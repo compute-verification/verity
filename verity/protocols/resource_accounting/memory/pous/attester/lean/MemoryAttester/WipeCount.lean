@@ -109,7 +109,8 @@ private def guardMark : ByteArray := ⟨Array.replicate StreamedWipe.MARK_BYTES 
 
 /-- A closed session of no batches under no key: `check` rejects it, and `named` reads it. -/
 private def guardSigned : StreamedWipe.Signed :=
-  ⟨guardCommitment, StreamedWipe.COMPLETE, guardMark, 0, 0, #[], "", ByteArray.empty, ByteArray.empty⟩
+  ⟨guardCommitment, ⟨Array.replicate RECORD_SALT_BYTES 0⟩, StreamedWipe.COMPLETE, guardMark, 0, 0, #[], "", ByteArray.empty,
+    ByteArray.empty⟩
 
 #guard match named guardCommitment ⟨some guardSigned, some 3⟩ with
   | .ok (some n) => n.startMark == guardMark && n.startMessage == StreamedWipe.startMessage guardCommitment &&

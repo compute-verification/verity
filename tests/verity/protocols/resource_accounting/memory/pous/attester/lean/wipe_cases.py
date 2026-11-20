@@ -76,7 +76,7 @@ def mark_of(j: Any) -> bytes:
 
 
 def signed_of(j: Any) -> sw.SignedWipe:
-    return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M._str(j, "ended"), mark_of(j),
+    return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M.hex_(j, "salt"), M._str(j, "ended"), mark_of(j),
                          int_(j, "fill_start_ns"), int_(j, "fill_end_ns"),
                          tuple(batch_of(r) for r in M.list_(j, "batches")),
                          M._str(j, "scheme"), M.hex_(j, "public_key"), M.hex_(j, "signature"))

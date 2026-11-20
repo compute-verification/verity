@@ -283,6 +283,12 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   (cd tests/adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $K/tie-fixture.err \
     || { tail -20 $K/tie-fixture.err; exit 8; }
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
+  pins_answered() {  # STATUS VERDICT ERR PINS [FORGED]: `weights-tie pins` gave its own answer, with no traceback: 0 and
+                     # `"pinned": true` with PINS written, or, with FORGED, its refusal, 1 and `"pinned": false` with none
+    ! grep -q '^Traceback (most recent call last):' "$3" || return 1
+    if [ -n "${5:-}" ]; then [ "$1" = 1 ] && grep -q '^{"pinned": false, ' "$2" && [ ! -e "$4" ]
+    else [ "$1" = 0 ] && grep -q '^{"pinned": true, ' "$2" && [ -e "$4" ]; fi
+  }
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
            # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
            # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own.
@@ -317,9 +323,10 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; python3 "$PL" $K/$name/audit.err | tail -25
     keep $name
     $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
-      | tee $O/$name/pins-verdict.json
+      2> $K/$name/pins.err | tee $O/$name/pins-verdict.json
     pinned=$?
-    if [ -n "$forged" ]; then [ $pinned != 0 ] && [ ! -e $O/$name/pins.json ] || rc=1; else [ $pinned = 0 ] || rc=1; fi
+    pins_answered $pinned $O/$name/pins-verdict.json $K/$name/pins.err $O/$name/pins.json "$forged" \
+      || { echo "PINS ERROR $name: weights-tie pins ended with status $pinned and not its own $([ -n "$forged" ] && echo refusal || echo pins)"; tail -5 $K/$name/pins.err; rc=1; }
     return $rc
   }
   tie weights-tie || rc=1

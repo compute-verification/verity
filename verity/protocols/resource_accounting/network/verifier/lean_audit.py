@@ -41,6 +41,7 @@ import json
 import os
 import struct
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -48,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.commitments.crypto import lms
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 from verity.protocols.resource_accounting.network.verifier import audit
 from verity.protocols.resource_accounting.network.verifier.audit import Published, Verdict
 from verity.protocols.resource_accounting.network.verifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord,
@@ -172,6 +174,7 @@ class Server:
         self.exe = Path(named) if named else None
         self._pid = os.getpid()
         self._proc: subprocess.Popen | None = None
+        self._stderr = None
         self._lock = threading.Lock()
 
     def _own(self) -> None:
@@ -190,7 +193,8 @@ class Server:
     def call(self, fn: str, case: dict) -> Any:
         """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, `link-window`: `NetworkCheck.TransferBlocks`'s verdict
         of record on one execution phase, `certificates`, `load` or `transfer-registration`); `ValueError` when the Lean
-        refuses the case."""
+        refuses the case. The process runs in `lean_child.lean_env`; `lean_child.LeanPanic` where it wrote a panic line,
+        whatever it answered, and `lean_child.LeanExit` where it ended before answering."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -199,8 +203,9 @@ class Server:
                 if not self.exe.is_file():
                     raise FileNotFoundError(f"{self.exe}: build it with `lake build network-records` in "
                                             f"verity/protocols/resource_accounting/network/verifier/lean, or set VERITY_NETWORK_RECORDS_EXE")
-                self._proc = subprocess.Popen([str(self.exe), "verdicts"], stdin=subprocess.PIPE,
-                                              stdout=subprocess.PIPE, text=True, encoding="utf-8")
+                self._stderr = tempfile.TemporaryFile()
+                self._proc = subprocess.Popen([str(self.exe), "verdicts"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                              stderr=self._stderr, text=True, encoding="utf-8", env=LC.lean_env())
             proc = self._proc
             try:
                 proc.stdin.write(json.dumps({"fn": fn, "input": case}, separators=(",", ":")) + "\n")
@@ -208,9 +213,18 @@ class Server:
                 line = proc.stdout.readline()
             except BrokenPipeError:
                 line = ""
-            if not line.endswith("\n"):
+            # the child writes its panic line before its answer, so it is in the file once the answer is read
+            self._stderr.seek(0)
+            panic = LC.panic_line(self._stderr.read())
+            if panic is not None or not line.endswith("\n"):
                 self._proc = None
-                raise RuntimeError(f"{self.exe} verdicts ended (exit {proc.wait()})")
+                if proc.poll() is None:
+                    proc.kill()
+                code = proc.wait()
+                if panic is not None:
+                    raise LC.LeanPanic(f"{LC.LEAN_PANIC}: {panic}")
+                raise LC.LeanExit(LC.exit_why(code) or f"{LC.LEAN_EXIT}: {self.exe} verdicts ended (exit {code}) "
+                                  "before it answered")
         msg = json.loads(line)
         if "reject" in msg:
             raise ValueError(f"outside the Lean audit's domain: {msg['reject']}")
