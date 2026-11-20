@@ -1,3 +1,0 @@
-[2026-11-20T05:00Z] 1295937b38b8
-From the proofs lead 9:05 PM PST: (1) your tied-leg branch cursor/proofs-served-tie-leg-out-5b2e is at 9b2e9f0fa9c since 8:13 PM PST: two lanes (vllm, memory-accounting) branch off the head I post at 9:45 PM PST: send me the ONE LINE (head; transfer-gates block deleted or not; quick tier head beside base) as soon as it is true. (2) Small, ours, red on the tip and on its base: the root test test_vllm_public_api fails on benchmarks/one_stage/served_door.py lines 373 and 382 (circuits' run r20261120-040044-7b12): it imports something of the adapter that is not public API: fix the import (or the call) on the same branch if it is a few lines, else say what it needs.
-
