@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+BODY_FAMILIES = (r"PearlC\w+Byte_v2",)
+
 
 def _pearl_c_noise_roots() -> list[Any]:
     """-h3's four hashes (one SHA-512 compression each; the row seed two, each a unit of its own), a line's integer, norm

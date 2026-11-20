@@ -1,13 +1,8 @@
 """What the sources read from a record that leaves an optional field out: absent, null and empty read alike, and a stated one is read.
 A field that holds another empty value (`OTHER_EMPTY`) in its block's place reads as the absent one too.
 
-Each reader below takes a document whose writer may leave a field out: a required manifest's `identities`
-(`verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`'s rank side), a narrowed row's `identity`
-(`verity_vllm.acquire.sources.narrowed_source`), the manifest's `requests`, `engine_steps` and `fixture`, a
-Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
-recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
-(`verity_vllm.acquire.sources.partial_source`), and a capture map's taps, whose `commit` block names the source that commits them
-(`verity_vllm.acquire.sources.attention_source`).  CPU only."""
+Each reader below takes a record whose writer may leave a field out: a step's layout and a capture's stored tensors
+(`verity_vllm.acquire.sources.partial_source`).  CPU only."""
 from __future__ import annotations
 
 import json

@@ -11,7 +11,7 @@
 # in-domain linears every step below runs at (this directory's <MODEL>.py; glm53_passes.py --model).
 # Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its
 # diagnostic timing at MODEL's in-domain linears at M = 64 and 8192 (`SHAPES`), then, only if the check passed,
-# glm53_passes.py capture (the gate and the prefill, decode and control passes, retained in a 0700 scratch directory
+# glm53_passes.py capture (the gate and the prefill and decode passes, retained in a 0700 scratch directory
 # /tmp/pearlplus-glm53.* removed on exit, never under $OUT, with only the public coins, verdicts, counts and roots in
 # $OUT/passes).  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
@@ -98,7 +98,7 @@ elif [ "$VOLUNTEER" = device ] && [ -f "$KEPT/decode/manifest.json" ]; then
       --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1'
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
-if [ "${VERIFY:-1}" = 1 ] && [ -f "$KEPT/control/manifest.json" ]; then
+if [ "${VERIFY:-1}" = 1 ] && [ -f "$KEPT/decode/manifest.json" ]; then
   "$PY" "$D/glm53_passes.py" verify --retain "$KEPT" --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
 fi

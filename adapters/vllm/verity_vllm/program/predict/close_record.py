@@ -24,7 +24,8 @@ class Record:
     """What a window's record reads besides its close: the rate ``rule`` its design is (`window_record.window_design`; the
     serve states it, where the prover is to propose it in the committed advice), the checkpoint of record whose weights it
     registers (``checkpoint_dir``, pinned by ``checkpoints``), the stated ``cap`` (units a member), the close's ``workers``,
-    where the salt libraries build (``build``) and how many ports' strings the host twin recomputes (``sample``)."""
+    where the salt libraries build (``build``) and how many ports' strings the host twin recomputes (``sample``). A
+    ``development`` rule is a development sampling design, which the record says (`development_of`)."""
 
     rule: str
     checkpoint_dir: str
@@ -33,6 +34,7 @@ class Record:
     cap: int = 64
     workers: int = 8
     sample: int = 8
+    development: bool = False
     _words: dict[str, Any] | None = field(default=None, init=False, repr=False)
 
     def roots(self, registered: Any, out: Path) -> dict[str, str]:
@@ -45,18 +47,20 @@ class Record:
 
         path = Path(out) / REGISTRATION
         if not path.is_file():
-            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints)
+            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints,
+                                          tables=served_tables(out))
             (Path(out) / DEPLOYMENT).write_text(json.dumps(WW.deployment_record(doc), indent=1) + "\n")
             path.write_text(json.dumps(doc, indent=1) + "\n")
         serve = json.loads((Path(out) / "serve.json").read_text())
         return ADV.registered_weights(json.loads(path.read_text()), serve)
 
-    def words(self, registered: Any) -> dict[str, Any]:
-        """The weights record's fields as the checkpoint of record composes them (`window_weights.record_words`), once a serve."""
+    def words(self, registered: Any, out: Path) -> dict[str, Any]:
+        """The weights record's fields as the checkpoint of record composes them (`window_weights.record_words`), and its
+        analytic tables as the serve under ``out`` served them (`served_tables`), once a serve."""
         if self._words is None:
             from . import window_weights as WW
 
-            self._words = WW.record_words(registered, self.checkpoint_dir, self.checkpoints)
+            self._words = WW.record_words(registered, self.checkpoint_dir, self.checkpoints, tables=served_tables(out))
         return self._words
 
     def hashers(self, com: Any) -> tuple[Any, Any, Any]:
@@ -103,9 +107,7 @@ class Record:
         directory), closed under its key with its strings (`window_strings.handed_strings`), else with strings made here
         (`window_strings.strings_of`). -> what it wrote, its strings' cost and the seconds each part took."""
         from verity.circuits.codec import program_digest
-        from verity.protocols.resource_accounting.network.prover import (
-            scan_state_rows as SR,
-        )
+        from verity.protocols.compose import schemes
 
         from verity_vllm.pipeline import advice_windows as AW
         from verity_vllm.pipeline import window_advice as WA
@@ -115,6 +117,8 @@ class Record:
         from . import window_rows as WRS
         from . import window_strings as WS
         from . import window_weights as WW
+
+        SR = schemes.catalog("network-attester", "scan_state_rows")
 
         seconds: dict[str, float] = {}
         t = [time.perf_counter()]
@@ -131,7 +135,7 @@ class Record:
         placed = WREC.place_slots(cls, [u.id for u in reqs], ADV.bodies(out, window))
         state = WRS.state_value(program_digest(low.circuit.program()[0]), cls,
                                 SR.standin_rows(cls, [(row, m) for _u, row, m in placed]), window=run)
-        words = self.words(registered)
+        words = self.words(registered, out)
         lap("weights_read")
         weights = weight_elements(words)
         slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
@@ -156,11 +160,41 @@ class Record:
 
         to = out / "windows" / f"w{window}" / "record"
         to.mkdir(parents=True, exist_ok=True)
-        filled, win = WREC.commit(low, cls, slots, values, run, WREC.window_design(self.rule, low.circuit), self.cap, bound, to,
+        design = WREC.window_design(self.rule, low.circuit)
+        filled, win = WREC.commit(low, cls, slots, values, run, design, self.cap, bound, to,
                                   window, strings=strings, workers=self.workers, lap=lap, key=key)
-        return {"run": run, "out": str(to), "members": len(win.window.members), "population": sum(filled.n.values()),
-                "design": {"rule": self.rule, "from": "the serve's --sampling-design"}, "cap": self.cap,
+        population = sum(filled.n.values())
+        said = {"development": development_of(design, population)} if self.development else {}
+        return {"run": run, "out": str(to), "members": len(win.window.members), "population": population,
+                "design": {"rule": self.rule, "from": "the serve's --sampling-design", **said}, "cap": self.cap,
                 "scan_state": "stand-in", "weights": "checkpoint of record", "strings": cost, "seconds": seconds}
+
+
+#: The δ a development design's statement is at: records_audit.py's default.
+DEVELOPMENT_DELTA = 0.5
+
+
+def development_of(design: dict[str, Any], n: int, delta: float = DEVELOPMENT_DELTA) -> dict[str, Any]:
+    """A development sampling design's statement: what an accept of its draw of the window's ``n`` proof blocks
+    establishes at ``delta`` (`profile.Stratified.count_bound` of the uniform draw), so no accept under it reads as one at
+    the rate of record. Refused for a design that is not a uniform draw."""
+    from verity.protocols.proofs.spot.verifier import profile as PR
+
+    if design.get("law") != "subset":
+        raise ValueError(f"a development sampling design is a uniform draw (rate:NUM/DEN), not {design.get('law')!r}")
+    k = int(design["k"])
+    bound = PR.Stratified.uniform(n, k).count_bound(delta)
+    return {"says": "DEVELOPMENT: a development sampling design, not the rate of record", "draws": k, "of": n,
+            "delta": delta, "incorrect_at_most": bound, "epsilon": bound / n}
+
+
+def served_tables(out: Path) -> dict[str, Any] | None:
+    """The analytic tables the serve under ``out`` served, by the weights record's table name: its rotary table, which
+    serve-openai writes to ``private/cos_sin_cache.npy``; None where it wrote none."""
+    import numpy as np
+
+    f = Path(out) / "private" / "cos_sin_cache.npy"
+    return {"cos_sin": np.load(f)} if f.is_file() else None
 
 
 def weight_elements(words: dict[str, Any]) -> Any:
@@ -235,6 +269,7 @@ if __name__ == "__main__":
     ap.add_argument("--window", type=int, required=True)
     ap.add_argument("--class", dest="cls", required=True, help="the window class S,P,O[,LANES,EVERY] the serve declared")
     ap.add_argument("--sampling-design", required=True)
+    ap.add_argument("--development-design", action="store_true", help="the sampling design is a development one")
     ap.add_argument("--checkpoint-dir", required=True)
     ap.add_argument("--checkpoints")
     ap.add_argument("--cap", type=int, default=64)
@@ -247,7 +282,7 @@ if __name__ == "__main__":
         print(json.dumps({"parsed": sorted(k for k, v in vars(a).items() if v not in (None, False))}))
         sys.exit(0)
     rec = Record(a.sampling_design, a.checkpoint_dir, Path(a.serve_run) / "private" / "salt_stream", checkpoints=a.checkpoints,
-                 cap=a.cap, workers=a.workers, sample=a.twin_ports)
+                 cap=a.cap, workers=a.workers, sample=a.twin_ports, development=a.development_design)
     out = finish(Path(a.serve_run), a.window, rec, WindowClass(*(int(x) for x in a.cls.split(","))))
     Path(a.out).write_text(json.dumps(out) + "\n")
     sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": a.window, **out}) + "\n")

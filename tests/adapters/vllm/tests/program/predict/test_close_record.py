@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -29,7 +30,7 @@ from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_strings as WS
 from verity_vllm.program.predict import window_weights as WW
-from verity_vllm.program.predict.close_record import Record, weight_elements
+from verity_vllm.program.predict.close_record import Record, development_of, served_tables, weight_elements
 
 
 def _committer(held):
@@ -82,6 +83,37 @@ def test_the_records_weights_read_a_fields_flat_elements_in_its_checkpoint_shape
         read("other", 0, 1)
 
 
+def test_the_records_words_hold_the_rotary_table_the_serve_served(tmp_path, monkeypatch):
+    """The checkpoint's shards hold no rotary table: the weights record holds it to the analytic table, and the record reads
+    the words the serve served (``private/cos_sin_cache.npy``), refused outside the table's bound. The close's stand-in
+    fields hold a rotary table of their own, so the record never asked the serve for one."""
+    table = np.arange(8, dtype=np.uint16).reshape(2, 4)
+    rot = {"field": "rot", "pinned": "analytic", "analytic": {"table": "cos_sin"}}
+    monkeypatch.setattr(WW, "_fields", lambda registered: (None, []))
+    monkeypatch.setattr(WW, "_composed", lambda *a: (a[-1]("w", [1, 2]), {"fields": [{"field": "w"}, rot]})[1])
+    bound = {"pass": {"status": "pass"}}
+    monkeypatch.setattr(WW.WR, "_check_analytic", lambda f, words: bound["pass"])
+    assert served_tables(tmp_path) is None
+    (tmp_path / "private").mkdir()
+    np.save(tmp_path / "private" / "cos_sin_cache.npy", table)
+    got = Record("rate:1/4", "ck", tmp_path / "salt").words(None, tmp_path)
+    assert sorted(got) == ["rot", "w"] and got["rot"].tolist() == table.tolist()
+    assert sorted(WW.record_words(None, "ck")) == ["w"], "no served table: the field is left out"
+    bound["pass"] = {"status": "fail", "why": "past the bound"}
+    with pytest.raises(ValueError, match="outside the analytic table's bound"):
+        WW.record_words(None, "ck", tables=served_tables(tmp_path))
+
+
+def test_a_development_design_says_what_an_accept_of_its_draw_establishes():
+    """A development design's record says DEVELOPMENT and its bound at δ: four uniform draws of 100 proof blocks leave at
+    most 15 incorrect at δ 1/2 (escape C(85,4)/C(100,4) >= 1/2 > C(84,4)/C(100,4)); a stratified design is refused."""
+    d = development_of({"law": "subset", "k": 4}, 100)
+    assert d["says"].startswith("DEVELOPMENT") and (d["draws"], d["of"], d["incorrect_at_most"], d["delta"]) == (4, 100, 15, 0.5)
+    assert d["epsilon"] == 0.15
+    with pytest.raises(ValueError, match="uniform draw"):
+        development_of({"law": "stratified", "k": 4}, 100)
+
+
 @pytest.mark.slow
 def test_the_serves_close_records_its_window_with_strings_from_where_its_rows_are_committed(tmp_path, monkeypatch):
     """`Record.make` over TINY's window at class 2,4,2 (`_close`): the window recorded, closed and written under
@@ -124,6 +156,23 @@ def test_the_cards_part_runs_first_and_the_record_is_made_from_its_handoff_alone
     (to / "key.bin").unlink()
     with pytest.raises(ValueError, match="no key.bin"):
         rec.make(plan, 0, compiled, low, units, served, after, handoff=to)
+
+
+def test_the_launchers_strings_line_prints_the_cards_handed_strings(tmp_path, capsys):
+    """The record's strings are the card's handed ones (`window_strings.handed_strings`), which carry no
+    ``acquired_s``, or the host's (`window_strings.strings_of`): the launcher's WINDOW-STRINGS line prints either, so a
+    run whose record took the card's strings doesn't end in a KeyError after its record."""
+    text = (Path(__file__).parents[6] / "adapters/vllm/tools/served_run/h100_smoke.sh").read_text()
+    line = text[text.index("card_s = "):]
+    line = line[:line.index('"))\n') + 3]
+    twin = {"ports": 8, "of": 27, "units": 874496, "equal": True, "unequal": []}
+    handed = {"ports": 139, "where": "card, handed", "acquired": 3602952, "host": 163500, "host_s": 4.4, "handed_unleafed": 0}
+    (tmp_path / "line.py").write_text(line)
+    runpy.run_path(str(tmp_path / "line.py"), {"s": handed, "t": twin, "k": 0})
+    runpy.run_path(str(tmp_path / "line.py"), {"s": {**handed, "where": "HostTwin", "acquired_s": 0.0}, "t": twin, "k": 0})
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("WINDOW-STRINGS window 0: 139 ports, card (card, handed) 3602952 units, host 163500 units")
+    assert "EQUAL" in out[0] and "3602952 units in 0.0 s" in out[1]
 
 
 def test_the_launcher_runs_the_cards_parts_under_the_lease_and_the_record_after_it():
