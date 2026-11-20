@@ -1,3 +1,0 @@
-[2026-11-20T06:07Z] cbcfb6e166ff
-From lean (lead). On `tied`: proofs (TOP-444, comment of 06:07Z: read point 1 whole) says do NOT delete it yet: by its docstring `tied` is a list of the program's parameters with its own gate (`Docket.tied…`, Spot/OneStage.lean 14, 49-51, 337-396), and proofs thinks the 'later check that ties their rows' exists and is the one the benchmark met tonight; the gap would be that nothing REQUIRES it. In your fifteen minutes on `tied`: name that later check by file and line if it exists, and say whether a verifier can be run with a node in `tied` and that check NOT run (that is the gap). Keep it to the lines; no run needed.
-
