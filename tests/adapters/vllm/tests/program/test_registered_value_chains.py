@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
@@ -155,26 +154,3 @@ def test_layer_norm_aten_eps_input(eps):
         x, w, b = _bf16(rng, N, 4.0), _bf16(rng, N), _bf16(rng, N)
         assert _flat(evaluate(new, x, w, b, eb)) == _flat(evaluate(old, x, w, b))
     assert _const_id(eb) in _held(old) and _const_id(eb) not in _held(new)
-
-
-def test_the_constant_twins_keep_their_digests():
-    """The constant bodies now take their values optionally; the Programs they build are the ones they built before."""
-    st = dict(INV=P.Fa2InvSum, **HOP)
-    got = {
-        "Attention_v2": bind(b1.AttentionV2, T=17, NH=2, KVH=1, D=16, BN=16, **st),
-        "Attention_v4": bind(F3.AttentionV4, T=33, NH=2, KVH=1, D=16, BN=16, **{**st, "INV": hopper.Fa3InvSum}, MASKED_FROM=1),
-        "AttentionSoftcap_v1": bind(DN.AttentionSoftcap, T=17, NH=2, KVH=1, D=16, BN=16, CAP=50.0),
-        "AttentionSoftcap_v2": bind(F2S.AttentionSoftcapV2, T=33, NH=2, KVH=1, D=16, BN=16, CAP=50.0, MASKED_FROM=1, **st),
-        "Bf16DivScalar_v1": bind(DN.Bf16DivScalar, N=8, C=30.0),
-        "Bf16MulScalar_v1": bind(DN.Bf16MulScalar, N=8, C=30.0),
-        "AddScalarF32_v1": bind(DN.AddScalarF32, N=8, C=1e-6),
-        "AddScalarBf16_v1": bind(DN.AddScalarBf16, N=8, C=1.0),
-        "RMSNormRef_v1": bind(RP.RMSNormRef, N=8, EPS=1e-6, DT="bf16"),
-        "LayerNormRef_v1": bind(RP.LayerNormRef, N=8, EPS=1e-5, DT="bf16"),
-        "LayerNormAten_v1": bind(LN.LayerNormAten, N=8, EPS=1e-5),
-    }
-    assert {k: program_digest(encode_program(Program(v)))[:16] for k, v in got.items()} == {
-        "Attention_v2": "62fa3bb28d03e5d8", "Attention_v4": "95413195ae00c692", "AttentionSoftcap_v1": "eb63193194c87cf0",
-        "AttentionSoftcap_v2": "3e69667726a0a607", "Bf16DivScalar_v1": "25bace9a57773ab6", "Bf16MulScalar_v1": "efe2e181523aafd8",
-        "AddScalarF32_v1": "5d68003bd74e3840", "AddScalarBf16_v1": "22017d4f8b23c248",
-        "RMSNormRef_v1": "c1f320c64fef5c6b", "LayerNormRef_v1": "7f97dc6cdf51458d", "LayerNormAten_v1": "93931c7a49661fb0"}

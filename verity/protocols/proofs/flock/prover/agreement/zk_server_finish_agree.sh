@@ -62,7 +62,9 @@ sys.exit(0 if v and all(x['accepted'] and x['verdict']['reps'] and all(r['ok'] f
 live=${PIPESTATUS[0]}
 VARGS=(--zk --circuit "$D/circuit.txt" --statement verity/flock-circuit --public "$D/pub.bin" --session "$S")
 [ -e "$D/partition.json" ] && VARGS+=(--partition "$D/partition.json")
-$(verifier_env) "$LEAN" verify "${VARGS[@]}" > "$O/lean-verify.out" 2> "$O/lean-verify.err"
+"$PY" "$SRC/verity/protocols/proofs/flock/prover/agreement/lean_run.py" VERIFY_EXITS "$O/lean-verify" -- \
+  $(verifier_env) "$LEAN" verify "${VARGS[@]}" 2>> "$OUT/job.log"
+ran=$?
 # a hidden_zk tile is no Program's, so the Lean verifier refuses its session for want of one (ProvedScope.NO_PROGRAM) once
 # every check has passed: that refusal alone passes here, as agree.py compares it
 "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
@@ -71,5 +73,5 @@ sys.exit(0 if v and (v[0]['accepted'] or v[0]['why'].startswith(sys.argv[2])) el
 lean=$?
 log "the session's verdict: $([ "$live" = 0 ] && echo ACCEPT || echo "NOT accepted"); the Lean verifier's: \
 $([ $lean = 0 ] && echo "every check passed" || echo "REJECT") $(grep '^VERDICT ' "$O/lean-verify.out" | cut -c1-300)"
-{ [ "$live" = 0 ] && [ $lean = 0 ]; } || rc=1
+{ [ "$live" = 0 ] && [ $ran = 0 ] && [ $lean = 0 ]; } || rc=1
 exit $rc
