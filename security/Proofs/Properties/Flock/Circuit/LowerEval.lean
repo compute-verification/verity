@@ -5,6 +5,7 @@ public import Proofs.Properties.Flock.Circuit.Chain
 public import Proofs.Properties.Flock.DecodeBoolean
 public import Proofs.Properties.Poub.Remote.Sort
 public import Proofs.Properties.InferenceOnly.OperandWidths
+public import Proofs.Core.Expand
 
 /-!
 # `LowerEval`, proved
@@ -1660,6 +1661,55 @@ theorem unit_ret_resolve {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {
     simp only [hc', Bool.false_eq_true, ite_false]
     rw [hdiv', hmod']
     rfl
+
+theorem ofFn_getD_eq {n : ℕ} (l : List Bool) (h : l.length = n) :
+    List.ofFn (fun i : Fin n => l.getD i false) = l := by
+  subst h
+  apply List.ext_getElem (by simp)
+  intro i h1 h2
+  simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2]
+
+theorem portWord_lt {P : Prog} (Y : (Flock.OfProgram.ofProgram P).Trace) {q w : ℕ}
+    (hq : q < (Flock.OfProgram.ofProgram P).N) :
+    portWord Y { gate := q, width := w } =
+      List.ofFn fun i : Fin ((Flock.OfProgram.ofProgram P).w ⟨q, hq⟩) => (Y ⟨q, hq⟩).getLsbD i := by
+  simp [portWord, portBits, hq]
+
+/-- The bits a computed gate's operation reads, where its operands are all below it: its operands' words in order. -/
+theorem opBits_eq {P : Prog} (Y : (Flock.OfProgram.ofProgram P).Trace) {G : ℕ} (hG : G < (Flock.OfProgram.ofProgram P).N)
+    {p : ℕ} {ops : Array ℕ} (hga : Flock.OfProgram.gateAt P G = some (p, ops))
+    (hin : Flock.OfProgram.inputAt P G = false) (hlt : ∀ a ∈ ops.toList, a < G) :
+    Flock.OfProgram.opBits (Flock.OfProgram.opsBelow P ⟨G, hG⟩) Y =
+      (ops.toList.map fun a => portWord Y { gate := a, width := 0 }).flatten := by
+  unfold Flock.OfProgram.opsBelow
+  simp only [hin, Bool.false_eq_true, ite_false, hga]
+  generalize ops.toList = l at hlt ⊢
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    have ha : a < G := hlt a (List.mem_cons_self ..)
+    rw [List.filterMap_cons, dif_pos ha]
+    simp only [Flock.OfProgram.opBits, List.flatMap_cons, List.map_cons, List.flatten_cons] at ih ⊢
+    rw [ih fun b hb => hlt b (List.mem_cons_of_mem _ hb), portWord_lt Y (Nat.lt_trans ha hG)]
+    rfl
+
+/-- **A computed gate's word** is its primitive's value on its operands' words, where its operands are below it and
+the value is as wide as the gate. -/
+theorem word_at_computed {P : Prog} (Y : (Flock.OfProgram.ofProgram P).Trace) {G w : ℕ}
+    (hG : G < (Flock.OfProgram.ofProgram P).N) {p : ℕ} {ops : Array ℕ}
+    (hga : Flock.OfProgram.gateAt P G = some (p, ops)) (hin : Flock.OfProgram.inputAt P G = false)
+    (hlt : ∀ a ∈ ops.toList, a < G) (hY : Y ⟨G, hG⟩ = (Flock.OfProgram.ofProgram P).op ⟨G, hG⟩ Y)
+    (hlen : (Prog.evalBool P p (ops.toList.map fun a => portWord Y { gate := a, width := 0 }).flatten).length =
+      Flock.OfProgram.widthAt P G) :
+    portWord Y { gate := G, width := w } =
+      Prog.evalBool P p (ops.toList.map fun a => portWord Y { gate := a, width := 0 }).flatten := by
+  have hop : (Flock.OfProgram.ofProgram P).op ⟨G, hG⟩ Y = Verity.ofBits (fun i => (Prog.evalBool P p
+      (Flock.OfProgram.opBits (Flock.OfProgram.opsBelow P ⟨G, hG⟩) Y)).getD i false) := by
+    simp only [Flock.OfProgram.ofProgram, Flock.OfProgram.ofProgramWith, hga]
+  rw [portWord_lt Y hG, hY, hop]
+  simp only [Verity.getLsbD_ofBits]
+  rw [opBits_eq Y hG hga hin hlt]
+  exact ofFn_getD_eq _ hlen
 
 end UnitWidthsProof
 
