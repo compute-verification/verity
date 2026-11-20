@@ -2833,7 +2833,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         ch, d, coins = _challenger_sample(rng, s, sampling_design, rec, trees, keys)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(d["units"]),
+                    "session_roots": {r["port"]: r["root"] for r in rec["roots"]},
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                   "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
@@ -2916,7 +2917,8 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     ch, d, coins = _challenger_sample(random.Random(seed), s, sampling_design, rec)
     proved = DR.proved(d)
     base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-            "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+            "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(d["units"]),
+            "session_roots": {r["port"]: r["root"] for r in rec["roots"]},
             "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
               "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
@@ -3053,7 +3055,8 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
         ch, d, coins = _challenger_sample(random.Random(f"v2-order-{order}"), s, sampling_design, rec, 1, order=order)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(d["units"]),
+                    "session_roots": {r["port"]: r["root"] for r in rec["roots"]},
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                   "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": s.partition,
@@ -3122,7 +3125,8 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
         record = D.canonical(d.trees[0].record).encode() if d.trees else b"{}"
         proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(draw["units"]),
+                    "session_roots": {r["port"]: r["root"] for r in rec["roots"]},
                     "sessions": ["s"], "statement": {}}
         if coins is not None:
             evidence["coins"] = coins
