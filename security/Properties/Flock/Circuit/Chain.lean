@@ -248,6 +248,10 @@ def StatementOpens {P : Prog} {n : ℕ} {α : Type} (Sc : _root_.Hash.StringComm
     ∀ q ∈ unitOuts P units[j]!, ∀ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ Pt.committed →
       ∃ p, Pt.pos L ⟨q.gate, h⟩ = some p ∧ Sc.Opens H (c p.1) p.2 (enc _ (Y ⟨q.gate, h⟩)) (π' j ⟨q.gate, h⟩)
 
+/-- **THE layout the served path reads** (`layoutOf`): each registered gate at its registered entry, every other gate
+in phase 0's window. `DoorJoin`, `PortsBind` and `FifthOpens` read it. -/
+abbrev servedLayout (P : Prog) : Verity.Layout (ofProgram P) := layoutOf P
+
 /-- **`DoorJoin`, an accepted session to the block's rows at C's committed values.** The session's copies, one a unit
 of the block, each satisfying its rows with the constant 1 (`V5Rows`'s conclusion), the statement's openings at each
 copy's arguments and return leaves (`StatementOpens`) and block `u`'s own (`Partition.Rblk`), at one commitment, give
@@ -261,16 +265,16 @@ def DoorJoin : Prop :=
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) (nt : Net)
     {α : Type} (Sc : _root_.Hash.StringCommitment α) (H : _root_.Hash.Msg → Verity.Digest)
     (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α) (blocks : Array (Array (ℕ × ℕ)))
-    (u : Fin blocks.size) (L : Verity.Layout (ofProgram P)) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
+    (u : Fin blocks.size) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
     (π : Fin (ofProgram P).N → Sc.Op) (z : ℕ → ℕ → Bool) (π' : ℕ → Fin (ofProgram P).N → Sc.Op),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.BlockFront.front P units = .ok fr → OperandsOutside P units fr →
     Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt → nt.unitLog ≤ 32 →
     BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) → Sc.Binds H →
-    (partOf P blocks).Rblk Sc H enc L c u.castSucc X π →
+    (partOf P blocks).Rblk Sc H enc (servedLayout P) c u.castSucc X π →
     (∀ j < units.size, ∃ hb : Built nt, (Rows.ofNet hb).Sat (fun x => z j x.val) ∧ z j t.constPos = true) →
-    StatementOpens Sc H enc (partOf P blocks) L c units a t z π' →
+    StatementOpens Sc H enc (partOf P blocks) (servedLayout P) c units a t z π' →
     (∀ g ∈ units, ∃ (hb : Built nt) (z' : ℕ → Bool), (Rows.ofNet hb).Sat (fun x => z' x.val) ∧ z' t.constPos = true ∧
         (∀ i < bitsOf a.ins, (argBits X g).getD i false = z' (Flock.Lower.inBit t (doorCol a.ins i))) ∧
         OutsAgree (partOf P blocks) a t g (outBits X g) z') ∨
@@ -317,12 +321,12 @@ def PortsBind : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) {α : Type}
     (Sc : _root_.Hash.StringCommitment α) (H : _root_.Hash.Msg → Verity.Digest)
     (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α) (blocks : Array (Array (ℕ × ℕ)))
-    (u : Fin blocks.size) (L : Verity.Layout (ofProgram P)) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
+    (u : Fin blocks.size) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
     (π π' : Fin (ofProgram P).N → Sc.Op) (z : ℕ → Bool),
     Spot.BlockFront.front P units = .ok fr → BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) →
     (∀ q ∈ fr.ins ++ fr.outs, ∃ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ (partOf P blocks).io u.castSucc) →
-    Sc.Binds H → (partOf P blocks).Rblk Sc H enc L c u.castSucc X π →
-    PortsOpenAt Sc H enc (partOf P blocks) L c fr t z π' →
+    Sc.Binds H → (partOf P blocks).Rblk Sc H enc (servedLayout P) c u.castSucc X π →
+    PortsOpenAt Sc H enc (partOf P blocks) (servedLayout P) c fr t z π' →
     ((∀ i < portWidth fr.ins, (portBits X fr.ins).getD i false = z (Flock.Lower.inBit t i)) ∧
       (∀ k < portWidth fr.outs, (portBits X fr.outs).getD k false = z (Flock.Lower.outBit t k))) ∨
       ∃ xs, _root_.Hash.CollisionIn H xs
@@ -355,5 +359,226 @@ def DescEqPartOf : Prop :=
       out.getObjValD "ius" = Lean.Json.arr (Array.ofFn fun u : Fin blocks.size =>
         let S := (partOf P blocks).gates u.castSucc
         Lean.Json.arr #[Lean.toJson S.card, Lean.toJson ((ofProgram P).width ((ofProgram P).into S \ θ))])
+
+/-! ### The map from Core's positions to the verifier's trees
+
+One template a block and one copy a unit: block `u` is a member `m`'s units, `m.indices`
+(`Spot.OneStageZk.Member.indices`), and copy `j` of its session is unit `m.indices[j]`. -/
+
+/-- A leaf of a tree the verifier holds a root of: the tree's name (its record port), the leaf, and the gate's index in
+the leaf's row. -/
+structure TreeLeaf where
+  tree : String
+  leaf : ℕ
+  slot : ℕ
+  deriving DecidableEq
+
+/-- The return field holding return leaf `l` of the fields `fs` (`fieldsOf`), and the leaf's index in it. -/
+def fieldSlot : List Ty → ℕ → ℕ × ℕ
+  | [], l => (0, l)
+  | f :: fs, l => if l < f.leaves then (0, l) else ((fieldSlot fs (l - f.leaves)).1 + 1, (fieldSlot fs (l - f.leaves)).2)
+
+/-- **Where the verifier opens unit `v`'s return leaf `l`**: the tree `<t>/o<j>` (`Flock.Registered.fieldTree`) of the
+field `j` holding it, `t` the template `tmpl` names for `v`'s Definition, at `v`'s rank among its template's units
+(`Flock.HmLinks.treeLeaf`), its slot the leaf's index in the field. -/
+def outTree (P : Prog) (tmpl : String → Option String) (v l : ℕ) : Option TreeLeaf := do
+  let ns := Flock.HmLinks.nodes P
+  let (key, rank) ← Flock.HmLinks.treeLeaf P ns v
+  let t ← tmpl key
+  let (k, _) ← Flock.HmLinks.unitAt ns v
+  let fn := P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!
+  let js := fieldSlot (fieldsOf fn.ret) l
+  pure ⟨Flock.Registered.fieldTree t js.1, rank, js.2⟩
+
+/-- The template the members `ms` name for Definition `key` over the partition's ranges `rs`: the template of the first
+member whose units are `key`'s (`Spot.OneStageZk.Member.tidIn`), as `Spot.OneStageZk.derivedFieldTrees` pairs them. -/
+def tmplOf (ms : Array Spot.OneStageZk.Member) (rs : Array Flock.TemplateQuery.TRange) (key : String) : Option String :=
+  ms.findSome? fun m => if m.tidIn rs = some key then (Spot.OneStageZk.templateOf m.name).map (·.1) else none
+
+/-- How a member's statement reads its row `row`: a port of its registered file (`Flock.Registered.ofJson`), its reads
+laid by `Flock.OneCircuit.pos`, or a root of its own in the record (`<member>/<row>`, `Spot.OneStageZk.rootStep`). -/
+inductive PortRead where
+  | registered (q : Flock.Registered.Port)
+  | own (row : String)
+
+/-- The read of member `m`'s row `row` over C (`P`). -/
+def readsOf (P : Prog) (m : Spot.OneStageZk.Member) (row : String) : Option PortRead :=
+  match m.own.registered.map Flock.Registered.ofJson with
+  | some (.ok own) =>
+    match own.find? (·.name == row) with
+    | some q => some (.registered ((Flock.OneCircuit.pos P m.indices q).toOption.getD q))
+    | none => some (.own row)
+  | _ => some (.own row)
+
+/-- **Where the verifier opens copy `j` of member `m`'s row read as `r`, at index `s` in it**: a registered port at the
+tree `Spot.OneStageZk.treePortOf` names (`committed/<p>` gives `<p>`, `input/n<w>` and `<t>/o<j>` themselves), a
+registered value at its own name, at the row `Flock.OneCircuit.pos` laid for the copy's unit (`readsRel`); a root of
+its own at `<member>/<row>`, leaf `j`. -/
+def argTree (m : Spot.OneStageZk.Member) (r : PortRead) (j s : ℕ) : Option TreeLeaf :=
+  match r with
+  | .own row => some ⟨s!"{m.name}/{row}", j, s⟩
+  | .registered q => do
+    let u ← m.indices[j]?
+    let leaf ← (q.readsRel[u - q.readsFrom]?).join
+    pure ⟨(Spot.OneStageZk.treePortOf q).getD q.value, leaf, s⟩
+
+/-- The row of `rs` holding bit `i`, and the bit's index in it. -/
+def rowAt : List (String × ℕ) → ℕ → Option (String × ℕ)
+  | [], _ => none
+  | (n, b) :: r, i => if i < b then some (n, i) else rowAt r (i - b)
+
+/-- Where unit `g`'s argument `x` starts in `argBits`. -/
+def argOff (P : Prog) (g x : ℕ) : ℕ := ((unitArgs P g).toList.take x).foldl (· + leafWidth P ·) 0
+
+/-- The template `admitted` admits for member `m`'s block of C (`P`), as the per-member check reads it
+(`AcceptGivesDoorFile`). -/
+def admOf (P : Prog) (m : Spot.OneStageZk.Member) : Option Spot.OneStageZk.Admit := do
+  let bl ← (m.own.blocks.get.toOption).join
+  let (lo, hi) ← bl.find? (·.1 == m.own.first)
+  let cuts ← m.own.cuts.get.toOption
+  let S ← (Spot.Restrict.restrict P (List.range' lo (hi - lo)).toArray).toOption
+  (Spot.OneStageZk.admitted m.own.partition cuts S).toOption
+
+/-- **The map from a gate of C to the verifier's tree leaves**, under the members `ms` over the ranges `rs`: a return
+leaf `l` of a unit `v` at `outTree`, which a reader another block wires to it opens too
+(`Flock.Registered.treeReadsWhole`); any other gate an argument `x` of copy `j` of a member reads, at the row and index
+the door lays it (`rowAt` of the input rows), at that row's tree (`argTree`). -/
+def TreeAt (P : Prog) (ms : Array Spot.OneStageZk.Member) (rs : Array Flock.TemplateQuery.TRange) (g : ℕ)
+    (tl : TreeLeaf) : Prop :=
+  (∃ v l : ℕ, ((unitOuts P v)[l]?).map Spot.BlockFront.Port.gate = some g ∧ outTree P (tmplOf ms rs) v l = some tl) ∨
+  ((¬ ∃ v l : ℕ, ((unitOuts P v)[l]?).map Spot.BlockFront.Port.gate = some g) ∧
+    ∃ m ∈ ms, ∃ (a : Spot.OneStageZk.Admit) (j x : ℕ) (row : String) (s : ℕ) (r : PortRead),
+      admOf P m = some a ∧ j < m.indices.size ∧ ((unitArgs P m.indices[j]!)[x]?).map Spot.BlockFront.Port.gate = some g ∧
+      rowAt a.ins.toList (argOff P m.indices[j]! x) = some (row, s) ∧ readsOf P m row = some r ∧
+      argTree m r j s = some tl)
+
+/-- A tree whose root the verifier holds before any coin: a root of the registration's record (`rootsByPort`), or a
+registered value a member's registered file reads, one root for every member (`Spot.OneStageZk.classHeld`). -/
+def HeldTree (P : Prog) (ms : Array Spot.OneStageZk.Member) (rec : Lean.Json) (t : String) : Prop :=
+  (Spot.OneStageZk.rootsByPort rec).contains t = true ∨
+    ∃ m ∈ ms, ∃ row q, readsOf P m row = some (.registered q) ∧ Spot.OneStageZk.treePortOf q = none ∧ q.value = t
+
+open Classical in
+/-- **The verifier's tree leaf at Core's position `p`** (`Partition.pos` at `servedLayout`): the one leaf `TreeAt`
+gives the gate at `p`; none where no gate is at `p` or its gate has no leaf or two. -/
+noncomputable def treeMap {n : ℕ} (P : Prog) (Pt : Verity.Partition (ofProgram P) n) (ms : Array Spot.OneStageZk.Member)
+    (rs : Array Flock.TemplateQuery.TRange) (p : Verity.Root × ℕ) : Option TreeLeaf :=
+  if h : ∃ (g : Fin (ofProgram P).N) (tl : TreeLeaf), Pt.pos (servedLayout P) g = some p ∧ TreeAt P ms rs g.val tl ∧
+      ∀ tl', TreeAt P ms rs g.val tl' → tl' = tl
+  then some (Classical.choose (Classical.choose_spec h))
+  else none
+
+/-- **The verifier's trees as one string commitment over Core's positions**: a commitment is Core's root with the
+verifier's root of every tree (`roots`); position `k` under root `r` opens where `M` takes `(r, k)`, as `Sc` opens that
+tree at the leaf and slot (`Nat.pair`), and hashes what that opening hashed. Its commit and open are `Sc`'s, read only
+for binding. -/
+def treeSc {α : Type} (Sc : _root_.Hash.StringCommitment α) (M : Verity.Root × ℕ → Option TreeLeaf) :
+    _root_.Hash.StringCommitment α where
+  Com := Verity.Root × (String → Sc.Com)
+  Dec := Sc.Dec
+  Op := Sc.Op
+  Coins := Sc.Coins
+  commit H s r := ((.phase 0, fun _ => (Sc.commit H s r).1), (Sc.commit H s r).2)
+  «open» H d k := Sc.open H d k
+  Opens H C k v π := ∃ tl, M (C.1, k) = some tl ∧ Sc.Opens H (C.2 tl.tree) (Nat.pair tl.leaf tl.slot) v π
+  hashed H C k v π := match M (C.1, k) with
+    | some tl => Sc.hashed H (C.2 tl.tree) (Nat.pair tl.leaf tl.slot) v π
+    | none => []
+
+/-- The accepted per-member check over C's partition: `checkMembersAt` accepts, and `Pp`, `rs` are the program and
+ranges its `membersRootsOf` reads. -/
+def MembersAccept (p : Spot.OneStageZk.Params) (ms : Array Spot.OneStageZk.Member) (c : Spot.OneStage.Commitment)
+    (Pp : Spot.Program) (rs : Array Flock.TemplateQuery.TRange) : Prop :=
+  ∃ (ξ : ByteArray) (e : Spot.OneStageZk.Evidence) (sts : Array Spot.OneStageZk.StatementFiles) (bs : Core.Blobs)
+    (pub : Spot.OneStage.Public) (prof : Core.Integrity),
+    Spot.OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof ∧
+    Spot.Program.parse p.own.program = .ok Pp ∧ Spot.Partition.evaluate Pp (Spot.getD p.own.partition "query") = .ok rs
+
+/-- **`TreeMapTotal`**: on an accept, every committed gate a member's block reads or writes (`Partition.io`) has a
+position at `servedLayout` and a leaf of a tree whose root the verifier holds before any coin (`HeldTree`). -/
+def TreeMapTotal : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ m ∈ ms, ∀ (fr : Spot.BlockFront.Front) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size),
+      Spot.BlockFront.front Pp.prog m.indices = .ok fr → BlockIs Pp.prog blocks u fr →
+      ∀ g ∈ (partOf Pp.prog blocks).io u.castSucc, ∃ q tl,
+        (partOf Pp.prog blocks).pos (servedLayout Pp.prog) g = some q ∧ TreeAt Pp.prog ms rs g.val tl ∧
+          HeldTree Pp.prog ms c.record tl.tree
+
+/-- **`TreeMapOne`**: on an accept, a committed gate has one tree leaf, whichever block reads it and whichever copy, so
+`treeMap` is the leaf `TreeAt` gives it. -/
+def TreeMapOne : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ (blocks : Array (Array (ℕ × ℕ))) (g : Fin (ofProgram Pp.prog).N), g ∈ (partOf Pp.prog blocks).committed →
+      ∀ tl tl', TreeAt Pp.prog ms rs g.val tl → TreeAt Pp.prog ms rs g.val tl' → tl = tl'
+
+/-- **`TreeMapInjective`**: on an accept, two gates of C at one tree leaf are one gate. -/
+def TreeMapInjective : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ (g g' : ℕ) (tl : TreeLeaf), TreeAt Pp.prog ms rs g tl → TreeAt Pp.prog ms rs g' tl → g = g'
+
+/-- **`TreeScBinds`**: the verifier's trees bind where each tree does: `treeSc Sc M` binds under the collision
+premise `Sc` binds under. -/
+def TreeScBinds : Prop :=
+  ∀ {α : Type} (Sc : _root_.Hash.StringCommitment α) (H : _root_.Hash.Msg → Verity.Digest)
+    (M : Verity.Root × ℕ → Option TreeLeaf), Sc.Binds H → (treeSc Sc M).Binds H
+
+/-- **`RblkOfTrees`**: block `u`'s openings at the verifier's tree leaves (`TreeAt`) of every gate of in(S) and
+out(S), each at its tree's root `roots`, with out(S) computed, are `Partition.Rblk` at Core's commitment
+`fun r => (r, roots)` of `treeSc Sc (treeMap …)`, at `servedLayout`, where every such gate has one leaf
+(`TreeMapOne`'s conclusion). -/
+def RblkOfTrees : Prop :=
+  ∀ (P : Prog) (ms : Array Spot.OneStageZk.Member) (rs : Array Flock.TemplateQuery.TRange)
+    (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) {α : Type} (Sc : _root_.Hash.StringCommitment α)
+    (H : _root_.Hash.Msg → Verity.Digest) (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α)
+    (roots : String → Sc.Com) (X : (ofProgram P).Trace) (π : Fin (ofProgram P).N → Sc.Op),
+    let Pt := partOf P blocks
+    let S := Pt.gates u.castSucc
+    (∀ g ∈ (ofProgram P).into S ∪ (ofProgram P).exits S, ∀ tl tl', TreeAt P ms rs g.val tl →
+      TreeAt P ms rs g.val tl' → tl = tl') →
+    (∀ g ∈ (ofProgram P).into S ∪ (ofProgram P).exits S, ∃ tl, TreeAt P ms rs g.val tl ∧
+      Sc.Opens H (roots tl.tree) (Nat.pair tl.leaf tl.slot) (enc g (X g)) (π g)) →
+    (∀ g ∈ (ofProgram P).into S ∪ (ofProgram P).exits S, ∃ q, Pt.pos (servedLayout P) g = some q) →
+    (∀ g ∈ (ofProgram P).exits S,
+      X g = ((ofProgram P).restrict S).run (fun a => if Pt.unit a = some u.castSucc then none else some (X a)) g) →
+    Pt.Rblk (treeSc Sc (treeMap P Pt ms rs)) H enc (servedLayout P) (fun r => (r, roots)) u.castSucc X π
+
+/-- **Gap: the session's unit indices are the header's.** The public file's `units.indices`
+(`Flock.Registered.unitIndices`), which the session reads, are the header's (`Spot.FilePart.indicesOf`), which
+`unitsHeld` holds to the member's `Member.indices`. -/
+def UnitIndicesAgree : Prop :=
+  ∀ (pub : Flock.Public) (us vs : Array ℕ),
+    Flock.Registered.unitIndices pub = .ok us → Spot.FilePart.indicesOf pub.header = .ok vs → us = vs
+
+/-- **Gap: a held port is the record's tree.** A registered port `portTreeHeld` holds, which opens a committed tree
+(`treePortOf`), carries the record's root, domain and leaf count at that tree's port. -/
+def PortTreeHeldRecord : Prop :=
+  ∀ (byPort : Std.HashMap String Lean.Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port)
+    (t : String), Spot.OneStageZk.portTreeHeld byPort who tmpl q = .ok () → Spot.OneStageZk.treePortOf q = some t →
+    ∃ e, byPort.get? t = some e ∧ Spot.getD e "root" = .str (Flock.hexOf q.root) ∧
+      Spot.getD e "domain" = .str (Flock.hexOf q.domain) ∧ Spot.nat? (Spot.getD e "leaves") = some q.leaves
+
+/-- **Gap: the verifier's check of a row is an opening of each of its values.** A row `row` whose payload
+(`payloadOf`) `Flock.Registered.opensLeaf` accepts at `pos` under port `q`'s root opens, at each index `s`, its value
+there under `Sc` at `rootOf q.root`, position `Nat.pair pos s`. -/
+def OpensLeafOpens {α : Type} (Sc : _root_.Hash.StringCommitment α) (H : _root_.Hash.Msg → Verity.Digest)
+    (rootOf : ByteArray → Sc.Com) (payloadOf : List α → ByteArray) (opOf : ByteArray → ℕ → Sc.Op) : Prop :=
+  ∀ (q : Flock.Registered.Port) (row : List α) (pos : ℕ) (path : ByteArray),
+    Flock.Registered.opensLeaf q (payloadOf row) pos path = true →
+    ∀ s (hs : s < row.length), Sc.Opens H (rootOf q.root) (Nat.pair pos s) row[s] (opOf path s)
+
+/-- **`FifthOpens`, the fifth statement's second half, over the map.** On an accept, for every committed gate of a
+member's block (`Partition.io`), the position Core gives it (`Partition.pos` at `servedLayout`) is a leaf of a tree
+whose root the verifier holds (`HeldTree`), `treeMap` takes the position there, and an opening the verifier checked
+at that leaf is the opening `Partition.Rblk` reads at the position, under `treeSc`. -/
+def FifthOpens : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ m ∈ ms, ∀ (fr : Spot.BlockFront.Front) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size),
+      Spot.BlockFront.front Pp.prog m.indices = .ok fr → BlockIs Pp.prog blocks u fr →
+      ∀ {α : Type} (Sc : _root_.Hash.StringCommitment α) (H : _root_.Hash.Msg → Verity.Digest) (roots : String → Sc.Com),
+      ∀ g ∈ (partOf Pp.prog blocks).io u.castSucc, ∃ q tl,
+        (partOf Pp.prog blocks).pos (servedLayout Pp.prog) g = some q ∧
+        treeMap Pp.prog (partOf Pp.prog blocks) ms rs q = some tl ∧ HeldTree Pp.prog ms c.record tl.tree ∧
+        ∀ v π, Sc.Opens H (roots tl.tree) (Nat.pair tl.leaf tl.slot) v π →
+          (treeSc Sc (treeMap Pp.prog (partOf Pp.prog blocks) ms rs)).Opens H (q.1, roots) q.2 v π
 
 end Flock.Chain
