@@ -83,7 +83,7 @@ theorem foldlM_paired {ms : Array Spot.OneStageZk.Member} :
     exact ⟨[], (List.append_nil _).symm, .nil⟩
   | st :: l, acc, out, h => by
     rw [List.foldlM_cons] at h
-    obtain ⟨a, ha, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+    obtain ⟨a, ha, h⟩ := FlockDeploy.BaseSetup.bind_ok h
     obtain ⟨m, hp, rfl⟩ := heldStep_paired ha
     obtain ⟨ms', hout, hF⟩ := foldlM_paired l _ out h
     refine ⟨m :: ms', ?_, .cons hp hF⟩
@@ -176,7 +176,7 @@ theorem foldl_read {a : Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     exact ⟨ha, fun _ hs => by simp at hs⟩
   | s :: l, r, r', h, ha => by
     rw [List.foldlM_cons] at h
-    obtain ⟨r₁, h₁, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+    obtain ⟨r₁, h₁, h⟩ := FlockDeploy.BaseSetup.bind_ok h
     obtain ⟨ha₁, hl⟩ := foldl_read l r₁ r' h ha
     have h₁' : Spot.OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s =
         .ok r₁ := h₁
@@ -197,21 +197,21 @@ theorem statement_fits {m : Spot.OneStageZk.Member} {slice : Json} {bs : Core.Bl
     Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB tables (some m.own.program)
       (some m.own.partition) m.own.registered = none := by
   unfold Spot.OneStageZk.Member.statement at h
-  obtain ⟨a', ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨a', ha', h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := FlockDeploy.BaseSetup.bind_ok h
   obtain rfl : a' = a := Except.ok.inj h
-  obtain ⟨tables', ht', ha'⟩ := Verity.Recursive.BaseSetup.bind_ok ha'
+  obtain ⟨tables', ht', ha'⟩ := FlockDeploy.BaseSetup.bind_ok ha'
   obtain rfl : tables' = tables := Except.ok.inj (ht'.symm.trans ht)
   unfold Spot.OneStageZk.statementOf at ha'
-  obtain ⟨⟨⟩, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok ha'
+  obtain ⟨⟨⟩, -, h⟩ := FlockDeploy.BaseSetup.bind_ok ha'
   split at h
   · exact absurd h (throw_ne _ _)
   split at h
   · exact absurd h (throw_ne _ _)
   split at h
   · exact absurd h (throw_ne _ _)
-  obtain ⟨circuitB', hc', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨pubB', hp', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨circuitB', hc', h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨pubB', hp', h⟩ := FlockDeploy.BaseSetup.bind_ok h
   obtain rfl : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
   obtain rfl : pubB' = pubB := Except.ok.inj (hp'.symm.trans hp)
   split at h
@@ -233,7 +233,7 @@ theorem stepMember_stmt {slice : Spot.OneStageZk.Member → Json}
   unfold Spot.OneStageZk.stepMember at h
   have h := mapError_ok h
   unfold Spot.OneStageZk.runFrom at h
-  obtain ⟨a, ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨a, ha', h⟩ := FlockDeploy.BaseSetup.bind_ok h
   rw [← Array.foldlM_toList] at h
   obtain ⟨har, hs⟩ := foldl_read _ r r' h ha
   exact ⟨har, a, hst a ha', hs⟩
@@ -250,7 +250,7 @@ theorem foldl_stmt {slice : Spot.OneStageZk.Member → Json}
     exact ⟨ha, fun _ hz => by simp at hz⟩
   | z :: l, r, r', hst, h, ha => by
     rw [List.foldlM_cons] at h
-    obtain ⟨r₁, h₁, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+    obtain ⟨r₁, h₁, h⟩ := FlockDeploy.BaseSetup.bind_ok h
     obtain ⟨ha₁, hl⟩ := foldl_stmt l r₁ r' (fun z' hz' => hst z' (List.mem_cons_of_mem _ hz')) h ha
     obtain ⟨har, hz⟩ := stepMember_stmt (hst z (by simp)) h₁ ha₁
     refine ⟨har, fun z' hz' => ?_⟩
@@ -269,11 +269,11 @@ theorem runMembers_stmt {slice : Spot.OneStageZk.Member → Json} {ms : Array Sp
       ∃ a, z.2.statement (slice z.2) bs = .ok a ∧
         ∀ s ∈ z.1.sessions.toList, SessionRead a bs s := by
   unfold Spot.OneStageZk.runMembers at h
-  obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨held, hheld, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨files, hfiles, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨r₁, hfold, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := FlockDeploy.BaseSetup.bind_ok h
   have e : r₁ = r := Except.ok.inj h
   rw [e] at hfold
   rw [← Array.foldlM_toList] at hfold

@@ -3,7 +3,6 @@ module
 public import Proofs.Flock.Recursive.LoopAny
 public import Proofs.Flock.Recursive.ZkServerAccepts
 public import Proofs.Flock.Recursive.ZkServerFixed
-public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.SessionLoop.TablesSide
 public import Proofs.Spot.Sampling.OneStage
 import all Init.Control.Except
@@ -23,8 +22,8 @@ import all Lean.Data.Json.Basic
 /-!
 # `RecursiveZKLoop` and `RecursiveZKLoopAnySum` say something
 
-Each guarantee's honest lemma concludes its premises at one instance, and its nontrivial lemma states that its bound
-fails at another.
+Each guarantee's nontrivial lemma states that its bound fails at one instance; its honest lemma, which concludes its
+premises at another, is `LoopHonest`'s.
 
 The instance:
 * the ZK server's schedule `sched`: one root table `t` of one node, no rounds, a Hello that links nothing. It is
@@ -32,8 +31,6 @@ The instance:
   transcript on the worker's requests and finishes (`sends`: `ZkServerSends`, from `honestReqs_accepts`);
 * the same requests as a worker of the adaptive zk_server (`wAny`): it finishes at every salt (`wAny_finishes`), by
   one kernel evaluation at the zero salt (`hon_finishes0`) and `liveFinished_chopReqs`;
-* one statement of V* (`m = 1`): the honest fixture's (`RecDeploy.BaseParses.fixture_stmt`), whose statement and
-  witness are in the claims' relation at the deployed masked parser, `deployZk Readable.relation`;
 * the deployed tables, through `TablesSide`'s `_dataE` theorems, with `SwCausalOn (Loop.SwOk Masked.dataE)` at the
   honest values (`swCausalOn_honestVals_dataE`); and the deployed release, which reads no stop
   (`LoopAny.releaseReadsNoStop_loopRelease`).
@@ -44,8 +41,8 @@ finishes (`RecursiveZKLoop`: the simulated view always finishes), and where the 
 that didn't finish (`RecursiveZKLoopAnySum`, at no holes: the real view is released unfinished at the stop `true`, and
 the simulated view is unfinished only at the stop `false`).
 
-* `Flock.SecurityProofs.RecursiveZKLoop_honest`, `Flock.SecurityProofs.RecursiveZKLoop_nontrivial`.
-* `Flock.SecurityProofs.RecursiveZKLoopAnySum_honest`, `Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial`.
+* `Flock.SecurityProofs.RecursiveZKLoop_nontrivial`.
+* `Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial`.
 -/
 
 @[expose] public section
@@ -235,38 +232,6 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **`RecursiveZKLoop`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
-values), the ZK server sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
-fixture's, in the claims' relation at the deployed masked parser at every context, its simulator's coins its own. -/
-theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
-    ∃ (y : Hash.Msg) (w : Claims.Flock.Wit),
-      Claims.ZKServer.Loop.finS.Tables ∧
-      Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
-      Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
-      Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)
-        Claims.ZKServer.Loop.finS.honestVals ∧
-      Claims.ZKServer.Loop.finS.TapeOK ∧
-      Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
-        (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.ZkServer.honestReqs sched hon)
-        (fun _ _ _ => ZkServerHonest.honestMsgs sched honD () () ())
-        (Flock.Guarantees.zkServerT sched sched.tables) ∧
-      (OuterZK.LoopSessions.atWorker 1 (fun (_ : ℕ) (_ : Unit × (Fin nhS → ByteArray)) => y)
-          (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit nhS) => w)).Honest
-        (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
-        (fun u : (Unit × Unit) × (Fin nhS → ZkView.Salt) =>
-          OuterZK.wctxAt (ZkServerHonest.honestMsgs sched honD () () ()) u.1.1 u.1.2 u.2) ∧
-      ∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-        (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-          _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ),
-        (OuterZK.LoopSessions.atWorker 1 (fun (_ : ℕ) (_ : Unit × (Fin nhS → ByteArray)) => y)
-          (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit nhS) => w)).Sized (OuterZK.loopSim L₀ src t)
-          (fun _ => (OuterZK.loopSim L₀ src t).C y) := by
-  obtain ⟨y, w, hR⟩ := RecDeploy.BaseParses.fixture_stmt h
-  exact ⟨y, w, Claims.ZKServer.Loop.tables_dataE, Claims.ZKServer.Loop.complete_dataE,
-    Claims.ZKServer.Loop.dummyReg_dataE, Claims.ZKServer.Loop.causal_dataE,
-    Claims.ZKServer.Loop.swCausalOn_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, sends,
-    fun _ _ _ => hR, fun _ _ _ _ _ _ => ⟨Equiv.refl _⟩⟩
-
 /-- **`RecursiveZKLoop`'s bound fails where the ZK server never finishes**: with no request and no statement of V*, the
 real view never finishes and the simulated one always does, so an event of not finishing has probability `1` against a
 bound of `0`. -/
@@ -297,42 +262,6 @@ theorem RecursiveZKLoop_nontrivial :
       FlockSoundness.Game.prCoin_false.le) zero_le) ?_ (by simp)
   refine ENNReal.iSup_eq_zero.2 fun _ => ?_
   simp [OuterZK.LoopSessions.atWorker]
-
-/-- **`RecursiveZKLoopAnySum`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
-values); the honest worker's requests, as a worker of the adaptive zk_server, finishing at every salt, so its contexts
-are all of them; one statement of V*, the honest fixture's, in the claims' relation at the deployed masked parser at
-every context, its simulator's coins its own; and the deployed release reading no stop. -/
-theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
-    ∃ (y : Hash.Msg) (w : Claims.Flock.Wit),
-      Claims.ZKServer.Loop.finS.Tables ∧
-      Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
-      Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
-      Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)
-        Claims.ZKServer.Loop.finS.honestVals ∧
-      Claims.ZKServer.Loop.finS.TapeOK ∧
-      (∀ u : (Unit × Unit) × (Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 → Fin 256),
-        adaptFinished sched (wAny u.1.1 u.1.2) nA (Flock.Guarantees.saltsOf u.2) = true) ∧
-      (OuterZK.LoopSessions.atWorker 1
-          (fun (_ : ℕ) (_ : Unit × (Fin (Flock.Guarantees.fwHoles sched) → ByteArray)) => y)
-          (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit (Flock.Guarantees.fwHoles sched)) => w)).Honest
-        (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
-        (fun u : {u : (Unit × Unit) × (Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 → Fin 256) //
-            adaptFinished sched (wAny u.1.1 u.1.2) nA (Flock.Guarantees.saltsOf u.2) = true} =>
-          Flock.Guarantees.anyCtx sched wAny nA 0 u.1.1.1 u.1.1.2 u.1.2) ∧
-      (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-        (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
-          _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ),
-        (OuterZK.LoopSessions.atWorker 1
-          (fun (_ : ℕ) (_ : Unit × (Fin (Flock.Guarantees.fwHoles sched) → ByteArray)) => y)
-          (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit (Flock.Guarantees.fwHoles sched)) => w)).Sized
-          (OuterZK.loopSim L₀ src t) (fun _ => (OuterZK.loopSim L₀ src t).C y)) ∧
-      ∀ (n : ℕ) (M : Fin n → ℕ),
-        Flock.Guarantees.ReleaseReadsNoStop (Flock.Guarantees.loopRelease (Ωa := Unit) M) none := by
-  obtain ⟨y, w, hR⟩ := RecDeploy.BaseParses.fixture_stmt h
-  exact ⟨y, w, Claims.ZKServer.Loop.tables_dataE, Claims.ZKServer.Loop.complete_dataE,
-    Claims.ZKServer.Loop.dummyReg_dataE, Claims.ZKServer.Loop.causal_dataE,
-    Claims.ZKServer.Loop.swCausalOn_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, fun u => wAny_finishes u.2,
-    fun _ _ _ => hR, fun _ _ _ _ _ _ => ⟨Equiv.refl _⟩, fun _ M => LoopAny.releaseReadsNoStop_loopRelease M⟩
 
 /-- **`RecursiveZKLoopAnySum`'s bound fails where the release reads the stop of an unfinished session**: with no
 request, no hole and no statement of V*, the real view never finishes. Released with the stop `true` beside whether it

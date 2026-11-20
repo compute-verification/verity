@@ -12,8 +12,8 @@ without one) and its message, on an accept the program's digest, its Boolean map
 The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `registered_program`'s), each of
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
 in both decoders' parsers), `chain()`, a GEMM chain whose word primitives' bodies are the catalog's, and
-`recut_vectors.reads()`, reads of an input node at another width, and `supplied_cases()`, a supplied input's mark (§5.4)
-as a program and a block carry it and each of its refusals."""
+`recut_vectors.reads()`, reads of an input node at another width, `supplied_cases()`, a supplied input's mark (§5.4)
+as a program and a block carry it and each of its refusals, and `test_codec_refusals.DECODER`'s descriptors."""
 from __future__ import annotations
 
 import argparse
@@ -25,6 +25,7 @@ from pathlib import Path
 import recut_vectors
 import test_supplied_block as SB
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
+import test_codec_refusals as refusals
 import test_format_spec as spec
 
 from verity.circuits import codec
@@ -86,6 +87,17 @@ def cases() -> list[tuple[str, str, object]]:
     out.append(("chain", chain(), REGISTRY))
     out += [(name, text, spec.REG) for name, text in recut_vectors.reads()]
     out += [(name, text, REGISTRY) for name, text in supplied_cases()]
+    out += refusal_cases()
+    return out
+
+
+def refusal_cases() -> list[tuple[str, str, object]]:
+    """`test_codec_refusals.DECODER`'s descriptors, each the smallest that trips one refusal of `codec.py`'s decoder."""
+    out = []
+    for label, make, edit, _text in refusals.DECODER:
+        d, registry = make()
+        edit(d)
+        out.append((f"refusal: {label}", json.dumps(d, ensure_ascii=False, separators=(",", ":")), registry))
     return out
 
 

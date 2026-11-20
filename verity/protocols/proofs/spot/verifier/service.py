@@ -177,7 +177,7 @@ from verity.circuits.program import Program
 from verity.commitments import history as HT
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
-from . import second_stage as SS, window_place as WP
+from . import levels as LV, second_stage as SS, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import (
     audit as A,
     draw as D,
@@ -2001,7 +2001,8 @@ class Stream:
         samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_sampling_design`, before
         R1-R8) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R8 then reading its table),
         when either check fails, or, after both,
-        when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
+        when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the stream is two-stage
+        (`levels-not-proved`, `levels.TWO_LEVELS_REFUSED`: two levels are built and refused), when the program's proof blocks read stratum by stratum
         are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
@@ -2040,6 +2041,8 @@ class Stream:
                             history=history, certified=certified)
                 if v.ok and bernoulli(sampling_design):
                     v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
+                if v.ok and self.n_rho is not None:
+                    v = _refuse(LV.NOT_PROVED, {"reason": LV.TWO_LEVELS_REFUSED}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
                     v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=sampling_design, table=table, earlier=earlier)

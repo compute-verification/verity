@@ -34,10 +34,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Recursive.LinksOuter
 import Proofs.Flock.Recursive.LinksRows
