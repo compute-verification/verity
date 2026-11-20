@@ -15,6 +15,7 @@ from verity_cli import run as RUN
 from verity_cli import served_table as ST
 
 from tests.program.predict.test_close_record import _close
+from tests.program.predict.test_window_rows import LANES
 from tests.program.predict.test_window_rows import RUN as RUN_ROOT
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -22,17 +23,17 @@ from verity_vllm.program.predict.close_record import Record
 
 ROOT = Path(__file__).parents[6]
 COMPILER = {"name": "c", "digest": "cd" * 64}
-#: what a card's serve writes in serve.json of the application's checkpoint (remote's REPO, REV and PRECISION) and of its
-#: device (`serve_seal.target_of`), the default profile standing in for the card's
-SERVED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "precision": "bfloat16",
-          "execution": "bi-eager", "default_seed": DEFAULT_SEED}
+#: what a card's serve writes in serve.json beside the application's checkpoint and its device (`serve_seal.target_of`), the
+#: default profile standing in for the card's
+SERVED = {"execution": "bi-eager", "default_seed": DEFAULT_SEED}
 PROGRAM, WORKLOAD = "a1" * 64, "12" * 64
 
 
-def _serve_dir(tmp_path, monkeypatch):
+def _serve_dir(tmp_path, monkeypatch, application):
     """TINY's window at class 2,4,2 closed as a serve's close leaves it (`Record.handoff`, then `Record.make` from the
     handoff alone, as close_record's finish does after the lease), under ``tmp_path/serve``; what only a card's serve writes
-    beside it (its configuration, seal, commit verdict, advice registration and predict row's Build) stood in."""
+    beside it (its configuration of ``application``'s checkpoint, its requests, seal, commit verdict, advice registration
+    and predict row's Build) stood in."""
     d = tmp_path / "serve"
     low, units, served, plan, binding, compiled = _close(d, monkeypatch)
     rec = Record("rate:1/4", "unread", tmp_path / "salt_stream", sample=2, workers=2)
@@ -40,7 +41,13 @@ def _serve_dir(tmp_path, monkeypatch):
     got = rec.make(plan, 0, compiled, low, units, served, SimpleNamespace(rc=binding.rc, com=None), handoff=Path(h["out"]))
     line = {"window": 0, "advice": "ef" * 64, "handoff": {"out": h["out"]}, "record": {"pending": "made after the lease"}}
     (d / "plans.jsonl").write_text(json.dumps(line) + "\n")
-    (d / "serve.json").write_text(json.dumps({"scheme": "rows-sha512", **SERVED, "target": TargetProfile.default().to_json()}))
+    params = RUN.load(ROOT / "applications" / f"{application}.toml", RUN.registry())["workload"]["params"]
+    checkpoint = {k: params[k] for k in ("model", "revision", "precision")}
+    (d / "serve.json").write_text(json.dumps({"scheme": "rows-sha512", **checkpoint, **SERVED,
+                                              "target": TargetProfile.default().to_json()}))
+    (d / "requests.jsonl").write_text("".join(json.dumps({"user": f"q{k}", "windows": [0], "prompt_ids": p[:lp],
+                                                         "ingress": {"brought": {"max_tokens": m}}}) + "\n"
+                                              for k, (_o, lp, m, p) in enumerate(LANES)))
     (d / "seals.jsonl").write_text(json.dumps({"window": 0, "run_root": RUN_ROOT}) + "\n")
     commit = d / "windows" / "w0" / "commit"
     commit.mkdir(parents=True)
@@ -91,7 +98,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     record and the composite after them. The end line counts what ran, refused and failed, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
     on a real window's record. Slow (minutes) for the close."""
-    d = _serve_dir(tmp_path, monkeypatch)
+    d = _serve_dir(tmp_path, monkeypatch, "remote")
     (tmp_path / "run").mkdir()
     path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
     rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
@@ -120,7 +127,7 @@ def test_the_window_road_runs_an_onsite_application_without_compute_accounting(t
     """onsite_network lists no compute accounting, so POUW is empty and the preflight passes it; the network attester's
     own piece refuses in its own words (`attester_piece.NOT_RUN`), and the wipe, whose answer the card launcher did not
     write, refuses as that launcher's. Slow (minutes) for the close."""
-    d = _serve_dir(tmp_path, monkeypatch)
+    d = _serve_dir(tmp_path, monkeypatch, "onsite_network")
     rc, log, _ = _road(tmp_path, monkeypatch, "onsite_network", d)
     assert "POUW" not in log and "pearl-plus" not in log, log
     assert "network-attester: the network audit is not run: its checks are being moved into the workload's circuit" in log, log
