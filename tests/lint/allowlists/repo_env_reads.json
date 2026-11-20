@@ -9,7 +9,6 @@
     {"file": "benchmarks/commitments/step_root_cost.py", "count": 2},
     {"file": "benchmarks/commitments/step_root_gpu.py", "count": 2},
     {"file": "benchmarks/dsa_topk/dsa_topk.py", "registry": true},
-    {"file": "benchmarks/hash/dither/h1v3_ref.py", "count": 1},
     {"file": "benchmarks/kv_filler/serve.py", "count": 1},
     {"file": "tests/benchmarks/network_e2e/encodings/test_replay.py", "count": 1},
     {"file": "benchmarks/network_e2e/encodings/vllm_trace.py", "count": 1},
