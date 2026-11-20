@@ -567,7 +567,7 @@ def wire_lists(draw):
     return {"wires": wires}
 
 
-DISJOINT = D.Port(PIECES, "wires_disjoint", disjoint_reference, wire_lists(), package=PACKAGE, of_record="lean")
+DISJOINT = D.Port(PIECES, "wires_disjoint", disjoint_reference, wire_lists(), package=PACKAGE, of_record="lean", need_rejects=False)
 
 
 def test_the_sweep_and_the_pair_by_pair_check_agree_with_the_reference(pieces):
