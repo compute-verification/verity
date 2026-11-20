@@ -252,7 +252,7 @@ def test_the_seal_reads_each_field_at_its_path_in_the_registration_and_refuses_a
     rc, out = _sealed(tmp_path / "a", {})
     assert rc == 0 and "and its record: PASS" in out and "predict row's are equal strings: PASS" in out, out
     assert "BOUND-PROGRAM: the commit's bound Program digest and the predicted workload digest are kept side by side and " \
-           "compared by nothing, so the seal does not tie the proved circuit to the served one" in out, out
+           "compared by nothing, so the seal does not tie the window's circuit to the served one" in out, out
     rc, out = _sealed(tmp_path / "b", {"circuit": "11" * 64})
     assert rc == 1 and "the record's circuit.json is not the circuit its registration binds" in out, out
     rc, out = _sealed(tmp_path / "c", {"compiler": {"name": "c", "digest": "11" * 64}})
