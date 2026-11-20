@@ -6,6 +6,12 @@ public import Definitions.Core.Blocks
 /-!
 # Blocks and their properties: the interface from accounting to policy
 
+TO BE REPLACED: `Division` is a chain of `Verity.Partition`s under `Refines` with claims per unit. Each scale (the
+server-day blocks; the inference and free blocks refining them, a class per unit; the proof blocks refining the
+inference blocks) is a partition of the actual circuit, so `parent`, `depth`, `Gates.covers`, `children`, `nest` and
+`disjoint` and the check's leaf and forest clauses go, and the claims, `Established`, `UseAtLeast` and the conversion
+read units.
+
 A block is Core's (`Verity.Block`): a window of ticks and the gates of a circuit it computes there. Here the circuit is
 the actual circuit (`Placed`). Its suffix names its scale: a proof block is a unit of a `Verity.Partition` and a
 `Verity.Scheme.Block`; an inference block is a unit of a registered circuit's `𝓘`; a server-day block is a server-time

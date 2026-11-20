@@ -19,10 +19,8 @@ whose conclusion is a one-line consequence of its hypotheses is a shape: its con
 * **The declared blocks run** (`DeclaredBlocksRun`): every inference block outside a set within the tolerance
   implements its declared block, at a size and input at most stated: one premise, replacing a function claim read
   off the sampled proofs.
-* **PoUB** (`PoubUseAtLeast`): use at least, in registered reads counted with multiplicity, from
-  `ResourceAccounting.Guarantees.RemoteRunConservationDeployed`.
-* **PoUS** (`PousUseAtLeast`): use at least, in the device model's held bit-ticks; its tie to the actual circuit is
-  `HeldExclusive`. Its guarantee is in the properties tree, which this tree does not read, so the hypothesis `G`.
+* **PoUB** (`PoubUseAtLeast`) and **PoUS** (`PousUseAtLeast`): open and not placed; no term of the inference-only
+  bound reads memory reads or memory held.
 * **The memory wipe** (`WipeInputAtMost`): input at most from its own past. Its guarantee's module is a guarantee
   layer this one may not import, so the hypothesis `G`.
 * **Network attestation** (`NetworkInputAtMost`, `NetworkOutputAtMost`): input at most from `AttesterOnEveryLink`
@@ -88,9 +86,10 @@ def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 its declared block `f j`, at size at most `c j` (the declared size times a stated overhead at the pricing) and input at
 most `k j` bits from its own past, another block and the outside world, except with probability at most `ε`.
 Nothing in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it,
-and useful work shows an amount of work. Whether this is (a) a named assumption of the system or (b) owed an argument
-from PoUW's coverage of the declared work, the uncovered share counted in the free block, is a claim for Daniel. An
-inference block outside `K` or before its salt has no row here, so a division the chain reads declares it free. -/
+and useful work shows an amount of work. It is owed an argument from PoUW's coverage of the declared work, with the
+uncovered share and the incorrect proof blocks the sample missed counted in the free block (owners compute-accounting
+and soundness). An inference block outside `K` or before its salt has no row here, so a division the chain reads
+declares it free. -/
 def DeclaredBlocksRun (K : Finset Dv.ι) (salt : Dv.ι → ℕ) (f : Dv.ι → Circuit) (c k : Dv.ι → ℕ) (decl : Finset Dv.ι → ℕ) (tol : ℕ)
     (ε : ℝ≥0∞) : Prop :=
   P.EstablishedOutside (K.filter fun j => j ∈ Dv.inference ∧ salt j ≤ (Dv.win j).start)
@@ -98,49 +97,18 @@ def DeclaredBlocksRun (K : Finset Dv.ι) (salt : Dv.ι → ℕ) (f : Dv.ι → C
 
 /-! ## PoUB -/
 
-/-- **The tier reads are the enclosing blocks' registered reads** (open, memory-accounting): in an accepted run whose
-reads clear the claim, every block `i` of `K` reads registered information at least `b i` bits, counted with
-multiplicity. The session's passes are the audit's own work over the store, so they are the enclosing block's reads. -/
-def TierReadsAreReads (K : Finset Dv.ι) (shown : P.Run → Prop) (b : Dv.ι → ℕ) : Prop :=
-  ∀ r, P.accepts r → shown r → ∀ i ∈ K, b i ≤ P.registeredReads r i
-
-/-- **PoUB: use at least, in registered reads counted with multiplicity.** From
-`ResourceAccounting.Guarantees.RemoteRunConservationDeployed`: every opening passes only while the session's tier reads
-are at least a share of n·P·N·b. Open: `RunReads`, which carries `WorkHardness`, `SquaringCeiling` and the side-channel
-independence on sessions of at least seven windows, and `TierReadsAreReads`. Its session is one node's, so the class is
-the server-day blocks; the capacity is the node's read rate times the window. Reads are not one of the four
-properties: which property the free block's input from memory takes (a rate form of `inputAtMost`, or reads) is open
-for training. A shape: its content is its premises. -/
-def PoubUseAtLeast (K : Finset Dv.ι) (shown : P.Run → Prop) (b : Dv.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
-  ResourceAccounting.Guarantees.RemoteRunConservationDeployed →
-    P.RunReads ResourceAccounting.Guarantees.RemoteRunConservationDeployed shown ε → P.TierReadsAreReads K shown b →
-      P.UseAtLeast K P.registeredReads b ε
+/-- **PoUB: use at least, in registered reads counted with multiplicity** (open, memory-accounting with training), from
+`ResourceAccounting.Guarantees.RemoteRunConservationDeployed`. Not placed: which block's unregistered input this
+bounds and which term of the bound it makes smaller is not decided. -/
+def PoubUseAtLeast (K : Finset Dv.ι) (b : Dv.ι → ℕ) (ε : ℝ≥0∞) : Prop := P.UseAtLeast K P.registeredReads b ε
 
 /-! ## PoUS -/
 
-/-- **The held bit-ticks clear the claim** (open, memory-accounting): in an accepted run whose audit passed, the device
-model's held bit-ticks `held r i` over every block `i` of `K` are at least `b i`. -/
-def HeldClearsClaim (K : Finset Dv.ι) (shown : P.Run → Prop) (held : P.Run → Dv.ι → ℕ) (b : Dv.ι → ℕ) : Prop :=
-  ∀ r, P.accepts r → shown r → ∀ i ∈ K, b i ≤ held r i
-
-/-- **Held memory does not double as the free blocks' state** (open, memory-accounting with lean): at every tick `t`
-of every block `i` of `K`, what the free blocks of `F` directly inside `i` carry across `t` outside registered
-information, summed, plus what is held at `t` (`heldAt r i t`) is at most the location's memory `mem i`. `Placed` has
-no memory occupied but not read; `heldAt` stands for it. -/
-def HeldExclusive (K F : Finset Dv.ι) (heldAt : P.Run → Dv.ι → ℕ → ℕ) (mem : Dv.ι → ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ i ∈ K, ∀ t ∈ Dv.ticks i,
-    ∑ j ∈ Dv.within F i, ((P.actual r).state (Dv.X j) t - (P.actual r).stateIn (Dv.X j) t (P.θ r)) + heldAt r i t ≤
-      mem i
-
-/-- **PoUS: use at least, in the device model's held bit-ticks.** From `Pous.Period.PeriodHeldDeployed` (in the
-properties tree, so the hypothesis `G`; untied): the device held at least a share of the claimed bit-ticks. Its `ε` is
-δ + ε_max for one audit, a break of the ring audit excluded from the event, so a monitoring period's bound needs the
-pooled figure, which does not exist. Open: `RunReads`, which carries `P2RingAuditSecure`, `DeviceModel` and
-`Instantiates`, and `HeldClearsClaim`. The class is the windows between challenges on one device. A shape: its content
-is its premises. -/
-def PousUseAtLeast (G : Prop) (K : Finset Dv.ι) (shown : P.Run → Prop) (held : P.Run → Dv.ι → ℕ) (b : Dv.ι → ℕ)
-    (ε : ℝ≥0∞) : Prop :=
-  G → P.RunReads G shown ε → P.HeldClearsClaim K shown held b → P.UseAtLeast K held b ε
+/-- **PoUS: use at least, in the device model's held bit-ticks `held`** (open, memory-accounting with training), from
+`Pous.Period.PeriodHeldDeployed`. Not placed: which block's unregistered input this bounds and which term of the bound
+it makes smaller is not decided. -/
+def PousUseAtLeast (K : Finset Dv.ι) (held : P.Run → Dv.ι → ℕ) (b : Dv.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
+  P.UseAtLeast K held b ε
 
 /-! ## The memory wipe -/
 
