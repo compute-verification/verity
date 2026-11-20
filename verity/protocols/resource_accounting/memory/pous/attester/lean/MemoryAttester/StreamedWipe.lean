@@ -132,7 +132,13 @@ def header (c : Commitment) (ended : String) (startMark : ByteArray) (fillStartN
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records root)`,
-the salt the `RECORD_SALT_BYTES` bytes the challenger drew for the session. -/
+the salt `RECORD_SALT_BYTES` bytes. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. -/
 def message (c : Commitment) (salt : ByteArray) (ended : String) (startMark : ByteArray) (fillStartNs fillEndNs : Int)
     (batches : Array Batch) : E ByteArray := do
   if salt.size ≠ RECORD_SALT_BYTES then throw s!"a session record's salt is {RECORD_SALT_BYTES} bytes"

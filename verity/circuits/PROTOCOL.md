@@ -504,7 +504,13 @@ statement; `pous.session.context/v1` is the 106 bytes the signature's message ha
 SHA-512 is one the verifier's `attester_keys` pin (the configuration's pins of the memory attester; no body takes the key
 the session's own object names); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only when the
 coin's signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
-signatures the attester has made. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
+signatures the attester has made. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
 fraction, exponent or leading zero) within its field's width. Each refuses, by the name "no statement", what the held
 commitment or coin lacks or the arguments don't fit. Nothing reads these bodies through the door yet.
 

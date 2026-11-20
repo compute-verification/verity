@@ -110,7 +110,7 @@ theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
 /-- The `CoinTree` of a one-round session over one block: its one challenge is block 0. -/
 def oneCoins : CoinTree := ⟨.empty, 1, #[0], .empty, #[.empty], #[], .empty⟩
 
-/-- A record salt of `RECORD_SALT_BYTES` zero bytes. -/
+/-- A record salt of `RECORD_SALT_BYTES` zero bytes: it shows only that the length is satisfiable. -/
 def oneSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
 
 theorem oneSalt_size : oneSalt.size = RECORD_SALT_BYTES := by simp [oneSalt, ByteArray.size]

@@ -21,7 +21,13 @@ row, holding the bytes as the memory attester writes them.
 **What is public.** The message m, ``lms.memory_attester_message(I, session, record)`` of the record
 ``SHA-512(SESSION_TAG ‖ salt ‖ u64be(HEAD) ‖ head ‖ records digest)``: a hiding commitment to the records, salted with
 the memory attester's 64-byte draw; and the signature over m, whose leaf number q shows how many signatures the memory
-attester has made under its key. The salt and the records are witness, committed rows the prover holds.
+attester has made under its key. The salt and the records are witness, committed rows the prover holds. The record's
+salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes from its coins source as the session opens
+(`challenger_party.Challenger._coins`, `wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in
+`MemoryAttester.__init__` when none is given; in Lean the device's own coins, `Session.Params.salt`), outside the
+session's commitment and before its first index is revealed, and read once, when `close()` signs; it makes the signed
+digest m a hiding commitment to the guessable header and records, and nothing in soundness rests on its being random or
+fresh: a salt the prover could choose would still leave the signature binding the same records.
 
 **The signed digest's unit.** `PousSessionDigest_v2{K, HEAD, LIMIT}` reads the signed header (``head``, HEAD bytes and a
 zero byte when HEAD is odd), the signed context (``ctx``, `signed_context`: what `lms.memory_attester_message` hashes
