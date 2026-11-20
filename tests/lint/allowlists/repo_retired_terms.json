@@ -1683,7 +1683,6 @@
     {"file": "security/Proofs/Properties/Verity/Sampled/Readings.lean", "count": 2},
     {"file": "security/Proofs/Properties/Verity/Sampled/Record.lean", "count": 12},
     {"file": "security/Proofs/Properties/Verity/Sampled/Record/Accepts.lean", "count": 36},
-    {"file": "security/Proofs/Properties/Verity/Sampled/Record/Inner.lean", "count": 4},
     {"file": "security/Proofs/Properties/Verity/Sampled/Record/Nums.lean", "count": 15},
     {"file": "security/Proofs/Properties/Verity/Sampled/Record/Opens.lean", "count": 22},
     {"file": "security/Proofs/Properties/Verity/Sampled/Record/PartCong.lean", "count": 58},
