@@ -970,6 +970,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # the header against the member's slice of the docket: the per-member form's rule, in its one Python
         # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
         opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
+        # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
+        # Lean's members check reads them off that file (`Member.reads`)
+        opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
+                   if REG.is_fresh_value(e.get("value"))}
         why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
                                                                     opened)
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
