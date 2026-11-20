@@ -5,7 +5,8 @@
 # negatives: the weight as a registered read (refused today by the members check's header rule); the partition at
 # two levels refused at the door before any coin; a changed output word in every block (so in every drawn one)
 # refused; one changed output word in one unit, accepted unless its block is drawn; a stratified rate refused by its
-# kind (SUBSET_ONLY). The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
+# kind (SUBSET_ONLY). Each arm passes only on its own outcome, a negative's refusal by its name, and a crash is an
+# ERROR (`one_linear_arms.py`); the script fails unless every arm passes. The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
 # bash benchmarks/one_stage/one_linear.sh
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 4h -- bash benchmarks/one_stage/one_linear.sh
 set -uo pipefail
@@ -28,14 +29,19 @@ except OSError:
 keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "failed_drawn", "forged")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
-  return $r
+  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json | tee $B/$1.arm
 }
 audit honest $RULE "--weights committed" ""; H=$?
 audit registered $RULE "" ""; G=$?
 audit forged-drawn $RULE "--weights committed --forge all" "--forged"; F=$?
 audit forged-one $RULE "--weights committed --forge 1" ""; U=$?
-audit stratified stratified-${RULE#rate:} "--weights committed" ""; R=$?
+audit stratified stratified-$RULE "--weights committed" ""; R=$?
 echo "LAW the zero-knowledge audit's proved statement covers a subset design, so the accept is under $RULE, a subset draw over one stratum; the audit under a rated law waits on its claim"
 echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
-[ $LV = 0 ] && [ $H = 0 ] && echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on three open premises"
-[ $LV = 0 ] && [ $H = 0 ] && [ $F = 0 ]
+if [ $LV = 0 ] && [ $H = 0 ]; then
+  echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on three open premises"
+  ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/accept_line.py $B/honest/summary.json - - ) 2>&1
+else
+  echo "NO ACCEPT levels rc $LV; $(cat $B/honest.arm 2>/dev/null || echo 'ARM honest: no verdict')"
+fi
+[ $LV = 0 ] && [ $H = 0 ] && [ $G = 0 ] && [ $F = 0 ] && [ $U = 0 ] && [ $R = 0 ]

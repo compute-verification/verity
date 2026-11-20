@@ -14,27 +14,8 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from one_linear_arms import refusal
 from verity.protocols.proofs.spot.verifier.one_stage.verifier import REGISTRATION_DELTA
-
-#: `Record.checks`' refusal of evidence naming no session root, which an honest window whose ports are all held by
-#: its members' registered reads meets: a completeness limit of the record, not a refusal of the window's values.
-NO_ROOTS = ("REJECT at roots: the audit record refuses a window whose evidence names no session root "
-            "(Record.checks' emptiness refusal); every port is held by the members check (headerHeldAt), so this "
-            "is a completeness limit, not a wrong value")
-
-
-def refusal(summary: dict) -> str | None:
-    """Why ``summary`` is no accept, or None for an accept."""
-    audit = summary.get("audit") or {}
-    if summary.get("ok") is True and audit.get("accepted") is True:
-        return None
-    failed = audit.get("checks_failed") or {}
-    if set(failed) == {"roots"} and not (failed["roots"] or {}).get("ports"):
-        return NO_ROOTS
-    if failed:
-        return "REJECT at " + ", ".join(sorted(failed)) + ": " + json.dumps(failed, sort_keys=True, default=str)[:600]
-    return "REJECT: " + json.dumps({"refused": summary.get("refused"), "why": audit.get("why")}, default=str)[:600]
-
 
 def lines(summary: dict, c: bytes | None, delta: str | None) -> list[str]:
     if (why := refusal(summary)) is not None:
