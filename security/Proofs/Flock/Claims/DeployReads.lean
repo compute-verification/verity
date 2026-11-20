@@ -237,6 +237,25 @@ theorem body_ok {α : Type} {A B : α → Flock.V Unit} {a : α} :
   rcases hA : A a with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
     simp [bind, Except.bind, pure, Except.pure]
 
+/-- A loop step `do C a (← W a); B a; pure (.yield ())` yields exactly when `W a >>= C a` and `B a` are `.ok`. -/
+theorem body_bind_ok {α β : Type} {W : α → Flock.V β} {C : α → β → Flock.V Unit} {B : α → Flock.V Unit} {a : α} :
+    (do C a (← W a); B a; pure (ForInStep.yield PUnit.unit) : Flock.V (ForInStep PUnit)) = .ok (.yield PUnit.unit) ↔
+      (W a >>= C a) = .ok () ∧ B a = .ok () := by
+  rcases hW : W a with e | r
+  · simp [bind, Except.bind]
+  · rcases hC : C a r with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
+      simp [bind, Except.bind, pure, Except.pure, hC, hB]
+
+theorem body_bind_yield {α β : Type} {W : α → Flock.V β} {C : α → β → Flock.V Unit} {B : α → Flock.V Unit} :
+    ∀ a s, (do C a (← W a); B a; pure (ForInStep.yield PUnit.unit) : Flock.V (ForInStep PUnit)) = .ok s →
+      s = .yield PUnit.unit := by
+  intro a s h
+  rcases hW : W a with e | r
+  · simp [hW, bind, Except.bind] at h
+  · rcases hC : C a r with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
+      simp [hW, hC, hB, bind, Except.bind, pure, Except.pure] at h
+    exact h.symm
+
 theorem body_yield {α : Type} {A B : α → Flock.V Unit} :
     ∀ a s, (do A a; B a; pure (ForInStep.yield PUnit.unit) : Flock.V (ForInStep PUnit)) = .ok s →
       s = .yield PUnit.unit := by

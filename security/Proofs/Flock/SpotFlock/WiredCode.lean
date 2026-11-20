@@ -245,8 +245,9 @@ theorem named_port_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁
     rw [hSj, getD_of_ok hports] at hme
     obtain ⟨reg, hmem, hrn⟩ := hback _ hme
     refine ⟨own, reg, rfl, hmem, hrn, fun sc hsc => ?_⟩
-    obtain ⟨_, _, -, -, hregs⟩ := opens_of_setup hset hreg sc hsc
-    obtain ⟨p, _, _, hp, -⟩ := hregs reg hmem
+    obtain ⟨own', hw⟩ := derived_of_setup hset hreg sc hsc
+    obtain ⟨_, _, -, -, hregs⟩ := opens_of_setup hset hreg sc hsc own' hw
+    obtain ⟨-, -, -, p, _, _, hp, -⟩ := hregs reg hmem
     rw [hrn] at hp
     exact ⟨p, hp⟩
 
