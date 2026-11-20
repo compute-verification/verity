@@ -427,6 +427,23 @@ def _words(bits: list[int], widths: list[int]) -> list[int]:
     return out
 
 
+#: a test whose whole run is a minute or more on a node: it stays out of every check but the nightly cold one, which runs each
+#: by name with VERITY_SLOW=1 (check.py's `OPT_IN`)
+FULL = pytest.mark.skipif(settings.get("VERITY_SLOW") != "1", reason="over a minute on a node: VERITY_SLOW=1")
+#: a sampled port's examples or a grid's rows, every tenth in `check` and every one only as `FULL` runs: the full run reaches
+#: the draws and rows between the tenth's, which no cheaper test does
+EVERY = pytest.mark.parametrize("every", [pytest.param(10, id="tenth"), pytest.param(1, id="full", marks=pytest.mark.skipif(
+    settings.get("VERITY_SLOW") != "1", reason="over a minute on a node: VERITY_SLOW=1"))])
+
+
+def sampled(server, port: DT.Port, examples: int, every: int, outputs: int, rejects: int) -> None:
+    """``port`` on ``examples`` // ``every`` examples: at least that share of ``outputs`` answered, and of ``rejects`` (half
+    of it, at least one, on a share) refused."""
+    stats = DT.run(port, examples=examples // every, seed=0, server=server)
+    least = rejects if every == 1 else max(1, rejects // (2 * every))
+    assert stats.outputs >= outputs // every and stats.rejects >= least, stats
+
+
 def agree(server, cases: list[dict]) -> tuple[int, int]:
     """Each case answered alike by both sides (`verity_difftest.replay`); (outputs, refusals)."""
     kinds = [DT.replay(PORT, c, server)[0] for c in cases]
@@ -436,9 +453,9 @@ def agree(server, cases: list[dict]) -> tuple[int, int]:
 # ---- the tests ----------------------------------------------------------------------------------------------------------
 
 @pytest.mark.slow
-def test_random_boolean_composites(server):
-    stats = DT.run(PORT, examples=RANDOM_EXAMPLES, seed=0, server=server)
-    assert stats.outputs >= 512 and stats.rejects >= 128, stats
+@EVERY
+def test_random_boolean_composites(server, every):
+    sampled(server, PORT, RANDOM_EXAMPLES, every, 512, 128)
 
 
 def test_the_random_composites_reach_every_form_and_their_oracle_is_reference_evaluate():
@@ -613,9 +630,9 @@ PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_ref
 
 
 @pytest.mark.slow
-def test_layout_gates_sampled(server):
-    stats = DT.run(GATE_PORT, examples=400, seed=0, server=server)
-    assert stats.outputs >= 200 and stats.rejects >= 20, stats
+@EVERY
+def test_layout_gates_sampled(server, every):
+    sampled(server, GATE_PORT, 400, every, 200, 20)
 
 
 def test_every_gate_of_some_programs(server):
@@ -720,9 +737,9 @@ def test_scalar_primitives_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-def test_scalar_primitives_sampled(server):
-    stats = DT.run(SCALAR_PORT, examples=2000, seed=0, server=server)
-    assert stats.outputs >= 1000 and stats.rejects >= 100, stats
+@EVERY
+def test_scalar_primitives_sampled(server, every):
+    sampled(server, SCALAR_PORT, 2000, every, 1000, 100)
 
 
 def test_scalar_words_out_of_range_are_refused(server):
@@ -876,11 +893,11 @@ def _grid(fn: PrimitiveDefinition) -> list[list[tuple[int, ...]]]:
     return [[(a, *r) for r in itertools.product(*rest)] for a in first]
 
 
-def _agree_on_grids(server, fns) -> int:
+def _agree_on_grids(server, fns, every: int = 1) -> int:
     total = 0
     for fn in fns:
         grid = [[(a,) for a in range(1 << 16)]] if fn is P.Bf16ToF32 else _grid(fn)
-        cases = [_batch_request(fn, rows) for rows in grid]
+        cases = [_batch_request(fn, rows[::every]) for rows in grid]
         assert agree(server, cases) == (len(cases), 0), fn.id
         total += sum(map(len, grid))
     return total
@@ -893,10 +910,11 @@ def test_float_primitives_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-def test_the_fmas_on_their_edge_grids(server):
+@EVERY
+def test_the_fmas_on_their_edge_grids(server, every):
     """The three-operand primitives (the FMAs: RN, FTZ, the negated addend, RM; v1 and v2) on every triple of FP32 edge words,
     each answer also the Python primitive's own evaluator's."""
-    assert _agree_on_grids(server, [fn for fn in FLOATS if len(fn.params) == 3]) == 8 * 35 ** 3
+    assert _agree_on_grids(server, [fn for fn in FLOATS if len(fn.params) == 3], every) == 8 * 35 ** 3
 
 
 @st.composite
@@ -918,9 +936,9 @@ FLOAT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference
 
 
 @pytest.mark.slow
-def test_float_primitives_sampled(server):
-    stats = DT.run(FLOAT_PORT, examples=2000, seed=0, server=server)
-    assert stats.outputs >= 1500 and stats.rejects >= 100, stats
+@EVERY
+def test_float_primitives_sampled(server, every):
+    sampled(server, FLOAT_PORT, 2000, every, 1500, 100)
 
 
 def test_float_words_out_of_range_are_refused(server):
@@ -1089,20 +1107,22 @@ def _tc_sweep(fn: PrimitiveDefinition) -> list[list[tuple]]:
     return [[(acc, *bg[1:]) for acc in F32_SWEEP] for bg in _tc_backgrounds(fn)]
 
 
-def _agree_on(server, fn: PrimitiveDefinition, grid: list[list[tuple]]) -> int:
-    """Each request of rows answered alike by both sides, and with the Python primitive's own evaluator's words."""
-    for rows in grid:
+def _agree_on(server, fn: PrimitiveDefinition, grid: list[list[tuple]], every: int = 1) -> int:
+    """Each request of rows answered alike by both sides, and with the Python primitive's own evaluator's words; the grid's
+    rows, of which each request's every ``every``-th, its first included, is asked."""
+    for rows in (rows[::every] for rows in grid):
         kind, out = DT.replay(PORT, request(json.loads(_batch_text(fn.id, len(rows))), _columns(rows)), server)
         assert kind == "output" and json.loads(out) == [fn.evaluate(*_flat(r)) for r in rows], fn.id
     return sum(map(len, grid))
 
 
 @pytest.mark.slow
-def test_tc_steps_on_their_edge_grids(server):
+@EVERY
+def test_tc_steps_on_their_edge_grids(server, every):
     """Every dot step on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials at two
     positions, and (the block-scaled steps) on every pair of edge scale bytes; each answer also the Python primitive's own
     evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, _tc_pairs(fn) + _tc_scales(fn)) for fn in TCS}
+    counts = {fn.id: _agree_on(server, fn, _tc_pairs(fn) + _tc_scales(fn), every) for fn in TCS}
     assert counts == {"AmpereBF16TcDot16_v2": 35 * 27 ** 2 + 6 * 27 ** 2, "HopperBF16WgmmaDot16_v1": 37 * 27 ** 2,
                       "HopperE4m3QgmmaDot32_v1": 37 * 14 ** 2, "BlackwellE4m3QmmaDot32_v1": 37 * 14 ** 2,
                       "BlackwellE5m2QmmaDot32_v1": 37 * 17 ** 2, "BlackwellNvf4OmmaDot64_v1": 41 * 16 ** 2 + 28 * 12 ** 2,
@@ -1110,11 +1130,12 @@ def test_tc_steps_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-def test_tc_steps_on_the_accumulator_sweep(server):
+@EVERY
+def test_tc_steps_on_the_accumulator_sweep(server, every):
     """Every dot step with each of the 3118 one-operand FP32 words as its accumulator over each background of
     `_tc_backgrounds`: the accumulator's truncation onto the adder, its alignment against the products, saturation, and the
     block-scaled steps' accumulator window and overflow."""
-    counts = {fn.id: _agree_on(server, fn, _tc_sweep(fn)) for fn in TCS}
+    counts = {fn.id: _agree_on(server, fn, _tc_sweep(fn), every) for fn in TCS}
     assert counts == {fn.id: len(F32_SWEEP) * (8 if TC_FMT[fn].scales else 7) for fn in TCS}, counts
 
 
@@ -1149,9 +1170,9 @@ TC_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, i
 
 
 @pytest.mark.slow
-def test_tc_steps_sampled(server):
-    stats = DT.run(TC_PORT, examples=1000, seed=0, server=server)
-    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+@EVERY
+def test_tc_steps_sampled(server, every):
+    sampled(server, TC_PORT, 1000, every, 800, 50)
 
 
 def test_tc_words_out_of_range_are_refused(server):
@@ -1211,14 +1232,15 @@ def _chain_batch_text(fid: str, steps: int, n: int) -> str:
     return json.dumps(desc_of(Program(bind(main))))
 
 
-def _replay_capture(server, fn: PrimitiveDefinition, rows: list[tuple], want: list[int], steps: int = 1) -> int:
+def _replay_capture(server, fn: PrimitiveDefinition, rows: list[tuple], want: list[int], steps: int = 1, every: int = 1) -> int:
     """The captured rows, `steps` chained calls each, in requests of at most 4096 rows: Lean's words are the Python oracle's
-    (`verity_difftest.replay`) and the captured ones."""
+    (`verity_difftest.replay`) and the captured ones; the rows, of which every ``every``-th, the first included, is asked."""
+    n, rows, want = len(rows), rows[::every], want[::every]
     for i in range(0, len(rows), 4096):
         chunk = rows[i:i + 4096]
         kind, out = DT.replay(PORT, request(json.loads(_chain_batch_text(fn.id, steps, len(chunk))), _columns(chunk)), server)
         assert kind == "output" and json.loads(out) == want[i:i + 4096], fn.id
-    return len(rows)
+    return n
 
 
 def _bf16_rows(cases: list[dict]) -> tuple[list[tuple], list[int]]:
@@ -1290,7 +1312,8 @@ def _tiles(z, *scales: str) -> tuple[list[tuple], list[int]]:
 
 
 @pytest.mark.slow
-def test_the_sm120_captures(server):
+@EVERY
+def test_the_sm120_captures(server, every):
     """The RTX PRO 6000's E5M2 specials and signed-zero tiles (38,912 words, NaN and infinite
     operands and accumulators included) through `BlackwellE5m2QmmaDot32_v1`, and its four MXFP4 edge families
     (73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
@@ -1299,10 +1322,11 @@ def test_the_sm120_captures(server):
 
     total = 0
     for name in ("tiles_specials", "tiles_signed_zero"):
-        total += _replay_capture(server, P.BlackwellE5m2QmmaDot32, *_tiles(np.load(FIXTURES / f"tc-sm120-e5m2-2026-09-30/{name}.npz")))
+        total += _replay_capture(server, P.BlackwellE5m2QmmaDot32, *_tiles(np.load(FIXTURES / f"tc-sm120-e5m2-2026-09-30/{name}.npz")),
+                                every=every)
     for name in ("nan_scale", "overflow_cancel", "overflow_edge", "inf_acc_overflow"):
         z = np.load(FIXTURES / f"tc-sm120-mxf4-2026-10-01/tiles_mxf4_{name}.npz")
-        total += _replay_capture(server, P.BlackwellMxf4OmmaDot64, *_tiles(z, "SFA", "SFB"))
+        total += _replay_capture(server, P.BlackwellMxf4OmmaDot64, *_tiles(z, "SFA", "SFB"), every=every)
     assert total == 38_912 + 73_728
 
 
@@ -1473,12 +1497,13 @@ def _word_family(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 
 @pytest.mark.slow
-def test_word_primitives_on_their_families(server):
+@EVERY
+def test_word_primitives_on_their_families(server, every):
     """The 16-entry accumulators under every edge accumulator over structured and sampled entries, the windows over
     backgrounds and specials at the atom boundaries, the salt-dead bits on every noise byte under each edge accumulator and
     on every one-operand accumulator word under each E4M3 edge, `PouwSqGe` at each threshold's boundary, and every mask's
     word of `PouwWindowWord`; each answer also the Python primitive's own evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, _word_family(fn)) for fn in WORD_FAMILIES}
+    counts = {fn.id: _agree_on(server, fn, _word_family(fn), every) for fn in WORD_FAMILIES}
     assert counts["PouwBlackwellE4m3SaltDead_v1"] == 35 * 256 + 14 * len(F32_SWEEP), counts
 
 
@@ -1539,9 +1564,9 @@ WORD_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-def test_word_primitives_sampled(server):
-    stats = DT.run(WORD_PORT, examples=2000, seed=0, server=server)
-    assert stats.outputs >= 1500 and stats.rejects >= 100, stats
+@EVERY
+def test_word_primitives_sampled(server, every):
+    sampled(server, WORD_PORT, 2000, every, 1500, 100)
 
 
 def _refused_leaves(fns) -> list[dict]:
@@ -1592,23 +1617,25 @@ def _sampler_grid(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 
 @pytest.mark.slow
-def test_sampler_primitives_on_their_grids(server):
+@EVERY
+def test_sampler_primitives_on_their_grids(server, every):
     """The logs on every word of `LOG_SWEEP`, the Gumbel lane (both versions) on the first 2048 vocabulary indices and the
     extremes under each key of `GUMBEL_KEYS` and on the lanes at the uniform's floor, the stream key on every pair of 64-bit edges and small positions, and the keep
     count on every dup count of `NUMDUP` against every q of `Q_SWEEP`; each answer also the Python primitive's own
     evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, _sampler_grid(fn)) for fn in SAMPLER}
+    counts = {fn.id: _agree_on(server, fn, _sampler_grid(fn), every) for fn in SAMPLER}
     assert counts == {"NvLogf_v1": len(LOG_SWEEP), "NvLogf_v2": len(LOG_SWEEP), "GumbelStreamKey_v1": 11 * 74,
                       "GumbelNoiseLane_v1": 9 * 2056 + 5, "GumbelNoiseLane_v2": 9 * 2056 + 5, "TopPNumkeep_v1": 11 * len(Q_SWEEP)}, counts
 
 
 @pytest.mark.slow
-def test_the_logs_on_sampled_words(server):
+@EVERY
+def test_the_logs_on_sampled_words(server, every):
     """`NvLogf_v1` and `_v2` on 2^18 seeded samples of the whole 32-bit range, in requests of 2^16."""
     rng = random.Random("logs")
     words = [rng.getrandbits(32) for _ in range(1 << 18)]
     for fn in (TW.NvLogf, TW.NvLogfV2):
-        assert _agree_on(server, fn, [[(w,) for w in words[i:i + (1 << 16)]] for i in range(0, 1 << 18, 1 << 16)]) == 1 << 18
+        assert _agree_on(server, fn, [[(w,) for w in words[i:i + (1 << 16)]] for i in range(0, 1 << 18, 1 << 16)], every) == 1 << 18
 
 
 FULL_LOGF = "VERITY_EVALUATE_FULL_LOGF"
@@ -1718,9 +1745,9 @@ SAMPLER_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-def test_sampler_primitives_sampled(server):
-    stats = DT.run(SAMPLER_PORT, examples=1000, seed=0, server=server)
-    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+@EVERY
+def test_sampler_primitives_sampled(server, every):
+    sampled(server, SAMPLER_PORT, 1000, every, 800, 50)
 
 
 def test_sampler_words_out_of_range_are_refused(server):
@@ -1756,9 +1783,10 @@ def _test_mufu_literals(*names: str) -> dict:
 
 
 @pytest.mark.slow
-def test_mufu_primitives_on_their_grids(server):
+@EVERY
+def test_mufu_primitives_on_their_grids(server, every):
     """Each MUFU primitive on every word of `MUFU_SWEEP`, each answer also the Python primitive's own evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in MUFU_SWEEP[i:i + 8192]] for i in range(0, len(MUFU_SWEEP), 8192)])
+    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in MUFU_SWEEP[i:i + 8192]] for i in range(0, len(MUFU_SWEEP), 8192)], every)
               for fn in MUFU}
     assert counts == {fn.id: len(MUFU_SWEEP) for fn in MUFU}, counts
 
@@ -1807,6 +1835,7 @@ def test_the_mufu_tables_are_the_library_tables(server, name):
 
 
 @pytest.mark.slow
+@FULL
 def test_the_tanh_table_is_the_library_table(server):
     """The Lean evaluator's MUFU.TANH table, as the library stores it (`tanh_mufu`, 2^27 words), has the library's SHA-512:
     all 92 million words of MUFU.TANH's eleven binades, against the measured shard's, which no cheaper test reaches (about
@@ -1832,9 +1861,9 @@ MUFU_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-def test_mufu_primitives_sampled(server):
-    stats = DT.run(MUFU_PORT, examples=1000, seed=0, server=server)
-    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+@EVERY
+def test_mufu_primitives_sampled(server, every):
+    sampled(server, MUFU_PORT, 1000, every, 800, 50)
 
 
 def test_mufu_words_out_of_range_are_refused(server):
@@ -1890,9 +1919,9 @@ DECIMAL_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-def test_decimal_primitives_sampled(server):
-    stats = DT.run(DECIMAL_PORT, examples=1000, seed=0, server=server)
-    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+@EVERY
+def test_decimal_primitives_sampled(server, every):
+    sampled(server, DECIMAL_PORT, 1000, every, 800, 50)
 
 
 def test_decimal_words_out_of_range_are_refused(server):
@@ -1925,14 +1954,15 @@ def _act_grid(fn: PrimitiveDefinition) -> list[tuple]:
 
 
 @pytest.mark.slow
-def test_activations_on_their_grids(server):
+@EVERY
+def test_activations_on_their_grids(server, every):
     """SiLU-and-mul (both versions) and GeLU-tanh-and-mul on every gate word under each of `_UPS` and on every pair of bf16
     edges, GeLU-erf on every word, `TanhF32Rn_v1` on `TANH_SWEEP`, and RoPE's two outputs on every pair of bf16 edges under
     every pair of `ROPE_CS`; each answer also the Python primitive's own evaluator's."""
     counts = {}
     for fn in ACTS:
         rows = _act_grid(fn)
-        counts[fn.id] = _agree_on(server, fn, [rows[i:i + 8192] for i in range(0, len(rows), 8192)])
+        counts[fn.id] = _agree_on(server, fn, [rows[i:i + 8192] for i in range(0, len(rows), 8192)], every)
     gu = 9 * 65536 + 27 * 27
     assert counts == {"SiluMulBf16_v1": gu, "SiluMulBf16_v2": gu, "RopeOut_v1": 72_900, "RopeOutAdd_v1": 72_900,
                       "TanhF32Rn_v1": len(TANH_SWEEP), "GeluTanhMulBf16_v1": gu, "GeluErfBf16_v1": 65536}, counts
@@ -1982,9 +2012,9 @@ ACT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, 
 
 
 @pytest.mark.slow
-def test_activations_sampled(server):
-    stats = DT.run(ACT_PORT, examples=1000, seed=0, server=server)
-    assert stats.outputs >= 800 and stats.rejects >= 50, stats
+@EVERY
+def test_activations_sampled(server, every):
+    sampled(server, ACT_PORT, 1000, every, 800, 50)
 
 
 def test_activation_words_out_of_range_are_refused(server):
