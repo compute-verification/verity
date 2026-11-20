@@ -207,7 +207,7 @@ register_kernel(ScanSlotsV5, scan_rows, domain="every state row")
 
 
 def _state_bits_sig(S):
-    return (("bits", Array(16 * S.NS, BL.BIT)),), Array(16 * S.NS, BL.BIT)
+    return (("bits", Array(16, BL.BIT)),), Array(16, BL.BIT)
 
 
 def _state_bits(B, S, bits):
@@ -215,8 +215,8 @@ def _state_bits(B, S, bits):
     return B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,))
 
 
-ScanStateBitsV1 = CompositeDefinition("ScanStateBits", 1, ("NS",), _state_bits_sig, _state_bits,
-                                      doc="`ScanState_v1`'s copy of the row's bits, two NOTs a bit.",
+ScanStateBitsV1 = CompositeDefinition("ScanStateBits", 1, (), _state_bits_sig, _state_bits,
+                                      doc="`ScanState_v1`'s copy of a word's 16 bits, two NOTs a bit.",
                                       conformance="exact-model-tested")
 
 
@@ -226,8 +226,9 @@ def _state_sig(S):
 
 def _state_words(B, S, state):
     bits = B.batch(bind(WordBits, W=16), state, axes=(0,))
-    out = B.call(bind(ScanStateBitsV1, NS=S.NS), Coll(Array(16 * S.NS, BL.BIT), bits.refs))
-    return B.batch(bind(BitsWord, W=16), Coll(Array(S.NS, Array(16, BL.BIT)), out.refs), axes=(0,))
+    # a batch steps over its source's copies whole (`Flock.Lower`'s `Work.stepOf`), so the copy is a word's a copy
+    out = B.batch(ScanStateBitsV1, bits, axes=(0,))
+    return B.batch(bind(BitsWord, W=16), out, axes=(0,))
 
 
 ScanStateV1 = CompositeDefinition("ScanState", 1, ("NS",), _state_sig, _state_words,
