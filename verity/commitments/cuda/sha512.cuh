@@ -14,8 +14,7 @@
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
 // instruction fetch), 0 straight-line, 2 all 80 rounds as five passes of one 16-round body with the schedule in place, the
-// form the codecs', the bandwidth tagger's and the streamed wipe's kernels run: two thirds of ROLL 1's SASS, faster than it
-// in dither's h1c and h1r, slower in its h1u.
+// form the codecs', the bandwidth tagger's and the streamed wipe's kernels run: two thirds of ROLL 1's SASS.
 //
 // `sha::` holds the committer's forms over the same constants: `compress_from<R0>` from a midstate, `compress_kw` over a
 // precomputed schedule, and the issue knobs SHA_ADD, SHA_ROT and SHA_ROLL (below), with the helpers that build their inputs.
@@ -65,7 +64,7 @@ using u32 = uint32_t;
       0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,   \
       0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull
 
-// SX_K_LIST stays defined for a constexpr copy, whose round constants are immediates (dither's h1sha.cuh)
+// SX_K_LIST stays defined for a constexpr copy, whose round constants are immediates (ncp2.cuh's)
 __constant__ u64 K_DEV[80] = {SX_K_LIST};
 static const u64 K_HOST[80] = {SX_K_LIST};
 
@@ -73,7 +72,7 @@ static const u64 K_HOST[80] = {SX_K_LIST};
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
-// the IV as constant operands, for a caller slower with iv's immediates (dither's h1r, its noise from a midstate)
+// the IV as constant operands, for a caller slower with iv's immediates
 __constant__ u64 IV_DEV[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull,
                               0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full,
                               0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
