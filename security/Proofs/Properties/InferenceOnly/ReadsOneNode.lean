@@ -592,7 +592,6 @@ theorem throughN_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
   rw [ha] at h
   dsimp only at h
   have h := walkAtMost_bind _ _ _ h
-  dsimp only at h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
   have hnode : c.body.nodes[k]! = node := node_get hn

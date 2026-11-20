@@ -3717,7 +3717,6 @@ theorem throughSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
   rw [ha] at h
   dsimp only at h
   have h := walkAtMost_bind _ _ _ h
-  dsimp only at h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
   have hnode : c.body.nodes[k]! = node := node_get hn
@@ -4433,6 +4432,7 @@ def downBody (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg)
         if q.rows > 1 then byRow ()
         else if q.stride == 1 then Desc.fromCallee c fuel k 0 q.base.toNat (q.base.toNat + q.len)
         else
+          Desc.walkAtMost "leaves of a call's output read one by one" q.len
           let mut out := #[]
           for t in [0:q.len] do
             out := out ++ (← Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1))
@@ -7229,7 +7229,6 @@ theorem throughShape_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
   rw [ha] at h
   dsimp only at h
   have h := walkAtMost_bind _ _ _ h
-  dsimp only at h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
   have hnode : c.body.nodes[k]! = node := node_get hn
@@ -10376,7 +10375,6 @@ theorem throughW_succ (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d)
   rw [ha] at h
   dsimp only at h
   have h := walkAtMost_bind _ _ _ h
-  dsimp only at h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
   have hnode : c.body.nodes[k]! = node := node_get hn
