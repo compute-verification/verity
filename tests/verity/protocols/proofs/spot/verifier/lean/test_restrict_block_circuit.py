@@ -111,7 +111,7 @@ def test_a_row_not_whole_words_is_refused_by_both(n):
     desc = _e(n)
     c = json.dumps(desc, sort_keys=True, separators=(",", ":")).encode()
     part = PO.build(desc, PO.template_instance_query("E_v1"), [[(0, 1)]])
-    why = f"lower: C_S's template E_v1: input row x of {n} bits {OC.NOT_WHOLE}"
+    why = f"lower: C_S's template E_v1: parameter x of {n} bits {OC.NOT_WHOLE}"
     with pytest.raises(OC.Refused, match=re.escape(why)):
         OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut=OC.cuts(c, part))
     got = lean(c, part, 0)

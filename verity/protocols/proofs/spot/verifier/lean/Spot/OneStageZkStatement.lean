@@ -156,7 +156,7 @@ def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array 
 its padding. -/
 def NOT_WHOLE : String := "is not whole u16 words, and the lowering lays the leaves after it in its padding"
 
-/-- `rows`, a block circuit's input rows or return fields `(name, bits)`, refused under `NOT_WHOLE` where one has bits
+/-- `rows`, a block circuit's parameters, input rows or return fields `(name, bits)`, refused under `NOT_WHOLE` where one has bits
 not a multiple of 16. -/
 def wholeWords (key what : String) (rows : Array (String × Nat)) : V Unit :=
   match rows.toList.find? (·.2 % 16 != 0) with
@@ -167,6 +167,7 @@ def wholeWords (key what : String) (rows : Array (String × Nat)) : V Unit :=
 #guard (wholeWords "E_v1" "return field" #[("o0", 2047), ("o1", 1)] matches .error _)
 #guard (wholeWords "E_v1" "input row" #[("x", 16), ("y", 1)] matches .error _)
 #guard (wholeWords "E_v1" "input row" #[("x#0", 256), ("x#1", 256), ("w", 16)] matches .ok ())
+#guard (wholeWords "E_v1" "input row" (cutRows [("x", 2)] #[("x", 48)]) matches .error _)
 #guard (wholeWords "E_v1" "input row" #[] matches .ok ())
 
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
@@ -203,8 +204,8 @@ def listedOf (partition : Json) : Option (Array String) :=
 its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
 input rows the template's parameters as bit rows, each cut as in(S)'s cuts `cuts` give for the template (`ioCuts`,
 `cutRows`), output ports its return fields `o{j}` in whole u16 words, META's `program_digests` the template's
-`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates, and one with a row or a
-return field not whole u16 words (`wholeWords`), by name. -/
+`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates, and one with a parameter, an
+input row or a return field not whole u16 words (`wholeWords`), by name. -/
 def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
     V ByteArray := do
   let some listed := listedOf partition
@@ -223,8 +224,10 @@ def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (Stri
   let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
   let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
   let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
-  let ins := cutRows ((cuts.lookup key).getD []) (fn.params.map fun (n, t) => (n, bits t))
+  let params := fn.params.map fun (n, t) => (n, bits t)
+  let ins := cutRows ((cuts.lookup key).getD []) params
   let fields := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", bits f)
+  wholeWords key "parameter" params
   wholeWords key "input row" ins
   wholeWords key "return field" fields
   let outs := fields.map fun (n, b) => (n, (b + 15) / 16)
@@ -249,8 +252,8 @@ def lowerE (d : String) : V ByteArray := do
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
   lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0])
 
-#guard (match lowerE E3 with | .error e => e == s!"lower: C_S's template E_v1: input row x of 3 bits {NOT_WHOLE}" | _ => false)
-#guard (match lowerE E2047 with | .error e => e == s!"lower: C_S's template E_v1: input row x of 2047 bits {NOT_WHOLE}" | _ => false)
+#guard (match lowerE E3 with | .error e => e == s!"lower: C_S's template E_v1: parameter x of 3 bits {NOT_WHOLE}" | _ => false)
+#guard (match lowerE E2047 with | .error e => e == s!"lower: C_S's template E_v1: parameter x of 2047 bits {NOT_WHOLE}" | _ => false)
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's

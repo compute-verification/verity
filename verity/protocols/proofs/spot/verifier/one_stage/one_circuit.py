@@ -27,7 +27,7 @@ LOWER = "lower : C_S of a partition that is no template query (Q_template_instan
 
 #: Lean's lowering of C_S (`Flock.Lower.lower`, `Flock.Compose.compose`), a Lake target of Flock's verifier.
 LOWER_EXE = "flock-lower-check"
-#: Why a row or a return field not whole u16 words is refused: `Spot.OneStageZk.NOT_WHOLE`, word for word.
+#: Why a parameter, an input row or a return field not whole u16 words is refused: `Spot.OneStageZk.NOT_WHOLE`, word for word.
 NOT_WHOLE = "is not whole u16 words, and the lowering lays the leaves after it in its padding"
 
 #: The templated statement's layout mode (`Flock.Tmpl`'s `iv/hybrid/T`) the door lowers C_S at.
@@ -127,7 +127,8 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
     gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``, its bits in whole u16
     words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the template's
     `definition_digest`. `NotDerived` where the partition is no template query; `Refused` where C_S's root calls other
-    than one Definition, one the query does not list, a row or a return field not whole u16 words (`NOT_WHOLE`), or the
+    than one Definition, one the query does not list, a parameter, an input row or a return field not whole u16
+    words (`NOT_WHOLE`), or the
     lowering refuses."""
     listed = _listed(partition.get("query") or {})
     if listed is None:
@@ -144,11 +145,12 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
         raise Refused("E_LOWER", f"C_S's template {key!r} is no Definition of C_S")
     params, ret = fn.signature()
     ks = (cut or {}).get(key, {})
-    rows = [r for name, bits in ((name, sum(t.leaf_widths())) for name, t in params)
+    whole = [(name, sum(t.leaf_widths())) for name, t in params]
+    rows = [r for name, bits in whole
             for r in ([(name, bits)] if ks.get(name, 1) <= 1 else
                       [(f"{name}#{j}", bits // ks[name]) for j in range(ks[name])])]
     fields = [(f"o{j}", sum(f.leaf_widths())) for j, f in enumerate(_fields(ret))]
-    for what, rs in (("input row", rows), ("return field", fields)):
+    for what, rs in (("parameter", whole), ("input row", rows), ("return field", fields)):
         for name, bits in rs:
             if bits % 16:
                 raise Refused("E_LOWER", f"lower: C_S's template {key}: {what} {name} of {bits} bits {NOT_WHOLE}")
