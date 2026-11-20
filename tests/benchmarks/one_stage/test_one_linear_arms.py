@@ -45,6 +45,18 @@ CASES = {
     "registered refused by the members check": (
         "registered", 1, WINDOW, {"ok": False, "audit": {"members_lean": {"ran": True, "ok": False, "reason": "port w"}}},
         "ARM registered REFUSED the members check: port w", 0),
+    "registered refused by R8 before the draw": (
+        "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {
+            "ok": False, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}},
+        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+    "registered refused by R8, read off a5's line": (
+        "registered", 1, WINDOW + 'A5 {"refused_before_draw": {"registration": false}, "checks": {"registration": '
+        '{"ok": false, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}}\n',
+        {"ok": False, "checks_before_draw": {"registration": False}},
+        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+    "registered refused before the draw by another check": (
+        "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {"ok": False, "codes": ["R3-root"]}}},
+        "ARM registered REJECT status 1, not REFUSED by its name", 1),
     "stratified refused by SUBSET_ONLY": ("stratified", 1, WINDOW, {"ok": False, "refused": {"params": SUBSET}},
                                           "ARM stratified REFUSED SUBSET_ONLY: the sampling design is stratified", 0),
     "forged-drawn by forged_outcome": ("forged-drawn", 0, WINDOW,
@@ -86,3 +98,19 @@ def test_the_accept_line_names_the_roots_refusal_and_states_an_accept_without_c(
     assert got[1] == ("ACCEPT one window, 288 units, 4 drawn: except with probability 1/2, at most 45 of its 288 units "
                       "are in blocks that are not correct (no C given, so no AND-gate figure)")
     assert "record = command" in got[2]
+
+
+def test_a_traceback_past_the_logs_tail_is_found_in_the_whole_audit_err(tmp_path):
+    """The arm's log holds the last 3000 bytes of its audit's stderr, which can start after a traceback's header: the
+    judge reads the whole stderr it is given, so a crash whose header only the whole file holds is still an ERROR."""
+    err = TRACEBACK.replace("+ exit 5\n", "") + "x" * 4000 + "\n"
+    (tmp_path / "arm.log").write_text(WINDOW + err[-3000:])
+    (tmp_path / "audit.err").write_text(err)
+    (tmp_path / "summary.json").write_text(json.dumps(NOT_OK))
+    argv = [sys.executable, str(ARMS), "forged-one", "1", str(tmp_path / "arm.log"), str(tmp_path / "summary.json")]
+    tail = subprocess.run(argv, capture_output=True, text=True, check=False)
+    whole = subprocess.run([*argv, str(tmp_path / "audit.err"), str(tmp_path / "missing.txt")], capture_output=True,
+                           text=True, check=False)
+    assert tail.stdout.startswith("ARM forged-one REJECT") and tail.returncode == 1
+    assert whole.stdout.startswith("ARM forged-one ERROR a crash: Traceback (most recent call last):"), whole.stdout
+    assert whole.returncode == 1
