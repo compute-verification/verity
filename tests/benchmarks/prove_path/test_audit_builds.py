@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 FLOCK = "verity/protocols/proofs/flock/verifier"
 PROVER = ROOT / "verity/protocols/proofs/flock/prover/python/verity_flock"
-AUDITING = ["benchmarks/one_stage/served_verdicts.sh", "benchmarks/prove_path/run.sh", "benchmarks/one_stage/a5_llama1b_h200.sh"]
+AUDITING = ["benchmarks/one_stage/served_verdicts.sh", "benchmarks/prove_path/run.sh"]
 
 
 def looked_up() -> set[str]:

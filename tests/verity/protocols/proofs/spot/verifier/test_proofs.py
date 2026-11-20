@@ -488,18 +488,18 @@ def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole(
 
 
 def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
-    """C of `counts[i]` units of the i-th of two Boolean templates (XOR of two bits, of three), in that order, its
-    ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
+    """C of `counts[i]` units of the i-th of two Boolean templates (NOT of each bit of ``x``, of one word, of two), in that
+    order, its ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
     from verity.circuits import codec
     from verity.circuits import partition_object as PO
-    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.boolean import BIT, NOT
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.population import wired_population_program
     from verity.circuits.types import Array
     # ``pad``, read by no gate, is a row past a compression before its last block, which a Flock block's pin needs
-    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (),
-                                   lambda S, n=n: ((("x", Array(n, BIT)), ("pad", Array(1024, BIT))), BIT),
-                                   lambda B, S, x, pad, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
+    ts = [bind(CompositeDefinition(f"DoorLowerNot{n}", 0, (),
+                                   lambda S, n=n: ((("x", Array(16 * n, BIT)), ("pad", Array(1024, BIT))), Array(16 * n, BIT)),
+                                   lambda B, S, x, pad: B.batch(NOT, x, axes=(0,)), register=False)) for n in (1, 2)]
     ts = [(t, m) for t, m in zip(ts, counts) if m]
     ids = [codec.descriptor_id(t) for t, _ in ts]
     program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
@@ -554,6 +554,29 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
         head, meta = text.split("\n", 2)[:2]
         assert head.startswith("flock-circuit/tmpl") and f"unit/{tid}" in head, head
         assert PO.digest(part) in meta and tid in meta, meta[:400]
+
+
+@lean
+@pytest.mark.slow
+def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_word_primitive():
+    """A template of a word parameter ``w`` (``Value 8``) that no gate reads beside two bits it XORs: the lift lifts only
+    a Definition reaching a word primitive, so Lean's lowering, the door's executable, refuses it by name
+    (`Flock.Lower.WIDE`) rather than lowering ``w`` as one wire."""
+    from verity.circuits import codec
+    from verity.circuits import partition_object as PO
+    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.types import Array, Value
+    t = bind(CompositeDefinition("DoorLowerWordUnread", 0, (),
+                                 lambda S: ((("x", Array(2, BIT)), ("w", Value(8)), ("pad", Array(1024, BIT))), BIT),
+                                 lambda B, S, x, w, pad: B.call(xor_gate(2), x), register=False))
+    tid = codec.descriptor_id(t)
+    program, query = wired_population_program([(t, 2)], {"templates": [[tid, 2]]})
+    c = b"".join(codec.descriptor_chunks(program))
+    part = PO.build(json.loads(c), query, [[(0, 1), (1, 2)]])
+    with pytest.raises(OC.Refused, match="a parameter or return leaf wider than one bit, not lifted to bits"):
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable)
 
 
 @pytest.mark.parametrize("indices, blocks, want", [

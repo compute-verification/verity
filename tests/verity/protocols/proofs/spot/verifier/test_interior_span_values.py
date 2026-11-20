@@ -13,13 +13,10 @@ import pytest
 from verity.circuits import population as PN
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.commitments import registered_value as RV
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from test_service import PAIR as ONE_TEMPLATE, _spec as one_template_spec
-from test_two_stage import (DELTA, MIXED, Q, WINDOW, WINDOW_QUERY, Clock, _refused, _window_boundary,
-                            _window_interior, _window_spec)
+from test_two_stage import (DELTA, MIXED, Q, WINDOW, Clock, _window_spec)
 
 import fake_challenger as FC
 
@@ -46,27 +43,6 @@ def _stream(span_values=(HIST,), spec=None) -> S.Stream:
                      clock=Clock(), span_values=span_values)
 
 
-def _digest_words(d: bytes) -> list[int]:
-    """A digest as a `Digest` port's 32 u16 words: each big-endian 64-bit word's little-endian 16-bit pieces."""
-    return [(int.from_bytes(d[i:i + 8], "big") >> (16 * j)) & 0xFFFF for i in range(0, 64, 8) for j in range(4)]
-
-
-def _interior(stream: S.Stream, previous: str, first, flat: bool = False) -> tuple[dict, dict]:
-    """The interior docket of `first`'s replay sample, a v2 record registering ``hist``: as the verifier fills it
-    from `SUPPLIED` (`registered.supplied_value`), or, `flat`, committed as the flat form's rows, 32 u16 words a span."""
-    program = stream.interior_program(len(first.units))
-    bare, ports = _window_interior(program, previous, first)
-    if flat:
-        prog = P.program_digest(program)
-        rows = [_digest_words(r) for r in ROOTS]
-        value = RV.Registered.commit(prog, "hist", rows, RV.supplied_salts(prog, "hist", len(rows)), 16)
-    else:
-        value = G.supplied_value(program, "hist", G.sources(SUPPLIED)["hist"], bare)
-    n = P.units(program, WINDOW_QUERY)
-    return DK.record(program, WINDOW_QUERY, {"law": "subset", "k": n}, S.SCHEME, bare["roots"], bare["window"],
-                    previous=previous, registered=[value.entry()]), ports
-
-
 def test_the_interior_program_takes_a_per_span_value_at_q_typed_by_its_leaf_type():
     stream = _stream()
     assert stream.span_values == (HIST,) and stream.values == ()
@@ -91,36 +67,6 @@ def test_the_interior_program_takes_the_streams_values_then_its_per_span_values(
     got = P.program_digest(stream.interior_program(Q))
     assert got == P.program_digest(PN.mixed_population_program(cells, values=(x, span)))
     assert got != P.program_digest(PN.mixed_population_program(cells, values=(span, x)))
-
-
-def test_a_per_span_value_of_digests_is_registered_in_digest_order_and_its_flat_form_refused():
-    """The interior registers the supplied root R7 fills in Digest order, both verifiers agreeing; the same roots
-    committed in the flat form, a `Digest` port's 32 u16 words a row, are refused (R7: another row width, so another
-    domain, and not the root R7 fills)."""
-    stream = _stream()
-    reg = _window_boundary(stream)
-    first = stream.select(reg)
-    flat = _interior(stream, reg.digest, first, flat=True)
-    assert set(_refused(lambda: stream.register_interiors(first, *flat, registered=REGISTERED, supplied=SUPPLIED))) == \
-        {"R7-words", "R7-domain", "R7-supplied"}
-    ireg = stream.register_interiors(first, *_interior(stream, reg.digest, first), registered=REGISTERED,
-                                     supplied=SUPPLIED)
-    assert ireg.record["registered"][0]["value"] == "hist" and ireg.record["registered"][0]["words"] == 512
-
-
-def test_r7_reads_the_flat_form_by_its_own_type():
-    """A stream that types the value flat, 32 sixteen-bit leaves a span, has R7 read each root's bytes as big-endian
-    32-bit halves (`registered.bytes_leaves`), which are not a `Digest` port's words: the flat form's rows are refused
-    there too."""
-    rows = [_digest_words(r) for r in ROOTS]
-    assert all(G.bytes_leaves(r, 16) != w for r, w in zip(ROOTS, rows))
-    assert all(G.digest_leaves(r) == [(w >> b) & 1 for w in ws for b in range(16)] for r, ws in zip(ROOTS, rows))
-    stream = _stream(span_values=(("hist", 32, 16),))
-    reg = _window_boundary(stream)
-    first = stream.select(reg)
-    flat = _interior(stream, reg.digest, first, flat=True)
-    assert _refused(lambda: stream.register_interiors(first, *flat, registered={"hist": 32}, supplied=SUPPLIED)) == \
-        ("R7-supplied",)
 
 
 def test_per_span_values_are_a_two_stage_windows():

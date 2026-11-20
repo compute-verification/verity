@@ -260,8 +260,8 @@ _DNK, _DNN = _dense_kinds()
 
 
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
-    """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
-    registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
+    """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry is not
+    loaded by a dense derivation that never asks for the kind."""
     from verity_vllm.definitions.registry import moe_pad as _mp
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
@@ -358,7 +358,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "silu_mul_fp8_block_quant": lambda I, G: _silu_mul_fp8_block_quant(I, G),
            # the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
-           # outputs selected by the router ids, `MoeSum_v1`); its lift of record is the hand-authored `LMoeFfnL_v1` (unselected slots DISABLED).
+           # outputs selected by the router ids, `MoeSum_v1`).
            # `rules/vllm_moe.py`'s padded rules ask for it at `_moe_C.moe_sum` (the block's last kernel); the registry is imported lazily.
            "moe_ffn_fixed": lambda E, TOPK, VPT, H, I: _moe_ffn_fixed(E, TOPK, VPT, H, I),
            # tensor-parallel collectives (registry.b1_tp2; exact-model-tested B1 TP2, re-confirmed on Llama TP2 by the step-1 probe):

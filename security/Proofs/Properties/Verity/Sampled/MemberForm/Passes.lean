@@ -20,7 +20,7 @@ to the second, at the window's member that is the parameters' member on the regi
 * **What the statement's checks are** (`statementOf_checks`, `statement_checks`): the files' check of a member's
   statement is `Flock.PortRoots.checkOf` at the circuit read with its inputs' tables, and its population check the
   member's on its public file.
-* **The public file's count** (`population_header`, `headerHeld_instances`, `slice_population`, `load_count`): the
+* **The public file's count** (`population_header`, `headerHeldAt_instances`, `slice_population`, `load_count`): the
   member's population check holds its public file's header to the member's slice of the registration, whose
   population is the member's units' count, so a load of the file has as many proof blocks as the member has units.
 * **The member's files pass** (`filesPass_of_held`): on blobs where v2 reads the member's files among the files
@@ -103,28 +103,31 @@ theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs
 
 /-! ## The public file's count -/
 
-/-- A member's population check that passes read the public file's header and held it to the slice. -/
+/-- A header `headerHeldAt` passes names the record's population as its `instances`: its first check, on the header
+as parsed. -/
+theorem headerHeldAt_instances {reads : Array (String × String)} {held : Array _root_.Flock.Registered.Port}
+    {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeldAt reads held rec hd = .ok ()) :
+    _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
+  unfold _root_.Spot.OneStageZk.headerHeldAt at h
+  split at h
+  · cases h
+  · rename_i hc
+    simpa using hc
+
+/-- A member's population check that passes read the public file's header, whose `instances` it held to the slice's
+population. -/
 theorem population_header {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {pubB : ByteArray}
     (h : vm.population slice pubB = .ok ()) :
-    ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧ _root_.Spot.OneStageZk.headerHeld slice hd = .ok () := by
+    ∃ hd, _root_.Spot.FilePart.header pubB = .ok hd ∧
+      _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD slice "population") = true := by
   unfold _root_.Spot.OneStageZk.Member.population at h
   obtain ⟨prog, -, h⟩ := ebind_ok h
   obtain ⟨strata, -, h⟩ := ebind_ok h
   obtain ⟨hd, hh, h⟩ := ebind_ok h
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
-  exact ⟨hd, hh, h⟩
-
-/-- A header held to a record names the record's population as its `instances`. -/
-theorem headerHeld_instances {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeld rec hd = .ok ()) :
-    _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.OneStageZk.headerHeld at h
-  dsimp only at h
-  split at h
-  · cases h
-  · split at h
-    · rename_i he
-      exact Properties.Spot.Credited.population_of_matchesPublic (Array.isEmpty_iff.1 he)
-    · cases h
+  obtain ⟨rd, -, h⟩ := ebind_ok h
+  obtain ⟨hl, -, h⟩ := ebind_ok h
+  exact ⟨hd, hh, headerHeldAt_instances h⟩
 
 /-- A member's slice of the registration names the member's units' count as its population. -/
 theorem slice_population (vm : _root_.Spot.OneStageZk.Member) (rec : Json)
@@ -142,10 +145,9 @@ theorem load_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : St
     {pubB : ByteArray} (hpop : vm.population (vm.slice rec roots) pubB = .ok ()) {tags : Flock.Tags}
     {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {P : Flock.Public}
     (hl : Flock.HmIn.loadPublic tags c pi pubB = .ok P) : P.n = vm.count := by
-  obtain ⟨hd, hh, hheld⟩ := population_header hpop
+  obtain ⟨hd, hh, hj⟩ := population_header hpop
   rw [Properties.Spot.Units.headerOf_loadPublic hl] at hh
   obtain rfl := Except.ok.inj hh
-  have hj := headerHeld_instances hheld
   have hi : _root_.Spot.getD P.header "instances" = .num ⟨Int.ofNat P.n, 0⟩ := by
     unfold _root_.Spot.getD _root_.Spot.field?
     rw [Properties.Spot.Credited.instances_of_loadPublic hl]

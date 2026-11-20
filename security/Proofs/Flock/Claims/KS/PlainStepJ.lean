@@ -1,7 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.LastSharedR
-public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.KS.PlainSampleRCols
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,7 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.PlainSampleJRun
-import Proofs.Flock.Claims.Recursion.NextRFits
+import Proofs.Flock.C3.Compose.HoloStreamSizes
 
 /-!
 # The plain simulator's round counts and rep schedules at a parsed record

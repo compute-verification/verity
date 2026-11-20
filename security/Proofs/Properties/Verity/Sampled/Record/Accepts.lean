@@ -40,7 +40,7 @@ namespace Verity.Sampled.Record
 open Lean (Json)
 open Claims (Msg Out Seen Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin Final Ins)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 
 private theorem ok_bind' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by

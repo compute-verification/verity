@@ -184,7 +184,7 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Compositi
     from verity_vllm import protocols as PO
 
     target = va.target_of_workload(wl, args.target)
-    protocols = PO.at_capture(target, model, PO.own_auditor(wl.get("protocols_config"), target))
+    protocols = PO.at_capture(target, model, PO.load_settings(wl.get("protocols_config")))
     return protocols, list(protocols.entries) if protocols is not None else []
 
 
