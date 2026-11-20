@@ -1,37 +1,54 @@
 """The door's walls: every proof block of a registered circuit C put through the served verifier's door's static steps at
-once (no commit, no prover, no coins), and random small Programs put through the same steps with the lowered template's
-rows held to the reference evaluator.
+once (no commit, no prover, no coins), its templates' lowered rows held to their own evaluation, and random small
+Programs put through the same steps and rows.
 
     door_walls.py census --circuit NAME|DIR [--blocks one-per-template|families|shapes|all|U,LO-HI,...] [--lower EXE]
-                         [--json FILE]
-    door_walls.py fuzz --seed S [--cases N] [--minutes M] [--lower EXE] [--json FILE] [--seeds-out FILE]
+                         [--json FILE] [--no-rows]
+    door_walls.py fuzz --seed S [--cases N] [--minutes M] [--lower EXE] [--json FILE]
     door_walls.py case NAME [--lower EXE]
 
-``census`` is the door-ready check a lane runs on its own circuit: ``NAME`` a builder (`BUILDERS`: ``one_linear``,
-``chain``, ``test_class``, ``class_of_record``, ``pearl_plus``, ``pous_setup``, ``network_scan``, ``lean_case``,
-``lean_case_wide``) or ``DIR`` a directory holding
-``C.json`` (C's descriptor bytes) and ``query.json`` (its template query, ``Q_template_instances`` over every template its
-root calls). Each chosen unit is a proof block of its own in one partition (the gaps between them blocks of their own,
-never put through the steps); a ``LO-HI`` item is the block [LO, HI) as given. ``one-per-template``: each template's
-first unit; ``families``: each template family's largest and smallest template (by gates), first unit; ``shapes``: one
-unit of each template for each distinct wiring shape of its parameters (`shape`); ``all``: every unit. Per block the
-steps are the door's own, in its order (`proofs.verify`): ``partition`` (`partition_object.validate`), ``block``
-(`one_circuit.block`), ``restrict``, ``cuts`` (`one_circuit.cuts`), ``lower`` (`one_circuit.lower`: Lean's
-`Lower.lower` and `Compose.compose`, `flock-lower-check compose`) and ``reader`` (`proofs.tmpl_why`, the templated
-reader's head check). It prints one table of refusal classes (the text with numbers, names and digests normalised, so
-that one cause is one class) with the step, the count, the templates hit, an example and a reading of whose wall it is,
-and exits 1 when any chosen block is refused, 2 when the tool itself fails.
+``census`` is the door-ready check a lane runs on its own circuit: ``NAME`` a builder (`BUILDERS`) or ``DIR`` a
+directory holding ``C.json`` (C's descriptor bytes) and ``query.json`` (its template query, ``Q_template_instances``
+over every template its root calls). Each chosen unit is a proof block of its own in one partition (the gaps between
+them blocks of their own, never put through the steps); a ``LO-HI`` item is the block [LO, HI) as given.
+``one-per-template``: each template's first unit; ``families``: each template family's largest and smallest template
+(by gates), first unit; ``shapes``: one unit of each template for each distinct wiring shape of its parameters
+(`shape`); ``all``: every unit. Per block the steps are the door's own, in its order (`proofs.verify`): ``partition``
+(`partition_object.validate`), ``block`` (`one_circuit.block`), ``restrict``, ``cuts`` (`one_circuit.cuts`), ``lower``
+(`one_circuit.lower`: Lean's `Lower.lower` and `Compose.compose`, `flock-lower-check compose`) and ``reader``
+(`proofs.tmpl_why`, the templated reader's head check). Then, once per template digest, unless ``--no-rows``, the rows
+of the block's template are held to C_S's own evaluation on random values at its inputs (`block_rows`): ``yes``,
+``refused honest``, ``accepted wrong (...)``, ``unlowered`` (Lean's lowering refuses it), ``too large (N gates)`` past
+`ROWS_GATES`, or ``unchecked`` (a unit whose outputs are no gates of its own). It prints one table of refusal classes
+(the text with numbers, names and digests normalised, so that one cause is one class) with the step, the count, the
+templates hit, the rows evaluated, an example, a reading of whose wall it is, the sha256 of C's descriptor bytes and
+the commit C was built at (`built_at`), and exits 1 when any chosen block is refused by a step or its rows are
+refused honest or accept a wrong output, 2 when the tool itself fails. A census of the class of record runs on a node:
+``research run --on auto --cwd clone --mem-gb 64 --cpus 8 --timeout 2h -- env CIRCUITS=class_of_record:families bash
+benchmarks/one_stage/door_walls.sh``.
 
-``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word- and bit-typed parameters, calls, nested calls, batches, scans,
-callees whose word parameters reach no word primitive, mixed widths, parts of outputs read by a later unit, run and
-registered inputs) with a random partition into blocks, runs the static steps on each block, and then holds the lowered
-template (Lean's `Lower.lower` at the door's groups, written by `flock-lower-check`'s template mode, read by
-`tmpl.parse`) to the honest values of every unit of the block (C evaluated by `reference.evaluate_region`): the honest
-outputs must satisfy its rows, and each wrong output (one flipped value bit, two value words swapped, one padding bit
-set) must not. A row check is exact where no unconstrained column reaches an output column; else it is sampled over
-`LANES` assignments of those columns, and says so. Each finding is minimised (`minimise`) and printed as a seed.
+``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word-typed parameters and fields of bits of widths not a multiple of
+16, calls, nested calls, batches, scans, callees whose word parameters reach no word primitive, mixed widths, parts of
+outputs read by a later unit, run and registered inputs) with a random partition into blocks, runs the static steps on
+each block, and then holds the lowered template (Lean's `Lower.lower` at the door's groups, written by
+`flock-lower-check`'s template mode, read by `tmpl.parse`) to the honest values of every unit of the block (C evaluated
+by `reference.evaluate_region`). Each finding is minimised (`minimise`) and printed as a seed; the test keeps them
+(``SEEDS``). At length on an idle node: ``research run --on auto --cwd clone --mem-gb 16 --cpus 4 --timeout 75m -- env
+CIRCUITS=" " FUZZ_MINUTES=30 FUZZ_SEED=S bash benchmarks/one_stage/door_walls.sh``.
 
-``case`` runs one named case through both (``lean_case``: C(a : Value 32, b : Value 1) = Not b called once at the root).
+``case`` runs one named case through both (``lean_case``: C(a : Value 32, b : Value 1) = Not b called once at the root;
+``lean_odd``: C(a : Array 3 (Value 1), b : Value 1) = Not b; their ``_wide`` forms add a wide field after ``b``).
+
+The row check (`row_check`) has two checks. The honest one (C's values at the block's ports satisfy the rows with the
+constant 1) is the completeness of `LowerEval` and `BlockEval` (`security/Properties/Flock/Circuit/Chain.lean`) together
+at one trace: it fails where the rows refuse what the block computes, which neither premise says. The wrong one (the
+rows on C's inputs refuse each wrong output: one flipped value bit, two value words swapped, one padding bit set) tests
+`LowerEval`'s conclusion, that any assignment satisfying the rows has at each output bit the evaluation of the
+Definition's lift, at those three outputs, with `BlockEval` stood in for by Python's evaluation of C (or of C_S) in
+place of `Prog.evalBool` on `Flock.Lift.lift`'s Program: so a finding does not say which of the two fails; `LowerEval`
+over every satisfying assignment is tested only at those outputs (exact where no unconstrained column reaches an
+output column, else sampled over `LANES` assignments of those columns, and said so); `BlockEval` over every trace at
+the traces drawn (one a block in a census or a fuzz case, four in ``case``); and `LowerEval`'s ports are read through the committed layout below, not `Lower.inBit` and `Lower.outBit`.
 
 The row check's assignment is the committed one (`served_door.stage`'s): each port a row of 16-bit words, a parameter's
 leaves low bit first in leaf order, padded with zeros to whole words, a cut port ``p#j`` the j-th of its ``k`` equal
@@ -40,6 +57,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import hashlib
 import json
 import random
 import re
@@ -194,10 +212,27 @@ def network_scan() -> tuple[bytes, dict]:
     return _bytes(root), sz.PA.template_instances_query([defs[k] for k in sz.TEMPLATES])
 
 
+def lean_odd() -> tuple[bytes, dict]:
+    """lean's second case: C(a : Array 3 (Value 1), b : Value 1) = Not b, a field of 3 bits followed by another."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.types import Array, Value
+    ps = (("a", Array(3, Value(1))), ("b", Value(1)))
+    return _rooted(_composite("WallsLeanOdd", ps, Value(1), lambda B, S, a, b: B.call(BL.NOT, b)), ps, Value(1))
+
+
+def lean_odd_wide() -> tuple[bytes, dict]:
+    """lean's second case past compose: C(a : Array 3 (Value 1), b : Value 1, c : Array 2048 (Value 1)) = Not b."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.types import Array, Value
+    ps = (("a", Array(3, Value(1))), ("b", Value(1)), ("c", Array(2048, Value(1))))
+    return _rooted(_composite("WallsLeanOddWide", ps, Value(1), lambda B, S, a, b, c: B.call(BL.NOT, b)), ps, Value(1))
+
+
 BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
     "one_linear": one_linear, "chain": chain, "test_class": test_class, "class_of_record": class_of_record,
     "pearl_plus": pearl_plus, "pous_setup": pous_setup, "network_scan": network_scan,
-    "lean_case": lean_case, "lean_case_wide": lean_case_wide}
+    "lean_case": lean_case, "lean_case_wide": lean_case_wide, "lean_odd": lean_odd,
+    "lean_odd_wide": lean_odd_wide}
 
 
 def load(spec: str) -> tuple[bytes, dict]:
@@ -265,6 +300,7 @@ class Result:
     c_s: bytes | None = field(default=None, repr=False)
     circuit: bytes | None = field(default=None, repr=False)
     key: str | None = None
+    rows: str = "not reached"
 
     @property
     def klass(self) -> str:
@@ -435,34 +471,95 @@ def tiling(chosen: Sequence[tuple[int, int, str]], population: int) -> tuple[lis
     return blocks, ks
 
 
-def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None) -> list[Result]:
+#: the gates of C_S past which the census evaluates no rows (the reference evaluator walks every gate of C_S)
+ROWS_GATES = 1 << 22
+
+
+def _words(fn: Any, cut: dict) -> tuple[int, int]:
+    """The template's input and output port words at the door's groups."""
+    ins_p, outs_p = ports(fn, cut)
+    params, ret = fn.signature()
+    in_w = [w for _n, t in params for w in t.leaf_widths()]
+    out_w = list(ret.leaf_widths())
+    return (sum(-(-sum(in_w[j] for j in lv) // WORD) for _p, lv in ins_p),
+            sum(-(-sum(out_w[j] for j in lv) // WORD) for _p, lv in outs_p))
+
+
+def block_rows(c_s: bytes, cuts: dict, exe: Callable[[], Path], seed: int = 0, instances: int = 4) -> str:
+    """The rows of C_S's template held to C_S's own evaluation on random values at its inputs (up to ``instances``
+    of its units): ``yes``, ``refused honest``, ``accepted wrong (...)``, ``too large (N gates)``, ``unlowered`` or
+    ``unchecked``."""
+    from verity.circuits import partition_object as PO
+    from verity.circuits import restrict as R
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.program import input_id
+    D = R.program(c_s)
+    called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+    if len(called) != 1:
+        return f"unchecked: C_S calls {len(called)} templates"
+    fn, cut = D.defs[called[0]], cuts.get(called[0], {})
+    gates = _evaluable(c_s).circuit.size
+    if gates > ROWS_GATES:
+        return f"too large ({gates} gates)"
+    rng = random.Random(seed)
+    try:
+        t, _log = template_of(c_s, called[0], *_words(fn, cut), exe)
+        q = PO.template_instances_query([fn])
+        pop = PO.TemplatePartition(D, q).population
+        xs, ys, vb = honest_rows(c_s, q, range(min(pop, instances)), fn, cut, trace_of(c_s, rng))
+        v = row_check(t, xs, ys, vb, rng)
+    except Unlowered:
+        return "unlowered"
+    except Unchecked as e:
+        return f"unchecked: {e}"
+    except Exception as e:  # noqa: BLE001 - a census records every crash by its text
+        return f"crashed: {_err(e)[:200]}"
+    if not v.honest_ok:
+        return "refused honest" + (f"; accepted wrong ({', '.join(v.wrong_ok)})" if v.wrong_ok else "")
+    if v.wrong_ok:
+        return f"accepted wrong ({', '.join(v.wrong_ok)}{'' if v.exact else ', sampled'})"
+    return "yes" if v.exact else "yes (sampled)"
+
+
+def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True) -> list[Result]:
+    """Each chosen block through the door's static steps and, with ``rows``, its template's rows (`block_rows`, once
+    per template digest)."""
     from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     chosen = choose(c, query, how)
     pop = PO.TemplatePartition(R.program(c), query).population
     blocks, ks = tiling(chosen, pop)
     door = Door(c, query, blocks, exe)
+    seen: dict[str, str] = {}
     out = []
     for (lo, hi, s), k in zip(chosen, ks):
         r = door.run(k, lo, hi, s)
+        if rows and r.c_s is not None:
+            key = "|".join(r.templates)
+            if key not in seen:
+                seen[key] = block_rows(r.c_s, door.cuts()[0] or {}, exe)
+            r.rows = seen[key]
         r.c_s = r.circuit = None
         out.append(r)
         if log:
             log(json.dumps({"block": k, "units": [lo, hi], "templates": list(r.templates), "shape": s, "step": r.step,
-                            "text": r.text[:600], "seconds": r.seconds}))
+                            "text": r.text[:600], "rows": r.rows, "seconds": r.seconds}))
     return out
 
 
-def table(results: Sequence[Result]) -> list[dict]:
-    """The census's table: one row per refusal class (``through`` for blocks that passed every step)."""
+def table(results: Sequence[Result], c_sha256: str = "", built: str = "") -> list[dict]:
+    """The census's table: one row per refusal class (``through`` for blocks that passed every step), each naming the
+    sha256 of C's descriptor bytes and the commit C was built at."""
     rows: dict[str, dict] = {}
     for r in results:
         key = r.klass or "through"
         row = rows.setdefault(key, {"class": key, "step": r.step or "-", "count": 0, "templates": [], "shapes": [],
                                     "example": {"block": r.block, "units": list(r.units), "templates": list(r.templates),
                                                 "text": r.text[:400]},
-                                    "owner": owner(r.step, r.text) if r.step else "-"})
+                                    "owner": owner(r.step, r.text) if r.step else "-", "rows": {},
+                                    "c_sha256": c_sha256, "built": built})
         row["count"] += 1
+        row["rows"][r.rows] = row["rows"].get(r.rows, 0) + 1
         for t in r.templates:
             if t not in row["templates"]:
                 row["templates"].append(t)
@@ -473,19 +570,35 @@ def table(results: Sequence[Result]) -> list[dict]:
 
 
 def render(rows: Sequence[dict]) -> str:
-    lines = ["| class | step | count | templates hit | example (block, units, template) | owner (reading) |",
-             "|---|---|---|---|---|---|"]
+    lines = ["| class | step | count | templates hit | rows evaluated (blocks) | example (block, units, template) "
+             "| owner (reading) | C sha256 | built at |", "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         ex = r["example"]
         ts = ", ".join(r["templates"][:4]) + (f" (+{len(r['templates']) - 4})" if len(r["templates"]) > 4 else "")
-        lines.append(f"| {r['class'][:160]} | {r['step']} | {r['count']} | {ts} | block {ex['block']}, units "
-                     f"{ex['units']}, {ex['templates'][0] if ex['templates'] else '-'} | {r['owner']} |")
+        rv = "; ".join(f"{k} ({n})" for k, n in r["rows"].items())
+        lines.append(f"| {r['class'][:160]} | {r['step']} | {r['count']} | {ts} | {rv} | block {ex['block']}, units "
+                     f"{ex['units']}, {ex['templates'][0] if ex['templates'] else '-'} | {r['owner']} | {r['c_sha256']} "
+                     f"| {r['built']} |")
     return "\n".join(lines)
+
+
+def built_at() -> str:
+    """The commit of the tree that built C, and the `one-circuit` commit it holds where the clone has that ref."""
+    def git(*a: str) -> str:
+        p = subprocess.run(["git", "-C", str(ROOT), *a], capture_output=True, text=True)
+        return p.stdout.strip() if p.returncode == 0 else ""
+    head = git("rev-parse", "HEAD") or "unknown"
+    oc = next((m for ref in ("origin/one-circuit", "one-circuit") if (m := git("merge-base", "HEAD", ref))), "")
+    return f"{head} (one-circuit {oc})" if oc else head
 
 
 # --- the row check ---------------------------------------------------------------------------------------------------
 
-class Unlowered(RuntimeError):
+class Unchecked(RuntimeError):
+    """The block's rows can't be held to its values: its unit's outputs are no gates of its own (a pass-through)."""
+
+
+class Unlowered(Unchecked):
     """Lean's `Lower.lower` refuses the template: it has no rows to check."""
 
 
@@ -724,6 +837,8 @@ def honest_rows(c: bytes, query: dict, units: Sequence[int], fn: Any, cut: dict,
     for u in units:
         a = [trace[g] for g in tp.inputs(u)]
         o = [trace[g] for g in tp.outputs(u)]
+        if len(o) != len(out_w):
+            raise Unchecked(f"unit {u} has {len(o)} output gates of its own for {len(out_w)} return leaves")
         row: list[int] = []
         for _p, leaves in ins_p:
             row += _padded(_bits([in_w[j] for j in leaves], [a[j] for j in leaves]))
@@ -774,12 +889,19 @@ def _prims():
     ]
 
 
-TYPES = (1, 7, 8, 32)
+#: a parameter's type: ``w`` > 0 is ``Value(w)``, ``w`` < 0 is ``Array(-w, Value(1))``, a field of bits
+TYPES = (1, 7, 8, 32, -3, -5, -16)
+#: the bits of the trailing field a drawn template takes with probability 0.4, so that its unit is wide enough to compose
+WIDE = 2048
 
 
 def _ty(w: int):
-    from verity.circuits.types import Value
-    return Value(w)
+    from verity.circuits.types import Array, Value
+    return Value(w) if w > 0 else Array(-w, Value(1))
+
+
+def _value_leaves(w: int) -> list[int]:
+    return [w] if w > 0 else [1] * -w
 
 
 @dataclass
@@ -798,19 +920,25 @@ class Spec:
 
 
 def draw(rng: random.Random, small: bool = False) -> Spec:
-    """A random case: 1-3 templates, each 1-3 parameters of widths in `TYPES`, a body of 0-4 primitive steps (or a call of
-    a nested callee), returning 1-2 values (a parameter passed through among them, so a word parameter may reach no word
+    """A random case: 1-3 templates, each 1-3 parameters of `TYPES` (and sometimes a field of `WIDE` bits after them), a body of 0-4 steps (a primitive, or step ``-1-j``
+    taking bit ``j`` of a field of bits), or a call of a nested callee, returning 1-2 values (a parameter passed through among them, so a word parameter may reach no word
     primitive); a root of 1-4 nodes, each a call, a batch or a scan of a template, each argument a root parameter of
     its width (run or registered), or an output leaf of an earlier node of that width (a part of its outputs)."""
     prims = _prims()
     nt = rng.randint(1, 2 if small else 3)
     templates = []
     for ti in range(nt):
-        params = [rng.choice(TYPES) for _ in range(rng.randint(1, 3))]
+        params = [rng.choice(TYPES) for _ in range(rng.randint(1, 3))] + ([-WIDE] if rng.random() < 0.4 else [])
         vals = list(enumerate(params))
         steps = []
         for _s in range(rng.randint(0 if rng.random() < 0.15 else 1, 4)):
             ok = [i for i, (p, ts, r) in enumerate(prims) if all(any(w == t.w for _v, w in vals) for t in ts)]
+            fields = [(v, w) for v, w in vals if w < 0]
+            if fields and (not ok or rng.random() < 0.4):
+                v, w = rng.choice(fields)
+                steps.append([-1 - rng.randrange(-w), [v]])
+                vals.append((len(vals), 1))
+                continue
             if not ok:
                 break
             pi = rng.choice(ok)
@@ -851,12 +979,15 @@ def draw(rng: random.Random, small: bool = False) -> Spec:
             srcs.append(src)
         root.append({"t": ti, "form": form, "n": n, "args": srcs})
         rw = _ret_widths(T)
+        one = [w for x in rw for w in _value_leaves(x)]
         if form == "call":
-            avail += [(ni, j, w) for j, w in enumerate(rw)]
+            avail += [(ni, j, w) for j, w in enumerate(one)]
         elif form == "batch":
-            avail += [(ni, m * len(rw) + j, w) for m in range(n) for j, w in enumerate(rw)]
+            avail += [(ni, m * len(one) + j, w) for m in range(n) for j, w in enumerate(one)]
         else:
-            avail += [(ni, 0, rw[0])] + [(ni, 1 + m * (len(rw) - 1) + j, w) for m in range(n) for j, w in enumerate(rw[1:])]
+            carry, ys = _value_leaves(rw[0]), [w for x in rw[1:] for w in _value_leaves(x)]
+            avail += [(ni, j, w) for j, w in enumerate(carry)]
+            avail += [(ni, len(carry) + m * len(ys) + j, w) for m in range(n) for j, w in enumerate(ys)]
     pop = sum(r["n"] if r["form"] == "batch" else 1 for r in root)
     cutsat = sorted(rng.sample(range(1, pop), k=min(pop - 1, rng.randint(0, 2)))) if pop > 1 else []
     edges = [0, *cutsat, pop]
@@ -867,7 +998,7 @@ def _ret_widths(T: dict) -> list[int]:
     ws = list(T["params"])
     prims = _prims()
     for pi, _a in T["steps"]:
-        ws.append(prims[pi][2].w)
+        ws.append(1 if pi < 0 else prims[pi][2].w)
     return [ws[v] for v in T["ret"]]
 
 
@@ -888,6 +1019,9 @@ def realise(spec: Spec) -> tuple[bytes, dict, list]:
             from verity.circuits import boolean as BL
             vals = list(xs)
             for pi, args in T["steps"]:
+                if pi < 0:
+                    vals.append(vals[args[0]][-1 - pi])
+                    continue
                 fn, operands = prims[pi][0], [vals[a] for a in args]
                 vals.append(B.call(fn, BL.operands(*operands)) if fn in (BL.AND, BL.XOR) else B.call(fn, *operands))
             outs = [vals[v] for v in T["ret"]]
@@ -1007,12 +1141,14 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
             t, _log = template_of(r.c_s, key, n_in, n_out, exe)
             xs, ys, vb = honest_rows(c, query, units, fn, cut, trace)
             v = row_check(t, xs, ys, vb, rng)
-        except Unlowered as e:
-            if r.step is None:
+        except Unchecked as e:
+            if r.step is not None:
+                out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
+            elif isinstance(e, Unlowered):
                 out.append(Finding(f"rows: the door accepts what Lean's lowering refuses: {normalise(str(e))}", "rows",
                                    str(e)[:600], spec.doc(), k))
             else:
-                out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
+                out.append(Finding(f"unchecked: {normalise(str(e))}", "unchecked", str(e)[:600], spec.doc(), k))
             continue
         except Exception as e:  # noqa: BLE001
             out.append(Finding(f"rows: crashed: {normalise(_err(e))}", "rows", _err(e)[:600], spec.doc(), k))
@@ -1160,6 +1296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--blocks", default="one-per-template")
     a.add_argument("--lower")
     a.add_argument("--json")
+    a.add_argument("--no-rows", action="store_true")
     b = sub.add_parser("fuzz")
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--cases", type=int, default=100)
@@ -1187,12 +1324,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     t = time.perf_counter()
     c, q = load(args.circuit)
     say("BUILT " + json.dumps({"circuit": args.circuit, "bytes": len(c), "seconds": round(time.perf_counter() - t, 1)}))
-    results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x))
-    rows = table(results)
+    results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows)
+    rows = table(results, hashlib.sha256(c).hexdigest(), built_at())
     if args.json:
         Path(args.json).write_text(json.dumps({"circuit": args.circuit, "blocks": args.blocks, "table": rows}, indent=1))
     print(render(rows))
-    refused = sum(r.step is not None for r in results)
+    refused = sum(r.step is not None or not r.rows.startswith(("yes", "too large", "not reached", "unchecked")) for r in results)
     say("CENSUS " + json.dumps({"circuit": args.circuit, "blocks": len(results), "refused": refused,
                                 "classes": len([r for r in rows if r["class"] != "through"])}))
     return 1 if refused else 0

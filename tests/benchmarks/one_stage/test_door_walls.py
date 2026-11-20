@@ -2,7 +2,8 @@
 stub of `flock-lower-check` that answers as Lean does, and the door's own refusal of a template of no gate, which no
 lowering reaches), and exits 1 when a block is refused; the fuzzer's draws are a function of the seed; and, on Lean's own
 lowering, an honest block passes the row check, the same block flags a planted wrong evaluation of its rows
-(`tmpl.evaluate` monkeypatched), and the fuzzer's findings are a function of its seed."""
+(`tmpl.evaluate` monkeypatched), and the fuzzer's findings are a function of its seed; and each finding the fuzzer
+kept (`SEEDS`) is still open, under a strict mark that fails once it is mended."""
 from __future__ import annotations
 
 import random
@@ -17,6 +18,26 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import door_walls as W  # noqa: E402
 
 COMPOSE_WHY = "no row has a compression before its last block"
+
+
+#: the fuzzer's findings, minimised: (what it is, the spec, its case seed, the class it shows on the tip it was found at)
+SEEDS = [
+    ("lean's second fault past compose: a 3-bit field, then b, then a wide field; Not b",
+     {"templates": [{"params": [-3, 1, -2048], "steps": [[2, [1]]], "ret": [3], "nested": False}], "root": [{"t": 0, "form": "call", "n": 1, "args": [[["p", 0]], [["p", 1]], [["p", 2]]]}], "root_params": [-3, 1, -2048], "registered": [], "blocks": [[0, 1]]},
+     0, 'rows: honest output refused (door accepts)'),
+    ("a 1-bit output's 15 padding bits have no row",
+     {"templates": [{"params": [-5, -2048], "steps": [[-1, [0]], [-131, [1]], [1, [2, 2]]], "ret": [3], "nested": False}], "root": [{"t": 0, "form": "call", "n": 1, "args": [[["p", 0]], [["p", 1]]]}], "root_params": [-5, -2048, -5, -5, -2048, -2048], "registered": [], "blocks": [[0, 1]]},
+     1946285518, 'rows: wrong output accepted: padding bit set (door accepts)'),
+    ('5-bit fields after a bit: the honest output refused',
+     {"templates": [{"params": [1, -5, -5], "steps": [[2, [0]]], "ret": [1], "nested": False}], "root": [{"t": 0, "form": "batch", "n": 2, "args": [[["p", 0], ["p", 1]], [["p", 2], ["p", 3]], [["p", 4], ["p", 5]]]}], "root_params": [1, 1, -5, -5, -5, -5], "registered": [], "blocks": [[0, 2]]},
+     1383842589, 'rows: honest output refused (door refuses at lower)'),
+    ('a 3-bit field before a bit: a flipped output accepted',
+     {"templates": [{"params": [-3, 1], "steps": [[-3, [0]], [0, [2, 2]]], "ret": [1, 0], "nested": False}], "root": [{"t": 0, "form": "batch", "n": 3, "args": [[["p", 0], ["p", 1], ["p", 2]], [["p", 3], ["p", 4], ["p", 5]]]}], "root_params": [-3, -3, -3, 1, 1, 1], "registered": [], "blocks": [[0, 3]]},
+     1790352721, 'rows: wrong output accepted: flipped value bit (door refuses at lower)'),
+    ("restrict divides by a template of no gate's gates",
+     {"templates": [{"params": [32, 8], "steps": [[4, [0, 0, 0]], [3, [0, 2]], [3, [2, 0]]], "ret": [0, 3], "nested": False}, {"params": [-3, 8, 7], "steps": [[5, [2, 1]], [5, [2, 1]]], "ret": [2, 4], "nested": False}, {"params": [8, -5, -3, -2048], "steps": [[-1, [1]], [-3, [2]]], "ret": [0], "nested": False}], "root": [{"t": 1, "form": "batch", "n": 3, "args": [[["p", 0], ["p", 1], ["p", 2]], [["p", 3], ["p", 4], ["p", 5]], [["p", 6], ["p", 7], ["p", 8]]]}, {"t": 2, "form": "batch", "n": 3, "args": [[["p", 9], ["n", 0, 5], ["p", 10]], [["p", 11], ["p", 12], ["p", 13]], [["p", 14], ["p", 15], ["p", 16]], [["p", 17], ["p", 18], ["p", 19]]]}, {"t": 1, "form": "batch", "n": 2, "args": [[["p", 20], ["p", 21]], [["n", 0, 1], ["n", 1, 2]], [["p", 22], ["p", 23]]]}, {"t": 2, "form": "batch", "n": 2, "args": [[["n", 0, 5], ["n", 0, 5]], [["p", 24], ["p", 25]], [["p", 26], ["p", 27]], [["p", 28], ["p", 29]]]}], "root_params": [-3, -3, -3, 8, 8, 8, 7, 7, 7, 8, 8, -5, -5, -5, -3, -3, -3, -2048, -2048, -2048, -3, -3, 7, 7, -5, -5, -3, -3, -2048, -2048], "registered": [7, 9, 14, 17, 18, 22, 24, 25], "blocks": [[0, 2], [2, 7], [7, 10]]},
+     3772944590, 'restrict: ZeroDivisionError: integer division or modulo by zero'),
+]
 
 
 def _stub(tmp_path: Path) -> Path:
@@ -95,3 +116,14 @@ def test_the_row_check_holds_an_honest_block_and_flags_a_planted_wrong_one(monke
     again = W.fuzz(3, 4, 5.0, exe)
     assert [c | {"example": None} for c in first["classes"]] == [c | {"example": None} for c in again["classes"]]
 
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("what,spec,seed,klass", [pytest.param(*s, marks=pytest.mark.xfail(strict=True, reason=s[3]), id=s[0])
+                                                  for s in SEEDS])
+def test_each_seed_reaches_the_door_and_its_rows_hold(what, spec, seed, klass):
+    """Each kept finding is open while its mark stands: the door's steps refuse it or take it without a crash, and its
+    rows hold. A finding that is mended fails its strict mark, and its mark goes."""
+    W._catalog()
+    found = {f.klass for f in W.check_case(W.Spec(**spec), W._exe(None), seed)}
+    assert klass not in found, found
+    assert not [k for k in found if k.startswith(("rows:", "restrict: ZeroDivisionError"))], found
