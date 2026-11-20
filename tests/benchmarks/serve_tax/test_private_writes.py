@@ -135,7 +135,6 @@ WRITES = {
         ("ranks_take", "Path(cfg['out']) / f'edges.{os.getpid()}.jsonl'"): "public",
         ("install", "out / f'prefix_resets.{pid}.jsonl'"): "public",
         ("install", "out / f'tokens.{pid}.jsonl'"): "public",
-        ("install", "out / f'boundary.{pid}.jsonl'"): "public",
     },
     "benchmarks/serve_tax/tp_edge.py": {
         ("snapshot", "self.out / 'outputs.jsonl'"): "apart",
