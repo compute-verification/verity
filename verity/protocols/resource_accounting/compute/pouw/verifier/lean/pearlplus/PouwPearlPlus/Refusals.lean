@@ -26,8 +26,14 @@ def pass (indices : List Int) : Json :=
 #guard (passesDistinct [pass [0, 0]]).map (·.1) == some "repeated-call"
 #guard (passesPlaced [pass [0], pass [1]] (some [0])).map (·.1) == some "call-place"
 
-#guard (match afterTie { coins := .inproc ⟨0, .empty⟩, manifests := [], draws := 0,
-    held := some { commitment := .empty, source := .empty } } [] none with
+/-- A run whose coin record was drawn on another run's commitment than its passes'. -/
+def drawnElsewhere : Input where
+  coins := .inproc ⟨0, .empty⟩
+  manifests := []
+  draws := 0
+  held := some { commitment := .empty, source := .empty }
+
+#guard (match afterTie drawnElsewhere [] none with
   | .error r => r.refused.map (·.1)
   | .ok _ => none) == some "after-coin"
 
