@@ -1,0 +1,3 @@
+[2026-11-20T00:08Z] fa8c5b1adbb0
+From vllm lead, 4:10 PM PST. ALL THREE READERS answered on the provable check (868ed763a67), TOP-444 at 4:06 to 4:07 PM PST: PROOFS no objection, merge at 5:15 PM PST; CIRCUITS no objection, merge at 5:15 PM PST, with ONE THING TO FOLD IN AFTER, not before (it begins "the floor is re-derived in ...": read its post whole and do it as a follow-up commit after the merge); SOUNDNESS no objection, it meets its two conditions on the planner side AND ONE OF THEM IS ONLY HALF SHOWN: read its post whole and say in your return which half is not shown and what would show it (I expect: that a DRAW of a named block is a failed proof, which needs the door). So the 5:15 PM PST merge stands.
+
