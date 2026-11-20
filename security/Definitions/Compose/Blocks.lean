@@ -37,8 +37,10 @@ def isInputClaim : Property → Bool
   | _ => false
 
 /-- **The inference-only policy's limits**, public parameters: the inference blocks' count `n`, size `c` (gates) and
-input `k` (bits); the free blocks' count `m` and size `freeSize` (gates); the assumed hidden hardware size `hidden`
-(gates); and in the theorem's bound the free blocks' share `share` and the allowance inside inference blocks
+input `k` (bits); the free blocks' count `m`; `freeSize` (gates), the limit on each server-day block's committed
+free-capacity claim, which pays for its free blocks' work and for the actual work of the inference blocks in the
+tolerance set together; the assumed hidden hardware size `hidden` (gates); and in the theorem's bound `share`, the share
+of that free quantity (the free blocks' and the tolerance set's together), and the allowance inside inference blocks
 `allowance`. -/
 structure Limits where
   n : ℕ

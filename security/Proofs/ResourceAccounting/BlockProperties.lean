@@ -182,16 +182,16 @@ theorem chain (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : Infe
     rintro r ⟨ha, hn⟩
     by_contra hall
     push_neg at hall
-    obtain ⟨M, hM⟩ := hcover r ha fun x hx => hall x hx ha
-    exact hn (hthm P r M (hcheck r ha) hM)
+    obtain ⟨M, hF, hM⟩ := hcover r ha fun x hx => hall x hx ha
+    exact hn (hthm P r M (hcheck r ha) hM hF)
   calc P.pr (fun r => P.accepts r ∧ ¬ InferenceOnly.Compliant pol (P.actual r) (P.θ r))
       ≤ P.pr (fun r => ∃ x ∈ s, P.accepts r ∧ ¬ shown x r) := P.mono _ _ hsub
     _ ≤ ∑ x ∈ s, P.pr (fun r => P.accepts r ∧ ¬ shown x r) := P.union _ _
     _ ≤ ∑ x ∈ s, ε x := Finset.sum_le_sum fun x hx => hest x hx
 
-/-- **An empty tolerance realizes**: `RealizesExcept ∅` gives `Realizes` (the claim clauses for every block, dropping the
-tolerance term). The converse needs the free quantity to fit the capacity, which `Realizes` alone does not carry, so the
-tolerance is a term and not a mere relabelling of the honest path. -/
+/-- **An empty tolerance realizes**: `RealizesExcept ∅` gives `Realizes` (the claim clauses for every block). The converse
+is `realizes_realizesExcept`; neither says anything of the committed free-capacity claim, which `FreeClaimHolds` carries
+on its own. -/
 theorem realizesExcept_empty_realizes (P : Runs L) (r : P.Run) : P.RealizesExcept r ∅ → P.Realizes r := by
   rintro ⟨h1, h2, h3, h4, h5, h6, -⟩
   refine ⟨h1, h2, h3, fun u => ?_, h6⟩
@@ -595,13 +595,13 @@ theorem rows_chain (P : Runs L)
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))),
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ] with hshownV
   set εV : Fin 7 → ℝ≥0∞ := ![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ 40 + adv, 0, εnet] with hεV
-  have hcover : ∀ r, P.accepts r → (∀ x ∈ Finset.univ, shownV x r) → ∃ M, P.RealizesExcept r M := by
+  have hcover : ∀ r, P.accepts r → (∀ x ∈ Finset.univ, shownV x r) →
+      ∃ M, P.FreeClaimHolds r M ∧ P.RealizesExcept r M := by
     intro r ha hall
-    obtain ⟨M, -, hreal⟩ := assemble r ha
+    exact assemble r ha
       (hall 0 (Finset.mem_univ _)) (hall 1 (Finset.mem_univ _)) (hall 2 (Finset.mem_univ _))
       (hall 3 (Finset.mem_univ _)) (hall 4 (Finset.mem_univ _)) (hall 5 (Finset.mem_univ _))
       (hall 6 (Finset.mem_univ _)) (reg hregsound hregreads r ha)
-    exact ⟨M, hreal⟩
   have hest : ∀ x ∈ Finset.univ, ExceptWith P.pr P.accepts (shownV x) (εV x) := by
     intro x _
     fin_cases x

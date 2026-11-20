@@ -247,20 +247,21 @@ with them as its registered information satisfies `pol`. -/
 def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) : Prop :=
   ∃ h : ∀ a ∈ θ, A.isInput a = true, pol (.ofCircuit A.toCircuit θ h)
 
-/-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check and realize their
-claims outside a tolerance set `M` of inference blocks (`RealizesExcept`, the tolerance path the reviews found missing)
-has a compliant actual circuit. The quantifier over `M` is not vacuous: the tolerance binds `M` as a term, not a free
-quantifier — `M`'s actual work sits inside each server-day block's committed free-capacity claim (`claimedFree`, which
-`check` caps at `lim.freeSize`; the clause is `FreeClaimHolds`, established by the conversion), so taking `M` all the
-inference blocks forces their total work under the limit rather than excusing it (the universal witness `excluded_run`).
-Its declared use is counted in the free block and the injected information it passes into correct
-blocks is a term of their input, so compliance follows all the same.
+/-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check, realize their
+claims outside a tolerance set `M` of inference blocks (`RealizesExcept`) and whose committed free-capacity claim holds
+for that `M` (`FreeClaimHolds`) has a compliant actual circuit. `FreeClaimHolds` is a hypothesis of the statement, beside
+`RealizesExcept`: without it `M` could be every inference block and the run would be bound by nothing. With it `M`'s
+actual work sits inside each server-day block's committed claim (`claimedFree`), which `check` caps at `lim.freeSize`,
+so a run whose tolerance set's work exceeds the limit satisfies no instance of the hypotheses (`excluded_run`). Who
+establishes `FreeClaimHolds` is the conversion (capacity minus the use credited outside `M`), open in `rows_chain`.
+`M`'s declared use is counted in the free block and the injected information it passes into correct blocks is a term of
+their input.
 The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an
 unregistered input, so placing the free block's input from its own past (PoUS) and from memory (PoUB) adds terms to the
 same bound and states no new theorem here. -/
 def PolicyTheorem {L : Type*} (check : (P : Runs L) → P.Run → Bool) (pol : Policy) : Prop :=
   ∀ (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))),
-    check P r = true → P.RealizesExcept r M → Compliant pol (P.actual r) (P.θ r)
+    check P r = true → P.RealizesExcept r M → P.FreeClaimHolds r M → Compliant pol (P.actual r) (P.θ r)
 
 /-- **The inference-only policy** at the limits `lim`, with training efficiency `efficiency`: a declaration complies when
 its training efficiency is at most `share + allowance`. Training efficiency is an undefined parameter here, a function of
@@ -281,14 +282,14 @@ namespace ResourceAccounting
 /-- **The chain**: over a monitoring period, with the policy's theorem, the check passing on every accepted run, and the
 protocols' rows `shown x` (PoUW through the conversion for the free block's size, `DeclaredBlocksRun` for the inference
 blocks' claims outside a tolerance set, the wipe and network attestation for input and output, registration for `θ`) that
-between them give that an accepted run realizes its claims outside some tolerance set of inference blocks (each row
-established except with probability at most `ε x`), an accepted run's actual circuit complies with `pol`, except with
-probability at most `∑ x ∈ s, ε x`. An inference block no row covers (before its epoch's salt), and the tolerance set the
-sample misses, are free work the partition declares a free block. -/
+between them give that an accepted run realizes its claims outside some tolerance set of inference blocks for which its
+committed free-capacity claim holds (each row established except with probability at most `ε x`), an accepted run's
+actual circuit complies with `pol`, except with probability at most `∑ x ∈ s, ε x`. An inference block no row covers
+(before its epoch's salt), and the tolerance set the sample misses, are free work, counted under the committed claim. -/
 def Chain {L : Type*} (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
     {κ : Type} (s : Finset κ) (shown : κ → P.Run → Prop) (ε : κ → ℝ≥0∞) : Prop :=
   InferenceOnly.PolicyTheorem check pol → (∀ r, P.accepts r → check P r = true) →
-    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → ∃ M, P.RealizesExcept r M) →
+    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → ∃ M, P.FreeClaimHolds r M ∧ P.RealizesExcept r M) →
     (∀ x ∈ s, ExceptWith P.pr P.accepts (shown x) (ε x)) →
     ExceptWith P.pr P.accepts (fun r => InferenceOnly.Compliant pol (P.actual r) (P.θ r)) (∑ x ∈ s, ε x)
 
