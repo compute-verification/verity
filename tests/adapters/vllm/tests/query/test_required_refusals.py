@@ -104,12 +104,11 @@ def test_a_population_prescribes_its_programs_record_fields_and_supplied_inputs_
 
 
 def test_a_call_that_may_not_read_the_schedule_witness_is_refused_under_the_implementations_path():
-    """The `schedule` parameter is the witness under either query, and a Call of another family that reads it is a fault that
+    """The `schedule` parameter is the witness under either query, and a Call that reads it is a fault that
     names the family and the module by the implementation's path.  The manifest is then incomplete, and the read is no token id."""
     sched = InputView(-3, "schedule", "Array<4,Value<32>>", (Port("schedule", 0, 4, 4, 32),))
     P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W), R(-3, "schedule")]),), sched)
-    fault = (f"Gemm_v1 under {IMPL}.a reads the `schedule` witness (only ['MoeAlignRanks_v1'] may: the replay binds a reader's keys to "
-             "its own committed rank)")
+    fault = f"Gemm_v1 under {IMPL}.a reads the `schedule` witness (no Call may: nothing commits or binds it)"
     for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
         pop = Population(P, _corr(P), query=q)
         assert (pop.witness, pop.witness_readers, pop.tp_faults) == ({R(-3, "schedule")}, [1], [fault])

@@ -208,7 +208,8 @@ def expand(inst) -> dict:
 def desc_program(text: str, refuse_recut: bool = False):
     """The Program `InferenceOnlyCheck.Desc` reads, with its refusals in its order: `program` where it doesn't decode,
     `recut-unread` where `refuse_recut` and the root reads an input node in leaves of part of its leaf width,
-    `not-topological`, and `program` past `walkBound`'s limit or for a scan of no iterations with output leaves."""
+    `not-topological` (a second check: the decoder refuses a node's read of itself or a later node first), and `program`
+    past `walkBound`'s limit or for a scan of no iterations with output leaves."""
     try:
         desc = json.loads(text)
         program = codec.decode_program(desc, declared(desc))

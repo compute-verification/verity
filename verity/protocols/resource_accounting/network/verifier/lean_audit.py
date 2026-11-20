@@ -24,7 +24,7 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
-`link-window` (`Server.call`), N2's verdict of record on one execution phase's proof (`service.TransferBlocks.verify`),
+`link-window` (`Server.call`), N2's verdict on one execution phase's proof, which no caller here sends,
 `certificates`, the client's check of one window's served attestations (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference), and `load`, the check of a run's load's registrations
 (`relay_check.check_load`, `NetworkVerifier.Load.loadCheck`), with `transfer-registration`, its read of one
