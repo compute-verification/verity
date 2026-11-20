@@ -187,7 +187,9 @@ keeps or drops from and never adds to.
   names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
   `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
-  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
+  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system, each with an
+  honest lemma under `witnesses` (`deployed_witness_failures`; `unwitnessed` excuses a deployed guarantee's `nontrivial`
+  half alone), and the report counts them (`deployed_witnesses`).
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
