@@ -325,8 +325,8 @@ def sessions(draw) -> dict:
     blocks = draw(st.sampled_from([1, 2, 5, 1 << 20, 1 << 40]))
     doc = copy.deepcopy(honest(k, blocks, draw(st.integers(0, 1)), draw(st.integers(0, 2)),
                                tuple(draw(st.integers(0, (1 << 40) - 1)) for _ in range(k))))
-    rnd = draw(st.one_of(st.integers(0, k - 1), st.integers(0, k + 1), st.sampled_from([1 << 32, (1 << 32) - 1])))
-    for name in draw(st.lists(st.sampled_from(sorted(MUTATIONS)), max_size=2)):
+    rnd = draw(st.one_of(*[st.integers(0, k - 1)] * 5, st.integers(0, k + 1), st.sampled_from([1 << 32, (1 << 32) - 1])))
+    for name in draw(st.one_of(st.just([]), st.just([]), st.lists(st.sampled_from(sorted(MUTATIONS)), min_size=1, max_size=2))):
         try:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
         except (KeyError, IndexError, TypeError, AttributeError):
@@ -356,8 +356,13 @@ def _head_of(coins: dict[str, bytes]) -> int:
     return 754
 
 
-SESSIONS = D.Port(PIECES, "supplied_marks", reference, st.one_of(sessions(), sessions(), sessions(), INPUTS), package=PACKAGE,
-                  of_record="lean")
+@st.composite
+def releases_or_programs(draw):
+    """Mostly a storage session's release; one in ten an input of the other supplied functions' cases."""
+    return draw(INPUTS) if draw(st.integers(0, 9)) == 0 else draw(sessions())
+
+
+SESSIONS = D.Port(PIECES, "supplied_marks", reference, releases_or_programs(), package=PACKAGE, of_record="lean")
 
 
 @needs_lake
