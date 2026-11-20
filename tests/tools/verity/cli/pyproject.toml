@@ -40,8 +40,7 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "benchmarks/one_stage/pearlplus_local_e2e.py", "benchmarks/pous/streamed_wipe/served_wipe.sh",
           "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh",
           "benchmarks/pous/served_piece.py", "benchmarks/pous/run_attester.sh",
-          "benchmarks/pous/served_case.py", "applications/onsite_full.toml", "applications/onsite_compute.toml",
-          "applications/onsite_network.toml", "applications/onsite_network_front.toml",
+          "benchmarks/pous/served_case.py", "applications/onsite_full.toml",
           "applications/remote.toml", "input_datasets/input_datasets", "adapters/vllm/verity_vllm/inputs",
           "tests/tools/verity/lean/fixtures/judge"]
 

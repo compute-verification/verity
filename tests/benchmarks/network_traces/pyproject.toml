@@ -46,7 +46,7 @@ untraced = [
 # total_cost.py, the second stage's bound it imports and the cards they read); where asked, the census's request and
 # GPU peak at the workload card's MACs a token.
 # block_record derives the record's subprotocols from the onsite application
-inputs = ["applications/onsite_full.toml", "applications/onsite_compute.toml", "applications/onsite_network.toml", "applications/onsite_network_front.toml",
+inputs = ["applications/onsite_full.toml",
           "calibration/hardware/cards", "calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
           "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
