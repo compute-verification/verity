@@ -1054,8 +1054,9 @@ def _private(seed: int):
 
 def test_a_windows_labels_are_its_step_slot_and_form_alone():
     """One advice under two sets of private values (`_private`): its rows differ, and `Rows.record` hands the window the
-    same runs under byte-identical labels, each only its step, slot and form, a unit of no request's (the scan's start
-    and buckets) only its step and form. Every unit is in one run, and both forms and both slots are there."""
+    same runs under byte-identical labels, each only its step, slot and form, a unit of no request's (the scan state's
+    `ScanState_v2`, the scan's starts and buckets) only its step and form. Every unit is in one run, and both forms and
+    both slots are there."""
     (_la, _va, a), (_lb, _vb, b) = _private(3), _private(4)
     assert any(not np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
     ka, kb = _Kept(), _Kept()

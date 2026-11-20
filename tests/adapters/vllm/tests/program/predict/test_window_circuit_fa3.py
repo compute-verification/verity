@@ -62,8 +62,9 @@ def _registered(target: dict = H200, config: dict = S.TINY):
 
 def _wired_in_slot_and_step(circuit) -> None:
     """Every wire but the scan's, which reads every slot's entry and gives every slot its start, is in its slot at its
-    step or before."""
+    step or before, and so is every wire but a unit of no request's, which feeds every slot."""
     labels = _labels(circuit)
+    shared = {e.template for e in circuit.blocks.inference if not e.request}
     assert all((lab >= 0).all() for lab in labels.values())
     scan = {IF.descriptor_id(fn) for fn, _ in circuit.templates
             if fn.name in ("IngressScanStart", "IngressScanBucket", "EgressBucket")}
@@ -72,7 +73,7 @@ def _wired_in_slot_and_step(circuit) -> None:
             continue
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
-        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+        assert (w.writer in shared or (reader[:, 0] == writer[:, 0]).all()) and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
 
 
 def _reads_its_keys_and_values(circuit, head: str) -> None:
@@ -204,10 +205,10 @@ def test_bf16_llama_3_2_1b_on_sm_90_lowers_wired_at_4_27_2(tied):
     n = {_label(fn): k for fn, k in circuit.templates}
     norms = {lab: k for lab, k in n.items() if lab.startswith("RMSNormFused")}
     if tied:
-        assert (len(n), norms) == (51, {"RMSNormFusedCuda_v2{N=2048}": 3584})
+        assert (len(n), norms) == (52, {"RMSNormFusedCuda_v2{N=2048}": 3584})
         return
     assert {lab for lab in n if lab.startswith("Gemm_v2")} >= {"Gemm_v2{K=2048,N=8}", "Gemm_v2{K=8192,N=4}"}
-    assert (len(n), norms) == (63, {"RMSNormFusedCudaTail_v1{N=2048}": 3584,
+    assert (len(n), norms) == (64, {"RMSNormFusedCudaTail_v1{N=2048}": 3584,
                                     **{ADD.format(at, r): 1792 for at in range(8) for r in (32, 64)}})
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert all(circuit.cuts[ids[ADD.format(at, r)]] == {"x": r} for at in range(8) for r in (32, 64))
