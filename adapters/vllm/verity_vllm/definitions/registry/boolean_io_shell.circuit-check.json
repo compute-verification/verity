@@ -21,6 +21,10 @@
   },
   "ScanSlots_v5{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=112537,LP=112329,MAX=112361,IDS=113689}": {
    "and": 30
+  },
+  "ScanStateBits_v1": {
+   "and": 0,
+   "type": "9d6d3bf6beb91f3857c3d41cf783b364d6fbb2929a77771fcc6e0e03291620334320e6a046454632bd6186b70708680b177b40ee7520ed14eda694cf567b80b3"
   }
  },
  "struct_max_gates": {

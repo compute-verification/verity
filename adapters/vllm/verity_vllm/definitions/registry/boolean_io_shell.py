@@ -35,7 +35,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.evaluation.batch import register_kernel
-from verity.circuits.refs import Coll, concat
+from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 from verity_vllm.definitions.registry import io_shell as X
@@ -205,4 +205,44 @@ def scan_rows(state, NP, IDB, K0, K, OCC, LP, MAX, IDS, **_):
 
 register_kernel(ScanSlotsV5, scan_rows, domain="every state row")
 
-BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsBitsV1, ScanSlotsV5]
+
+def _state_bits_sig(S):
+    return (("bits", Array(16, BL.BIT)),), Array(16, BL.BIT)
+
+
+def _state_bits(B, S, bits):
+    # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
+    return B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,))
+
+
+ScanStateBitsV1 = CompositeDefinition("ScanStateBits", 1, (), _state_bits_sig, _state_bits,
+                                      doc="`ScanState_v2`'s copy of a word's 16 bits, two NOTs a bit.",
+                                      conformance="exact-model-tested")
+
+
+def _state_sig(S):
+    return (("state", Array(S.NS, Value(16))),), Tuple(Array(S.NS, Value(16)), Array(S.NS, Array(16, BL.BIT)))
+
+
+def _state_words(B, S, state):
+    bits = B.batch(bind(WordBits, W=16), state, axes=(0,))
+    # a batch steps over its source's copies whole (`Flock.Lower`'s `Work.stepOf`), so the copy is a word's a copy
+    out = B.batch(ScanStateBitsV1, bits, axes=(0,))
+    return tuple_of(B.batch(bind(BitsWord, W=16), out, axes=(0,)), out)
+
+
+ScanStateV2 = CompositeDefinition("ScanState", 2, ("NS",), _state_sig, _state_words,
+                                  doc="The scan's state row of ``NS`` u16 words, read once from its registration and "
+                                      "copied, so one row owns it: o0 its words, which each lane's `ScanSlots_v5` reads "
+                                      "by a wire, and o1 its bits, which the first `IngressScanBucket`'s ``sin`` reads.",
+                                  conformance="exact-model-tested")
+
+
+def state_rows(state, **_):
+    s = np.asarray(state, dtype=np.uint64)
+    return np.concatenate([s, (s[:, :, None] >> np.arange(16, dtype=np.uint64) & 1).reshape(len(s), -1)], axis=1), None
+
+
+register_kernel(ScanStateV2, state_rows, domain="every state row")
+
+BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsBitsV1, ScanSlotsV5, ScanStateBitsV1, ScanStateV2]

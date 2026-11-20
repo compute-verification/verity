@@ -22,7 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     128,256-entry vocabulary, 6-character fields); `IngressSampled_v1` at the same two with a 6-byte and a 16-byte id;
     `ScanSlots_v5` at TINY's class's scan state row (lane 1 of 2, KO 2, 4 prompt ids), the class of record's (lane 3 of 4,
     KO 64, 1,024) and the remote application's (lane 0 of 4, KO 2, 27, ``ScanSlots_v5:4:2:27``), and its `ScanSlotsBits_v1`
-    at each."""
+    at each; `ScanState_v2` at the same three rows' widths, and its `ScanStateBits_v1`."""
     from verity.circuits.defs import bind
 
     from verity_vllm.definitions.registry import boolean_io_shell as BX
@@ -38,4 +38,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("ScanSlotsBits_v1:2:2:4", lambda: _scan_slots(4548, (376, 168, 200, 474), 36333, 1, 4, "ScanSlotsBitsV1")),
         ("ScanSlotsBits_v1:4:64:1024", lambda: _scan_slots(9353, (376, 168, 200, 1528), 37387, 3, 1024, "ScanSlotsBitsV1")),
         ("ScanSlotsBits_v1:4:2:27", lambda: _scan_slots(9090, (376, 168, 200, 474), 36333, 0, 27, "ScanSlotsBitsV1")),
+        ("ScanState_v2:4548", lambda: bind(BX.ScanStateV2, NS=4548)),
+        ("ScanState_v2:9353", lambda: bind(BX.ScanStateV2, NS=9353)),
+        ("ScanState_v2:9090", lambda: bind(BX.ScanStateV2, NS=9090)),
+        ("ScanStateBits_v1", lambda: bind(BX.ScanStateBitsV1)),
     ]

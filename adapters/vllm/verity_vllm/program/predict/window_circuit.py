@@ -11,11 +11,12 @@ request has no Program. The class circuit (`class_circuit`), every slot's Progra
 positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(in the class circuit `scan_state.SCAN_STATE`, registered, a row a bucket) through `boolean_io_shell.ScanSlots_v4`
-(`scan_state.bridge`), a template a lane, which gives its lane its first position's token (its prompt's first id) and the
-slot it carries on, its occupancy word and its head (its prompt's length and ``max_tokens``). A served window has a unit
-a lane of each boundary, empty lanes included; a class circuit's slot holds a unit of every lane's template and reads its
-own lane's, so its slots lower the same units. Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
+(in the class circuit `scan_state.SCAN_STATE`, registered, a row a bucket), read once a boundary by
+`boolean_io_shell.ScanState_v2`, a unit of no request, whose words each lane's `boolean_io_shell.ScanSlots_v5`
+(`scan_state.bridge`) reads by a wire, a template a lane, which gives its lane its first position's token (its prompt's
+first id) and the slot it carries on, its occupancy word and its head (its prompt's length and ``max_tokens``). A served
+window has a unit a lane of each boundary, empty lanes included; a class circuit's slot holds a unit of every lane's
+template and reads its own lane's, so its slots lower the same units. Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST=False}`'s below the class's
 prompt limit (the prompt's id below its length, else the previous position's select), and past it the previous position's
 select. Each select is collected in the unit that makes it (`io_shell.SelectCollect_v1`: the select, then
 `io_shell.OutCollect_v1` over it). The last position's makes the slot's entry of the scan's Programs' row instead
@@ -37,11 +38,12 @@ each lane's unit reads and the entries are the circuit's external ports.
 
 A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): its first start unit
 (`IngressScanStart`) reads ``SCAN_STATE``'s one row, the state before the window; its ingress unit t
-(`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (the first
-start's at t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads
+(`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (`ScanState_v2`'s
+o1 at t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads
 ingress unit t's view and its row is held to the attester's released row t (``RELEASED_ROWS``). Each lane's
-`ScanSlots_v4` at boundary a reads the state there as u16 words, start unit a / EVERY's o1: the first's at 0, else one
-reading S_{a−1} by wire. A boundary at a time after the walk: its start, its gap collectors and its entries (one
+`ScanSlots_v5` at boundary a reads the state there as u16 words: at 0 `ScanState_v2`'s o0, which reads ``SCAN_STATE``'s
+one row and whose o1, its bits, is the first ingress unit's S_{−1}; else start unit a / EVERY − 1's o1, reading S_{a−1}
+by wire. A boundary at a time after the walk: its start, its gap collectors and its entries (one
 allocation, lane j's entry j), then its ingress units, one allocation each, so the order puts every read after its
 writer. Those three ports are the circuit's external ports.
 A slot's Program
@@ -163,6 +165,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
 
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
@@ -269,13 +272,11 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         if cls.boundaries != tuple(range(0, cls.buckets, cls.every)):
             raise Unexpressible(f"{cls}: boundaries {list(cls.boundaries)}, not every {cls.every}th bucket from 0")
         start, bucket, egress = cls.scan.start, cls.scan.bucket, cls.scan.egress
-        ttid, _ = b.allocation(start, [None])
-        b.value(ttid, "sin", 0, SS.SCAN_STATE, 0, 1)
-        itid, outs = descriptor_id(bucket), dict(IF.layout(bucket).outs)
+        ttid, itid, outs = descriptor_id(start), descriptor_id(bucket), dict(IF.layout(bucket).outs)
 
         def state(a: int) -> Row:
-            """The scan's state row before bucket ``a`` as bits: the start's at 0, else ingress unit a − 1's S_{a−1}."""
-            return Row(ttid, 0, "o0", outs["o1"]) if a == 0 else Row(itid, a - 1, "o1", outs["o1"])
+            """The scan's state row before bucket ``a`` as bits: `ScanState_v2`'s at 0, else ingress unit a − 1's S_{a−1}."""
+            return Row(otid, owner[0], "o1", outs["o1"]) if a == 0 else Row(itid, a - 1, "o1", outs["o1"])
     if order is None:
         fn = class_program(registered, cls.positions).program.fn
         layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
@@ -297,16 +298,20 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     by = {(r.anchor, r.lane): k for k, r in enumerate(progs)}
     host = {a: min([(r.lane, k) for k, r in enumerate(progs) if r.anchor == a], default=(0, 0))[1] for a in cls.boundaries}
     scanned: list[tuple[int, int, tuple[str, int]]] = []
+    ns = scans[0].bindings["NS"]
+    owned = cls.boundaries if order is None else cls.boundaries[:1]
+    otid, ou = b.allocation(bind(BIO.ScanStateV2, NS=ns), [None] * len(owned))
+    owner = {a: ou + i for i, a in enumerate(owned)}
+    for a, u in owner.items():
+        b.read(otid, "state", u, (1,), a * ns, (0,), SS.SCAN_STATE)
     for j in range(cls.lanes):
         groups = ([[(cls.anchor(k), k) for k in range(programs)]] if order is None
                   else [[(a, by.get((a, j), host[a]))] for a in cls.boundaries])
         for group in groups:
             tid, u = b.allocation(scans[j], [(k, 0) for _, k in group])
             for i, (a, k) in enumerate(group):
-                if order is None:
-                    b.read(tid, "state", u + i, (1,), a * scans[j].bindings["NS"], (0,), SS.SCAN_STATE)
-                else:
-                    b.feed(tid, "state", u + i, 1, (Row(ttid, a // cls.every, "o1", outs["o1"]),))
+                b.feed(tid, "state", u + i, 1, (Row(otid, owner[a], "o0", ns) if a in owner
+                                                else Row(ttid, a // cls.every - 1, "o1", outs["o1"]),))
                 scanned.append((a, j, (tid, u + i)))
                 if order is None and cls.lane(k) == j:
                     progs[k].scan_unit = (tid, u + i)

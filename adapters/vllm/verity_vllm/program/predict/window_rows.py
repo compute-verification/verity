@@ -63,6 +63,7 @@ from verity.commitments.periods.rows import registered as registered_commit
 from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.query.manifest import format as RM
 
@@ -462,7 +463,7 @@ class Rows:
     `scan_state.SCAN_STATE` and the network attester's ingress rows `scan_state.INGRESS_ROWS`, each with its rows), of
     which an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). The scan's units are filled a
     boundary at a time (`window_circuit`'s module docstring), each its Definition on its inputs, so a lane's
-    `ScanSlots_v4` reads the state row its ingress units computed. Refused unless every unit's every row is filled once."""
+    `ScanSlots_v5` reads the state row its ingress units computed. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if lowered.requests is None:
@@ -504,9 +505,11 @@ class Rows:
         entries = {**{(P.anchor, P.lane): P.entry_unit for P in lowered.programs},
                    **{(cls.anchor(s), cls.lane(s)): e for s, _k, _c, e in lowered.empty}}
         units = {(a, j): unit for a, j, unit in lowered.scans}
+        owner = next(t for t, f in self.fns.items() if f.defn is BIO.ScanStateV2)
         for n, a in enumerate(cls.boundaries):
             for o in ("o0", "o1"):
-                self._put(start, n, o, np.asarray([self.state[a]], dtype=np.uint16), EVALUATED)
+                self._put(start if n else owner, n - 1 if n else 0, o, np.asarray([self.state[a]], dtype=np.uint16),
+                          EVALUATED)
             for j in range(cls.lanes):
                 tid, u = units[(a, j)]
                 for i, v in enumerate(_lane(self.fns[tid], self.state, a, IO.scan_reference)):
