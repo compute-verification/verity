@@ -238,8 +238,8 @@ BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
 
 def load(spec: str) -> tuple[bytes, dict]:
     """C's bytes and its template query from a builder's name or a directory holding ``C.json`` and ``query.json``."""
+    _catalog()
     if spec in BUILDERS:
-        _catalog()
         return BUILDERS[spec]()
     d = Path(spec)
     return (d / "C.json").read_bytes(), json.loads((d / "query.json").read_text())
