@@ -42,7 +42,7 @@ def _test_signer():
 
 
 ts = _test_signer()
-TEST_ID = mc.TEST_PREFIX + mc.PROTOCOL
+TEST_ID = mc.TEST_PREFIX + SC.PROTOCOL
 SCHEMES_ALL = {**mc.SCHEMES, **ts.SCHEMES}
 
 
@@ -412,7 +412,7 @@ MUTATIONS = [
     lambda s, x: s.resign(rounds=s.signed.rounds + s.signed.rounds[-1:]),
     lambda s, x: s.resign(rounds=s.signed.rounds[:-1]),
     lambda s, x: s.resign(rounds=()),
-    lambda s, x: s.resign(ended=[mc.LATE, mc.COMPLETE, "", "ünïcode\n\x01", "x" * (x % 5)][x % 5]),
+    lambda s, x: s.resign(ended=[SC.LATE, SC.COMPLETE, "", "ünïcode\n\x01", "x" * (x % 5)][x % 5]),
     lambda s, x: dataclasses.replace(s.resign(commitment=dataclasses.replace(s.commitment, k=len(s.signed.rounds))),
                                      commitment=dataclasses.replace(s.commitment, k=len(s.signed.rounds))),
 ]
@@ -450,7 +450,7 @@ JSON_MUTATIONS = [
     _json_edit("commitment", _drop),
     _json_edit("commitment", lambda j, x: j | {"protocol": "verity-pous/memory-challenger/v1"}),
     _json_edit("commitment", lambda j, x: j | {"clock": "CLOCK_REALTIME ns"}),
-    _json_edit("commitment", lambda j, x: j | {"coin_tree": mc.RECORDS}),
+    _json_edit("commitment", lambda j, x: j | {"coin_tree": SC.RECORDS}),
     _json_edit("commitment", lambda j, x: j | {"coin_key_sha512": "00" * 64}),
     _json_edit("commitment", lambda j, x: j | {"session": j["session"].upper()}),
     _json_edit("commitment", lambda j, x: j | {"binding": j["binding"] + "0"}),

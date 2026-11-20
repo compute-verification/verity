@@ -59,6 +59,7 @@ open PousVerifier.Properties.SecurityProofs (append_cancel mth_binds leaves_entr
 open MemoryAttester.Properties.SecurityProofs (forIn'_measure_eq)
 open Lean (Json)
 open Verity.CanonUtf8 (canonUtf8_flat eq_ok_of)
+open Flock.SessionCoins (COMPLETE)
 
 local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)

@@ -18,6 +18,7 @@ from verity.circuits.evaluation.reference import resolve
 from verity.circuits.ops.boolean import versions  # noqa: F401 - registers WordBits' Boolean bodies, which the round unit's row reads through
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments import session_coins as SC
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import Round
 from verity.protocols.resource_accounting.memory.pous.prover import session_circuit as S
@@ -138,8 +139,8 @@ def _session(K: int, late: int | None = None):
     if late is not None:
         rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
     ident, salt = _rand(16), _rand(mc.RECORD_SALT_BYTES)
-    m = R.memory_attester_message(ident, c.session, mc.message(c, salt, mc.COMPLETE, rounds))
-    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
+    m = R.memory_attester_message(ident, c.session, mc.message(c, salt, SC.COMPLETE, rounds))
+    head = json.dumps({**c.header(), "ended": SC.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
     rows = _rows(rounds)
     return (c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(ident, c.session), salt, rows,
             rounds, m)
@@ -152,7 +153,7 @@ def _rows(rounds) -> list[bytes]:
 
 def _unsalted(c, ident: bytes, rounds) -> bytes:
     """The message under the unsalted tag, without a salt: what the memory attester signed before its record was salted."""
-    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": len(rounds)}, sort_keys=True,
+    head = json.dumps({**c.header(), "ended": SC.COMPLETE, "rounds": len(rounds)}, sort_keys=True,
                       separators=(",", ":")).encode()
     record = hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
                             + mc.records_digest(rounds)).digest()

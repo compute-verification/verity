@@ -55,6 +55,7 @@ is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`C
 namespace MemoryAttester.Properties
 
 open Flock
+open Flock.SessionCoins (LATE)
 
 /-! ## The challenger's wipes -/
 

@@ -25,6 +25,7 @@ namespace MemoryAttester.Properties.SecurityProofs.Device
 
 open MemoryAttester Flock
 open Tree (CF)
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-- How a device's record has ended, if it has. -/
 def Ends (st : Recorded) : Prop := st.ended = none ∨ st.ended = some COMPLETE ∨ st.ended = some LATE

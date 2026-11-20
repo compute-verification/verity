@@ -23,24 +23,16 @@ set_option backward.privateInPublic.warn false
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA)
 
 abbrev E := Except String
 
-abbrev PROTOCOL : String := SessionCoins.PROTOCOL
 def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
-abbrev COIN_TREE : String := SessionCoins.COIN_TREE
-abbrev RECORDS : String := SessionCoins.RECORDS
-abbrev COIN_TAG : ByteArray := SessionCoins.COIN_TAG
-abbrev COIN_BINDING : ByteArray := SessionCoins.COIN_BINDING
 def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v2".toUTF8.push 0
 /-- The session record's salt, the device's own draw a session: the signed digest hides the rows it covers. -/
 def RECORD_SALT_BYTES : Nat := 64
-abbrev COIN_SCHEMA : String := SessionCoins.COIN_SCHEMA
 def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
-abbrev COMPLETE : String := SessionCoins.COMPLETE
-abbrev LATE : String := SessionCoins.LATE
-abbrev CLOCK : String := SessionCoins.CLOCK
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
 A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below

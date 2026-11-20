@@ -49,14 +49,14 @@ def _session(k: int = K, drawn: int = BLOCKS):
 
 def _clear(c, openings, m=None, key=KEY, sig=None, scheme=mc.LMS, pinned=None, store=STORE, rounds=None, salt=None
            ) -> tuple[str, ...]:
-    m = mc.message(c, salt, mc.COMPLETE, rounds) if m is None else m
+    m = mc.message(c, salt, SC.COMPLETE, rounds) if m is None else m
     sig = _sign(key, c.session, m) if sig is None else sig
     return V.clear_reasons(c, openings, scheme, lms.public_key(key), m, sig, store=store,
                            pinned={_pin(KEY)} if pinned is None else pinned, schemes=SCHEMES)
 
 
 def _unsalted(c, rounds) -> bytes:
-    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, mc.COMPLETE,
+    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, SC.COMPLETE,
                      len(rounds))
     return hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
                           + mc.records_digest(rounds)).digest()
@@ -79,12 +79,12 @@ def test_a_message_the_signature_does_not_sign_is_refused() -> None:
     """The signature is the attester's over the salted message of its own records: the message of records that differ
     in one word, under another salt or without a salt (the unsalted tag), each fails to verify by name."""
     c, openings, rounds, salt = _session()
-    sig = _sign(KEY, c.session, mc.message(c, salt, mc.COMPLETE, rounds))
+    sig = _sign(KEY, c.session, mc.message(c, salt, SC.COMPLETE, rounds))
     word = dataclasses.replace(rounds[1], digest=bytes([rounds[1].digest[0] ^ 1]) + rounds[1].digest[1:])
-    for m in (mc.message(c, salt, mc.COMPLETE, [rounds[0], word, *rounds[2:]]),
-              mc.message(c, bytes([salt[0] ^ 1]) + salt[1:], mc.COMPLETE, rounds), _unsalted(c, rounds)):
+    for m in (mc.message(c, salt, SC.COMPLETE, [rounds[0], word, *rounds[2:]]),
+              mc.message(c, bytes([salt[0] ^ 1]) + salt[1:], SC.COMPLETE, rounds), _unsalted(c, rounds)):
         assert _clear(c, openings, m=m, sig=sig) == (V.BAD_SIGNATURE,)
-    assert _clear(c, openings, m=mc.message(c, salt, mc.COMPLETE, rounds), sig=sig[:-1]) == (V.BAD_SIGNATURE,)
+    assert _clear(c, openings, m=mc.message(c, salt, SC.COMPLETE, rounds), sig=sig[:-1]) == (V.BAD_SIGNATURE,)
 
 
 def test_a_session_over_another_store_is_refused() -> None:

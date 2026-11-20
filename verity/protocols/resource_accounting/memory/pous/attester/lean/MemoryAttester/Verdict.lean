@@ -22,6 +22,7 @@ signers' schemes (`TEST_SCHEMES`, `pous_test_signer.SCHEMES`) are accepted only 
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COMPLETE)
 
 /-- A closed session: its commitment, its record's salt, how it ended, its round records, and the one signature over
 them. -/

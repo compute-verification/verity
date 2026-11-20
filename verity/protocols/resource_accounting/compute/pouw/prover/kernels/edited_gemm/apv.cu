@@ -21,7 +21,7 @@
 // then atom 3 against X_diag adds 64 S_diag for f, and the epilogue adds 64 S over the blocks before b_l (Sq).
 // Noise from the per-call key (sha_pass.cuh's Sig; SHA-512(key || BE64(tag << 56 | j))): b under tag 7 in NS 1's patch
 // layout over V^T (as cpv.cu's vedit); U under tag 14 (row q: block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) +
-// 1, negated where bit 6 is set: egemm_ref.u_rows' map, LP_UW 64).
+// 1, negated where bit 6 is set: egemm.cu's U rows' map, LP_UW 64).
 // Kernels:
 //   uedit            U - 64 (s x 32, for pedit), P_A's rows (s x 128) and apv_fu's V_u = U + 64 in fragment order
 //   pedit            P~ over each tile's keys

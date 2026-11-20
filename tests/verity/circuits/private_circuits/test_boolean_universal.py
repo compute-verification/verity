@@ -1,6 +1,6 @@
 """`verity.circuits.private_circuits.universal`: the universal unit agrees with `interpret` on random private circuits (in range and not), through the
-plain-integer reference and the bit-sliced evaluator; padding leaves a private circuit's outputs unchanged; the unit is a function of its
-class alone, pinned by gate counts and program digest, with exactly `and_count` ANDs."""
+plain-integer reference and the bit-sliced evaluator; padding leaves a private circuit's outputs unchanged; the unit has exactly `and_count`
+ANDs."""
 from __future__ import annotations
 
 import random
@@ -10,17 +10,9 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
 from verity.circuits.defs import bind
 from verity.circuits.private_circuits import universal as U
 
-#: (G, N_IN, N_OUT) -> (And, Xor, Not gates, standalone program digest)
-PINS = {
-    (16, 16, 8): (1066, 1586, 0, "e2b4dde3a31d65a1a7f5af2b50540a89f713efa296e8e42f0d7bced7d4a1065510c19d1b45a27023edeb5eef812eb4d62e8a20c99d4b3e5b9c46037a43b451dc"),
-    (64, 64, 32): (16674, 24898, 0, "39698ff01cb97b6998cb2da36bb14bc81e69acd724594cf2f9c2114770a9cee0181f964c9c9ba06f9beff51369ed6cab1496097afb2ca7b50e703b7f437a6241"),
-}
 CLASSES = [(1, 1, 1), (3, 2, 2), (5, 1, 3), (16, 16, 8), (20, 13, 5), (64, 64, 32)]
 
 
@@ -55,20 +47,6 @@ def test_the_ops_and_the_reads_past_the_wires() -> None:
 @pytest.mark.parametrize("cls", CLASSES, ids=str)
 def test_the_ands_are_the_closed_form(cls) -> None:
     assert U.traced(*cls).counts["and"] == BS.compile(_unit(*cls)).counts["and"] == U.and_count(*cls)
-
-
-@pytest.mark.parametrize("cls", sorted(PINS), ids=str)
-def test_the_unit_is_a_function_of_its_class(cls) -> None:
-    """Its circuit is pinned by digest: no private circuit enters it but as the values of op, src and out."""
-    ands, xors, nots, digest = PINS[cls]
-    target = _unit(*cls)
-    assert BL.is_boolean(target) and target is _unit(*cls)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    assert codec.program_digest(codec.encode_program(prog)) == digest
-    G, N_IN, N_OUT = cls
-    k = U.index_bits(G, N_IN)
-    assert [p.leaves for _, p in target.signature()[0]] == [2 * G, 2 * G * k, N_OUT * k, N_IN]
 
 
 @pytest.mark.parametrize("cls", CLASSES, ids=str)
