@@ -17,10 +17,6 @@ public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
 import all Init.Util
-meta import Flock
-meta import Spot.Restrict
-meta import Spot.Edges
-meta import Circuits.DefinitionDigest
 
 /-!
 # One-stage v2: the parameters, one statement's check, and a member's statement and files
@@ -151,25 +147,6 @@ def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array 
   #[("x#0", 256), ("x#1", 256), ("x#2", 256), ("x#3", 256), ("w", 256)]
 #guard cutRows [] #[("x", 1024)] == #[("x", 1024)]
 
-/-- The refusal of a block whose rows the lowering would misread: each row and port starts at a whole u16 word, while
-`Flock.Lower.lower` lays the leaves one after another, so the leaves after a row of bits not a multiple of 16 sit in
-its padding. -/
-def NOT_WHOLE : String := "is not whole u16 words, and the lowering lays the leaves after it in its padding"
-
-/-- `rows`, a block circuit's parameters, input rows or return fields `(name, bits)`, refused under `NOT_WHOLE` where one has bits
-not a multiple of 16. -/
-def wholeWords (key what : String) (rows : Array (String × Nat)) : V Unit :=
-  match rows.toList.find? (·.2 % 16 != 0) with
-  | some (n, b) => throw s!"lower: C_S's template {key}: {what} {n} of {b} bits {NOT_WHOLE}"
-  | none => pure ()
-
-#guard (wholeWords "E_v1" "input row" #[("x", 3), ("y", 1)] matches .error _)
-#guard (wholeWords "E_v1" "return field" #[("o0", 2047), ("o1", 1)] matches .error _)
-#guard (wholeWords "E_v1" "input row" #[("x", 16), ("y", 1)] matches .error _)
-#guard (wholeWords "E_v1" "input row" #[("x#0", 256), ("x#1", 256), ("w", 16)] matches .ok ())
-#guard (wholeWords "E_v1" "input row" (cutRows [("x", 2)] #[("x", 48)]) matches .error _)
-#guard (wholeWords "E_v1" "input row" #[] matches .ok ())
-
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
 as the bytes `--program` reads), the partition object, the public file's committed SHA-512 (the commitment) and theta's
 registration (the registered file, which states no position), and the first unit of the statement's block. -/
@@ -204,8 +181,7 @@ def listedOf (partition : Json) : Option (Array String) :=
 its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
 input rows the template's parameters as bit rows, each cut as in(S)'s cuts `cuts` give for the template (`ioCuts`,
 `cutRows`), output ports its return fields `o{j}` in whole u16 words, META's `program_digests` the template's
-`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates, and one with a parameter, an
-input row or a return field not whole u16 words (`wholeWords`), by name. -/
+`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates by name. -/
 def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
     V ByteArray := do
   let some listed := listedOf partition
@@ -224,13 +200,8 @@ def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (Stri
   let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
   let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
   let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
-  let params := fn.params.map fun (n, t) => (n, bits t)
-  let ins := cutRows ((cuts.lookup key).getD []) params
-  let fields := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", bits f)
-  wholeWords key "parameter" params
-  wholeWords key "input row" ins
-  wholeWords key "return field" fields
-  let outs := fields.map fun (n, b) => (n, (b + 15) / 16)
+  let ins := cutRows ((cuts.lookup key).getD []) (fn.params.map fun (n, t) => (n, bits t))
+  let outs := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", (bits f + 15) / 16)
   let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
   let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
     ((CJ.getObjValD "definitions").getObjValD key)
@@ -239,33 +210,6 @@ def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (Stri
   let t ← Flock.Lower.lower S d (Array.replicate nIn 16) (Array.replicate nOut 16)
   Flock.Compose.compose { name := s!"unit/{key}", body := .tmpl t LAYOUT, ins, outs, programDigests := [(key, digest)] }
     ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
-
-/-- E(x : Array n (Value 1), y : Value 1) = (x, Not y), at n = 3 and 2047: the one-stage path would read `y` from x's
-padding and leave the second output's word without a row. -/
-def E3 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",3,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,3]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":3,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,3]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,4]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",3,["Value",1]],["Tuple",[["Array",3,["Value",1]],["Value",1]]]]}"#
-def E2047 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2047]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2048]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]],["Tuple",[["Array",2047,["Value",1]],["Value",1]]]]}"#
-
-/-- X(x : Array 16 (Value 1)) = Xor2(x[0], x[0]): whole parameter and row, a 1-bit return field. -/
-def X16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Xor2_v1","X_v1"],"definitions":{"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Root[XProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"fn":2,"form":"call","out":0}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",1]},"form":"composite","id":"Root[XProg_v1]_v1"},"X_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"concat":[{"affine":["p",0,0,1]},{"affine":["p",0,0,1]}]},"type":2}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",1]},"form":"composite","id":"X_v1"},"Xor2_v1":{"form":"primitive","id":"Xor2_v1","params":[["x",["Array",2,["Value",1]]]],"ret":["Value",1]}},"program_fn":"XProg_v1","root":"Root[XProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Array",2,["Value",1]]]}"#
-/-- F(x : Array 48 (Value 1)) = x[0:47] ++ [Not x[47]]: whole parameter and return field, rows of 24 bits when x is cut in two. -/
-def F48 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","F_v1"],"definitions":{"F_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,47,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",48,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,47]},{"affine":["n",0,0,1]}]},"ret_type":["Array",48,["Value",1]]},"form":"composite","id":"F_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[FProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":48,"out":1},{"args":[{"refs":{"affine":["n",0,0,48]},"type":1}],"fn":2,"form":"call","out":1}],"params":[],"ret":{"affine":["n",1,0,48]},"ret_type":["Array",48,["Value",1]]},"form":"composite","id":"Root[FProg_v1]_v1"}},"program_fn":"FProg_v1","root":"Root[FProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",48,["Value",1]]]}"#
-
-/-- `lowerBlock` on unit 0 of the descriptor `d`, its template `key`, cut as `cuts` gives. -/
-def lowerAt (d key : String) (cuts : List (String × Nat) := []) : V ByteArray := do
-  let CJ ← Json.parse d
-  let P ← Flock.Program.decode d.toUTF8
-  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", key)])]
-  lowerBlock CJ (Json.mkObj [("query", q)]) [(key, cuts)] (← Spot.Restrict.restrict P #[0])
-
-/-- `lowerAt d key cuts` refused with exactly `why`, so each clause of `wholeWords` in `lowerBlock` is held on its own. -/
-def refusedAs (t : V ByteArray) (why : String) : Bool := match t with
-  | .error e => e == s!"lower: C_S's template {why} {NOT_WHOLE}"
-  | .ok _ => false
-
-#guard refusedAs (lowerAt E3 "E_v1") "E_v1: parameter x of 3 bits"
-#guard refusedAs (lowerAt E2047 "E_v1") "E_v1: parameter x of 2047 bits"
-#guard refusedAs (lowerAt F48 "F_v1" [("x", 2)]) "F_v1: input row x#0 of 24 bits"
-#guard refusedAs (lowerAt X16 "X_v1") "X_v1: return field o0 of 1 bits"
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's

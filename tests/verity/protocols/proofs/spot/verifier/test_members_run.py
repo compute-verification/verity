@@ -28,14 +28,13 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proo
 
 from test_challenger import entropy
 
-XOR16 = PrimitiveDefinition("MembersRunXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
-                            register=False)
-#: each template's ``x`` a 128-byte row, past a compression before its last block, which a Flock block's pin needs; every
-#: field whole u16 words, as the door lowers only such (`one_circuit.NOT_WHOLE`)
-PAIR = bind(CompositeDefinition("MembersRunPair", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
-                                lambda B, S, x: B.call(XOR16, x[0], x[1]), register=False))
-TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
-                                  lambda B, S, x: B.call(XOR16, B.call(XOR16, x[0], x[1]), x[2]), register=False))
+XOR8 = PrimitiveDefinition("MembersRunXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+                           register=False)
+#: each template's ``x`` a 128-byte row, past a compression before its last block, which a Flock block's pin needs
+PAIR = bind(CompositeDefinition("MembersRunPair", 0, (), lambda S: ((("x", Array(128, Value(8))),), Value(8)),
+                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
+TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", Array(128, Value(8))),), Value(8)),
+                                  lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
 A, B = "a/c0", "b/c0"
