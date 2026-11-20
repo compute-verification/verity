@@ -47,15 +47,14 @@ def gemm():
 
 def circuit(registered: bool = True):
     """The registered circuit: ``UNITS`` units of one template in (token, slice) order, ``x`` external, ``w`` the registered
-    weight's rows, unit (t, j) reading words [j·N·K, (j + 1)·N·K); with ``registered`` false, ``w`` external too, and
-    ``x`` and ``w`` each committed once, in its run input node's tree (`interface.run_input_reads`)."""
+    weight's rows, unit (t, j) reading words [j·N·K, (j + 1)·N·K); with ``registered`` false, ``w`` external too."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.periods import interface as I
 
     g = gemm()
     gid = descriptor_id(g)
     if not registered:
-        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"), run_inputs=True)
+        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"))
     reg = I.Registered({"weights": E * K}, reads=(I.Read(gid, "w", "weights", 0, (len(TOKENS), SLICES), 0, (0, N * K)),))
     return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x",), registered=reg)
 
