@@ -68,7 +68,8 @@ _BLOCK_NORM_PROVENANCE = {
     "related": f"glm53_fused_rmsnorm_capture ({EVIDENCE['glm53_fused_rmsnorm_capture']['art']}): the same "
                "tl.sum lowering at the unmasked four-warp block (DsaRMSNorm_v1, TritonBlockRMSNorm_v1{N, N, 4, EPS}) in GLM-5.3's "
                "_fused_norm_rope_kernel",
-    "tests": ["tests/program/test_dsa_norm.py (the Definition against the PTX model)",
+    "tests": ["tests/properties/test_dsv4_q_norm_commit.py (the Definition and the row kernel against the committed rows)",
+              "tests/program/test_dsa_norm.py (the Definition against the PTX model)",
               "tests/program/test_kernel_self_check.py (each row kernel against its Definition)",
               "tests/check/test_sampled_replay_mla_rows.py (each row kernel on spec-text statics against its Definition)"],
     "definitions": "adapters/vllm/verity_vllm/definitions/registry/dsa_norm.py (the reference; the twin is checked against it, never the other way round)",
