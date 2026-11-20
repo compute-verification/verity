@@ -143,6 +143,8 @@ class Program:
 
     def width(self) -> int:
         r = self.rng.random()
+        if self.grids:
+            return 8
         return WIDE if r < 0.03 else self.rng.choice(WIDTHS)
 
     def prim(self, params, ret, key: str | None = None) -> str:
@@ -451,7 +453,8 @@ def composite(P: Program, budget: int, scale: int = 1) -> None:
 
 def program(seed: int, scale: int = 1, grids: bool = False) -> str:
     """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`); with
-    `grids`, half its references grid parts where one fits (`GRID`)."""
+    `grids`, half its references grid parts where one fits and every leaf 8 bits, so no reference reads a leaf at
+    another width (`GRID`)."""
     rng = random.Random(seed)
     P = Program(rng)
     P.grids = grids
