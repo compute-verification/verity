@@ -322,7 +322,7 @@ The auditor:
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
 - `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
-  carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
+  carry (`--write`).
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
   never reads it. `run_daily.py`: its daily publish.
 

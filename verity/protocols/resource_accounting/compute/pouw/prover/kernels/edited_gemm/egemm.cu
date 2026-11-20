@@ -33,7 +33,7 @@
 //   egemm gate DIR M N K SEED       every arm once on poisoned buffers: each GEMM's output against cuBLASLt's X W^T, each
 //                                   duo32 kernel's receipts against t_duo32's and each other kernel's against its kind's
 //                                   first, a no-write control; tiles (every kernel's receipts) and key_ok_r9's
-//                                   device answers on its boundary words to DIR for egemm_ref.py
+//                                   device answers on its boundary words to DIR
 //   egemm bench REPS M N K          hot items (about 20 ms each) interleaved across EG_ARMS, one JSON line
 //   egemm il REPS ARM BASE M N K    per call, ARM and BASE alternating (the slice's timing; EG_COLD=1: L2 flushed
 //                                   before each call), one JSON line
@@ -188,7 +188,7 @@ DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
 // dependent warp-uniform chains from the seed, folded into the receipt at the tile's end, the uniform filler's stand-in;
 // ptxas keeps them on the vector datapath unless USH broadcasts the chains from lane 0 (__shfl_sync, which ptxas reads as
 // warp-uniform) before each atom's (1) or each tile's (2). BAT: problems stacked in rows, 2^bsh row tiles of A each against
-// their own tiles_n row tiles of B (d2sgemm.cu's Q K^T, a problem a head)
+// their own tiles_n row tiles of B (Q K^T, a problem a head)
 template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0, bool BAT = false> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
@@ -839,7 +839,7 @@ struct EP {
   Maps* mF;
 };
 
-// the GEMM kernels (k3: the 3-atom tail's twin) and their receipt kinds (egemm_ref.py's names), each kind's together
+// the GEMM kernels (k3: the 3-atom tail's twin) and their receipt kinds, each kind's together
 struct EKn { const char* name; Kern k, k3; const char* kind; };
 #define EKE(NAME, KIND) {#NAME, NAME, NAME##_k3, KIND}
 static const EKn EK[] = {
@@ -1000,7 +1000,7 @@ static unsigned long long ecmp(EP& P, const void* a, const void* b, size_t words
 }
 
 // key_ok_r9 on the device, on words at its boundary (a b = t mod 2^30 for each b in 1..128 and t just inside and just
-// outside [-128, 128], three lifts each) and 4096 others; egemm_ref.py holds every answer to receipt_folds_r9.key_ok_r9
+// outside [-128, 128], three lifts each) and 4096 others; the dump holds every answer to receipt_folds_r9.key_ok_r9
 __global__ void r9_probe(const uint32_t* a, uint8_t* ok, int n) {
   const int w = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
   if (w < n) {
@@ -1052,7 +1052,7 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   rec("t_duo32", ty, -1);
   ok &= ty == 0;
   // every kernel's output against cuBLASLt's; a duo32 kernel's receipts against t_duo32's, any other kind's against its
-  // kind's first kernel's (R3); every kernel's receipts on three tiles to DIR, for egemm_ref.py
+  // kind's first kernel's (R3); every kernel's receipts on three tiles to DIR
   const int tiles_m = m / 128, tiles_n = n / 128;
   const int tl[3][2] = {{0, 0}, {tiles_m / 2, tiles_n / 2}, {tiles_m - 1, tiles_n - 1}};
   auto dump_r = [&](const std::string& name, const uint32_t* R) {
@@ -1121,7 +1121,7 @@ static int egate(const std::string& dir, int m, int n, int k, uint32_t seed) {
   const unsigned long long cy = ecmp(P, P.Y, P.Yr, P.ny), cr = ecmp(P, P.R, P.R2, P.nr);
   const bool control_rejected = cy > 0 && cr > 0;
   rec("control", cy, (long long)cr);
-  // the tiles egemm_ref.py recomputes from x, W and the key: the operands and e_l2h's output (every kernel's equals
+  // the tiles a CPU reference recomputes from x, W and the key: the operands and e_l2h's output (every kernel's equals
   // cuBLASLt's on device)
   egemm_run(P, l2h, P.Y, P.R);
   CK(cudaStreamSynchronize(P.st));

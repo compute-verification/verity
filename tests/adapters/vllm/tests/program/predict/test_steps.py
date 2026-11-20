@@ -139,24 +139,33 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
 
-def test_a_token_select_is_a_transfer_gate_by_its_body_whatever_its_name():
+def test_a_token_select_is_a_transfer_gate_by_its_name_or_its_body_and_its_name_over_another_body_is_refused():
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.ops.prims import const
     from verity_vllm.definitions.registry import dead_free as DF
     from verity_vllm.program.predict.steps import Compiled, egress
 
     sel = DF.TokenSelectV4
+
+    def gates(*fns):
+        return Compiled.transfer_gates.fget(NS(requests=[], programs={"p": NS(fn=NS(body=NS(nodes=[NS(fn=f) for f in fns])))}))
+
+    def zero(B, S, logits):
+        return B.call(const(32, 0))
+
     real = bind(sel, V=256)
     renamed = bind(CompositeDefinition("LogitArgmax", 1, sel.statics, sel.signature, sel.body, register=False, ports=sel.ports),
                    V=256)
-    other = bind(CompositeDefinition("TokenSelect", 4, sel.statics, sel.signature, lambda B, S, logits: B.call(const(32, 0)),
-                                     register=False, ports=sel.ports), V=256)
+    other = bind(CompositeDefinition("TokenSelect", 4, sel.statics, sel.signature, zero, register=False, ports=sel.ports), V=256)
+    neither = bind(CompositeDefinition("LogitZero", 1, sel.statics, sel.signature, zero, register=False, ports=sel.ports), V=256)
     assert other.id == real.id and other is not real and renamed.id == "LogitArgmax_v1{V=256}"
-    assert (egress(real), egress(renamed), egress(other)) == (True, True, False)
-    program = NS(fn=NS(body=NS(nodes=[NS(fn=renamed)])))
-    assert Compiled.transfer_gates.fget(NS(requests=[], programs={"p": program})) == ("LogitArgmax_v1{V=256}",)
-    program = NS(fn=NS(body=NS(nodes=[NS(fn=other)])))
-    assert Compiled.transfer_gates.fget(NS(requests=[], programs={"p": program})) == ()
+    assert (egress(real), egress(renamed), egress(neither)) == (True, True, False)
+    assert gates(real, renamed, neither) == ("LogitArgmax_v1{V=256}", "TokenSelect_v4{V=256}")
+    why = ("TokenSelect_v4{V=256}: a unit named as the token select TokenSelect whose body is no registered select's at its "
+           "statics is refused: it is neither a transfer gate nor sampled")
+    for refused in (lambda: egress(other), lambda: gates(renamed, other)):
+        with pytest.raises(ValueError, match=re.escape(why)):
+            refused()
 
 
 @pytest.mark.parametrize("edit, served, why", [
