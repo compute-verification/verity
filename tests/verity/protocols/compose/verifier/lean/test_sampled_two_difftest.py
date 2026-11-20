@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import json
 import random
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -234,9 +236,24 @@ def _reads_v2(r: dict | None) -> dict | None:
             "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "reads_from")} for k, e in r["ports"].items()}}
 
 
+def _circuit_sha(program: dict, partition: dict, first: int) -> str:
+    """The SHA-512 of the circuit file Lean derives for the block starting at unit `first` (`spot-one-stage-zk
+    restrict`), the one a member's statement reads."""
+    with tempfile.TemporaryDirectory() as d:
+        cp, pp, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "circuit.txt")
+        cp.write_text(canonical(program))
+        pp.write_text(canonical(partition))
+        exe = D.build(R.ROOT / "verity/protocols/proofs/spot/verifier/lean", "spot-one-stage-zk")
+        p = subprocess.run([str(exe), "restrict", str(cp), str(pp), str(first), str(out)],
+                           capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stdout + p.stderr
+        return hashlib.sha512(out.read_bytes()).hexdigest()
+
+
 def _kept_params(j: dict) -> dict:
     """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
-    program and its members' units as its blocks, each member naming its block rather than handing its units."""
+    program and its members' units as its blocks, each member naming its block rather than handing its units, and each
+    template's circuit the one Lean derives for its member's block."""
     j = copy.deepcopy(j)
     for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
         at[k] = _v2(at[k])
@@ -248,6 +265,10 @@ def _kept_params(j: dict) -> dict:
         name: {"block": blocks.index(tuple(m["units"][0])), "public": m["public"],
                "registered": _reads_v2(m["registered"]), "vus_per_block": m["vus_per_block"]}
         for name, m in members.items()}
+    firsts = {name: m["units"][0][0] for name, m in members.items()}
+    for t in ip["proofs"]["templates"]:
+        if t["template"] in firsts:
+            t["circuit"] = _circuit_sha(ip["program"], ip["partition"], firsts[t["template"]])
     return j
 
 
