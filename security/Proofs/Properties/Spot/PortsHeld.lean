@@ -262,7 +262,10 @@ theorem hinv_step {R0 Dom0 : Json} {D : List String} {rc hc : Json} (q : String)
   have hDw : Wf (getD (.obj mf) "domain_ids") := wf_getD hfv _
   unfold OneStageZk.dropPort
   dsimp only
-  rw [hmf, SpotFlock.RunsAs.setObjVal_obj, setObjVal_eq_setKey, setObjVal_eq_setKey]
+  rw [hmf]
+  show HInv R0 Dom0 (q :: D) (SecondStage.setKey (.obj m) "frame_v3"
+    (SecondStage.setKey (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList))) "domain_ids"
+      (Json.mkObj ((entries (getD (.obj mf) "domain_ids")).filter (·.1 != q)).toList)))
   have hfv1 : Wf (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList))) :=
     SpotFlock.ReadsJson.wf_setKey hfv (wf_drop hRw q) "roots"
   have hfv2 := SpotFlock.ReadsJson.wf_setKey hfv1 (wf_drop hDw q) "domain_ids"
@@ -392,7 +395,7 @@ theorem headerHeldAt_drops {reads : Array (String × String)} {held : Array Floc
       refine Or.inr ⟨p, Or.inl ?_, rfl⟩
       obtain ⟨r0, hr0, hfm⟩ := Array.mem_filterMap.1 ha
       cases hp : getD r0 "port" <;> cases ht : getD r0 "tree" <;> rw [hp, ht] at hfm <;> cases hfm
-      exact ⟨r0, hr0, hp, _, ht, Array.contains_iff_mem.1 hc⟩
+      exact ⟨_, hr0, hp, _, ht, Array.contains_iff_mem.1 hc⟩
     · rcases ite_ok hf with ⟨-, hf⟩ | ⟨-, hf⟩
       · first
           | (simp only [throw, throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at hf; done)
@@ -403,7 +406,7 @@ theorem headerHeldAt_drops {reads : Array (String × String)} {held : Array Floc
     intro ⟨p, v⟩ ha s s' hf
     dsimp only at hf
     rcases ite_ok hf with ⟨hc, hf⟩ | ⟨-, hf⟩
-    · dsimp only at hf
+    · try dsimp only at hf
       rcases ite_ok hf with ⟨-, hf⟩ | ⟨hr, hf⟩
       · first
           | (simp only [throw, throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at hf; done)
