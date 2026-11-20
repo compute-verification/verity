@@ -76,12 +76,20 @@ LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODE
 REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
 [ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "${RECORD:-1}" = 0 ] || [ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)
+# the fixed load's requests start in the window's first step only in the network attester's release order, which the serve
+# reads under the name of the scheme that provides admission
+ADMIT=$("$PY" - <<'EOF'
+import json
+from verity.protocols.compose import schemes
+print(json.dumps({schemes.named("provides", "admission"): {"order": "release-order"}}))
+EOF
+) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.compose.schemes, above)"; exit 3; }
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"
   --max-model-len "$((PROMPT + OUTPUTS))" --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8
   ${REC_ARGS[@]+"${REC_ARGS[@]}"}
-  --protocols-config '{"network-attester": {"order": "release-order"}}')
+  --protocols-config "$ADMIT")
 LEASE=(gpu-lease 1 --wait --max-min "$LEASE_MIN" --mem-gb "$LEASE_MEM_GB" -- bash "$TREE/$SELF" card)
 WREG=$D/weights_registration.json DREG=$D/deployment-registration.json VW=$SR/window
 FIN=(-m verity_vllm.program.predict.close_record --class "$CLASS" --sampling-design "$LAW" --checkpoint-dir "$SNAP")
