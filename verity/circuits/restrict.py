@@ -371,6 +371,8 @@ def _nodes(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> list[tuple[in
             if per == 0:
                 raise Refused("E_NO_GATE", f"root node {k} calls {node.fn.id}, which has no gate: no unit holds it")
             m0, m1 = (max(lo, a) - a) // per, (min(hi, b) - a) // per
+            if a + m0 * per != max(lo, a) or a + m1 * per != min(hi, b):
+                raise Refused("E_UNITS", f"the units cut root node {k} inside a member")
             out.append((k, m0, m1))
     return out
 

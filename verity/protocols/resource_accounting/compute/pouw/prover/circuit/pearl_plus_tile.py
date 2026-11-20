@@ -563,16 +563,21 @@ def reference(dev: str, k: int, n: int, a: Sequence[Sequence[int]], b: Sequence[
     capped = (_cap_ok(d, k, n, rho, ops.a.codes[:tr], ops.b.codes, sd)
               and all(_cap_ok(d, k, n, rhor, [ops.a.codes[i]], ops.b.codes, [sd[i]]) for i in range(tr)))
     y = served(checked, ops, tr, tn)
-    return C.leaf(checked, "h3"), y, int(filler and admitted and certs and capped and y is not None)
+    finite = not isinstance(y, str)
+    return C.leaf(checked, "h3"), y if finite else None, int(filler and admitted and certs and capped and finite)
 
 
-def served(checked: Any, ops: Any, tr: int, tn: int) -> list[list[int]] | None:
-    """The tile's served y (`pearl_c_u.y`): each of its first ``tr`` rows' TN BF16 words; None where a word is not finite
-    (`pearl_c_u.NonFinite`: an FP32 product or the BF16 rounding overflows)."""
+#: `served`'s refusal where a served word is not finite
+NOT_FINITE = "tile-served-word-not-finite"
+
+
+def served(checked: Any, ops: Any, tr: int, tn: int) -> list[list[int]] | str:
+    """The tile's served y (`pearl_c_u.y`): each of its first ``tr`` rows' TN BF16 words; where a word is not finite
+    (`pearl_c_u.NonFinite`: an FP32 product or the BF16 rounding overflows), the refusal naming it (`NOT_FINITE`)."""
     try:
         return [[CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j]) for j in range(tn)] for i in range(tr)]
-    except (CU.NonFinite, P.Reject):
-        return None
+    except (CU.NonFinite, P.Reject) as e:
+        return f"{NOT_FINITE}: {type(e).__name__}: {e}"
 
 
 def _salt_dead(d, alpha: int, beta: int, x: Sequence[int]) -> list[int]:

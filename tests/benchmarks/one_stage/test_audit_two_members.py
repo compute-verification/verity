@@ -88,6 +88,7 @@ STATE = next(iter(RA.PHASE_OWN))
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
+TMPL_UNIT = ROOT / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "lean" / "TmplUnit.lean"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
@@ -150,7 +151,12 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
     if p.returncode == NOTHING_TO_BUILD_ON:
         pytest.skip(p.stderr.strip())
     assert p.returncode == 0 and prover.is_file(), f"check_build.sh bin: {p.stdout[-2000:]}\n{p.stderr[-4000:]}"
-    return {"bin": prover, **lean}
+    # the door's member circuits are templated: the prover reads each unit placed by `flock-tmpl-unit`, here run on the
+    # verifier package's build rather than built as an executable of a copy of it
+    tmpl_unit = prover.parent / "flock-tmpl-unit"
+    tmpl_unit.write_text(f"#!/bin/sh\ncd {LEAN.parents[2]} && exec lake env lean --run {TMPL_UNIT} \"$@\"\n")
+    tmpl_unit.chmod(0o755)
+    return {"bin": prover, **lean, "tmpl-unit-bin": tmpl_unit}
 
 
 def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
@@ -350,10 +356,12 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 
 
 #: The two refusals the afresh audit meets on this branch, each by a line of the audit's own words. Both fail closed.
-#: The recut (limits entry 34): Lean's decoder refuses a recut read that Python's codec decodes, so the registration
-#: disagrees. The header: since a registered value is leafed once, in its registration's tree, the docket gives the
-#: member no root at the port that reads it, and the members check still asks one of every port the header names.
-AFRESH_REFUSALS = ("name no leaf", "port wrow has no tree under the member")
+#: The recut: the registered value's 16-bit words are read into ``wrow``'s 8-bit leaves (a format's words are 16 or 32
+#: bits), a root Spot's registration refuses (`recut-root`) where Python's registers it, so the registration disagrees.
+#: The header: since a registered value is leafed once, in its registration's tree, the docket gives the member no root
+#: at the port that reads it, and the members check still asks one of every port the header names.
+AFRESH_REFUSALS = ("recut-root: the root reads an input node at a width other than its registered one",
+                   "port wrow has no tree under the member")
 
 
 class AfreshRefused(Exception):
@@ -361,7 +369,7 @@ class AfreshRefused(Exception):
 
 
 @pytest.mark.xfail(strict=True, raises=AfreshRefused,
-                   reason="limits entry 34 (the recut read Lean's decoder refuses) and the members check's header rule "
+                   reason="the recut read Spot's registration refuses (recut-root) and the members check's header rule "
                    "for a port that reads a registered value; any other failure, or either refusal gone, fails this test")
 def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no

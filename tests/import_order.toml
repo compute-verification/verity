@@ -569,10 +569,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/docket.py",
-    "verity/protocols/proofs/spot/prover/produced.py",
-    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
-    "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
@@ -585,6 +582,7 @@ paths = [
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
 ]
 loads = [
+    "verity/circuits",
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -831,7 +829,6 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/network/verifier",
-    "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",

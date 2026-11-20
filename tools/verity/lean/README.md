@@ -194,6 +194,8 @@ keeps or drops from and never adds to.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `scope`: {listed guarantee not deployed: one sentence saying what sessions or forms it covers where that is narrower
+  than what is served}, which only a person writes; the report counts them beside the gap (`scope_failures`, `scope_counts`).
   `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
   (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
   definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
@@ -322,7 +324,7 @@ The auditor:
 - `upstream.py`, `Upstream.lean`: the watch on what a pinned dependency proves about what a package assumes.
 - `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
-  carry (`--write`; `tests/test_claim_ids_table.py` holds the table to it).
+  carry (`--write`).
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
   never reads it. `run_daily.py`: its daily publish.
 

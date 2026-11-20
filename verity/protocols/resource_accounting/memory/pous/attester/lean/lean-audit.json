@@ -13,9 +13,9 @@
  },
  "layers": {
   "MemoryAttester": {
-   "imports": ["Flock", "Randomness", "Lms", "Attest", "CoreProtocol", "MemoryAttester"],
+   "imports": ["Flock", "Randomness", "Lms", "Attest", "CoreProtocol", "MemoryAttester", "Commitments.SessionCoins"],
    "except": ["MemoryAttester.Difftest"],
-   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS, the auditor parties' period checks (Attest) and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryAttester.Difftest) also imports the difftest server"
+   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS, the auditor parties' period checks (Attest) and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryAttester.Difftest) also imports the difftest server; Commitments.SessionCoins: the records check a session's coins by the commitments' one derivation of them, which imports only the commitments' Hm96 and frame-v3 and the base's hash and bytes (Lean core and Std only)"
   }
  },
  "guarantees": {},

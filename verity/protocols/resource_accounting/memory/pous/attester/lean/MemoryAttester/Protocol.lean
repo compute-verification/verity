@@ -29,6 +29,7 @@ namespace MemoryAttester
 
 open Lean (Json)
 open Flock
+open Flock.SessionCoins (PROTOCOL COIN_TREE RECORDS CLOCK)
 
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n

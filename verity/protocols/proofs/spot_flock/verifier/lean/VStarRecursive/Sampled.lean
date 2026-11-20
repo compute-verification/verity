@@ -19,6 +19,8 @@ executable's root, not here.
 -/
 module
 
+public import Spot.Levels
+meta import Spot.Levels
 public import VStarRecursive.SampledTwo
 meta import VStarRecursive.SampledTwo
 
@@ -78,9 +80,7 @@ private def split (j : Json) (what : String) (params : Bool) : V (Nat × Json) :
 
 /-- The refusal of parameters that parse at two levels: the two-level audit is built, and no soundness theorem covers
 its accept, so the parameters are refused at registration, before any coin. -/
-def TWO_LEVELS_REFUSED : String :=
-  "levels-not-proved: the parameters name 2 levels: the two-level audit is built and refused, since no soundness " ++
-    "theorem covers its accept; an audit is accepted at one level"
+def TWO_LEVELS_REFUSED : String := Spot.Levels.TWO_LEVELS_REFUSED
 
 /-- Two levels' parameters, parsed by `parse` so its refusals keep their reasons, then refused by name. -/
 def twoLevels {α : Type} (parse : V α) : V Params := do

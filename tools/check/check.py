@@ -1300,9 +1300,29 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
     print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
           flush=True)
-    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+    rc = subprocess.run(argv, cwd=ROOT).returncode
+    try:
+        print(f"check: lean-agreement: {agreement_outcome(json.loads((w / 'ci' / 'sets.json').read_text())['sets'])}",
+              flush=True)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"check: lean-agreement: no outcome: ci.py's sets.json can't be read ({type(e).__name__}: {e})", flush=True)
+    if rc:
         print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
     return rc
+
+
+def agreement_outcome(sets: list[dict]) -> str:
+    """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
+    the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept."""
+    ran = [r for r in sets if "skipped" not in r]
+    n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
+    disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
+    last = sum(r.get("passed_every_check", 0) for r in ran)
+    line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
+            f"{' and by upstream' if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            "are refused at it")
+    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted else "")
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall
