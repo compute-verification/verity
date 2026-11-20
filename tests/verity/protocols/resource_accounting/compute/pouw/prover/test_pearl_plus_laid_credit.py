@@ -169,11 +169,23 @@ def _tile_named(body, signature=None) -> CompositeDefinition:
 def test_a_unit_with_the_tiles_id_at_a_huge_k_and_a_small_body_is_refused() -> None:
     """A root unit carrying the tile's id at K = 2^20, its body one word passed through, is refused by name before the
     registry builds any tile, so it is never credited its statics' 2^20 · TR · TN MACs."""
-    (t,) = PC.tiles(SCHEME, K, 1, 1, tile=(1, 1))
-    forged = bind(_tile_named(lambda B, S, x: x, lambda S: ((("x", Value(16)),), Value(16))), **{**t.core.bindings,
-                                                                                              "K": 2 ** 20})
+    statics = PC.credited_product(SCHEME, 2 ** 20, 1, 1, 1, 1).bindings
+    forged = bind(_tile_named(lambda B, S, x: x, lambda S: ((("x", Value(16)),), Value(16))), **statics)
     assert descriptor_id(forged).startswith(PS.TILE + "{") and "K=1048576" in descriptor_id(forged)
+    assert PS.scheme_statics(forged) is None
     with pytest.raises(ValueError, match=PS.TILE_FOREIGN):
+        PS.laid_tiles(_forged_c(forged), lambda *_: True, [], "")
+
+
+@pytest.mark.parametrize("static, value", [("RHO", 100), ("DEV", "sm120")])
+def test_a_tile_whose_device_or_inert_work_bound_is_not_the_schemes_is_refused(static, value) -> None:
+    """A unit under the tile's id at a shape the scheme of record binds, with its tile inert-work bound looser (RHO 100,
+    up to 1/100 inert work where the scheme allows 1/400) or another device (sm120, priced as H100 MACs), is refused by
+    name before its body is read: its statics' MACs are not the scheme's."""
+    statics = {**PC.credited_product(SCHEME, K, 1, 1, 1, 1).bindings, static: value}
+    forged = bind(_tile_named(lambda B, S, x: x, lambda S: ((("x", Value(16)),), Value(16))), **statics)
+    assert static in PS.scheme_statics(forged)
+    with pytest.raises(ValueError, match=PS.TILE_SCHEME):
         PS.laid_tiles(_forged_c(forged), lambda *_: True, [], "")
 
 

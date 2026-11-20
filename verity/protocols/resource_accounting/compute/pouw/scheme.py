@@ -116,12 +116,14 @@ TILE = "PearlPlusTileCoreWords_v5"
 #: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
-#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; C laid has a digest
+#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; a tile's device or
+#: inert-work bounds are not the kernel scheme of record's (`scheme_statics`); C laid has a digest
 #: other than the one registered before any coin, so its tiles are not those of the C the blocks are proved against
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
 TILE_FOREIGN = "tile-body-foreign"
+TILE_SCHEME = "tile-statics-not-the-scheme"
 C_DIGEST = "tile-c-digest-differs"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
 #: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
@@ -141,6 +143,27 @@ class LaidTile:
     amount: int
     blocks: tuple[int, ...]
     kinds: Mapping[str, int]
+
+
+#: the tile's statics that its shape does not fix and the kernel scheme of record does: its device, its tile inert-work
+#: bound ρ (1/RHO) and its row bound ρr (1/RHOR)
+SCHEME_STATICS = ("DEV", "RHO", "RHOR")
+
+
+def scheme_statics(fn: Any) -> str | None:
+    """Why ``fn``'s `SCHEME_STATICS` are not those of `KERNEL` at its shape (K, TM, TN, N, TR), as
+    `pearl_plus_credited.credited_product` binds them, or None when they are: a tile is credited `tile_macs` of its shape
+    only under the scheme of record's device and inert-work bounds."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
+
+    b = getattr(fn, "bindings", {})
+    try:
+        want = PC.credited_product(KERNEL, b["K"], b["TM"], b["TN"], b["N"], b["TR"]).bindings
+    except (KeyError, TypeError, ValueError) as e:
+        return f"has no shape {KERNEL} binds ({type(e).__name__}: {e})"
+    if bad := [s for s in SCHEME_STATICS if b.get(s) != want[s]]:
+        return ", ".join(f"{s} = {b.get(s)!r} where {KERNEL} binds {want[s]!r}" for s in bad)
+    return None
 
 
 def foreign_tile(fn: Any) -> str | None:
@@ -202,7 +225,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of C as
     `verity.circuits.laying.lay` lays it under ``fits`` that it holds, by a public rule from the laying: since laying keeps
     C's gates in C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do.
-    C must hold a tile (`TILE_ABSENT`), each tile must be the registry's `TILE` at its statics, its body and every
+    C must hold a tile (`TILE_ABSENT`), each tile's device and inert-work bounds must be `KERNEL`'s at its shape
+    (`TILE_SCHEME`, `scheme_statics`), each tile must be the registry's `TILE` at its statics, its body and every
     Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), and the laid C must be the one ``registered`` names, its
     `codec.program_digest` registered before any coin (`C_DIGEST`): the tiles credited are those of the C the
     blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
@@ -221,6 +245,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     if not tiles:
         raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
     for u, fn in tiles:
+        if why := scheme_statics(fn):
+            raise ValueError(f"{TILE_SCHEME}: C's root unit {u}, {getattr(fn, 'id', fn)}, {why}")
         if why := foreign_tile(fn):
             raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
                              "are not what it computes")
