@@ -180,15 +180,6 @@ def InferenceClaimsDeclared (f : (r : P.Run) → Fin (P.nIn r) → Circuit) (c k
     p = .function (f r u) ∨ (∃ s, p = .sizeAtMost s ∧ c r u ≤ s) ∨
       (∃ s, p = .inputAtMost [.past, .block, .world] s ∧ k r u ≤ s)
 
-/-- **A server-day block's input claims are at least the rows' bounds** (open, owners memory-accounting for its own past
-and network-accounting for the outside world): in an accepted run, every input claim of a server-day block `i` from
-exactly its own past is at least `bPast i` bits, and every one from exactly the outside world at least `bWorld i`
-bits. -/
-def ServerInputClaimsCover (bPast bWorld : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ i, P.kind r i = true → ∀ s,
-    (Property.inputAtMost [.past] s ∈ P.claimsOut r i → bPast r i ≤ s) ∧
-      (Property.inputAtMost [.world] s ∈ P.claimsOut r i → bWorld r i ≤ s)
-
 /-! ## The memory wipe -/
 
 /-- **The wipe's information bound gives a width bound** (open, memory-accounting): in an accepted run where the prior
@@ -203,7 +194,7 @@ def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → F
   ∀ r, P.accepts r → survives r → ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (b r i))
 
 /-- **The memory wipe: input at most from its own past, for the attested boundary** (the server-day block its one-server
-case), at `E i + 8,600,000,000` bits, `E i` the bits that leave the boundary during the wipe that opens block `i`. From
+case), at `wipePastBound (E i)` bits (`E i` plus 8,600,000,000), `E i` the bits that leave the boundary during the wipe that opens block `i`. From
 the streamed-label wipe's guarantee (a layer this one may not import, so the hypothesis `G`), over a uniform prior, at
 `2⁻⁴⁰` plus the PRF distinguisher's advantage `adv`. The guarantee is at "the fill is the whole memory" (`M = N·512`), so
 the memory size from the hardware description is a hypothesis of this row (`CapacityAtMost Capacity.memorySize`, keeping a
@@ -211,9 +202,9 @@ device at each server). Open: `RunReads` and `WipeInformationGivesWidth`. A shap
 def WipeInputAtMost (G : Prop) (survives : P.Run → Prop) (E : (r : P.Run) → Fin (P.nOut r) → ℕ)
     (memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
   G → P.RunReads G survives (2⁻¹ ^ 40 + adv) → P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
-    P.WipeInformationGivesWidth survives (fun r i => E r i + 8600000000) →
+    P.WipeInformationGivesWidth survives (fun r i => wipePastBound (E r i)) →
       ExceptWith P.pr P.accepts
-        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (E r i + 8600000000)))
+        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (wipePastBound (E r i))))
         (2⁻¹ ^ 40 + adv)
 
 /-! ## Network attestation -/

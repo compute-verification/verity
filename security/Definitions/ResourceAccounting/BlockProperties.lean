@@ -23,8 +23,8 @@ Core/Partition.lean`: every computed gate in exactly one unit, input gates in no
   property here.
 
 Coverage, disjointness and the tree shape are the partitions' own (`Partition.input_iff`, `Partition.gates` a function,
-`Refines.sub`), so no field and no clause states them. Each block's location and window are fixed data (`locIn`/`winIn`,
-`locOut`/`winOut`), not the run's choice, and each block's gates lie at its location during its window (`insideOut`,
+`Refines.sub`), so no field and no clause states them. Each block's location and window are fields of the run
+(`locIn`/`winIn`, `locOut`/`winOut`), and each block's gates lie at its location during its window (`insideOut`,
 `insideIn`, main's `Placed.region`): a server-day block is a `region`, so its size is bounded by `ComputeRate` and its
 input and output by `Placed.ingress`/`egress`/`state` through main's lemmas, not assumed.
 
@@ -35,9 +35,11 @@ The four properties, each built on the actual circuit's definitions:
 * **input** from named sources (`Source`), in bits (width);
 * **output** to the outside world, in bits (width).
 
-A monitoring period's runs (`Runs`) carry, per run, the actual circuit, its pricing and registered input gates, and the
-two partitions the prover committed before any coin. `Realizes` is the feasible-set membership: the run's blocks have
-every property claimed of them. Every accounting statement is `ExceptWith pr accepts shown ε`: the predicate `shown`
+A monitoring period's runs (`Runs`) carry, per run, the actual circuit, its pricing and registered input gates, the
+two partitions the prover committed before any coin, and for each server-day block the numbers accounting reads: its
+capacity's inputs, the wipe's egress and the network attester's ingress count (attested), and the covert figure
+(assumed). `Realizes` is the feasible-set membership: every inference, free or hidden unit has every property claimed of
+it, and every server-day block holds the three bounds (`ServerDayBounds`). Every accounting statement is `ExceptWith pr accepts shown ε`: the predicate `shown`
 fails on an accepted run with probability at most `ε`. `UseAtLeast` states a lower bound on a used capacity, for every
 tolerance set `M`, and the one conversion `FreeBlockAtMost` turns capacity minus use into a bound on the sum of the free
 blocks directly inside each server-day block (for size, with `M`'s inference blocks); it alone carries the capacity
@@ -70,19 +72,11 @@ inductive Property where
   | outputAtMost (k : ℕ)
 
 /-- **A block's committed size claim**, in gates: the bound of the first `sizeAtMost` in its claims list, `0` when the
-list has none (the check refuses an inference or server-day block with none). -/
+list has none (the check refuses an inference block with none). -/
 def claimedSize : List Property → ℕ
   | [] => 0
   | .sizeAtMost k :: _ => k
   | _ :: t => claimedSize t
-
-/-- **A block's committed input claim from exactly the sources `src`**, in bits: the bound of the first `inputAtMost src`
-in its claims list, `0` when the list has none (the check refuses a server-day block with none from `[.past]` or from
-`[.world]`). -/
-def claimedInput (src : List Source) : List Property → ℕ
-  | [] => 0
-  | .inputAtMost s k :: t => if s = src then k else claimedInput src t
-  | _ :: t => claimedInput src t
 
 /-- **The class of a unit of `inner`**: an inference block or a free block (inside a server-day block), or hidden (a unit
 inside hidden hardware's work, which has no established property). -/
@@ -146,18 +140,24 @@ end Placed
 def ExceptWith {Ω : Type} (pr : (Ω → Prop) → ℝ≥0∞) (accepts : Ω → Prop) (P : Ω → Prop) (ε : ℝ≥0∞) : Prop :=
   pr (fun r => accepts r ∧ ¬ P r) ≤ ε
 
+/-- **The wipe's bound on a server-day block's input from its own past**, in bits: `e`, the bits that left the attested
+boundary during the wipe that opens the block, plus 8,600,000,000 bits. The wipe's row (`WipeInputAtMost`) and the check
+both read it. -/
+def wipePastBound (e : ℕ) : ℕ := e + 8600000000
+
 /-- **A monitoring period's runs**, as accounting reads them: the audit game's probability `pr` (monotone, and
 subadditive over finite unions), the verifier's acceptance, and each run's actual circuit, pricing, registered input
 gates, and the two partitions the prover committed before any coin. `outer` partitions the whole circuit into server-day
 blocks and hidden hardware (`kind`); `inner` refines it into units the prover labels inference, free or hidden
 (`label`), a unit labelled hidden exactly when its server-day-or-hidden parent is hidden hardware (`labelHiddenIff`).
-Each block's location
-and window are fixed data. `kind` is a fact about location, not the prover's label: a top block is a server-day block
-exactly when its location is one the hardware description lists (`kindIff`), and a hidden block's location shares no
-leaf with a listed one (`hiddenUnlisted`). A server-day block is a listed location and a day, not the prover's cut: its
-window is one of the period's registered days (`winDay`), and no two server-day blocks of a run share a location and a day
-(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). The class every
-definition reads is `cls`, derived from the label and the epoch's challenge tick (`salt`). -/
+`kind` is determined by location: a top block is a server-day block exactly when its location is in the hardware
+description's list (`kindIff`), which is registered information, the auditor's; a hidden block's location shares no leaf
+with a listed one (`hiddenUnlisted`). A server-day block's window is one of the period's registered days (`winDay`), and
+no two server-day blocks of a run share a location and a day (`oneBlock`), so a run has at most the listed locations
+times the days of them (`serverDay_count_le`). A top block's location (`locOut`) and its day (`dayOf`) are fields of the
+run, not the auditor's: `insideOut` ties them to the block's gates, and `kindIff` and `hiddenUnlisted` to the list. The
+class every definition reads is `cls`, derived from the label and the epoch's challenge tick (`salt`). No server-day
+block carries a claim: the run carries, for each, the numbers its three bounds read (`ServerDayBounds`). -/
 structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
@@ -170,31 +170,37 @@ structure Runs (L : Type*) where
   registered : ℕ
   nOut : Run → ℕ
   outer : (r : Run) → Partition (actual r).toCircuit (nOut r)
+  /-- **Whether a top block is a server-day block** (`true`) or hidden hardware's work (`false`): determined by whether
+  its location is in the hardware description's list (`kindIff`). -/
   kind : (r : Run) → Fin (nOut r) → Bool
+  /-- **Each top block's location**, a field of the run, not the auditor's: `insideOut` puts the block's gates there, and
+  `kindIff` and `hiddenUnlisted` tie it to the list. -/
   locOut : (r : Run) → Fin (nOut r) → Finset L
   /-- **The locations the hardware description lists** (`Hardware.units` in `Registration/Physical.lean`), registered
-  information for the period. -/
+  information for the period, the auditor's. -/
   listed : Set (Finset L)
   /-- A top block is a server-day block exactly when its location is listed. -/
   kindIff : ∀ r i, kind r i = true ↔ locOut r i ∈ listed
   /-- A hidden block's location shares no leaf with any listed location. -/
   hiddenUnlisted : ∀ r i, kind r i = false → ∀ X ∈ listed, Disjoint (locOut r i) X
+  /-- **Each top block's window**, a field of the run; a server-day block's is one of the period's registered days
+  (`winDay`). -/
   winOut : (r : Run) → Fin (nOut r) → Window
   /-- **The monitoring period's span** (`MonitoringPeriod.span`), registered information. -/
   period : TickSpan
   /-- The number of the period's days. -/
   nDays : ℕ
   /-- **The period's days**: a cut of its span into `nDays` consecutive spans, from its start to its stop, so they tile
-  it; registered information. -/
+  it; registered information, the auditor's. -/
   days : period.Cut nDays
-  /-- The day of each top block. -/
+  /-- **The day of each top block**, a field of the run, not the auditor's: `winDay` makes a server-day block's window
+  that registered day. -/
   dayOf : (r : Run) → Fin (nOut r) → Fin nDays
-  /-- A server-day block's window is its day. -/
+  /-- A server-day block's window is one of the period's registered days, its `dayOf`. -/
   winDay : ∀ r i, kind r i = true →
     (winOut r i).start = (days.part (dayOf r i)).start ∧ (winOut r i).len = (days.part (dayOf r i)).len
   /-- No two server-day blocks of a run share a location and a day. -/
   oneBlock : ∀ r i j, kind r i = true → kind r j = true → locOut r i = locOut r j → dayOf r i = dayOf r j → i = j
-  claimsOut : (r : Run) → Fin (nOut r) → List Property
   /-- **The hardware description's compute rate** of each location (`Hardware.compute`, `Φ`, in
   `Registration/Physical.lean`): work a tick, in gates at the run's pricing, as `ComputeRate` reads it; registered
   information for the period. -/
@@ -205,6 +211,15 @@ structure Runs (L : Type*) where
   credited : (r : Run) → Fin (nOut r) → ℕ
   /-- **The tolerance**, in gates: the sampling design's, one number for the period. -/
   tol : ℕ
+  /-- **The wipe's egress for each server-day block**, in bits: the bits that left the attested boundary during the wipe
+  that opens the block, as `WipeInputAtMost` reads it; attested. -/
+  wipeEgress : (r : Run) → Fin (nOut r) → ℕ
+  /-- **The network attester's ingress count for each server-day block**, in bits: what the network attester saw enter
+  the attested boundary, as `NetworkInputAtMost` reads it; attested. -/
+  ingressCount : (r : Run) → Fin (nOut r) → ℕ
+  /-- **The covert figure for each server-day block**, in bits: an assumed number of bits for the channels the network
+  attester does not see; assumed: no protocol stands behind it. -/
+  covert : (r : Run) → Fin (nOut r) → ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
   ref : (r : Run) → (inner r).Refines (outer r)
@@ -283,16 +298,28 @@ def infChildren (r : P.Run) (i : Fin (P.nOut r)) : Finset (Fin (P.nIn r)) :=
 def freeChildren (r : P.Run) (i : Fin (P.nOut r)) : Finset (Fin (P.nIn r)) :=
   univ.filter fun u => (P.ref r).parent u = i ∧ P.cls r u = Class.free
 
+/-- **Every server-day block of run `r` holds the three bounds accounting establishes**: its size at most its capacity
+(gates at the run's pricing), its input from its own past at most the wipe's bound (`wipePastBound` of the wipe's
+egress, bits), and its input from the outside world at most the network attester's ingress count plus the covert figure
+(bits). -/
+noncomputable def ServerDayBounds (r : P.Run) : Prop :=
+  ∀ i, P.kind r i = true →
+    P.HoldsOut r i (.sizeAtMost (P.capacity r i)) ∧
+      P.HoldsOut r i (.inputAtMost [.past] (wipePastBound (P.wipeEgress r i))) ∧
+      P.HoldsOut r i (.inputAtMost [.world] (P.ingressCount r i + P.covert r i))
+
 /-- **The run realizes its claims** (the feasible-set membership for `r`): `θ` is input gates of at most the registered
-width, the pricing charges every computed gate, and every block has each property claimed of it. -/
+width, the pricing charges every computed gate, every unit of `inner` has each property claimed of it, and every
+server-day block holds the three bounds (`ServerDayBounds`). -/
 noncomputable def Realizes (r : P.Run) : Prop :=
   (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
     (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
-    (∀ u, ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧ (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
+    (∀ u, ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧ P.ServerDayBounds r
 
 /-- **The run realizes its claims outside a tolerance set** `M` of inference blocks (the feasible-set membership with a
-tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, every
-inference block outside `M` holds its claims, and `M` holds only inference blocks. The sampled proofs and
+tolerance): `θ` is registered, the pricing charges every computed gate, every claim of a unit that is not an inference
+block holds, every inference block outside `M` holds its claims, every server-day block holds the three bounds
+(`ServerDayBounds`), and `M` holds only inference blocks. The sampled proofs and
 `DeclaredBlocksRun` give the inference claims only outside such an `M`, so the chain reads this, not `Realizes`. **The
 tolerance is a term, not an unbounded quantifier**: what caps `M`'s actual work is not here but in `FreeWorkAtMost` (the
 free blocks' sizes and `M`'s inference blocks' sizes at most capacity − credited use + tolerance) whose right-hand side
@@ -305,7 +332,7 @@ noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop
     (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
     (∀ u, P.cls r u = Class.inference → u ∉ M → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
     (∀ u, P.cls r u ≠ Class.inference → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
-    (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p) ∧
+    P.ServerDayBounds r ∧
     (∀ u ∈ M, P.cls r u = Class.inference)
 
 /-- **The free and tolerance work is at most capacity − credited use + tolerance**: inside every server-day block `i`,
