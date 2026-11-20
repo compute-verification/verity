@@ -192,29 +192,33 @@ def test_an_agreeing_rejection_is_written_and_the_lean_exit_code_must_be_its_ver
         assert (rc, answer, check["lean"]) == (2, None, None) and check["reason"].startswith(f"the Lean exited {code}")
 
 
-def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_name(run, tmp_path):
-    """A ``pouw-pearlplus`` that writes a panic line and prints the Python's own accept with exit 0 gives no answer: the
-    step runs it under `lean_child` and refuses it by `lean_child.LEAN_PANIC`, whatever it printed."""
+@pytest.mark.parametrize("said", ["PANIC at PouwVerifier.PearlPlus.run M:1:2: boom", "Error: index out of bounds"])
+def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_name(run, tmp_path, said):
+    """A ``pouw-pearlplus`` that writes a panic line (a ``PANIC`` one, or an out-of-range index's with none) and prints the
+    Python's own accept with exit 0 gives no answer: the step runs it under `lean_child` and refuses it by
+    `lean_child.LEAN_PANIC`, whatever it printed."""
     from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 
     d, verify, doc = run
     exe = stub(tmp_path, printout(doc), 0)
-    exe.write_text(exe.read_text().replace("cat ", "echo 'PANIC at PouwVerifier.PearlPlus.run M:1:2: boom' >&2\ncat ", 1))
+    exe.write_text(exe.read_text().replace("cat ", f"echo '{said}' >&2\ncat ", 1))
     rc, answer, check = lean(tmp_path, verify, d, exe)
-    assert (rc, answer) == (2, None) and check["reason"].startswith(f"{LC.LEAN_PANIC}: PANIC at "), check["reason"]
+    assert (rc, answer) == (2, None) and check["reason"] == f"{LC.LEAN_PANIC}: {said}", check["reason"]
 
 
-@pytest.mark.parametrize("end, how", [("kill -ABRT $$", "killed by signal 6"), ("exit 3", "exit status 3")])
+@pytest.mark.parametrize("end, how", [("kill -ABRT $$", "killed by SIGABRT"), ("exit 3", "status 3"),
+                                      ("exit 134", "status 134 (abort)")])
 def test_a_lean_killed_by_a_signal_or_with_no_verdicts_exit_status_is_refused_by_name(run, tmp_path, end, how):
-    """A ``pouw-pearlplus`` that prints the Python's own accept, then ends by a signal or with an exit status that is no
-    verdict's (0 accept, 1 reject) gives no answer: `verifier.LEAN_ABORT`, whatever it printed."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+    """A ``pouw-pearlplus`` that prints the Python's own accept, then ends by a signal or with a status that is no
+    verdict's (`served_passes.PEARLPLUS_EXITS`: 0 accept, 1 reject; 134 an abort's) gives no answer:
+    `lean_child.LEAN_EXIT`, whatever it printed."""
+    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 
     d, verify, doc = run
     exe = stub(tmp_path, printout(doc), 0)
     exe.write_text(exe.read_text().replace("exit 0\n", f"{end}\n"))
     rc, answer, check = lean(tmp_path, verify, d, exe)
-    assert (rc, answer) == (2, None) and check["reason"].startswith(f"{PV.LEAN_ABORT}: pouw-pearlplus {how}"), check["reason"]
+    assert (rc, answer) == (2, None) and check["reason"] == f"{LC.LEAN_EXIT}: {how}", check["reason"]
 
 
 def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_passes_or_an_executable(run, tmp_path):

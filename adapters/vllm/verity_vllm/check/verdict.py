@@ -1,7 +1,7 @@
 """The Commit VERDICT as typed records (`vllm-verdict/v1`): every check the Commit decides, by its human name, with what it read, what
 it established and what it found -- ONE document (`<row>/verdict.json`) beside the files it is derived from.
 
-    verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
+    cli.run(verdict_record) from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
 
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check

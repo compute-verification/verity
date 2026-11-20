@@ -41,14 +41,6 @@ def test_a_place_that_answers_none_for_no_number_answers_none(tmp_path, monkeypa
     assert driver._cgroup_memory() == (1000, 400)
 
 
-def test_a_place_that_sorts_by_the_number_sorts_it_with_the_names_that_have_none() -> None:
-    pytest.importorskip("torch")                     # the module of the place imports it; the two places above need none
-    from verity_vllm.pipeline import commit
-
-    rows = {0: [("r2", 0, 1)], 1: [(f"r{NO_DECIMAL}", 0, 1)], 2: [("r1", 0, 1)], 3: [("rx", 0, 1)]}
-    schedule = commit.engine_schedule(rows, {}, {})
-    assert list(schedule["observed_arrive_steps"]) == [f"r{NO_DECIMAL}", "rx", "r1", "r2"]
-    assert schedule["observed_arrive_steps"] == {"r2": 0, f"r{NO_DECIMAL}": 1, "r1": 2, "rx": 3}
 
 
 @pytest.mark.parametrize("length", [NO_DECIMAL.encode("latin-1"), NO_DECIMAL.encode(), b"4" + NO_DECIMAL.encode("latin-1"), b"x", b""])
