@@ -99,6 +99,8 @@ from verity.protocols.compose import schemes  # noqa: E402
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
 PROTOCOL = schemes.get("network-attester").protocol
+#: the named assumption the attester's guarantee reads (`NetworkCheck.Period`): the attester is the auditor's device
+(PREMISE,) = schemes.get("network-attester").assumptions
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network attester's records
 ROWS = "verity/network-rows/v1"
 #: the front's refusal without ``--gate``
