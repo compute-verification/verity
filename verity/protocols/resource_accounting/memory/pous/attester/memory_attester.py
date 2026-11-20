@@ -222,8 +222,8 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return SC.header_fields(self.session, self.coin_root, self.coin_key, self.binding, self.blocks, self.k, self.limit_ns,
-                                self.block_bytes)
+        return SC.header_fields(self.session, self.coin_root, _sha512(self.coin_key), self.binding, self.blocks, self.k,
+                                self.limit_ns, self.block_bytes)
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -276,8 +276,8 @@ def message(commitment: SessionCommitment, salt: bytes, ended: str, rounds: Sequ
     salt `RECORD_SALT_BYTES` bytes, so it ends where the tag says and the header's length begins."""
     if len(salt) != RECORD_SALT_BYTES:
         raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
-    head = SC.header(commitment.session, commitment.coin_root, commitment.coin_key, commitment.binding, commitment.blocks,
-                     commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
+    head = SC.header(commitment.session, commitment.coin_root, _sha512(commitment.coin_key), commitment.binding,
+                     commitment.blocks, commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
     return _sha512(SESSION_TAG, salt, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 

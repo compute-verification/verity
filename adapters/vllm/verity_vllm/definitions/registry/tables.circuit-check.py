@@ -2,22 +2,7 @@
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
-
-
-def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
-    leaf families they do not reach, at small statics."""
-    from verity.circuits.defs import bind
-
-    from verity_vllm.definitions.registry import tables
-
-    return [
-        # the Definitions that read a registered table (`gelu_tanh_bf16`, `tanh_rn`) through `TableRead16x1_v1`, `TableRead27x2_v1`;
-        # no rule binds them (`boolean_tanh` computes both tables' entries)
-        ("GeluTanhMulBf16_v3", lambda: bind(tables.GeluTanhMulBf16V3)),
-        ("TanhF32Rn_v2", lambda: bind(tables.TanhF32RnV2)),
-    ]
+from typing import Any
 
 
 def _table_read_roots() -> list[Any]:

@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
+from hypothesis import note, strategies as st
 
 import verity_difftest as D
 from verity.circuits import supplied as SU
@@ -261,12 +261,13 @@ def mark_of(fn: str, args: dict, head: int | None = None) -> dict:
 
 def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int | None = None, released=...) -> dict:
     """One input marked ``fn`` read at 16-bit leaves, the verifier holding ``tables``, its ``(coins, commitments)``, and the
-    round coin released at place 1 unless ``released`` says otherwise (None: no places)."""
+    round coin's, the header's and the message's release (the coin held under each) at place 1 unless ``released`` says otherwise (None: no
+    places)."""
     mark = mark_of(fn, args, args.get("head"))
     if bits is not None:
         mark = {**mark, "bits": bits}
     coins, commitments = tables
-    released = {ROUND: 1} if released is ... and fn == ROUND else None if released is ... else released
+    released = {fn: 1} if released is ... and fn in (ROUND, HEADER, MESSAGE) else None if released is ... else released
     return {"program": desc([["x0", 1, mark]], [2]), "coins": {f: c.hex() for f, c in coins.items()},
             "commitments": {f: c.hex() for f, c in commitments.items()}, "attester_keys": PINNED, "widths": {"x0": 16},
             "record": RECORD, "log": [], "binding": BINDING, **({} if released is None else {"released": released})}
@@ -275,14 +276,16 @@ def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int |
 @functools.cache
 def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...]) -> dict:
     """A session the memory attester writes: ``k`` coins over ``blocks`` blocks, each at ``picks[j] % blocks``: the commitment
-    the verifier holds (with how the session ended and its rounds, the key, the message and its signature: the vectors', over
-    their session) and the coin (the openings)."""
+    the verifier holds before its first coin (the header's fields, the key by its hash, the LMS key and the place), and what
+    the session releases after it (the openings and the coin key, how it ended and its rounds, the message and its
+    signature). The LMS key, the message and its signature are the vectors', over their session."""
     session = bytes.fromhex(VECTORS["commitment"]["session"])
     key = MA.HM96.key_from_label(f"difftest-key{key_label}".encode())
     salts = [fixed(f"salt{seed}/{j}", MA.HM96.salt_bytes) for j in range(k)]
     tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
     c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
-    return {"commitment": c.to_json(), "ended": "complete", "rounds": k, "place": 0,
+    return {"commitment": {n: v for n, v in c.to_json().items() if n != "coin_key"}, "coin_key": key.hex(),
+            "ended": "complete", "rounds": k, "place": 0,
             "key": VECTORS["key"], "message": VECTORS["message"], "signature": VECTORS["signature"],
             "openings": [tree.opening(j).to_json() for j in range(k)]}
 
@@ -326,9 +329,15 @@ MUTATIONS = {
     "session flipped": lambda d, j: _c(d, session=_flip(d["commitment"]["session"])),
     "session short": lambda d, j: _c(d, session=d["commitment"]["session"][2:]),
     "session upper": lambda d, j: _c(d, session=d["commitment"]["session"].upper()),
-    "key flipped": lambda d, j: _c(d, coin_key=_flip(d["commitment"]["coin_key"])),
-    "key short": lambda d, j: _c(d, coin_key=d["commitment"]["coin_key"][2:]),
-    "key top bit": lambda d, j: _c(d, coin_key=d["commitment"]["coin_key"][:-2] + "ff"),
+    "key flipped": lambda d, j: d.update(coin_key=_flip(d["coin_key"])),
+    "key short": lambda d, j: d.update(coin_key=d["coin_key"][2:]),
+    "key hash flipped": lambda d, j: _c(d, coin_key_sha512=_flip(d["commitment"]["coin_key_sha512"])),
+    "key top bit, its hash held": lambda d, j: (d.update(coin_key=d["coin_key"][:-2] + "ff"),
+                                                _c(d, coin_key_sha512=hashlib.sha512(bytes.fromhex(d["coin_key"])).hexdigest())),
+    "key a byte short, its hash held": lambda d, j: (d.update(coin_key=d["coin_key"][:-2]),
+                                                     _c(d, coin_key_sha512=hashlib.sha512(bytes.fromhex(d["coin_key"])).hexdigest())),
+    "no coin key": lambda d, j: d.pop("coin_key"),
+    "session 33": lambda d, j: _c(d, session=d["commitment"]["session"] + "00"),
     "limit string": lambda d, j: _c(d, limit_ns="854000"),
     "limit big": lambda d, j: _c(d, limit_ns=10 ** 30),
     "limit 5 digits": lambda d, j: _c(d, limit_ns=85_400),
@@ -373,8 +382,9 @@ MUTATIONS = {
 }
 #: the numbers of a text, changed to a form that is no canonical natural: the field and what its value becomes
 NUMBER_FORMS = ("{n}.0", "{n}e0", "{n}E0", "0{n}", "+{n}", "-0", "{n}e+0", "{n}.5", "00")
-COMMITMENT_NUMBERS = ("blocks", "k", "limit_ns", "block_bytes", "rounds")
+COMMITMENT_NUMBERS = ("blocks", "k", "limit_ns", "block_bytes", "place")
 COIN_NUMBERS = ("index", "j")
+ENDED_NUMBERS = ("rounds",)
 
 
 def _formed(t: str, key: str, form: str) -> str:
@@ -393,22 +403,31 @@ def sessions(draw) -> dict:
     for name in draw(st.one_of(st.just([]), st.just([]), st.lists(st.sampled_from(sorted(MUTATIONS)), min_size=1, max_size=2))):
         try:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
-        except (KeyError, IndexError, TypeError, AttributeError):
-            pass
-    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "message", "signature", "place") if x in doc})
-    coin = CASES.text({x: doc[x] for x in ("openings", "carried", "coin_root") if x in doc})
+        except (KeyError, IndexError, TypeError, AttributeError) as e:
+            note(f"{name} does not apply to this session: {e!r}")
+    commit = CASES.text({x: doc[x] for x in ("commitment", "key", "place") if x in doc})
+    coin = CASES.text({x: doc[x] for x in ("openings", "coin_key", "carried", "coin_root") if x in doc})
+    ended = CASES.text({x: doc[x] for x in ("ended", "rounds") if x in doc})
+    signed = CASES.text({x: doc[x] for x in ("message", "signature") if x in doc})
     if draw(st.integers(0, 6)) == 0:
         commit = _formed(commit, draw(st.sampled_from(COMMITMENT_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
     if draw(st.integers(0, 6)) == 0:
         coin = _formed(coin, draw(st.sampled_from(COIN_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
+    if draw(st.integers(0, 9)) == 0:
+        ended = _formed(ended, draw(st.sampled_from(ENDED_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
     if draw(st.integers(0, 24)) == 0:
         commit = draw(st.sampled_from(["{", "[]", "null", "", '{"commitment": 5}', "\xff"]))
     if draw(st.integers(0, 24)) == 0:
         coin = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
-    coins = {ROUND: coin.encode("latin-1") if coin == "\xff" else coin.encode()}
-    commitments = {f: (commit.encode("latin-1") if commit == "\xff" else commit.encode()) for f in (ROUND, HEADER, CONTEXT, MESSAGE)}
     if draw(st.integers(0, 24)) == 0:
-        coins.pop(ROUND)
+        ended = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
+    raw = lambda t: t.encode("latin-1") if t == "\xff" else t.encode()  # noqa: E731
+    if draw(st.integers(0, 24)) == 0:
+        signed = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
+    coins = {ROUND: raw(coin), HEADER: raw(ended), MESSAGE: raw(signed)}
+    commitments = {f: raw(commit) for f in (ROUND, HEADER, CONTEXT, MESSAGE)}
+    if draw(st.integers(0, 24)) == 0:
+        coins.pop(draw(st.sampled_from([ROUND, HEADER, MESSAGE])))
     if draw(st.integers(0, 24)) == 0:
         commitments.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT, MESSAGE])))
     fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT, MESSAGE]))
@@ -419,9 +438,11 @@ def sessions(draw) -> dict:
     if fn == CONTEXT:
         return session_instance(fn, {}, tables, draw(st.sampled_from([848, 848, 848, 832])))
     if fn == MESSAGE:
-        return session_instance(fn, {}, tables, draw(st.sampled_from([512, 512, 512, 496])))
+        placed = draw(st.sampled_from([{MESSAGE: 1}] * 8 + [{MESSAGE: 0}, {MESSAGE: 3}, {}, None]))
+        return session_instance(fn, {}, tables, draw(st.sampled_from([512, 512, 512, 496])), placed)
     head = max(1, _head_of(tables) + draw(st.sampled_from([0, 0, 0, 0, 0, 0, -1, 1])))
-    return session_instance(fn, {"head": head}, tables, 8 * (head + head % 2) if draw(st.integers(0, 9)) else 8 * head)
+    placed = draw(st.sampled_from([{HEADER: 1}] * 8 + [{HEADER: 0}, {HEADER: 3}, {}, None]))
+    return session_instance(fn, {"head": head}, tables, 8 * (head + head % 2) if draw(st.integers(0, 9)) else 8 * head, placed)
 
 
 def _head_of(tables: tuple[dict, dict]) -> int:
@@ -455,7 +476,7 @@ def test_the_storage_sessions_bodies_agree(pieces):
 VECTOR_CASES = [(f"round {j}", ROUND, {"round": j}, VECTORS["round_coin"][j], "halves", 32) for j in range(3)] + [
     ("the header", HEADER, {"head": VECTORS["head"]}, VECTORS["header"], "le", 16),
     ("the context", CONTEXT, {}, VECTORS["context"], "le", 16),
-    ("the message", MESSAGE, {}, CASES.RELEASE["message"], "le", 16)]
+    ("the message", MESSAGE, {}, VECTORS["message"], "le", 16)]
 
 
 @needs_lake
@@ -497,24 +518,24 @@ def _ordered(fn: str, args: dict, tables, released=None) -> dict:
 @needs_lake
 def test_a_released_commitment_is_not_a_coin_to_the_order_rule(pieces):
     """The order rule (every commitment registered before any coin) counts what the verifier holds as a coin and nothing it
-    holds as a commitment: the header and the context, held as commitments only, need no place beside the root the record
-    registers, and the round coin, whose coin is held, needs one, whatever is held of it as a commitment."""
+    holds as a commitment: the context, held as a commitment only, needs no place beside the root the record registers; the
+    header and the round coin, whose release is held as a coin, need one, whatever is held of them as a commitment."""
     tables = CASES.held()
-    for fn, args in ((HEADER, {"head": 753}), (CONTEXT, {})):
+    j = _ordered(CONTEXT, {}, tables)
+    assert reference(j)["x0"] and pieces.call("supplied_marks", j)[0] == "output"
+    for fn, args in ((HEADER, {"head": 753}), (ROUND, {"round": 0})):
         j = _ordered(fn, args, tables)
-        assert reference(j)["x0"] and pieces.call("supplied_marks", j)[0] == "output"
-    j = _ordered(ROUND, {"round": 0}, tables)
-    with pytest.raises(D.Reject, match="names no place of pous.session.round_coin/v1's coin"):
-        reference(j)
-    kind, text = pieces.call("supplied_marks", j)
-    assert kind != "output" and "names no place of pous.session.round_coin/v1's coin" in text
-    for placed in ({ROUND: 1}, {ROUND: 1, HEADER: 0}):
-        j = _ordered(ROUND, {"round": 0}, tables, placed)
-        assert reference(j)["x0"] and pieces.call("supplied_marks", j)[0] == "output"
-    j = _ordered(ROUND, {"round": 0}, tables, {ROUND: 0})
-    with pytest.raises(D.Reject, match="E_SUPPLIED_ORDER"):
-        reference(j)
-    assert "E_SUPPLIED_ORDER" in pieces.call("supplied_marks", j)[1]
+        with pytest.raises(D.Reject, match=f"names no place of {fn}'s coin"):
+            reference(j)
+        kind, text = pieces.call("supplied_marks", j)
+        assert kind != "output" and f"names no place of {fn}'s coin" in text
+        for placed in ({fn: 1}, {fn: 1, CONTEXT: 0}):
+            j = _ordered(fn, args, tables, placed)
+            assert reference(j)["x0"] and pieces.call("supplied_marks", j)[0] == "output"
+        j = _ordered(fn, args, tables, {fn: 0})
+        with pytest.raises(D.Reject, match="E_SUPPLIED_ORDER"):
+            reference(j)
+        assert "E_SUPPLIED_ORDER" in pieces.call("supplied_marks", j)[1]
 
 
 def _programmed(marks, tables, released) -> dict:

@@ -490,20 +490,23 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-The storage session's four functions read what the memory attester released after the session, which the verifier holds
-by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key, message, signature}`, the session
-commitment, how the session ended and its rounds, the LMS public key's hex, the signed message's and its signature's) and, for the round coin, as a coin (`coins`: JSON
-`{openings}`). A commitment is registered before any coin, so the order rule counts `coins` alone. `pous.session.round_coin/v1`
-is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
-commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused);
-`pous.session.header/v1` is the header of a session that ended complete with all `k` rounds, which the commitment's `ended`
-and `rounds` are compared with, so a late or short session has no statement; `pous.session.context/v1` is the 106 bytes the
-signature's message hashes before the record, of a key whose SHA-512 is one the verifier's `attester_keys` pin (the
-configuration's pins of the memory attester); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only
-when the signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
-signatures the attester has made. Each number they read is a canonical natural (no sign, fraction, exponent or
-leading zero) within its field's width. Each refuses, by the name "no statement", what the held commitment or coin lacks or the
-arguments don't fit. Nothing reads these bodies through the door yet.
+The storage session's four functions read the session in two entries by when each of its parts exists. The verifier holds,
+by function name, what exists before the first coin as a commitment (`commitments`: JSON `{commitment, key, place}`: the
+header's fields, which hold the coin key by its hash, the LMS public key's hex and the place the verifier registered it at),
+and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin, `{ended, rounds}`
+for the header and `{message, signature}` for the message). A commitment is registered before any coin, so the order rule
+counts `coins` alone as coins and holds each commitment's place before the place of every coin read beside it.
+`pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at
+an index below the commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is
+refused), with the coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended
+complete with all `k` rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no
+statement; `pous.session.context/v1` is the 106 bytes the signature's message hashes before the record, of a key whose
+SHA-512 is one the verifier's `attester_keys` pin (the configuration's pins of the memory attester; no body takes the key
+the session's own object names); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only when the
+coin's signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
+signatures the attester has made. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
+fraction, exponent or leading zero) within its field's width. Each refuses, by the name "no statement", what the held
+commitment or coin lacks or the arguments don't fit. Nothing reads these bodies through the door yet.
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the

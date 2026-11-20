@@ -56,7 +56,7 @@ def _clear(c, openings, m=None, key=KEY, sig=None, scheme=mc.LMS, pinned=None, s
 
 
 def _unsalted(c, rounds) -> bytes:
-    head = SC.header(c.session, c.coin_root, c.coin_key, c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, mc.COMPLETE,
+    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, mc.COMPLETE,
                      len(rounds))
     return hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
                           + mc.records_digest(rounds)).digest()

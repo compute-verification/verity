@@ -61,7 +61,7 @@ def keys : List (String × Nat) :=
 
 /-- The header's values, in `keys`'s places. -/
 def vals (c : ChallengePhaseCommitment) (e : String) (n : Nat) : List String :=
-  (SessionCoins.headerFields c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes).map (·.2) ++
+  (SessionCoins.headerFields c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes).map (·.2) ++
     [pyJsonStr e, toString n]
 
 /-- The order the header writes its keys in, which no field moves. -/
@@ -72,7 +72,7 @@ def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × N
 
 theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
     header c e n = "{" ++ ",".intercalate (order.toList.map (entry c e n)) ++ "}" := by
-  have hf : (SessionCoins.headerFields c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ++
+  have hf : (SessionCoins.headerFields c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes ++
       [("ended", SessionCoins.pyJsonStr e), ("rounds", toString n)]).toArray =
       keys.toArray.map fun x => (x.1, (vals c e n)[x.2]!) := by
     simp [keys, vals, SessionCoins.headerFields, pyJsonStr]
