@@ -928,17 +928,22 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
     assert "disagree on applicability fields ['gemm_target']" in G.workload_applicability(row_workload("x__bi-eager"), dis)["refusal"]
 
 
+def _toy_descriptor(LP: int = 3, T: int = 2, **extra) -> dict:
+    """A small Program's descriptor: the program digest is defined on a descriptor only, never on a dict shaped like one."""
+    from tests.program.test_workload_program import _toy_request
+    return encode_program(Program(_toy_request(LP, T))) | extra
+
+
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
     # a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
     from verity_vllm.pipeline import global_program as G
-    desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
-            "root": "Toy_v1", "annotations": {"free": "text"}}
+    desc = _toy_descriptor(annotations={"free": "text"})
     d = tmp_path / "build_request_LP3_T2"
     d.mkdir()
     (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": program_digest(desc)}}))
     ok = G.component_provenance(str(d), desc)
     assert ok["refusal"] is None and ok["descriptor_digest"] == ok["recorded_digest"] == program_digest(desc)
-    tampered = dict(desc, definitions={"Toy_v1": {"form": "composite", "body": {"nodes": [2, 1]}}})
+    tampered = _toy_descriptor(3, 3, annotations=desc["annotations"])
     bad = G.component_provenance(str(d), tampered)
     assert bad["refusal"] and "not the Program derive_step built" in bad["refusal"]
     annotated = dict(desc, annotations={"free": "other text"})          # annotations are outside the digest: not a tamper
@@ -951,7 +956,7 @@ def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_
 
 def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_an_edited_one(tmp_path):
     # The artifact's workload_digest is a claim; the checker verifies it against the descriptor GP-01 wrote beside it
-    desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}, "annotations": {"free": "text"}}
+    desc = _toy_descriptor(annotations={"free": "text"})
     d = tmp_path / "build_workload"
     d.mkdir()
     with gzip.open(d / "descriptor.json.gz", "wb") as f:
@@ -972,7 +977,7 @@ def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_
     # the descriptor swapped under an intact digest -> refused (the digest no longer names the descriptor)
     p.write_text(json.dumps(art))
     with gzip.open(d / "descriptor.json.gz", "wb") as f:
-        f.write(canonical_json(dict(desc, definitions=[{"name": "D1"}])))
+        f.write(canonical_json(_toy_descriptor(3, 3, annotations=desc["annotations"])))
     with pytest.raises(ValueError, match="not the Program it names"):
         gm.from_gprog(str(p))
     # no descriptor beside the artifact (an evidence dir pulled without it): accepted but recorded as UNVERIFIED, never as verified
@@ -987,7 +992,7 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
     beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
     alone (the loader's error must still name the recorded path)."""
-    desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}}
+    desc = _toy_descriptor()
     row = tmp_path / "staged" / "row"
     bw = row / "build_workload"
     bw.mkdir(parents=True)

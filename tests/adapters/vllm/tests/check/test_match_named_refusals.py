@@ -12,7 +12,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.circuits.codec import canonical_json, program_digest
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
 
 from verity_vllm.check.match import batch_decomp
 from verity_vllm.check.match.attribution import attribute_instances
@@ -108,7 +109,8 @@ def test_a_build_whose_request_is_not_the_manifests_is_refused_by_name(tmp_path,
 def test_a_build_whose_record_of_its_descriptor_file_is_not_the_file_is_refused(tmp_path):
     """The digest the artifact claims is the descriptor's in both, so the Program is the one it names; the second artifact records
     another sha256 for the file."""
-    desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}}
+    from tests.program.test_workload_program import _toy_request
+    desc = encode_program(Program(_toy_request(3, 2)))
     with gzip.open(tmp_path / "descriptor.json.gz", "wb") as f:
         f.write(canonical_json(desc))
     sha = hashlib.sha256(canonical_json(desc)).hexdigest()
