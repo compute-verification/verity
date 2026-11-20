@@ -77,7 +77,8 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
         roots = {r["port"]: r["root"] for r in rec["roots"]}
         held.append(TB.check_row_tables(mine, publics, roots, live))
         s = stream(spec, coins)
-        return s, s.register(rec, ports, leaf_layer=layer, window_root=window_root, counts={TEMPLATE: UNITS})
+        return s, s.register(rec, ports, leaf_layer=layer, window_root=window_root, counts={TEMPLATE: UNITS},
+                             partition=mine.partition)
 
     outcomes, _ = coin_outcomes(tmp_path, signer, monkeypatch, register, positions=64)
     assert held == [{}] * len(outcomes)
@@ -88,6 +89,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
     bare = stream(_spec(mine, table=False), sampler=lambda sampling_design, n: [0, 1])
     rec = CS.registration(c, {"row": 100}, registrar=DK)
-    assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
+    assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS},
+                                                         partition=mine.partition))
     with pytest.raises(ValueError, match="over"):
         S.Value(CS.TABLE_PORT, S.ROOTS, "serve")

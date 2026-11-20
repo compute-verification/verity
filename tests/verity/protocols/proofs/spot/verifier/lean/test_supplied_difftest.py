@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
+from hypothesis import note, strategies as st
 
 import verity_difftest as D
 from verity.circuits import supplied as SU
@@ -384,8 +384,8 @@ def sessions(draw) -> dict:
     for name in draw(st.one_of(st.just([]), st.just([]), st.lists(st.sampled_from(sorted(MUTATIONS)), min_size=1, max_size=2))):
         try:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
-        except (KeyError, IndexError, TypeError, AttributeError):
-            pass
+        except (KeyError, IndexError, TypeError, AttributeError) as e:
+            note(f"{name} does not apply to this session: {e!r}")
     commit = CASES.text({x: doc[x] for x in ("commitment", "key", "place") if x in doc})
     coin = CASES.text({x: doc[x] for x in ("openings", "coin_key", "carried", "coin_root") if x in doc})
     ended = CASES.text({x: doc[x] for x in ("ended", "rounds") if x in doc})
