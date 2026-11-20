@@ -4716,7 +4716,7 @@
   },
   "Flock.SecurityProofs.MaskedZK": {
    "type_hash": "af08708a1578b1ef3007ae701f1a819f3da31d67b642f12780733ac9db9bc738",
-   "unfolded_hash": "11ebf382596e202893d196df9abe8241659b5ed5a515601b279f28c37313fdbd"
+   "unfolded_hash": "f9f58495e8d7660ea398ac3239ea931386e28ce3cc326578f003198dd5c1ded1"
   },
   "Flock.SecurityProofs.PublicAudit": {
    "type_hash": "127843c8302e3bbea90f0839428dd250efab959ceaa293546d56ac1ebe9ddffa",
@@ -5089,7 +5089,7 @@
   },
   "ResourceAccounting.SecurityProofs.JointPeriodLiveECR": {
    "type_hash": "5bc0bbacab878fe3007571ea98295ad9373bdae4d3bd57df42b3fa53e0ee5dc8",
-   "unfolded_hash": "bcad712f43a7fd2cb63230618130c5061a4d0a1e8ccd3051c29dd999c1b9c89f"
+   "unfolded_hash": "78da053bcc961dab78ffc48bb9ed525ed90c1d4c903be399c8f76f4a4f5ae6a0"
   },
   "ResourceAccounting.SecurityProofs.JointPooledBlocksLive": {
    "type_hash": "7bbc2d207c559018b13a35189ba7a2f9a5b6603f83911349e01d91e404c37169",
