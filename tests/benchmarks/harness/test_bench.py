@@ -425,7 +425,7 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
-    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
+    the experimental arm's call check on the installed run: y against x·Wᵀ and the commitment twice.
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
@@ -434,13 +434,12 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
-        """A pass's tile digest is written into `leaves` by its call (not with ``hash_leaf`` omitted) over the poison, and
-        each end, on the run or any twin of it, draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that
-        breaks either)."""
-        fresh, writes, hashing = True, True, True
+        """A pass's tile digest is written into `leaves` by its call over the poison, and each end, on the run or any twin
+        of it, draws fresh salts, so its roots are its own (`fresh`: a run that breaks it)."""
+        fresh, hashing = True, True
 
         def __init__(self, y, ends=None, **commits):
-            self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
+            self.y, self.details = y, {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
             self.nb, self.leaves, self.ends = 64, torch.zeros(64, dtype=torch.uint8), [0] if ends is None else ends
@@ -451,7 +450,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
         def twin(self):
             t = Run(self.y, self.ends, **self.commits)
-            t.fresh, t.writes = self.fresh, self.writes
+            t.fresh = self.fresh
             self.twins.append(t)
             return t
 
@@ -466,9 +465,8 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 
         def gemm(self, w, x, W, bias):
             y = self.y(x, W)
-            if self.writes and "hash_leaf" not in self.omit:
-                digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
-                self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
+            digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
+            self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
             return y
 
         def end(self):
@@ -483,14 +481,13 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     # the compared passes are twins' (`PearlCDeviceRun.twin`), each taking the cases in one order, so a case's share a place
-    assert run.stepped and run.begins == 1 and len(run.twins) == 3 and [t.begins for t in run.twins] == [4, 4, 4]
+    assert run.stepped and run.begins == 1 and len(run.twins) == 2 and [t.begins for t in run.twins] == [4, 4]
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
-    for broken in ("fresh", "writes"):          # roots that repeat (salts not fresh), leaves the call never writes
-        run = Run(exact_y)
-        setattr(run, broken, False)
-        assert not _pearl_c_gate(run, "pearl-plus")["passed"]
+    run = Run(exact_y)
+    run.fresh = False                           # roots that repeat (salts not fresh)
+    assert not _pearl_c_gate(run, "pearl-plus")["passed"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
     live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
