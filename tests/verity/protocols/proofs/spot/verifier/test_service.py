@@ -10,7 +10,7 @@ import random
 import pytest
 
 from verity.commitments import docket_digest as DD
-from verity.circuits import population as PN
+from verity.circuits import partition_object as PO, population as PN
 import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -75,17 +75,24 @@ def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None) -> S.Stre
                      clock=clock or Clock(), sampler=sampler)
 
 
-def _ports(n: int) -> dict:
-    part = P.partition(PN.population_program(PAIR, n), QUERY)
+def _partition(n: int, blocks=None) -> dict:
+    program = PN.population_program(PAIR, n)
+    return P.partition(program, QUERY) if blocks is None else PO.build(program, QUERY, blocks)
+
+
+def _ports(n: int, blocks=None) -> dict:
+    part = _partition(n, blocks)
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
-def _record(n: int = 6, sampling_design=None, row: int = 0, previous: str | None = None, work_table=None, **change) -> dict:
-    ports = _ports(n)
+def _record(n: int = 6, sampling_design=None, row: int = 0, previous: str | None = None, work_table=None, blocks=None,
+            **change) -> dict:
+    ports = _ports(n, blocks)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     rec = DK.record(PN.population_program(PAIR, n), QUERY, sampling_design or {"law": "subset", "k": 2}, S.SCHEME, roots,
-                   {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table)
+                   {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table,
+                   partition=None if blocks is None else _partition(n, blocks))
     return {**rec, **change}
 
 
@@ -745,6 +752,28 @@ def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monk
     assert set(body["checks"]["run"]["detail"]["disagree"]["fields"]) == {"read"}
     sampled = _stream(sampler=lambda sampling_design, n: [0, 1])
     assert _round(sampled).accepted and len(ran) == 3
+
+
+def test_a_blocked_dockets_run_reads_the_partition_object_its_record_was_held_to(monkeypatch):
+    """A docket registered under a partition object with `blocks`, whose digest its record names: the outcome's run hands
+    the Lean the same object R2 held the record to, so the round accepts; on the blockless object the Lean refuses the
+    record at register (`R2-partition`) and the round fails `disagree`."""
+    n, blocks = 6, [[(u, u + 2) for u in range(0, 6, 2)]]
+
+    def blocked_round() -> tuple[S.Outcome, dict]:
+        stream = _stream()
+        reg = stream.register(_record(n, blocks=blocks), _ports(n, blocks), partition=_partition(n, blocks))
+        draw = stream.select(reg)
+        assert stream.deliver(draw, [SESSION]) is None
+        return stream.outcome(draw, _lean(True), {"statement": "stub"}), stream.records[-1]["audit"]["checks"]
+
+    out, checks = blocked_round()
+    assert out.accepted, checks
+    run = S.V.run
+    monkeypatch.setattr(S.V, "run", lambda *a, **kw: run(*a, **{**kw, "partition": None}))
+    out, checks = blocked_round()
+    assert not out.accepted and checks["run"]["codes"] == ["disagree"]
+    assert checks["run"]["detail"]["disagree"]["lean"]["codes"] == ["R2-partition"], checks["run"]
 
 
 def test_public_outputs_come_from_the_verifier_of_record():
