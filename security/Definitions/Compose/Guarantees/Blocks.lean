@@ -18,8 +18,9 @@ hypothesis, named where this layer may import it, and the open premises that tie
   to at most the tolerance implements its declared block, at a size and input at most stated. It is owed an argument
   from PoUW's coverage of the declared work, with the uncovered share and the incorrect proof blocks the sample missed
   counted in the free block.
-* **The free claim** (`ClaimCoversConversion`): the committed free-capacity claim is at least capacity minus PoUW's use
-  bound plus the tolerance, which with the two rows above gives `FreeClaimHolds`.
+* **The free work bound** (`FreeWorkAtMost`): the two rows above, with the compute capacity, give it: the free and
+  tolerance work in each server-day block is at most capacity − credited use + tolerance, the number `check` compares
+  with `lim.freeSize`.
 * **PoUB** (`PoubUseAtLeast`) and **PoUS** (`PousUseAtLeast`): open and not placed; no term of the inference-only bound
   reads memory reads or memory held.
 * **The memory wipe** (`WipeInputAtMost`): input at most from its own past, for every server-day block; its guarantee's
@@ -47,41 +48,42 @@ variable {L : Type*} (P : Runs L)
 
 /-! ## PoUW -/
 
-/-- **The spend is work outside `M` plus `M`'s declared size** (open, compute-accounting): in an accepted run whose spend
-clears the claim, for every set `M` of `inner`'s units and inside every server-day block `i`, `b r i` gates at `π` are at
-most the work of the inference blocks directly inside `i` whose windows start at or after their epoch's challenge tick
-`salt u` and that are outside `M`, plus the committed size claims (`claimedSize`) of the inference blocks directly inside
-`i` in `M`. Its content is two open steps: the conversion from multiply-accumulates, the spend's unit, to work at `π`;
-and that a block's credit is at most its committed size claim, which is what lets it hold for every `M`. Stated with `+`
-on the right rather than `−` on the left, so no truncated subtraction enters it. -/
-def SpendIsWork (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop)
-    (b : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+/-- **The spend is work outside `M` plus `M`'s declared size** (open, compute-accounting; no verifier checks it today). It
+holds for every `M`, so at `M` = every inference block it says the whole credited use is at most the sum of the committed
+size claims: a block's credit is at most its committed size claim. In an accepted run whose spend clears the claim, for
+every set `M` of `inner`'s units and inside every server-day block `i`, PoUW's credited use `credited r i` (gates at `π`)
+is at most the work of the inference blocks directly inside `i` whose windows start at or after their epoch's challenge
+tick `salt u` and that are outside `M`, plus the committed size claims (`claimedSize`) of the inference blocks directly
+inside `i` in `M`. The credited use is fixed before the sampling coins, by the registered claim (the epoch's salt is a live
+coin that comes before the work); the factor from multiply-accumulates, the spend's unit, to gates at `π` is a constant
+of the scheme and the pricing, assumed. Stated with `+` on the right rather than `−` on the left, so no truncated
+subtraction enters it. -/
+def SpendIsWork (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop) : Prop :=
   ∀ r, P.accepts r → shown r → ∀ (M : Finset (Fin (P.nIn r))) i, P.kind r i = true →
-    b r i ≤ (∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u) +
+    P.credited r i ≤ (∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u) +
       ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)
 
 /-- **PoUW (Pearl+): use at least, in size.** From `Pouw.PearlC.GGapSampledDraw`: the accepted adversary's spend is at
 least a share of the claimed work. Open: `RunReads` and `SpendIsWork`. For every set `M`, its use is the work of the
-inference children after the salt and outside `M`, and its bound is `b r i` less the committed size claims of `M`'s
-inference children; the partitions keep that use apart from the free blocks and `M`'s blocks (`sizeExclusive`), so it
-feeds the conversion. A shape: its content is its premises. -/
+inference children after the salt and outside `M`, and its bound is the run's credited use `credited r i` less the
+committed size claims of `M`'s inference children; the partitions keep that use apart from the free blocks and `M`'s
+blocks (`sizeExclusive`), so it feeds the conversion. A shape: its content is its premises. -/
 def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (Pr : Pouw.PearlC.Protocol Q R S) (TR : Pouw.PearlC.TileRules Q R S)
     (D : Pouw.PearlC.Layout → Prop) (Wd : Pouw.PearlC.Layout → ℕ → Pouw.PearlC.Decl → ℚ) (g : ℝ) (δ : ℕ → ℕ → ℝ)
-    (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop)
-    (b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
+    (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop) (ε : ℝ≥0∞) : Prop :=
   Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ →
-    P.RunReads (Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ) shown ε → P.SpendIsWork salt shown b →
+    P.RunReads (Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ) shown ε → P.SpendIsWork salt shown →
       P.UseAtLeast Capacity.computeRate
         (fun r M i =>
           ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
-        (fun r M i => b r i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)) ε
+        (fun r M i => P.credited r i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)) ε
 
 /-! ## The declared blocks run -/
 
 /-- **The declared blocks run** (open, compute-accounting with soundness): every inference block `u` whose window starts
 at or after its epoch's challenge tick `salt u`, outside a set `M` of such blocks whose committed size claims summed
-(`∑ u ∈ M, claimedSize (claimsIn u)`, gates) are at most the tolerance `tol` (gates), implements its declared block
+(`∑ u ∈ M, claimedSize (claimsIn u)`, gates) are at most the run's tolerance `P.tol` (gates), implements its declared block
 `f u`, at size at most `c u` gates and input at most `k u` bits from its own past, another block and the outside world,
 except with probability at most `ε`. The declared size of a block is its committed size claim, read from its claims
 list, which the check caps at `lim.c`; it is no parameter of the row. Nothing
@@ -89,40 +91,18 @@ in Verity proves that the prover ran the declared circuit: the proofs show commi
 inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is the
 tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M` pass
 into correct ones (the injected information) is the `.block` source of the inference blocks' input here. The tolerance
-binds the actual work through the committed free-capacity claim (`claimedFree`, the clause `FreeClaimHolds`): `M`'s
-inference blocks sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives `.function`,
+binds the actual work through `FreeWorkAtMost`: `M`'s inference blocks sit inside the free block, counted at their actual
+size, so `feasible_work_le` reads them. The row gives `.function`,
 `.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is owed where the
 rows become the chain's hypotheses by name (`rows_chain`'s `assemble`). -/
 def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
-    (c k : (r : P.Run) → Fin (P.nIn r) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
+    (c k : (r : P.Run) → Fin (P.nIn r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   ExceptWith P.pr P.accepts
     (fun r => ∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
-      (∑ u ∈ M, claimedSize (P.claimsIn r u)) ≤ tol ∧
+      (∑ u ∈ M, claimedSize (P.claimsIn r u)) ≤ P.tol ∧
       ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
         P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (c r u)) ∧
           P.HoldsIn r u (.inputAtMost [.past, .block, .world] (k r u))) ε
-
-/-- **The committed free claim covers the conversion's bound** (open, compute-accounting with lean): in an accepted run,
-every server-day block's committed free-capacity claim is at least its compute capacity `cap r i` (gates at `π`) less
-PoUW's use bound `b r i` (gates at `π`) plus the tolerance `tol` (gates). It is not a conjunct of
-`InferenceOnly.check`: the check is a function of the limits and the run's committed data, and neither `b` nor `cap` is
-among them. `b` is the bound PoUW's verification establishes on the period's sample, after the coins, while
-`claimedFree` is committed before any coin; `cap` is the hardware description's figure (`CapacityAtMost`), which `Runs`
-does not carry. Whoever holds PoUW's `b` beside the committed claims makes this comparison; no verifier in the tree
-makes it today. -/
-def ClaimCoversConversion (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ i, P.kind r i = true → cap r i - b r i + tol ≤ P.claimedFree r i
-
-/-- **The committed free claims cover the conversion's bound, pooled** (open, compute-accounting with lean): in an
-accepted run, the server-day blocks' committed free-capacity claims summed are at least the server-day blocks' compute
-capacities summed less PoUW's use bounds summed, plus the tolerance `tol` once (all gates at `π`). It gives
-`FreeClaimHoldsPooled` (`freeClaimHoldsPooled_of_conversion`); `ClaimCoversConversion` gives it on every accepted run with
-a server-day block (`claimCovers_pooled`), and `pooled_counts_tol_once` shows it holding where `ClaimCoversConversion`
-does not. Nobody compares it today, for the reasons `ClaimCoversConversion` gives. -/
-def ClaimCoversConversionPooled (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ) : Prop :=
-  ∀ r, P.accepts r →
-    (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap r i) - (∑ i ∈ univ.filter (fun i => P.kind r i = true), b r i) +
-        tol ≤ ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i
 
 /-! ## PoUS and PoUB
 
@@ -280,13 +260,13 @@ def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) 
   ∃ h : ∀ a ∈ θ, A.isInput a = true, pol (.ofCircuit A.toCircuit θ h)
 
 /-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check, realize their
-claims outside a tolerance set `M` of inference blocks (`RealizesExcept`) and whose committed free-capacity claim holds
-for that `M` (`FreeClaimHolds`) has a compliant actual circuit. `FreeClaimHolds` is a hypothesis of the statement, beside
-`RealizesExcept`: without it `M` could be every inference block and the run would be bound by nothing. With it `M`'s
-actual work sits inside each server-day block's committed claim (`claimedFree`), which `check` caps at `lim.freeSize`,
-so a run whose tolerance set's work exceeds the limit satisfies no instance of the hypotheses (`excluded_run`).
-`rows_chain` derives `FreeClaimHolds` from PoUW's row, the compute capacity, the declared row's tolerance and
-`ClaimCoversConversion` (`freeClaimHolds_of_conversion`).
+claims outside a tolerance set `M` of inference blocks (`RealizesExcept`) and whose free and tolerance work for that `M`
+is at most capacity − credited use + tolerance in every server-day block (`FreeWorkAtMost`) has a compliant actual
+circuit. `FreeWorkAtMost` is a hypothesis of the statement, beside `RealizesExcept`: without it `M` could be every
+inference block and the run would be bound by nothing. With it `M`'s actual work sits under capacity − credited use +
+tolerance, which `check` caps at `lim.freeSize`, so a run whose tolerance set's work exceeds the limit satisfies no
+instance of the hypotheses (`excluded_run`). `rows_chain` derives `FreeWorkAtMost` from PoUW's row, the compute capacity
+and the declared row's tolerance (`freeWorkAtMost_of_conversion`).
 `M`'s declared use is counted in the free block and the injected information it passes into correct blocks is a term of
 their input.
 The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an
@@ -294,7 +274,7 @@ unregistered input, so placing the free block's input from its own past (PoUS) a
 same bound and states no new theorem here. -/
 def PolicyTheorem {L : Type*} (check : (P : Runs L) → P.Run → Bool) (pol : Policy) : Prop :=
   ∀ (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))),
-    check P r = true → P.RealizesExcept r M → P.FreeClaimHolds r M → Compliant pol (P.actual r) (P.θ r)
+    check P r = true → P.RealizesExcept r M → P.FreeWorkAtMost r M → Compliant pol (P.actual r) (P.θ r)
 
 /-- **The inference-only policy** at the limits `lim`, with training efficiency `efficiency`: a declaration complies when
 its training efficiency is at most `share + allowance`. Training efficiency is an undefined parameter here, a function of
@@ -315,14 +295,15 @@ namespace ResourceAccounting
 /-- **The chain**: over a monitoring period, with the policy's theorem, the check passing on every accepted run, and the
 protocols' rows `shown x` (PoUW through the conversion for the free block's size, `DeclaredBlocksRun` for the inference
 blocks' claims outside a tolerance set, the wipe and network attestation for input and output, registration for `θ`) that
-between them give that an accepted run realizes its claims outside some tolerance set of inference blocks for which its
-committed free-capacity claim holds (each row established except with probability at most `ε x`), an accepted run's
-actual circuit complies with `pol`, except with probability at most `∑ x ∈ s, ε x`. An inference block no row covers
-(before its epoch's salt), and the tolerance set the sample misses, are free work, counted under the committed claim. -/
+between them give that an accepted run realizes its claims outside some tolerance set of inference blocks whose free and
+tolerance work is at most capacity − credited use + tolerance (`FreeWorkAtMost`; each row established except with
+probability at most `ε x`), an accepted run's actual circuit complies with `pol`, except with probability at most
+`∑ x ∈ s, ε x`. An inference block no row covers (before its epoch's salt), and the tolerance set the sample misses, are
+free work, counted under that bound. -/
 def Chain {L : Type*} (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
     {κ : Type} (s : Finset κ) (shown : κ → P.Run → Prop) (ε : κ → ℝ≥0∞) : Prop :=
   InferenceOnly.PolicyTheorem check pol → (∀ r, P.accepts r → check P r = true) →
-    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → ∃ M, P.FreeClaimHolds r M ∧ P.RealizesExcept r M) →
+    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → ∃ M, P.FreeWorkAtMost r M ∧ P.RealizesExcept r M) →
     (∀ x ∈ s, ExceptWith P.pr P.accepts (shown x) (ε x)) →
     ExceptWith P.pr P.accepts (fun r => InferenceOnly.Compliant pol (P.actual r) (P.θ r)) (∑ x ∈ s, ε x)
 

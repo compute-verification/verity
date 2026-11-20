@@ -192,14 +192,16 @@ structure Runs (L : Type*) where
   /-- No two server-day blocks of a run share a location and a day. -/
   oneBlock : ∀ r i j, kind r i = true → kind r j = true → locOut r i = locOut r j → dayOf r i = dayOf r j → i = j
   claimsOut : (r : Run) → Fin (nOut r) → List Property
-  /-- **The claimed free-block capacity**: the number the prover commits for each server-day block, committed data the
-  check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a quantity the model computes. It is a claim, like
-  the size and input claims in `claimsOut`: it does not carry M or the block's children, which a per-block `Placed.Holds`
-  `Property` cannot see, so it is a committed claim field rather than a `Property` (a verifier sees only what is committed).
-  What makes `FreeClaimHolds` true of it is that it is at least `cap − b + tol` (`ClaimCoversConversion`): the server-day
-  block's compute capacity less PoUW's use bound plus the tolerance, in gates (`conversion_le_sub`); nothing here
-  requires that. -/
-  claimedFree : (r : Run) → Fin (nOut r) → ℕ
+  /-- **The hardware description's compute rate** of each location (`Hardware.compute`, `Φ`, in
+  `Registration/Physical.lean`): work a tick, in gates at the run's pricing, as `ComputeRate` reads it; registered
+  information for the period. -/
+  rate : Finset L → ℕ
+  /-- **PoUW's credited use** of each server-day block of a run, in gates at the run's pricing: the verifier's output for
+  that run, a function of the registered claim, the proven share and the scheme's assumed factor from multiply-accumulates
+  to gates; not a number the prover supplies. -/
+  credited : (r : Run) → Fin (nOut r) → ℕ
+  /-- **The tolerance**, in gates: the sampling design's, one number for the period. -/
+  tol : ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
   ref : (r : Run) → (inner r).Refines (outer r)
@@ -245,6 +247,10 @@ noncomputable def hiddenGates (r : P.Run) : Finset (Fin (P.actual r).N) :=
 /-- Block `u`'s size in run `r`, its work at the run's pricing, in gates. -/
 def sizeIn (r : P.Run) (u : Fin (P.nIn r)) : ℕ := (P.actual r).work (P.π r) ((P.inner r).gates u)
 
+/-- **Block `i`'s compute capacity** in run `r`, in gates at the run's pricing: its location's rate times its window's
+length, for a server-day block its day's (`winDay`). -/
+def capacity (r : P.Run) (i : Fin (P.nOut r)) : ℕ := P.rate (P.locOut r i) * (P.winOut r i).len
+
 /-- Block `i`'s size in run `r`, its work at the run's pricing, in gates. -/
 def sizeOut (r : P.Run) (i : Fin (P.nOut r)) : ℕ := (P.actual r).work (P.π r) ((P.outer r).gates i)
 
@@ -271,11 +277,11 @@ noncomputable def Realizes (r : P.Run) : Prop :=
 tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, every
 inference block outside `M` holds its claims, and `M` holds only inference blocks. The sampled proofs and
 `DeclaredBlocksRun` give the inference claims only outside such an `M`, so the chain reads this, not `Realizes`. **The
-tolerance is a term, not an unbounded quantifier**: what caps `M`'s actual work is not here but in `FreeClaimHolds` (the
-free blocks' sizes and `M`'s inference blocks' sizes at most the committed claim `claimedFree`) which the check caps at
-`lim.freeSize`; taking `M = all inference blocks` then forces their total work under `lim.freeSize`, not nothing (the
-witness `excluded_run`). `FreeClaimHolds` is deliberately not folded in here: it comes from PoUW's row through the
-conversion (`freeClaimHolds_of_conversion`), not from membership in the feasible set. `Realizes` implies `RealizesExcept
+tolerance is a term, not an unbounded quantifier**: what caps `M`'s actual work is not here but in `FreeWorkAtMost` (the
+free blocks' sizes and `M`'s inference blocks' sizes at most capacity − credited use + tolerance) whose right-hand side
+the check caps at `lim.freeSize`; taking `M = all inference blocks` then forces their total work under `lim.freeSize`, not
+nothing (`excluded_run`). `FreeWorkAtMost` is deliberately not folded in here: it comes from PoUW's row through the
+conversion (`freeWorkAtMost_of_conversion`), not from membership in the feasible set. `Realizes` implies `RealizesExcept
 ∅` (`realizes_realizesExcept`). -/
 noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
@@ -285,28 +291,32 @@ noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop
     (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p) ∧
     (∀ u ∈ M, P.cls r u = Class.inference)
 
-/-- **The committed free-capacity claim holds** (the clause the free field used to carry, now its own named def): inside
-every server-day block `i`, the free blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most
-the claimed value `claimedFree r i` the prover committed. This is what `check` relies on through its claim conjunct
-(`claimedFree ≤ lim.freeSize`). It follows, for the `M` the declared row gives, from PoUW's row, the compute capacity,
-`M`'s declared size at most the tolerance and the claim at least `cap − b + tol` (`freeClaimHolds_of_conversion`), never
-from `RealizesExcept`. -/
-def FreeClaimHolds (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
+/-- **The free and tolerance work is at most capacity − credited use + tolerance**: inside every server-day block `i`,
+the free blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most `i`'s capacity less
+PoUW's credited use of `i` plus the tolerance (gates at the run's pricing). `check` caps that right-hand side at
+`lim.freeSize`. It follows, for the `M` the declared row gives, from PoUW's row, the compute capacity and `M`'s declared
+size at most the tolerance (`freeWorkAtMost_of_conversion`), never from `RealizesExcept`. -/
+def FreeWorkAtMost (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   ∀ i, P.kind r i = true →
     (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
-      ≤ P.claimedFree r i
+      ≤ P.capacity r i - P.credited r i + P.tol
 
-/-- **The committed free-capacity claims hold, pooled over the run**: summed over the run's server-day blocks, the free
-blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most the server-day blocks' committed
-claims `claimedFree` summed (gates). A new definition beside `FreeClaimHolds`, which implies it
-(`freeClaimHolds_pooled`): the pooled conversion (`conversion_pooled_le`) counts the tolerance once over the run, where
-the per-block one counts it in every server-day block. Which of the two the policy's limit should read is not decided
-here: it is for the policy's own theorem (`InferenceOnly.InferenceOnlyTheorem`, open) to say whether the free work it
-allows is bounded per server-day block or over the run. -/
-def FreeClaimHoldsPooled (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
+/-- **The run's pooled free bound**, in gates at the run's pricing: its server-day blocks' capacities summed less their
+credited uses summed, plus the tolerance once. -/
+def pooledFreeBound (r : P.Run) : ℕ :=
+  (∑ i ∈ univ.filter (fun i => P.kind r i = true), P.capacity r i) -
+    (∑ i ∈ univ.filter (fun i => P.kind r i = true), P.credited r i) + P.tol
+
+/-- **The free and tolerance work, pooled over the run, is at most the pooled free bound**: summed over the run's
+server-day blocks, the free blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most
+`pooledFreeBound r` (gates). `check` does not read it: which limit the policy states, per server-day block or pooled over
+the period, is training's (`InferenceOnly.InferenceOnlyTheorem`, open). The pooled form matches the design: the sampling
+design's tolerance is one number for the period, and `FreeWorkAtMost` summed over the server-day blocks counts it once for
+each of them. -/
+def FreeWorkAtMostPooled (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   ∑ i ∈ univ.filter (fun i => P.kind r i = true),
       ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
-    ≤ ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i
+    ≤ P.pooledFreeBound r
 
 /-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
 def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
