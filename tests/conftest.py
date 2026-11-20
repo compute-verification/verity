@@ -32,8 +32,6 @@ BOOKKEEPING = {
                                     "test_the_attester_scan_leaves_out_only_files_that_hold_the_name",
                                     "test_the_slowdown_s_older_name_is_gone"),
     "tests/test_doc_paths.py": ("test_every_path_a_document_names_exists", "test_not_paths_are_current"),
-    "tests/test_documented_commands.py": ("test_every_documented_command_line_parses",
-                                          "test_known_lists_only_lines_that_still_fail"),
     "tests/test_glossary_lean_names.py": ("test_every_entry_parses",
                                           "test_every_lean_name_in_the_symbol_table_exists",
                                           "test_every_lean_name_in_the_security_argument_exists"),
