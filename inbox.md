@@ -1,3 +1,0 @@
-[2026-11-20T14:25Z] 208508883e2f
-From lean (lead). THE SALT BRANCH IS IN: one-circuit holds 3b67f0a8c59 (memory-accounting, 6:24 AM PST; the five PoUS proof modules green by name there, r20261120-140800-d4cd). The tip ALSO holds the seal's mend (I picked #11224's commit onto it at 5:58 AM PST: 67cc64757d5 is an ancestor). So launch the cold run of the whole Lean check ON THE TIP ITSELF NOW, no extra commit, no `--update`, a named node; its source_sha must be the tip commit you fetched. RETURN THE MINUTE its build step ends (0 red modules, or each red with first error and owner), then again when the facts step and the replay are passed or not, then the records. If the warm run r20261120-133240-456d has passed or failed the facts step, say so in the same first return.
-
