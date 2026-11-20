@@ -75,18 +75,23 @@ from verity_vllm.records.weights_registration import WeightsRegistration
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     """A window circuit record's session Program, whose function is the session Definition (module docstring), its slots m and
     steps T. Refused (ValueError) where the record states no inference blocks, its entries don't tile its templates
-    (`interface.Blocks.of`) or its templates are not the declared circuit's (`pinned`)."""
+    (`interface.Blocks.of`), its slots hold different units, or its templates are not the declared circuit's (`pinned`)."""
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
-    if not blocks.uniform:
-        raise ValueError(f"{doc.get('name')}: a served window's blocks, a request each of its own positions, have no one "
-                         "session Definition; a class circuit's do")
-    per: Counter[str]
-    m, per = blocks.slots, Counter()
+    m = blocks.slots
+    held: list[Counter[str]] = [Counter() for _ in range(m)]
     for e in blocks.inference:
-        per[e.template] += e.units // m
+        width = e.radix_of("slot")
+        for s in range(e.slot, e.slot + width):
+            held[s][e.template] += e.units // width
+    for s in range(1, m):
+        if held[s] != held[0]:
+            t = next(t for t in sorted({*held[0], *held[s]}) if held[0][t] != held[s][t])
+            raise ValueError(f"{doc.get('name')}: slots 0 and {s} hold different units ({held[0][t]} and {held[s][t]} of {t}): "
+                             "a window of requests of different lengths is not counted yet")
+    per = held[0]
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
     program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
     pinned(doc)

@@ -112,6 +112,29 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     assert cls.fresh == IF.input_count(small)["free"] // 2
 
 
+def _slotted(*entries) -> dict:
+    circuit = IF.Circuit("test/blocks", ((BC.resolve(GEMM), 4), (BC.resolve(ROPE), 6)),
+                         blocks=IF.Blocks(slots=2, steps=3, inference=entries))
+    return IF.descriptor_record(circuit, 1)
+
+
+def test_slots_holding_equal_units_are_counted_as_the_uniform_record_is_and_unequal_ones_are_refused(small):
+    """Entries with a slot base and a smaller slot radix, each slot holding the units the uniform record's slots do, give its
+    session Definition, slots and steps; slots holding different units are refused, naming two slots and a template."""
+    I = IF.InferenceEntry
+    equal = _slotted(I(GEMM, 0, (1, 2), ("slot", "-"), 0), I(GEMM, 2, (1, 2), ("slot", "-"), 0, 1),
+                     I(ROPE, 0, (3, 1), ("step", "slot"), 0), I(ROPE, 3, (3, 1), ("step", "slot"), 0, 1))
+    assert not IF.Blocks.of(equal["blocks"], {GEMM: 4, ROPE: 6}, equal["partition"]).uniform
+    (sa, ma, ta), (sb, mb, tb) = BC.session(small), BC.session(equal)
+    assert (ma, ta) == (mb, tb) and codec.descriptor_id(sa.fn) == codec.descriptor_id(sb.fn)
+    assert BC.judgment(DAY, [(equal, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})[1] == \
+        BC.judgment(DAY, [(small, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})[1]
+    unequal = _slotted(I(GEMM, 0, (3, 1), ("-", "slot"), 0), I(GEMM, 3, (1, 1), ("slot", "-"), 0, 1),
+                       I(ROPE, 0, (3, 2), ("step", "slot"), 0))
+    with pytest.raises(ValueError, match=rf"slots 0 and 1 hold different units \(3 and 1 of {re.escape(GEMM)}\)"):
+        BC.session(unequal)
+
+
 def _impostor(tid: str):
     """A Definition under ``tid`` whose body is another: the registered one's with its two parameters swapped."""
     real = BC.resolve(tid)
