@@ -69,6 +69,7 @@ class Lean:
         self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
                                      env=LC.lean_env())
         self.done, self.requests, self.lock = done, queue.SimpleQueue(), threading.Lock()
+        self.err_lock = threading.Lock()
         self.pending: collections.deque[Callable[[dict], None] | None] = collections.deque()
         self.ended: str | None = None
         threading.Thread(target=self._write, daemon=True).start()
@@ -96,16 +97,14 @@ class Lean:
             try:
                 self.proc.stdin.write(data)
                 self.proc.stdin.flush()
-            except (BrokenPipeError, ValueError, OSError) as e:
-                self._end(f"the process is gone: {e}")
+            except (BrokenPipeError, ValueError, OSError):
+                self._end(self._gone())
         with contextlib.suppress(OSError):
             self.proc.stdin.close()
 
     def _read(self) -> None:
         for line in self.proc.stdout:
-            self.stderr.seek(0)
-            err = self.stderr.read().decode("utf-8", "replace")
-            if (panic := LC.panic_line(err)) is not None:
+            if (panic := LC.panic_line(self._err())) is not None:
                 self.proc.kill()
                 self._end(f"{LC.LEAN_PANIC}: {panic}")
                 break
@@ -117,11 +116,20 @@ class Lean:
                 answered = self.pending.popleft() if self.pending else None
             if answered is not None:
                 answered(msg)
-        code = self.proc.wait()
-        self.stderr.seek(0)
-        panic = LC.panic_line(self.stderr.read())
-        self._end(f"{LC.LEAN_PANIC}: {panic}" if panic else f"the process ended ({code})")
+        self._end(self._gone())
         self.done({"done": None, "accepted": False})
+
+    def _err(self) -> str:
+        """What the process has written on its standard error so far, read by whichever thread asks."""
+        with self.err_lock:
+            self.stderr.seek(0)
+            return self.stderr.read().decode("utf-8", "replace")
+
+    def _gone(self) -> str:
+        """Why the process has no more answers: its panic line, else the status it ended with (`LC.exit_why`)."""
+        code = self.proc.wait()
+        panic = LC.panic_line(self._err())
+        return f"{LC.LEAN_PANIC}: {panic}" if panic else LC.exit_why(code) or f"the process ended ({code})"
 
     def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:
         self.requests.put((json.dumps(request, separators=(",", ":")).encode() + b"\n" + body, answered))

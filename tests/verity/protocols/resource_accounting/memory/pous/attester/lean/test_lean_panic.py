@@ -78,3 +78,58 @@ def test_a_warning_on_the_error_stream_is_no_panic(tmp_path):
         assert json.loads(server.call("verdict", {})[1]) == ACCEPT
     finally:
         server.close()
+
+
+#: the runtime's lines with no ``PANIC`` (`verity.lean_process.PANIC`): an index past the end, `String.get!` off a character,
+#: `Task.get` in a sync task, a stack overflow and a debug build's assertion
+OTHER_PANICS = ["Error: index out of bounds", "Error: invalid `String.Pos` at `String.get!`",
+                "`Task.get` called from a `(sync := true)` task", "Stack overflow detected. Aborting.",
+                "LEAN ASSERTION VIOLATION"]
+
+
+def _replying(stderr_line: str | None, then: str = "") -> str:
+    """A server that answers accept to every request, with ``stderr_line`` before each reply and ``then`` after it."""
+    out = json.dumps({"output": ACCEPT}, sort_keys=True, separators=(",", ":"))
+    return (f"for line in sys.stdin:\n"
+            f"    {'print(%r, file=sys.stderr, flush=True)' % stderr_line if stderr_line else 'pass'}\n"
+            f"    print({out!r}, flush=True)\n    {then or 'pass'}\n")
+
+
+@pytest.mark.parametrize("line", OTHER_PANICS)
+def test_an_accept_beside_a_runtime_line_with_no_panic_word_is_refused_by_name(tmp_path, line):
+    server = _fake(tmp_path, _replying(line))
+    try:
+        with pytest.raises(D.ProtocolError) as e:
+            server.call("verdict", {})
+        assert str(e.value) == f"{D.LEAN_PANIC}: {line}"
+    finally:
+        server.close()
+
+
+def test_a_server_that_ends_134_silently_after_an_accept_is_refused_by_name_at_its_next_request(tmp_path):
+    server = _fake(tmp_path, _replying(None, "sys.exit(134)"))
+    try:
+        assert server.call("verdict", {})[0] == "output"
+        with pytest.raises(D.ProtocolError, match=f"{D.LEAN_EXIT}: status 134 \\(abort\\)"):
+            server.call("verdict", {})
+    finally:
+        server.close()
+
+
+def test_a_server_killed_by_a_signal_after_an_accept_is_refused_by_name_at_its_next_request(tmp_path):
+    server = _fake(tmp_path, _replying(None, "import signal; os.kill(os.getpid(), signal.SIGKILL)"))
+    try:
+        assert server.call("verdict", {})[0] == "output"
+        with pytest.raises(D.ProtocolError, match=f"{D.LEAN_EXIT}: killed by SIGKILL"):
+            server.call("verdict", {})
+    finally:
+        server.close()
+
+
+def test_a_refusal_sentence_that_contains_the_runtimes_text_is_no_panic(tmp_path):
+    sentence = "the record is refused: Error: index out of bounds is what its field says, not the runtime"
+    server = _fake(tmp_path, _replying(sentence))
+    try:
+        assert json.loads(server.call("verdict", {})[1]) == ACCEPT
+    finally:
+        server.close()

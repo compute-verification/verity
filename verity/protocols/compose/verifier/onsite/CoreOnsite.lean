@@ -413,7 +413,7 @@ private def wipeCommitment : MemoryAttester.StreamedWipe.Commitment :=
 /-- A closed session of no batches under no key, naming the count's start certificate (`guardMark 5 1`'s) as its start
 mark. No check accepts it; the ties read it. -/
 private def wipeSigned : MemoryAttester.StreamedWipe.Signed :=
-  ⟨wipeCommitment, MemoryAttester.StreamedWipe.COMPLETE,
+  ⟨wipeCommitment, ⟨Array.replicate MemoryAttester.RECORD_SALT_BYTES 0⟩, MemoryAttester.StreamedWipe.COMPLETE,
     Flock.Sha512.hash ((NetworkVerifier.Span.guardMark 5 1).extract 4 111), 0, 0, #[], "", .empty, .empty⟩
 
 private def startMsg : ByteArray := MemoryAttester.StreamedWipe.startMessage wipeCommitment

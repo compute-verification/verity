@@ -432,11 +432,11 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
     got = a5.case_members(case, **proof)
     assert got["commitment"] == "ab"
     assert got["params"] == {"delta": "1/100", "proofs": {"members": {
-        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "units": [[0, 3]],
+        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "block": 0,
                  "vus_per_block": 4},
-        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "units": [[3, 5]],
+        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "block": 1,
                  "vus_per_block": 4},
-        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "units": [[5, 9]],
+        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "block": 2,
                  "vus_per_block": 4}}}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names and e["proved_units"] == [1, 6]

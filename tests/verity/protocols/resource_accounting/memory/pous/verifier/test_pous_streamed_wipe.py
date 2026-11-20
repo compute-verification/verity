@@ -215,7 +215,7 @@ def signed_bytes(s: sw.SignedWipe) -> bytes:
               "start_mark": s.start_mark.hex(), "tiers": [[t, b] for t, b in p.tiers]}
     assert list(header) == sorted(header) and len(header) == 16 and "egress_bits" not in header
     head = json.dumps(header, separators=(",", ":")).encode()
-    return hashlib.sha512(b"verity-pous/streamed-wipe/session/v2\0" + len(head).to_bytes(8, "big") + head
+    return hashlib.sha512(b"verity-pous/streamed-wipe/session/v3\0" + s.salt + len(head).to_bytes(8, "big") + head
                           + sw.records_root(s.commitment.session, s.batches)).digest()
 
 
@@ -275,7 +275,7 @@ def test_the_signed_header_carries_the_certificates_digest():
         other = session(changed)[1]
         assert other.start_mark == hashlib.sha512(changed).digest() != signed.start_mark
         assert other.message() == signed_bytes(other) != signed.message()
-        assert dataclasses.replace(other, start_mark=signed.start_mark, signature=signed.signature) == signed
+        assert dataclasses.replace(other, salt=signed.salt, start_mark=signed.start_mark, signature=signed.signature) == signed
         forged = dataclasses.replace(signed, start_mark=other.start_mark)
         assert sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons == \
             ("the signature does not verify",)
@@ -351,7 +351,7 @@ def test_the_reader_refuses_another_format_or_mark():
     for certificate in (CERTIFICATE, None):
         signed = session(certificate)[1]
         j = json.loads(json.dumps(signed.to_json()))
-        assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
+        assert set(j) == {"commitment", "salt", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
                           "scheme", "public_key", "signature"}
         assert WP.signed_of(j) == signed
         assert j["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
