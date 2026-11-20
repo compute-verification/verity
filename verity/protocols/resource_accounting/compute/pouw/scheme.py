@@ -669,9 +669,7 @@ def attach(exchange: Any, ctx: Any) -> Attached:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
-    # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
-    # scheme, and H1 has none
-    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
+    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block(TILE, tile_macs),),
