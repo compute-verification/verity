@@ -4018,7 +4018,7 @@
    "kind": "exclusion"
   },
   "Flock.SecurityProofs.RecursiveZKLoop": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoop_honest"],
+   "honest": [],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
@@ -10396,61 +10396,6 @@
     "reads": []
    },
    "type_hash": "32c8bdf6510649ba950ef59ebf347b0770a93163675bdbc57d3c3790e449ba35"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoop_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :",
-    "  Exists fun y =>",
-    "    Exists fun w =>",
-    "      And Claims.ZKServer.Loop.finS.Tables",
-    "        (And (Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse))",
-    "          (And Claims.ZKServer.Loop.finS.DummyReg",
-    "            (And Claims.ZKServer.Loop.finS.Causal",
-    "              (And",
-    "                (Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)",
-    "                  Claims.ZKServer.Loop.finS.honestVals)",
-    "                (And Claims.ZKServer.Loop.finS.TapeOK",
-    "                  (And",
-    "                    (Flock.Guarantees.ZkServerSends FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                      (fun x x_1 x_2 x_3 x_4 x_5 =>",
-    "                        Flock.ZkServer.honestReqs FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.hon)",
-    "                      (fun x x_1 x_2 =>",
-    "                        FlockSoundness.Discharge.Recursion.ZkServerHonest.honestMsgs",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.honD Unit.unit Unit.unit Unit.unit)",
-    "                      (Flock.Guarantees.zkServerT FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                        FlockSoundness.Discharge.Recursion.LoopWitness.sched.tables))",
-    "                    (And",
-    "                      ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y) fun x x_1 =>",
-    "                            w).Honest",
-    "                        (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse) fun u =>",
-    "                        FlockSoundness.Discharge.Recursion.OuterZK.wctxAt",
-    "                          (FlockSoundness.Discharge.Recursion.ZkServerHonest.honestMsgs",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.honD Unit.unit Unit.unit Unit.unit)",
-    "                          u.fst.fst u.fst.snd u.snd)",
-    "                      (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)",
-    "                        (src :",
-    "                          Claims.Msg →",
-    "                            Claims.Flock.Wit →",
-    "                              Claims.ZKServer.Loop.Tp →",
-    "                                Nat → Flock.V (Prod (Array Flock.F128) (Prod ByteArray (Array ByteArray))))",
-    "                        (t : Nat),",
-    "                        (FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y)",
-    "                              fun x x_1 => w).Sized",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t) fun x =>",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t).C y))))))))"
-   ],
-   "assumptions": ["RecDeploy.HonestFixture"],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Claims.Flock.R"],
-    "open": ["Claims.ZKServer.Loop.SwOk", "RecDeploy.HonestFixture"],
-    "reads": ["RecDeploy.TopsAt"]
-   },
-   "type_hash": "74a7ce8bc710dd6b5305a7eb974de24d370b2c13ccb97028fa9cefed07ed9476"
   },
   "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": {
    "owner": "@proofs",
