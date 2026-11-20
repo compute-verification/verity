@@ -3,8 +3,8 @@ once (no commit, no prover, no coins), its templates' lowered rows held to their
 Programs put through the same steps and rows.
 
     door_walls.py census --circuit NAME|DIR [--blocks one-per-template|families|shapes|all|U,LO-HI,...] [--lower EXE]
-                         [--units one|floor|plan] [--cap N] [--json FILE] [--no-rows]
-    door_walls.py fuzz --seed S [--cases N] [--minutes M] [--lower EXE] [--json FILE]
+                         [--units one|floor|plan] [--form unit|whole] [--cap N] [--json FILE] [--no-rows]
+    door_walls.py fuzz --seed S [--cases N] [--minutes M] [--form unit|whole] [--lower EXE] [--json FILE]
     door_walls.py case NAME [--lower EXE]
 
 ``census`` is the door-ready check a lane runs on its own circuit: ``NAME`` a builder (`BUILDERS`) or ``DIR`` a
@@ -33,7 +33,16 @@ in a partition of its own; ``plan``, the block holding the chosen unit in the pa
 (`plan_blocks`: `IF.partition_blocks` at ``--cap`` units a member for a circuit lowered as an `IF.Circuit`, one unit a
 block for Pearl+'s credited linear), every chosen block in that one partition. Under ``floor`` and ``plan`` a second
 table gives each block's size, its widest row in bits as `one_circuit.lower` hands it to `Compose.compose`, its gates
-(`count`) and its rows. In the runner, an item ``NAME:BLOCKS:UNITS``.
+(`count`), the lowered template's gates and its rows. In the runner, an item ``NAME:BLOCKS:UNITS[:FORM]``.
+
+``--form`` sets what the door lowers: ``unit``, the door's own (`lowerBlock`: the one template the block's root calls,
+each unit a copy with rows of its own); ``whole``, the block's own Program (`whole_circuit`: `restrict`'s ported block,
+an internal read a reference between its nodes, called once by a root of in(S)'s runs), put through the same steps from
+``cuts`` on as a circuit of one unit, so that `Lower.lower` lowers the block's root and `Compose.compose` writes rows of
+in(S)'s runs and out(S)'s; its rows are held on `WHOLE_TRACES` evaluations, and a block that reads a registered value
+is refused as Lean's `Spot.Restrict.ported` refuses it (class ``ported``). ``case internal_read`` puts the smallest
+block with an internal read through both (`internal_case`). ``--piece EXE`` (the Spot difftest) adds, per whole block,
+Lean's own `Spot.Restrict.piece`: Lean's `restrict` against Python's, and `Lower.lower` on Lean's `ported` of it.
 
 ``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word-typed parameters and fields of bits of widths not a multiple of
 16, calls, nested calls, batches, scans, callees whose word parameters reach no word primitive, mixed widths, parts of
@@ -83,7 +92,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 LANES = 64
 WORD = 16
-STEPS = ("partition", "block", "restrict", "cuts", "lower", "reader", "rows")
+STEPS = ("partition", "block", "restrict", "cuts", "lower", "reader", "ported", "rows")
 
 
 def _exe(path: str | None) -> Callable[[], Path]:
@@ -223,15 +232,17 @@ def lean_case_wide() -> tuple[bytes, dict]:
 
 
 def pearl_plus() -> tuple[bytes, dict]:
-    """Pearl+'s credited linear (`credited_in_c.py`'s C at its default size, K,TM,TN,N,M = 256,1,1,1,2, with its
-    reader), laid under the composer's limit as its stage lays it."""
+    """Pearl+'s credited linear (`credited_in_c.py`'s C at K,TM,TN,N,M = 256,1,1,64,2, with its reader), laid under
+    the composer's limit as its stage lays it. Its reader adds rows of N = 64 BF16 words: a reader of one word a row
+    has no row that spans a compression before its last block, which the composer refuses, and no path of record lays
+    one."""
     import importlib.util
     from verity.circuits import laying as LY
     spec = importlib.util.spec_from_file_location("credited_in_c", ROOT / "benchmarks/pouw/credited_in_c.py")
     m = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = m
     spec.loader.exec_module(m)
-    program = LY.lay(m.linear(256, 2, 1, (1, 1), True).program, m.fits)
+    program = LY.lay(m.linear(256, 2, 64, (1, 1), True).program, m.fits)
     return _bytes(program), LY.query(program)
 
 
@@ -248,6 +259,12 @@ def pous_setup() -> tuple[bytes, dict]:
     """Storage's store blocks: PoUS's setup C at its test's point (`window.Setup(64, 189, 16, 4, 4)`), every unit one
     `PousP2SetupCheck_v2`."""
     program, query = _held("pous_setup", _accounting().pous_setup())
+    return _bytes(program), query
+
+
+def internal_read() -> tuple[bytes, dict]:
+    """The smallest block with an internal read (`door_walls_circuits.internal_read`): T(T(a, w1), w2), two units."""
+    program, query = _accounting().internal_read()
     return _bytes(program), query
 
 
@@ -278,7 +295,7 @@ BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
     "one_linear": one_linear, "chain": chain, "test_class": test_class, "class_of_record": class_of_record,
     "pearl_plus": pearl_plus, "pous_setup": pous_setup, "network_scan": network_scan,
     "lean_case": lean_case, "lean_case_wide": lean_case_wide, "lean_odd": lean_odd,
-    "lean_odd_wide": lean_odd_wide}
+    "lean_odd_wide": lean_odd_wide, "internal_read": internal_read}
 
 
 def load(spec: str) -> tuple[bytes, dict]:
@@ -311,6 +328,8 @@ def normalise(text: str) -> str:
 
 def owner(step: str, text: str) -> str:
     """A reading of whose wall a refusal is, by the step and the code that refused it."""
+    if step == "ported":
+        return "lean's ported (Spot.Restrict.ported)"
     if step == "rows":
         return "lean's lower (Flock.Lower)"
     if step == "lower" and (m := re.search(r"\(Spot\.OneStageZk\.admitted\), ([a-z-]+):", text)):
@@ -352,10 +371,18 @@ class Result:
     row_bits: int | None = None
     gates: int | str | None = None
     tried: list = field(default_factory=list)
+    cut: dict = field(default_factory=dict, repr=False)
+    tmpl_gates: int | str | None = None
+    ported: str = ""
+    piece: str = ""
+    ports: tuple = field(default=((), ()), repr=False)
 
     @property
     def klass(self) -> str:
-        return "" if self.step is None else f"{self.step}: {normalise(self.text)}"
+        """The step's refusal; under the whole form, a block every step takes but Lean's `ported` refuses is that."""
+        if self.step is not None:
+            return f"{self.step}: {normalise(self.text)}"
+        return f"ported: {normalise(self.ported)}" if self.ported not in ("", "yes") else ""
 
 
 def _err(e: BaseException) -> str:
@@ -385,13 +412,87 @@ def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | str]:
     return max(rows, default=0), gates
 
 
-class Door:
-    """The door's static steps on C and one partition of it, each run once where it is the partition's and not a block's."""
+def template_gates(c_s: bytes) -> int | str | None:
+    """The two-input gates (`count`) of the one Definition C_S's root calls, the template the door lowers; None where it
+    calls other than one, and why where the count can't walk it."""
+    from verity.circuits import restrict as R
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.count import count
+    from verity.circuits.program import input_id
+    D = R.program(c_s)
+    called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+    try:
+        return count(D)[called[0]].gates if len(called) == 1 else None
+    except Exception as e:  # noqa: BLE001 - a template the count can't walk has no gate count, and the census goes on
+        return f"uncounted: {_err(e)[:120]}"
 
-    def __init__(self, c: bytes, query: dict, blocks: Sequence[tuple[int, int]], exe: Callable[[], Path]):
+
+FORMS = ("unit", "whole")
+
+
+def whole_circuit(c: bytes, partition: dict, units: Sequence[tuple[int, int]], D: Any) -> tuple[bytes, dict, str, tuple]:
+    """The block's own Program as a circuit of one unit: `restrict`'s ported block (`Block_v1`, its parameters in(S)'s
+    runs, `Spot.Restrict.ported`'s form, its internal reads references between its nodes) called once by a root whose
+    parameters bind as in(S)'s; its template query; what Lean's `ported` says of it (``yes``, or its refusal of a
+    registered read, word for word); and in(S) and out(S) as C's gates."""
+    from verity.circuits import partition_object as PO
+    from verity.circuits import program as P
+    from verity.circuits import restrict as R
+    from verity.circuits.program import REGISTRATION
+    b = R.restrict(c, partition, [tuple(u) for u in units], D=D)
+    fn = b.program.fn
+    params, ret = fn.signature()
+    names = [n for n, _t in params]
+    bound = dict(zip(names, b.program.bindings))
+    ported = "yes"
+    if reg := next((t for n, t in params if bound[n] == REGISTRATION), None):
+        ported = (f"ported: the block reads a registered value (RegisteredInput{reg.elem.w}_v1), and a parameter does not "
+                  "carry that it is registered: its rows would be committed afresh")
+    root = _composite("Whole", params, ret, lambda B, S, *xs: B.call(fn, *xs))
+    saved = list(P._BODY_LOOKUP)
+
+    def lookup(p):
+        try:
+            return D.boolean[p.id]
+        except KeyError:
+            raise LookupError(f"C names no Boolean body for {p.id}") from None
+
+    P.register_boolean_bodies(lookup)
+    try:
+        prog = P.Program(root, registered=[n for n in names if bound[n] == REGISTRATION], supplied=b.program.supplied)
+    finally:
+        P._BODY_LOOKUP[:] = saved
+    return _bytes(prog), PO.template_instances_query([fn]), ported, (b.inputs, b.outputs)
+
+
+def lean_piece(server: Any, c: bytes, partition: dict, units: Sequence[tuple[int, int]], decoded: Any) -> str:
+    """Lean's `Spot.Restrict.piece` on the block (the Spot difftest's ``restrict``): ``lowers`` where Lean's `restrict`
+    is Python's and `Flock.Lower.lower` lowers Lean's `ported` of it at the front's port widths, else what differs or
+    the lowering's refusal."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    us = [u for lo, hi in units for u in range(lo, hi)]
+    try:
+        py = OC.restrict(c, partition, units, decoded).decode()
+        kind, body = server.call("restrict", {"descriptor": c.decode(), "units": us, "python": py})
+    except Exception as e:  # noqa: BLE001 - a census records the cross-check's crash by its text
+        return f"crashed: {_err(e)[:300]}"
+    if kind != "output":
+        return f"{kind}: {str(body)[:300]}"
+    out = json.loads(body)
+    if not out["agree"]:
+        return f"restrict differs at {out['at']}"
+    return "lowers" if out["lowers"] is None else f"refuses: {out['lowers'][:300]}"
+
+
+class Door:
+    """The door's static steps on C and one partition of it, each run once where it is the partition's and not a block's.
+    Under ``form="whole"`` each block's steps from ``cuts`` on run on `whole_circuit` of it, a partition of its one unit."""
+
+    def __init__(self, c: bytes, query: dict, blocks: Sequence[tuple[int, int]], exe: Callable[[], Path],
+                 form: str = "unit", piece: Any = None):
         from verity.circuits import partition_object as PO
         from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-        self.c, self.query, self.exe = c, query, exe
+        self.c, self.query, self.exe, self.form, self.piece = c, query, exe, form, piece
         self.decoded = OC.Decoded(c)
         self.tp = PO.TemplatePartition(self.decoded.get(), query)
         self.partition = PO.build(json.loads(c), query, [list(blocks)])
@@ -428,6 +529,8 @@ class Door:
         except Exception as e:  # noqa: BLE001
             return stop("block", _err(e))
         r.seconds["block"] = round(time.perf_counter() - t, 3)
+        if self.form == "whole":
+            return self._whole(r, units)
         t = time.perf_counter()
         try:
             r.c_s = OC.restrict(self.c, self.partition, units, self.decoded)
@@ -437,7 +540,9 @@ class Door:
         cut, why = self.cuts()
         if why is not None:
             return stop("cuts", why)
+        r.cut = cut or {}
         r.row_bits, r.gates = sizes(r.c_s, cut or {})
+        r.tmpl_gates = template_gates(r.c_s)
         t = time.perf_counter()
         try:
             r.circuit = OC.lower(r.c_s, self.partition, self.exe, cut=cut,
@@ -451,6 +556,26 @@ class Door:
             why = PF.tmpl_why(f)
         if why is not None:
             return stop("reader", why)
+        return r
+
+    def _whole(self, r: Result, units: list) -> Result:
+        t = time.perf_counter()
+        try:
+            w, q, r.ported, r.ports = whole_circuit(self.c, self.partition, units, self.decoded.get())
+        except Exception as e:  # noqa: BLE001
+            r.step, r.text = "restrict", _err(e)
+            return r
+        r.seconds["restrict"] = round(time.perf_counter() - t, 3)
+        if self.piece is not None:
+            r.piece = lean_piece(self.piece, self.c, self.partition, units, self.decoded)
+        try:
+            inner = Door(w, q, [(0, 1)], self.exe).run(0, 0, 1)
+        except Exception as e:  # noqa: BLE001 - the whole block's partition refused is the door's partition step
+            r.step, r.text = "partition", _err(e)
+            return r
+        r.step, r.text, r.c_s, r.circuit, r.cut = inner.step, inner.text, inner.c_s, inner.circuit, inner.cut
+        r.row_bits, r.gates, r.tmpl_gates = inner.row_bits, inner.gates, inner.tmpl_gates
+        r.seconds |= {k: v for k, v in inner.seconds.items() if k != "block"}
         return r
 
 
@@ -561,10 +686,14 @@ def _words(fn: Any, cut: dict) -> tuple[int, int]:
             sum(-(-sum(out_w[j] for j in lv) // WORD) for _p, lv in outs_p))
 
 
-def block_rows(c_s: bytes, cuts: dict, exe: Callable[[], Path], seed: int = 0, instances: int = 4) -> str:
+#: the evaluations of C_S a whole block's rows are held to: its one unit is one instance an evaluation
+WHOLE_TRACES = 4
+
+
+def block_rows(c_s: bytes, cuts: dict, exe: Callable[[], Path], seed: int = 0, instances: int = 4, traces: int = 1) -> str:
     """The rows of C_S's template held to C_S's own evaluation on random values at its inputs (up to ``instances``
-    of its units): ``yes``, ``refused honest``, ``accepted wrong (...)``, ``too large (N gates)``, ``unlowered`` or
-    ``unchecked``."""
+    of its units, on each of ``traces`` evaluations): ``yes``, ``refused honest``, ``accepted wrong (...)``, ``too large
+    (N gates)``, ``unlowered`` or ``unchecked``."""
     from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_id
@@ -582,7 +711,10 @@ def block_rows(c_s: bytes, cuts: dict, exe: Callable[[], Path], seed: int = 0, i
         t, _log = template_of(c_s, called[0], *_words(fn, cut), exe)
         q = PO.template_instances_query([fn])
         pop = PO.TemplatePartition(D, q).population
-        xs, ys, vb = honest_rows(c_s, q, range(min(pop, instances)), fn, cut, trace_of(c_s, rng))
+        xs, ys, vb = [], [], []
+        for _ in range(traces):
+            x, y, b = honest_rows(c_s, q, range(min(pop, instances)), fn, cut, trace_of(c_s, rng))
+            xs, ys, vb = xs + x, ys + y, vb + b
         v = row_check(t, xs, ys, vb, rng)
     except Unlowered:
         return "unlowered"
@@ -601,23 +733,30 @@ UNITS = ("one", "floor", "plan")
 
 
 def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True, units: str = "one",
-           plan: Sequence[tuple[int, int]] | None = None) -> list[Result]:
+           plan: Sequence[tuple[int, int]] | None = None, form: str = "unit", piece: Any = None,
+           only: str = "") -> list[Result]:
     """Each chosen block through the door's static steps and, with ``rows``, its template's rows (`block_rows`, once
     per template digest and block size). ``units``: ``one``, each chosen unit a block; ``plan``, the block of ``plan``
     (one level of the population) holding each chosen unit, all in that one partition; ``floor``, from each chosen unit
     ``u``, the fewest consecutive units ``k`` of its template, doubling from 1 up to the units of its range from ``u``
-    (that last tried too), for which every step passes, each ``k`` its own partition (`floor_of`)."""
+    (that last tried too), for which every step passes, each ``k`` its own partition (`floor_of`). ``form``: ``unit``,
+    the door's (the one template the block's root calls, lowered); ``whole``, the block's own Program (`whole_circuit`),
+    its rows held on `WHOLE_TRACES` evaluations, once per digest of its C_S."""
     from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     chosen = choose(c, query, how)
     tp = PO.TemplatePartition(R.program(c), query)
+    if only:
+        at = {u: t for _k, t, a, n in tp.ranges for u in (a,)}
+        names = sorted(at)
+        chosen = [x for x in chosen if re.search(only, at[names[bisect.bisect_right(names, x[0]) - 1]])]
     seen: dict[tuple, str] = {}
 
-    def rows_of(r: Result, cut: dict) -> None:
+    def rows_of(r: Result) -> None:
         if rows and r.c_s is not None:
-            key = ("|".join(r.templates), r.units[1] - r.units[0])
+            key = (hashlib.sha256(r.c_s).hexdigest(),) if form == "whole" else ("|".join(r.templates), r.units[1] - r.units[0])
             if key not in seen:
-                seen[key] = block_rows(r.c_s, cut, exe)
+                seen[key] = block_rows(r.c_s, r.cut, exe, traces=WHOLE_TRACES if form == "whole" else 1)
             r.rows = seen[key]
         r.c_s = r.circuit = None
 
@@ -625,18 +764,20 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
         if log:
             log(json.dumps({"block": r.block, "units": list(r.units), "templates": list(r.templates), "shape": r.shape,
                             "step": r.step, "text": r.text[:600], "rows": r.rows, "row_bits": r.row_bits,
-                            "gates": r.gates, "tried": r.tried, "seconds": r.seconds}))
+                            "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "piece": r.piece,
+                            "tried": r.tried,
+                            "seconds": r.seconds}))
         return r
 
     out = []
     if units == "floor":
-        return [said(r) for r in floors(c, query, tp, chosen, exe, rows_of)]
+        return [said(r) for r in floors(c, query, tp, chosen, exe, rows_of, form, piece)]
     if units == "plan":
         if plan is None:
             raise ValueError("--units plan needs the circuit's plan (`plan_blocks`)")
         blocks = sorted(plan)
         starts = [lo for lo, _ in blocks]
-        door = Door(c, query, blocks, exe)
+        door = Door(c, query, blocks, exe, form, piece)
         done = set()
         for lo, _hi, s in chosen:
             k = bisect.bisect_right(starts, lo) - 1
@@ -644,53 +785,61 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
                 continue
             done.add(k)
             r = door.run(k, *blocks[k], s)
-            rows_of(r, door.cuts()[0] or {})
+            rows_of(r)
             out.append(said(r))
         return out
     blocks, ks = tiling(chosen, tp.population)
-    door = Door(c, query, blocks, exe)
+    door = Door(c, query, blocks, exe, form, piece)
     for (lo, hi, s), k in zip(chosen, ks):
         r = door.run(k, lo, hi, s)
-        rows_of(r, door.cuts()[0] or {})
+        rows_of(r)
         out.append(said(r))
     return out
 
 
 def floors(c: bytes, query: dict, tp: Any, chosen: Sequence[tuple[int, int, str]], exe: Callable[[], Path],
-           rows_of) -> list[Result]:
+           rows_of, form: str = "unit", piece: Any = None) -> list[Result]:
     """For each chosen unit ``u``, the block [u, u + k) at the fewest ``k`` (1, 2, 4, ..., then the units of u's range
-    from u, short of the next chosen unit) that passes every step, else at the largest tried; its ``tried`` lists each
-    ``k`` with its class (``through``) and widest row. Round ``i`` puts every unpassed unit's ``i``-th size through
-    one partition."""
+    from u, short of the next chosen unit; under ``whole``, whose block may hold several templates, then `CAP` units
+    from u, the population's end short of that) that passes every step, else at the largest tried; its ``tried`` lists
+    each ``k`` with its class (``through``) and widest row. Round ``i`` puts every unpassed unit's ``i``-th size through
+    as few partitions as hold its blocks apart."""
     starts = sorted(lo for lo, _hi, _s in chosen)
     ks = []
     for lo, _hi, _s in chosen:
         _k, _t, a, n = next(x for x in tp.ranges if x[2] <= lo < x[2] + x[3])
         nxt = starts[bisect.bisect_right(starts, lo)] if bisect.bisect_right(starts, lo) < len(starts) else tp.population
-        most, k, mine = min(a + n, nxt) - lo, 1, []
+        most, k, mine = (min(tp.population, lo + CAP) if form == "whole" else min(a + n, nxt)) - lo, 1, []
         while k < most:
             mine.append(k)
             k *= 2
         ks.append(mine + [most])
     last: list[Result | None] = [None] * len(chosen)
-    cuts: list[dict] = [{} for _ in chosen]
     tried: list[list] = [[] for _ in chosen]
     for i in range(max(map(len, ks), default=0)):
         live = [j for j in range(len(chosen)) if i < len(ks[j]) and (last[j] is None or last[j].step is not None)]
         if not live:
             break
         trial = sorted((chosen[j][0], chosen[j][0] + ks[j][i], chosen[j][2], j) for j in live)
-        blocks, at = tiling([(lo, hi, s) for lo, hi, s, _j in trial], tp.population)
-        door = Door(c, query, blocks, exe)
-        for (lo, hi, s, j), k in zip(trial, at):
-            r = door.run(k, lo, hi, s)
-            r.circuit = None
-            tried[j].append([hi - lo, r.klass or "through", r.row_bits])
-            last[j], cuts[j] = r, door.cuts()[0] or {}
-        del door
+        groups: list[list] = []
+        for x in trial:
+            g = next((g for g in groups if g[-1][1] <= x[0]), None)
+            if g is None:
+                groups.append([x])
+            else:
+                g.append(x)
+        for g in groups:
+            blocks, at = tiling([(lo, hi, s) for lo, hi, s, _j in g], tp.population)
+            door = Door(c, query, blocks, exe, form, piece)
+            for (lo, hi, s, j), k in zip(g, at):
+                r = door.run(k, lo, hi, s)
+                r.circuit = None
+                tried[j].append([hi - lo, r.klass or "through", r.row_bits])
+                last[j] = r
+            del door
     for j, r in enumerate(last):
         r.tried = tried[j]
-        rows_of(r, cuts[j])
+        rows_of(r)
     return last
 
 
@@ -700,10 +849,11 @@ def table(results: Sequence[Result], c_sha256: str = "", built: str = "") -> lis
     rows: dict[str, dict] = {}
     for r in results:
         key = r.klass or "through"
-        row = rows.setdefault(key, {"class": key, "step": r.step or "-", "count": 0, "templates": [], "shapes": [],
+        step = r.step or ("ported" if key != "through" else "-")
+        row = rows.setdefault(key, {"class": key, "step": step, "count": 0, "templates": [], "shapes": [],
                                     "example": {"block": r.block, "units": list(r.units), "templates": list(r.templates),
                                                 "text": r.text[:400]},
-                                    "owner": owner(r.step, r.text) if r.step else "-", "rows": {},
+                                    "owner": owner(step, r.text) if step != "-" else "-", "rows": {},
                                     "c_sha256": c_sha256, "built": built})
         row["count"] += 1
         row["rows"][r.rows] = row["rows"].get(r.rows, 0) + 1
@@ -737,16 +887,17 @@ def floor_table(results: Sequence[Result]) -> list[dict]:
         k = r.units[1] - r.units[0]
         out.append({"template": r.templates[0] if len(r.templates) == 1 else "|".join(r.templates), "first": r.units[0],
                     "passes_at": k if r.step is None else f"never, up to {k}", "row_bits": r.row_bits,
-                    "gates": r.gates, "rows": r.rows, "class": r.klass or "through", "tried": r.tried})
+                    "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "piece": r.piece, "rows": r.rows,
+                    "class": r.klass or "through", "tried": r.tried})
     return out
 
 
 def render_floor(rows: Sequence[dict]) -> str:
-    lines = ["| template | units per block it passes at | widest row (bits) | block's gates | rows | stopped at |",
-             "|---|---|---|---|---|---|"]
+    lines = ["| template | units per block it passes at | widest row (bits) | block's gates | lowered template's gates "
+             "| rows | stopped at |", "|---|---|---|---|---|---|---|"]
     for r in rows:
-        lines.append(f"| {r['template']} | {r['passes_at']} | {r['row_bits']} | {r['gates']} | {r['rows']} "
-                     f"| {r['class'][:120]} |")
+        lines.append(f"| {r['template']} | {r['passes_at']} | {r['row_bits']} | {r['gates']} | {r['tmpl_gates']} "
+                     f"| {r['rows']} | {r['class'][:120]} |")
     return "\n".join(lines)
 
 
@@ -1016,30 +1167,38 @@ def honest_rows(c: bytes, query: dict, units: Sequence[int], fn: Any, cut: dict,
     from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     tp = PO.TemplatePartition(R.program(c), query)
-    params, ret = fn.signature()
-    in_w = [w for _n, t in params for w in t.leaf_widths()]
-    out_w = list(ret.leaf_widths())
-    ins_p, outs_p = ports(fn, cut)
+    out_w = list(fn.signature()[1].leaf_widths())
     xs, ys, vb = [], [], []
     for u in units:
         a = [trace[g] for g in tp.inputs(u)]
         o = [trace[g] for g in tp.outputs(u)]
         if len(o) != len(out_w):
             raise Unchecked(f"unit {u} has {len(o)} output gates of its own for {len(out_w)} return leaves")
-        row: list[int] = []
-        for _p, leaves in ins_p:
-            row += _padded(_bits([in_w[j] for j in leaves], [a[j] for j in leaves]))
-        out: list[int] = []
-        val: list[bool] = []
-        for _p, leaves in outs_p:
-            bits = _bits([out_w[j] for j in leaves], [o[j] for j in leaves])
-            pad = _padded(bits)
-            out += pad
-            val += [True] * len(bits) + [False] * (len(pad) - len(bits))
-        xs.append(row)
-        ys.append(out)
-        vb.append(val)
+        x, y, b = _assigned(fn, cut, a, o)
+        xs.append(x)
+        ys.append(y)
+        vb.append(b)
     return xs, ys, vb
+
+
+def _assigned(fn: Any, cut: dict, a: Sequence[int], o: Sequence[int]) -> tuple[list[int], list[int], list[bool]]:
+    """One instance's committed assignment: its input bits, its padded output bits and which of those are values, from
+    its parameters' leaf values ``a`` and its return's ``o``."""
+    params, ret = fn.signature()
+    in_w = [w for _n, t in params for w in t.leaf_widths()]
+    out_w = list(ret.leaf_widths())
+    ins_p, outs_p = ports(fn, cut)
+    row: list[int] = []
+    for _p, leaves in ins_p:
+        row += _padded(_bits([in_w[j] for j in leaves], [a[j] for j in leaves]))
+    out: list[int] = []
+    val: list[bool] = []
+    for _p, leaves in outs_p:
+        bits = _bits([out_w[j] for j in leaves], [o[j] for j in leaves])
+        pad = _padded(bits)
+        out += pad
+        val += [True] * len(bits) + [False] * (len(pad) - len(bits))
+    return row, out, val
 
 
 def trace_of(c: bytes, rng: random.Random) -> dict[int, int]:
@@ -1360,10 +1519,12 @@ class Finding:
     block: int
 
 
-def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
+def check_case(spec: Spec, exe: Callable[[], Path], seed: int, form: str = "unit", stats: dict | None = None) \
+        -> list[Finding]:
     """Every block of the spec's partition through the door's static steps (one finding a block: ``through``, or the
     step's refusal class), then its lowered template's rows held to the honest and wrong assignments and, where a unit
-    reads another unit of the block, to a wrong read (`wrong_read`)."""
+    reads another unit of the block, to a wrong read (`wrong_read`); under ``whole``, the block's one instance at C's
+    values on in(S) and out(S)."""
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_id
     from verity.circuits.program import input_id
@@ -1373,7 +1534,7 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
     except Exception as e:  # noqa: BLE001 - a spec the builders refuse is no door finding
         return [Finding(f"build: {normalise(_err(e))}", "build", _err(e)[:400], spec.doc(), -1)]
     try:
-        door = Door(c, query, [tuple(b) for b in spec.blocks], exe)
+        door = Door(c, query, [tuple(b) for b in spec.blocks], exe, form)
     except Exception as e:  # noqa: BLE001 - the query or the partition object refusing C is the partition step's wall
         return [Finding(f"partition: {normalise(_err(e))}", "partition", _err(e)[:600], spec.doc(), -1)]
     trace = trace_of(c, rng)
@@ -1392,7 +1553,7 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
             continue
         key = called[0]
         fn = D.defs[key]
-        cut = (door.cuts()[0] or {}).get(key, {})
+        cut = r.cut.get(key, {})
         ins_p, outs_p = ports(fn, cut)
         params, ret = fn.signature()
         in_w = [w for _n, t in params for w in t.leaf_widths()]
@@ -1402,8 +1563,16 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         units = [u for _k, tt, a, n in door.tp.ranges if tt == key for u in range(max(a, lo), min(a + n, hi))]
         try:
             t, _log = template_of(r.c_s, key, n_in, n_out, exe)
-            xs, ys, vb = honest_rows(c, query, units, fn, cut, trace)
+            if form == "whole":
+                x, y, b = _assigned(fn, cut, [trace[g] for g in r.ports[0]], [trace[g] for g in r.ports[1]])
+                xs, ys, vb = [x], [y], [b]
+            else:
+                xs, ys, vb = honest_rows(c, query, units, fn, cut, trace)
             v = row_check(t, xs, ys, vb, rng)
+            if stats is not None:
+                stats["rows"] = stats.get("rows", 0) + 1
+                if r.step is None:
+                    stats["through"] = stats.get("through", 0) + 1
         except Unchecked as e:
             if r.step is not None:
                 continue
@@ -1422,7 +1591,7 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         for w in v.wrong_ok:
             out.append(Finding(f"rows: wrong output accepted: {w} ({door_says}{'' if v.exact else ', sampled'})", "rows",
                                f"free columns reaching an output: {v.free_reaching}; {v.detail}", spec.doc(), k))
-        if v.honest_ok:
+        if v.honest_ok and form == "unit":
             read = wrong_read(c, query, door.tp, units, t, fn, cut, trace)
             if read:
                 out.append(Finding(f"rows: a unit's read of another unit of its block is not tied: the reader given a "
@@ -1482,11 +1651,11 @@ def _odd(c_s: bytes, key: str) -> str:
     return ", odd field" if odd else ", no odd field"
 
 
-def minimise(spec: Spec, klass: str, exe: Callable[[], Path], seed: int, budget: int = 40) -> Spec:
+def minimise(spec: Spec, klass: str, exe: Callable[[], Path], seed: int, budget: int = 40, form: str = "unit") -> Spec:
     """A smaller spec showing the same class: drop root nodes, then template steps, then merge blocks, while it does."""
     def shows(s: Spec) -> bool:
         try:
-            return any(f.klass == klass for f in check_case(s, exe, seed))
+            return any(f.klass == klass for f in check_case(s, exe, seed, form))
         except Exception:  # noqa: BLE001
             return False
 
@@ -1537,31 +1706,35 @@ def _smaller(s: Spec):
             yield Spec(s.templates, root, s.root_params, s.registered, [[0, pop]])
 
 
-def fuzz(seed: int, cases: int, minutes: float, exe: Callable[[], Path], log=None) -> dict:
+def fuzz(seed: int, cases: int, minutes: float, exe: Callable[[], Path], log=None, form: str = "unit") -> dict:
+    """``cases`` drawn cases from ``seed`` for at most ``minutes``; ``checked``: the blocks whose rows were held, and of
+    those the ones every door step took (``through``)."""
     _catalog()
     rng = random.Random(seed)
     t0 = time.perf_counter()
     found: dict[str, list] = defaultdict(list)
     tried = blocks = 0
+    stats: dict = {}
     for i in range(cases):
         if (time.perf_counter() - t0) / 60 > minutes:
             break
         words = rng.random() < WORDS
         s = draw_inner(rng, words) if rng.random() < INNER else draw(rng, small=rng.random() < 0.5, words=words)
         cs = rng.getrandbits(32)
-        fs = check_case(s, exe, cs)
+        fs = check_case(s, exe, cs, form, stats)
         tried += 1
         blocks += len(s.blocks)
         for f in fs:
             found[f.klass].append((i, cs, f))
         if log:
             log(json.dumps({"case": i, "seed": cs, "findings": sorted({f.klass for f in fs})}))
-    summary = {"seed": seed, "cases": tried, "blocks": blocks, "seconds": round(time.perf_counter() - t0, 1), "classes": []}
+    summary = {"seed": seed, "form": form, "cases": tried, "blocks": blocks, "seconds": round(time.perf_counter() - t0, 1),
+               "checked": stats, "classes": []}
     for k, hits in sorted(found.items(), key=lambda kv: -len(kv[1])):
         i, cs, f = min(hits, key=lambda h: len(json.dumps(h[2].spec)))
         small = f.spec
         if k.startswith("rows:"):
-            small = minimise(Spec(**f.spec), k, exe, cs).doc()
+            small = minimise(Spec(**f.spec), k, exe, cs, form=form).doc()
         summary["classes"].append({"class": k, "count": len(hits), "step": f.step, "example": {"case": i, "seed": cs,
                                    "block": f.block, "detail": f.detail[:400], "spec": small}})
     return summary
@@ -1607,6 +1780,64 @@ def case(name: str, exe: Callable[[], Path]) -> dict:
     return rec
 
 
+def internal_case(exe: Callable[[], Path], seed: int = 0) -> dict:
+    """`internal_read`'s block [0, 2) under both forms: the door's steps, the lowered template's input bits, its rows on
+    C's honest values, and on a forged read (the reader's x the writer's output with bit 0 flipped, the reader's output
+    T of that): under ``unit``, whether the reader's copy's rows take it (``forged_accepted``); under ``whole``, whether
+    the block's rows take the block output it gives (``forged_accepted``), with its inputs C's."""
+    from verity.circuits import partition_object as PO
+    from verity.circuits import restrict as R
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.program import input_id
+    _catalog()
+    c, q = internal_read()
+    tp = PO.TemplatePartition(R.program(c), q)
+    rng = random.Random(seed)
+    trace = trace_of(c, rng)
+    out: dict = {"c_sha256": hashlib.sha256(c).hexdigest()}
+    for form in FORMS:
+        r = Door(c, q, [(0, 2)], exe, form).run(0, 0, 2)
+        rec: dict = {"step": r.step, "text": r.text[:400], "ported": r.ported, "row_bits": r.row_bits,
+                     "gates": r.gates, "tmpl_gates": r.tmpl_gates}
+        out[form] = rec
+        if r.c_s is None:
+            continue
+        D = R.program(r.c_s)
+        key, = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+        fn, cut = D.defs[key], r.cut.get(key, {})
+        rec |= {"template": key, "params": [[n, t.leaves] for n, t in fn.signature()[0]],
+                "in_ports": [p for p, _lv in ports(fn, cut)[0]]}
+        try:
+            t, _log = template_of(r.c_s, key, *_words(fn, cut), exe)
+        except Unlowered as e:
+            rec["rows"] = f"unlowered: {str(e)[:300]}"
+            continue
+        if form == "unit":
+            xs, ys, vb = honest_rows(c, q, [0, 1], fn, cut, trace)
+            a = [trace[g] for g in tp.inputs(1)]
+            a[0] ^= 1
+            x, y, b = _assigned(fn, cut, a, [1 - v for v in a[:READ_BITS]])
+            forged = row_check(t, [xs[0], x], [ys[0], y], [vb[0], b], rng)
+            rec["in_bits"] = [len(v) for v in xs]
+        else:
+            ins, outs = r.ports
+            x, y, b = _assigned(fn, cut, [trace[g] for g in ins], [trace[g] for g in outs])
+            xs, ys, vb = [x], [y], [b]
+            o = [trace[g] for g in outs]
+            o[0] ^= 1
+            fx, fy, fb = _assigned(fn, cut, [trace[g] for g in ins], o)
+            forged = row_check(t, [fx], [fy], [fb], rng)
+            rec["in_bits"] = [len(x)]
+        honest = row_check(t, xs, ys, vb, rng)
+        rec |= {"honest_ok": honest.honest_ok, "wrong_accepted": honest.wrong_ok, "exact": honest.exact,
+                "forged_accepted": forged.honest_ok, "forged_exact": forged.exact}
+    return out
+
+
+#: the bits of the internal read: T's x
+READ_BITS = 16
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1617,6 +1848,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--json")
     a.add_argument("--no-rows", action="store_true")
     a.add_argument("--units", choices=UNITS, default="one")
+    a.add_argument("--form", choices=FORMS, default="unit")
+    a.add_argument("--only", default="", help="the chosen blocks whose first unit's template matches this regex")
+    a.add_argument("--piece", help="the Spot difftest executable: under --form whole, Lean's restrict piece on each block")
     a.add_argument("--cap", type=int, default=CAP)
     a.add_argument("--one-circuit", default="", help="the one-circuit commit C's tree holds, where the clone has no such ref")
     b = sub.add_parser("fuzz")
@@ -1625,6 +1859,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     b.add_argument("--minutes", type=float, default=30.0)
     b.add_argument("--lower")
     b.add_argument("--json")
+    b.add_argument("--form", choices=FORMS, default="unit")
     k = sub.add_parser("case")
     k.add_argument("name", choices=sorted(BUILDERS))
     k.add_argument("--lower")
@@ -1633,13 +1868,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     say = lambda s: print(s, flush=True)  # noqa: E731
     if args.cmd == "case":
         _catalog()
-        say("CASE " + json.dumps(case(args.name, exe), default=str))
+        say("CASE " + json.dumps(internal_case(exe) if args.name == "internal_read" else case(args.name, exe), default=str))
         return 0
     if args.cmd == "fuzz":
-        s = fuzz(args.seed, args.cases, args.minutes, exe, log=lambda x: say("FUZZ " + x))
+        s = fuzz(args.seed, args.cases, args.minutes, exe, log=lambda x: say("FUZZ " + x), form=args.form)
         if args.json:
             Path(args.json).write_text(json.dumps(s, indent=1, default=str))
-        say("SUMMARY " + json.dumps({k: s[k] for k in ("seed", "cases", "blocks", "seconds")}))
+        say("SUMMARY " + json.dumps({k: s[k] for k in ("seed", "form", "cases", "blocks", "seconds", "checked")}))
         for c in s["classes"]:
             say("CLASS " + json.dumps(c, default=str))
         return 1 if any(c["class"].startswith("rows:") for c in s["classes"]) else 0
@@ -1649,18 +1884,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     plan, by = plan_blocks(args.circuit, args.cap) if args.units == "plan" else (None, "")
     if by:
         say("PLAN " + json.dumps({"by": by, "blocks": len(plan)}))
+    server = None
+    if args.piece:
+        from verity_difftest import Server
+        server = Server([args.piece])
     results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows, units=args.units,
-                     plan=plan)
+                     plan=plan, form=args.form, piece=server, only=args.only)
     rows = table(results, hashlib.sha256(c).hexdigest(), built_at(args.one_circuit))
     sized = floor_table(results) if args.units != "one" else []
     if args.json:
         Path(args.json).write_text(json.dumps({"circuit": args.circuit, "blocks": args.blocks, "units": args.units,
+                                               "form": args.form,
                                                "plan": by, "table": rows, "sizes": sized}, indent=1))
     print(render(rows))
     if sized:
         print(render_floor(sized))
-    refused = sum(r.step is not None or not r.rows.startswith(("yes", "too large", "not reached", "unchecked")) for r in results)
-    say("CENSUS " + json.dumps({"circuit": args.circuit, "units": args.units, "blocks": len(results), "refused": refused,
+    refused = sum(bool(r.klass) or not r.rows.startswith(("yes", "too large", "not reached", "unchecked")) for r in results)
+    say("CENSUS " + json.dumps({"circuit": args.circuit, "units": args.units, "form": args.form, "blocks": len(results),
+                                "refused": refused,
                                 "classes": len([r for r in rows if r["class"] != "through"])}))
     return 1 if refused else 0
 

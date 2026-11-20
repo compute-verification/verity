@@ -2632,15 +2632,25 @@ def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resol
     record is the one its registration binds (the period's ``circuit``) and names the registration's program, partition
     and run; -> (the period, the record)."""
     d = Path(window_dir)
-    body, rec = (d / "circuit.json").read_bytes(), json.loads((d / "registration.json").read_text())
-    bound = (rec.get("window") or {}).get("circuit")
-    if hashlib.sha512(body).hexdigest() != bound:
-        raise ValueError(f"{d / 'circuit.json'} is not the circuit record the registration binds ({bound})")
-    doc = json.loads(body)
-    if (doc.get("program"), doc.get("partition"), doc.get("run")) != (rec.get("program"), rec.get("partition"),
-                                                                        (rec.get("window") or {}).get("run")):
-        raise ValueError("the circuit record names another program, partition or run than its registration")
+    doc = tied_record((d / "circuit.json").read_bytes(), json.loads((d / "registration.json").read_text()),
+                      d / "circuit.json")
     return window_of_record(doc, sampling_design, resolve), doc
+
+
+def tied_record(body: bytes, registration: Mapping[str, Any], name: str | Path = "circuit.json") -> dict[str, Any]:
+    """The circuit record whose file's bytes are ``body``, refused (ValueError) unless it is the one ``registration`` binds
+    (its period's ``circuit``, the SHA-512 of ``body``) and names the registration's program, partition and run. This tie
+    holds the record's program to the registered one, and a reader's rebuild of the record's program from its template
+    ids (`window_of_record`, `block_counts.pinned`) holds the Definitions to the record's: only the two together make what
+    is counted or checked the registered circuit's, so neither is redundant."""
+    bound = (registration.get("window") or {}).get("circuit")
+    if hashlib.sha512(body).hexdigest() != bound:
+        raise ValueError(f"{name} is not the circuit record the registration binds ({bound})")
+    doc = json.loads(body)
+    if (doc.get("program"), doc.get("partition"), doc.get("run")) != (
+            registration.get("program"), registration.get("partition"), (registration.get("window") or {}).get("run")):
+        raise ValueError("the circuit record names another program, partition or run than its registration")
+    return doc
 
 
 @dataclass(frozen=True)

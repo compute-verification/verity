@@ -464,12 +464,13 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
         history: Mapping[str, Any] | None = None, family: str | None = None,
         key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None,
-        certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
+        certified: Mapping[str, Mapping[str, Any]] | None = None, partition: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one docket, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
     log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
-    let through, ``history`` its history tables, ``certified`` its certified entries, which an interior docket
+    let through, ``history`` its history tables, ``certified`` its certified entries, ``partition`` the window's partition
+    object R2 held the record's digest to (None: the blockless one), which an interior docket
     takes none of), `check_public`'s values and declared items, the receipt's challenger and
     place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
@@ -496,7 +497,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record with round 2's
     `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, None, work_table,
+    args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
                               seed_salt=seed_salt, pool=pool, tied=tied, history=history, certified=certified),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],

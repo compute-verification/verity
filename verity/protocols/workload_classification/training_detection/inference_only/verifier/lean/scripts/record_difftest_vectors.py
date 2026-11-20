@@ -104,10 +104,9 @@ import verity.commitments.periods.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
-from verity.circuits.program import Program
+from verity.circuits.program import Program, input_id
 from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, lane_bounds, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.circuits.edges import INPUT_ID
 
 HERE = Path(__file__).resolve().parent
 
@@ -342,7 +341,7 @@ class Circuit:
         units: dict[str, int] = {}
         for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
             t = desc["callees"][x["fn"]]
-            if not INPUT_ID.match(t):
+            if input_id(t) is None:
                 units[t] = units.get(t, 0) + (x["n"] if x["form"] == "batch" else 1)
         self.root = list(units.items())
         return codec.canonical_json(desc).decode(), codec.program_digest(desc)
