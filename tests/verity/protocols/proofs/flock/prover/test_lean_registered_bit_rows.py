@@ -22,6 +22,10 @@ import numpy as np
 import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
@@ -36,6 +40,25 @@ SCHEMAS = {"x": G.SCHEMA_V2, VALUE: G.SCHEMA_SEG}
 ROWS = "rope.rows"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
+
+
+def _one_value_program() -> tuple[Program, dict]:
+    """`_program`'s with one registered input, `ROWS`, of N + TABLE_ROWS rows: unit u reads row u at x and row
+    N + POSITIONS[u] at cs, the positions the verifier derives from C and the partition."""
+    from verity_flock import subcircuit_templates as TM
+
+    template = TM.rope_head(64).definition()
+    (_, xt), _ = template.signature()[0]
+    ret = template.signature()[1]
+
+    def sig(S):
+        return ((ROWS, Array(N + TABLE_ROWS, xt)),), Array(N, ret)
+
+    def body(B, S, rows):
+        return coll_concat(sig(S)[1], [B.call(template, rows[i], rows[N + p]) for i, p in enumerate(POSITIONS)])
+
+    return (Program(bind(CompositeDefinition("RegisteredRoPEOneValue", 0, (), sig, body, register=False)),
+                    registered=(ROWS,)), P.template_instance_query(template))
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +112,7 @@ def one_value(tmp_path_factory):
 
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
-    program, query = _program()
+    program, query = _one_value_program()
     part = P.partition(program, query)
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
@@ -103,12 +126,13 @@ def one_value(tmp_path_factory):
     regs = {name: RV.Registered.commit(prog, value, rng.integers(0, 1 << 16, (n, WORDS)).tolist(), schema=G.SCHEMA_V2)
             for name, value in (("rows", ROWS), ("again", ROWS), ("other", "other"))}
     reads = {"x": list(range(N)), "cs": [N + p for p in POSITIONS]}
+    assert G.reads(program, query, {ROWS: WORDS}) == {p: {"value": ROWS, "rows": r} for p, r in reads.items()}
     reg = regs["rows"]
-    port = {"value": ROWS, "root": reg.root.hex(), "leaves": n, "words": WORDS, "word_bits": 16,
-            "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
+    own = G.reads_file(program, query, {ROWS: WORDS}, {ROWS: reg.root.hex()}, schemas={ROWS: G.SCHEMA_V2},
+                       positions=False)
+    assert all(own["ports"][p]["domain"] == reg.domain.domain_id.hex() for p in reads)
     out = _out(prog, rng)
-    outs = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
-    own = {"format": G.READS, "ports": {**{p: {**port, "reads": r} for p, r in reads.items()}, "out": outs}}
+    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2}
     (d / "own.json").write_text(json.dumps(own))
     st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, reads=reads, own=own,
                          bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
