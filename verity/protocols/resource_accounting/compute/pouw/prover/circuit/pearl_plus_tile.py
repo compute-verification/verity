@@ -11,8 +11,9 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         -> (key: u16[16], eb_0 … eb_{TN-1}: Array<1, u16[2]>, f_0 … f_7: Array<K/8, u16[2]>)
         key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices: eb's col·TN + j one a field, F's
         t in `F_ROWS` = 8 fields of K/8 (the σ of its unregistered word body behind `WordBits` and `BitsWord{16}`)
-    PearlPlusTileLine_v4{SIDE,FACTOR,G}                 on 16-bit words: the σ of one line's word body on each index
-        (key: u16[16], index: Array<G, u16[2]>) -> Array<G, u16[16]>   `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
+    PearlPlusTileLine_v4{SIDE,FACTOR,G,K,TN}            on 16-bit words: the σ of one line's word body on each index
+        (seed: the seed's output, index: Array<G, u16[2]>) -> Array<G, u16[16]>
+        `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm), key the seed's key field
     PearlPlusGramRow_v5{K,DEV,P}                        on 16-bit words: the σ of one Gram row's word body
         (fb, fa: Array<K, u16[16]>) -> Array<32, u16[2]>       row P of `PearlCGram_v1`, for F_B's column P
 
@@ -25,10 +26,12 @@ The node (`pearl_plus_credited.PearlPlusTileCoreWords_v4`) maps the line over eb
 FACTOR 0, G 1) and over F's 8 groups of K/8 indices (SIDE 0 and 1, FACTOR 1, G K/8), and Calls the Gram row for each of
 F_B's 32 columns: each line unit and each row is independent given the key, so each is a unit of its own when C is laid
 (`verity.circuits.laying`), and eb, fa, fb and g reach the core as wired values. Every unit reads each of its writers'
-output fields whole: a line unit its key and its own indices (the seed writes one field a unit), a Gram row F_B's and
+output fields whole: a line unit the seed's output and its own indices (the seed writes one field a unit), a Gram row F_B's and
 F_A's lines (its column P a static, so F_B's column is no part of a line's field), and the core the lines and the rows.
 A reader of F reads 8 rows of each side whatever K, and a reader of eb one row a line, so that a row of B that the laying
-opens the core into reads its own line whole; Flock gives each row a block reads its own hm96 slot.
+opens the core into reads its own line whole; Flock gives each row a block reads its own hm96 slot. A line unit takes
+the seed's output whole and its key from it, so that each line unit holds a row with a compression before its last block,
+which a Flock block needs: an eb unit is one line, and its key, its index and its line are each shorter.
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's inert-work bound (`inert_bound`):
 
@@ -418,28 +421,30 @@ _LINE_BITS = _on_bits(_LINE, 2, register=False)
 
 def _lines_signature(S):
     sigma = bind(_LINE_BITS, SIDE=S.SIDE, FACTOR=S.FACTOR)
-    (_k, kt), (_i, it) = sigma.signature()[0]
-    return (("key", _words(kt)), ("index", Array(S.G, _words(it)))), Array(S.G, _words(sigma.signature()[1]))
+    (_i, it) = sigma.signature()[0][1]
+    return (("seed", _seed_ret(S)), ("index", Array(S.G, _words(it)))), Array(S.G, _words(sigma.signature()[1]))
 
 
-def _lines_body(B, S, key, index):
+def _lines_body(B, S, seed, index):
     sigma = bind(_LINE_BITS, SIDE=S.SIDE, FACTOR=S.FACTOR)
     (_k, kt), (_i, it) = sigma.signature()[0]
-    lines = B.batch(sigma, _unpack(B, key, kt), _unpack(B, index, Array(S.G, it)), axes=(None, 0))
+    lines = B.batch(sigma, _unpack(B, seed[0], kt), _unpack(B, index, Array(S.G, it)), axes=(None, 0))
     return _pack(B, lines, Array(S.G, _words(sigma.signature()[1])))
 
 
 def _refuse_lines(b: dict) -> str | None:
     g = b.get("G", 1)
-    return _refuse_line(b) or (None if isinstance(g, int) and g >= 1 else f"G is a count of lines, G >= 1: {g!r}")
+    return _refuse_line(b) or _refuse_slices(b) or \
+        (None if isinstance(g, int) and g >= 1 else f"G is a count of lines, G >= 1: {g!r}")
 
 
 PearlPlusTileLineV4 = CompositeDefinition(
-    "PearlPlusTileLine", 4, ("SIDE", "FACTOR", "G"), _lines_signature, _lines_body, refuse=_refuse_lines,
+    "PearlPlusTileLine", 4, ("SIDE", "FACTOR", "G", "K", "TN"), _lines_signature, _lines_body, refuse=_refuse_lines,
     conformance=_NOISE_CONF,
-    doc="G of a -h3 tile's noise lines on 16-bit words: the key's words and each of the G indices' words their bits, "
-        "`PearlPlusTileLine_v2` (σ of `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)) on each index, and each "
-        "line's 32 E4M3 codes back in 16 words, low bit first")
+    doc="G of a -h3 tile's noise lines on 16-bit words: the key's words (the key field of `PearlPlusTileSeed_v3`{K,TN}'s "
+        "output, which the unit takes whole) and each of the G indices' words their bits, `PearlPlusTileLine_v2` (σ of "
+        "`PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)) on each index, and each line's 32 E4M3 codes back in 16 "
+        "words, low bit first")
 
 
 def _gram_row_body(B, S, fb, fa):
@@ -471,9 +476,9 @@ def seed(k: int, tn: int) -> SpecializedDefinition:
 LINES = {"eb": (1, 0), "fa": (0, 1), "fb": (1, 1)}
 
 
-def line(kind: str, g: int) -> SpecializedDefinition:
+def line(kind: str, g: int, k: int, tn: int) -> SpecializedDefinition:
     side, factor = LINES[kind]
-    return bind(PearlPlusTileLineV4, SIDE=side, FACTOR=factor, G=g)
+    return bind(PearlPlusTileLineV4, SIDE=side, FACTOR=factor, G=g, K=k, TN=tn)
 
 
 def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
@@ -486,14 +491,13 @@ def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:
     of indices K/`F_ROWS` lines a unit, and a `gram_row` Call for each of F_B's 32 columns, each reading F_B's and F_A's
     lines whole."""
     s = B.call(seed(k, tn), salt, root, col)
-    key = s[0]
 
     def run(at: int, n: int):
         t = s[1 + at].type
         return Coll(Array(n, t), s.refs.slice(s.type.field_offset(1 + at), s.type.field_offset(1 + at) + n * t.leaves))
 
     def lines(kind: str, n: int, at: int, members: int):
-        out = B.batch(line(kind, n // members), key, run(at, members), axes=(None, 0))
+        out = B.batch(line(kind, n // members, k, tn), s, run(at, members), axes=(None, 0))
         return Coll(Array(n, out.type.elem.elem), out.refs)
 
     eb = lines("eb", tn, 0, tn)
