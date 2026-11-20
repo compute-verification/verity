@@ -3430,7 +3430,8 @@ def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "
                                  "block, against c 7, k 3, n 16 (no count published: n is judged on the blocks' exact "
-                                 "count, held on the node)"]
+                                 "count, held on the node); its basis the registry at the names the record carries, not "
+                                 "the declared circuit (candidate 129.2)"]
     assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
                       str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
                       "--pins", str(d / "weights_registration.json"),

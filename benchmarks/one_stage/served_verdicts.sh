@@ -1132,6 +1132,8 @@ circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted)
   for c in $CLASSES; do circuit "$c" "WC_TIMEOUT=${WC_TIMEOUT:-30m}" "WINDOW-CIRCUIT class $c" || bad=1; done
   return "$bad"
 }
+# block_counts.py rebuilds each template from its id through the registry and compares no digest with the record's
+BASIS_129="its basis the registry at the names the record carries, not the declared circuit (candidate 129.2)"
 block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
   # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
   local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
@@ -1146,7 +1148,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
     if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
          --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
          --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
-      say "BLOCK-COUNTS class $c, the picked window alone: $(said 0 "$D/block-counts-$tag.err" | cut -c1-400)"
+      say "BLOCK-COUNTS class $c, the picked window alone: $(said 0 "$D/block-counts-$tag.err" | cut -c1-400); $BASIS_129"
     else say "BLOCK-COUNTS class $c refused $(failed "$?" "$D/block-counts-$tag.err")"; fi
   done
 }
@@ -1253,7 +1255,7 @@ inference_only() {  # in TREE, once step 3 counted window K's circuit at the cla
     --circuit "$D/window-circuit-w$K-${c//,/-}.json" --registration "$D/advice/w$K/registration.json" --pins "$WREG" \
     "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
-  say "${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
+  say "${out:+$out; $BASIS_129}${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
   return "$rc"
 }
 pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the run serves, asked of the piece itself
