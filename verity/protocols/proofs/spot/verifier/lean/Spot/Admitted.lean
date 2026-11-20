@@ -19,6 +19,7 @@ public import Std.Data.HashMap
 public import Std.Data.HashSet
 import all Init.Util
 meta import Flock
+meta import Flock.JsonParse
 meta import Spot.Restrict
 meta import Spot.Edges
 meta import Circuits.DefinitionDigest

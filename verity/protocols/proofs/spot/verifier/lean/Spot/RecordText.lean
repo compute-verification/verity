@@ -6,6 +6,7 @@ public import Flock.JsonParse
 public import Spot.Wires
 public import Spot.Edges
 meta import Spot.Wires
+meta import Flock.JsonParse
 
 /-!
 # What an execution phase's circuit record's text declares
