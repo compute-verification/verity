@@ -232,10 +232,11 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
 XOR16 = PrimitiveDefinition("CoreSpotXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
                             register=False)
-#: `PAIR` and `TRIPLE` over u16 words, the one form the door lowers (`OneStageZk.admitted`).
-PAIR16 = bind(CompositeDefinition("CoreSpotPair16", 0, (), lambda S: ((("x", Array(2, Value(16))),), Value(16)),
+#: `PAIR` and `TRIPLE` over u16 words, the one form the door lowers (`OneStageZk.admitted`), each `x` a 128-byte row,
+#: past a compression before its last block, which a Flock block's pin needs.
+PAIR16 = bind(CompositeDefinition("CoreSpotPair16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
                                   lambda B, S, x: B.call(XOR16, x[0], x[1]), register=False))
-TRIPLE16 = bind(CompositeDefinition("CoreSpotTriple16", 0, (), lambda S: ((("x", Array(3, Value(16))),), Value(16)),
+TRIPLE16 = bind(CompositeDefinition("CoreSpotTriple16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
                                     lambda B, S, x: B.call(XOR16, B.call(XOR16, x[0], x[1]), x[2]), register=False))
 _MIXED16 = Setup(PN.mixed_population_program([(PAIR16, 2), (TRIPLE16, 3)]),
                  P.template_instances_query([PAIR16.id, TRIPLE16.id]))
