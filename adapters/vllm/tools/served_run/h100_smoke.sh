@@ -10,7 +10,8 @@
 # Does NOT show: an audit, a proof, or a traced Build on the H100.
 # Needs: PY (default the node's /workspace/venv312/bin/python), gpu-lease (it leases one card for the serve alone, at most
 #   LEASE_MIN minutes, default 30), HF_HOME (default /workspace/hf) holding the model; CUDA_HOME (12.9, machine.py's),
-#   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here.
+#   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. WIPE_CMD, set only where the application
+#   lists the wipe, wipes the leased card before serve-openai starts, its answer in the serve's pieces/wipe (unset: no wipe).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory
 #   (named private in the run's private-paths.json); under $OUT the window's registration.json and circuit.json, the
 #   deployment registration and smoke.txt: the reader's counts, the units by source and the registration's digest, then the
@@ -184,6 +185,7 @@ assert (a.fixed, a.window_steps, a.prompt_range, a.varied) == (S, O, f"{P}:{P}",
 print("LOAD PARSED: fixed", a.fixed, "request(s) of", a.prompt_range, "tokens over", a.window_steps, "window steps, release run", a.release[:8])
 EOF
   echo "LEASE: ${LEASE[*]}"
+  [ -z "${WIPE_CMD:-}" ] || echo "WIPE under the lease before serve-openai: $WIPE_CMD $D all $D/pieces/wipe"
   window_commit_of 0
   CUDA_VISIBLE_DEVICES= "$PY" - "${WC[@]}" <<'EOF'
 import runpy, sys
@@ -199,7 +201,12 @@ EOF
   exit 0
 fi
 
-if [ "${1:-}" = card ]; then  # under the lease: the serve, the load and the server's stop, nothing else
+if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application lists it, the serve, the load and the server's stop
+  if [ -n "${WIPE_CMD:-}" ]; then  # the wipe's command as served_verdicts.sh's serve() calls it, before the engine loads
+    mkdir -p "$D/pieces/wipe"; rc=0
+    timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$D/pieces/wipe" > "$SR/wipe.log" 2>&1 || rc=$?
+    printf '{"limit": "%s", "rc": %d}\n' "${WIPE_TIMEOUT:-20m}" "$rc" > "$D/pieces/wipe/piece.json"
+  fi
   (cd adapters/vllm && exec "$PY" -m verity_vllm.pipeline.cli "${SERVE[@]}") > "$SR/serve.log" 2>&1 &
   SERVER=$!
   listened=0
