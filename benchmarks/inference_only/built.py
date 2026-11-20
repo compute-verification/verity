@@ -101,12 +101,11 @@ def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
     """One block's work: one slot of the class's fixed load (`window_class.Tables.schedule`) priced as
     `served_shares.step_macs` prices a served step, and its total in the policy's unit (`policy.TOTAL`)."""
     import served_shares as SS
-    import served_verdicts as SV
     from verity_vllm.program.predict.window_class import Tables
 
-    if model not in SS.MODELS or model not in SV.DECLARED:
-        raise ValueError(f"served_shares.MODELS and served_verdicts.DECLARED hold no shapes for {model!r}, so a block's "
-                         f"work isn't priced: add them there (they hold {sorted(SS.MODELS)})")
+    if model not in SS.MODELS:
+        raise ValueError(f"served_shares.MODELS holds no shapes for {model!r}, so a block's work isn't priced: add them "
+                         f"there (it holds {sorted(SS.MODELS)})")
     macs = dict.fromkeys(P.WORK, 0)
     for rows in Tables.schedule(P.class_of(cls)):
         mine = [r for r in rows if r[0] == 0]
