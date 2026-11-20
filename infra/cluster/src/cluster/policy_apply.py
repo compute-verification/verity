@@ -4,9 +4,9 @@ with `--apply` that change written on the key's node and read back.
 The keys and their state are `policy.diff`'s, read over the same SSH path, and a key is applied only when it is `drift` and
 its surface has an applier (`applier`):
 
-- `lean-slots.NAME`, `check-slots.NAME` and `fill.cpu-sets.OWNER`: one line of a slot file (`NAME VALUE`), as lean_slot.py,
-  slot.py and fill_runner.py read it each time. The line naming it is commented out (kept, with who and when) and the value in
-  force written after it, or appended when no line names it; a file where two lines name it is fixed by hand.
+- `check-slots.NAME` and `fill.cpu-sets.OWNER`: one line of a slot file (`NAME VALUE`), as slot.py and fill_runner.py read
+  it each time. The line naming it is commented out (kept, with who and when) and the value in force written after it, or
+  appended when no line names it; a file where two lines name it is fixed by hand.
 - `direct-gpus`, `direct-cpus`: gpu-lease's direct-run maps, written whole as the one value (gpu-lease reads the file whole, so
   no comment may stay in it).
 - `user-cpuset.delegate`: the drop-in's `Delegate=` line, replaced in place (so converged it is again deploy.toml's file),
@@ -14,14 +14,13 @@ its surface has an applier (`applier`):
   had. Never `systemctl revert`, which would drop the runtime AllowedCPUs vy-device-cores sets. On vy-nebius-2 it is planned
   only (`PLAN_ONLY`): vy-device-cores owns node 2's cpusets.
 
-Anything else (lease pools, Kueue's queues, the node's pools, booked windows) has no applier and is said so and skipped; so is
-a key that is unknown (never applied: unread is not as declared) or undeclared (no value in force to converge to).
+Anything else (booked windows) has no applier and is said so and skipped; so is a key that is unknown (never applied: unread is not as declared) or undeclared (no value in force to converge to).
 
 Every file is read exactly (`exact`) before it is planned, and the write (`script`) runs as one command on the node: under the
 override log's lock it checks that each file and the log are byte for byte what was planned from (else it writes nothing),
 writes each file, and appends one `apply` record per key to the node's hash-chained log (`policy.OVERRIDES`: key, value,
-was, by, reason, path, the file's sha256 before and after). On node 2 every command starts with node 2's gate, so nothing is
-read or written while a timed window is on or near; a plan may read a node whose fill runner isn't running (`policy.N2_GATE`'s
+was, by, reason, path, the file's sha256 before and after). Every command starts with node 2's gate, so nothing is read or
+written while a timed window is on or near; a plan may read a node whose fill runner isn't running (`policy.N2_GATE`'s
 stale form, said so in the output), but a write needs the runner's fresh quiet status (`policy.N2_WRITE_GATE`). After it,
 the node is read again, and each applied key must read as in force.
 """
@@ -40,15 +39,9 @@ from typing import Any, Callable
 from . import ledger, nebius2, policy, status
 
 #: a key's surface (and, for `fill`, its third part) and how its file is edited
-EDITS = {"lean-slots": "line", "check-slots": "line", "fill.cpu-sets": "line", "direct-gpus": "whole", "direct-cpus": "whole",
+EDITS = {"check-slots": "line", "fill.cpu-sets": "line", "direct-gpus": "whole", "direct-cpus": "whole",
          "user-cpuset": "delegate"}
-NO_APPLIER = {
-    "lease-pool": "n1_lease.py takes max, borrow and borrow-until from the policy under $VY_POOL_POLICY; the rest is its tmux "
-                  "pane's environment, set by hand",
-    "kueue": "a ClusterQueue is sky/kueue.yaml's, applied by cluster_up.sh",
-    "pools": "the node's own `pools`, which the planner reads from the description (checks: the check slots' CPUs)",
-    "fill.window": "a timed window is booked by hand in fill/windows",
-}
+NO_APPLIER = {"fill.window": "a timed window is booked by hand in fill/windows"}
 #: (node, surface): why that surface is planned and never written there
 PLAN_ONLY = {(nebius2.NODE, "user-cpuset"): "vy-device-cores owns node 2's cpusets (user.slice 0-119, its device cores "
                                             "120-127): write the drop-in by hand, never `systemctl revert`"}
@@ -100,7 +93,7 @@ def surface(key: str) -> str:
 
 def path_of(key: str) -> str:
     s = surface(key)
-    return {"lean-slots": policy.LEAN_SLOTS, "check-slots": policy.CHECK_SLOTS, "fill.cpu-sets": f"{policy.FILL}/cpu-sets",
+    return {"check-slots": policy.CHECK_SLOTS, "fill.cpu-sets": f"{policy.FILL}/cpu-sets",
             "user-cpuset": policy.USER_CPUSET}.get(s) or policy.DIRECT[s]
 
 
@@ -173,16 +166,10 @@ def stamp(t: int) -> str:
     return datetime.fromtimestamp(t, UTC).strftime(policy.UNTIL_FORMAT)
 
 
-def _gate(node: str, write: bool = False) -> str:
-    if node != nebius2.NODE:
-        return "set -f\n"
-    return policy.N2_WRITE_GATE if write else policy.N2_GATE
-
-
-def exact(node: str, paths: list[str]) -> str:
-    """The command that reads `paths` byte for byte (base64), after node 2's gate there."""
+def exact(paths: list[str]) -> str:
+    """The command that reads `paths` byte for byte (base64), after node 2's gate."""
     q = " ".join(shlex.quote(p) for p in paths)
-    return _gate(node) + (f'for f in {q}; do if [ -e "$f" ]; then echo "{B64_MARK}$f"; base64 -w0 "$f" || exit 1; echo; '
+    return policy.N2_GATE + (f'for f in {q}; do if [ -e "$f" ]; then echo "{B64_MARK}$f"; base64 -w0 "$f" || exit 1; echo; '
                           f'else echo "{policy.ABSENT_MARK}$f"; fi; done\n')
 
 
@@ -276,7 +263,7 @@ def script(p: Plan) -> str:
     q = shlex.quote
     # a failure prints why and exits 0, so what was written before it still reaches the caller (ssh's runner drops stdout
     # on a nonzero exit)
-    out = [_gate(p.node, write=True),
+    out = [policy.N2_WRITE_GATE,
            'fail() { echo "failed $1"; exit 0; }\n',
            f"mkdir -p {q(str(Path(log).parent))} || fail 'to make the log directory'\n",
            f"exec 9>>{q(log + '.lock')} || fail 'to open the log lock'\nflock -x 9 || fail 'to lock the log'\n",
@@ -313,7 +300,7 @@ def _read_node(keys: dict[str, policy.Key], node: str, run: Callable[[str], str]
         lv = policy.live(node, raw, now)
         return policy.diff(policy.effective(keys, lv.overrides, now, node), node, lv, now), lv
     except Exception as e:  # noqa: BLE001  (as main_diff: output of any unexpected shape is unknown, never drift)
-        lv = policy.Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"}, {})
+        lv = policy.Live({}, {node: f"its live policy couldn't be parsed: {type(e).__name__}: {e}"})
         return policy.diff(keys, node, lv, now), lv
 
 
@@ -330,7 +317,7 @@ def node_plan(keys: dict[str, policy.Key], node: str, run: Callable[[str], str],
     if not paths:
         return Plan(node, todo, quiet=lv.quiet)
     try:
-        refused, files = read_exact(run(exact(node, [*paths, policy.OVERRIDES])))
+        refused, files = read_exact(run(exact([*paths, policy.OVERRIDES])))
         if refused is None:
             records = policy.read_overrides((files.get(policy.OVERRIDES) or b"").decode(), f"{node}:{policy.OVERRIDES}")
             if records != lv.overrides:
