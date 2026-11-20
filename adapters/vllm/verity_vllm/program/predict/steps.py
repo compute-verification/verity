@@ -121,7 +121,6 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from typing import Any
 
 import verity_vllm.pipeline.advice_code.format as I1
@@ -149,8 +148,7 @@ from .hits import Rows, check_sources, hit_chunks, producers_of
 from .ingress_policy import ingress_body, policy_of, request_of
 from .phi import Phi
 from .segment import edge_groups, edge_of, launch_of, segment_of, seqlen_q_of
-from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
-from .traced import trace_commands as trace_commands
+from .traced import trace_dir
 
 SCHEMA = COMPILED_STEPS_SCHEMA
 @dataclass(frozen=True)
@@ -725,26 +723,6 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             discarded += [(s, row.request, start, n) for start, n in past]
         steps.append(live)
     return Plan(units, steps, discarded, dict(sorted(refused.items())), idle)
-
-
-def compare(summary: dict, root: str) -> dict:
-    """Each compiled request Program's digest against its trace's (`<root>/<trace_dir>/result.json`): equal, different, or no trace."""
-    out, seen = [], set()
-    for u in summary["requests"]:
-        if u is None or (d := trace_dir(u)) in seen:
-            continue
-        seen.add(d)
-        res = Path(root, d, "result.json")
-        doc = json.loads(res.read_text()) if res.exists() else {}
-        program = doc.get("program")   # a trace that built no Program states none: no digest, and the unit counts no_trace
-        traced = (program if program else {}).get("digest")
-        why = ((NO_EDGE_TRACE if u.get("edge") else NO_PARTIAL_TRACE if u.get("entries") else None) if not doc else
-               str(doc.get("message") or doc.get("unsupported"))[:400])
-        out.append({"unit": d, "compiled": u["digest"], "traced": traced,
-                    "outcome": "no_trace" if not traced else ("equal" if traced == u["digest"] else "different"),
-                    **({} if traced or why is None else {"trace_error": why})})
-    n = {k: sum(1 for x in out if x["outcome"] == k) for k in ("equal", "different", "no_trace")}
-    return {"schema": SCHEMA + "/comparison", "compiler": summary["compiler"], "units": out, **n, "mismatches": n["different"] + n["no_trace"]}
 
 
 compile_steps = cyclic_gc_off(compile_steps)

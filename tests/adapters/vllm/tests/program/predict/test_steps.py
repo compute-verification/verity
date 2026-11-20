@@ -8,8 +8,6 @@ import json
 import os
 import random
 import re
-import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
 from typing import Any
@@ -35,7 +33,6 @@ from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.build_instances import check_rows
 from verity_vllm.program.frontend import seed_rule as SEED
 from verity_vllm.program.frontend import stop_rule as SR
-from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict import batch as B
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import (
@@ -51,14 +48,12 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import (
     Registered,
     RowRef,
-    compare,
     compile_steps,
     launch_class,
     plan_steps,
     policy_of,
     request_program,
     stop_of,
-    trace_commands,
     trace_dir,
 )
 
@@ -369,9 +364,6 @@ def test_each_request_program_returns_its_length_rule_as_its_last_check():
         assert request_program(reg, u).checks == {"output": 1, "accept": 1, "of": [SR.what(u.stop)]}
     s = c.summary()["requests"]
     assert [r["stop"] for r in s] == [u0.stop, u1.stop] and trace_dir(s[0]) != trace_dir(s[1])
-    cmds = trace_commands(c.summary(), reg, "/out")
-    assert sorted(cmd[cmd.index("--stop") + 1] for cmd in cmds) == sorted(json.dumps(x, sort_keys=True, separators=(",", ":"))
-                                                                          for x in (u0.stop, u1.stop))
 
 
 @pytest.mark.parametrize("finish, ids, ok", [
@@ -483,8 +475,6 @@ def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     assert c.workload.requests[1].prefix == {"rows": 16, "producers": [0]} and c.workload.requests[0].prefix is None
     s = c.summary()
     assert s["requests"][1]["C"] == 16 and trace_dir(s["requests"][1]).rpartition("_s")[0] == "build_request_LP24_T2_C16_greedy"
-    [_, cmd] = trace_commands(s, reg, "/t")
-    assert cmd[cmd.index("--cached") + 1] == "16" and "--cached" not in trace_commands(s, reg, "/t")[0]
 
 
 @pytest.mark.parametrize("body", [GREEDY, STOCH])
@@ -503,7 +493,7 @@ def test_a_recomputed_cache_hit_compiles_to_the_uncached_request_program(body):
     assert c.steps[1] == [RowRef(0, c.requests[0].digest, 24, 1, 1), RowRef(1, u.digest, 16, 8, 1)]
     assert [r.prefix for r in c.workload.requests] == [None, None]
     s = c.summary()
-    assert s["requests"][1]["recomputed"] == 16 and all("--cached" not in cmd for cmd in trace_commands(s, reg, "/t"))
+    assert s["requests"][1]["recomputed"] == 16 and s["requests"][1]["C"] == 0
     if body is GREEDY:
         assert u.digest == _whole(reg, 24, 2, 3)
 
@@ -597,12 +587,10 @@ def test_a_target_whose_tile_doesnt_read_the_launch_compiles_each_request_as_alo
     assert [u.digest for u in c.requests] == [compile_steps(reg, *_alone(u.LP, u.T + 1)).requests[0].digest for u in c.requests]
 
 
-def test_a_launch_context_traces_at_its_build_and_names_its_trace(tmp_path):
-    """The traced side builds a unit with a launch context at `--launch-context [n0, n1, ...]`, in a trace dir of its own."""
+def test_a_launch_context_names_its_trace_dir():
+    """A unit with a launch context has a trace dir of its own (`trace_dir`)."""
     reg, _ = _wide(H200)
     s = compile_steps(reg, *_decode_beside()).summary()
-    cmds = trace_commands(s, reg, str(tmp_path))
-    assert [json.loads(c[c.index("--launch-context") + 1]) if "--launch-context" in c else None for c in cmds] == [[8, 40, 1, 1], None]
     assert trace_dir(s["requests"][0]) != trace_dir({**s["requests"][0], "seqlen_q": None})
 
 
@@ -832,11 +820,10 @@ def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
         compile_steps(_registered(), *_mixed())
 
 
-def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path):
+def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs():
     """At TP2 each rank compiles the node's advice to its own rank's request Programs (its shards, a `peers_*` Input per collective)
     in the registered compiler's form, which the TP2 Build of record isn't: there the last layer's rows before the prefill's last end
-    in units no output reads, its reduces among them. The rows are the one-rank compilation's, and the traces are the rank's
-    `--dead-free` Builds."""
+    in units no output reads, its reduces among them. The rows are the one-rank compilation's."""
     from verity_torch.prune import dead_units
     advice, ingress = _mixed()
     one = compile_steps(_registered(), advice, ingress)
@@ -853,10 +840,7 @@ def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path
             kept = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": u.policy}), "request", LP=u.LP, T=u.T).program.fn.body
             assert {kept.nodes[i].fn.id.split("{")[0] for i in dead_units(kept)} >= {"AllReduce2_v1", "Attention_v5"}
         digests.append(sorted(c.programs))
-        cmd = trace_commands(c.summary(), reg, str(tmp_path))[0]
-        assert cmd[-5:] == ["--tp", "2", "--rank", str(rank), "--dead-free"]
     assert len({*digests[0], *digests[1], *one.programs}) == 3 * len(one.programs)
-    assert "--tp" not in trace_commands(one.summary(), _registered(), str(tmp_path))[0]
 
 
 def test_a_target_without_batch_invariance_outside_class_g_is_refused():
@@ -939,8 +923,8 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     """The B8 row's requests scheduled under a long-prefill threshold of 64 and a step budget of 160 (no recorded class-G window
     chunks a prefill, so its advice is this scheduler's): each request's prefill chunks are its prompt rows in the steps that ran
     them, each at most 64, the budget cutting some; its launch context is, per chunk and then per decode, every row of that step;
-    alone (R2's solo advice, each row a launch of its own) it plans to the same chunks; and each unit's trace is the Build at its
-    launch context, a chunked unit's with its chunks (the chunked request wrapper), which the Build parses back."""
+    alone (R2's solo advice, each row a launch of its own) it plans to the same chunks; and a chunked unit's trace dir names its
+    chunks."""
     advice, ingress, steps = _chunked_b8(160, 64)
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 64, "max_num_batched_tokens": 160})
     plan = plan_steps(reg, advice, ingress)
@@ -960,20 +944,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     summary: dict[str, Any]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}", "stop": u.stop} for u in plan.requests]}
-    (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
-    assert long[long.index("--max-model-len") + 1] == "2316"
-    cmds = trace_commands(summary, reg, str(tmp_path))
-    assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
-    for u, c in zip(plan.requests, cmds):
-        assert json.loads(c[c.index("--target") + 1])["card"] == reg.phi.target["card"] == "h200-sxm-141gb" and "--device-name" not in c
-        assert c[c.index("--max-model-len") + 1] == str(max(2048, u.LP + u.T))
-        ctx = parse_launch_context(c[c.index("--launch-context") + 1])
-        assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
-        assert LC.bad_chunks(ctx, "request", u.LP, u.T, u.C) is None
-    assert LC.bad_chunks({**ctx, "chunks": [1, *ctx.get("chunks", [u.LP])]}, "request", u.LP, u.T, u.C)["reason"] == "launch_context"
-    got = compare(summary, str(tmp_path))
-    assert (got["no_trace"], [x.get("trace_error") for x in got["units"]]) == (8, [None] * 8)
 
 
 def test_a_chunked_request_forwards_each_chunk_at_its_launch_step_and_samples_after_the_last():
@@ -996,42 +967,6 @@ def test_a_chunked_request_forwards_each_chunk_at_its_launch_step_and_samples_af
     toks = drive(M(), "request", list(range(20)), M=1, pos0=0, LP=20, T=2, policy=None, batch=[[]] * 5, chunks=(8, 8, 4))
     assert len(toks) == 3 and seen == [("forward", 0, 0, 8), ("forward", 1, 8, 8), ("forward", 2, 16, 4), ("sample", 2, 0, 19),
                                        ("forward", 3, 20, 1), ("sample", 3, 1, 20), ("forward", 4, 21, 1), ("sample", 4, 2, 21)]
-
-
-def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_steps():
-    """The Build's `vllm_meta.ChunkedGreedyRequest` under the launch context `trace_commands` gives a chunked unit: one forward a
-    chunk at its launch step and positions, the sample after the last chunk only, then each decode at the step after, as `drive`
-    builds it; a chunked request with a cached prefix or another policy is refused by name."""
-    import torch
-
-    from verity_vllm.program.frontend import vllm_meta as vm
-    from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-    seen: list[tuple[Any, ...]] = []
-
-    class Toy(torch.nn.Module):
-        def forward(self, ids, positions):
-            seen.append(("forward", OB._OBSERVED["launch_region"], int(positions[0]), len(ids)))
-            return torch.zeros((len(ids), 4))
-
-        def compute_logits(self, hidden):
-            seen.append(("sample", OB._OBSERVED["launch_region"], len(hidden)))
-            return torch.zeros((len(hidden), 8))
-
-    OB.observe_launch_context(parse_launch_context({"batch": [[[8, 0]], [[8, 8]], [[4, 16]], [[1, 20]], [[1, 21]]], "chunks": [8, 8, 4]}))
-    try:
-        mod, (prompt,) = vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8, 4])
-        toks = mod(torch.zeros(prompt.shape, dtype=torch.int32))
-    finally:
-        OB.clear_observations()
-    assert type(mod) is vm.ChunkedGreedyRequest and mod.DERIVE_SOURCE == vm.GreedyRequest.DERIVE_SOURCE and len(toks) == 3
-    assert seen == [("forward", (0, "tokens"), 0, 8), ("forward", (1, "tokens"), 8, 8), ("forward", (2, "tokens"), 16, 4),
-                    ("sample", (2, "sampled"), 1), ("forward", (3, "tokens"), 20, 1), ("sample", (3, "sampled"), 1),
-                    ("forward", (4, "tokens"), 21, 1), ("sample", (4, "sampled"), 1)]
-    for kw in ({"C": 4}, {"sampling": {"kind": "stochastic"}}):
-        with pytest.raises(ValueError, match="a prefill in chunks for the greedy request without a cached prefix only"):
-            vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8, 4], **kw)
-    with pytest.raises(ValueError, match=re.escape("prefill chunks [8, 8]: a chunked request's chunks are its 20 prompt rows")):
-        vm.make_wrapper("request", Toy(), LP=20, T=2, chunks=[8, 8])
 
 
 def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
@@ -1065,7 +1000,7 @@ def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_p
 def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_path):
     """GLM-5.3's B8 mixed-arrivals row, its schedule as a window's advice under a class-G registration: each request's launch context,
     read from the advice's steps, is the one its Build was traced at (the row's `--launch-context`), its eight shapes are the traced
-    Build's eight request Programs, and each trace command builds at its unit's launch context, into a dir of its own."""
+    Build's eight request Programs, each with a trace dir of its own."""
     reg, (advice, ingress, traced) = _class_g(tmp_path), _b8_window()
     check_phi(reg.phi, Net.DOMAIN)
     plan = plan_steps(reg, advice, ingress)
@@ -1075,9 +1010,7 @@ def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_p
     assert sorted(f"build_request_LP{u.LP}_T{u.T}" for u in plan.distinct()) == sorted(record)
     summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(), "stop": u.stop}
                             for u in plan.requests]}
-    cmds = trace_commands(summary, reg, str(tmp_path))
-    assert [json.loads(c[c.index("--launch-context") + 1]) for c in cmds] == [{"batch": u.batch()} for u in plan.requests]
-    assert len({c[c.index("--out") + 1] for c in cmds}) == 8 and trace_dir(plan.requests[0]).startswith("build_request_LP11_T12_greedy_l")
+    assert len({trace_dir(u) for u in summary["requests"]}) == 8 and trace_dir(plan.requests[0]).startswith("build_request_LP11_T12_greedy_l")
     assert trace_dir(plan.requests[0]) == trace_dir(summary["requests"][0])
 
 
@@ -1467,27 +1400,6 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
 
 
 @pytest.mark.slow
-def test_a_class_g_chunked_prompts_traced_build_is_its_compiled_program(tmp_path):
-    """The chunked prompt above (q0's 20 prompt tokens in chunks of 8, 8 and 4 beside q1, then two decodes), compiled at rank 0,
-    and its trace: the command `trace_commands` gives it (the Build's chunked request wrapper at its launch context, as a served
-    window's trace runs it), run on the pinned vLLM with GLM-5.3's config of record and no CUDA device visible, as the row driver
-    runs a Build (`gpu_lease.hide_devices`; vLLM keeps Triton then). `compare` finds the two digests equal. What no cheaper test
-    can: that the Build's chunked request wrapper traces the Program the compiler predicts. It needs the pinned vLLM (a pod's
-    venv), so it skips without it; its Build takes minutes on one core."""
-    pytest.importorskip("vllm")
-    advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
-                                (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], _scheduled([(0, 20, 3), (1, 6, 2)], 16, 8))
-    reg = _class_g(tmp_path / "hub", engine={"long_prefill_token_threshold": 8, "max_num_batched_tokens": 16})
-    s = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True).summary()
-    (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
-    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [8, 8, 4]
-    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
-                   env={**os.environ, "HF_HUB_CACHE": str(tmp_path / "hub"), "CUDA_VISIBLE_DEVICES": ""})
-    got = compare(s, str(tmp_path / "traces"))
-    assert (got["equal"], got["mismatches"]) == (1, 0), got["units"]
-
-
-@pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("VERITY_VLLM_CLASS_G_WINDOW") != "1",
                     reason="VERITY_VLLM_CLASS_G_WINDOW=1: GLM-5.3's B8 requests as one window in prefill chunks, its eight request "
                            "Programs built at rank 0 (about twenty minutes and 35 GB on one core)")
@@ -1499,25 +1411,6 @@ def test_a_class_g_window_of_long_prompts_compiles_in_chunks(tmp_path):
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 64, "max_num_batched_tokens": 160})
     c = compile_steps(reg, advice, ingress)
     assert c.batch_rule is None and len(c.programs) == 8 and sum(len(u.chunks) > 1 for u in c.requests) == 5
-
-
-def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
-    reg = _registered()
-    s = compile_steps(reg, *_mixed()).summary()
-    cmds = trace_commands(s, reg, str(tmp_path))
-    names = [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds]
-    assert [n.rpartition("_s")[0] for n in names] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1-r2"]
-    assert [json.loads(c[c.index("--stop") + 1]) for c in cmds] == [_spec(8, 3, 4), _spec(5, 2, 3)]
-    assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "rid": 2}
-    assert json.loads(cmds[0][cmds[0].index("--target") + 1]) == RTXPRO6000
-    (tmp_path / trace_dir(s["requests"][0])).mkdir()
-    (tmp_path / trace_dir(s["requests"][0]) / "result.json").write_text(json.dumps({"program": {"digest": s["requests"][0]["digest"]}}))
-    (tmp_path / trace_dir(s["requests"][1])).mkdir()
-    (tmp_path / trace_dir(s["requests"][1]) / "result.json").write_text(json.dumps({"ok": False, "message": "boom"}))
-    got = compare(s, str(tmp_path))
-    assert (got["equal"], got["different"], got["no_trace"], got["mismatches"]) == (1, 0, 1, 1)
-    assert got["units"][1]["trace_error"] == "boom"
-    assert (s["schema"], got["schema"]) == ("verity-vllm/compiled-steps/v2", "verity-vllm/compiled-steps/v2/comparison")
 
 
 @pytest.mark.slow
