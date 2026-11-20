@@ -2036,6 +2036,9 @@ trap 'rc=$?; publish; exit $rc' EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 tree_sha | tee "$OUT/machine.txt"
+for v in PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM; do
+  [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is refused: the tied leg is deleted: no window is tied to a W"; exit 3; }
+done
 if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree's, on a node with the audit's memory
   [ -z "$CLASH" ] || { say "PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; exit 3; }
   why=$(short_of_memory) && { say "PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and $why"; exit 3; }
@@ -2127,9 +2130,6 @@ if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ] && hold_
     say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3 ;;
   esac
 fi
-for v in PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM; do
-  [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is refused: the tied leg is deleted: no window is tied to a W"; exit 3; }
-done
 # V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
 [ -z "$V3C" ] || [ -n "$COMPOSE" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
   || { say "PREFLIGHT: V3C_LAW is the rate V3c's window is committed under and its audit states to its stream, rate:NUM/DEN or stratified-rate:NUM/DEN, not $V3C_LAW: in place of a fixed count K, state K over the proof blocks the class's window registers (rate:K/N or stratified-rate:K/N)"; exit 3; }
