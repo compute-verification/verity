@@ -73,7 +73,6 @@ SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "calibration/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
-    "tests/test_retired_terms.py": "the prose lint that holds a few of the terms at zero names them to find them",
 }
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
@@ -88,7 +87,7 @@ LIVE = {
     "slack": "the table keeps its other senses, Slack among them",
     "tap": "vLLM's capture taps are live; the network attester's are retired as \"uplink tap\" and \"the auditor's tap\"",
     "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
-                    "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
+                    "(`benchmarks/rho`'s `Remote`) is live",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
     "M2": "a label the code uses for other things",
     "layer 1": "a model's layers", "layer 2": "a model's layers", "layer 3": "a model's layers",
@@ -142,6 +141,152 @@ LIVE_CAPS = ("verity/protocols/resource_accounting/compute/pouw/prover/circuit/l
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_live.py",
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_window.py",
              "tests/verity/protocols/resource_accounting/compute/pouw/verifier/window_vectors.py")
+
+#: The retired terms `research msg` warns on, and what to write instead (`tools/research/src/research/vocabulary.py`
+#: reads these assignments): `TERMS`, retired everywhere but the Lean, and `DOC_TERMS`, retired in the maintained docs'
+#: prose, each with its pattern; `_CODE` is a code span or fence, where a term is a mention.
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
+         "faulty ANDs": "incorrect ANDs"}
+_SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
+DOC_TERMS = {
+    "wrong unit, incorrect unit": "incorrect proof block",
+    "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
+    "isolation unit, IU": "inference block",
+    "replay unit": "replay block",
+    "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
+    "verity example, verity demo": "verity run NAME",
+    "components, the composite's product": "subprotocols, composition",
+    "firewall": "ZK server",
+    "warden, network warden": "the network attester (what keeps the older name, a format's value or a name a caller "
+                              "outside the tree gives, stays in backticks: tests/lint/retired_terms.md)",
+    "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
+                                                      "stays in backticks)",
+    "coin server, coin source, coin device, randomness source": "the challenger",
+    "salted leaf, salted commitment": "hiding leaf, hiding commitment",
+    "acceptance probability P_a, a sampling design's acceptance probability": "miss probability (detection is its "
+                                                                              "complement; a prover's acceptance probability "
+                                                                              "keeps the word)",
+    "egress cone": "reach (E)",
+    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "block-scaled, blockwise, scale block": "scale group",
+    "production": "serving, or proving",
+    "builder, advice compiler, circuit builder": "registered compiler",
+    "declared advice": "advice",
+    "declared circuit": "registered circuit",
+    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+                                                             "the registered compiler turns into the execution block",
+    "registered work": "registered circuit (D)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
+    "prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
+        "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
+        "Flock's prover, a proof's messages, a cheating prover)",
+    "onsite deployment, remote deployment, composite protocol": "configuration (onsite or remote, the Lean's `Composite`)",
+    "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
+                                       "theorem's hypothesis stays a premise)",
+    "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "C-Flock": "Flock (Succinct's is upstream Flock)",
+    "netlist": "a private circuit, or the circuit's description",
+    "M0": "Flock's circuit prover",
+    "IR, Verity IR": "circuit or Program (`verity.circuits`)",
+    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
+    "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
+    "declaration block, declaration period": "execution block, execution phase",
+    "uplink tap, the auditor's tap": "the network attester, and its records network attestations",
+    "timed verifier": "the memory attester",
+    "network transparency": "network accounting",
+    "prover gateway, verifier gateway": "the ZK server; the challenger",
+    "batch verifier": "the verifier",
+    "GPU workers": "workers",
+    "escape probability": "miss probability",
+    "post-landing run, postland": "after-landing run",
+    "Commit window": "Commit period",
+    "accounting period": "the monitoring period",
+    "isolation block, certified block": "inference block",
+    "transformer block": "layer",
+    "audit phase, audit round": "the verification phase",
+    "monitored compute, monitored hardware, monitored server": "registered hardware (the monitoring period keeps its name)",
+    "staging decode": "the store's load",
+    "pinned theorem, pinned statement": "guarantee",
+    "trusted text": "spec",
+    "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
+                                                            "verification phase)",
+    "hm96 rows, outside the commitments' docs": "hiding commitments",
+    "integrity period": "execution phase",
+    "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
+    "that period's coins": "before any coins are flipped",
+    "rejection dominates, reject dominance": "any rejection rejects the whole",
+    "physical block": "server block",
+    "thread block": "CTA",
+    "KV block": "KV page",
+    "the accelerator model, the machine model": "the ACCEL model (`calibration/machine_model/` and its `machine-model` "
+                                                "command keep the name)",
+    "coverage premise, coverage table": "the card assumption, the opcode table",
+    "envelope ISA, envelope op": "the ACCEL ops",
+    "server-time block, serving block, server-window": "server block",
+    "overhead lower bound, exclusion bound": "the slowdown lower bound",
+    "circuit-size slowdown, training efficiency, hardware multiple": "slowdown(𝒢, 𝒜, η)",
+    "per-block cap, per-block limit": "the server-block yield q_S, or the inference-block yield q(c, k)",
+    "training class": "pricing argument",
+    "physical class, restricted class, monitored class": "the feasible set 𝓕; the admissible set 𝒜",
+    "certified work, accounted compute, declared compute": "verified compute, V",
+    "certified share, declared utilization": "utilization",
+    "uncertified capacity, uncertified gates, undeclared compute, skippable work, residual compute, monitored residual":
+        "free compute, U",
+    "dark compute, dark fleet, dark leaves, undeclared hardware": "unregistered hardware, ε_unreg",
+    "unregistered input, unregistered information, novel information": "fresh input, fresh input bits",
+    "registered computation": "the registered circuit",
+    "work requirement": "necessary subcomputation",
+    "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
+    "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
+                                          "renamed)",
+    "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network attestation), the bandwidth audit's or the "
+           "memory wipe's, or run",
+    "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
+        "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
+}
+_SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
+_DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
+                       rf"|wardens?"
+                       rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|egress{_SPACE}cones?"
+                       rf"|acceptance{_SPACE}probabilit(?:y|ies){_SPACE}\$?(?:\\bar\{{?\s?)?P\u0304?\}}?_\{{?a\b"
+                       rf"|(?:sampling{_SPACE})?design's{_SPACE}acceptance{_SPACE}probabilit(?:y|ies)"
+                       rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
+                       rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
+                       rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?|composite{_SPACE}protocols?"
+                       rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
+                       rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
+                       rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
+                       rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
+                       rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
+                       rf"|(?:accelerator|machine){_SPACE}models?|coverage{_SPACE}(?:premises?|tables?)|envelope{_SPACE}(?:ISA|ops?)"
+                       rf"|server{_SPACE}time{_SPACE}blocks?|serving{_SPACE}blocks?|server-windows?"
+                       rf"|(?:overhead{_SPACE}lower|exclusion){_SPACE}bounds?|circuit{_SPACE}size{_SPACE}slowdown"
+                       rf"|training{_SPACE}efficiency|hardware{_SPACE}multiples?|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
+                       rf"|(?:training|physical|restricted|monitored){_SPACE}class(?:es)?|certified{_SPACE}(?:work|shares?)"
+                       rf"|accounted{_SPACE}compute|declared{_SPACE}(?:compute|utilization)|uncertified{_SPACE}(?:capacity|gates)"
+                       rf"|undeclared{_SPACE}(?:compute|hardware)|skippable{_SPACE}work|residual{_SPACE}compute|monitored{_SPACE}residuals?"
+                       rf"|dark{_SPACE}(?:compute|fleets?|leaves|hardware)|unregistered{_SPACE}(?:inputs?|information)"
+                       rf"|novel{_SPACE}information|registered{_SPACE}computations?|work{_SPACE}requirements?"
+                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
+                       rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
+                       rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
+                       rf"|batch{_SPACE}verifiers?|GPU{_SPACE}workers?|escape{_SPACE}probabilit(?:y|ies)"
+                       rf"|post{_SPACE}landing(?:{_SPACE}runs?)?|postland\w*|commit{_SPACE}windows?|accounting{_SPACE}periods?"
+                       rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
+                       rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
+                       rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
+                       rf"|remote{_SPACE}(?:bandwidth(?:{_SPACE}audits?)?|audits?)|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
+                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|(?i:\bC-Flock\b|\bnetlists?\b|\bverifiers?{_SPACE}of{_SPACE}record\b)|\bM0\b|\bIRs?\b"
+                       rf"|\bcommit{_SPACE}periods?\b")
+_CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 
 def _vllm(path: str) -> str:
