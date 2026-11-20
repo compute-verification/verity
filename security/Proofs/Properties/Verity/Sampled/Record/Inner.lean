@@ -31,7 +31,7 @@ namespace Verity.Sampled.Record
 
 open Claims (Msg)
 open FlockDeploy (Ins)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 
 variable {A : Live} {o : Own}
 
