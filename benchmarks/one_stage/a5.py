@@ -182,6 +182,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 HERE = (Path(__file__).resolve().parent)
@@ -197,6 +198,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, definition_digest, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
@@ -787,9 +789,10 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
         (cache / WARM_SECONDS).write_text(json.dumps(before, sort_keys=True, indent=1) + "\n")
 
 
-def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
+def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str | None = None) -> None:
     """A sampled member's prover's file and its circuit, under the header its public file was held to before the sample, the
-    circuit held to its compose's line first (`held`)."""
+    circuit held to its compose's line first (`held`); a templated circuit's unit placed by ``tmpl_unit_bin``
+    (`a0.templated`), the statement's ``tmpl_unit``."""
     m, st_dir = mm["m"], mm["st"]["dir"]
     if not mm["circuit"].exists() and mm.get("make"):
         if (pin := mm["make"]()[0]["pin"]) != mm["pin"]:
@@ -801,6 +804,9 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
             (st_dir / "tables").mkdir(exist_ok=True)
             link(f, st_dir / "tables" / f.name)
+    if mm["circ"].meta.get("statement") == FC.TMPL_STATEMENT:
+        text = (st_dir / "circuit.txt").read_text()
+        mm["st"] |= a0.templated(SimpleNamespace(meta=mm["circ"].meta, text=text), st_dir, tmpl_unit_bin)
     got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
     with open(got["inst"], "rb") as f:
@@ -1096,7 +1102,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
         (sdir / SAMPLE_FILE).write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
-        stage(served, mm, files)
+        stage(served, mm, files, getattr(a, "tmpl_unit_bin", None))
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
                 "session_law": session_sampling_design}
 
@@ -2459,6 +2465,7 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--zk-server", help=ZK_SERVER_HELP)
+    ap.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit: places a templated member circuit's unit rows (`a0.templated`), which its prover and verifier read")
     ap.add_argument("--gpus", type=cards,
                     help="the proof server's cards, their indices comma-separated (0,1), as nvidia-smi numbers them: "
                          "a prover a card, behind the ZK server (--zk-server) or not; default the CPU. CUDA_DEVICE_ORDER "
