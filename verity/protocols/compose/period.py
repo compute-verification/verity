@@ -38,7 +38,7 @@ class Stages:
     """Each stage's body but compilation's, called as ``stage(public, workload, state[, window])``: ``windows`` gives
     the period's windows. ``accounting`` is for the switched-on accounting protocols' verified properties of a window's
     blocks, the only thing the policy layer is to read; in this first version it returns each party's outcome, and the
-    policy stage reads a file that accounting's steps wrote."""
+    policy stage, given them, runs the policy's steps on the window's record, which accounting's steps left."""
 
     registration: Callable[[PublicParameters, Any, PeriodState], Any]
     windows: Callable[[PublicParameters, Any, PeriodState], Iterable[Any]]

@@ -832,8 +832,10 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
-def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
+def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], steps: Sequence[str] = (),
+                  log: str = "served-window") -> int:
+    """The served window's runner on ``steps`` in their order (its window road where none is named, its log
+    ``state/logs/<log>.log``) with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
     and no composite unless the caller asks for one (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
@@ -842,9 +844,9 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
     env = lean_env({**os.environ, **node, **variables(cfg, bindings)})
     env |= {**composite(env), "OUT": str(state / "out"), "APPLICATION_PROTOCOLS": " ".join(cfg["protocols"])}
     (state / "logs").mkdir(parents=True, exist_ok=True)
-    with open(state / "logs" / "served-window.log", "w") as log:
-        return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
-                              check=False).returncode
+    with open(state / "logs" / f"{log}.log", "w") as f:
+        return subprocess.run(["bash", str(ROOT / RUNNER), *(("steps", *steps) if steps else ())], cwd=ROOT, env=env,
+                              stdout=f, stderr=subprocess.STDOUT, check=False).returncode
 
 
 VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
@@ -1101,8 +1103,7 @@ def _windows(public: period.PublicParameters, w: ServedWorkload, state: period.P
 def _accounting(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState,
                 window: str) -> dict[str, dict[str, Any]]:
     """Each party's outcome here: the served window's runner (`served_window`) when the workload's party is here, with
-    each prepared runtime party's run beside it. The runner's window road runs the policy's steps too
-    (inference-policy, inference-only), in its own order."""
+    each prepared runtime party's run beside it."""
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
@@ -1127,20 +1128,32 @@ def _accounting(public: period.PublicParameters, w: ServedWorkload, state: perio
     return out
 
 
+#: the inference-only policy's steps in their order; block-counts judges its counts against the policy's c, k and n in
+#: the process that counts them, so it is the policy's whole
+POLICY = ("inference-policy", "block-counts", "inference-only")
+#: the runner's exits where it reached its steps' end, every step run (0) or some refused or not run (20)
+ENDED = (0, 20)
+
+
 def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState, window: str,
-            outcomes: Mapping[str, Any]) -> Path | None:
-    """The inference-only policy's record, which the accounting stage's window road wrote (``out/record/
-    inference-only.json``), where it did: nothing is left for this stage to call."""
-    f = w.state / "out" / "record" / "inference-only.json"
-    return f if f.is_file() else None
+            outcomes: Mapping[str, Any]) -> int | None:
+    """The runner on the policy's steps (`POLICY`), its exit, where the workload's party is here and the accounting
+    stage's runner reached its end (`ENDED`); else None, as the window road ran none of them."""
+    if WORKERS not in w.here or not any(o["outcome"].get("served-window") in ENDED for o in outcomes.values()):
+        return None
+    return served_window(w.cfg, w.state, w.bindings, POLICY, "policy")
 
 
 def _result(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> Result:
-    """Each party's outcome: its window's, else a gate's side as started by the gate; and when the verifier is here,
-    the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
+    """Each party's outcome: its window's (the policy's runner's exit where the accounting's was 0), else a gate's side
+    as started by the gate; and when the verifier is here, the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
     read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
     component -> premise), and beside it what compilation said (``compilation``)."""
     out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
+    for x in state.windows:
+        for o in out.values():
+            if x["policy"] and o["outcome"].get("served-window") == 0:
+                o["outcome"]["served-window"], o["refused"] = x["policy"], SERVED_WINDOW
     for p in w.here:
         if p in out or p == VERIFIER:
             continue

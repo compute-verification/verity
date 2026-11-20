@@ -65,15 +65,18 @@ def _serve_dir(tmp_path, monkeypatch, application):
 
 
 def _road(tmp_path, monkeypatch, application, d, **env):
-    """``application``'s runner as `verity run` launches it on a node whose environment names the serve dir: its exit, its
-    lines and its public record (``state/out``)."""
+    """``application``'s runner as `verity run`'s accounting and policy stages launch it on a node whose environment names
+    the serve dir: the accounting call's exit, both calls' lines in that order and its public record (``state/out``)."""
     cfg = RUN.load(ROOT / "applications" / f"{application}.toml", RUN.registry())
     for k, v in {"D": str(d), "PRED": str(tmp_path / "predicted"), "SERVE_ROOT": str(tmp_path), "WINDOW_CLASS": "2,4,2",
                  "VENV": sys.prefix, "CUDA_HOME": str(tmp_path / "no-cuda"), "HF_HOME": str(tmp_path / "hf"), **env}.items():
         monkeypatch.setenv(k, v)
     state = tmp_path / f"state-{application}"
     rc = ST.served_window(cfg, state, {})
-    return rc, (state / "logs" / "served-window.log").read_text(), state / "out"
+    if rc in ST.ENDED:
+        ST.served_window(cfg, state, {}, ST.POLICY, "policy")
+    logs = [state / "logs" / f"{x}.log" for x in ("served-window", "policy")]
+    return rc, "".join(f.read_text() for f in logs if f.is_file()), state / "out"
 
 
 def _digests(doc, path=""):
