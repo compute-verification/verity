@@ -1984,11 +1984,12 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
 }
 road_sampled() {  # step 3 on the window's road: the window's record audited from its own files (records_audit.py audit), its circuit the prover's
   local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
-  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt m0 law run rc b line
+  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt unit=${TMPL_UNIT_BIN:-$leanb/flock-tmpl-unit} m0 law run rc b line
   [ "$DEVELOPMENT" = 1 ] || { step_refused sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
-  for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check" "$leanb/flock-tmpl-unit"; do
+  for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check"; do
     [ -x "$b" ] || { step_refused sampled-proofs "proofs' $(basename "$b") is not built at $b (build(): lake build in verity/protocols/proofs/flock/verifier, prover/pod/60-circuit.sh MODE=build)"; return; }
   done
+  [ -x "$unit" ] || { step_refused sampled-proofs "proofs' flock-tmpl-unit, which places a templated member's unit rows, is not built at $unit (TMPL_UNIT_BIN; served_door_prove.sh builds it from TmplUnit.lean)"; return; }
   grep -q -- '"--prover-circuit"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { step_refused sampled-proofs "proofs' records_audit.py takes no --prover-circuit, the audit of a circuit the prover registered with its compile check not run"; return; }
   law=$("$PY" -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r.get("rule") or (r.get("law") or {}).get("rule") or "")' "$rec/registration.json") || law=
@@ -2005,7 +2006,7 @@ road_sampled() {  # step 3 on the window's road: the window's record audited fro
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
     --circuit "$(sha512sum "$rec/circuit.json" | cut -c1-128)" --prover-circuit --run "$run" --registered "$WREG" \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
-    --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$leanb/flock-tmpl-unit" \
+    --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
     --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
     > "$LOGS/sampled-proofs/audit.log" 2> "$LOGS/sampled-proofs/audit.err"
   rc=$?
@@ -2031,17 +2032,24 @@ Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
 if not draw:
     print("the law samples no block of this window: nothing would be proved")
     sys.exit(3)
-said = (f"under {sys.argv[3]}, {len(draw)} drawn block(s) {draw}, on the local challenger's coins (DEVELOPMENT=1); "
+said = (f"under the DEVELOPMENT law {sys.argv[3]}, {len(draw)} drawn block(s) {draw}, on the local challenger's coins (DEVELOPMENT=1); "
         "its circuit registered by the prover; the compile check did not run")
 if bad:
     print(f"REJECTED: {said}; drawn unit(s) {bad} of a block the door refuses to lower: a failed proof, not resampled "
           "(its Definition in the serve dir's private/sampled-proofs/summary.json)")
-else:
-    print(f"{'Lean accepted' if accepted else 'REJECTED'}: {said}")
+    sys.exit(1)
+print(f"{'Lean accepted' if accepted else 'REJECTED'}: {said}")
+sys.exit(0 if accepted else 1)
 EOF
 )
   case $? in
-    0) RAN+=(sampled-proofs); say "sampled-proofs: $line" ;;
+    0) RAN+=(sampled-proofs)
+       if [ -f "$TREE/benchmarks/one_stage/accept_line.py" ]; then
+         say "sampled-proofs: $line"
+         (cd "$TREE/benchmarks/one_stage" && env -u PYTHONPATH PYTHONPATH="$TREE" "$TREE/.venv/bin/python" accept_line.py "$s/summary.json" - -) 2>&1 \
+           | while IFS= read -r b; do say "sampled-proofs: $b"; done
+       else say "sampled-proofs: $line; the bound: not stated (accept_line.py absent)"; fi ;;
+    1) RAN+=(sampled-proofs); say "sampled-proofs: $line" ;;
     3) REFUSED+=(sampled-proofs); say "sampled-proofs: $line" ;;
     *) FAILED+=(sampled-proofs); say "sampled-proofs: ERROR: the records audit's summary (records_audit.py exit $rc) has no public form" ;;
   esac

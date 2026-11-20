@@ -148,8 +148,13 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     published = lines + "".join(text for _, text in _published(out))
     assert not [p for p in UNSAID if p in published.lower()], [p for p in UNSAID if p in published.lower()]
     sampled = [x for x in lines.splitlines() if x.startswith("sampled-proofs: ")]
-    assert len(sampled) == 1 and sampled[0].startswith("sampled-proofs: Lean accepted: under rate:1/4, ") and sampled[0].endswith(
-        "on the local challenger's coins (DEVELOPMENT=1); its circuit registered by the prover; the compile check did not run"), log
+    assert sampled and sampled[0].startswith("sampled-proofs: Lean accepted: under the DEVELOPMENT law rate:1/4, ") and (
+        "on the local challenger's coins (DEVELOPMENT=1); its circuit registered by the prover; the compile check did not run"
+        in sampled[0]), log
+    if (ROOT / "benchmarks" / "one_stage" / "accept_line.py").is_file():
+        assert [x for x in sampled if x.startswith("sampled-proofs: ACCEPT one window, ")], sampled
+    else:
+        assert sampled == [sampled[0]] and sampled[0].endswith("; the bound: not stated (accept_line.py absent)"), sampled
     summary = json.loads((out / "summary.json").read_text())
     assert summary["audit"]["accepted"] is True and summary["ok"] is True and summary["sampled"] > 0, summary
     assert summary["compiled"] == "not checked" and summary["unprovable_drawn"] == [], summary
