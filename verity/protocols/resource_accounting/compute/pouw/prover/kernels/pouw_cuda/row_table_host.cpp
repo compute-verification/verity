@@ -1,3 +1,4 @@
+// The row tables' device code, kept here until proofs decides where it lives.
 // `row_table.cuh` on the CPU, one row and one node at a time: the twin `row_tables_device.host_step` drives, so the CPU tests hold
 // the device's functions to `commit.row_tables.step_roots` on a machine without a GPU.
 #include <vector>

@@ -77,7 +77,6 @@ from __future__ import annotations
 import fcntl
 import gc
 import hashlib
-import json
 import logging
 import os
 import re
@@ -90,17 +89,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.commitments import hm96
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import (
-    Commitment,
-    CommitmentDomain,
-    Opening,
-    tree_levels,
-    verify_opening,
-)
+from verity.commitments.merkle import tree_levels
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.memory.pous.verifier.params import SALT_BITS
@@ -109,24 +100,23 @@ from verity.protocols.resource_accounting.memory.pous.verifier.verifier import D
 
 log = logging.getLogger(__name__)
 
-PROTOCOL = "verity-pous/memory-challenger/v2"
+PROTOCOL = SC.PROTOCOL
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
-COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
-RECORDS = "sha512/row/v2"
-COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
-COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
+COIN_TREE = SC.COIN_TREE
+RECORDS = SC.RECORDS
+COIN_TAG = SC.COIN_TAG
+COIN_BINDING = SC.COIN_BINDING
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
-COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
+COIN_SCHEMA = SC.COIN_SCHEMA
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
-COMPLETE, LATE = "complete", "late"
-HM96 = hm96.SHA512
-LIMITS = VerificationLimits()
+COMPLETE, LATE = SC.COMPLETE, SC.LATE
+HM96 = SC.HM96
 
 
 def _sha512(*parts: bytes) -> bytes:
@@ -141,8 +131,7 @@ def block_digest(block: bytes) -> bytes:
     return sha512_row_v2_digest(block, 8 * len(block))
 
 
-def _domain(tag: bytes, session: bytes, count: int) -> CommitmentDomain:
-    return CommitmentDomain(_sha512(tag, session)[:32], -1, RangeIndexedDomain(0, count), hash="sha512")
+_domain = SC.domain
 
 
 def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]:
@@ -153,14 +142,8 @@ def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]
     return tuple(out)
 
 
-def coin_digest(session: bytes, j: int, index: int) -> bytes:
-    """`x_j`, round `j`'s coin before hiding."""
-    return _sha512(COIN_TAG, session, j.to_bytes(4, "big"), index.to_bytes(8, "big"))
-
-
-def coin_leaf(key: bytes, session: bytes, j: int, index: int, salt: bytes) -> bytes:
-    """The hm96-sha512 leaf of round `j`'s coin under the session's key `key` and the coin's salt."""
-    return HM96.tree_leaf(key, HM96.commit_string(key, coin_digest(session, j, index), salt))
+coin_digest = SC.coin_digest
+coin_leaf = SC.coin_leaf
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,15 +197,8 @@ class CoinTree:
 
 def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
     """`opening` opens round `opening.j`'s coin under the commitment's coin tree, to a block index."""
-    if not (0 <= opening.j < commitment.k and 0 <= opening.index < commitment.blocks):
-        return False
-    try:
-        leaf = coin_leaf(commitment.coin_key, commitment.session, opening.j, opening.index, opening.salt)
-        domain = _domain(COIN_BINDING, commitment.session, commitment.k)
-        return verify_opening(domain, Commitment(commitment.coin_root, commitment.k), Opening(opening.j, leaf, opening.path),
-                              COIN_SCHEMA, LIMITS)
-    except Exception:  # noqa: BLE001 - a malformed opening opens nothing
-        return False
+    return SC.verify(commitment.session, commitment.coin_root, commitment.coin_key, commitment.blocks, commitment.k,
+                     opening.j, opening.index, opening.salt, opening.path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,10 +218,8 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records": RECORDS, "session": self.session.hex(),
-                "coin_root": self.coin_root.hex(), "coin_key_sha512": _sha512(self.coin_key).hex(), "blocks": self.blocks,
-                "k": self.k, "limit_ns": self.limit_ns, "block_bytes": self.block_bytes, "binding": self.binding.hex(),
-                "clock": "CLOCK_MONOTONIC ns"}
+        return SC.header_fields(self.session, self.coin_root, self.coin_key, self.binding, self.blocks, self.k, self.limit_ns,
+                                self.block_bytes)
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -295,8 +269,8 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
 
 def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
     """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
-    head = json.dumps({**commitment.header(), "ended": ended, "rounds": len(rounds)}, sort_keys=True,
-                      separators=(",", ":")).encode()
+    head = SC.header(commitment.session, commitment.coin_root, commitment.coin_key, commitment.binding, commitment.blocks,
+                     commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 

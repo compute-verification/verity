@@ -130,7 +130,7 @@ class ValueRows:
 
 def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
     """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts sample many
-    (``salts.at``, `pouw.h1.registered.Salts`), else one by one."""
+    (``salts.at``, `Salts`), else one by one."""
     at = getattr(value.salts, "at", None)
     return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
 

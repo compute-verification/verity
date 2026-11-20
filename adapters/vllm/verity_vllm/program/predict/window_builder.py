@@ -330,18 +330,25 @@ def check_provable(circuit: IF.Circuit) -> None:
         raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
 
 
-def check_served(circuit: IF.Circuit) -> dict[str, str]:
-    """`check_provable` for a served window, which the door proves: it refuses past `IF.MAX_ROWS` rows or `IF.K_MAX`, and
-    does not ask the older composer's floor (a row past `IF.LAST_BLOCK_BYTES` bytes), which the door does not have. -> each
-    template a block of all of whose units in the window is under the prover's zero-knowledge floor (``m >= ZK_M_MIN``),
-    by id with why, estimated from a unit's input and output bits and ANDs, since the door's lowering sets its ``k_log``.
-    Such a template's units stay in the circuit and its sample: a draw of one is a failed proof. The door's own check
-    replaces this when door-ready lands."""
+def row_compressions(bits: int) -> int:
+    """A bit row's SHA-512 compressions before its last block, as the door counts a port's ``chunks``
+    (``Flock/Compose.lean``'s ``bitPort``; an output port is a bit row of exactly ``16 * words`` bits, its ``outPort``)."""
+    return ((bits + 7) // 8 + 17 + 127) // 128 - 1
+
+
+def check_served(circuit: IF.Circuit) -> dict[str, dict[str, str]]:
+    """`check_provable` for a served window, which the door proves: it refuses past `IF.MAX_ROWS` rows or `IF.K_MAX`. ->
+    by id with why, without refusing, each template the door cannot prove, under each reason it has: ``row_floor``, no
+    compression before the last SHA-512 block in any of its rows, input and output together, each at its own bits
+    (`row_compressions`, ``Flock/Compose.lean``'s ``outPort`` and ``bitPort``, and ``compose``'s refusal at ``rowSlots``); and
+    ``prover_floor``, a block of all of its units in the window under the prover's zero-knowledge floor (``m >= ZK_M_MIN``,
+    `laying.zk_min_units`), estimated from a unit's input and output bits and ANDs, since the door's lowering sets its
+    ``k_log``. Such a template's units stay in the circuit and its sample: a draw of one is a failed proof."""
     from verity.circuits.count import count
     from verity.circuits.laying import ZK_M_MIN, zk_min_units
     from verity.circuits.program import Program
 
-    why, alone = [], {}
+    why, named = [], {"row_floor": {}, "prover_floor": {}}
     for fn, n in circuit.templates:
         tid, cuts = descriptor_id(fn), circuit.cuts.get(descriptor_id(fn))
         lay = IF.layout(fn)
@@ -350,16 +357,19 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
             why.append(f"{tid}: {len(ins) + len(outs)} rows, past a proof block's {IF.MAX_ROWS}")
         elif (k := IF.proof_block_k_log(ins, outs)) > IF.K_MAX:
             why.append(f"{tid}: its rows alone need a Flock block of 2^{k} bits, past 2^{IF.K_MAX}")
+        if sum(row_compressions(8 * b) for b in ins + outs) == 0:
+            named["row_floor"][tid] = (f"no row has a compression before its last SHA-512 block (its widest {max(ins + outs)} B, "
+                                       f"none of {len(ins) + len(outs)} rows past {IF.LAST_BLOCK_BYTES} B)")
         prog = Program(fn)
         bits = 8 * (sum(ins) + sum(outs)) + count(prog)[descriptor_id(prog.root)].ands
         k = max(bits - 1, 1).bit_length()
         # g is the door's, unknown before its lowering; at g = 1 the floor is the fewest units any packing needs.
         if n < (need := zk_min_units(k, 1)):
-            alone[tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of all {n} units "
-                          f"is under {need} (`zk_min_units` at g 1): m under {ZK_M_MIN}")
+            named["prover_floor"][tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of "
+                                          f"all {n} units is under {need} (`zk_min_units` at g 1): m under {ZK_M_MIN}")
     if why:
         raise Unexpressible(f"{len(why)} templates Flock wouldn't prove: " + "; ".join(why))
-    return alone
+    return named
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:

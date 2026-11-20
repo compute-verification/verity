@@ -26,7 +26,7 @@ REWRITE = ("a change meant to add or move a family Definition rewrites the fixtu
 FAMILY = "primitives, composites and serving"
 REG = "verity_vllm.definitions.registry"
 #: the family's Definition modules (`FAMILY` of adapters/vllm `tests/program/test_prims_serve_boundaries.py`)
-DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
+DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "tables", "value_inputs",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")
 
 

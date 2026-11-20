@@ -122,6 +122,7 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.circuits import partition_object as PO
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
@@ -415,8 +416,8 @@ def bits_of(t) -> int:
 
 
 def program_sha512(desc: dict) -> str:
-    """`partition_object.program_sha512`: SHA-512 of the canonical descriptor without `annotations`."""
-    return hashlib.sha512(D.canonical({k: v for k, v in desc.items() if k != "annotations"}).encode()).hexdigest()
+    """`partition_object.program_sha512`: the program digest (`codec.program_digest`)."""
+    return PO.program_sha512(desc)
 
 
 def _members(x: dict) -> int:

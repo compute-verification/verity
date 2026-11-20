@@ -3,6 +3,7 @@ module
 public import Circuits.Program
 import Batteries.Tactic.OpenPrivate
 import Proofs.Core.QSort
+import Proofs.Properties.InferenceOnly.Fueled
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Std.Data.HashMap.Lemmas
 import Std.Data.TreeMap.Lemmas
@@ -345,8 +346,8 @@ fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
     index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
     st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite, st_mapConst, st_lift,
     st_forIn_nil, st_forIn_range0, st_forIn_root, memo_one, memo_none, tmemo_one, tmemo_none, tddefs_rule, lift_self, leaves_rule, dup_rule,
-    names_rule, reached_rule, refs_rule, subFns_rule, canon_rule]
-  block [domainError, Ty.ofJson, checkReached]
+    names_rule, reached_rule, refs_rule, Fueled.subFnsFueled_eq, subFns_rule, Fueled.canonFueled_eq, canon_rule]
+  block [domainError, Ty.ofJson, checkReached, canonFueled]
   shallow [programEmpty]
 
 end Flock.Program.Closed

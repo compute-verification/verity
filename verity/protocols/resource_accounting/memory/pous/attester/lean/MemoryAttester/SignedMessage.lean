@@ -20,7 +20,7 @@ open Flock
 /-- `lms._field`: a u64 big-endian length, then the bytes. -/
 def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 
-def MEMORY_CHALLENGER_TAG : String := "verity/memory-challenger-record/v1"
+abbrev MEMORY_CHALLENGER_TAG : String := SessionCoins.MEMORY_CHALLENGER_RECORD
 
 /-- `memory_challenger_message(I, session, record)`. -/
 def memoryAttesterMessage (I session record : ByteArray) : E ByteArray := do

@@ -19,3 +19,7 @@ typical_worker_gb = 5
 [[tool.verity.tests.reads]]
 tests = ["test_lms_sign_lean_difftest.py"]
 paths = ["verity/commitments/crypto"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_session_coins.py"]
+paths = ["verity/commitments/lean/Commitments/SessionCoins.lean"]

@@ -155,10 +155,10 @@ V0_PAIR_6 = ("f48ead5729310772f4e376c2d9b3c45f09b86becd9b385821bb28eed0e9d1255"
 V0_RECORD_6 = ("aabbe23588d9df8fd0e58d7d7f5c5ff0fe0231d36769183ec8f8bc146dc306dc"
                "ba2c2d0b7212a8cec870cc81446b4ac3bf3845171b458cae6bc6264f748b7d6f")
 #: v1's program digests of `population_program(PAIR, 6)` and `mixed_population_program([(PAIR, 3), (XOR3, 5)])`
-V1_PAIR_6 = ("d46d56b21d3be0fef873edbc247f883f97e70b03bc9cbd1194df7212c26ff04a"
-             "8b78c7cb5e49c5126b584c351c82b519a862a2f178e8d8f78c414720487dfded")
-V1_PAIR_3_XOR3_5 = ("f545623af3880e3b987fbdcbb6dd51f8db2b56ebd75af01621755e3b6a5c66e1"
-                    "1d8af0b21fa7c1117bf6d7a5d928c77ed975169deec98d46d6f5e5246dedc2a8")
+V1_PAIR_6 = ("871cf6efcbaf08c14898ccd9bd335aff97642b62f7c7ffcec8f852095825a57a"
+             "6e8d7ed355781aff6357ee81c02309aebea2db248ff4252cf930cbb18fed3dd6")
+V1_PAIR_3_XOR3_5 = ("2d7299fec4c6021c6139d013232d6947083be32e13f8215da239fb587d452aa8"
+                    "480f0963e94449ebd0a769ea9aa6a180fd671e0476281caf996f93bcce72af78")
 
 
 def _xor8_registry() -> DefinitionTable:

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.Accepts
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.DeployReads
 
 /-!
 # Masked completeness at SHA-512

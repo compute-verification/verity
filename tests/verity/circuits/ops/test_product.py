@@ -116,6 +116,6 @@ def test_a_unit_other_than_the_default_names_its_k_log_and_g(kw):
 def test_the_default_is_256_units_in_blocks_at_the_least_zero_knowledge_m():
     p = PR.product()
     assert p.outputs.shape == (256, 1) and len(p.blocks) == 16 and p.m == 25
-    assert p.digest == ("71cdbf7c67ae3f054fc9a5fcd43b2c3dcb7017cc33306857431f8c42faa0cb59"
-                        "dec407780be910cba076ceabf019362487f9a55a8a31f66e7b10b755fd72d4fb")
+    assert p.digest == ("c88943a133a643d896c711861dad6c71916bdfe4b76e28b249cb74742ea821d3"
+                        "fbbc5da4b0123cfb5d691473bb9ade44d8fb3816f9b70cfebba5317d0cafcb7e")
     assert PO.validate(p.partition).ok and PO.validate(p.partition_levels).ok
