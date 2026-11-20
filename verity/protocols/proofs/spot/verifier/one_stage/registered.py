@@ -237,7 +237,7 @@ def _source(template: str, parameter: str, element: int | None) -> str:
 
 
 def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
-          schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
+          schemas: Mapping[str, str] | None = None, template: str | None = None) -> dict[str, dict[str, Any]]:
     """Every proof block's reads of the registered values, from the verifier's own program: `values` is `{parameter: words}`, and
     the result `{template parameter: {"value", "rows"}}`, `rows` one entry per proof block of the population (the row it reads,
     None for a proof block of another template). A proof block's parameter that holds a registered leaf must be exactly one row, read
@@ -246,8 +246,10 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     in every proof block or in none: a read at a computed position is no public read. `schemas` (`{value: schema}`) gives a
     value's row format when it is not `SCHEMA`, which sets how many leaves a row holds (`row_leaves`). A key is one
     parameter's or one row's of it (in every template that has it): two reads under one key, a parameter `a[0]` beside
-    row 0 of a parameter `a`, are refused, never merged. The proof blocks are a template query's instances; a `Q_word` or
-    `Q_call` proof block reads no registered value (`ValueError`)."""
+    row 0 of a parameter `a`, are refused, never merged. With `template`, the reads are that one template's: only its
+    proof blocks read (every other's row is None), so the keys are its parameters and a parameter of one name reads its
+    own value in each template; a template with no instance among the query's units is refused. The proof blocks are a
+    template query's instances; a `Q_word` or `Q_call` proof block reads no registered value (`ValueError`)."""
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
@@ -261,13 +263,18 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
         """The registered value whose leaf `gate` is, and which leaf: parameters' gates are disjoint intervals."""
         return next(((v, gate - r.start) for r, v in spans if gate in r), None)
 
-    template = {k: tid for k, tid, _a, _n in tp.ranges}
+    tids = {k: tid for k, tid, _a, _n in tp.ranges}
+    if template is not None and template not in tids.values():
+        raise ValueError(f"template {template} has no instance among the query's units "
+                         f"({sorted(set(tids.values()))}): a read is a parameter of a template the query draws from")
     nodes = program.root.body.nodes
     out: dict[str, dict[str, Any]] = {}
     value_of: dict[tuple[str, str], str | None] = {}
     source: dict[str, tuple[str, str, int | None]] = {}
     for u in range(tp.population):
         k, _m = tp.locate(u)
+        if template is not None and tids[k] != template:
+            continue
         gates, at = tp.inputs(u), 0
         for name, t in nodes[k].fn.signature()[0]:
             s, at = gates[at:at + t.leaves], at + t.leaves
@@ -283,13 +290,13 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
                 if not rows or None in rows.values():
                     raise ValueError(f"unit {u}: parameter {name!r} is not one whole row of a registered value, nor an "
                                      "array of whole rows of one")
-            if value_of.setdefault((template[k], name), value) != value:
-                raise ValueError(f"unit {u}: parameter {name!r} of {template[k]} reads {value!r}, and in another unit "
-                                 f"{value_of[(template[k], name)]!r}")
+            if value_of.setdefault((tids[k], name), value) != value:
+                raise ValueError(f"unit {u}: parameter {name!r} of {tids[k]} reads {value!r}, and in another unit "
+                                 f"{value_of[(tids[k], name)]!r}")
             for i, (key, row) in enumerate(rows.items()):
                 src = (name, i if key != name else None)
-                if (was := source.setdefault(key, (template[k], *src)))[1:] != src:
-                    raise ValueError(f"port {key!r} names two reads: {_source(*was)} and {_source(template[k], *src)}: "
+                if (was := source.setdefault(key, (tids[k], *src)))[1:] != src:
+                    raise ValueError(f"port {key!r} names two reads: {_source(*was)} and {_source(tids[k], *src)}: "
                                      "a port reads one parameter's row")
                 entry = out.setdefault(key, {"value": value, "rows": [None] * tp.population})
                 if entry["value"] != value:
@@ -858,7 +865,7 @@ def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[s
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
                ports: Mapping[str, str] | None = None, domains: Mapping[str, str] | None = None,
                schemas: Mapping[str, str] | None = None, window: str | None = None,
-               fixed: Sequence[str] = (), positions: bool = True) -> dict[str, Any]:
+               fixed: Sequence[str] = (), positions: bool = True, template: str | None = None) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
     proof block's position (`reads`; without `positions`, none, in `READS_V2`, Flock's `Registered.FORMAT`, whose
@@ -870,10 +877,16 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     (`registration.check`'s `outputs`). `schemas` (`{value: schema}`) gives a value's row format when it is not
     `SCHEMA` (`row_schema`, `schema_entry`): the format of the circuit port that reads it, which the Lean verifier holds
     the port to. `window` and `fixed`: the window's open root and the values held across windows, as R7 took them
-    (`registered_entries`)."""
+    (`registered_entries`). `template` makes it the file of that template's statements (`reads`' `template`), the one
+    Lean holds a statement of it to: a port of a parameter its template does not have is refused (`OneCircuit.regRow`),
+    and so is a `ports` entry naming a parameter at which `template` reads no registered value."""
     mine = registered_entries(program, values, schemas, window, fixed)
     out, read_as = {}, {}
-    for name, r in reads(program, query, values, schemas).items():
+    got = reads(program, query, values, schemas, template)
+    if template is not None and (stray := sorted(set(ports or {}) - set(got))):
+        raise ValueError(f"ports names parameters {stray}, and {template} reads no registered value at a parameter of "
+                         "those names: a port reads its own template's parameter")
+    for name, r in got.items():
         root = roots.get(r["value"])
         if root is None:
             raise ValueError(f"parameter {name!r} reads {r['value']!r}, whose registered root the verifier does not hold")
