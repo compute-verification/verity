@@ -351,7 +351,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between the queued count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "OVERLONG security/Proofs": 275, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -603,10 +603,6 @@ def test_no_long_module_grows():
           f"the lines past {LONG} of a package's modules",
           "put the new declarations in a module beside the long one and import it; a generator splits its output:\n  "
           + "\n  ".join(f"{f}: {n} lines" for fs in long.values() for f, n in fs.items()))
-
-
-#: the Lean declarations whose own names carry each of the older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or queued when the rule came; an

@@ -69,6 +69,7 @@ challenger_built || exit 1
 
 $UV sync -q --all-packages --extra torch-cpu || exit 4
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] && [ -x $RT_BIN ] && [ -x $CC_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+export LEAN_ABORT_ON_PANIC=1  # settings.py's ABORT_ON_PANIC, for every Lean run below and every process they start
 SD="$UV run -q python benchmarks/one_stage/served_door.py"
 if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: records_audit.py audit on a local challenger
   WIN="$SD window --tree ."; [ -n "${WINDOW_ARGS:-}" ] && WIN="$UV run -q python $WINDOW_ARGS"  # another window's builder

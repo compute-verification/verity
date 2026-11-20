@@ -31,11 +31,14 @@ holds before the sample, so the prover never chooses it.
 
 **Scope.** Nothing reads the storage session's three bodies (`pous.session.round_coin/v1`, `.header/v1`, `.context/v1`)
 through the door yet: they are definitions with their refusals, held to the Python's by `spot-difftest`. The verifier holds
-a function's value as a coin (`coins`: what a coin is released as) or as a released commitment (`commitments`: registered
-before any coin: the order rule, `order`, counts `coins` alone as coins, and holds the `place` each held commitment carries
-before the place of every coin read beside it). A round's coin is held to the coin root of the
-commitment the verifier holds, never to one the coin carries, and a session that did not end complete with all its rounds has
-no statement.
+a session in two entries by when each of its parts exists. `commitments` holds what exists before the first coin: the
+header's fields (the session id, the coin root, the hash of the coin key, the blocks, the rounds `k`, the limit, the answer's
+size, the binding), the attester's registered key and the `place` the verifier registered it at. `coins` holds what the
+session releases after it: the openings and the coin key itself (a round's coin), how it ended and its number of rounds (the
+header's). The order rule, `order`, counts `coins` alone as coins and holds the `place` of each held commitment before the
+place of every coin read beside it. A round's coin is held to the coin root of the commitment the verifier holds, never to
+one the coin carries, and to the coin key whose hash that commitment holds; a session that did not end complete with all its
+rounds has no statement.
 -/
 
 @[expose] public section
@@ -367,14 +370,16 @@ private def heldObject (tbl : Array (String × ByteArray)) (kind v f : String) :
   let .obj _ := j | throw (noStatement v f s!"{kind} is no object")
   return j
 
-/-- The held commitment's fields `hexes` (lowercase hex of whole bytes) and `nats` (naturals below `2 ^ bits`), in that
-order of refusal. -/
+/-- The held commitment's fields `hexes` (lowercase hex of whole bytes, the session id 32 bytes) and `nats` (naturals below
+`2 ^ bits`), in that order of refusal. -/
 private def sessionFields (v f : String) (rel : Json) (hexes : List String) (nats : List (String × Nat)) :
     V (Array (String × ByteArray) × Array (String × Nat)) := do
   let .obj c := getD rel "commitment" | throw (noStatement v f "commitment holds no commitment object")
   let cj := Json.obj c
   let hs ← hexes.toArray.mapM fun k => match hexOpt (getD cj k) with
-    | some b => pure (k, b)
+    | some b =>
+      if k == "session" && b.size != 32 then throw (noStatement v f s!"commitment's session is {b.size} bytes, not 32")
+      else pure (k, b)
     | none => throw (noStatement v f s!"commitment's {k} is no lowercase hex")
   let ns ← nats.toArray.mapM fun (k, bits) => match nat? (getD cj k) with
     | some n => if n < 2 ^ bits then pure (k, n) else throw (noStatement v f s!"commitment's {k} is no u{bits}")
@@ -385,20 +390,24 @@ private def hexIn (xs : Array (String × ByteArray)) (k : String) : ByteArray :=
 private def natIn (xs : Array (String × Nat)) (k : String) : Nat := (xs.find? (·.1 == k)).elim 0 (·.2)
 
 /-- The storage session's round coin: round `round`'s index, the last opening of the round the coin holds, opened under the
-coin root of the commitment the verifier holds (never one the coin carries). -/
+coin root of the commitment the verifier holds (never one the coin carries) with the coin key the coin releases, which
+hashes to the commitment's `coin_key_sha512`. -/
 private def roundCoin (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
     V (Array (String × String) × Nat) := do
   let f := m.fn
   let j ← argNat v m "round"
   let rel ← heldObject commitments "commitment" v f
-  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key"] [("blocks", 64), ("k", 32)]
+  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key_sha512"] [("blocks", 64), ("k", 32)]
   let k := natIn ns "k"
   let blocks := natIn ns "blocks"
   if j ≥ 2 ^ 32 then throw (noStatement v f s!"round {j} is no u32")
   if j ≥ k then throw (noStatement v f s!"round {j} is no round of the session's {k}")
   let coin ← heldObject coins "coin" v f
-  if (entries coin).any (·.1 != "openings") then
-    throw (noStatement v f "coin holds more than its openings: the coin root is the verifier's own")
+  if (entries coin).any (fun (n, _) => n != "openings" && n != "coin_key") then
+    throw (noStatement v f "coin holds more than its openings and its key: the coin root is the verifier's own")
+  let some key := hexOpt (getD coin "coin_key") | throw (noStatement v f "coin's coin_key is no lowercase hex")
+  if Flock.Sha512.hash key != hexIn hs "coin_key_sha512" then
+    throw (noStatement v f "coin's key is not the one the commitment holds the hash of")
   let .arr ops := getD coin "openings" | throw (noStatement v f "coin holds no openings list")
   let some o := ops.findRev? (fun o => nat? (getD o "j") == some j)
     | throw (noStatement v f s!"coin holds no opening of round {j}")
@@ -409,26 +418,28 @@ private def roundCoin (coins commitments : Array (String × ByteArray)) (v : Str
   let some path := pj.mapM hexOpt | throw bad
   if index ≥ 2 ^ 64 then throw (noStatement v f s!"round {j}'s index {index} is no u64")
   if index ≥ blocks then throw (noStatement v f s!"round {j}'s index {index} is no block of the session's {blocks}")
-  if !Flock.SessionCoins.verify (hexIn hs "session") (hexIn hs "coin_root") (hexIn hs "coin_key") blocks k j index salt path then
+  if !Flock.SessionCoins.verify (hexIn hs "session") (hexIn hs "coin_root") key blocks k j index salt path then
     throw (noStatement v f s!"round {j}'s index {index} is not its committed coin")
   return (#[("bytes", Flock.hexOf (Flock.be32 j.toUInt32 ++ Flock.be64 index.toUInt64))], 12)
 
-/-- The storage session's signed header: the held commitment's fields with `"ended": "complete"` and `"rounds": k`, which
-the commitment's own `ended` and `rounds` are compared with, so a late or short session has no statement. -/
-private def header (commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+/-- The storage session's signed header: the held commitment's fields (the key by its hash) with `"ended": "complete"` and
+`"rounds": k`, which the `ended` and `rounds` the session's release holds (the coin held under the function) are compared
+with, so a late or short session has no statement. -/
+private def header (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
     V (Array (String × String) × Nat) := do
   let f := m.fn
   let want ← argNat v m "head"
   let rel ← heldObject commitments "commitment" v f
-  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key", "binding"]
+  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key_sha512", "binding"]
     [("blocks", 64), ("k", 32), ("limit_ns", 64), ("block_bytes", 64)]
   let k := natIn ns "k"
-  let .str ended := getD rel "ended" | throw (noStatement v f "commitment holds no ended string")
-  let some rounds := nat? (getD rel "rounds") | throw (noStatement v f "commitment's rounds is no u32")
-  if rounds ≥ 2 ^ 32 then throw (noStatement v f "commitment's rounds is no u32")
+  let released ← heldObject coins "coin" v f
+  let .str ended := getD released "ended" | throw (noStatement v f "coin holds no ended string")
+  let some rounds := nat? (getD released "rounds") | throw (noStatement v f "coin's rounds is no u32")
+  if rounds ≥ 2 ^ 32 then throw (noStatement v f "coin's rounds is no u32")
   if ended != Flock.SessionCoins.COMPLETE then throw (noStatement v f "session did not end complete")
   if rounds != k then throw (noStatement v f s!"session has {rounds} rounds, not its {k}")
-  let head := (Flock.SessionCoins.header (hexIn hs "session") (hexIn hs "coin_root") (hexIn hs "coin_key")
+  let head := (Flock.SessionCoins.header (hexIn hs "session") (hexIn hs "coin_root") (hexIn hs "coin_key_sha512")
     (hexIn hs "binding") (natIn ns "blocks") k (natIn ns "limit_ns") (natIn ns "block_bytes")
     Flock.SessionCoins.COMPLETE k).toUTF8
   if head.size != want then throw (noStatement v f s!"header is {head.size} bytes, not {want}")
@@ -446,7 +457,6 @@ private def context (commitments : Array (String × ByteArray)) (v : String) (m 
   let session := hexIn hs "session"
   let ident := key.extract 0 16
   if ident.size != 16 then throw (noStatement v f s!"key is {ident.size} bytes, not an LMS identifier's 16")
-  if session.size != 32 then throw (noStatement v f s!"session is {session.size} bytes, not 32")
   let ctx := Flock.SessionCoins.signedContext ident session
   return (#[("bytes", Flock.hexOf ctx)], ctx.size)
 
@@ -485,7 +495,7 @@ def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mar
     if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
     return (#[("position", "0")], 8)
   | "pous.session.round_coin/v1" => roundCoin coins commitments v m
-  | "pous.session.header/v1" => header commitments v m
+  | "pous.session.header/v1" => header coins commitments v m
   | "pous.session.context/v1" => context commitments v m
   | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
 
