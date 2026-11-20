@@ -1,6 +1,6 @@
-"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and the Definitions
-that read it compute what their twins, whose primitive evaluator holds the table, compute. A `registered_values` derivation of
-Gemma-2's GeGLU registers no table: its Boolean version computes the activation (`registry.boolean_tanh`)."""
+"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and a program
+reading one decodes where it was not built. A `registered_values` derivation of Gemma-2's GeGLU registers no table: its Boolean
+version computes the activation (`registry.boolean_tanh`)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import pytest
 from verity.circuits.boolean import table as BT
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.constants import REGISTRATION, inputs
-from verity.circuits.defs import REGISTRY, bind
-from verity.circuits.evaluation import RegisteredTable, evaluate
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
 
@@ -53,7 +53,9 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     import subprocess
     import sys
 
-    prog = Program(T.GeluTanhMulBf16V3, registered=("gelu_tanh_bf16",))
+    row = CompositeDefinition("TTableRow", 1, (), lambda S: ((("g", Value(16)), ("gelu_tanh_bf16", T.GELU_TABLE)), Value(16)),
+                              lambda B, S, g, t: B.call(T.table_read(16, 1), g, t), register=False)
+    prog = Program(bind(row), registered=("gelu_tanh_bf16",))
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
     code = ("import json, sys; from verity.circuits.codec import decode_program, program_digest; from verity.circuits.defs import REGISTRY; "
@@ -73,38 +75,6 @@ def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
         assert e == D.tanh_f32_bits(w) and e < 1 << 31
     assert hi - lo < 1 << 27   # every region word has its own index
     assert T.tanh_rn_entry((lo - 1) & 0x7FFFFFF) == 0 == T.tanh_rn_entry(hi & 0x7FFFFFF)
-
-
-def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
-    """`TanhF32Rn_v2` reads `tanh_rn`'s 2^28 words lazily (`tanh_rn_table`), two per instance: on both signs of each rule's and
-    each region's edges, every exponent, and random words of the region and of all f32, it is `TanhF32Rn_v1`."""
-    rng = np.random.default_rng(15)
-    lo, hi = T.TANH_RN_LO, T.TANH_RN_HI
-    edges = [0, 1, 0x007FFFFF, 0x00800000, lo - 1, lo, lo + 1, 0x37FFFFFF, 0x38000000, 0x3F800000, 0x3FFFFFFF, 0x40000000, hi - 1,
-             hi, 0x41200000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF]
-    edges += [0x38000000 | e for r in T.TANH_RN_REGIONS for e in (r[0], r[1] - 1)] + [0x40000000 | e for r in T.TANH_RN_REGIONS for e in r]
-    exponents = [e << 23 | m for e in range(256) for m in (0, 1, 0x400000, 0x7FFFFF)]
-    words = edges + exponents + rng.integers(lo, hi, 2000).tolist() + rng.integers(0, 1 << 31, 1000).tolist()
-    words = [(w & 0x7FFFFFFF) | s for w in words for s in (0, 1 << 31)]
-    table, reads = T.tanh_rn_table(), []
-    assert (table.name, table.leaves, table.declared_by) == ("tanh_rn", T.TANH_RN_TABLE.leaves, D.TanhF32Rn)
-    def counting(j):
-        reads.append(j)
-        return table.word(j)
-    counted = RegisteredTable("tanh_rn", counting, table.leaves, D.TanhF32Rn)
-    fn = bind(T.TanhF32RnV2)
-    assert fn.id == "TanhF32Rn_v2"
-    for w in words:
-        assert evaluate(fn, w, counted) == (D.TanhF32Rn.evaluate(w),), hex(w)
-    assert len(reads) == 2 * len(words)
-
-
-def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
-    """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
-    difftest runs it on every gate word)."""
-    table = T.table_words("gelu_tanh_bf16")
-    for g, u in [(0x3F80, 0x8000), (0xFF80, 0), (0x7FC0, 0x3F80), (0x0001, 0x7F80), (0x8000, 0xFF80)]:
-        assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 
 
 def test_a_registered_values_derivation_registers_no_gelu_table():
