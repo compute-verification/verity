@@ -87,7 +87,7 @@ def NestedFacts (P : Prog) (d : ℕ) (D : Defn) : Prop :=
       ((D.body.nodes[k]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
         ((P.defs[(D.body.nodes[k]).fn]!).params.getD i default).2.widths.toList)
 
-/-- **`NestedTyped`** (open): in a C `decode` accepts whose root has no recut, each template of axis-0 batches over word
+/-- **`NestedTyped`**: in a C `decode` accepts whose root has no recut, each template of axis-0 batches over word
 primitives and earlier such templates, each of whose reached Boolean Definitions evaluates through gates alone, has
 `NestedFacts`. -/
 def NestedTyped : Prop :=
@@ -236,7 +236,7 @@ theorem flatten_map_flatten {α : Type} (l : List (List (List α))) : l.flatten.
 
 /-- **`LiftWordEval` for a template of axis-0 batches over word primitives and earlier such templates**, on
 `NestedTyped`. -/
-theorem liftWordEval_nested (hT : NestedTyped) :
+theorem liftWordEval_nested_of (hT : NestedTyped) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
       d < P.defs.size → Batch0Nested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
