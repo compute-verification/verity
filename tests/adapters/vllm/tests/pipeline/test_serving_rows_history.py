@@ -266,7 +266,9 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
         ms = w.members
         c = CS.commit(w, data, salts_of=salts_of, strings_of=strings_of)
         full = CS.commit(w, data, salts_of=salts_of)
-        assert all(full.roots[p] == c.roots[p] and full.bc[p] == c.bc[p] for p in strings_of)  # the other ports' salts are fresh a commit
+        # every other port's salts are fresh a commit
+        trees = {w.tree(m, o) for m in ms for o, _w in m.outs if m.port(o) in strings_of}
+        assert trees and all(full.roots[t] == c.roots[t] for t in trees) and all(full.bc[q] == c.bc[q] for q in strings_of)
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))
         pins = HW.pins(doc, roots)
