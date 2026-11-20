@@ -127,3 +127,26 @@ def ended(p: subprocess.Popen, ok_statuses: Collection[int] = OK) -> int:
     refuse_panic(err)
     refuse_exit(rc, ok_statuses)
     return rc
+
+
+def main(argv: Sequence[str]) -> int:
+    """``lean_run.py SET OUT -- CMD...``, for a shell job: CMD started as `run` starts it, SET the name of the statuses it
+    documents (`VERIFY_EXITS`); its standard error to OUT.err, and its output to OUT.out unless it is refused, which
+    leaves OUT.out empty, prints the refusal and exits 3."""
+    if len(argv) < 4 or argv[2] != "--" or not isinstance(ok := globals().get(argv[0]), frozenset):
+        print("usage: lean_run.py SET OUT -- CMD...  (SET: OK, REFUSES, VERIFY_EXITS or CONTRACT_EXITS)", file=sys.stderr)
+        return 2
+    p = subprocess.run(list(argv[3:]), capture_output=True, text=True, env=lean_env())
+    refused = why(p, ok)
+    with open(f"{argv[1]}.err", "w") as f:
+        f.write(p.stderr)
+    with open(f"{argv[1]}.out", "w") as f:
+        f.write("" if refused else p.stdout)
+    if refused:
+        print(refused, file=sys.stderr)
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

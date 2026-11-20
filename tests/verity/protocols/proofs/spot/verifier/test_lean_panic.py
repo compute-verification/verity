@@ -121,3 +121,54 @@ def test_a_served_process_that_dies_answers_no_call(tmp_path, monkeypatch):
         assert V.lean("verify", {})["answered"] is False
     finally:
         server.close()
+
+
+ACCEPTS = """for line in sys.stdin:
+    print(json.dumps({"output": {"accepted": True}}), flush=True)
+"""
+
+
+def _served(tmp_path, monkeypatch, body: str) -> V._Server:
+    monkeypatch.setattr(V, "executable", lambda *_: _fake(tmp_path, body))
+    return V._Server("fake-lean", tmp_path)
+
+
+def test_a_served_process_that_ends_at_its_documented_status_closes(tmp_path, monkeypatch):
+    server = _served(tmp_path, monkeypatch, ACCEPTS)
+    assert server.call("verify", {}) == ("output", {"accepted": True})
+    assert server.close() is None
+
+
+@pytest.mark.parametrize("end, why", [("sys.exit(134)", f"{LC.LEAN_EXIT}: status 134 \\(abort\\)"),
+                                      (f"print({PANIC_LINE!r}, file=sys.stderr)", f"{LC.LEAN_PANIC}: {PANIC_LINE}")])
+def test_a_served_process_that_accepts_then_does_not_end_as_documented_is_refused_at_its_close(tmp_path, monkeypatch,
+                                                                                                end, why):
+    server = _served(tmp_path, monkeypatch, f"{ACCEPTS}{end}\n")
+    assert server.call("verify", {}) == ("output", {"accepted": True})
+    with pytest.raises(V.LeanError, match=f"^fake-lean did not end as documented at its close: {why}$"):
+        server.close()
+
+
+def test_a_served_process_that_accepts_then_aborts_refuses_the_next_call_by_name(tmp_path, monkeypatch):
+    server = _served(tmp_path, monkeypatch, """print(json.dumps({"output": {"accepted": True}}), flush=True) if sys.stdin.readline() else None
+sys.exit(134)
+""")
+    try:
+        assert server.call("verify", {}) == ("output", {"accepted": True})
+        server._proc.wait()
+        with pytest.raises(V.LeanError, match=f"^fake-lean ended after its last answer, before verify: {LC.LEAN_EXIT}: "
+                                              "status 134 \\(abort\\)$"):
+            server.call("verify", {})
+    finally:
+        server.close()
+
+
+def test_the_verifiers_exit_refuses_by_status_an_accept_whose_process_then_aborted(tmp_path, monkeypatch):
+    server = _served(tmp_path, monkeypatch, f"{ACCEPTS}sys.exit(134)\n")
+    monkeypatch.setattr(V, "_server", server)
+    monkeypatch.setattr(V, "_caller_server", V._Server("unstarted", tmp_path))
+    exited = []
+    monkeypatch.setattr(V.os, "_exit", exited.append)
+    assert V.lean("verify", {}) == {"accepted": True}
+    V._close_at_exit()
+    assert exited == [70]

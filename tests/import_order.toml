@@ -297,7 +297,6 @@ loads = [
 paths = [
     "verity/commitments",
     "verity/commitments/gates/attest.py",
-    "verity/commitments/gates/block_key.py",
     "verity/protocols/resource_accounting/memory/poub/verifier/commitments/gates/block_check.circuit-check.py",
     "verity/protocols/resource_accounting/memory/poub/verifier/commitments/gates/block_check.py",
 ]

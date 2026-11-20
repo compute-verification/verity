@@ -132,3 +132,33 @@ def test_the_agreement_step_fails_naming_the_refusal(tmp_path, monkeypatch, caps
                   "--sessions", session], quiet=True)
     assert rc == 1
     assert f"agree: FAILED: {CASES[case][2]}" in capsys.readouterr().err.splitlines()
+
+
+ACCEPT = "print('VERDICT ' + json.dumps({'accepted': True}))\n"
+
+
+@pytest.mark.parametrize("case", [*CASES, "undocumented status"])
+def test_a_shell_jobs_verdict_beside_a_panic_an_abort_or_an_undocumented_status_is_not_read(tmp_path, capsys, case):
+    """`lean_run.py SET OUT -- CMD`, a shell job's launch (`zk_server_finish_agree.sh`'s `verify`): an accept beside a
+    panic line, after an abort or at a status SET doesn't hold leaves OUT.out empty and exits 3, naming the refusal."""
+    if case in CASES:
+        exe, why = _answering(tmp_path, case, ACCEPT), CASES[case][2]
+    else:
+        exe = _fake(tmp_path, f"assert os.environ.get({LR.ABORT_ON_PANIC!r}) == '1'\n{ACCEPT}sys.exit(3)\n")
+        why = f"{LR.LEAN_EXIT}: status 3"
+    assert LR.main(["VERIFY_EXITS", str(tmp_path / "v"), "--", str(exe)]) == 3
+    assert (tmp_path / "v.out").read_text() == "" and capsys.readouterr().err == f"{why}\n"
+
+
+def test_a_shell_job_reads_a_documented_refusal(tmp_path):
+    exe = _fake(tmp_path, "print('VERDICT ' + json.dumps({'accepted': False}))\nprint('setup: 1 ms', file=sys.stderr)\n"
+                          "sys.exit(1)\n")
+    assert LR.main(["VERIFY_EXITS", str(tmp_path / "v"), "--", str(exe)]) == 0
+    assert (tmp_path / "v.out").read_text().startswith("VERDICT ") and (tmp_path / "v.err").read_text() == "setup: 1 ms\n"
+    assert LR.main(["NO_SUCH_SET", str(tmp_path / "v"), "--", str(exe)]) == 2
+
+
+def test_the_finish_agreements_lean_verify_starts_under_lean_run():
+    lines = (POD.parent / "agreement" / "zk_server_finish_agree.sh").read_text().splitlines()
+    at = [i for i, x in enumerate(lines) if '"$LEAN" verify' in x]
+    assert at and all("/agreement/lean_run.py\" VERIFY_EXITS " in lines[i - 1] and lines[i - 1].endswith("-- \\") for i in at)
