@@ -274,5 +274,6 @@
       "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d",
       "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a"
     ]
-  }
+  },
+  "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain"
 }
