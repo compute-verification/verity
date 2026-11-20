@@ -5,7 +5,7 @@
 * past `dsa_topk_mask_cut.WHOLE_MAX` its positions and merge units are the ones `dsa_topk_reads.cut` names;
 * at small statics its body calls `units` in order, `boundary_rows.Layout` takes it inline over the window's class, with its
   return, each read's ok, the boundary's third value, a row a read, and each unit reads the window's operands and the units
-  before it as round 2 links and wires them (`second_stage`'s node links and node wires);
+  before it as round 2 links and wires them (`replay_links`' node links and node wires);
 * where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
   kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow).
 """
@@ -27,7 +27,6 @@ from verity.commitments.gates.embedding import read
 from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
 from verity_vllm.pipeline import long_row as LR
-from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.circuits import replay_links as RL
 
 RUN = "0" * 128
@@ -87,7 +86,7 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     """The check template registered inline at small statics, and round 2's own derivation run on the replay block it
     registers: every unit's operand gets a link or a wire, and each read's ok a link to the return the class commits, a row
     a read. About a minute, nearly all of it building the template's body (its
-    units' gates, the picks' most); no cheaper test runs `second_stage` on the registered descriptor, which round 2 reads."""
+    units' gates, the picks' most); no cheaper test runs `replay_links` on the registered descriptor, which round 2 reads."""
     t, L = _laid()
     nodes = t.body.nodes
     assert _members(nodes) == [descriptor_id(d) for _, d in LR.units(t)]
@@ -98,16 +97,16 @@ def test_the_layout_takes_it_inline_and_round_two_links_and_wires_each_units_ope
     assert L.ports()[BR.RETURN]["leaves"] == L.spans * L.n_rho * t.bindings["TOPK"]
     defs = definitions(L.program)
     fn = defs[descriptor_id(L.replay)]
-    cs = SS._callers_of(defs, fn)
+    cs = RL._callers_of(defs, fn)
     assert None not in cs.template
     assert all(RL._node_links(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
     assert all(RL._node_wires(cs, fn, k, node) is not None for k, node in enumerate(fn.body.nodes))
     wires = {(x.template.partition("{")[0], x.port, x.writer.partition("{")[0], x.wport)
-             for x, _per, _runs in SS.wire_runs(defs, descriptor_id(L.replay))}
+             for x, _per, _runs in RL.wire_runs(defs, descriptor_id(L.replay))}
     assert {("DsaPositionsChunk_v1", "slots", "DsaPositionsMerge_v2", "o0"),
             ("DsaPositionsSlot_v2", "slots", "DsaPositionsChunk_v1", "o0"),
             ("EmbeddingRead_v2", "tok", "DsaPositionsSlot_v2", "o0")} <= wires
-    returns = [(x.template, x.port, per) for x, per, _ in SS.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
+    returns = [(x.template, x.port, per) for x, per, _ in RL.link_runs(defs, descriptor_id(L.replay)) if x.value == BR.RETURN]
     assert returns == [(descriptor_id(t.bindings["READ"]), "o1", L.verdict_rows[0])]
 
 
