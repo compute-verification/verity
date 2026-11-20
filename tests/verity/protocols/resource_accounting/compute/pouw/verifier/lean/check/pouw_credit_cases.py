@@ -881,15 +881,16 @@ REGISTRY_TILES = ("v1", "v3", "v5")
 
 
 @functools.cache
-def registry_window(k: int, tile: str = "v1") -> dict:
+def registry_window(k: int, tile: str = "v1", prefix: str = "") -> dict:
     """The registry's window (`h1window.program`) of one linear at K, one call, over the 4 × 8 tile unit
-    (`h1window.tile_unit`) over the H1 tile `tile` (`REGISTRY_TILES`), as `codec.encode_program` writes it: a template
-    `credit.TILE_PINS` pins when K and `tile` are an instance it holds. About 60 MB, ten seconds to build."""
+    (`h1window.tile_unit`) over the H1 tile `tile` (`REGISTRY_TILES`), its parameters named `prefix`, as
+    `codec.encode_program` writes it: a template `credit.TILE_PINS` pins when K and `tile` are an instance it holds.
+    About 60 MB, ten seconds to build."""
     from verity.circuits import codec
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
     unit = HW.tile_unit(k, (4, 8), {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}[tile])
-    return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), unit=lambda _k: unit))
+    return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), prefix, unit=lambda _k: unit))
 
 
 #: `registry_window`'s layout at K = 64, as `credit.layout_of` reads it
@@ -1941,17 +1942,17 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     and `tile` make its circuits J10-R's, at `nks` K, over ``PouwH1Tile_v<tile>`` (`layout`, `descriptor`), and
     `program_fn` replaces its circuit's program function. With `windows` it has that many execution phases, and with `commit`
     each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`). `real`: its circuit is the
-    registry's window at K = 64 over `tile`'s H1 tile (`registry_window`, `REGISTRY_LAYOUT`), a template
-    `credit.TILE_PINS` pins, for a mutation that leaves the circuit as it is."""
+    registry's window at K = 64 over `tile`'s H1 tile, its parameters ``h1/`` (`registry_window`, `REGISTRY_LAYOUT`),
+    a template `credit.TILE_PINS` pins, for a mutation that leaves the circuit as it is."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3) if windows is None else windows
     pname = rng.choice(rc.PERIODS)
     if real and name in ("bad-circuit", "tile-k", "other-circuit"):
         raise ValueError(f"a real period's circuit is the registry's window, which {name} would change")
     lay = json.loads(json.dumps(REGISTRY_LAYOUT)) if real else layout(rng, nks=nks)
     t = table_rows(rng, lay)
-    prefix = "" if real else f"h1/w-{rng.randrange(100)}/"
-    desc = (desc_bytes(registry_window(64, {None: "v5" if j10r else "v1", 1: "v1", 3: "v3", 5: "v5"}[tile])).hex()
-            if real else
+    prefix = "h1/" if real else f"h1/w-{rng.randrange(100)}/"
+    real_tile = {None: "v5" if j10r else "v1", 1: "v1", 3: "v3", 5: "v5"}[tile] if real else None
+    desc = (desc_bytes(registry_window(64, real_tile, prefix)).hex() if real else
             _break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
             _break_desc(rng, lay, "tile-k", j10r, tile) if name == "tile-k" else
             descriptor(rng, lay, prefix, j10r=j10r, tile=tile))
