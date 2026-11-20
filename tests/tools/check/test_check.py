@@ -349,9 +349,10 @@ def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
     assert said.startswith("1 sets: 48 of 48 sessions agree, 0 disagree; 0 accepted") and "NO SESSION IS ACCEPTED" in said
     both = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 3, "passed_every_check": 2}]
     said = CHECK.agreement_outcome(both)
-    assert "3 accepted by the Lean verifier and by upstream, 2 refused last" in said and "NO SESSION" not in said
+    assert ("3 accepted by the Lean verifier and by upstream, 2 pass every Lean check before the form's and are refused at it"
+            in said and "NO SESSION" not in said)
     split = [{"set": 0, "sessions": 50, "agree": 49, "disagree": ["s7"], "accepted": 3, "passed_every_check": 0}]
-    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 refused" in CHECK.agreement_outcome(split)
+    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 pass" in CHECK.agreement_outcome(split)
     assert "NO SESSION" not in CHECK.agreement_outcome([])
 
 
@@ -362,7 +363,7 @@ def test_the_agreements_outcome_names_each_sets_second_verifier_and_what_fails()
              "both_refuse": 39, "upstream_alone_accepts": 4, "lean_alone_accepts": 0, "refused_at_target": 2,
              "refused_elsewhere": 4, "refused_untargeted": 37}]
     said = CHECK.agreement_outcome(last)
-    assert "NO SESSION IS ACCEPTED: 0 accepted; 7 passed every check and were refused last" in said
+    assert "NO SESSION IS ACCEPTED: 0 accepted; 7 pass every Lean check before the form's and are refused at it" in said
     assert "refusals only" not in said
     assert ("7 both accept, 39 both refuse, 4 the second verifier alone accepts, 0 the Lean verifier alone accepts; "
             "Lean's refusals: 2 at the check the vectors name, 4 at another, 37 where they name none") in said

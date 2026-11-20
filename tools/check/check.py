@@ -1340,7 +1340,7 @@ def agreement_outcome(sets: list[dict]) -> str:
         seconds.setdefault(r.get("second", AGREEMENT_UPSTREAM), []).append(r)
     by = " and by upstream" if set(seconds) <= {AGREEMENT_UPSTREAM} else " and by each set's second verifier"
     line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
-            f"{by if accepted and not disagree else ''}, {last} refused last after passing every check; as compared, "
+            f"{by if accepted and not disagree else ''}, {last} pass every Lean check before the form's and are refused at it; as compared, "
             f"{c('both_accept')} both accept, {c('both_refuse')} both refuse, {c('upstream_alone_accepts')} the second "
             f"verifier alone accepts, {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
             f"{c('refused_at_target')} at the check the vectors name, {c('refused_elsewhere')} at another, "
@@ -1353,7 +1353,7 @@ def agreement_outcome(sets: list[dict]) -> str:
         line += f"; ERROR: the Lean verifier panicked on {len(panics)} sessions ({', '.join(panics)}): their verdicts are not read"
     if n and not accepted:
         line += ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if not last else
-                 f"; NO SESSION IS ACCEPTED: 0 accepted; {last} passed every check and were refused last")
+                 f"; NO SESSION IS ACCEPTED: 0 accepted; {last} pass every Lean check before the form's and are refused at it")
     return line
 
 

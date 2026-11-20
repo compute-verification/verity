@@ -2,6 +2,7 @@
 asserted by the clause's own text, so deleting the clause fails its case."""
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -143,3 +144,21 @@ def test_a_block_bit_outside_its_inputs_and_gates_names_no_bit_of_c():
         with pytest.raises(IndexError) as e:
             b.to_c_bit(i)
         assert e.value.args == (left,)
+
+
+def test_words_that_cut_a_member_are_refused_by_front_called_directly():
+    _, bits = _fanout()
+    body = bits.D.root.body
+    k = next(k for k, n in enumerate(body.nodes) if n.form in ("call", "batch") and n.fn.gates >= 2)
+    with pytest.raises(R.Refused) as e:
+        R.front(bits.D, [(body.offsets[k] + 1, body.offsets[k + 1])])
+    assert str(e.value) == f"E_UNITS: the units cut root node {k} inside a member"
+
+
+def test_a_block_built_by_hand_without_an_input_a_gate_reads_names_the_bit():
+    c, bits = _fanout()
+    b = R.restrict(c, TR.TOY_PARTITION, [(1, 3)], bits)
+    assert b.inputs
+    with pytest.raises(R.Refused) as e:
+        dataclasses.replace(b, inputs=b.inputs[:-1]).listing()
+    assert str(e.value).startswith("E_UNREAD: a gate reads bit ") and str(e.value).endswith(" of C, which no port carries")
