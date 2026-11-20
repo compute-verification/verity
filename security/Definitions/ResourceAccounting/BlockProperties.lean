@@ -23,7 +23,7 @@ Accounting establishes that the actual circuit divides into blocks with some of 
 actual circuit's existing definitions:
 * **size**: its work at a pricing (`Placed.work`), gates at unit pricing;
 * **function**: a block of the declared circuit that the block's gates, cut as a circuit (`Placed.cut`), implement
-  (`Verity.Circuit.Implements`);
+  (`Verity.Implements`);
 * **input** from a named source (`Source`), in bits (width): over `region X I`, from the outside world it is
   `Placed.ingress X I`, and from its own past and registered information it is the part of `Placed.state` it reads;
 * **output** to the outside world, in bits (width): over `region X I`, `Placed.egress X I`.
@@ -151,7 +151,7 @@ noncomputable def output (i : St.ι) : ℕ :=
 /-- **Block `i` has the property `p`.** -/
 def Holds (i : St.ι) : Property → Prop
   | .sizeAtMost k => B.size π i ≤ k
-  | .function f => Circuit.Implements f (A.cut (B.gates i))
+  | .function f => Verity.Implements f (A.cut (B.gates i))
   | .inputAtMost sources k => B.input θ i sources ≤ k
   | .outputAtMost k => B.output i ≤ k
 
