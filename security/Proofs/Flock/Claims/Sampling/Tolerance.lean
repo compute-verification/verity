@@ -291,4 +291,18 @@ theorem toleranceCappedOfCounts : ToleranceCappedOfCounts := by
   rw [sum_filter_list]
   exact Finset.sum_le_sum h3
 
+/-- **The whole-population cap**: the capped tolerance is at most the tolerance and at most the population's whole
+declared use. -/
+theorem toleranceCapped_le (ns ks : List ℕ) (w : ℕ → ℕ) (L b : ℕ) :
+    toleranceCapped ns ks w L b ≤ tolerance ns ks w L b ∧
+      toleranceCapped ns ks w L b ≤ ((List.range ns.length).map (stratumUse ns w)).sum := by
+  unfold toleranceCapped tolerance
+  dsimp only
+  refine ⟨Nat.add_le_add_left (min_le_left _ _) _, ?_⟩
+  rw [sum_range_list, sum_filter_list, sum_filter_list]
+  calc _ ≤ ∑ s ∈ (range ns.length).filter (fun s => ks[s]! = 0), stratumUse ns w s +
+        ∑ s ∈ (range ns.length).filter (fun s => ¬ ks[s]! = 0), stratumUse ns w s :=
+        Nat.add_le_add_left ((min_le_right _ _).trans (Finset.sum_le_sum fun s _ => min_le_right _ _)) _
+    _ = _ := Finset.sum_filter_add_sum_filter_not _ _ _
+
 end Claims.Sampling
