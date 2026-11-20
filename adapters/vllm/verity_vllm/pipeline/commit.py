@@ -1178,7 +1178,7 @@ def main(args: Options) -> None:
     coms: dict[str, Any] = {}
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _target = va.target_of_workload(wl, args.target)
-    _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), _target)   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
+    _settings = PO.load_settings(args.protocols_config or wl.get("protocols_config"))
     try:
         PO.commit_context(_target, settings=_settings, commit_scheme=args.commit_scheme)
     except PO.Refused as e:

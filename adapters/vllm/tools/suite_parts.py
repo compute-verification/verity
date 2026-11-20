@@ -54,8 +54,6 @@ SECONDS: dict[str, float] = {
     "program/test_boolean_attention.py": 169,
     "program/test_topp_words.py": 160,
     "program/test_deepgemm.py": 154,
-    "protocols/test_pouw_h1.py": 153,
-    "protocols/test_pouw_h1_credit.py": 150,
     "program/test_sampling_split.py": 148,
     "pipeline/test_single_request_build_path.py": 138,
     "program/test_bf16_gemm.py": 138,

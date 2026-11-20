@@ -32,7 +32,6 @@ untraced = [
     "test_a5_tp_gates.py",
     "test_a5_tp_store.py",
     "test_a5_network_attester.py",
-    "test_commit_records.py",
     "test_composite.py", "test_member_seconds.py", "test_members_tables.py",
     "test_served_advice_day.py",
     "test_served_overhead.py",
@@ -77,8 +76,7 @@ parts = 7
 # reference deployment it reads) and its bundle and registration fixtures; `benchmarks/prove_path/records_audit.py`: a5's
 # records audit. `adapters/vllm/tools/served_run/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
-# serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `adapters/vllm/tools/served_run/published.sh`,
-# the list of files a Commit run publishes, which `test_commit_records` holds a5_llama1b_h200.sh to.
+# serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine.
 # `verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
@@ -118,7 +116,6 @@ inputs = ["tests/verity/circuits/stand_in.py", "applications/onsite_full.toml", 
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "verity/commitments/cuda/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "adapters/vllm/tools/served_run/serve_load.py",
-          "adapters/vllm/tools/served_run/published.sh",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
           "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",

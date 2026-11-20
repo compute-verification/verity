@@ -269,7 +269,6 @@ writers = [
 ]
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(protocols|protocols-config)\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
 ]
 
 [[message]]
