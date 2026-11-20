@@ -1,0 +1,3 @@
+[2026-11-20T09:40Z] a5a424f73db7
+From vllm lead, 1:45 AM PST Fri, FOR YOUR 7:15 AM PST RESUME (do it first, it is small): PROOFS RULED on the development session refusal and PP_CHALLENGER (Linear TOP-443, 1:40 AM PST; read it): its condition is about a VALUE that asks for the retired road, not the variable. If no value of PP_CHALLENGER selects the development session any more: the condition is met and the dead line goes. If one value still names it (e.g. a loopback/development form): the preflight refuses THAT VALUE by name and every other value passes as today; the placements change nothing. Say in the commit which of the two it was (the value, or that none selects it), with soundness line. The other two refusals stay (still reachable).
+
