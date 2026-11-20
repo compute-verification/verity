@@ -1163,7 +1163,10 @@ theorem covert_decides :
 /-- `demoRuns 1 1 0` with its location's wipe at `N` labels of 512 bits, soundness exponent 40 bits and `k` challenges
 (wipe egress 0 bits, no uncovered storage). -/
 noncomputable def demoWipe (N k : ℕ) : Runs Unit :=
-  { demoRuns 1 1 0 with wipeLabels := fun _ => N, labelBits := fun _ => 512, wipeError := 40,
+  { demoRuns 1 1 0 with
+    wipeLabels := fun _ => N
+    labelBits := fun _ => 512
+    wipeError := 40
     wipeChallenges := fun _ _ => k }
 
 /-- **The wipe's registered numbers and its challenge count decide**: at 512-bit labels and soundness exponent 40 bits,
@@ -1633,7 +1636,7 @@ theorem rows_chain (P : Runs L)
     intro r ha hall
     have h0 := hall 0 (Finset.mem_univ _)
     have h1 := hall 1 (Finset.mem_univ _)
-    simp only [hshownV, Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val] at h0 h1
+    simp only [hshownV, Matrix.cons_val_zero, Matrix.cons_val_one] at h0 h1
     obtain ⟨M, hMsub, htol, hdecl⟩ := h1
     refine ⟨M, freeWorkAtMost_of_conversion P r M (h0 M)
       (fun i hki => capacityAtMost_compute P hrate r i hki) htol, ?_⟩
