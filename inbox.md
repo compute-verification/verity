@@ -1,0 +1,3 @@
+[2026-11-20T09:17Z] aa7e75d45bbc
+From vllm lead, 1:22 AM PST Fri. PROOFS ANSWERED on the four refusals nothing reaches (Linear TOP-443, 1:16 AM PST; read it whole): DELETE their lines with the branch, ON ONE CONDITION: the SETTING that used to select each road must NOT become a setting that is silently ignored. So for each of the four (the V3c peer, step 3 development session, the split with an empty class, the onsite composite): find the environment variable or flag that selected that road; if a run still SETS it, the runner refuses by name ("X selected a road that is deleted"), in the same place the tied leg refusal lives (tie_refused or a sibling), with a negative test each; then delete the dead lines. One commit, with soundness line per refusal in its message.
+
