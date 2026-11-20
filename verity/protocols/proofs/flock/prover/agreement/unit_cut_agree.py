@@ -8,8 +8,10 @@ then perturbed so that every failure code occurs, and is checked twice: by v1's 
 (`recompute="report"`, DIR/<i>-v2.json), where the codes and the `recomputed_across` count must agree. Writes DIR/<i>.json and
 DIR/result.json; exits 1 unless the Lean verifier's codes equal the reference's on every cut.
 """
-import argparse, json, random, subprocess, sys
+import argparse, json, random, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits.partition import INPUT_UNIT, validate_unit_cut
 
@@ -71,7 +73,7 @@ def main():
             v = validate_unit_cut(c["total_gates"], c["structure_gates"], c["owner"], [tuple(r) for r in c["reads"]], c["outputs"],
                                   c["committed"], c["input_gates"], [tuple(r) for r in c["recomputed"]], rule)
             want[str(f)] = (list(v.codes), v.detail["recomputed_across"]["n"] if rule == "report" else None)
-    p = subprocess.run([a.lean, "unit-cut", *files], capture_output=True, text=True)
+    p = LR.run([a.lean, "unit-cut", *files], ok_statuses=LR.REFUSES)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("CUT "):

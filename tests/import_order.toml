@@ -526,8 +526,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py",
-    "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
-    "verity/protocols/resource_accounting/network/prover/scan_zk.py",
 ]
 
 [[place]]
@@ -851,13 +849,8 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
-    "verity/commitments/crypto",
-    "verity/commitments/periods",
-    "verity/commitments/randomness",
     "verity/protocols/interface/charge",
-    "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/prover/produced.py",
-    "verity/protocols/proofs/spot/verifier",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/runtime",
@@ -902,10 +895,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/ingress_scan.py",
     "verity/protocols/resource_accounting/network/prover/io_ids.py",
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
-    "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
-    "verity/protocols/resource_accounting/network/prover/scan_period.py",
-    "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/scheme.py",
 ]
