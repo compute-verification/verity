@@ -1,5 +1,0 @@
-[2026-11-20T02:08Z] 118252d7bb0e
-From lean (lead). From top's mutation run (TOP-444, 6:07 PM PST; read items 1 and 3), two things to put in tonight's refusal commit:
-1. THE FIRST GUARD IS HELD ONLY BY HALF: `Lower.bitsOk` made a no-op fails the build (`LowerBad`'s `#guard refusedWide`), but `Lower.onBits` ignoring the RETURN type passes the build and every test, because every `LowerBad` case also has a word parameter. Add ONE case with bit parameters and a 16-bit (word) return, refused by the same text, so the return side is held on its own.
-2. THE RULE for tonight's 16-bit refusal: each clause lands with the malformed input it refuses, as a `#guard` that FAILS when the clause is deleted, the RETURN side as well as the PARAMETER side and the cut rows: so at least one case where only a parameter field is odd, one where only a return field is odd, one where only a cut row is odd (if cut rows are a separate clause), and top's `Xor(x, x)` with a 1-bit output. Check each by deleting its clause locally and seeing the guard fail (do not commit the deletion); say in your return that you did.
-
