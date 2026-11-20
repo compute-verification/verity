@@ -524,3 +524,54 @@ def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_writt
     assert a5.case_written(failed) == {"written": False, "why": "ZeroDivisionError: division by zero"}
     (none := tmp_path / "none").mkdir()
     assert a5.case_written(none) == {"written": False, "why": "the audit wrote none, and no reason"}
+
+
+def _audited(d: Path, accepted: bool, case: bool = True) -> dict:
+    """A stand-in audit's result under ``d``, its Python verdict ``accepted``, with a stand-in per-member case."""
+    d.mkdir(parents=True, exist_ok=True)
+    if case:
+        (d / "case-v2.json").write_text(json.dumps({"blobs": [], "commitment": "", "evidence": "", "params": {}}))
+    return {"accepted": accepted, "checks": {"draw": {"ok": accepted, "codes": []}}}
+
+
+def test_the_audit_accepts_only_where_leans_members_check_accepts_its_case_too(tmp_path):
+    """`a5.members_lean`: Lean's `checkMembersAt` on the audit's own per-member case is required; where it and the Python
+    verdict differ the audit refuses with `MEMBERS_DISAGREE` and both texts, and an audit with no case is Lean's
+    refusal, its reason the one `case_written` gives."""
+    def lean(verdict, why=None):
+        return lambda case: (verdict, why)
+
+    r = _audited(tmp_path / "both", True)
+    a5.members_lean(tmp_path / "both", r, lean("accept"))
+    assert r["accepted"] and r["checks"]["members_lean"]["ok"] and r["checks"]["members_lean"]["codes"] == []
+    r = _audited(tmp_path / "lean-refuses", True)
+    a5.members_lean(tmp_path / "lean-refuses", r, lean("reject", "proofs: member a/c0: refused"))
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and not got["ok"] and got["codes"] == [a5.MEMBERS_DISAGREE]
+    assert got["detail"] == {"lean": {"verdict": "reject", "reason": "proofs: member a/c0: refused"},
+                             "python": {"accepted": True, "failed": []}}
+    r = _audited(tmp_path / "python-refuses", False)
+    a5.members_lean(tmp_path / "python-refuses", r, lean("accept"))
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and got["codes"] == [a5.MEMBERS_DISAGREE] and got["detail"]["python"]["failed"] == ["draw"]
+    r = _audited(tmp_path / "neither", False)
+    a5.members_lean(tmp_path / "neither", r, lean("reject", "proofs: x"))
+    assert not r["accepted"] and r["checks"]["members_lean"]["codes"] == ["lean-reject"]
+    (tmp_path / "none" / "case-v2-error.txt").parent.mkdir()
+    (tmp_path / "none" / "case-v2-error.txt").write_text("ValueError: no case\n")
+    r = _audited(tmp_path / "none", True, case=False)
+    a5.members_lean(tmp_path / "none", r, lean("accept"))
+    assert not r["accepted"] and r["checks"]["members_lean"]["detail"]["lean"] == {"verdict": "reject",
+                                                                                   "reason": "ValueError: no case"}
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_leans_members_check_refuses_a_stand_in_case_the_python_accepted(tmp_path):
+    """The executable's own ``check`` (`members.case_check`) on a stand-in case: Lean refuses its parameters, so an
+    audit the Python accepted is refused as a disagreement, Lean's reason beside the Python's verdict."""
+    r = _audited(tmp_path, True)
+    a5.members_lean(tmp_path, r)
+    got = r["checks"]["members_lean"]
+    assert not r["accepted"] and got["codes"] == [a5.MEMBERS_DISAGREE], got
+    assert got["detail"]["lean"]["verdict"] == "reject" and got["detail"]["lean"]["reason"], got

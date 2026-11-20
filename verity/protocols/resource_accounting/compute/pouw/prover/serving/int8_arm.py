@@ -1,5 +1,5 @@
 """The served int8 arm PoUW's H1 (`h1`) records and checks: its exact GEMM and its dequantization, which the workload that serves the arm
-hands in (`use`). H1 reads both only to redo what the arm served: a call's z when the arm kept none (`H1Run.record`), and
+hands in (`use`). H1 reads both only to redo what the arm served: a call's z when the arm kept none (H1's runner, deleted), and
 dq(z, s_a, s_w) when it checks the arm's z/y records (`h1.records.reason`, `h1.records.holds_on`).
 
 `arm` raises `NotImplementedError` until a workload has handed its arm in."""

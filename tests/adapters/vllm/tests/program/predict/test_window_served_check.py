@@ -53,7 +53,7 @@ def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_tem
     with pytest.raises(Unexpressible, match="no row past 111 B"):
         WC.check_provable(circuit)
     named = WC.check_served(circuit)
-    assert named["row_floor"] and all("no row past 111 B" in why for why in named["row_floor"].values())
+    assert named["row_floor"] and all("no row has a compression before its last" in why for why in named["row_floor"].values())
     assert named["prover_floor"] and all("under 25" in why for why in named["prover_floor"].values())
     _in_population(circuit, {**named["row_floor"], **named["prover_floor"]})
 

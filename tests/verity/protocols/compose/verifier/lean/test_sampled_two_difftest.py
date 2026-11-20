@@ -171,20 +171,29 @@ def test_two_definitions_are_refused_by_name(server) -> None:
     assert T.ONE_DEFINITION in json.loads(lean[1])["reason"], lean
 
 
+def test_two_levels_that_parse_are_refused_by_name(monkeypatch) -> None:
+    """By design, the twin refuses two levels' parameters by name (`TWO_LEVELS_REFUSED`) where the two-stage form's
+    parse returns, and only there: its parse's own refusals keep their reasons."""
+    monkeypatch.setattr(T, "params_of_json", lambda j: {})
+    with pytest.raises(D.Reject) as refused:
+        R._form_params(base())
+    assert str(refused.value) == R.TWO_LEVELS_REFUSED
+    assert R.TWO_LEVELS_REFUSED.startswith("levels-not-proved: ")
+
+
 def test_the_base_is_refused(server) -> None:
     """Past the mirror the Lean still refuses: the members are none."""
     assert PORT.lean(server, case(base()))[0] == "reject"
 
 
-#: One honest two-stage play's case, as ``sampled_two_small.sh`` with no arguments keeps it (its ``$OUT/form``:
-#: params.json, commitment.json, evidence.json and blobs/, the play's circuit, public file and session's files). Its
-#: files are past what git holds, so `artifacts.json` registers the directory and `suites.py` fetches it.
+#: One honest two-stage play's case (params.json, commitment.json, evidence.json and blobs/, the play's circuit, public
+#: file and session's files). Its files are past what git holds, so `artifacts.json` registers the directory and
+#: `suites.py` fetches it.
 CASE = Path(__file__).resolve().parent / "fixtures" / "sampled-two-case"
-#: What mends a kept case SPOT no longer accepts because an honest play changed: a play made afresh, which the script
-#: accepts before it keeps it.
-AFRESH = ("if an honest play changed, keep one made afresh: `bash benchmarks/one_stage/sampled_two_small.sh` on a "
-          "node, its $OUT/form's params.json, commitment.json, evidence.json and blobs/ as a directory, `research "
-          "data put --kind fixture/v1 --tree DIR --preserve`, and its id at this path in artifacts.json")
+#: No command makes a two-level play while two levels are refused, so the kept case is not remade: the check must
+#: refuse it by name before it reads what an honest play would change.
+AFRESH = ("the kept two-level case is refused by another name than levels.TWO_LEVELS_REFUSED: the refusal must come "
+          "before the check reads the case's evidence, which no command remakes while two levels are refused")
 
 
 def _case_dir() -> Path:
@@ -223,23 +232,14 @@ def _profile(j) -> dict | None:
 
 
 @pytest.mark.slow
-def test_two_levels_accept_one_honest_play_and_profile_both(tmp_path) -> None:
-    """SPOT accepts some play at two levels: one honest two-stage run's case (`CASE`, or the directory
-    ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``) passes `vstar-recursive sampled check`, and the
-    accept's integrity profile lists both levels, coarse to fine: the replay blocks, the boundary registration's
-    population, then the interior's, each with its sampling design and its drawn count, and no credited block. It
-    catches a change after which two levels accept no play, which every refusal case above passes, or profile one."""
+def test_two_levels_are_refused_by_name_on_an_honest_play(tmp_path) -> None:
+    """By design, SPOT refuses two levels by name at registration: one honest two-stage run's case (`CASE`, or the
+    directory ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``), whose parameters parse at two levels to the
+    end, is refused by `vstar-recursive sampled check` with `TWO_LEVELS_REFUSED` and no accept, as the twin refuses
+    it. It catches a change after which two levels accept a play that no soundness theorem covers."""
     on = _check(tmp_path)
-    assert on.returncode == 0, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
-    prof = _profile(json.loads(on.stdout))
-    assert prof is not None, on.stdout[-4000:]
-    population = json.loads((_case_dir() / "commitment.json").read_text())["population"]
-    levels = prof["levels"]
-    assert [lv["name"] for lv in levels][:1] == ["replay"] and len(levels) == 2, levels
-    assert levels[0]["size"] == population, (levels, population)
-    assert all(lv["draw"] is not None and lv["size"] >= 1 for lv in levels), levels
-    assert sorted(prof["drawn"]) == sorted(lv["name"] for lv in levels), prof["drawn"]
-    assert "credited" not in prof, prof
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
+    assert _profile(json.loads(on.stdout)) is None, on.stdout[-4000:]
 
 
 #: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)
@@ -264,37 +264,16 @@ def _evidence() -> dict:
     return json.loads((_case_dir() / "evidence.json").read_text())
 
 
-def _refuses(tmp_path: Path, evidence: dict, reason: str) -> None:
-    """The kept play with its evidence replaced by `evidence` is refused, by `reason`."""
-    on = _check(tmp_path, evidence=evidence)
-    assert on.returncode == 1 and reason in on.stdout, (on.stdout + on.stderr)[-4000:]
-
-
 @pytest.mark.slow
-def test_two_levels_refuse_a_session_count_mismatch(tmp_path) -> None:
-    """Two levels read one statement a session: the kept honest play (`CASE`) with one second-stage statement dropped,
-    so the statements are fewer than the sessions, is refused by `STMT_COUNT`, the reason the twin's reference gives.
-    The counts agree only at the honest play, which the accept test passes; no refusal case above reaches this check,
-    whose play's interior names no members."""
+def test_two_levels_are_refused_by_name_before_their_evidence_is_read(tmp_path) -> None:
+    """By design, two levels' parameters are refused by name before their evidence is read: the kept honest play
+    (`CASE`) with one second-stage statement dropped, which the twin's reference refuses by `STMT_COUNT` when it reads
+    the statements, is refused by `TWO_LEVELS_REFUSED` instead."""
     ev = _evidence()
     own = ev["statements"]
     assert len(own) >= 1, ev
     short = own[:-1]
-    reason = T.stmts_sessions(own, short)
-    assert reason == T.STMT_COUNT
-    _refuses(tmp_path, {**ev, "statements": short}, reason)
-
-
-@pytest.mark.slow
-def test_two_levels_refuse_a_statement_that_is_not_its_session_s(tmp_path) -> None:
-    """Two levels read each statement as its session's: the kept honest play (`CASE`) with its first second-stage
-    statement replaced by another, so the statement at a position is not the one its session makes, is refused by
-    `STMT_SESSION 0`, the reason the twin's reference gives."""
-    ev = _evidence()
-    own = ev["statements"]
-    assert len(own) >= 1, ev
-    swapped = [{"template": "not-the-session-s"}, *own[1:]]
-    assert canonical(swapped[0]) != canonical(own[0])
-    reason = T.stmts_sessions(own, swapped)
-    assert reason == T.STMT_SESSION(0)
-    _refuses(tmp_path, {**ev, "statements": swapped}, reason)
+    assert T.stmts_sessions(own, short) == T.STMT_COUNT
+    on = _check(tmp_path, evidence={**ev, "statements": short})
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:]
+    assert T.STMT_COUNT not in on.stdout, on.stdout[-4000:]
