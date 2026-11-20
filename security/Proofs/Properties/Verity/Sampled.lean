@@ -369,9 +369,9 @@ noncomputable abbrev Cc :=
 noncomputable def P :=
   (keyProgP A.D.unroll {} A.hU A.n).partition (FlockSoundness.Discharge.Layout.outsOfP A.D.unroll A.hU A.n {})
 
-/-- The session's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
+/-- The session's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor. -/
 theorem hcS : Flock.HmOut.parseStmt (zkTags A.I) A.I.circuitFile A.I.tables = .ok A.D.unroll :=
-  Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse A.hD)
+  Flock.Desc.parseStmt_stmt A.hD
 
 /-- V5's binding at the session's ports. -/
 noncomputable def vb :=
