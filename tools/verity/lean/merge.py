@@ -33,7 +33,7 @@ other kept it as the base had it is dropped (`gone`): none of that side's guaran
 the other side's new or restated guarantees can, and one moved to another module leaves the old one (`moved`); a group
 left without definitions is dropped. Whether a guarantee is listed is not the build's: one side's removal applies over
 the other's change to its record, and only a change to its owner keeps it. What only a person writes (an `owner`, an open
-premise's `issue` or `due`, a domain hypothesis's `why` or `cites`, a `shape`, `frozen` or `except` entry, a dependency's
+premise's `issue` or `due`, a domain hypothesis's `why` or `cites`, a `scope` sentence, a `shape`, `frozen` or `except` entry, a dependency's
 revision, a policy entry such as a layer's field or a `compile_time` digest) merges as the union of both sides' entries:
 one both sides changed differently is theirs', and one a side removed while the other changed it is the changed one
 (`one`). A `shape.inline` entry is one premise of a guarantee, so two sides that each add or drop premises of one
