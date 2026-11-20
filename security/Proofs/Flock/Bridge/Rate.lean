@@ -11,8 +11,8 @@ counts. A selection rule that names a rate fixes each count from the rate and th
 least the rate at whatever sizes the prover registers. This file holds that step:
 
 * `RateOn num den samplingDesign n`: each of `samplingDesign`'s counts is at least `num/den` of what it is taken from: a subset's `k` of the
-  `n` units, and each stratum's count under a stratified or work design (the rule's, `stratumK` or `workK`) of the
-  stratum's units. A Bernoulli design is none;
+  `n` units, and each stratum's count under a stratified or work design (the rule's, `stratumK` or `workK`) or a rated
+  design (its registered `k`) of the stratum's units. A Bernoulli design is none;
 * `rateOn_subset`, `rateOn_stratified`, `rateOn_work`: the designs a rate names are `RateOn`: `subset k` at
   `k = Spot.Rate.count`, `stratified K` at `K = Spot.Rate.stratK` over the strata's sizes, and `work K` at floors
   `Spot.Rate.floor`;
@@ -29,7 +29,8 @@ namespace Flock.Bridge
 
 /-- **A sampling design whose every count is at least `num/den` of what it is taken from**: a subset's `k` of the `n`
 units; under a stratified design each stratum's count `stratumK K n_s n` of its `n_s` units; under a work design each
-stratum's count `workK` of its units. A Bernoulli design is none. -/
+stratum's count `workK` of its units; under a rated design each stratum's registered `k` of its units. A Bernoulli design
+is none. -/
 def RateOn (num den : ℕ) (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) : Prop :=
   match samplingDesign with
   | .subset k => num * n ≤ den * k
@@ -37,6 +38,7 @@ def RateOn (num den : ℕ) (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ
   | .stratified K St => ∀ s ∈ St.toList, num * s.size ≤ den * Flock.Draw.stratumK K s.size n
   | .work K ws => ∀ s ∈ ws.toList,
       num * s.size ≤ den * Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor
+  | .rated _ rs => ∀ s ∈ rs.toList, num * s.size ≤ den * s.k
 
 /-- A rate's subset, `Spot.Rate.count` of the `n` units, is `RateOn`. -/
 theorem rateOn_subset (num den tables n : ℕ) (hd : 0 < den) (ht : 0 < tables) :
@@ -98,6 +100,12 @@ theorem rateOn_count {samplingDesign : Flock.Draw.SamplingDesign} {ns : List ℕ
     show num * s.size ≤ den * s.k
     rw [hk s hs]
     exact hr s hs
+  | rated _ rs =>
+    obtain ⟨⟨-, hsz⟩, -, hsum⟩ := h
+    subst hsz
+    subst hsum
+    rw [List.map_map]
+    exact sum_mul_le _ _ num den rs.toList hr
 
 /-- A count `kd` of `n` units, `n` not zero, with `num · n ≤ den · kd`, is at least the share `num/den` of them. -/
 theorem rate_le_share {num den n kd : ℕ} (h : num * n ≤ den * kd) (hd : 0 < den) (hn : 0 < n) :

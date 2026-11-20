@@ -316,7 +316,7 @@ theorem cellsOf_eq (i : Spot.Run.Input) (it : Spot.Run.Interior) : SampledTwoDes
 
 theorem oneStageOk_samplingDesignOk (ns : List ℕ) (samplingDesign : Option _root_.Flock.Draw.SamplingDesign) :
     oneStageOk ns ((samplingDesign.map oneStageOf).getD .all) = SampledTwoDesc.samplingDesignOk ns samplingDesign := by
-  rcases samplingDesign with _ | (_ | _ | _ | _) <;> rfl
+  rcases samplingDesign with _ | (_ | _ | _ | _ | _) <;> rfl
 
 /-- **The design `Select.select` samples**, from the check's first-stage sampling design. -/
 theorem slotDesign_of_firstSamplingDesign {rule : Spot.Select.Rule} {d : Spot.Program} {q : Json} {tb : Option Json}

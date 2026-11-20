@@ -1026,11 +1026,12 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
       exact Iff.rfl)
   have h1r := reset h1
   have h0 : ∀ c, j0 () c = #[] ↔ c = #[] ∧
-      (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+      (∃ samplingDesign, Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") = .ok samplingDesign ∧
+          jeq (get "law") samplingDesign = true) ∧
       j1 () #[] = #[] := by
     intro c
     simp only [j0]
-    rcases hd : Draw.derive v.program v.query v.samplingDesign v.workTable with a | samplingDesign
+    rcases hd : Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") with a | samplingDesign
     · rw [h1r]
       simp only [addCode_ne_nil, false_and, false_iff]
       rintro ⟨_, ⟨samplingDesign, hl, _⟩, _⟩
@@ -1057,7 +1058,8 @@ theorem docket_nil (rec : Json) (v : Docket.Verifier) :
         keys? rec = some (if v2 = true then Docket.KEYS_V2 else Docket.KEYS) ∧
         (jeq (get "format") (if v2 = true then Json.str Docket.FORMAT_V2 else Json.str Docket.FORMAT) = true ∧
           jeq (get "protocol") (Json.str Docket.PROTOCOL) = true) ∧
-        (∃ samplingDesign, Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign ∧ jeq (get "law") samplingDesign = true) ∧
+        (∃ samplingDesign, Draw.agreed v.program v.query v.samplingDesign v.workTable (get "law") = .ok samplingDesign ∧
+          jeq (get "law") samplingDesign = true) ∧
         j1 () #[] = #[]) := by
     intro bk bf hk hf
     cases bk
@@ -1122,7 +1124,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
   have hcl : dcl = closure := rfl
   have hkeys : ∀ x, keys? (Json.obj kvs) = some x → have_ = x := by intro x h; simp [have_, h]
   simp only []
-  by_cases hc : ["subset", "bernoulli", "stratified", "work"].contains kind = true
+  by_cases hc : ["subset", "bernoulli", "stratified", "work", "rated"].contains kind = true
   rotate_left
   · simp only [hc, Bool.not_false, Bool.or_true, ↓reduceIte, Id.run_pure]
     constructor
@@ -1173,7 +1175,7 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
           · rename_i t ht; exfalso; have := h s hs t ht; simp only [countIn] at this; simp [this] at hb
           · rfl
         · rfl
-    have hmem : kind ∈ ["subset", "bernoulli", "stratified", "work"] := by
+    have hmem : kind ∈ ["subset", "bernoulli", "stratified", "work", "rated"] := by
       simpa only [List.contains_iff_mem] using hc
     have hkeys' : keys? (Json.obj kvs) = some (sampleKeys kind closure) := by
       have : have_ = want := by simpa only [Bool.not_eq_true, bne_eq_false_iff_eq] using hk
@@ -1185,11 +1187,12 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
         have e : Json.arr xs = Json.arr us' := hxs.symm.trans h1
         cases e; rw [hm] at h2; cases h2; exact h3
       · intro h; exact ⟨xs, units, hxs, hm, h⟩
-    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m → Draw.strataMessage (Json.obj kvs) m = none →
+    have hpn : ∀ m, int? (getD (Json.obj kvs) "population") = some m →
+        (if kind == "rated" then Draw.ratedMessage (Json.obj kvs) m else Draw.strataMessage (Json.obj kvs) m) = none →
         problem = none := by
       intro m h1 h2; simp only [problem, n, h1]; exact h2
     have hpe : problem = none → ∃ m, int? (getD (Json.obj kvs) "population") = some m ∧
-        Draw.strataMessage (Json.obj kvs) m = none := by
+        (if kind == "rated" then Draw.ratedMessage (Json.obj kvs) m else Draw.strataMessage (Json.obj kvs) m) = none := by
       intro h; simp only [problem, n] at h; revert h
       cases int? (getD (Json.obj kvs) "population") <;> simp
     have hcs_some : ∀ ys, cs = some ys → ∃ zs, getD (Json.obj kvs) "closure" = .arr zs ∧ zs.mapM int? = some ys := by
@@ -1226,18 +1229,20 @@ theorem checkSampleFull_obj_nil (kvs : Std.TreeMap.Raw String Json compare) (pop
         simp only [ok]
         split <;> simp_all
     all_goals first
-      | (simp only [Bool.or_eq_true, beq_iff_eq, Bool.not_eq_false']
+      | (simp only [Bool.or_eq_true, beq_iff_eq, Bool.not_eq_false', or_assoc]
          apply imp_congr_right; intro _
          rw [hjb]
          obtain ⟨m, h1, h2⟩ := hpe hp
+         simp (config := {failIfUnchanged := false}) only [beq_iff_eq] at h2
          exact ⟨fun h => ⟨m, h1, h2, h⟩, fun ⟨_, _, _, h⟩ => h⟩)
       | (simp only [Bool.or_eq_false_iff, beq_eq_false_iff_ne]
          constructor
-         · rintro ⟨h1, h2⟩ (h | h) <;> contradiction
+         · rintro ⟨⟨h1, h2⟩, h3⟩ (h | h | h) <;> contradiction
          · intro h
-           refine ⟨fun hs => ?_, fun hw => ?_⟩
+           refine ⟨⟨fun hs => ?_, fun hw => ?_⟩, fun hr => ?_⟩
            · obtain ⟨m, h1, h2, _⟩ := h (.inl hs); rw [hpn m h1 h2] at hp; cases hp
-           · obtain ⟨m, h1, h2, _⟩ := h (.inr hw); rw [hpn m h1 h2] at hp; cases hp)
+           · obtain ⟨m, h1, h2, _⟩ := h (.inr (.inl hw)); rw [hpn m h1 h2] at hp; cases hp
+           · obtain ⟨m, h1, h2, _⟩ := h (.inr (.inr hr)); rw [hpn m h1 h2] at hp; cases hp)
       | (constructor
          · intro h1 h2; rw [h1] at h2; cases h2
          · intro h
@@ -1288,7 +1293,7 @@ theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw p
     · rintro ⟨h, _⟩; cases h
 
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
-    Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
+    Draw.agreed v.program v.query v.samplingDesign v.workTable (getD rec "law") = .ok samplingDesign := h.1.2.2.2.1
 
 theorem creditedGate_accept {α : Type} {prof : Core.Integrity} {o : Core.Outcome α Core.Integrity} {a : α}
     {b : Core.Integrity} :

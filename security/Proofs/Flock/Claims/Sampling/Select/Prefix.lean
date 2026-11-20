@@ -143,6 +143,10 @@ theorem sampleWith_append {ξ t : ByteArray} (samplingDesign : Flock.Draw.Sampli
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
     exact run_bind_of h (fun r hr => stratifiedWith_append hr) (fun _ _ hk => hk)
+  | rated _ strata =>
+    unfold Flock.Draw.drawWith at h ⊢
+    dsimp only at h ⊢
+    exact run_bind_of h (fun r hr => stratifiedWith_append hr) (fun _ _ hk => hk)
 
 /-- **A sample reads only what it needs.** The units a sampling design samples from `ξ`'s bytes, and the bytes it read, are the same
 from `ξ ++ t`. -/

@@ -176,7 +176,10 @@ def rule (samplingDesign : Json) : V Json := do
   | .str "subset" | .str "stratified" | .str "work" =>
     exactly samplingDesign #["k", "law"] "the law"
     if (nat? (getD samplingDesign "k")).isNone then throw "the law's k is not a natural number"
-  | _ => throw "the law is not subset, bernoulli, stratified or work"
+  | .str "rated" =>
+    exactly samplingDesign #["law", "rates"] "the law"
+    discard <| Draw.ratedEntries samplingDesign
+  | _ => throw "the law is not subset, bernoulli, stratified, work or rated"
   return samplingDesign
 
 /-- The agreed sampling design and the work table it is expanded over: a sampling design object (`rule`) with the verifier's own work
@@ -625,7 +628,10 @@ def coveredDesign : Flock.Draw.SamplingDesign → V Flock.Draw.SamplingDesign
   | samplingDesign => pure samplingDesign
 
 /-- The sample the coins `src` give over `population` units under the expanded `samplingDesign` (`Select.select`'s for a sampling design rule):
-its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
+its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`).
+It samples under the verifier's own expansion (`Draw.deriveSamplingDesign`) where there is one, and that is the design
+`Draw.agreed` agrees to only because `Draw.COUNTS_AWAIT_THEIR_CLAIM` refuses a rated design at counts of its own: the
+read of the expansion goes in the change that lets a design's own counts stand. -/
 def sampledFrom (v : Docket.Verifier) (samplingDesign : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
   let l ← coveredDesign (derived.getD (← Draw.flockSamplingDesign samplingDesign population))
@@ -660,7 +666,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   let rec_ := c.record
   let codes := Docket.check rec_ v
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable (getD rec_ "law") with
   | .error err => .reject s!"registration: R1-law: {err}"
   | .ok samplingDesign =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") samplingDesign
@@ -676,7 +682,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
     let units := match getD e.draw "units" with | .arr us => us.filterMap nat? | _ => #[]
     let str := fun (k : String) => match getD rec_ k with | .str s => s | _ => ""
     let strata := Bound.strataOf population draw
-    let perTemplate := if jeq (getD samplingDesign "law") "stratified" || jeq (getD samplingDesign "law") "work" then
+    let perTemplate := if ["stratified", "work", "rated"].any (jeq (getD samplingDesign "law") ·) then
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     let profile : Core.Integrity :=
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
@@ -692,7 +698,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
 is, and when the sampling design doesn't derive, which `check` refuses. -/
 def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable (getD c.record "law") with
   | .ok samplingDesign => coinsReason v samplingDesign c.record e.draw src
   | .error _ => none
 
@@ -700,7 +706,8 @@ def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Op
 `Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
 def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   let v := p.verifier
-  match Draw.derive v.program v.query v.samplingDesign v.workTable, nat? (getD c.record "population") with
+  match Draw.agreed v.program v.query v.samplingDesign v.workTable (getD c.record "law"),
+      nat? (getD c.record "population") with
   | .ok samplingDesign, some n => match Draw.ranOutOf (sampledFrom v samplingDesign n src) with | .ok b => b | .error _ => false
   | _, _ => false
 

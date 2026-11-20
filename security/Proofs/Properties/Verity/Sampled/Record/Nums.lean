@@ -151,6 +151,7 @@ theorem proved_of_sampleDesign {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitS
       | stratified K St => exact FlockComplete.ZkTables.closure_stratified (FlockDeploy.wf_norm J) hD hl
       | bernoulli a b => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
       | work K ws => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
+      | rated _ _ => simp [Flock.ProvedScope.samplingDesignWhy, hl] at hw
     unfold Flock.Draw.UnitSample.proved
     rw [hcl]
     rfl

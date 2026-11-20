@@ -71,12 +71,14 @@ def puGates (b : Slots.ProofBlock) : List ℕ := List.range' b.gates.1 (b.gates.
 def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map puGates⟩
 
-/-- The claims' one-stage design of a Flock sampling design. -/
+/-- The claims' one-stage design of a Flock sampling design. A rated one is `subset 0`, whose miss probability is `1`,
+so no bound reads a rated draw's own counts: the claims hold no rated design yet. -/
 def oneStageOf : Flock.Draw.SamplingDesign → Claims.Sampling.OneStage
   | .subset k => .subset k
   | .bernoulli num den => .bernoulli num den
   | .stratified k _ => .stratified k
   | .work k ws => .work k (ws.toList.map (·.work)) (ws.toList.map (·.floor))
+  | .rated _ _ => .subset 0
 
 /-- **The design `Slots.select` samples** under `rule` on `d` and `query` with the work `table`: the population's design,
 the sampling design `Select.select` samples (`all` for the `All` rule), and the input class sampled `all`. An error where

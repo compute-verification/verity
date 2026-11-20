@@ -46,7 +46,7 @@ def _sha512(obj: Any) -> str:
 
 def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
             credited: frozenset[int] = frozenset()) -> IntegrityProfile:
-    """The audit's integrity profile under any of the four sampling designs. The work sampling design is the
+    """The audit's integrity profile under any of the five sampling designs. The work sampling design is the
     stratified sampling design at its sizes (Lean `SamplingDesign.work`), so its profile is the same `Stratified`
     one, counting the sampled proof blocks (a closure proves more, and only helps). ``credited`` is the first-level
     numbers `resource_accounting.scheme.credited` returns; it refuses them unless each is a block of every level
@@ -55,7 +55,7 @@ def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
         sampling_design = Subset(draw["k"])
     elif draw["law"] == "bernoulli":
         sampling_design = Bernoulli(Fraction(draw["p"]))
-    elif draw["law"] in ("stratified", "work"):
+    elif draw["law"] in ("stratified", "work", "rated"):
         sampling_design = core_sampling_design(sampling_design_of(draw), docket["population"])
     else:
         raise ValueError(f"no profile for a {draw['law']!r} sample")
@@ -65,11 +65,11 @@ def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
 
 
 def core_sampling_design(sampling_design: Mapping[str, Any], population: int) -> Stratified | None:
-    """The sampling design as core's `Stratified`: the uniform k-subset is one stratum, and a stratified or work sampling design has one per
+    """The sampling design as core's `Stratified`: the uniform k-subset is one stratum, and a stratified, work or rated sampling design has one per
     template (named by its descriptor id). None for `bernoulli`."""
     if sampling_design.get("law") == "subset":
         return Stratified.uniform(population, sampling_design["k"])
-    if sampling_design.get("law") in ("stratified", "work"):
+    if sampling_design.get("law") in ("stratified", "work", "rated"):
         return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in sampling_design["strata"]))
     return None
 
@@ -95,7 +95,7 @@ def wrong_units(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float
     p = profile(docket, draw, delta)
     out: dict[str, Any] = {"delta": delta, "of": docket["population"], "bound": p.bound(),
                            "rule": "except with probability delta, an accepted transcript has at most `bound` wrong units"}
-    if draw["law"] in ("stratified", "work"):
+    if draw["law"] in ("stratified", "work", "rated"):
         out["per_template"] = p.stratum_bounds()
         out["rule"] += ", and at most `per_template[t]` of them in template t"
     return out
@@ -261,7 +261,7 @@ def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Ma
         "wrong_units": None}
     if accepted:
         p = profile(docket, draw, delta)
-        if draw["law"] in ("stratified", "work"):
+        if draw["law"] in ("stratified", "work", "rated"):
             sampled = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
                        for s in draw["strata"]}
             rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": sampled}

@@ -160,5 +160,23 @@ theorem sampleUnits_size {samplingDesign : Flock.Draw.SamplingDesign} {ns : List
           refine (stratifiedWith_size src _ 0 p D ho).trans ?_
           rw [Array.toList_map, List.map_map]
           exact hsum
+    | rated _ strata =>
+      obtain ⟨-, -, hsum⟩ := hlaw
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (strata.map (·.toStratum))).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          refine (stratifiedWith_size src _ 0 p D ho).trans ?_
+          rw [Array.toList_map, List.map_map]
+          exact hsum
 
 end Properties.Spot.SecurityProofs

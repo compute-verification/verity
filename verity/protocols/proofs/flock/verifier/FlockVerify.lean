@@ -1606,6 +1606,7 @@ def sampleEvery? (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Option Dra
     | .bernoulli a b => a == b
     | .stratified _ strata => strata.all fun s => s.k == s.size
     | .work _ strata => strata.all fun s => s.k == s.toStratum.size
+    | .rated _ strata => strata.all fun s => s.k == s.toStratum.size
   if every then Id.run (Draw.drawWith (fun _ need => pure (ByteArray.mk (Array.replicate need 0))) samplingDesign pop) else none
 
 /-- What `draw` says, refusing before any coin, to a sample that would read coins and is given none: the verifier has no

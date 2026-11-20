@@ -101,7 +101,7 @@ def sampling_design_of(program: Program, query: Mapping[str, Any], sampling_desi
     with the population; ValueError (or `partition.QueryRefused`) where it doesn't apply."""
     population = P.units(program, query)
     mine = D.derive(program, query, sampling_design, table)
-    if mine.get("law") not in ("stratified", "work"):
+    if mine.get("law") not in ("stratified", "work", "rated"):
         problem = sampling_design_problem(mine, population)
         if problem:
             raise ValueError(problem)

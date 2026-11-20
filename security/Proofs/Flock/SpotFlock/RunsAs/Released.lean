@@ -182,6 +182,10 @@ theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) 
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
     exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
+  | rated _ strata =>
+    unfold Flock.Draw.drawWith at h ⊢
+    dsimp only at h ⊢
+    exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
 /-- **A sample reads only the bytes it reports reading**: the units a sampling design samples from `ξ`, having read `r.2` bytes, are
 the same from any source that starts with `ξ`'s first `r.2` bytes. -/

@@ -561,6 +561,7 @@ def samplingDesignWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.U
   | .subset _ => if zk || tags.hiddenOutputs || plainTables then none else some "a subset draw without --zk"
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
+  | .rated .. => some "a rated draw"
 
 /-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`samplingDesignWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without

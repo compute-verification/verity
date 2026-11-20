@@ -294,6 +294,13 @@ theorem units_ok_of_firstOk (samplingDesign : Flock.Draw.SamplingDesign) (n : �
       dsimp only at hr
       rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
       exact ⟨_, _, hr.symm⟩
+    | rated _ rs =>
+      obtain ⟨_, _, ho⟩ := stratifiedWith_take_first src (rs.map fun w : Flock.Draw.RatedStratum => w.toStratum) 0
+        miss h
+      unfold Flock.Draw.drawWith at hr
+      dsimp only at hr
+      rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
+      exact ⟨_, _, hr.symm⟩
   obtain ⟨d, read, hd⟩ := key _ rfl
   refine ⟨d.units, read, ?_⟩
   unfold _root_.Spot.Draw.sampleUnits
@@ -396,6 +403,18 @@ theorem units_error_le {samplingDesign : Flock.Draw.SamplingDesign} {ns : List �
       rw [Array.toList_map, List.map_map]
       exact hsum
     have hb := strata_fail_le (ws.map fun w : Flock.Draw.WorkStratum => w.toStratum) hks L hL
+    rw [hsum'] at hb
+    exact hb
+  | rated _ rs =>
+    obtain ⟨-, hk, hsum⟩ := hlaw
+    have hks : ∀ s ∈ (rs.map fun w : Flock.Draw.RatedStratum => w.toStratum).toList, s.k ≤ s.size := fun s hs => by
+      rw [Array.toList_map] at hs
+      obtain ⟨w, hw, rfl⟩ := List.mem_map.1 hs
+      exact hk w hw
+    have hsum' : ((rs.map fun w : Flock.Draw.RatedStratum => w.toStratum).toList.map (·.k)).sum = kd := by
+      rw [Array.toList_map, List.map_map]
+      exact hsum
+    have hb := strata_fail_le (rs.map fun w : Flock.Draw.RatedStratum => w.toStratum) hks L hL
     rw [hsum'] at hb
     exact hb
 

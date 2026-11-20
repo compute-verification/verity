@@ -210,7 +210,7 @@ theorem stratifiedWith_take (src : ByteArray) (strata : Array Flock.Draw.Stratum
     rw [hD, SampleExec.mem_qsort]; exact hDl x hx
 
 /-- The stages a sampling design's sample over `[0, n)` runs (`Flock.Draw.drawWith`), stage `i` missing as `miss i` says: one for
-`subset` and `bernoulli`, one per stratum for `stratified` and `work`. -/
+`subset` and `bernoulli`, one per stratum for `stratified`, `work` and `rated`. -/
 def samplingDesignStages (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (miss : ℕ → Array ℕ → Prop) : List Stage :=
   match samplingDesign with
   | .subset k => [⟨2 * k * Flock.Draw.width n + 64, Flock.Draw.subset k n, miss 0⟩]
@@ -218,12 +218,15 @@ def samplingDesignStages (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) 
   | .stratified _ strata => (List.range' 0 strata.size).map fun i => stage strata[i]! (miss i)
   | .work _ strata =>
     (List.range' 0 (strata.map (·.toStratum)).size).map fun i => stage (strata.map (·.toStratum))[i]! (miss i)
+  | .rated _ strata =>
+    (List.range' 0 (strata.map (·.toStratum)).size).map fun i => stage (strata.map (·.toStratum))[i]! (miss i)
 
 /-- The unit stage `i`'s local index `x` is. -/
 def unitOf (samplingDesign : Flock.Draw.SamplingDesign) (i x : ℕ) : ℕ :=
   match samplingDesign with
   | .stratified _ strata => strata[i]!.unit x
   | .work _ strata => (strata.map Flock.Draw.WorkStratum.toStratum)[i]!.unit x
+  | .rated _ strata => (strata.map Flock.Draw.RatedStratum.toStratum)[i]!.unit x
   | _ => x
 
 /-- **`sampleUnits` as stages**: a sample from `src` that ends runs `samplingDesign`'s stages in turn from its first byte, every unit
@@ -289,6 +292,21 @@ theorem sampleUnits_seq (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) (
           obtain rfl := (Option.some.inj h1).symm
           exact stratifiedWith_take src strata 0 p D ho
     | work k strata =>
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (strata.map (·.toStratum))).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          exact stratifiedWith_take src _ 0 p D ho
+    | rated _ strata =>
       unfold Flock.Draw.drawWith at hw
       dsimp only at hw
       rw [StateT.run_bind] at hw

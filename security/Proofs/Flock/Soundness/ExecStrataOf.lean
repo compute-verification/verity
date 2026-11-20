@@ -271,6 +271,37 @@ theorem workProblem_chain {k : ℕ} {S : Array WorkStratum} {pop : ℕ} (h : wor
           · next heq => rw [← beq_iff_eq.1 heq]; exact hc
           · cases h
 
+/-- What `ratedProblem` checks of the ranges: sorted by their starts, they chain from `0` to `pop`. -/
+theorem ratedProblem_chain {rates : Array RateEntry} {S : Array RatedStratum} {pop : ℕ}
+    (h : ratedProblem rates S pop = none) :
+    Chain 0 pop ((S.foldl (fun x1 x2 => x1 ++ x2.units) #[]).qsort fun a b => decide (a.fst < b.fst)).toList := by
+  unfold ratedProblem at h
+  split at h
+  · simp at h
+  · simp only [Std.Legacy.Range.forIn_eq_forIn_range', Id.run_bind] at h
+    split at h
+    · next r heq =>
+      have hr : r = none := h
+      subst hr
+      exact absurd heq (forIn_ne_some_none _ _ fun i => by
+        split
+        · exact Or.inr ⟨_, rfl⟩
+        · exact Or.inl rfl)
+    · split at h
+      · simp at h
+      · try simp only [Id.run_bind] at h
+        rcases loopB "U2: the strata don't tile the population"
+            ((S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : RatedStratum) => x1 ++ x2.units) #[]).qsort
+              fun (a b : ℕ × ℕ) => decide (a.fst < b.fst)).toList 0 with hm | ⟨hn2, hc⟩
+        · simp only [Array.forIn_toList] at hm
+          simp only [hm] at h
+          cases h
+        · simp only [Array.forIn_toList] at hn2 hc
+          simp only [hn2] at h
+          split at h
+          · next heq => rw [← beq_iff_eq.1 heq]; exact hc
+          · cases h
+
 theorem foldl_units (S : Array Stratum) :
     (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : Stratum) => x1 ++ x2.units) #[]).toList =
       S.toList.flatMap fun s => s.units.toList := by
@@ -283,6 +314,16 @@ theorem foldl_units (S : Array Stratum) :
 
 theorem foldl_units_work (S : Array WorkStratum) :
     (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : WorkStratum) => x1 ++ x2.units) #[]).toList =
+      S.toList.flatMap fun s => s.units.toList := by
+  rw [← Array.foldl_toList]
+  suffices ∀ acc : Array (ℕ × ℕ), (S.toList.foldl (fun x1 x2 => x1 ++ x2.units) acc).toList =
+      acc.toList ++ S.toList.flatMap fun s => s.units.toList by simpa using this #[]
+  induction S.toList with
+  | nil => intro acc; simp
+  | cons s ss ih => intro acc; simp [ih]
+
+theorem foldl_units_rated (S : Array RatedStratum) :
+    (S.foldl (fun (x1 : Array (ℕ × ℕ)) (x2 : RatedStratum) => x1 ++ x2.units) #[]).toList =
       S.toList.flatMap fun s => s.units.toList := by
   rw [← Array.foldl_toList]
   suffices ∀ acc : Array (ℕ × ℕ), (S.toList.foldl (fun x1 x2 => x1 ++ x2.units) acc).toList =
@@ -391,6 +432,25 @@ theorem ofJson_work {j : Json} {D : UnitSample} {k : ℕ} {S : Array WorkStratum
   all_goals
     obtain ⟨-, rfl⟩ := ‹_ ∧ _ = S›
     have hp := ‹∀ (why : String), workProblem _ _ _ = some why → False›
+    exact Option.eq_none_iff_forall_ne_some.2 fun w hw => hp w hw
+
+/-- A sample file `UnitSample.ofJson` accepts under a rated sampling design: `ratedProblem` found nothing. -/
+theorem ofJson_rated {j : Json} {D : UnitSample} {rates : Array RateEntry} {S : Array RatedStratum}
+    (h : UnitSample.ofJson j = .ok D) (hl : D.samplingDesign = .rated rates S) :
+    ratedProblem rates S D.population = none := by
+  unfold UnitSample.ofJson at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    cases hl
+  all_goals
+    have hlaw := ‹(_ : Flock.V Flock.Draw.SamplingDesign) = Except.ok (Flock.Draw.SamplingDesign.rated rates S)›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.SamplingDesign.rated.injEq] at hlaw
+  all_goals
+    obtain ⟨rfl, rfl⟩ := ‹_ = rates ∧ _ = S›
+    have hp := ‹∀ (why : String), ratedProblem _ _ _ = some why → False›
     exact Option.eq_none_iff_forall_ne_some.2 fun w hw => hp w hw
 
 end ofJson

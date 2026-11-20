@@ -118,6 +118,11 @@ theorem sampleWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.Sampling
     try dsimp only at h
     exact bind_within h (fun r hr => stratifiedWith_within hp hr)
       (fun r _ hs hk => by exact pure_within hk hs)
+  | rated _ strata =>
+    unfold Flock.Draw.drawWith at h
+    try dsimp only at h
+    exact bind_within h (fun r hr => stratifiedWith_within hp hr)
+      (fun r _ hs hk => by exact pure_within hk hs)
 
 /-- **A sample reads no byte past its source**: the units a sampling design samples from `ξ`, having read `r.2` bytes, read them within
 `ξ`. -/

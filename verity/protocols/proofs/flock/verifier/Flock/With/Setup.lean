@@ -713,6 +713,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
 /-- `drawn` through the oracle. -/
 def sampledWith (hs : Hashes M) (c : Circuit) (pub : Public) (draw : Json) : M Public := do
   let d ← Draw.UnitSample.ofJson draw
+  if let .rated .. := d.samplingDesign then throw Draw.RATED_UNCHECKED
   let proved := d.proved
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
   let np := c.ports.size

@@ -789,6 +789,7 @@ def samplesInFull (d : Draw.UnitSample) (u : Nat) : Bool :=
   | .bernoulli a b => a == b
   | .stratified _ strata => strata.any full
   | .work _ strata => strata.any (full ·.toStratum)
+  | .rated _ strata => strata.any (full ·.toStratum)
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
 does not sample in full. -/

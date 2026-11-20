@@ -209,7 +209,8 @@ def ExecutionPhaseCommitmentRecord.digest (c : ExecutionPhaseCommitmentRecord) :
 /-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitSample`, decoded with this check's own
 refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its sampling design to `outcome`. -/
 
-deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.SamplingDesign
+deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.RateEntry, Flock.Draw.RatedStratum,
+  Flock.Draw.SamplingDesign
 
 /-- `parse_design`'s spelling. -/
 def samplingDesignName : Flock.Draw.SamplingDesign → String
@@ -217,6 +218,7 @@ def samplingDesignName : Flock.Draw.SamplingDesign → String
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
   | .work k _ => s!"work:{k}"
+  | .rated .. => "rated"
 
 def keysAre (j : Json) (ks : List String) (ctx : String) : V Unit :=
   unless keys j == some ks do throw s!"{ctx}: keys are not {", ".intercalate ks}"

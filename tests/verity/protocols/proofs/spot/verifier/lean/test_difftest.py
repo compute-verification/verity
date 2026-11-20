@@ -490,8 +490,14 @@ def rule(sampling_design) -> dict:
         _exactly(sampling_design, {"k", "law"}, "the law")
         if not _nat(sampling_design["k"]):
             raise D.Reject("the law's k is not a natural number")
+    elif kind == "rated":
+        _exactly(sampling_design, {"law", "rates"}, "the law")
+        try:
+            DR.rated_entries(sampling_design)
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     else:
-        raise D.Reject("the law is not subset, bernoulli, stratified or work")
+        raise D.Reject("the law is not subset, bernoulli, stratified, work or rated")
     return sampling_design
 
 
@@ -805,7 +811,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     if _registration(p, rec):
         return "reject", "registration"
-    mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+    mine = DR.agreed(p["program"], p["query"], p["law"], p["work_table"], rec["law"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
         return "reject", "draw"
     if coins is not None and _coins_problem(rec, mine, e["draw"], coins):
@@ -832,7 +838,8 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
     if not _nat(rec.get("population")):
         return False
     try:
-        return draw_ran_out(DR.derive(p["program"], p["query"], p["law"], p["work_table"]), rec["population"], src)
+        return draw_ran_out(DR.agreed(p["program"], p["query"], p["law"], p["work_table"], rec.get("law")),
+                            rec["population"], src)
     except (P.QueryRefused, ValueError, TypeError):
         return False
 
@@ -907,6 +914,21 @@ def partition(j):
     except (P.QueryRefused, ValueError):
         out["law"] = None
     return out
+
+
+def agreed(j):
+    j = _json(j)
+    p = _params_of(j)
+    try:
+        P.strata(p["program"], p["query"])
+    except P.QueryRefused as e:
+        raise D.Reject(str(e)) from None
+    registered = j.get("registered") if isinstance(j, dict) else None
+    try:
+        d = DR.agreed(p["program"], p["query"], p["law"], p["work_table"], registered)
+    except ValueError as e:
+        return {"why": str(e)}
+    return {"law": d, "same": DR.same_design(registered, d)}
 
 
 def registration(j):
@@ -1903,6 +1925,48 @@ def sampling_designs(draw, n: int):
         den = draw(st.integers(1, 6))
         return {"law": "bernoulli", "p": f"{draw(st.integers(0, den))}/{den}"}
     return {"k": draw(st.integers(0 if kind == "subset" else 1, n)), "law": kind}
+
+
+RATE_ENTRY = st.builds(lambda t, num, den: {"rate": f"{num}/{den}", "table": t},
+                       st.sampled_from(["plain", "work", "plain", "work", "other"]), st.integers(0, 6), st.integers(0, 6))
+
+
+@st.composite
+def rated_laws(draw):
+    """A rated law: up to three entries over the plain count, the work table and an unknown table, rates from 0/0 to 6/1."""
+    return {"law": "rated", "rates": draw(st.lists(RATE_ENTRY, max_size=3))}
+
+
+def _registered_from(mine, edit, i: int, json_):
+    """A registered design from the verifier's own expansion `mine`: as it is, one stratum's k moved (up, down, to its
+    size, to zero), a stratum dropped, or any JSON."""
+    if not isinstance(mine, dict) or not isinstance(mine.get("strata"), list) or not mine["strata"] or edit == "json":
+        return json_
+    out = copy.deepcopy(mine)
+    s = out["strata"][i % len(out["strata"])]
+    size = sum(hi - lo for lo, hi in s["units"])
+    if edit == "drop":
+        out["strata"].pop(i % len(out["strata"]))
+    elif edit != "same":
+        s["k"] = {"up": s["k"] + 1, "down": max(0, s["k"] - 1), "cap": size, "zero": 0}[edit]
+    return out
+
+
+@st.composite
+def agreed_inputs(draw):
+    """`agreed`'s inputs: an audit's parameters under a rated law (or its own law) and a work table with zero works,
+    over populations of one to six proof blocks, and a registered design edited from the verifier's own expansion."""
+    a = draw(changed_audits(most=0, setups=SETUPS))
+    law = draw(st.one_of(rated_laws(), rated_laws(), st.just(a["params"]["law"])))
+    t = draw(st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})))
+    params = a["params"] | {"law": law, "work_table": t}
+    try:
+        p = _params_of({"params": params})
+        mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+    except (D.Reject, P.QueryRefused, ValueError, TypeError, KeyError):
+        mine = None
+    edit = draw(st.sampled_from(["same", "same", "up", "down", "cap", "zero", "drop", "json"]))
+    return {"params": params, "registered": _registered_from(mine, edit, draw(st.integers(0, 5)), draw(JSON))}
 
 
 @st.composite
@@ -3057,7 +3121,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
     one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
-    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, while a rate
+    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, or a `rated` one, while a rate
     that names the audit's subset sampling design over the population is read as that sampling design), and evidence holding more than its limits
     (`Challenger.LIMITS`: an opening's path one digest past `MAX_PATH`, and the evidence at it read on), and evidence
     whose coins are not the challenger's signed release is rejected: none, the record carrying its own key, coins under
@@ -3080,7 +3144,8 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
                  "a work design": ({"k": 3, "law": "work"}, table, "work"),
                  "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),
                  "a stratified rate": ("stratified-rate:1/2", None, "stratified"),
-                 "a work rate": ("work-rate:1/2", table, "work")}
+                 "a work rate": ("work-rate:1/2", table, "work"),
+                 "a rated law": ({"law": "rated", "rates": [{"rate": "1/2", "table": "plain"}]}, None, "rated")}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
@@ -3365,7 +3430,8 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
     st.builds(lambda a, q, sampling_design, t, pre: {"params": a["params"] | {
         "query": q, "law": sampling_design, "work_table": t,
         "partition": {"program": PO.program_sha512(a["params"]["program"]), "query": q} if pre else None}},
-        changed_audits(most=0), st.sampled_from(QUERIES), st.one_of(sampling_designs(6), st.just({"k": 1, "law": "stratified"})),
+        changed_audits(most=0), st.sampled_from(QUERIES),
+        st.one_of(sampling_designs(6), st.just({"k": 1, "law": "stratified"}), rated_laws()),
         st.one_of(st.none(), st.dictionaries(st.sampled_from(PROGRAMS_TEMPLATES + ["Other_v1"]), WORK_ENTRY | BAD_WORK_ENTRY,
                                              max_size=3)), st.booleans()),
     st.builds(lambda a, pq, sampling_design, t, pre: {"params": a["params"] | {
@@ -3374,6 +3440,7 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         changed_audits(most=0, setups=SETUPS), partitions(), sampling_designs(24),
         st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
     JSON), package=PACKAGE)
+AGREED = D.Port(PIECES, "agreed", agreed, st.one_of(agreed_inputs(), agreed_inputs(), agreed_inputs(), JSON), package=PACKAGE)
 COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
     st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
               st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
@@ -6470,7 +6537,7 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (AGREED, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
@@ -6489,6 +6556,45 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
+
+
+def test_the_sample_reads_the_expansion_only_under_the_counts_guard(pieces):
+    """`OneStage.sampledFrom` samples under the verifier's own expansion (`Draw.deriveSamplingDesign`), not the design
+    `Draw.agreed` agrees to; the two are one design only while `Draw.COUNTS_AWAIT_THEIR_CLAIM` refuses a rated design at
+    counts of its own. So while `sampledFrom` reads the expansion, Lean's `agreed` and the mirror's refuse such a design by
+    that name, and the one Lean agrees to under a rated law is the expansion. The change that lets a design's own counts
+    stand deletes this test with the read."""
+    import hypothesis
+    one_stage = (PACKAGE / "Spot" / "OneStage.lean").read_text()
+    body = one_stage[one_stage.index("def sampledFrom"):].split("\n\n", 1)[0]
+    assert "Draw.deriveSamplingDesign" in body, "sampledFrom no longer reads the expansion: delete this test with the read"
+    refused, agreed_rated = [], []
+
+    @hypothesis.settings(derandomize=True, database=None, deadline=None, max_examples=400,
+                         suppress_health_check=[hypothesis.HealthCheck.too_slow, hypothesis.HealthCheck.filter_too_much])
+    @hypothesis.given(agreed_inputs())
+    def guarded(j):
+        python, lean = AGREED.python(j), AGREED.lean(pieces, j)
+        out = json.loads(python[1]) if python[0] == "output" else {}
+        law = j["params"]["law"]
+        if "law" in out and isinstance(law, dict) and law.get("law") == "rated":
+            p = _params_of(j)
+            mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+            assert lean[0] == "output" and json.loads(lean[1])["law"] == mine, (j, lean)
+            agreed_rated.append((j, mine))
+
+    guarded()
+    for j, mine in agreed_rated:
+        for i, s in enumerate(mine["strata"]):
+            if s["k"] < sum(hi - lo for lo, hi in s["units"]):
+                own = copy.deepcopy(mine)
+                own["strata"][i]["k"] += 1
+                case = {**j, "registered": own}
+                python = AGREED.python(case)
+                assert json.loads(python[1]) == {"why": DR.COUNTS_AWAIT_THEIR_CLAIM}, (case, python)
+                assert AGREED.lean(pieces, case) == python, case
+                refused.append(case)
+    assert len(agreed_rated) >= 5 and len(refused) >= 3, (len(agreed_rated), len(refused))
 
 
 def test_the_callers_check_agrees(callers):
@@ -9263,7 +9369,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
     the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
     or `work` sampling design; v2, whose one statement's soundness statement covers a subset sampling design alone,
-    refuses the parameters of the `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones'
+    refuses the parameters of the `stratified`, the `work` and a `rated` one by their kind (`subset_only`), and the `subset` ones'
     it doesn't. So v2 refuses the
     work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
@@ -9310,6 +9416,12 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
             assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only(kind)}"), (kind, out)
         else:
             assert not (out["reason"] or "").startswith("params: "), (kind, out)
+    rated = {**v2["params"], "law": {"law": "rated", "rates": [{"rate": "1/2", "table": "plain"}]}, "work_table": None}
+    with pytest.raises(D.Reject) as refused:
+        decode_params_v2(rated)
+    out = server_v2.exchange(_json({**v2, "params": rated}))
+    assert (str(refused.value), out["verdict"], out["reason"]) == (
+        subset_only("rated"), "reject", f"params: {subset_only('rated')}"), out
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):

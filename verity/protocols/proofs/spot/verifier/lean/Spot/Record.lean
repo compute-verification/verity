@@ -251,7 +251,7 @@ def checksFast (reg receipt draw samplingDesign : Json) (units : Array Int) (pro
   funext reg receipt draw samplingDesign units provedUnits instances digest served sessionRoots sessionRegistered
   simp only [checks, checksFast, find?_byPort]
 
-/-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
+/-- The profile's sample of the sampling design a sample names (`audit.profile`): a work or rated sampling design is the stratified sampling design at its sizes and registered counts. -/
 def profileSample (samplingDesign : Json) : Option Core.SamplingDesign :=
   match getD samplingDesign "law" with
   | .str "subset" => (nat? (getD samplingDesign "k")).map .subset
@@ -259,7 +259,7 @@ def profileSample (samplingDesign : Json) : Option Core.SamplingDesign :=
     let .str p := getD samplingDesign "p" | none
     let (a, b) ← Draw.probability? p
     return .bernoulli (← Core.Ratio.mk' a b)
-  | .str "stratified" | .str "work" => do
+  | .str "stratified" | .str "work" | .str "rated" => do
     let .arr ss := getD samplingDesign "strata" | none
     let strata ← ss.mapM fun s => do
       let .str t := getD s "template" | none
@@ -459,7 +459,7 @@ def record (i : Input) : V Json := do
   let accepted := !ofRecord.isEmpty && ofRecord.all (accepted' ·.2) && ran.all (accepted' ·.2)
     && cs.all (·.2.codes.isEmpty)
   let kind := getD i.draw "law"
-  let stratified := jeq kind "stratified" || jeq kind "work"
+  let stratified := jeq kind "stratified" || jeq kind "work" || jeq kind "rated"
   let mut profile := Json.null
   let mut integrity := Json.null
   let mut wrongUnits := Json.null

@@ -84,7 +84,8 @@ def firstSamplingDesign (rule : Spot.Select.Rule) (d : Spot.Program) (query : Js
     let parsed ← Spot.Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n
     pure (some (derived.getD parsed))
 
-/-- **A sampling design is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/
+/-- **A sampling design is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is, and a rated one
+never is: no two-stage claim covers a rated draw. -/
 def samplingDesignOk (ns : List Nat) : Option Draw.SamplingDesign → Bool
   | none => true
   | some (.subset K) => 1 ≤ K && K ≤ ns.sum
@@ -93,6 +94,7 @@ def samplingDesignOk (ns : List Nat) : Option Draw.SamplingDesign → Bool
   | some (.work _ ws) => (ws.toList.map (·.work)).length == ns.length &&
       (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
       0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
+  | some (.rated _ _) => false
 
 /-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's sampling design and the input
 class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/

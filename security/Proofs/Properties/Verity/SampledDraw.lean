@@ -188,6 +188,9 @@ theorem agrees_sampleWith (g₁ g₂ : ℕ → ℕ → StateT ℕ (Except String
   | work k strata =>
     unfold Flock.Draw.drawWith
     exact agrees_bind (agrees_stratifiedWith _ _ S hg hs _) fun _ => agrees_refl _
+  | rated _ strata =>
+    unfold Flock.Draw.drawWith
+    exact agrees_bind (agrees_stratifiedWith _ _ S hg hs _) fun _ => agrees_refl _
 
 /-- **A sample reads a prefix of its bytes**: a sample that ends on `src` ends the same, having read the same bytes, on
 `src` with any bytes after it. -/
@@ -347,7 +350,7 @@ theorem checkAt_drew {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage
       simp only [hd] at h'
       exact h'
     obtain ⟨n, read, hn, hdf⟩ := coinsReason_none hr
-    exact ⟨samplingDesign, n, read, hd, hn, hdf⟩
+    exact ⟨samplingDesign, n, read, _root_.Properties.Spot.SecurityProofs.derive_of_agreed hd, hn, hdf⟩
 
 /-- **v2's check at the coins `ξ` accepts only where v1's does**, at the evidence's verdicts as the session ran them. -/
 theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
