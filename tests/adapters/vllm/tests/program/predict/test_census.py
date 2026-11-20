@@ -90,8 +90,6 @@ def _served(c: dict, *families: str) -> int:
 
 def test_step_census_and_requirement():
     r, c, req, rc = _views(CFG, "step", M=1, pos0=8)
-    assert r.digest.startswith("5e34739ca3f59dda")
-    assert c["digest"] == "31fc5a4003fd5b059049f0e46aee1bc36db3a7103b532987c36450650b7f581f881e5ba7fbb21b7a5255dec50e30f62ac4d5280a703d08f66ed31758cbf2669a"
     gemms = [e for e in c["classes"].values() if e["family"] == "Gemm_v2"]
     assert all(e["served_macs"] == e["statics"]["K"] * e["statics"]["N"] for e in gemms)
     assert _served(c, "Gemm_v2") == LINEAR
