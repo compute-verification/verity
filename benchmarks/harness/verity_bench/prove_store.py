@@ -71,7 +71,7 @@ WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.tx
 
 def census_docs(store: Any, workload: Workload) -> tuple[str, Any, list[tuple[str | None, dict]]]:
     """The workload's census of record: its art, the art's manifest and each request's `census.json` by its request.
-    The art holds one at its root (a request named None) or, as `block_census.sh --request` writes them, one a request
+    The art holds one at its root (a request named None) or, as `block_census.py --request` writes them, one a request
     at `REQUEST/census.json`."""
 
     art = of_record(store, workload.record(CENSUS), "block census")

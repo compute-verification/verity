@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id
@@ -95,11 +96,33 @@ def _listed(query: Mapping[str, Any]) -> list[Any] | None:
     return None
 
 
-def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT) -> bytes:
+def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None) -> dict[str, dict[str, int]]:
+    """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
+    ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
+    node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
+    divides."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
+    D = (decoded or Decoded(c)).get()
+    try:
+        ranges = PO.TemplatePartition(D, partition["query"]).ranges
+    except PO.QueryInapplicable as e:
+        raise Refused("E_QUERY", str(e)) from e
+    try:
+        return EG.io_cuts(D.desc, ranges)
+    except ValueError as e:
+        if str(e).startswith(PREFIX):
+            raise NotDerived(str(e)[len(PREFIX):]) from e
+        raise Refused("E_LOWER", f"in(S)'s cuts: {e}") from e
+
+
+def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT,
+          cut: Mapping[str, Mapping[str, int]] | None = None) -> bytes:
     """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
     `flock-lower-check compose`, the executable ``exe()`` builds, on C_S's template (the one Definition its root calls, which
     the partition's template query lists): its input ports
-    the template's parameters as bit rows, in order, and one output port a return field, ``o{j}``, its bits in whole u16
+    the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j`` where ``cut`` (`cuts`, C's)
+    gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``, its bits in whole u16
     words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the template's
     `definition_digest`. `NotDerived` where the partition is no template query; `Refused` where C_S's root calls other
     than one Definition, one the query does not list, or the lowering refuses."""
@@ -117,7 +140,10 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
     if fn is None:
         raise Refused("E_LOWER", f"C_S's template {key!r} is no Definition of C_S")
     params, ret = fn.signature()
-    ins = ",".join(f"{name}:{sum(t.leaf_widths())}" for name, t in params)
+    ks = (cut or {}).get(key, {})
+    ins = ",".join(f"{name}:{bits}" if ks.get(name, 1) <= 1 else
+                   ",".join(f"{name}#{j}:{bits // ks[name]}" for j in range(ks[name]))
+                   for name, bits in ((name, sum(t.leaf_widths())) for name, t in params))
     outs = ",".join(f"o{j}:{-(-sum(f.leaf_widths()) // 16)}" for j, f in enumerate(_fields(ret)))
     digests = json.dumps({key: definition_digest(D.desc["definitions"][key], D.desc)})
     with tempfile.TemporaryDirectory(prefix="one-circuit-lower-") as d:

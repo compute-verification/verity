@@ -692,7 +692,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
     A.qr = p.base.verifier.query ∧
     ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ V.families θ ∧
       A.Lb 0 = m * _root_.Spot.Challenger.COIN_BYTES
-  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
+  tags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
   stratified : A.I.stratified = none
@@ -806,7 +806,7 @@ parameters name (`programDigestOf`, `publicDigestOf`), the lookup tables the cir
 and `verify --zk`'s tags at the statement's tags and the circuit file (`zkTagsOf`). Where the statement has no tags v2
 refuses, and the tags read are a default. -/
 noncomputable def readOf (T : PinnedTables) (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
-  ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
+  ⟨zkTagsOf ((Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).getD default)
       (Verity.namedFile (programDigestOf θ) F),
     Verity.namedFile (programDigestOf θ) F, pinnedTables T (Verity.namedFile (programDigestOf θ) F),
     Verity.namedFile (publicDigestOf θ) F⟩
@@ -831,7 +831,7 @@ theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.program
 tables the circuit file registers. -/
 theorem readOf_eq (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
-    (htags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
+    (htags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
     (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
     (htab : A.I.tables = pinnedTables T (V.circuitFile θ F)) :
     readOf T θ F = A.fileRead := by

@@ -1,4 +1,4 @@
-"""One-stage audit, run A5: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank, each `served` or a stand-in. The
+"""One-stage audit, run A5: a deferred Commit's window, `served` or a stand-in. The
 docket is over serving rows of the Commit's own values, and the sampled proof blocks go to M0's prover and the Lean verifier.
 
 A deferred Commit's window is committed after serving from its sealed replay bundle opened against its record and bound to its run
@@ -8,27 +8,10 @@ the record's commitment and run root and `verity-vllm serving-rows`): that the r
 the record's roots is the committer's opening, not proved. A SHA-512 record does not make it `served`; it becomes `served` once a
 circuit opens the record's own leaves (`pipeline.deferred_rows`).
 
-A TP Commit's windows (`tp-commit --serving-rows`, `pipeline.tp.serving_rows`) are `served`: each rank commits its window from its own
-committed store while serving, after every rank's root is final and before any sample, under ``run = <TP run root>/rank<r>``. Serving's
-own commitment, made before any sample, is what the audit holds; that those rows are the values under the ranks' rows-sha512 roots is
-the rank's claim, not proved (the profile makes no claim that they are, `pipeline.serving_rows`). A5 takes a TP window as served only
-under a SHA-512 TP run root, as it takes a deferred Commit's: a TP Commit's ranks commit under rows-sha512 and its TP run root is
-SHA-512 (`tp.run_root`, ``verity/tp-run-root/v2``), and an old record's SHA-256 v1 root is refused by name before the sample
-(`source`: `sha512`). A TP Commit that wrote no window and deferred its ranks' replay to sealed bundles has each rank's window
-from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from_bundle`), under the same run and `tp`: a
-`stand-in`, its `of` the rank's rows-sha512 root under the TP run root, made after the Commit and
-before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
-
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/adapters/torch \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --out DIR [--delta 0.5]
-      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--zk-server flock-zk-server] --out DIR [--delta 0.5]
-      python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --advice-opening F \\
-        [--other-advice-opening F --other-windows DIR] --windows DIR --challenger local --main FILE ...
-
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
 (`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
 `c2_replay.serving_rows`), serving's own commitment, made before any sample. A5 takes it only over a
@@ -37,7 +20,7 @@ window is refused by name (`source`: `sha512`), and only when the record's weigh
 against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weights_tree`). The summary reports the form
 (`source`) and the commitment it names (`commitment`).
 
-* **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
+* **Serving's files.** `--window DIR` is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
   `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run root, no stand-in link). Each
   holds `registration.json` (core's v1 record), `window.json`, per member k `m<k>-public.bin` and `m<k>-private.bin`, and per
@@ -46,11 +29,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   sample, and a sampled member's prover's file (`inst`, its rows and salts, gathered from both private files) after it, under the
   header its public file was held to (`stage`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
-  the verifier derives its window and the record's commitment from them alone (`deferred_rows.of_record`, `window_of`). A TP
-  Commit: `--tp-commit` is its record (its
-  `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
-  workload file the record served; the verifier derives rank r's window from them alone (`tp.serving_rows.window_of_record`), and
-  `--jobs N` audits up to N ranks at once, each in its own process. Either
+  the verifier derives its window and the record's commitment from them alone (`deferred_rows.of_record`, `window_of`). The
   window is the population program and partition over the served Programs, the sampling design and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
@@ -65,27 +44,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record and that commitment, or a served window whose run is the run
-  root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
-  `of` and `link` are
-  `tp.serving_rows.stand_in` over the bundle the record names for the rank, under a SHA-512 TP run root, its run, `tp` and served
-  Programs the record's.
-* **Advice windows** (``--advice-opening``, a TP Commit, network attestation under arbitrary vLLM usage): the advice (I1's
-  canonical encoding: everything serving made unpredictable) is private, and the docket binds the root of its hiding
-  commitment and its bits (`advice_windows.commit_advice`). The verifier is handed the commitment's opening, the named gap until
-  the compiler's wiring is proved in zero knowledge, and derives rank r's window from the record, the advice it opens and its own
-  copy of the registered compiler alone (`advice_windows.of_opening`, `window_of_advice`; ``--compiler traced``, the stand-in,
-  the Build's Programs of record), not from the workload; `source` holds the docket's ``compiler`` (name and digest) and
-  ``advice`` (root and bits) to the verifier's, so the stream's docket, which the sample comes after, fixes both. The
-  prover's windows come from the bundles (`verity-vllm advice-windows`). Negatives (`advice_negatives`), each refused before the
-  sample: the docket naming another compiler or another advice root, the opening under another salt, the verifier opening
-  other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
-  and its roots). With ``--transfer-gate`` (the templates the compiler lists as holding transfer gates), the window's
-  work sampling design (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
-  rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
-  docket under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
-  trading one for a unit of the rest (`check_draw`), and the docket's sampling design sampling them as the rest is (R1).
+  root of record, a SHA-512 root, with no stand-in link.
 * **One sample per window** by the registered sampling design (the partition file's `subset:k`) over the window's whole population, made by the
-  verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
+  verifier's Lean `verity-verify-proof draw`; each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
@@ -123,8 +84,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   and its log holds the sample and that session's rounds, which v2's one-statement case reads (``case-v2.json``,
   `OneStageZk.treesHeld`). The summary's ``coin_trees`` names which an audit that reached its sessions ran them on:
   ``window``, that challenger's session, or ``own``, each verifier's own source (a challenger of its own where the
-  summary has ``challengers``, else the tree it samples itself); a TP rank's row carries the word.
-* **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
+  summary has ``challengers``, else the tree it samples itself).
+* **The sample from the auditor's challenger** (`a5_coins`, a stand-in's), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
   them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one
@@ -166,8 +127,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weig
   ``registered_reads`` carries each sampled chunk's table and root from that file beside the
   ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
   when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row, a
-  port committed afresh (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
-  context); `a5_row_tables.py` is their stand-in.
+  port committed afresh (`registered_negatives`), and a verdict reporting another root. `a5_row_tables.py` is the stand-in with row tables.
 * **Wiring across statements** (`commit.wiring`): a w13 coordinate's K-chunks (`pipeline.kchunk_rows`) are three
   templates, each chunk's ``acc`` row the output row of the chunk before it. Each (template, output field) is one tree, and
   a wired port commits nothing: a sampled chunk's verify reads its ``acc`` rows at its writer template's root, at the
@@ -217,15 +177,12 @@ import threading
 import time
 import traceback
 from collections.abc import Iterator, Mapping, Sequence
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
-
-if TYPE_CHECKING:
-    from verity_vllm.pipeline import advice_windows as AW
+from typing import Any, Callable
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
@@ -890,8 +847,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         raise SystemExit(f"--plain: {why}")
     if drawn is None and not streamed(a) and sampling_design.get("law") != "subset":
         raise SystemExit(f"a5 samples by the subset sampling design with Lean on a development challenger's coins; the partition "
-                         f"file's is {sampling_design}: sample it through a rank's service.Stream (--challenger, "
-                         "a TP Commit)")
+                         f"file's is {sampling_design}: sample it through a rank's service.Stream (a stand-in's)")
     if (why := output_refusal(a, sampled_design := D.derive(program, query, sampling_design, table))) is not None:
         summary["refused"] = why
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -2439,174 +2395,12 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return ok
 
 
-def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: CS.Binding, held: dict, served: Path,
-                     opening: dict) -> dict[str, dict]:
-    """An advice window's refusals, each before the sample: its docket's window naming another compiler or another advice
-    root (`source`); the advice's opening under another salt, which opens no registered root (`source`); the verifier opening other
-    advice (``--other-advice-opening``), whose window from it the docket fails (`source` and R2); and a unit committed under
-    other advice (``--other-windows``: member 0's public file from that window in place of serving's), which the docket's
-    leaf layer refuses (R4) and whose roots are not the registered ones."""
-    from verity_vllm.pipeline import advice_windows as AW
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    rec = json.loads((served / "registration.json").read_text())
-    w = rec.get("window") or {}
-    neg: dict[str, dict] = {}
-    for key, field in (("compiler", "digest"), ("advice", "root")):
-        v = SRT.source({**w, key: {**(w.get(key) or {}), field: "00" * 64}}, mine, held)
-        neg[f"registration-naming-another-{key} (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-    if AW.transfer_gates_of(compiler):
-        bare = replace(compiler, transfer_gates=())
-        v = SRT.source({**w, "compiler": {**(w.get("compiler") or {}), "digest": bare.digest}}, mine, held)
-        neg["registration-under-the-compiler-listing-no-transfer-gates (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-    salts = list(opening["salts"])
-    salts[0] = f"{int(salts[0][:2], 16) ^ 1:02x}{salts[0][2:]}"
-    _reqs, resalted = AW.of_opening(compiler, {**opening, "salts": salts})
-    v = SRT.source(w, mine, {**held, **resalted})
-    neg["opening-under-another-salt (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-    publics = {m.key: (served / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    if a.other_advice_opening:
-        reqs, bound = AW.of_opening(compiler, json.loads(Path(a.other_advice_opening).read_text()))
-        theirs, theirs_held = AW.window_of_advice(a.tp_commit, r, a.partition, compiler, reqs, bound)
-        src = SRT.source(w, theirs, theirs_held)
-        v = V.check(rec, theirs.program, theirs.query, theirs.law, CS.SCHEME, CS.expected_ports(theirs), leaf_layer=CS.leaf_layer(publics),
-                    work_table=theirs.work_table)
-        neg["advice-that-disagrees (source, R2)"] = {"refused": not src["ok"] or a0.negative(v)["refused"], "codes": src["codes"] + list(v.codes),
-                                                     "population": {"registered": rec.get("population"), "of_the_advice": theirs.population}}
-    if a.other_windows:
-        od, first = Path(a.other_windows) / f"rank{r}", mine.members[0]
-        spliced = dict(publics, **{first.key: (od / "m0-public.bin").read_bytes()})
-        v = V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), leaf_layer=CS.leaf_layer(spliced),
-                    work_table=mine.work_table)
-        registered = {x["port"]: x["root"] for x in rec["roots"]}
-        roots = json.loads((od / "window.json").read_text())["members"][0]["frame_v3"]["roots"]
-        roots_ok = all(registered.get(first.port(p)) == root for p, root in roots.items())
-        neg["unit-committed-under-other-advice (R4, roots)"] = {"refused": not roots_ok or a0.negative(v)["refused"],
-                                                                "codes": list(v.codes) + ([] if roots_ok else ["roots"])}
-    return neg
-
-
-def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) -> dict:
-    """Rank ``r``'s window of record (``tp.serving_rows.window_of_record``; with ``--advice-opening``, the compiler's Programs for
-    the advice it opens, ``advice_windows.window_of_advice``, and `advice_negatives`) audited under ``out/rank<r>``, on its own ports; -> its
-    row of the summary. With ``a.coins``, a rank that ends without its sample (refused before it, or failed) says so, so the
-    step's session closes once every other rank has sampled."""
-    from verity_vllm.pipeline import advice_windows as AW
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    t0 = time.time()
-    try:
-        windows = Path(a.windows)
-        more: dict[str, dict] = {}
-        if a.advice_opening:
-            compiler = AW.Traced.for_commit(a.tp_commit, a.build_root, a.transfer_gate)
-            opening = json.loads(Path(a.advice_opening).read_text())
-            reqs, bound = AW.of_opening(compiler, opening)
-            mine, held = AW.window_of_advice(a.tp_commit, r, a.partition, compiler, reqs, bound)
-            more.update(advice_negatives(a, r, compiler, mine, held, windows / f"rank{r}", opening))
-        else:
-            mine, held = SRT.window_of_record(a.tp_commit, r, a.partition, a.build_root, a.workload)
-        window_s = round(time.time() - t0, 2)
-        theirs = windows / f"rank{(r + 1) % world}" / "registration.json"
-        if world > 1 and theirs.exists():
-            v = SRT.source(json.loads(theirs.read_text()).get("window"), mine, held)
-            more["registration-of-another-rank (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
-        s, ok = audit(a, sets, out / f"rank{r}", mine, windows / f"rank{r}", lambda w: SRT.source(w, mine, held),
-                      a.port + RANK_PORTS * r, {"rank": r, "tp": held["tp"], "verifier_window_s": window_s,
-                                                **({"binding": {k: held[k] for k in SRT.BINDING}} if a.advice_opening else {})}, more, rank=r)
-    finally:
-        if a.coins is not None:
-            a.coins.skip(r)
-    return {"ok": ok, "seconds": round(time.time() - t0, 1),
-            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding",
-                                     "coin_trees")},
-            **({"plain": s["plain"]} if "plain" in s else {})}
-
-
-def tp_rank_job(a: argparse.Namespace, out: Path, world: int, r: int) -> dict:
-    return tp_rank(a, template_sets(Path(a.template_sets)), out, world, r)
-
-
-def tp_ranks(a: argparse.Namespace, sets: dict, out: Path, world: int, ranks: list[int]) -> Iterator[tuple[int, dict]]:
-    """`tp_rank` of each of ``ranks``, in up to ``a.jobs`` spawned processes (a rank's window holds a Program that does not pickle, so
-    a process does the whole rank); -> (rank, row) as each finishes."""
-    if a.jobs <= 1 or len(ranks) <= 1:
-        for r in ranks:
-            yield r, tp_rank(a, sets, out, world, r)
-        return
-    with ProcessPoolExecutor(min(a.jobs, len(ranks)), mp_context=multiprocessing.get_context("spawn")) as ex:
-        jobs = {ex.submit(tp_rank_job, a, out, world, r): r for r in ranks}
-        for f in as_completed(jobs):
-            yield jobs[f], f.result()
-
-
-def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
-    """Every rank's window of the TP Commit ``--tp-commit`` (or the ranks ``--ranks``), each audited on its own under ``out/rank<r>``,
-    and ``out/summary.json`` over them; a rank's audit also refuses another rank's docket as its own."""
-    from verity_vllm.pipeline.tp import serving_rows as SRT
-
-    rec = SRT.record(a.tp_commit)
-    world = int(rec["world"])
-    ranks = [int(x) for x in a.ranks.split(",")] if a.ranks else list(range(world))
-    summary: dict = {"tp_run_root": rec["tp_run_root"], "world": world, "roots": rec["roots"], "ranks": {}}
-    ok_all = True
-    if a.challenger:
-        if len(ranks) > 1 and a.jobs < len(ranks):
-            raise SystemExit(f"--challenger samples every rank on the step's one session, which ends once every rank is sampled: "
-                             f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
-        a.window_root = rec["tp_run_root"]
-        manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key,
-                                              local=LC.Local)
-        summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
-    try:
-        for r, row in tp_ranks(a, sets, out, world, ranks):
-            summary["ranks"][str(r)] = row
-            ok_all = ok_all and row["ok"]
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    finally:
-        if a.coins is not None:
-            for r in ranks:
-                a.coins.skip(r)
-            finisher.join()
-            published = a.coins.evidence()
-            summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"),
-                                         **(published.get("plan") or {}))
-            manager.shutdown()
-    summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks) \
-        and not summary.get("challenger", {}).get("error")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("A5-TP " + json.dumps({"tp_run_root": rec["tp_run_root"], "accepted": summary["accepted"],
-                                 "ranks": {r: {x: s.get(x) for x in ("ok", "population", "draw_counts", "seconds")} for r, s in summary["ranks"].items()}},
-                                sort_keys=True, default=str))
-    return summary["accepted"]
-
-
 @AM.memoized
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bundle", help="a deferred Commit's sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
     ap.add_argument("--row-dir", help="with --bundle: the row dir of the Build's Programs of record")
     ap.add_argument("--window", help="with --bundle: serving's window (verity-vllm serving-rows --out)")
-    ap.add_argument("--tp-commit", help="a TP Commit's record (its --out: runs.jsonl, versions.json)")
-    ap.add_argument("--build-root", help="with --tp-commit: each rank's Programs of record in rank<r>/")
-    ap.add_argument("--workload", help="with --tp-commit: the workload file the Commit served")
-    ap.add_argument("--windows", help="with --tp-commit: serving's windows, rank<r>/ each (the --serving-rows request's dir)")
-    ap.add_argument("--advice-opening", help="with --tp-commit, instead of --workload: the opening of the advice's hiding commitment "
-                    "(advice_windows.opening: I1's canonical encoding and its rows' salts, the named gap); each rank's window is the "
-                    "registered compiler's Programs for it (advice_windows.window_of_advice), its registration naming the compiler's "
-                    "digest and the advice's root")
-    ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
-                    "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
-    ap.add_argument("--transfer-gate", action="append", default=[], help="with --advice-opening: a template the registered compiler "
-                    "lists as holding transfer gates, every proof block of which is proved (repeatable; the partition's sampling design is work-rate:NUM/DEN)")
-    ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
-                    "given to the verifier (a negative)")
-    ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
-                    "negative: a proof block committed under other advice)")
-    ap.add_argument("--ranks", default=None, help="with --tp-commit: the ranks to audit, comma-separated (default every rank)")
-    ap.add_argument("--jobs", type=int, default=1, help="with --tp-commit: audit up to this many ranks at once, each in its own process")
     ap.add_argument("--partition", required=True, help="the verifier's partition file: {templates, law, scope?}")
     ap.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
     ap.add_argument("--m0-pythonpath", required=True)
@@ -2630,18 +2424,6 @@ def main() -> int:
                     help="each sampled member's prover limit in seconds, and each template's compose: one ZK server session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
                          "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
-    ap.add_argument("--challenger", help="with --tp-commit: sample each rank on the auditor's challenger's coins, one session on the TP "
-                    "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
-                    "infra's gate, with --peer and --challenger-key)")
-    ap.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it")
-    ap.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
-                    "(infra's challenger-key/v1), never the session's key.json")
-    ap.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
-    ap.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history, a commit a line "
-                    "(`git rev-list --first-parent origin/main`), never the host's or the prover's")
-    ap.add_argument("--plain", action="store_true", help="with --challenger: plain sessions, not --zk, "
-                    "under the partition's stratified sampling design, a window of one member with no registered reads or shared rows "
-                    "(PLAIN_SCOPE)")
     a = ap.parse_args()
     from verity_config.settings import of
 
@@ -2649,38 +2431,13 @@ def main() -> int:
         LV.command(of(__file__).raw(LV.ENV), (1,), 1)
     except LV.Refused as e:
         ap.error(f"{e} (two levels: two_stage.py)")
-    if bool(a.bundle) == bool(a.tp_commit):
-        ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
-    need = ("row_dir", "window") if a.bundle else ("build_root", "windows", *(() if a.advice_opening else ("workload",)))
-    if missing := [f"--{x.replace('_', '-')}" for x in need if not getattr(a, x)]:
-        ap.error(f"{'--bundle' if a.bundle else '--tp-commit'} needs {' '.join(missing)}")
-    if a.bundle and a.advice_opening:
-        ap.error("--advice-opening samples a TP Commit's ranks (--tp-commit)")
-    if (a.other_advice_opening or a.other_windows or a.transfer_gate) and not a.advice_opening:
-        ap.error("--other-advice-opening, --other-windows and --transfer-gate are an advice window's: give --advice-opening")
-    a.coins, a.rule, a.window_root = None, None, None
-    if a.plain and not a.challenger:
-        ap.error("--plain samples through a rank's service.Stream: give --challenger")
-    if a.challenger:
-        if a.bundle:
-            ap.error("--challenger samples a TP Commit's ranks (--tp-commit)")
-        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
-            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
-        if not a.main:
-            ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
-                     "session's pin")
-        a.rule = json.loads(Path(a.partition).read_text()).get("law")
-        if not isinstance(a.rule, str):
-            ap.error(f"--challenger samples by the partition file's rule, a rate's text (rate:NUM/DEN, stratified-rate:NUM/DEN, "
-                     f"work-rate:NUM/DEN), not {a.rule!r}")
-        try:
-            S.SamplingDesign(a.rule)
-        except ValueError as e:
-            ap.error(f"--challenger samples by the partition file's rule: {e}")
+    if not (a.bundle and a.row_dir and a.window):
+        ap.error("give --bundle, --row-dir and --window (a deferred Commit's)")
+    a.coins, a.rule, a.window_root, a.plain = None, None, None, False
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sets = template_sets(Path(a.template_sets))
-    return 0 if (deferred(a, sets, out) if a.bundle else tp(a, sets, out)) else 1
+    return 0 if deferred(a, sets, out) else 1
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ module
 
 public import Circuits.Annot
 public import Circuits.AnnotExpand
+public import Circuits.DefinitionDigest
 public import Circuits.Descriptor
 public import Circuits.Evaluated
 public import Circuits.Extract

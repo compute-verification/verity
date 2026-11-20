@@ -335,6 +335,8 @@ def step(a) -> int:
                     t = time.perf_counter()
                     text = OC.lower(c_s, part, lambda: exe)
                     (d / f"circuit-{u}.txt").write_bytes(text)
+                    from verity.circuits import partition_object as PO
+                    (d / f"partition-{u}.json").write_bytes(PO.canonical(part))
                     from verity_flock import circuit as FC
                     meta = FC.meta_of(text.decode())
                     rec |= {"circuit_bytes": len(text), "head": text.split(b"\n", 1)[0].decode()[:300],

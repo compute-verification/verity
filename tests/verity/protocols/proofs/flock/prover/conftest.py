@@ -3,10 +3,15 @@ from __future__ import annotations
 import fcntl
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import keyed
 import pytest
+
+sys.path.append(str(next(p for p in Path(__file__).resolve().parents if p.name == "tests") / "verity" / "circuits"))
+
+import stand_in  # noqa: E402,F401  (the test primitives' Boolean bodies, registered as it loads)
 
 
 @pytest.fixture(scope="session")

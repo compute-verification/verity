@@ -58,7 +58,7 @@ from verity.device import compute_capability, load_card, skus
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF32, scale_log2_bits
-from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
+from verity_vllm.definitions.registry.moe import Ex2Approx
 from verity_vllm.definitions.registry.prims import A16, BF16, F32
 
 #: float(M_LOG2E)
