@@ -853,12 +853,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Assumptions.VBridge": {
-   "owner": "@proofs",
-   "digest": "91f7d4ab3e4808c515c454de9cbf167344eb8a08189e054da49c5a8528cf69e6",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Flock.Assumptions.VBridgeC": {
    "owner": "@proofs",
    "digest": "0634d9eb1d28abfb492a990a5d6f311d46f467ddff88ff1186df20092efc9e72",
@@ -1114,12 +1108,6 @@
   "FlockSoundness.Discharge.PrivateCircuit.Hides": {
    "owner": "@proofs",
    "digest": "92fd3bb6fa51e3639c58761520cf59e9cc9c3fb3087671ef90bbd64f97f2a0ed",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Recursion.InnerSound": {
-   "owner": "@proofs",
-   "digest": "058a338c9396590e9bcd8a6155feddcc1a9ad585466295cdd10ec343a0f5f7b6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3237,8 +3225,6 @@
   "Flock.SecurityProofs.RecursiveCircuitIndist": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.RecursiveCircuitPrivate": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveRanRegistered": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveRanRegisteredExec": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.RecursiveZK": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.SampledKSLiveHonest": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
   "Flock.SecurityProofs.SampledKSLivePub": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
@@ -4721,14 +4707,6 @@
   "Flock.SecurityProofs.PublicAudit": {
    "type_hash": "127843c8302e3bbea90f0839428dd250efab959ceaa293546d56ac1ebe9ddffa",
    "unfolded_hash": "ac8397012cbd50e133b7ef8510cb989d219cd7d4c8cc829e8900b2aadcbdc3c9"
-  },
-  "Flock.SecurityProofs.RecursiveRanRegistered": {
-   "type_hash": "6e4075cb2bdd1b28dc8fd6c03ab6c6686cc4b6a139f0e1bcb643bd5c305fbc86",
-   "unfolded_hash": "ef9ed2c8e1053ae7992ef995ad5bb97ee0abdd9732272e7e3775e76e9a4c3175"
-  },
-  "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
-   "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
-   "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
@@ -10406,42 +10384,6 @@
    },
    "type_hash": "e718471c446e3db3185d1ccd2741bc02613f8bc76f66725264907253b38df8c7",
    "unfolded_hash": "896b88abe30632c37f4ba24c86d2882071729d16fcd30744cb86d24850a16bcf"
-  },
-  "Flock.SecurityProofs.RecursiveRanRegistered": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
-    "domain": [],
-    "open": [
-     "Flock.Assumptions.VBridge",
-     "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ",
-     "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ",
-     "FlockSoundness.Discharge.PrivateCircuit.Commit.Binding",
-     "FlockSoundness.Discharge.Recursion.InnerSound"
-    ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
-   },
-   "type_hash": "6e4075cb2bdd1b28dc8fd6c03ab6c6686cc4b6a139f0e1bcb643bd5c305fbc86",
-   "unfolded_hash": "ef9ed2c8e1053ae7992ef995ad5bb97ee0abdd9732272e7e3775e76e9a4c3175"
-  },
-  "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveRanRegisteredExec : Flock.Guarantees.RecursiveRanRegisteredExec"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Flock.Assumptions.VBridge",
-     "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ",
-     "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ"
-    ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
-   },
-   "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
-   "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
   },
   "Flock.SecurityProofs.RecursiveZK": {
    "owner": "@proofs",
@@ -25608,7 +25550,6 @@
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned.",
-   "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, A3 (_hA3) and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes) and live-verifier custody (RecordCustodyExec, RecordCustodyExecH with hidden outputs), both listed.",
    "ResourceAccounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (security/Definitions/Compose/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "ResourceAccounting.SecurityProofs.CovertResidual": "frozen (no-function): Like Joint, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (security/Definitions/Compose/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
@@ -25893,7 +25834,6 @@
    "Pouw.SecurityProofs.SpareCapacityAtDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1W1, at W1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some incorrect set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (BoundaryGates.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
-   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover, the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover: the same floor and the same luck 3/4 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided per prover, the staged floor of record at each adversary's own error: the same floor and the same parity luck 0.854, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (RunMap), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOneSided and ChargeVF3j16, as StagedFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies.",
@@ -26377,18 +26317,6 @@
    },
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.RecursiveRanRegistered": {
-    "∀ (R : Reg) (ω : L.Ω) (t : List (Prod Cm I.Coin)) (R₂ : Reg₂) (j : Fin S) (S' : Finset (Fin (Vs j).nv)) (R' : Reg') (i : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R').length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Pos), (com i).Opens rt (p i) (op₀ i)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : Prod Reg (Prod L.Ω (Prod (List (Prod Cm I.Coin)) (Prod Reg₂ (FlockSoundness.Discharge.Recursion.VRec Vs Reg' dg N))))), FlockSoundness.Discharge.Recursion.AcceptsV (zs o.fst o.snd.fst o.snd.snd.fst) o.snd.snd.snd → ∀ (i : Pos), reads o i → (com i).Opens rt (row o i) (op o i)": "FlockSoundness.Discharge.Recursion.AcceptsV taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : Prod Reg (Prod L.Ω (Prod (List (Prod Cm I.Coin)) (Prod Reg₂ (FlockSoundness.Discharge.Recursion.VRec Vs Reg' dg N))))), FlockSoundness.Discharge.Recursion.AcceptsV (zs o.fst o.snd.fst o.snd.snd.fst) o.snd.snd.snd → ∀ (q : Pos → Row), (∀ (i : Pos), reads o i → Eq (q i) (row o i)) → Eq (x o.fst o.snd.fst) (stmt q o.snd.fst)": "FlockSoundness.Discharge.Recursion.AcceptsV taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
-    "∀ (R : Reg) (ω : L.Ω) (t : List (Prod Cm (Flock.Guarantees.innerAt T CT st).Coin)) (R₂ : Reg₂) (j : Fin S) (S' : Finset (Fin (Vs j).nv)) (R' : Reg') (i : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R').length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), (Flock.Guarantees.rowCommit i).Opens rt (p i) (op₀ i)": "Flock.Guarantees.rowCommit taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : Prod Reg (Prod L.Ω (Prod (List (Prod Cm (Flock.Guarantees.innerAt T CT st).Coin)) (Prod Reg₂ (FlockSoundness.Discharge.Recursion.VRec Vs Reg' dg N))))), FlockSoundness.Discharge.Recursion.AcceptsV (zs o.fst o.snd.fst o.snd.snd.fst) o.snd.snd.snd → ∀ (i : Nat), reads o i → (Flock.Guarantees.rowCommit i).Opens rt (row o i) (op o i)": "FlockSoundness.Discharge.Recursion.AcceptsV taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (o : Prod Reg (Prod L.Ω (Prod (List (Prod Cm (Flock.Guarantees.innerAt T CT st).Coin)) (Prod Reg₂ (FlockSoundness.Discharge.Recursion.VRec Vs Reg' dg N))))), FlockSoundness.Discharge.Recursion.AcceptsV (zs o.fst o.snd.fst o.snd.snd.fst) o.snd.snd.snd → ∀ (q : Nat → ByteArray), (∀ (i : Nat), reads o i → Eq (q i) (row o i)) → Eq (x o.fst o.snd.fst) (stmt q o.snd.fst)": "FlockSoundness.Discharge.Recursion.AcceptsV taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLivePub": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -50394,12 +50322,6 @@
     "Flock.Premises.VBridgeC": "d0ed0299f38d0db39f4102bf5ad7d2438f166919bea1e3268c046fef8c0424e0"
    }
   },
-  "Proofs.Flock.Recursive.Private": {
-   "digest": "fbe78ad16c970e57c1b416a922f38411505349e786da8fbdd478efc59bf09566",
-   "definitions": {
-    "Flock.SecurityProofs.regRowCommit": "4aba8bdedb389fab8c9b97b6efe4a969777eb97095eba6a3e5d26d639c075d11"
-   }
-  },
   "Proofs.Flock.Recursive.Property": {
    "digest": "1afbb6c0d3c013052298c065b865a93406826c56cdf38e28c5de3bc8f39c532a",
    "definitions": {
@@ -50533,13 +50455,6 @@
    "digest": "5f7f10384bffa652a0dd81bb6cd59152c85acd083d86576cbbd3b82262944809",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.forkAt": "bea688862904ea576931e7a54d0c258ecba9573951a417231aa94971db16017d"
-   }
-  },
-  "Proofs.Flock.Recursive.SoundExec": {
-   "digest": "7ad88fa59d8f12f83fe46719aeff87700d10e42cc8185a1316fdd3b58084790d",
-   "definitions": {
-    "Flock.Guarantees.RecursiveRanRegisteredExec": "7146b97f12dd242444bb4bf43934ac7c4787f6f3dace5d11814f8a6c1b8a556a",
-    "Flock.Guarantees.rowCommit": "c21e5763703d75de03e540e184f9e086e41895ee90ec001bfffdea3e198196ec"
    }
   },
   "Proofs.Flock.Recursive.Stage": {
