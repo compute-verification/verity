@@ -13,9 +13,10 @@
 #   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. WIPE_CMD, set only where the application
 #   lists the wipe, wipes the leased card before serve-openai starts, its answer in the serve's pieces/wipe (unset: no wipe).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory
-#   (named private in the run's private-paths.json); under $OUT the window's registration.json and circuit.json, the
-#   deployment registration and smoke.txt: the reader's counts, the units by source and the registration's digest, then the
-#   window's plan, its strings (card and host, the twin's comparison) and its record beside window-commit's.
+#   (named private in the run's private-paths.json); under $OUT/window, named private too, the window's registration.json
+#   and circuit.json and the deployment registration (it carries the Program digest); under $OUT smoke.txt: the reader's
+#   counts, the units by source, the class's bits, then the window's plan, its strings (card and host, the twin's
+#   comparison) and its record beside window-commit's.
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
 [ -z "${PEARLPLUS_TIE:-}" ] || [ "$PEARLPLUS_TIE" = 0 ] || { echo "h100_smoke.sh: PEARLPLUS_TIE is retired (the window commit takes no tie); unset it" >&2; exit 3; }
@@ -269,7 +270,7 @@ window_commit_of "$K"
 timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/window-commit.err" \
   || { e=$?; say "$said"$'\n'"$(plan_lines)"$'\n'"SMOKE FAILED window-commit of window $K, exit $e ($SR/window-commit.err)"; exit 1; }
 mkdir -p "$OUT/window"
-cp "$VW/registration.json" "$VW/circuit.json" "$OUT/window/" && cp "$DREG" "$OUT/"
+cp "$VW/registration.json" "$VW/circuit.json" "$DREG" "$OUT/window/"
 said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" "$SR" "$MNBT" <<'EOF'
 import json, math, sys
 from verity.commitments import docket_digest as DD
