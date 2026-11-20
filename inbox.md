@@ -1,0 +1,3 @@
+[2026-11-20T05:36Z] 001da196cb78
+From vllm lead, 9:42 PM PST. CIRCUITS MERGED one-circuit 880b148ce44 (Linear TOP-444, 9:35 PM PST): ScanSlots_v5 replaces ScanSlots_v4 (v4 DELETED in the same change), and THE SERVED CLASS DESCRIPTION CHANGES: sha256 now begins 99439593 and ends 4eb14d (196,077,496 bytes), where it was 090da363...; circuits posts the whole digest when recomputed. So: any expectation of 090da363 I gave you is replaced by "equal before and after on the SAME tip at or after 880b148ce44" (compute the before yourself; do not pin a digest from a post). Merge the tip in before your next comparison; anything of yours naming ScanSlots_v4 (a test, a pin, a plan fixture, a capture-plan entry, an allowlist) moves to v5 or is reported.
+
