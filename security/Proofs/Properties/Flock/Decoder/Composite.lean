@@ -548,7 +548,11 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     · rw [getElem!_push_lt _ _ (by omega)]
       exact nodesOk_mono hp4 hn1 k (by omega)
     · rw [getElem!_push_eq]
-      refine ⟨hci, ⟨?_, fun a ha => ?_, fun e => ?_, fun e => ?_, b4, b5⟩, ?_, fun a ha => ?_⟩
+      refine ⟨hci, ⟨?_, fun a ha => ?_, fun e => ?_, fun e => ?_, b4, b5, fun hF => ?axes⟩, ?_, fun a ha => ?_⟩
+      case axes =>
+        dsimp only at hF ⊢
+        subst hF
+        exact buildNode_axes _ _ _ _ _ _ _ _ _ hbn (fun a ha => by obtain ⟨ty, ps, e, -⟩ := hel a ha; rw [e])
       · exact b1.trans b3
       · dsimp only at ha ⊢
         obtain ⟨c1, c2⟩ := b2 a (by omega)
