@@ -290,7 +290,8 @@ def _alpha(rng, crit: Fraction) -> list[int]:
 
 
 def _forward(desc: dict) -> bool:
-    """A root node's single-leaf argument redirected to the node itself: the gate reads itself (`not-topological`)."""
+    """A root node's single-leaf argument redirected to the node itself: the gate reads itself, which the decoder refuses as a
+    forward reference (`program`)."""
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
     for k in range(len(nodes) - 1, -1, -1):
         if nodes[k]["form"] != "primitive":

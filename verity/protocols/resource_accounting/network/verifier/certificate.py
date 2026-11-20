@@ -32,11 +32,9 @@ fresh for each record (`Issuer`'s `coins`), never the prover's:
 
     signed digest = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ R )     (`certificate_digest`)
 
-The attester hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord`). N2's head check
-(`head_check`) links the two: R is the digest of the head it opened, and the salted digest of R is the one the
-attestation signs. So the signature check reads only the attestation's public fields and its signed digest
-(`Certificate.verify`), never a hash of witness. Until N2's proof block is proved, its verifier checks that
-link on the host too, over the opening (`CertifiedRecord.verify`).
+The attester hands `salt_c` to the prover with the head, as witness only (`CertifiedRecord`). The signature check
+reads only the attestation's public fields and its signed digest (`Certificate.verify`), never a hash of witness;
+`CertifiedRecord.verify` checks over the opening that R is the head's digest and that its salted digest is the signed one.
 
 **The attestation** signs a 64-byte message that binds the signed digest to the key, the attester session and the
 execution phase, so an attestation can't be replayed onto another window, link, direction, key or session. It is LMS's

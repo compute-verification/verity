@@ -318,14 +318,69 @@ def _clause(text: str) -> str | None:
     return p.split(", ", 1)[1].split(":")[0]
 
 
+def _admitted_lean() -> str:
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    return (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean").read_text()
+
+
 def _lean_descriptor(name: str) -> bytes:
     """The descriptor `Spot/Admitted.lean` defines as ``name``, which its guards read."""
     import re
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    text = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean").read_text()
-    m = re.search(r"^def " + name + r' : String := r#"(.*)"#$', text, re.M)
+    m = re.search(r"^def " + name + r' : String := r#"(.*)"#$', _admitted_lean(), re.M)
     assert m, name
     return m.group(1).encode()
+
+
+def _sites() -> list[tuple[str, str]]:
+    """Every refusal of `admitted` and `admittedBlock`: its clause and its text, `{...}` where it interpolates."""
+    import re
+    text = _admitted_lean()
+    body = text[text.index("def admitted (partition"):text.index("/-- The template `lowerBlock`")]
+    return re.findall(r'notAdmitted "([a-z-]+)" s?!?"((?:[^"\\]|\\.)*)"', body)
+
+
+#: each refusal of `admitted` and `admittedBlock` no C reaches through the door, by its clause and a part of its text,
+#: with the check that refuses first or why it can't fail
+UNREACHED = {
+    ("one-template", "C_S's root is not one of its Definitions"): "restrict's C_S has its root among its Definitions",
+    ("listed", "is not one the partition's query lists"): "the query (`Partition.evaluate`) refuses a unit it lists not",
+    ("listed", "has no entry in C_S's index"): "C_S indexes each of its Definitions",
+    ("listed", "is no Definition of C_S"): "C_S indexes each of its Definitions",
+    ("cut-rows", "which is no parameter"): "`ioCuts` cuts only the template's parameters",
+    ("leaves-are-bits", "has no lift to bits"): "`on-bits` lifts the template first",
+    ("leaves-are-bits", "{why}"): "the lift keeps each parameter's and field's bits as its leaves",
+    ("no-recut", "C's root is not one of its Definitions"): "the decoder's root is one of its Definitions",
+    ("no-recut", "recut, in leaves of part of their width"): "the gate layout's `recut-gates` refuses first (`RC16`)",
+    ("disjoint-ranges", "is named twice in the block"): "a block's units are a range",
+    ("disjoint-ranges", "hold gates in common"): "the decoder lays the root's nodes at disjoint offsets",
+    ("one-callee", "is no node of C's root"): "a block's units are nodes of C's root",
+    ("one-callee", "callee is no Definition of C"): "the decoder resolves every callee to a Definition",
+    ("one-callee", "not the block's template"): "`one-template`: C_S's root calls each unit's callee",
+}
+
+
+def _site(clause: str, text: str) -> tuple[str, str] | None:
+    """The refusal of `_sites` that ``clause`` and ``text`` are."""
+    import re
+    for c, t in _sites():
+        parts = re.split(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", t.replace('\\"', '"'))
+        if c == clause and re.fullmatch(".*".join(map(re.escape, parts)), text):
+            return c, t
+    return None
+
+
+def _input_body() -> list[str]:
+    """`Spot.OneStageZk.INPUT_BODY`: what refuses `IB16`, the lowering's name or the decoder's."""
+    import re
+    m = re.search(r"^def INPUT_BODY : List String := \[(.*?)\]$", _admitted_lean(), re.M | re.S)
+    return [x.replace('\\"', '"') for x in re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))]
+
+
+def _outside(text: str) -> str:
+    """A refusal outside the door predicate by the case it is: `recut-gates`, `input-body`, else its text."""
+    if "recut-gates: " in text:
+        return "recut-gates"
+    return "input-body" if any(n in text for n in _input_body()) else text
 
 
 def _q(t: str) -> dict:
@@ -345,6 +400,11 @@ CONSTRUCTED = [
     ("a block of two templates", "AB16", None, ("A_v0", "B_v0"), [(0, 2)], "one-template"),
     ("a unit reading another of its block", "AA16", None, ("A_v0",), [(0, 2)], "operands-outside"),
     ("two words in and out", "E16", None, ("E_v1",), [(0, 1)], "holds"),
+    ("a template returning no field", "NF16", None, ("E_v1",), [(0, 1)], "whole-words"),
+    ("a parameter cut into rows of two widths", "MIX", None, ("A_v1", "X_v1"), [(0, 1), (1, 2)],
+     ("whole-words", "cut-rows")),
+    ("a root reading an input recut", "RC16", None, ("E_v1",), [(0, 1)], "recut-gates"),
+    ("a word whose Boolean body is an input", "IB16", None, ("E_v1",), [(0, 1)], "input-body"),
 ]
 
 
@@ -395,12 +455,16 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
     `Spot/Admitted.lean`'s guards (`CONSTRUCTED`), Lean's door (`spot-one-stage-zk restrict`: `admitted` on C_S, then
     `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
     `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
-    a decoded C can reach refuses."""
+    a decoded C can reach refuses: each refusal of `admitted` and `admittedBlock` is reached or is `UNREACHED`'s. A C
+    refused outside the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
+    `flock-lower-check`."""
     from verity.circuits import partition_object as PO
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
     W._catalog()
-    exe, lean = _stub(tmp_path), PF.v2_executable()
+    stub, lean, lower = _stub(tmp_path), PF.v2_executable(), W._exe(None)()
     seen: dict[str, int] = {}
+    reached: set[tuple[str, str]] = set()
     cases = []
     for seed in range(40):
         s = _drawn(random.Random(seed))
@@ -412,15 +476,29 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
         q = _q(ts[0]) if len(ts) == 1 else PO.template_instances_query(list(ts))
         cases.append((what, c, q, blocks, None, clause))
     for case, c, q, blocks, doc, want in cases:
+        exe = lower if want in ("recut-gates", "input-body") else stub
         door = W.Door(c, q, blocks, lambda: exe)
         for k, (lo, hi) in enumerate(blocks):
-            py = _predicate(door.run(k, lo, hi).text)
+            r = door.run(k, lo, hi)
+            py = _predicate(r.text)
             run = _lean_restrict(lean, tmp_path, c, door.partition, lo)
             assert _predicate(run.stderr) == py, (case, k, doc, run.stderr[-600:], py)
-            got = _clause(py or "") or "holds"
-            assert want in (None, got), (case, py)
+            if py is None and exe == lower:
+                assert run.returncode == 1, (case, k, run.stdout[-600:])
+                assert W.clause(f"refused: {run.stderr}") == W.clause(f"refused: {r.text}"), (case, run.stderr, r.text)
+                got = _outside(r.text)
+            else:
+                got = _clause(py or "") or "holds"
+            if py is not None and not py.startswith(OC.PREFIX):
+                clause, text = py.split(", ", 1)[1].split(": ", 1)
+                reached.add(_site(clause, text) or (clause, text))
+            assert want in (None, got) or (isinstance(want, tuple) and want[k] == got), (case, k, py)
             seen[got] = seen.get(got, 0) + 1
-    assert set(seen) == {"holds", "operands-outside", "whole-words", "port-names", "on-bits", "one-template"}, seen
+    assert set(seen) == {"holds", "operands-outside", "whole-words", "port-names", "on-bits", "one-template",
+                         "cut-rows", "recut-gates", "input-body"}, seen
+    unreached = {s for s in _sites() if not any(c == s[0] and t in s[1] for c, t in UNREACHED)}
+    assert reached == unreached, (sorted(reached - unreached), sorted(unreached - reached))
+    assert all(sum(c == s[0] and t in s[1] for s in _sites()) == 1 for c, t in UNREACHED), UNREACHED
 
 
 @pytest.mark.slow

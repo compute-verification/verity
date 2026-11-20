@@ -67,7 +67,8 @@ from verity_vllm import messages as M
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
 from verity_vllm.pipeline.seal_process import SealFailed
-from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.serve_seal import (binding_of, committed_bytes, drop, extras_of, freeze, seal_window, thaw, view_of,
+                                             window_requests)
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
 #: The compile slice built to prove the served windows, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
@@ -180,7 +181,8 @@ class CommitWindows:
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
     in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``coins``
     (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each window opens
-    under in its line (``seed_coin``)."""
+    under in its line (``seed_coin``). ``plan`` (`close_plan.ClosePlan`) runs at each window's close once its line is
+    written and before its seal: its outcome is ``plans``' entry for the window."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -190,11 +192,13 @@ class CommitWindows:
                  window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, release: Any = None,
-                 coins: SeedCoins | None = None) -> None:
+                 coins: SeedCoins | None = None, plan: Callable[[int, Any], dict[str, Any]] | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
+        self.plan, self.plans = plan, {}                 # `close_plan.ClosePlan`, and each window's outcome
+        self._bindings: dict[int, Any] = {}              # each sealed window's binding map, until its plan reads it
         self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
@@ -347,6 +351,7 @@ class CommitWindows:
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
+        self._plan(rec)
         if self.mirror is not None:
             self.mirror()
         if isinstance(job, tuple):
@@ -413,11 +418,31 @@ class CommitWindows:
         rec["close_phases_s"] = {"on_loop": round(on_loop, 4), **phases_of(laps)}
         rec["on_loop_phases_s"] = c.on_loop
         self._write_window(rec)
+        self._plan(rec)
         with self._lock:
             self.closing.pop(c.window, None)            # a close that failed before its line stays here, and fails the summary
         if self.mirror is not None:
             self.mirror()
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
+
+    def _plan(self, rec: Mapping[str, Any]) -> None:
+        """The window's close plan, once its line names its run root and before its seal, given the binding map its close built
+        (`serve_seal.binding_of`) where it is sealed, its outcome a line of ``plans.jsonl``: none for a window with no steps or
+        a failed close; a plan that fails is the window's outcome, and serving goes on."""
+        with self._lock:
+            binding = self._bindings.pop(int(rec["window"]), None)
+        if self.plan is None or not rec.get("steps") or "error" in rec:
+            return
+        try:
+            got = self.plan(int(rec["window"]), binding)
+        except Exception as e:  # noqa: BLE001  (a window whose plan fails says so; the server goes on)
+            got = {"window": rec["window"], "error": f"{type(e).__name__}: {e}"[:500]}
+        finally:
+            if binding is not None:
+                drop(binding.bmap["entries"])
+        with self._lock:
+            self.plans[int(rec["window"])] = got
+        M.append(self.out / "plans.jsonl", "Run", json.dumps(got).encode())
 
     def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
         """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
@@ -503,7 +528,14 @@ class CommitWindows:
                 return {"error": why, "disk": short}
             reqs, request_rows = window_requests(served_rows(c.com), name_of, by_name.get)
             tokens = {q["request_id"]: list(by_name[q["request_id"]].streamed) for q in reqs if q["request_id"] in by_name}
-            kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc), **self.seal)
+            binding = None
+            if self.plan is not None:  # the plan locates its served rows through the map, so the close builds it
+                view = view_of(c.com)
+                bmap, binding = binding_of(view, rc, self.out / "windows" / f"w{c.window}", request_rows)
+                with self._lock:
+                    self._bindings[c.window] = SimpleNamespace(bmap=bmap, aliases=view.aliases, com=c.com, rc=rc)
+            kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc),
+                      binding=binding, **self.seal)
             if c.off_loop:
                 if self.sealer.process is None:
                     for metas in c.com._layouts.values():

@@ -143,8 +143,6 @@ inputs = ["verity/lean_process.py", "tools/verity/circuit_check", "verity/__init
           "verity/protocols/resource_accounting/network/prover/io_ids.circuit-check.json",
           "verity/protocols/resource_accounting/network/prover/ingress_scan.py", "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.py",
           "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.json", "verity/protocols/resource_accounting/network/prover/ingress_scan.circuit-check.unkeyed.json",
-          "verity/protocols/resource_accounting/network/verifier/head_check.py", "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.py",
-          "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.json", "verity/protocols/resource_accounting/network/verifier/head_check.circuit-check.unkeyed.json",
           # the compiler's package, which importing any of its Definitions below runs
           "adapters/vllm/verity_vllm/compiler/__init__.py",
           "adapters/vllm/verity_vllm/compiler/replay_step.py", "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.py",

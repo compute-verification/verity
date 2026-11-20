@@ -31,10 +31,8 @@ the id the challenger sampled for it); an attestation that fails, one from anoth
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest attester
-every attestation verifies, and the verdicts are those of the raw records. N2 (`service.TransferBlocks`) makes no grid
-comparison: `check_link(grid=False)` leaves the grid to its proof block's head check (`head_check`), which holds the
-head's status, grid parameters and counts on every execution phase, so N2's claim is counts only, and nothing here holds
-the frames.
+every attestation verifies, and the verdicts are those of the raw records. `check_link(grid=False)` makes no grid
+comparison, and nothing here then holds the head's grid parameters, counts or frames.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
 its statuses: an execution phase is accepted if it has exactly one record and its status is complete (Lean
@@ -100,9 +98,7 @@ class Audit:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
         `advice` violation. Attested records are checked against the attester's `key` in its `session`. With `grid`
-        False no grid is compared: each attested head's check in N2's proof block (`head_check`) holds its status, grid
-        and counts instead, and nothing holds its frames, so a raw or committed record, which has neither, raises
-        `ValueError`. N2 checks with `grid` False."""
+        False no grid is compared, and a raw or committed record raises `ValueError`."""
         by_window = _by_window(link, records, Direction.EGRESS, key, session)
         if not grid and any(not isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
             raise ValueError("only a certified record's grid is held by its head check: compare the others' (grid=True)")
