@@ -988,8 +988,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
         (piece / "parts.json").write_text(json.dumps(bad, sort_keys=True))
         rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"w{n}", "--alpha", "1",
                                       "--gamma", 1, *stand_ins(tmp_path, v1))
-        assert rc == 1 and [r["protocol"] for r in refused] == [SC.PEARL_PLUS], (n, refused)
-        assert "parts" in refused[0]["reason"], (n, refused)
+        assert rc == 1 and [r["protocol"] for r in refused] == [INF, SC.PEARL_PLUS], (n, refused)
+        assert "parts" in refused[-1]["reason"], (n, refused)
 
 
 def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first_record_before_it(tmp_path):
