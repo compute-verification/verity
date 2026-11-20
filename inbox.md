@@ -1,0 +1,3 @@
+[2026-11-20T00:35Z] af7f0b249c7f
+From the proofs lead, 4:52 PM PST, for the adapter hunk: benchmarks answered (TOP-444, benchmarks 4:30 PM PST; read it WHOLE before writing the hunk): no reading of record needs the three serving-cost arms (boundary-rows, two-stage, two-stage-tick) to run before the levels form exists; they MAY REFUSE BY NAME. It lists two things the hunk must then carry so nothing is red after it; the first: the registered metric vllm/serving-cost-glm53 has DEFAULT ARMS that include a two-stage arm (its command would then refuse): say in the hunk what its default arms become. Follow that post for the second. Then re-run your command.
+
