@@ -943,13 +943,19 @@ def _session(t: int) -> str:
     return hashlib.sha512(f"session {t}".encode()).hexdigest()
 
 
-def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None = None) -> dict:
+def _roots(rec: dict) -> dict[str, str]:
+    """The record's roots, ``{port: root}``: what an honest unit's session commits."""
+    return {r["port"]: r["root"] for r in rec["roots"]}
+
+
+def _unit(t: int, roots: dict[str, str] | None, lean: bool = True, opening: bool = True, session: int | None = None) -> dict:
     stage = {"definition": "Pc8TileSide", "circuit_sha512": "11" * 64, "class_sha512": "22" * 64, "ands": 7, "k_log": 3,
              "binding": "hash scratch"}
     return {"unit": t, "statement": SC.statement(stage, b"pub"),
             "verdicts": {"lean": {"of_record": True, "accepted": lean, "why": "", "digest": "33" * 64,
                                   "sessions": [_session(t if session is None else session)]},
-                         "opening": {"of_record": False, "accepted": opening, "why": ""}}}
+                         "opening": {"of_record": False, "accepted": opening, "why": ""}},
+            "roots": roots}
 
 
 @pytest.mark.slow
@@ -957,21 +963,26 @@ def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None =
 def test_the_outcome_publishes_exactly_the_public_items(served):
     """The outcome over every sampled proof block accepts only when each unit's Lean verdict and opening check accept; PoUW's public
     items of it are exactly `window.PUBLIC`; it waits for the proof's delivery, is final, and units other than the sample's
-    are refused, and so is a Lean verdict about sessions other than the delivered ones.  A control stream replays the
-    honest sample: a reject there is final, and its failure budget stops it."""
+    are refused, and so is a Lean verdict about sessions other than the delivered ones, and an outcome whose sessions report
+    no roots or two roots for one port (`SESSION_ROOTS`).  A control stream replays the honest sample: a reject there is
+    final, and its failure budget stops it; sessions whose roots are not the record's are such a reject (``roots``)."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ch = _challenger(params)
     _held(ch, "honest", rec)
     d = ch.select("honest")
-    units, delivered = [_unit(t) for t in d.units], [_session(t) for t in d.units]
+    units, delivered = [_unit(t, _roots(rec)) for t in d.units], [_session(t) for t in d.units]
     with pytest.raises(S.Pending):
         ch.outcome("honest", units)
     assert ch.deliver("honest", delivered) is None
     with pytest.raises(S.Refused) as e:
-        ch.outcome("honest", [_unit(t, session=99 if t == d.units[1] else None) for t in d.units])
+        ch.outcome("honest", [_unit(t, _roots(rec), session=99 if t == d.units[1] else None) for t in d.units])
     assert _codes(e) == {"sessions"}
+    for roots in (None, {**_roots(rec), "other": "00" * 64}):
+        with pytest.raises(S.Refused) as e:
+            ch.outcome("honest", [_unit(t, roots if t == d.units[1] else _roots(rec)) for t in d.units])
+        assert _codes(e) == {SC.SESSION_ROOTS}
     with pytest.raises(S.Refused) as e:
         ch.outcome("honest", units[:-1])
     assert _codes(e) == {"units"}
@@ -984,7 +995,9 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         with pytest.raises(S.Refused) as e:
             again()
         assert _codes(e) == {"final"}
-    for i, bad in enumerate(([_unit(t, lean=t != d.units[1]) for t in d.units], [_unit(t, opening=False) for t in d.units])):
+    wrong = {p: "00" * 64 for p in _roots(rec)}
+    for i, bad in enumerate(([_unit(t, _roots(rec), lean=t != d.units[1]) for t in d.units],
+                             [_unit(t, _roots(rec), opening=False) for t in d.units], [_unit(t, wrong) for t in d.units])):
         name = f"ctl-{i}"
         ch.register(name, rec, stream=name, replay="honest")
         assert ch.select(name).units == d.units
@@ -997,7 +1010,9 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         with pytest.raises(S.Refused) as e:
             _held(ch, f"{name}-window", rec, stream=name)
         assert _codes(e) == {"late-registration"}
-    assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+        if i == 1:
+            assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
+    assert body["audit"]["checks"]["roots"] == {"ok": False, "codes": ["roots"], "detail": {"ports": sorted(wrong)}}
 
 
 def _through(ch, rec, name="honest"):
@@ -1005,7 +1020,7 @@ def _through(ch, rec, name="honest"):
     _held(ch, name, rec)
     d = ch.select(name)
     ch.deliver(name, [_session(t) for t in d.units])
-    return ch.outcome(name, [_unit(t) for t in d.units])
+    return ch.outcome(name, [_unit(t, _roots(rec)) for t in d.units])
 
 
 @LEAN
@@ -1223,7 +1238,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case_twin", lambda j: {**case(j), "reason": "forced"}),
                    lambda ch: _through(ch, rec))
     with pytest.raises(S.Refused) as e:
-        ch.outcome("honest", [_unit(t) for t in ch.draws["honest"].units])
+        ch.outcome("honest", [_unit(t, _roots(rec)) for t in ch.draws["honest"].units])
     assert _codes(e) == {"final"}
     t = ch.draws["honest"].units[0]
     monkeypatch.setattr(OR, "py_opening", lambda x: "forced")
@@ -1267,6 +1282,9 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
     assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None and SC.lean_verdict(tmp_path / "none.out")["sessions"] == []
     (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}}\n')
     assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
+    assert SC.live_roots(tmp_path / "prove.out") is None and SC.live_roots(None) is None
+    (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}, "roots": {"W": "ab"}}\n')
+    assert SC.live_roots(tmp_path / "prove.out") == {"W": "ab"}
 
 
 @LEAN
@@ -1319,8 +1337,9 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         (tmp_path / f"lean{u}.out").write_text(f"VERDICT {json.dumps({'session': f'{t}/s{u}/', 'accepted': True, 'why': ''})}\n")
         (tmp_path / f"stage{u}.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2",
                                                              "ands": 1, "k_log": 1, "binding": "hash scratch"}))
+        (tmp_path / f"prove{u}.out").write_text(f"LIVE\t{json.dumps({'verdict': {'accepted': True, 'why': ''}, 'roots': _roots(rec)})}\n")
         rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
-                     "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json"})
+                     "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json", "rust": f"{t}/prove{u}.out"})
     (tmp_path / "units.json").write_text(json.dumps(rows))
     honest = {"registration": f"{t}/registration.json", "manifest": f"{t}/manifest.json"}
     reqs = [{"op": "coins"},

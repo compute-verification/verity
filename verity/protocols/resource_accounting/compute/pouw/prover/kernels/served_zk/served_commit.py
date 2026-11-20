@@ -1225,7 +1225,8 @@ class Challenger:
         if [u["unit"] for u in units] != D.proved(d.draw):
             raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
         verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n).items()}
-        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]})
+        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]},
+                       session_roots=session_roots(units))
         public = {**reg.record["window"]["public"], "verdict": o.accepted, "drawn": d.units}
         body = st.records[-1]
         ans = OR.service_answer(o.accepted, list(o.verdict.codes), o.profile.to_json() if o.profile else None, reg.digest,
@@ -1245,14 +1246,47 @@ def _sessions(units: list[dict]) -> list[str]:
     return [hashlib.sha512(Path(u["session"]).read_bytes()).hexdigest() for u in units]
 
 
+#: the outcome's refusal when its sessions' roots can't be held to the record's
+SESSION_ROOTS = "session-roots"
+
+
+def live_roots(path_: Path | None) -> dict[str, str] | None:
+    """The roots a unit's --zk session committed, ``{port: root}`` from its prover's first ``LIVE`` line; None when
+    there is no output, it doesn't read, or it carries no roots."""
+    if path_ is None:
+        return None
+    try:
+        lines = [json.loads(x[5:]) for x in path_.read_text().splitlines() if x.startswith("LIVE\t")]
+    except (OSError, ValueError):
+        return None
+    roots = lines[0].get("roots") if lines else None
+    return dict(roots) if isinstance(roots, Mapping) and roots else None
+
+
+def session_roots(units: list[dict]) -> dict[str, str]:
+    """``{port: root}`` the sampled proof blocks' sessions committed, which the stream holds port by port to the record's
+    roots. Refused by name (`SESSION_ROOTS`) when a block's session reports none, or two report different roots for one
+    port: the outcome is never decided with that check skipped."""
+    out: dict[str, str] = {}
+    for u in units:
+        if not u.get("roots"):
+            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports no roots"})
+        for port, root in u["roots"].items():
+            if out.setdefault(port, root) != root:
+                raise _refused(SESSION_ROOTS, {"unit": u["unit"], "port": port, "why": "two sessions report different roots"})
+    return out
+
+
 def _units(rows: list[dict]) -> list[dict]:
-    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log)."""
+    """The outcome's units from the job's rows (each unit's stage, public file, Lean output, opening verdict, live log),
+    each with the roots its session committed (`live_roots`)."""
     out = []
     for u in rows:
         pub = Path(u["pub"]).read_bytes()
         out.append({"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
                     "verdicts": {"lean": lean_verdict(Path(u["lean"])), "opening": _json(u["opening"]),
-                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}})
+                                 **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})},
+                    "roots": live_roots(Path(u["rust"]) if u.get("rust") else None)})
     return out
 
 
