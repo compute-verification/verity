@@ -372,13 +372,17 @@ def node_outputs(program, values: dict, skip: set[str]) -> dict[int, np.ndarray]
     return out
 
 
-def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str, tuple[int, int, int]]:
-    """Each input row of in(S) of the reader at root ``node`` (a call) that C wires from another unit: its writer's root
-    node, member and output field, the row being that field whole and in order. A row that is part of a field, or of
-    more than one, is refused by name (``FIELD``): Lean's registered reads read one field's tree."""
+def wired_rows(program, node: int, member: int, port_rows: list[str], cut: dict) -> dict[str, tuple[int, int, int]]:
+    """Each input row of in(S) of the reader unit (root ``node``, its ``member``) that C wires from another unit: its
+    writer's root node, member and output field, the row being that field whole and in order, read from the member's own
+    operands (`cut.member_refs`). A row that is part of a field, or of more than one, is refused by name (``FIELD``):
+    Lean's registered reads read one field's tree."""
+    from verity.circuits.cut import member_refs
     from verity.circuits.program import is_input
-    sig = dict(program.root.body.nodes[node].fn.signature()[0])
-    args = dict(zip(sig, program.root.body.nodes[node].args))
+    nd = program.root.body.nodes[node]
+    sig = dict(nd.fn.signature()[0])
+    args = {p: member_refs(a, ax, member)
+            for p, a, ax in zip(sig, nd.args, nd.axes if nd.form == "batch" else (None,) * len(nd.args))}
     nodes, out = program.root.body.nodes, {}
     for name in port_rows:
         p, _, j = name.partition("#")
@@ -386,7 +390,7 @@ def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str,
             continue
         rows, ln = cut.get(p, 1), sig[p].leaves
         lo, hi = (int(j) * ln // rows, (int(j) + 1) * ln // rows) if j else (0, ln)
-        refs = args[p].refs
+        refs = args[p]
         got = [tuple(refs[i]) for i in range(lo, hi)]
         if not any(r[0] == "n" and r[1] != node and not is_input(nodes[r[1]].fn) for r in got):
             continue
@@ -696,7 +700,7 @@ def stage(a) -> int:
         print("WIRED-ROWS " + json.dumps(rec["wired_rows"]), flush=True)
         (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
         return 4
-    fed = wired_rows(program, node, rows, rec["lower"]["cut"])
+    fed = wired_rows(program, node, member, rows, rec["lower"]["cut"])
     trees = sorted({(kw, f) for kw, _m, f in fed.values()})
     rec["writer_rows"] = {"of": "each input row of in(S) C wires from a writer is that writer's output field whole, read "
                                 "by path in the field's one tree (KEY/oJ, one row a unit of the writer's template), "
