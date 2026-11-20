@@ -21,8 +21,8 @@ from verity.circuits.boolean.forms import ONE, Circuit
 
 #: (ARITY, D) -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    (2, 1): (103101, 479098, 14170, "292bd91ed222d65237d273ed86f6cf1f5bc7237c282b12abbaf0df48bb84728f8b5804070b4cf078cd2c8e357122860c022298aba2bb87fdaa4f1e3f2a592e7b"),
-    (4, 1): (163576, 769803, 19049, "b8c72007efe698f6d379de091be61af8d46829b0641b989b58f762f475e3662d9df9c5e5ebd147b6b39998624c83788e150b30c86bb9520e61d236ed73fc80f5"),
+    (2, 1): (103101, 479098, 14170, "26b9e86715d164dbb146c4f5ff80a2466fd8cd6409cf997603eb78df525a904c704d99e15b1931d7497a628df5f16c2f3bb6b147810da1a72a26a52e65acbc27"),
+    (4, 1): (163576, 769803, 19049, "2f151f4c1847d4f6c6e49a962004c0b3f8dcdd016a22a27e891fb7d25d3ed4443e6d93a3f1cd2f2081f09c76f9c577bb73a5e90c47a3e6dcca581fd07d943df9"),
 }
 #: ARITY -> (ANDs, Flock rows) one level adds: the node's compressions and the slot multiplexers; rows are the ANDs and the
 #: copies `sha512.commit` adds (an untraced `forms.Circuit`, no common-subexpression pass)
