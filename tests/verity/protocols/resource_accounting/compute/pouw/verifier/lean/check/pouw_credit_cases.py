@@ -6,7 +6,7 @@ A `credited` case is an honest served execution phase read through its challenge
 manifest rows (the serving process's call rows, each with its credit bit, a credited one with its z table's root), the
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
 the execution phase's registered entries (each K's A and B values, their domains one-stage's registration's under the execution phase's
-open root and its circuit, `registered_value.domain`), and the sample: `credit.draw_root` over them, recorded by the
+open root and its circuit, `registered_value.domain`), and the sample: `window.draw_root` over them, recorded by the
 challenger, then its sampling coin opened after it; the auditor's ledger opens and ends the session for the execution phase, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
@@ -81,8 +81,8 @@ malformed one, name no model credit pins in it (``weights-model``), open the exe
 under the domain of those rows (so `credit._registration` accepts it).
 
 A `period` case is one to three such execution phases of one circuit in one credit period of the auditor's ledger (`period-open`
-committing the SHA-512 of the circuit's descriptor, the K every execution phase is sampled at, `credit.K_FIELD`, the tables'
-rows T, `credit.ROWS_FIELD`, and the weights' root every execution phase opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each execution phase's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
+committing the SHA-512 of the circuit's descriptor, the K every execution phase is sampled at, `window.K_FIELD`, the tables'
+rows T, `window.ROWS_FIELD`, and the weights' root every execution phase opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each execution phase's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
 descriptor, an execution phase of no credit period beside it in the ledger. Its mutations leave the credit period unclosed or an
 execution phase incomplete, drop, reorder or add an execution phase, present the execution phase of no credit period among the credit period's, name a credit period
 never opened or no credit period, forge the ledger, refuse one execution phase, make one execution phase wholly another circuit's (its
@@ -107,7 +107,7 @@ another circuit registers them under its own.
 
 An `a_link` case is an execution phase's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
-`credit.cover` segments of every A value under `credit.round_root` of a random inner root. Its mutations register an A
+`credit.cover` segments of every A value under `window.round_root` of a random inner root. Its mutations register an A
 tree other than the one the rounds committed, rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms. It may also
 register rounds' A tables ``…/a/<K>@<s>``, each committed whole by its round; its mutations list one in another
@@ -174,7 +174,7 @@ def _draw_root(d: dict) -> str:
     salt, served, commit = bytes.fromhex(d["salt"]), d["served"], Cr.commit_of(d["commit"])[0]
     calls = Cr.calls_root(salt, d["calls"], None if served is None else bytes.fromhex(served),
                           None if commit is None else commit[0])
-    return Cr.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
+    return Wd.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
 
 
 #: each way an execution phase's A tables or input-ids tables are not the served Commit's, made before its sample: one round's A
@@ -362,7 +362,7 @@ def _once(lins: list[str]) -> list[int]:
 
 
 def table_rows(rng: random.Random, lay: dict) -> int:
-    """The tables' leaf count T a credit period of execution phases of layout `lay` commits (`credit.ROWS_FIELD`): one whose
+    """The tables' leaf count T a credit period of execution phases of layout `lay` commits (`window.ROWS_FIELD`): one whose
     `h1window.slot` is the layout's A slot M, M itself or some T in (M/2, M] (any T in [1, M] when M is the tile's R)."""
     m, r = lay["m"], lay["tile"][0]
     return rng.choice([m, rng.randint(1 if m == r else m // 2 + 1, m)])
@@ -2212,7 +2212,7 @@ def _log(steps: int, values: dict, inners: list[str]) -> list[dict]:
 
 def _reroot(log: list[dict]) -> list[dict]:
     for r, x in enumerate(log):
-        x["root"] = Cr.round_root(r, bytes.fromhex(x["inner"]), {v: [(lv, i, bytes.fromhex(h)) for lv, i, h in s]
+        x["root"] = Wd.round_root(r, bytes.fromhex(x["inner"]), {v: [(lv, i, bytes.fromhex(h)) for lv, i, h in s]
                                                                   for v, s in x["a"].items()}).hex()
     return log
 

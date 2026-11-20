@@ -92,7 +92,7 @@ commitments and never published.
    (`advice_windows.window_of_advice`, reading no committed value), and holds the docket to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile slice's proof block below replaces the opening and the recompile. Nothing else in the audit changes.
-4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
+4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.window.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the docket the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
    when it receives the docket, and its `select` reads the challenger's coins only after that: a select on a docket the
