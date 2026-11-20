@@ -79,7 +79,7 @@ def test_the_bandwidth_audits_honest_session_is_accepted_and_two_dishonest_are_r
         return answer
 
     honest = run("honest", T.AT_LEAF, [], "accept")
-    assert honest["verdict"] == "accept", honest
+    assert honest["verdict"] == "accept", honest["reason"]
     cheat = run("cheat", T.AT_LEAF, ["--skip-layer", "1"], "reject")
     assert cheat["verdict"] == "reject"
     swapped = run("swapped", "00" * 64, [], "accept")
