@@ -3229,7 +3229,6 @@
  },
  "deployed": [
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
-  "Flock.SecurityProofs.SampledKSLiveV3",
   "Flock.SecurityProofs.SampledKSLiveV5",
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
   "Pous.SecurityProofs.StreamedWipe",
