@@ -425,7 +425,7 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 #: the network attester's chain report as its piece publishes it (`attester_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
-CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
+CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's) "
                "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
                "published report doesn't say. So each draw whose sampling_design isn't all is open under "
