@@ -968,19 +968,63 @@ def programs():
                 yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
 
 
+def _bits(t):
+    """A descriptor type's bit form (`verity.circuits.boolean.bit_type`)."""
+    if t[0] == "Value":
+        return ["Value", 1] if t[1] == 1 else ["Array", t[1], ["Value", 1]]
+    if t[0] == "Array":
+        return ["Array", t[1], _bits(t[2])]
+    if t[0] == "Record":
+        return ["Record", [[n, _bits(f)] for n, f in t[1]]]
+    return ["Tuple", [_bits(f) for f in t[1]]]
+
+
+def _leaves(t) -> int:
+    if t[0] == "Value":
+        return 1
+    if t[0] == "Array":
+        return t[1] * _leaves(t[2])
+    return sum(_leaves(f[1] if t[0] == "Record" else f) for f in t[1])
+
+
+def v2(text: str) -> str:
+    """Program `text` in the schema the decoder reads (`verity-ir/descriptor/v2`): each word primitive but an input given a
+    Boolean body that returns constant bits, `StandIn[name]_v1`."""
+    d = json.loads(text)
+    const, bit = "Const1[0x0]_v1", ["Value", 1]
+    d["definitions"][const] = {"form": "primitive", "id": const, "params": [], "ret": bit}
+    if const not in d["callees"]:
+        d["callees"].append(const)
+    if bit not in d["types"]:
+        d["types"].append(bit)
+    fn, out, boolean = d["callees"].index(const), d["types"].index(bit), {}
+    for key, x in list(d["definitions"].items()):
+        if x["form"] != "primitive" or key == const or key.startswith(("Input", "RegisteredInput")):
+            continue
+        ret = _bits(x["ret"])
+        boolean[key] = name = f"StandIn[{key[:-3]}]_v1"
+        d["definitions"][name] = {"form": "composite", "id": name, "bindings": {}, "body": {
+            "params": [[n, _bits(t)] for n, t in x["params"]], "ret_type": ret,
+            "nodes": [{"args": [], "fn": fn, "form": "primitive", "out": out}],
+            "ret": {"strided": ["n", 0, 0, 1, 0, 0, _leaves(ret)]}}}
+    d["boolean"], d["schema"] = boolean, "verity-ir/descriptor/v2"
+    return json.dumps(d, separators=(",", ":"), sort_keys=True)
+
+
 #: Programs reading grid parts, apart from `programs()` and the data the audit pins.
 GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 600), 0.3, 1),
         ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 60), 0.3, 1))
 
 
 def grid_programs():
+    """`GRID`'s Programs and mutants, as `programs()` makes a family's, in schema v2 (`v2`)."""
     for fam, make, seeds_, mut, k in GRID:
         for s in seeds_:
             text, given = make(s)
-            yield _line(f"{fam}-{s}", fam, text, given, k)
+            yield _line(f"{fam}-{s}", fam, v2(text), given, k)
             rng = random.Random(~s)
             if rng.random() < mut:
-                yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
+                yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", v2(mutate(rng, text)), given, k)
 
 
 def write_grid(out: Path) -> dict[str, Path]:
