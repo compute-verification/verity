@@ -1561,7 +1561,9 @@ theorem liftSeqRefs : LiftSeqRefs := by
       rw [range_mul_map, List.flatMap_map]
       apply List.flatMap_congr
       intro k _
-      simp only [G, hh p i w hw]
+      dsimp only
+      rw [hh p i w hw (b + k)]
+      dsimp only
       apply List.map_congr_left
       intro t _
       simp [Nat.add_mul, Nat.add_assoc]
