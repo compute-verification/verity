@@ -283,8 +283,18 @@ def o1 : Registered.Port := { o0 with name := "o1", value := fieldTree "T" 1 }
 #guard (outWhy { outC with ports := #[oPort "w" 2, oPort "o0" 2], outPorts := #[("o0", 2)] } pairP 0 #[1] o0).startsWith
   "registered reads: output row o0: T returns 2 output fields and the circuit has 1 output rows"
 
--- `withPositions` sends a port past the input rows (`HmOut.nIn`) to `outReads`; a row past the circuit's is refused
+-- `withPositions` sends a port past the declared input rows (`outRow?`, META `input_ports`) to `outReads`; a row past
+-- the circuit's is refused
 #guard HmOut.nIn outC == 1 && HmOut.nIn outC2 == 1
+def hidMeta (k : Nat) : Json := (oMeta "T").setObjVal! "input_ports" (Json.num k)
+#guard outRow? { outC with metaJ := hidMeta 1 } 0 == none && outRow? { outC with metaJ := hidMeta 1 } 1 == some 0
+#guard outRow? { outC2 with metaJ := hidMeta 1 } 2 == some 1
+-- a public-output circuit (`HmRow.parse`: no `input_ports`, one output row counted per output port, none among its
+-- ports): its last input, at `HmOut.nIn`, is an input row, not output row 0
+def pubC : Circuit :=
+  { (default : Circuit) with
+    ports := #[oPort "x" 64, oPort "cs" 64], outPorts := #[("out", 64)], outRowPorts := #[1], metaJ := oMeta "T" }
+#guard HmOut.nIn pubC == 1 && outRow? pubC 1 == none && outRow? pubC 0 == none
 #guard (outWhy outC regP 1 #[0] o0).startsWith "registered reads: output row o0: the circuit has 1 output rows"
 
 -- (d) the derived position held at the instances: an instance at a row of another leaf than its unit's is refused
