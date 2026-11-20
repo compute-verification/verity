@@ -191,7 +191,7 @@ lowers. -/
 def Admitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) : Prop :=
   (admitted partition cuts S).toOption.isSome = true
 
-instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+instance instDecidableAdmitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
     Decidable (Admitted partition cuts S) := inferInstanceAs (Decidable (_ = true))
 
 /-- **The door's second predicate, the block's form in C**, beside `admitted`'s on C_S: the units `units` of C, whose C_S `admitted` gave the template
@@ -232,7 +232,7 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
 def AdmittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : Prop :=
   (admittedBlock P units key).toOption.isSome = true
 
-instance (P : Flock.Program.Prog) (units : Array Nat) (key : String) : Decidable (AdmittedBlock P units key) :=
+instance instDecidableAdmittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : Decidable (AdmittedBlock P units key) :=
   inferInstanceAs (Decidable (_ = true))
 
 /-- The template `lowerBlock` lowers C_S's block to at what `admitted` gives `a`: its template on bits, every input row
