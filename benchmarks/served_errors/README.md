@@ -28,4 +28,5 @@ The terms:
 - the remote product's joint error a block, statistical and cryptographic (every term at one budget), and the latter over
   a period.
 
-The recursive audit's and Dither's proof-system terms have no value until the outer proof is rebuilt on the door.
+The recursive audit's and Dither's proof-system terms are absent, not zero: the recursive audit's δ and the old outer
+proof's κ_S have no value until the outer proof is rebuilt on the door, and no sum here includes them.
