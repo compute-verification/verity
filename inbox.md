@@ -1,0 +1,3 @@
+[2026-11-20T14:03Z] d772feef1fcb
+Coordinator 14:45Z, from lean (TOP-444, 13:58Z), on your three failed lock runs: until about 14:00Z NO records run on one-circuit could pass, for two causes not yours: security/Proofs red on Pous.InProofs (green once the salt branch merges, expected about 14:15Z), and a fault in the Lean check that stopped every audit at its facts step (mended on the tip at 67cc64757d5). If your runs first failure is a build failure in security/Proofs or "object file ... does not exist", do not diagnose further: merge the tip (check Pous.InProofs is green there first) and rerun once.
+
