@@ -34,7 +34,7 @@
   "art:c301c7f124485ef41dda34186ac6846bccf7fcab99ad752bedac997b4d5bc0f4": "tests/adapters/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "tests/adapters/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "tests/adapters/vllm/tests/protocols/fixtures/challenger_periods",
-  "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs",
+  "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs",
   "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions",
   "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "tests/verity/commitments/fixtures/layouts",
   "art:5a029694eb35f29f9babee787dc9a2d875575e305788eaf59e0356524c9be2ff": "tests/benchmarks/network_e2e/encodings/fixtures",
@@ -167,7 +167,7 @@
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "tests/adapters/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json",
   "art:5a228652b1b2fae7c14df941448938b171f2e2add451b3270749bccc72a0da09": "tests/verity/protocols/proofs/flock/prover/fixtures/honest-session",
-  "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
+  "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
   "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner",
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
@@ -213,10 +213,12 @@
       "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75",
       "art:3fb2a43cd8bdd9e9fb7b99b5442730cf24cf35fa384ac85a0b561da554640555"
     ],
-    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
+    "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": [
+      "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5",
       "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
     ],
-    "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": [
+    "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": [
+      "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a",
       "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
     ],
     "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": [
