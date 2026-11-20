@@ -201,4 +201,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Recursive.Assumptions",
   "Proofs.Properties.Verity.Recursive.Compiled",
   "Proofs.Properties.Verity.Recursive.PartVerdict",
-  "Proofs.Properties.Verity.Recursive.ScheduleRun"]
+  "Proofs.Properties.Verity.Recursive.ScheduleRun",
+  "Proofs.Properties.Verity.Recursive.ScheduleInner",
+  "Proofs.Properties.Verity.Recursive.ScheduleSession"]
