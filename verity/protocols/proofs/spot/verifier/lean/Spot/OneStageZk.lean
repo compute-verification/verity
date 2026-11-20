@@ -526,11 +526,46 @@ def heldFiled (reads : Array (Flock.TemplateQuery.TRange × Nat)) (ms : Array Me
     | some (_, i) => throw (HELD_READ_WHY m.name i)
     | none => pure ()
 
-@[inherit_doc heldFiled]
-def heldReadsFiled (v : Docket.Verifier) (ms : Array Member) : V Unit :=
+/-- The refusal of the per-member form under a partition that is no template query applying to the program, whose
+ranges its members' reads of a held or tied parameter are read off (`heldReadsFiled`, `heldRootsOf`). -/
+def HELD_QUERY_WHY : String :=
+  "the per-member form's partition is no template query that applies to the program (Q_template_instance, " ++
+    "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off"
+
+/-- The verifier's readers of a held or tied parameter (`Partition.heldReads` at `Docket.heldGates` and
+`Docket.tiedGates`), refused (`HELD_QUERY_WHY`) under a partition that is no template query applying to the program. -/
+def heldReadsOf (v : Docket.Verifier) : V (Array (Flock.TemplateQuery.TRange × Nat)) :=
   match Partition.templateRanges? v.program v.query with
-  | some rs => heldFiled (Partition.heldReads v.program.prog rs (Docket.heldGates v ++ Docket.tiedGates v)) ms
-  | none => pure ()
+  | some rs => pure (Partition.heldReads v.program.prog rs (Docket.heldGates v ++ Docket.tiedGates v))
+  | none => throw HELD_QUERY_WHY
+
+@[inherit_doc heldFiled]
+def heldReadsFiled (v : Docket.Verifier) (ms : Array Member) : V Unit := do
+  heldFiled (← heldReadsOf v) ms
+
+/-- The refusal of a reader of a held or tied parameter's run input node `w` whose slice holds no port at
+`input/n<w>` (`heldRootsHeld`). -/
+def HELD_ROOT_WHY (member : String) (w : Nat) : String :=
+  s!"member {member}: its units read C's run input node {w}, a held or tied parameter's, and its slice holds no " ++
+    s!"port at {Flock.Registered.freshValue w}: every reader of a held or tied parameter opens the record's one tree " ++
+    "of its rows"
+
+/-- **Every reader of a held or tied parameter opens its node's one tree**: for each range and run input node `w`
+`reads` gives (`heldReadsOf`), each member whose units meet the range has, among the roots `roots` its slice is cut
+from (`membersRootsOf`), an entry whose tree is `input/n<w>` (`Registered.freshValue`), which `headerHeldAt`'s shared
+loop holds by a read there; refused by name otherwise (`HELD_ROOT_WHY`): the record holding no such root, or a port
+`runInputRootsAt` derived none for. -/
+def heldRootsHeld (reads : Array (Flock.TemplateQuery.TRange × Nat)) (ms : Array Member)
+    (roots : Std.HashMap String (Array Json)) : V Unit :=
+  ms.forM fun m => reads.forM fun (r, w) =>
+    if m.units.any (fun (lo, hi) => r.first < hi && lo < r.first + r.count) &&
+        !(roots.getD m.name #[]).any (getD · "tree" == .str (Flock.Registered.freshValue w)) then
+      throw (HELD_ROOT_WHY m.name w)
+    else pure ()
+
+@[inherit_doc heldRootsHeld]
+def heldRootsOf (v : Docket.Verifier) (ms : Array Member) (roots : Std.HashMap String (Array Json)) : V Unit := do
+  heldRootsHeld (← heldReadsOf v) ms roots
 
 section HeldReadExamples
 open Flock.Program (Prog Node Defn Ty)
@@ -575,6 +610,26 @@ private def heldCase (n : Nat) (held : Array (Nat × Nat)) (ms : Array Member) :
 #guard heldCase 1 #[(0, 4)] #[heldMember "A/m0" 0 false] == some (HELD_READ_WHY "A/m0" 0)
 
 end HeldReadExamples
+
+section HeldRootExamples
+
+/-- `heldRootsHeld` over `heldToy 2`'s one range at node 0's gates, each member's slice roots naming the trees `ts`. -/
+private def heldRootCase (ms : Array (Member × Array String)) : Option String :=
+  let roots := ms.foldl (fun (acc : Std.HashMap String (Array Json)) (m, ts) =>
+    acc.insert m.name (ts.map fun t => Json.mkObj [("tree", .str t)])) {}
+  match heldRootsHeld (Partition.heldReads (heldToy 2) #[⟨1, "A", 0, 2⟩] #[(0, 4)]) (ms.map (·.1)) roots with
+  | .ok () => none
+  | .error e => some e
+
+-- every reader's slice holds input/n0: accepted
+#guard heldRootCase #[(heldMember "A/m0" 0 true, #["input/n0"]), (heldMember "A/m1" 1 true, #["input/n0"])] == none
+-- a reader whose slice holds no input/n0 (the record holds none, or no port was derived): refused by name
+#guard heldRootCase #[(heldMember "A/m0" 0 true, #["input/n0"]), (heldMember "A/m1" 1 true, #["A/o0"])] ==
+  some (HELD_ROOT_WHY "A/m1" 0)
+-- a member whose units meet no reading range is not a reader
+#guard heldRootCase #[(heldMember "B/m0" 5 true, #[])] == none
+
+end HeldRootExamples
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
@@ -694,9 +749,46 @@ def fieldTreesHeld (want : Array (String × Nat)) (ts : Std.HashSet String) (rec
   if let some (port, _) := got.find? fun (port, _) => !want.any (·.1 == port) then
     throw (FIELD_TREES_WHY s!"it holds {port}, no output field's tree")
 
+/-- The refusal of a member's root of its own at a port whose argument C reads from a run input node `w`
+(`runInputRootsAt`): the node's rows are committed once, in `input/n<w>`, which every unit reading them opens. -/
+def RUN_OWN_ROOT_WHY (member port : String) (w : Nat) : String :=
+  s!"member {member}: port {port} reads C's run input node {w}, and the registration holds a root of its own for it: " ++
+    s!"a run input node's rows are committed once, in {Flock.Registered.freshValue w}"
+
+/-- **A member's ports at C's run input nodes' trees**: the member `name` whose first unit is `u`, its roots `own` and
+the record's roots by port `byPort` (`rootsByPort`): for each parameter of the Definition of `u`'s root node in C
+(`HmLinks.unitAt`) that `u` reads at a run input node `w` (`OneCircuit.regRow`, `Registered.runNode`), the record's root
+of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which `headerHeldAt` holds as it holds a field
+tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a registered input, at another block's
+output or in a form `regRow` refuses gets none, and so does one whose tree the record holds no root of; where the record
+holds it, a root of the member's own at the port refuses by name (`RUN_OWN_ROOT_WHY`). -/
+def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Array Json)
+    (byPort : Std.HashMap String Json) : V (Array Json) := do
+  let some (k, j) := Flock.HmLinks.unitAt (Flock.HmLinks.nodes P) u | return own
+  let some node := (Flock.Registered.rootNodes P)[k]? | return own
+  let some f := P.defs[node.fn]? | return own
+  f.params.foldlM (fun (got : Array Json) (p, _) => do
+    let .ok (w, _, _) := Flock.OneCircuit.regRow P k j p | return got
+    if !Flock.Registered.runNode P w then return got
+    let t := Flock.Registered.freshValue w
+    let some r := byPort.get? t | return got
+    if own.any (getD · "port" == .str p) then throw (RUN_OWN_ROOT_WHY name p w)
+    return got.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str p),
+      ("root", getD r "root"), ("tree", .str t)])) own
+
+/-- `runInputRootsAt` for each member of `ms`, at its first unit, over the roots `roots` and the record `rec`. Its cost
+is the members' number times their Definitions' parameters. -/
+def runInputRoots (P : Flock.Program.Prog) (ms : Array Member) (rec : Json)
+    (roots : Std.HashMap String (Array Json)) : V (Std.HashMap String (Array Json)) :=
+  let byPort := rootsByPort rec
+  ms.foldlM (fun acc m => match m.units[0]? with
+    | none => pure acc
+    | some (u, _) => return acc.insert m.name (← runInputRootsAt P m.name u (acc.getD m.name #[]) byPort)) roots
+
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
 output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
-output ports at its template's fields' trees (`ownFieldsOf`, among the window's trees `fieldTreesOf` reads), and where
+output ports at its template's fields' trees (`ownFieldsOf`, among the window's trees `fieldTreesOf` reads), each
+member's ports at C's run input nodes' trees (`runInputRoots`), and where
 C has an edge, each member's wired ports at their writers' output fields' trees (`fieldRoots`, at C's wiring under the
 verifier's partition, `derivedWiring`). -/
 def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
@@ -707,18 +799,20 @@ def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMa
   let rs ← Partition.evaluate P (getD p.own.partition "query")
   fieldTreesHeld (← derivedFieldTrees P.prog rs ms) ts rec
   let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
+  let roots ← runInputRoots P.prog ms rec roots
   if !hasEdge P.prog then return roots
   let W ← derivedWiring P.prog rs
   fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots
 
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
-member's, with each member's wired ports at their writers' (`membersRootsOf`), then every member's files and each
-statement's session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`). -/
+member's, with each member's wired ports at their writers' (`membersRootsOf`), every reader of a held or tied
+parameter at its node's tree (`heldRootsOf`), then every member's files and each statement's session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
   membersRootsOf p ms c.record >>= fun roots =>
+  heldRootsOf p.base.verifier ms roots >>= fun _ =>
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
 
 /-- **Where the per-member form's run returns, every member's files are held, sampled or not**: at the roots
@@ -731,6 +825,7 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact ⟨roots, hr, runMembers_files h⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
@@ -742,6 +837,7 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact runMembers_proved h hall
 
 /-- **Where the per-member form's run returns, every statement is of a member the sample holds**
@@ -751,6 +847,7 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
     ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.sampled e.base.provedUnits = true := by
   unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact runMembers_sampled h
