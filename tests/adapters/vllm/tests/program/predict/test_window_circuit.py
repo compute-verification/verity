@@ -453,7 +453,8 @@ def _rows_by_step(compiler, window) -> tuple[dict, list[list[tuple[int, int, int
     from the span that holds its units."""
     data = S.I1.encode(S._session(*window)[0])
     sched, low = compiler.schedule(data), compiler.lower(data)
-    of = {(tid, u): (low.requests[slot], p) for tid, runs in low.spans.items() for at, n, slot, p in runs for u in range(at, at + n)}
+    of = {(tid, u): (low.requests[slot], p) for tid, runs in low.spans.items() for at, n, slot, p in runs
+          if slot >= 0 for u in range(at, at + n)}
     by: dict[int, dict[int, tuple[int, int]]] = {}
     for key, c in sched.items():
         assert by.setdefault(c.step, {}).setdefault(c.place, of[key]) == of[key]
