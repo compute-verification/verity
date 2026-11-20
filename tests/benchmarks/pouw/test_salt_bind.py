@@ -131,13 +131,22 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 
 def _pub(priv, advice, t: int) -> bytes:
     """The sampled proof block's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
-    verifier pins, then the unit's A row's and B row's b ‖ c."""
+    verifier pins (each opened row's ``frame_v3`` root its one-row tree), then the unit's A row's and B row's b ‖ c."""
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain
+    from verity.commitments.rowleaf import row_leaf
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": {"schemas": schemas}}
-    return json.dumps(head).encode() + b"\n" + priv[e]["a"]["bcs"][i] + priv[e]["b"]["bcs"][j] + bytes(128)
+    bcs = {"a0": priv[e]["a"]["bcs"][i], "b0": priv[e]["b"]["bcs"][j]}
+    fv = {"frame": "frame-v3-sha512", "owner": -1, "schemas": schemas, "bindings": {}, "domain_ids": {}, "roots": {}}
+    for p, bc in bcs.items():
+        dom = CommitmentDomain(hashlib.sha512(f"tile/{p}".encode()).digest(), -1, RangeIndexedDomain(0, 1), hash="sha512")
+        fv["bindings"][p], fv["domain_ids"][p] = dom.binding.hex(), dom.domain_id.hex()
+        fv["roots"][p] = row_leaf(dom, 0, Wd._HM.tree_leaf(Wd._HM.default_key, bc), schemas[p]).hex()
+    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": fv}
+    return json.dumps(head).encode() + b"\n" + bcs["a0"] + bcs["b0"] + bytes(128)
 
 
 @pytest.mark.slow

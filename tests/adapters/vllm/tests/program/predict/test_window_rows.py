@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
+import torch
 import pytest
 from verity.commitments import domains as DM
 from verity.circuits.codec import descriptor_id
@@ -52,6 +53,7 @@ from verity_vllm.program.predict import inference_blocks as IB
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
@@ -520,6 +522,52 @@ def test_the_rows_print_their_units_by_source_and_their_readers_counts(window, c
     assert sum(doc["units"].values()) == sum(filled.n.values()) and doc["units"]["served"] > 0
     WR.Rows(low, slots, tables)
     assert json.loads(capsys.readouterr().err.split("WINDOW-ROWS ", 1)[1])["opened"] is None
+
+
+def _located(store, prefix: str = ""):
+    """`Served`'s ``locate`` over ``store``: a member's elements as its bytes, under ``prefix`` and its op and member's name."""
+    from verity_vllm.check.replay.opening import Located
+
+    def locate(step, op, m, lo, hi):
+        a = store.get((step, op, m))
+        if a is None:
+            return None, f"no {op}/{m} at step {step}"
+        return Located(step, f"{prefix}{op}/{m}", lo * a.itemsize, hi * a.itemsize, f"uint{8 * a.itemsize}"), ""
+    return locate
+
+
+def test_a_plan_is_the_rows_sources_and_feeds_each_served_row_from_where_it_is_committed(window):
+    """`Plan`, from the lowering and each slot's served record with no value read, gives every unit the source `Rows` gives
+    it, and each run of rows a served node fills is the committed bytes it names, cut at the port's row width: the words
+    `Rows` puts there, which `stage` lays out from the retained blocks as the row hash reads them. A slot with no ``where``
+    (a stand-in) is computed throughout, and a served record with no ``locate`` is refused by name."""
+    low, _f, tables, weights, slots = window
+    served, got, held = [], [], {}
+    for k, s in enumerate(slots):
+        rows, store = _served(low, s, T=max(WR.positions(low.programs[k].fn)) + 1 - s.row[1])
+        held.update({(step, f"s{k}:{op}/{m}"): a for (step, op, m), a in store.items()})
+        served.append(WR.Served(rows, *_read(store), locate=_located(store, f"s{k}:")))
+        got.append(WR.Slot(low.programs[k].fn, CLASS, SLOTS[k], weights, served[-1]))
+    filled = WR.Rows(low, got, tables)
+    plan = WP.Plan(low, served)
+    assert all(np.array_equal(plan.source[t], filled.source[t]) for t in filled.source)
+    assert plan.describe()["units"] == filled.counts()["units"] and filled.counts()["units"]["served"] > 0
+    fed, blocks = 0, {key: torch.from_numpy(np.ascontiguousarray(a).view(np.uint8).reshape(-1)) for key, a in held.items()}
+    for f in plan.feeds:
+        want = filled.outs[f.tid][int(f.out[1:])][f.unit:f.unit + f.rows]
+        words = np.concatenate([np.frombuffer(held[(x.step, x.name)].view(np.uint8)[x.lo:x.hi].tobytes(), f"<u{int(x.dtype[4:]) // 8}")
+                                .astype(f"<u{x.bits // 8}").view("<u2") for x in f.spans])
+        assert np.array_equal(words, want.reshape(-1)), f
+        rows = WP.stage(f, lambda step, name: (blocks[(step, name)], 0)).numpy()
+        assert rows.shape == (f.rows, -(-2 * f.words // 16) * 16) and not rows[:, 2 * f.words:].any()
+        assert np.array_equal(np.ascontiguousarray(rows[:, :2 * f.words]).view("<u2"), want.reshape(f.rows, f.words)), f
+        fed += f.rows
+    assert fed == plan.describe()["fed_rows"] > 0
+
+    stand = WP.Plan(low, slots)
+    assert not stand.feeds and all(np.array_equal(stand.source[t], WR.Rows(low, slots, tables).source[t]) for t in stand.source)
+    with pytest.raises(ValueError, match="give its `locate`"):
+        WP.Plan(low, [WR.Served(rows, *_read(store)) for rows, store in [_served(low, slots[0], T=1)]] + [slots[1]])
 
 
 def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
