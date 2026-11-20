@@ -34,7 +34,7 @@ __all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMO
            "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
            "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
            "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
-           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "program_dirs_for", "programs_for",
+           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "narrowed_of", "program_dirs_for", "programs_for",
            "promoted_observation", "segment_steps", "spec_family", "spec_statics", "split_name", "tp_ranks_fold_digest",
            "wrapper_prefix_of"]
 
@@ -65,6 +65,13 @@ TP_SHARD_MEMBER = "shard_rank{rank}"
 #: layer's fused qkv on the prompt rows before the last, of which only the keys and values are read), `width` elements a row: their own
 #: member beside the widest rows' `member` (`query.required.Population.narrowed`), so neither stands for the other
 NARROWED_MEMBER = "{member}@{width}"
+_NARROWED_RE = re.compile(NARROWED_MEMBER.format(member="(.+)", width=r"(\d+)"))
+
+
+def narrowed_of(member: str) -> str | None:
+    """The widest rows' member a `NARROWED_MEMBER` names (``out`` of ``out@1024``), else None."""
+    m = _NARROWED_RE.fullmatch(member)
+    return m.group(1) if m else None
 
 #: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
 #: sampled ids; and the one family of its identities (every value of every engine step).
