@@ -184,6 +184,8 @@ def verdicts(a, slots=None):
             if drawn(s):
                 tasks.append(("upstream", upstream_cmd(a, public, ["--drawn-only"]), [s]))
 
+    a.lean_refused = []
+
     def run(t):
         # `slots` (ci.py): one budget of verifier processes shared by every set running at once
         if slots is not None:
@@ -200,7 +202,6 @@ def verdicts(a, slots=None):
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
-    a.lean_refused = []
 
     def read(ts):
         with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
