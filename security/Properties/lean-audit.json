@@ -2957,6 +2957,8 @@
     "Definitions.Core",
     "Properties.Flock",
     "Spot.Restrict",
+    "Spot.OneStageZk",
+    "Spot.OneStageZkStatement",
     "InferenceOnlyVerifier.Desc",
     "Properties.InferenceOnly"
    ],
