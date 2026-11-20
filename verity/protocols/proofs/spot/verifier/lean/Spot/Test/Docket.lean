@@ -97,8 +97,9 @@ def V3 : Verifier := verifier
 #guard codes V3 (put · "law" (some (Json.mkObj [("law", "subset"), ("k", (2 : Nat))]))) == #["R1-law"]
 #guard codes V3 (put · "window" (some (Json.mkObj [("kind", "rehearsal")]))) == #["window"]
 #guard codes V3 (put · "program" (some OTHER)) == #["R2-program"]
-#guard codes { V3 with partition := some (Json.mkObj [("format", "verity/partition/v0"),
-  ("program", Flock.hexOf V3.program.sha512), ("query", QE)]) } == #["R2-partition"]
+-- a partition with no digest gives no honest record of its own, so the record is the unchanged verifier's
+#guard (honest V3).toOption.map (check · { V3 with partition := some (Json.mkObj [("format", "verity/partition/v0"),
+  ("program", Flock.hexOf V3.program.sha512), ("query", QE)]) }) == some #["R2-partition"]
 #guard codes V3 (put · "query" (some OTHER)) == #["R2-query"]
 #guard codes V3 (put · "population" (some (2 : Nat))) == #["R2-population"]
 #guard codes V3 (put · "scheme" (some "t")) == #["R3-scheme"]
@@ -129,7 +130,7 @@ def V3 : Verifier := verifier
   (withCertified "c" "d") == #["R7-certified"]
 #guard codes { V3 with tied := #["nope"] } == #["R8-tied"]
 #guard codes (verifier E3S) == #["R8-shared-input"]
--- `y` tied, so R8 lets both readers through; two members of one unit each, under a sample of one unit of two
-#guard codes { verifier E3S with tied := #["y"], members := #[(#[(0, 1)], 1), (#[(1, 2)], 1)] } == #["link-points"]
+-- a member's units past the population of one: `bounds` refuses it
+#guard codes { V3 with members := #[(#[(0, 2)], 1)] } == #["link-points"]
 
 end Spot.Test.Docket
