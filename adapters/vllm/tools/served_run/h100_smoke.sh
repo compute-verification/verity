@@ -45,6 +45,17 @@ APPLICATION=${APPLICATION:-applications/remote.toml}
 # statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
 SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
 read -r MODEL REV PRECISION CLASS DATASET TIMING <<< "${SAID%%$'\n'*}"
+if [ -n "${WIPE_CMD:-}" ]; then  # the wipe reads the application's pins and configuration as the road hands them to a piece
+  WIPE_ENV=$(PYTHONPATH=$TREE/tools/verity/cli:$PYTHONPATH "$PY" - "$APPLICATION" <<'PINS'
+import shlex, sys
+from pathlib import Path
+from verity_cli import run, served_table
+for k, v in served_table.pins_and_configuration(run.load(Path(sys.argv[1]), run.registry())).items():
+    print(f"export {k}={shlex.quote(v)}")
+PINS
+  ) || { echo "SMOKE REFUSED application: $APPLICATION's pins and configuration can't be read for the wipe"; exit 3; }
+  eval "$WIPE_ENV"
+fi
 echo "${SAID#*$'\n'}"
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
 [ $((SLOTS * PROMPT)) -le "$MNBT" ] || { echo "SMOKE REFUSED class: CLASS=$CLASS's $SLOTS prompts of $PROMPT ids are $((SLOTS * PROMPT))" \
@@ -239,6 +250,8 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
     sleep 5
   done
   [ "$listened" = 1 ] || { say "SMOKE FAILED serve: the server did not listen on port $PORT within 10 minutes (tail $SR/serve.log)"; exit 1; }
+  "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
+    || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
   "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
   kill -INT "$SERVER"; s=0; wait "$SERVER" || s=$?; SERVER=
   [ "$s" = 0 ] || { say "SMOKE FAILED stop: the server's exit ($SR/serve.log)"; exit 1; }
@@ -306,5 +319,6 @@ open(f"{sr}/registration.digest", "w").write(DD.digest(json.load(open(reg))) + "
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"
+said+=$'\n'"$(grep '^TOKENIZE' "$SR/tokenize.log" | tail -1)"
 said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"
 say "$said"
