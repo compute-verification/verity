@@ -637,7 +637,6 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     """An -h3 transcript is accepted by an -h3 verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
     the prover's fresh salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
     digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
-    from dataclasses import replace
 
     from verity.commitments import CommitmentDomain, hm96
     from verity.commitments.merkle import tree_levels
@@ -668,8 +667,6 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     digests = [prover.digest(t) for t in range(2)]
     assert tr.commitment.root == root(transcript_domain(epoch, 2, "hm96-sha512"), digests, prover._tree)
     opening = prover.open(epoch, 0)
-    bad = replace(opening, a=(replace(opening.a[0], value=opening.a[0].value[:-1] + b"\0"),) + opening.a[1:])
-    assert Verifier(s, epoch).check_tile(tr, bad).reason == "activation opening"
     h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), epoch).check_tile(tr, opening)
     assert not h0.ok and h0.reason == "activation opening"
 

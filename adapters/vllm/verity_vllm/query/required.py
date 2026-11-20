@@ -291,8 +291,7 @@ class Population:
                 for port in p.port_table:
                     self.record_fields[ValueRef(p.id, port.name)] = port.name
         prescribed = frozenset(self.record_fields) | frozenset(self.supplied)
-        #: a rank Program's WITNESS input (`format.SCHEDULE_PARAM`): its readers' keys, which the replay binds to each reader's own
-        #: committed rank -- never token ids, and no identity of the manifest names it
+        #: a Program's `format.SCHEDULE_PARAM` input: never token ids, no identity of the manifest names it, and each reader is a fault
         self.witness: frozenset[ValueRef] = frozenset(ValueRef(p.id, port.name) for p in P.params if p.name == fmt.SCHEDULE_PARAM
                                                       for port in p.port_table)
         self.witness_readers: list[int] = [c.id for c in P.calls if any(r in self.witness for r in param_reads(c))] if self.witness else []
@@ -306,10 +305,8 @@ class Population:
         self.peer_inputs: frozenset[ValueRef] = frozenset()
         self.tp_faults: list[str] = []
         for cid in self.witness_readers:
-            if P.call(cid).family not in fmt.SCHEDULE_READERS:
-                self.tp_faults.append(f"{P.call(cid).family} under {corr.implementation_path(corr.module_of(cid))} reads the "
-                                      f"`{fmt.SCHEDULE_PARAM}` witness (only {sorted(fmt.SCHEDULE_READERS)} may: the replay binds a reader's "
-                                      f"keys to its own committed rank)")
+            self.tp_faults.append(f"{P.call(cid).family} under {corr.implementation_path(corr.module_of(cid))} reads the "
+                                  f"`{fmt.SCHEDULE_PARAM}` witness (no Call may: nothing commits or binds it)")
         if self.world > 1:
             self._rank_partials()
         self.literals = literals = literal_calls(P)

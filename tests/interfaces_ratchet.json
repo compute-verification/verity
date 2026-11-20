@@ -45,7 +45,7 @@
   "verity/protocols/resource_accounting/network/verifier/load_check.py": 1
  },
  "lean_old_names": {
-  "Claims.Collision": 33,
+  "Claims.Collision": 21,
   "FlockSoundness.Game": 347,
   "structure Partition": 3,
   "structure Scheme": 5
@@ -200,11 +200,11 @@
  },
  "second_descriptions": {
   "Circuit.ofAudit": 0,
-  "Claims.Sampling (proofs)": 365,
+  "Claims.Sampling (proofs)": 345,
   "Claims.Sampling (read)": 59,
   "CutIsRegistered": 0,
   "EdgeFreeReads": 4,
-  "HmLinks": 14,
+  "HmLinks": 13,
   "Partition.ofAudit": 0,
   "PositionsCarry": 0,
   "RegisteredCircuit.ofPartition": 4,

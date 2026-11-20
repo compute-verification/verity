@@ -1,11 +1,11 @@
 """The match oracle's judgment of a rank's compared tensors and its MoE align witnesses (`partial_source.TPPartialSource.compare_match_oracle`).
 
-The Commit commits each align call's members (`moe_align_source`, `MEMBERS`) and the Match capture records the same
-(`moe_align_source.CaptureWitness`, `witness_file`).  They are functions of the router's top-k ids as well as of the order atomicAdd
+An align call's members (`MEMBERS`, computed from `moe_align_block_size`'s outputs by `align_values`) are committed by the Commit and
+recorded by the Match capture (`witness_file`).  They are functions of the router's top-k ids as well as of the order atomicAdd
 hands out each expert's slots in: `rank` is a pair's order within its expert, `start` and `blk` follow from the per-expert counts and
 `rank`, and `par` from the counts alone.  So a differing witness says the routing or the schedule differs, and `implied` names which it
 can be.  The schedule decides each pair's block and so the expert GEMM's split-K cuts, and with them the low bits of every value
-downstream.  So the Commit replays the capture's schedule (`moe_align_source.arm_replay`, the capture's `schedule_file`): every align
+downstream.  So the Commit replays the capture's schedule (the capture's `schedule_file`): every align
 call whose top-k ids are the capture's takes the capture's order, and the two runs compute under one schedule wherever they route
 alike.  Nothing is exempt (`WITNESS_RULE`): every committed collective is compared with the capture's bit for bit, and a differing
 witness FAILS the match by name; it means the routing differs, or the capture recorded no schedule to replay (`schedule_replay` in the
@@ -22,12 +22,53 @@ MEMBERS = ("align.rank", "align.start", "align.blk", "align.par")
 ROUTING, ROUTING_OR_SCHEDULE = "routing", "routing or schedule"
 
 
+def align_values(topk_ids: Any, sorted_ids: Any, expert_ids: Any, num_post_padded: Any, num_experts: int, block: int) -> tuple[Any, ...]:
+    """(rank, start, blk, par, ok) of one `moe_align_block_size` call from its kernel's outputs: int32 [P] x 3, int32 [1], and a bool
+    scalar, whether those outputs are the ones the kernel writes for that schedule.  On the inputs' device, no sync."""
+    import torch
+
+    dev, i64 = topk_ids.device, torch.int64
+    e = topk_ids.reshape(-1).to(i64)
+    P, L = int(e.numel()), int(sorted_ids.numel())
+    idx, pos = torch.arange(P, device=dev), torch.arange(L, device=dev)
+    s = sorted_ids.to(i64)
+    live = pos < num_post_padded.reshape(-1)[:1].to(i64)
+    hit = live & (s >= 0) & (s < P)
+    tgt = torch.where(hit, s, P)
+    seen = torch.zeros(P + 1, dtype=i64, device=dev).scatter_add_(0, tgt, torch.ones(L, dtype=i64, device=dev))[:P]
+    first_pos = torch.full((P + 1,), L, dtype=i64, device=dev).scatter_reduce_(0, tgt, pos, reduce="amin")[:P]
+    key = torch.where(seen > 0, first_pos, L + idx)
+    by_key = torch.argsort(key, stable=True)
+    o = by_key[torch.argsort(e[by_key], stable=True)]
+    es = e[o]
+    new = torch.ones(P, dtype=torch.bool, device=dev)
+    new[1:] = es[1:] != es[:-1]
+    head = torch.cummax(torch.where(new, idx, 0), 0).values
+    rank_o = idx - head
+    valid_o = (es >= 0) & (es < num_experts)
+    start_o = (valid_o & (rank_o % block == 0)).to(i64)
+    blk_o = (torch.cumsum(start_o, 0) - start_o)[head] + rank_o // block
+    rank, start, blk = (torch.empty_like(x).scatter_(0, o, x) for x in (rank_o, start_o, blk_o))
+    par = start_o.sum().reshape(1)
+    valid = (e >= 0) & (e < num_experts)
+    nb = int(expert_ids.numel())
+    ok = torch.stack([
+        (seen == valid.to(i64)).all(),
+        (~live | hit | (s == P)).all(),
+        (~valid | (key == blk * block + rank % block)).all(),
+        (~valid | (expert_ids.to(i64)[blk.clamp(0, max(nb - 1, 0))] == e)).all() if nb else ~valid.any(),
+        (par * block == num_post_padded.reshape(-1)[:1].to(i64)).all(),
+    ]).all()
+    i32 = torch.int32
+    return rank.to(i32), start.to(i32), blk.to(i32), par.to(i32), ok
+
+
 def witness_file(rank: int) -> str:
     return f"align.rank{rank}.jsonl"
 
 
 def schedule_file(rank: int) -> str:
-    """The capture's align schedule at ``rank``: each call's step, module, top-k ids and rank (`moe_align_source.CaptureWitness`)."""
+    """The capture's align schedule at ``rank``: each call's step, module, top-k ids and rank."""
     return f"align_schedule.rank{rank}.pt"
 
 

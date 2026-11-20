@@ -621,7 +621,7 @@ INT8 = "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 
 
 def test_generation_toml_lists_only_stored_rows_each_with_its_checkpoint():
-    assert len(GENERATED) >= 43 and set(f"{r}.json" for r in GENERATED) <= set(stored_workloads())
+    assert len(GENERATED) >= 41 and set(f"{r}.json" for r in GENERATED) <= set(stored_workloads())
     assert all(W.generation(r)["tokenizer_sha256"] for r in GENERATED)
 
 

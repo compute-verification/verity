@@ -158,8 +158,7 @@ from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.opened import Files, Opened, f32_row, opening, pow2
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import opened as PO, window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -309,7 +308,7 @@ class Pass:
     records: list
     transcript: Transcript
     verifier: Verifier
-    prover: Opened
+    prover: PO.Opened
 
     def tile_ids(self, picks: list[tuple[int, Tile]]) -> list[tuple[int, int]]:
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in self.verifier.refs}
@@ -353,10 +352,10 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
     return Pass(path, man, salt, scheme, epoch, records, transcript, verifier, prover_of(man, path.parent, verifier.refs))
 
 
-def prover_of(man: dict, d: Path, refs) -> Opened:
+def prover_of(man: dict, d: Path, refs) -> PO.Opened:
     """The prover's openings of the pass in directory ``d`` (`Opened`): salted where its scheme commits under hm96, each
     tile's opening the `clear_audit.TileOpening` this file's `Verifier` reads."""
-    return Opened(man, Files(d), refs, pouw_schemes.get(man["scheme"]).commitment_hash == HM96, TileOpening)
+    return PO.Opened(man, PO.Files(d), refs, pouw_schemes.get(man["scheme"]).commitment_hash == HM96, TileOpening)
 
 
 _JOB: dict = {}

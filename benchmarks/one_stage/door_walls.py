@@ -449,13 +449,13 @@ CRASHED = "crashed: "
 
 def clause(text: str) -> str:
     """A refusal's clause: the door predicate's clause name where it names one, else its text with the tool's own
-    wrappers (`E_LOWER`, `flock-lower-check compose (n)`) cut, normalised."""
+    wrappers (its error code, `flock-lower-check compose (n)`) cut, normalised."""
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     i = text.find(OC.NOT_ADMITTED)
     if i >= 0:
         return text[i + len(OC.NOT_ADMITTED):].lstrip(", ").split(":")[0]
     t = text.removeprefix("refused: ").strip()
-    t = re.sub(r"^(Refused: )?(E_LOWER: )?(restrict: )?", "", t)
+    t = re.sub(r"^(Refused: )?(E_[A-Z_]+: )?(restrict: )?", "", t)
     t = re.sub(r"^flock-lower-check compose \(\d+\): (flock-lower-check compose: )?", "", t)
     return normalise(t.splitlines()[0] if t else t)
 
