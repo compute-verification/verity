@@ -65,11 +65,17 @@ class Dataset:
         return self._derived(f"shuffle:seed={_canonical(seed)}", pick)
 
     def timed(self, rule: str, *, seed: int = 0, **parameters: Any) -> Dataset:
-        """Each record as ``[seconds from the start, record]``, in order, times never decreasing; the kind stays the
-        parent's, since the pairing is this view's. ``at-once``: every time 0.0 (no seed). ``rate``: exponential gaps at
-        ``rate`` a second, drawn from ``seed``. Refused (``timed-twice``) on a dataset already timed."""
+        """Each record as ``[seconds from the start, record]``, in order; the kind stays the parent's, since the pairing
+        is this view's. ``at-once``: every time 0.0 (no seed). ``rate``: exponential gaps at ``rate`` a second, drawn from
+        ``seed``, never decreasing. ``column``: the record's own member ``name`` (no seed), for a set that keeps its times.
+        Refused (``timed-twice``) on a dataset already timed."""
         if self._timed:
             raise Refused("timed-twice", f"{self.identity} is timed already: time the dataset it was timed from")
+        if rule == "column" and set(parameters) == {"name"}:
+            name = parameters["name"]
+            ds = self._derived(f"timed:column,name={name}", lambda r: [[x[name], x] for x in r])
+            ds._timed = True
+            return ds
         if rule == "at-once" and not parameters:
             step, times = "timed:at-once", lambda n: [0.0] * n
         elif rule == "rate" and set(parameters) == {"rate"}:
@@ -83,7 +89,7 @@ class Dataset:
                 return out
             step = f"timed:rate,rate={_canonical(rate)},seed={_canonical(seed)}"
         else:
-            raise ValueError(f"timed takes at-once, or rate with rate=R, not {rule!r} with {sorted(parameters)}")
+            raise ValueError(f"timed takes at-once, rate with rate=R, or column with name=N, not {rule!r} with {sorted(parameters)}")
         ds = self._derived(step, lambda r: [[t, x] for t, x in zip(times(len(r)), r)])
         ds._timed = True
         return ds

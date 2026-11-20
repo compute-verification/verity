@@ -8,7 +8,8 @@ dataset, so nothing under `verity/` imports this package (`tests/import_order.to
 Every dataset is reproducible: a definition `definitions/NAME.toml` pins exactly what is read. A record is a plain JSON
 value the package never interprets; one record may be a whole session of several turns, and `sample` and `shuffled`
 move whole records, never parts of one. No definition names a timing: arrival times are the `timed` view's, laid over
-any dataset.
+any dataset, except a set that must keep the times it was recorded or generated with, which carries them as a column of
+its records and is played by `timed("column", name=...)`.
 
 ## API
 
@@ -21,8 +22,9 @@ any dataset.
 - `Dataset.sample(n, seed)`: `n` records drawn without replacement, in their order; `Dataset.shuffled(seed)`: all of
   them in a seeded order. Both are deterministic and return datasets.
 - `Dataset.timed(rule, seed=0, **parameters)`: each record paired with an arrival time, `[seconds from the start,
-  record]`, in order, its kind the parent's: `at-once` (every time 0.0) or `rate` with `rate=R` (exponential gaps at R a
-  second from the seed); identity `|timed:at-once` or `|timed:rate,rate=R,seed=S`. A timed dataset is not timed again.
+  record]`, in order, its kind the parent's: `at-once` (every time 0.0), `rate` with `rate=R` (exponential gaps at R a
+  second from the seed) or `column` with `name=N` (each record's own member N); identity `|timed:at-once`,
+  `|timed:rate,rate=R,seed=S` or `|timed:column,name=N`. A timed dataset is not timed again.
   Nothing about concurrency or closed loops is here.
 - `Dataset.splits`: each split by name.
 - `Refused`, with its `name`: `unknown-dataset`, `unknown-split`, `digest` (recorded bytes whose digest is not the

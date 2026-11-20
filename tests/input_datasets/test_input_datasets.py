@@ -138,3 +138,13 @@ def test_a_timed_view_pairs_each_record_with_its_time_and_is_timed_once(monkeypa
         with pytest.raises(D.Refused) as e:
             again.timed("at-once")
         assert (e.value.name, str(e.value)) == ("timed-twice", f"{again.identity} is timed already: time the dataset it was timed from")
+
+
+def test_a_column_timing_reads_each_records_own_time():
+    """``column``: the record's own member, in order, the record kept whole; refused on a set already timed."""
+    held = [{"t": 0.25, "x": 1}, {"t": 0.5, "x": 2}, {"t": 1.75, "x": 3}]
+    timed = D.Dataset("k", "id", lambda: held).timed("column", name="t")
+    assert list(timed) == [[r["t"], r] for r in held] and timed.identity == "id|timed:column,name=t" and timed.kind == "k"
+    with pytest.raises(D.Refused) as e:
+        timed.timed("column", name="t")
+    assert e.value.name == "timed-twice"
