@@ -96,7 +96,6 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "I001", "symbol": "_construct", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "verity_vllm/pipeline/build.py", "kind": "SIM115", "symbol": "_construct", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/components.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
