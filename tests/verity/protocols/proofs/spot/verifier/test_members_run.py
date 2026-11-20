@@ -599,3 +599,53 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="per-member form"):
         w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})
+
+
+def _periods_interface_tests():
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[5] / "tests/verity/commitments/periods/test_interface.py"
+    spec = importlib.util.spec_from_file_location("periods_test_interface", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_a_members_run_input_ports_are_held_at_their_nodes_trees_derived_from_c(tmp_path):
+    """`OneStageZk.runInputRoots`' mirror on a window whose C reads ``x``, ``sx``, ``wrow`` and ``sw`` from run input
+    nodes (`Window` with ``run_inputs``): from C and the partition alone, each member's slice holds each such port at
+    the record's ``input/n<w>`` root, with that tree; a root of a member's own at one refuses by name; a record of no
+    run input's tree gives the slice it gave before."""
+    TI = _periods_interface_tests()
+    got = {}
+
+    def record(*a, **_k):
+        got["roots"] = a[4]
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    win = TI.I.Window(TI.I.Circuit("test", ((TI.COORD, 10),), run_inputs=True), TI.RUN, TI.SAMPLING_DESIGN, 4)
+    ins, outs = TI.values(10)
+    win.record(TI.COORD, ins, outs)
+    win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)
+    program, query = win.window.program, win.window.query
+    members = {m.name: [[m.base, m.base + m.n]] for m in win.window.members}
+    rec = {"population": 10, "scheme": "frame-v3-sha512/hm96-sha512", "roots": got["roots"]}
+    runs = {r.port: r.param for r in win.runs}
+    by_port = {r["port"]: r for r in got["roots"]}
+    sl = M.slices(members, rec, program=program, query=query)
+    for name in members:
+        held = {r["port"]: r for r in sl[name]["roots"] if r.get("tree", "").startswith("input/")}
+        assert set(held) == set(runs), (name, held)
+        for p, t in runs.items():
+            assert held[p] == {"domain": by_port[t]["domain"], "leaves": by_port[t]["leaves"], "port": p,
+                               "root": by_port[t]["root"], "tree": t}
+    first = next(iter(members))
+    own = {"domain": "dd", "leaves": 4, "port": f"{first}/x", "root": "aa" * 64}
+    with pytest.raises(ValueError) as e:
+        M.slices(members, {**rec, "roots": [*got["roots"], own]}, program=program, query=query)
+    w = int(runs["x"].removeprefix("input/n"))
+    assert str(e.value) == M.run_own_root_why(first, "x", w)
+    old = {**rec, "roots": [r for r in got["roots"] if not r["port"].startswith("input/")]}
+    assert not any(r.get("tree", "").startswith("input/") for s in M.slices(members, old, program=program, query=query).values()
+                   for r in s["roots"])

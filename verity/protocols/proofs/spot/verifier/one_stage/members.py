@@ -54,6 +54,7 @@ Where it is not Lean's step for step, each on a case neither side accepts:
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import math
@@ -66,7 +67,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.circuits import codec, edges as EG, partition_object as PO
-from verity.circuits.program import Program
+from verity.circuits.program import Program, is_input, is_registered
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
@@ -714,9 +715,56 @@ def _wired(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any], 
            record: Mapping[str, Any], roots: dict[str, list[dict[str, Any]]],
            ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]]) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.membersRootsOf` past `_members_roots`: the window's field trees held to C's (`_field_trees_held`),
-    then each member's wired ports at their writers' trees (`_wired_roots`)."""
+    each member's ports at C's run input nodes' trees (`_run_input_roots`), then each member's wired ports at their
+    writers' trees (`_wired_roots`)."""
     _field_trees_held(_derived_field_trees(program, query, ms), _templates(ms), record)
+    roots = _run_input_roots(program, query, ms, record, roots)
     return _wired_roots(desc, P._template(program, query, "the members' partition").ranges, ms, ft, roots)
+
+
+def run_own_root_why(member: str, port: str, w: int) -> str:
+    """`OneStageZk.RUN_OWN_ROOT_WHY`: the refusal of a member's root of its own at a port C reads from run input node
+    ``w``."""
+    return (f"member {member}: port {port} reads C's run input node {w}, and the registration holds a root of its own "
+            f"for it: a run input node's rows are committed once, in input/n{w}")
+
+
+def _run_input_roots(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any], record: Mapping[str, Any],
+                     roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.runInputRoots`: for each member, each input port its first unit reads whole from one run input node
+    ``w`` of C, the record's root of ``input/n<w>`` with that tree; a tree the record holds no root of gives none, and
+    where it holds one, a member's own root at the port refuses (`run_own_root_why`)."""
+    tp = PO.TemplatePartition(program, query)
+    body, total = program.root.body, program.root.gates
+    offs = list(body.offsets)
+    by_port = {r.get("port"): r for r in record.get("roots") or () if isinstance(r, Mapping)}
+    out = dict(roots)
+    for name, m in ms.items():
+        u = m["units"][0][0]
+        k = next((k for k, _t, a, n in tp.ranges if a <= u < a + n), None)
+        if k is None:
+            continue
+        own, at = list(roots.get(name, [])), 0
+        gates = list(tp.inputs(u))
+        for p, t in body.nodes[k].fn.signature()[0]:
+            leaves = len(t.leaf_widths())
+            g = gates[at:at + leaves]
+            at += leaves
+            if not g:
+                continue
+            w = bisect.bisect_right(offs, g[0]) - 1
+            fw = body.nodes[w].fn
+            end = offs[w + 1] if w + 1 < len(offs) else total
+            if not is_input(fw) or is_registered(fw) or g != list(range(g[0], g[0] + leaves)) or g[-1] >= end:
+                continue
+            if (r := by_port.get(f"input/n{w}")) is None:
+                continue
+            if any(e.get("port") == p for e in own):
+                raise _Refused(run_own_root_why(name, p, w))
+            own.append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": p, "root": r.get("root"),
+                        "tree": f"input/n{w}"})
+        out[name] = own
+    return out
 
 
 def _meta(circuit: Path) -> Any:
@@ -1096,4 +1144,5 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
-           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why", "wired_tree_why"]
+           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why", "run_own_root_why",
+           "wired_tree_why"]
