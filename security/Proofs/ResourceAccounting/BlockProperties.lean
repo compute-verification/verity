@@ -35,10 +35,10 @@ theorem chain {L : Type*} {St : Statement} (P : Period L St) (pol : Policy L) {�
       ∃ x ∈ s, P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i) := by
     rintro r ⟨ha, hn⟩
     by_contra hall
-    push_neg at hall
     refine hn (hthm St (P.actual r) (P.π r) (P.θ r) hcheck ⟨P.blocks r, fun i q hq => ?_⟩)
     obtain ⟨x, hx, hi, rfl⟩ := hcover i q hq
-    exact hall x hx ha i hi
+    by_contra hq
+    exact hall ⟨x, hx, ha, fun h => hq (h i hi)⟩
   calc P.pr (fun r => P.accepts r ∧ ¬ pol.compliant (P.actual r))
       ≤ P.pr (fun r => ∃ x ∈ s, P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i)) := P.mono _ _ hsub
     _ ≤ ∑ x ∈ s, P.pr (fun r => P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i)) := P.union _ _
