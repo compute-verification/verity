@@ -145,18 +145,26 @@ class LaidTile:
     kinds: Mapping[str, int]
 
 
-#: the tile's statics that its shape does not fix and the kernel scheme of record does: its device, its tile inert-work
-#: bound ρ (1/RHO) and its row bound ρr (1/RHOR)
-SCHEME_STATICS = ("DEV", "RHO", "RHOR")
+#: Every static of `TILE`, by what holds it. ``credit``: `tile_macs` reads it. ``scheme``: `KERNEL` fixes it at the tile's
+#: shape (its device, its tile inert-work bound ρ = 1/RHO, its row bound ρr = 1/RHOR), `scheme_statics`. ``free``: TM,
+#: the tile's rows with its filler rows, which its body holds to zero word for word and `tile_macs` does not count; N, the
+#: linear's columns, which its body's inert-work bound reads only as the row's credit over N columns divided by N, so
+#: the bound stays 1/RHO of the tile's own cells. A static not listed here is refused (`scheme_statics`).
+TILE_STATICS: Mapping[str, str] = MappingProxyType({"K": "credit", "TR": "credit", "TN": "credit", "DEV": "scheme",
+                                                    "RHO": "scheme", "RHOR": "scheme", "TM": "free", "N": "free"})
+SCHEME_STATICS = tuple(s for s, why in TILE_STATICS.items() if why == "scheme")
 
 
 def scheme_statics(fn: Any) -> str | None:
-    """Why ``fn``'s `SCHEME_STATICS` are not those of `KERNEL` at its shape (K, TM, TN, N, TR), as
-    `pearl_plus_credited.credited_product` binds them, or None when they are: a tile is credited `tile_macs` of its shape
-    only under the scheme of record's device and inert-work bounds."""
+    """Why ``fn``'s statics are not `TILE_STATICS`, or its `SCHEME_STATICS` are not those of `KERNEL` at its shape (K,
+    TM, TN, N, TR), as `pearl_plus_credited.credited_product` binds them, or None when they are: a tile is credited
+    `tile_macs` of its shape only under the scheme of record's device and inert-work bounds."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 
     b = getattr(fn, "bindings", {})
+    statics = tuple(getattr(getattr(fn, "defn", None), "statics", ()))
+    if set(statics) != set(TILE_STATICS):
+        return f"has statics {sorted(statics)}, and the credit rule holds exactly {sorted(TILE_STATICS)}"
     try:
         want = PC.credited_product(KERNEL, b["K"], b["TM"], b["TN"], b["N"], b["TR"]).bindings
     except (KeyError, TypeError, ValueError) as e:

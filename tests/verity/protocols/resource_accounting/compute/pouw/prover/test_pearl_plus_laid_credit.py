@@ -177,16 +177,56 @@ def test_a_unit_with_the_tiles_id_at_a_huge_k_and_a_small_body_is_refused() -> N
         PS.laid_tiles(_forged_c(forged), lambda *_: True, [], "")
 
 
-@pytest.mark.parametrize("static, value", [("RHO", 100), ("DEV", "sm120")])
-def test_a_tile_whose_device_or_inert_work_bound_is_not_the_schemes_is_refused(static, value) -> None:
-    """A unit under the tile's id at a shape the scheme of record binds, with its tile inert-work bound looser (RHO 100,
-    up to 1/100 inert work where the scheme allows 1/400) or another device (sm120, priced as H100 MACs), is refused by
-    name before its body is read: its statics' MACs are not the scheme's."""
-    statics = {**PC.credited_product(SCHEME, K, 1, 1, 1, 1).bindings, static: value}
-    forged = bind(_tile_named(lambda B, S, x: x, lambda S: ((("x", Value(16)),), Value(16))), **statics)
-    assert static in PS.scheme_statics(forged)
+def _off_scheme() -> dict[str, dict]:
+    """The registry's tile at K = 256, one row and one column, each binding right for its own statics and one of them not
+    the scheme of record's: RHO 100 (a tile inert-work bound of 1/100 where the scheme's is 1/400), RHOR 400 (a row
+    bound of 1/400 where the scheme's at K = 256 is 1/100), DEV sm120 (the sm120 scheme's tile, priced as H100 MACs)."""
+    ours = PC.credited_product(SCHEME, K, 1, 1, 1, 1).bindings
+    return {"RHO": {**ours, "RHO": 100}, "RHOR": {**ours, "RHOR": 400},
+            "DEV": dict(PC.credited_product("pearl-c-sm120-v1-h3", K, 1, 1, 1, 1).bindings)}
+
+
+def test_every_tile_static_is_read_by_the_credit_rule_pinned_to_the_scheme_or_free() -> None:
+    """The tile's statics are exactly the classified ones, a static added to the Definition fails here; the credited
+    ones are those `tile_macs` reads, and the scheme of record binds each pinned one."""
+    assert set(PC.PearlPlusTileCoreWords.statics) == set(PS.TILE_STATICS)
+    assert set(PS.TILE_STATICS.values()) == {"credit", "scheme", "free"}
+    credit = {s for s, why in PS.TILE_STATICS.items() if why == "credit"}
+    assert PS.tile_macs(dict.fromkeys(credit, 1)) == 1
+    assert set(PS.SCHEME_STATICS) <= set(PC.credited_product(SCHEME, K, 1, 1, 1, 1).bindings)
+
+
+def test_the_scheme_of_record_is_the_lean_credits() -> None:
+    """The Python refusal and the Lean credit's price name one scheme: `KERNEL` is the Lean port's `NAME`, which its
+    `schemeOf` holds every pass to."""
+    from pathlib import Path
+    import re
+
+    records = Path(PS.__file__).parent / "verifier/lean/pearlplus/PouwPearlPlus/Records.lean"
+    (name,) = re.findall(r'^def NAME : String := "([^"]+)"$', records.read_text(), re.M)
+    assert PS.KERNEL == name == SCHEME
+
+
+@pytest.mark.parametrize("static", ["RHO", "RHOR", "DEV"])
+def test_a_registry_tile_off_the_schemes_device_or_bounds_is_refused_by_its_statics(static) -> None:
+    """The registry's own tile, its body right for its statics, with RHO, RHOR or DEV not the scheme of record's at its
+    shape, is refused by `scheme_statics` naming that static; read from the statics alone, with no body built."""
+    tile = bind(PC.PearlPlusTileCoreWords, **_off_scheme()[static])
+    why = PS.scheme_statics(tile)
+    assert why is not None and (why.startswith(f"{static} = ") or f", {static} = " in why), why
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("static", ["RHO", "RHOR", "DEV"])
+def test_a_c_holding_a_registry_tile_off_the_schemes_statics_is_refused(c, static) -> None:
+    """Slow: a C of the registry's tile off the scheme builds that tile's body at its statics (its core's bounds, and for
+    sm120 its Gram rows too), which the cheaper test of `scheme_statics` never builds; this one shows `laid_tiles` refuses
+    such a C by name, its body being right for its statics, so the refusal does not rest on the body pin."""
+    _ts, *_ = c
+    tile = bind(PC.PearlPlusTileCoreWords, **_off_scheme()[static])
+    assert PS.foreign_tile(tile) is None
     with pytest.raises(ValueError, match=PS.TILE_SCHEME):
-        PS.laid_tiles(_forged_c(forged), lambda *_: True, [], "")
+        PS.laid_tiles(_forged_c(tile), lambda *_: True, [], "")
 
 
 @pytest.mark.slow
