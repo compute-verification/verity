@@ -213,32 +213,16 @@ def test_a_root_read_recut_is_refused_before_the_block_by_leans_text():
     assert str(e.value) == f"E_FORM: {why}"
 
 
-def input_body() -> list[str]:
-    """`Spot.OneStageZk.INPUT_BODY`: what refuses `IB16`, the lowering's name or the decoder's."""
-    m = re.search(r"^def INPUT_BODY : List String := \[(.*?)\]$", lean_text(), re.M | re.S)
-    return [_unescape(x) for x in re.findall(STR, m.group(1))]
+def input_body() -> str:
+    """`INPUT_BODY` of `Spot/Admitted.lean`: the decoder's refusal of `IB16`."""
+    return _unescape(re.search(r"^def INPUT_BODY : String :=\n  " + STR + "$", lean_text(), re.M).group(1))
 
 
-def test_a_word_whose_boolean_body_is_an_input_reaches_the_lowering_unless_the_decoder_refuses_it():
-    """`IB16`: the decoder refuses it by `INPUT_BODY`'s name, or `admitted` admits it and `lower` hands it to the
-    lowering, which refuses it (`test_door_walls`, on Lean's executable)."""
-    d = descriptor("IB16")
-    try:
-        D = R.program(d.encode())
-    except R.Refused as e:
-        assert str(e).split(": ", 1)[1] in input_body(), e
-        return
-    part = PO.build(json.loads(d), PO.template_instance_query("E_v1"), [[(0, 1)]])
-    asked = []
-
-    def exe():
-        asked.append(True)
-        raise OC.Refused("E_LOWER", input_body()[0])
-
-    assert OC.admitted(D, part)[0] == "E_v1"
-    with pytest.raises(OC.Refused, match=re.escape(input_body()[0])):
-        OC.lower(OC.restrict(d.encode(), part, [(0, 1)]), part, exe, formed=OC.formed_in(d.encode(), part, [(0, 1)]))
-    assert asked == [True]
+def test_a_word_whose_boolean_body_is_an_input_is_refused_by_the_decoder_by_leans_text():
+    """`IB16`: the decoder refuses it (`codec._input_body`) by the text Lean's guard holds `lowerE` to, before `admitted`."""
+    with pytest.raises(R.Refused) as e:
+        R.program(descriptor("IB16").encode())
+    assert str(e.value) == f"E_DESCRIPTOR: {input_body()}"
 
 
 def test_a_refused_block_reaches_no_executable():

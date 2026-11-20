@@ -369,18 +369,9 @@ def _site(clause: str, text: str) -> tuple[str, str] | None:
     return None
 
 
-def _input_body() -> list[str]:
-    """`Spot.OneStageZk.INPUT_BODY`: what refuses `IB16`, the lowering's name or the decoder's."""
-    import re
-    m = re.search(r"^def INPUT_BODY : List String := \[(.*?)\]$", _admitted_lean(), re.M | re.S)
-    return [x.replace('\\"', '"') for x in re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))]
-
-
 def _outside(text: str) -> str:
-    """A refusal outside the door predicate by the case it is: `recut-gates`, `input-body`, else its text."""
-    if "recut-gates: " in text:
-        return "recut-gates"
-    return "input-body" if any(n in text for n in _input_body()) else text
+    """A refusal outside the door predicate by the case it is: `recut-gates`, else its text."""
+    return "recut-gates" if "recut-gates: " in text else text
 
 
 def _q(t: str) -> dict:
@@ -404,7 +395,6 @@ CONSTRUCTED = [
     ("a parameter cut into rows of two widths", "MIX", None, ("A_v1", "X_v1"), [(0, 1), (1, 2)],
      ("whole-words", "cut-rows")),
     ("a root reading an input recut", "RC16", None, ("E_v1",), [(0, 1)], "recut-gates"),
-    ("a word whose Boolean body is an input", "IB16", None, ("E_v1",), [(0, 1)], "input-body"),
 ]
 
 
@@ -456,7 +446,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
     `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
     `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
     a decoded C can reach refuses: each refusal of `admitted` and `admittedBlock` is reached or is `UNREACHED`'s. A C
-    refused outside the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
+    refused outside the predicate (`RC16`) is refused by both doors alike, `lower` reading Lean's
     `flock-lower-check`."""
     from verity.circuits import partition_object as PO
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -476,7 +466,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
         q = _q(ts[0]) if len(ts) == 1 else PO.template_instances_query(list(ts))
         cases.append((what, c, q, blocks, None, clause))
     for case, c, q, blocks, doc, want in cases:
-        exe = lower if want in ("recut-gates", "input-body") else stub
+        exe = lower if want == "recut-gates" else stub
         door = W.Door(c, q, blocks, lambda: exe)
         for k, (lo, hi) in enumerate(blocks):
             r = door.run(k, lo, hi)
@@ -495,7 +485,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
             assert want in (None, got) or (isinstance(want, tuple) and want[k] == got), (case, k, py)
             seen[got] = seen.get(got, 0) + 1
     assert set(seen) == {"holds", "operands-outside", "whole-words", "port-names", "on-bits", "one-template",
-                         "cut-rows", "recut-gates", "input-body"}, seen
+                         "cut-rows", "recut-gates"}, seen
     unreached = {s for s in _sites() if not any(c == s[0] and t in s[1] for c, t in UNREACHED)}
     assert reached == unreached, (sorted(reached - unreached), sorted(unreached - reached))
     assert all(sum(c == s[0] and t in s[1] for s in _sites()) == 1 for c, t in UNREACHED), UNREACHED
