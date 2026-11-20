@@ -64,6 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.circuits import partition_object as PO
 from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
@@ -541,6 +542,65 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
     return out
 
 
+def field_trees_why(what: str) -> str:
+    """`OneStageZk.FIELD_TREES_WHY`."""
+    return ("roots: the registration's trees of its templates' output fields are not the ones C and the partition give "
+            f"({what}): a window registers exactly one tree <template>/o<j> for each output field of each member's "
+            "template, its leaves the template's units in C")
+
+
+def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any]) -> list[tuple[str, int]]:
+    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' order, ``<template>/o<j>`` for each
+    return field of the one Definition the partition's ranges over C give its members' units, its leaves that
+    Definition's units."""
+    try:
+        ranges = P._template(program, query, "the members' partition").ranges
+    except P.QueryRefused as e:
+        raise _Refused(str(e)) from None
+    fns = {PO.descriptor_id(fn): fn for _k, fn in PO.calls(program)}
+    tids: dict[str, str] = {}
+    for name in sorted(ms):
+        t = _template_of(name)
+        if t is None:
+            raise _Refused(field_trees_why(f"the member {name} names no template"))
+        met = list(dict.fromkeys(tid for lo, hi in ms[name]["units"] for _k, tid, first, n in ranges
+                                 if first < hi and lo < first + n))
+        if len(met) != 1:
+            raise _Refused(field_trees_why(f"the member {name}'s units are not one Definition's in C"))
+        if t[0] in tids:
+            if tids[t[0]] != met[0]:
+                raise _Refused(field_trees_why(f"the template {t[0]}'s members' units are two Definitions'"))
+        elif met[0] in tids.values():
+            raise _Refused(field_trees_why(f"the Definition {met[0]}'s units are two templates'"))
+        else:
+            tids[t[0]] = met[0]
+    out: list[tuple[str, int]] = []
+    for t, tid in tids.items():
+        n = sum(c for _k, r, _a, c in ranges if r == tid)
+        ret = fns[tid].signature()[1]
+        out += [(f"{t}/o{j}", n) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+    return out
+
+
+def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Mapping[str, Any]) -> None:
+    """`OneStageZk.fieldTreesHeld`: each derived tree a root of `record`, once, at its derived leaf count, and no other
+    root ``<template>/<field>`` of a template of `ts`."""
+    roots = record.get("roots")
+    got = [(r["port"], r.get("leaves")) for r in (roots if isinstance(roots, list) else ())
+           if isinstance(r, dict) and type(r.get("port")) is str and (t := _template_of(r["port"])) is not None
+           and t[0] in ts]
+    for tree, n in want:
+        held = [leaves for port, leaves in got if port == tree]
+        if not held:
+            raise _Refused(field_trees_why(f"it omits {tree}"))
+        if len(held) > 1:
+            raise _Refused(field_trees_why(f"it holds {tree} more than once"))
+        if not (_nat(held[0]) and held[0] == n):
+            raise _Refused(field_trees_why(f"it holds {tree} at {json.dumps(held[0])} leaves, not {n}"))
+    if (port := next((p for p, _ in got if p not in dict(want)), None)) is not None:
+        raise _Refused(field_trees_why(f"it holds {port}, no output field's tree"))
+
+
 def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Mapping[str, Any]) -> dict[str, Any]:
     """`OneStageZk.Member.slice`: the member's count of units, its roots of the docket and its scheme."""
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
@@ -872,6 +932,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _class(ms)
         _tree_ports_held(ms, record)
         roots, _ = _members_roots(ms, record)
+        _field_trees_held(_derived_field_trees(program, params["query"], ms), _templates(ms), record)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
@@ -913,4 +974,4 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "members_run", "population_why", "POPULATION_WHY", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]
+           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]
