@@ -9,7 +9,6 @@ import copy
 from types import SimpleNamespace
 from typing import Any
 
-import numpy as np
 import pytest
 
 from tests.check import test_sampled_replay as T
@@ -46,14 +45,6 @@ def inst() -> dict:
 @pytest.fixture(scope="module")
 def pi(inst: dict) -> IX.ProgramIndex:
     return IX.ProgramIndex(inst)
-
-
-@pytest.fixture(scope="module")
-def world() -> Any:
-    """The Program served honestly to two requests, three steps each."""
-    inst, woff = T._program()
-    weights = T._bf16(np.random.default_rng(7), max(hi for _lo, hi in woff.values()), 0.5)
-    return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
 
 
 @NO_DICT

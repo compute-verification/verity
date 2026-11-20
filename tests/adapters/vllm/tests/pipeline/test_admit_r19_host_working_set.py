@@ -19,23 +19,10 @@ import signal
 import numpy as np
 import pytest
 
-# the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
-from tests.check import test_sampled_replay as TSR
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.commit.committer import native_collect as NC
 
 HIDDEN_PREFIXES = ("fa2.m1/", "fa3.m1/")
-
-
-@pytest.fixture(scope="module")
-def world():
-    rng = np.random.default_rng(7)
-    inst, woff = TSR._program()
-    n_w = max(hi for lo, hi in woff.values())
-    weights = TSR._bf16(rng, n_w, 0.5)
-    for f in ("model.model.layers.0.input_layernorm.weight", "model.model.norm.weight"):
-        weights[woff[f][0]:woff[f][1]] = 0x3F80
-    return TSR.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
 
 
 # ------------------------------------------------------------------------------------------------------ (c) gc.freeze before the fork

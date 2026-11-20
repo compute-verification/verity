@@ -1,4 +1,4 @@
-"""Sampled exact VU replay (C2 of record) -- positive on a tiny honest Program, targeted negatives named."""
+"""A tiny Program, served honestly by the reference evaluator (`Honest`), with the row kernels' and the weights provider's tests."""
 from __future__ import annotations
 
 import json
@@ -7,14 +7,15 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.evaluation.reference import evaluate, signature_of
+from verity.circuits.types import Tuple, Value
 
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.numerics import rows as RK
 from verity_vllm.definitions.registry import b1
-from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.program_view import from_instances, spec_base, spec_statics, specialization
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -162,13 +163,105 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     return inst, woff
 
 
+def _evaluate_row(spec: str, ops: list[np.ndarray]) -> dict[str, np.ndarray]:
+    """Row `spec` on its operands by the reference evaluator of its registered Definition: each return's leaves under its port
+    (`"0"`, `"1"`, ...)."""
+    target = specialization(spec_base(spec), spec_statics(spec))
+    params, ret = signature_of(target)
+    leaves = evaluate(target, *(int(o.reshape(-1)[0]) if isinstance(p, Value) else [int(x) for x in o.reshape(-1)]
+                                for o, p in zip(ops, params)))
+    out, at = {}, 0
+    for j, t in enumerate(ret.fields if isinstance(ret, Tuple) else (ret,)):
+        out[str(j)] = np.asarray(leaves[at:at + t.leaves], dtype=np.uint64)
+        at += t.leaves
+    return out
+
+
+class Honest:
+    """Executes the Program per request by the reference evaluator and commits the module outputs per (engine step, member name):
+    request blocks side by side (r0 then r1), the shape the collector's packed members have."""
+
+    def __init__(self, inst, woff, weights, prompts):
+        self.inst, self.woff, self.weights, self.prompts = inst, woff, weights, prompts
+        self.pi = IX.ProgramIndex(inst)
+        self.values: dict[tuple[str, int], np.ndarray] = {}             # (rid, row i) -> flattened output words
+        self.blocks: dict[tuple[int, str, str, str], np.ndarray] = {}   # (step, rid, op_path, member) -> block words
+        self.dtypes: dict[tuple[int, str, str, str], str] = {}          # (step, rid, op_path, member) -> the member's dtype
+        for rid, prompt in prompts.items():
+            self._run(rid, prompt)
+
+    def _commit(self, key, dtype, words):
+        self.dtypes[key] = dtype
+        self.blocks[key] = np.concatenate([self.blocks[key], words]) if key in self.blocks else words
+
+    def _run(self, rid, prompt):
+        pi = self.pi
+        for r in pi.rows:
+            d = pi.describe(r)
+            ops = []
+            for group in r["args"]:
+                words = []
+                for kind, a, lo, hi in group:
+                    if kind == "p" and pi.pnames[a] == "weights":
+                        words.append(self.weights[lo:hi])
+                    elif kind == "p" and a in pi.supplied:
+                        words.append(np.asarray([pi.supplied[a][1][lo]["bits"]], dtype=np.uint32))
+                    elif kind == "p":
+                        words.append(np.asarray(prompt[lo:hi], dtype=np.uint32))
+                    else:
+                        words.append(self.values[(rid, a)][lo:hi])
+                ops.append(np.concatenate(words) if len(words) > 1 else words[0])
+            got = _evaluate_row(r["spec"], ops)
+            members = d["members"]
+            if not members:                                             # interior row: its value flows on, nothing is committed
+                self.values[(rid, r["i"])] = got["0"].astype(np.uint16)
+                continue
+            if len(got) == 1:
+                got = {members[0][0]: got["0"]}
+            flat = []
+            for m in members:
+                wdt = np.uint64 if d["family"] == "TokenSelect_v1" else (np.uint32 if str(m[2]) in ("f32", "i32") else np.uint16)
+                flat.append(got[m[0]].astype(wdt))
+                self._commit((d["step"], rid, d["op_path"], m[0]), str(m[2]), flat[-1])
+            for c in d.get("copies") or []:                             # the same output committed under its second required name
+                self._commit((d["step"], rid, c["op_path"], c["member"]), str(c["dtype"]), flat[0])
+            self.values[(rid, r["i"])] = np.concatenate(flat) if len(flat) > 1 else flat[0]
+            if d["family"] == "Embedding_v1":                           # the ids the embedding consumed: input_token_ids member `in`
+                key = (d["step"], rid, d["op_path"], "in")
+                self.blocks[key] = np.concatenate([self.blocks[key], ops[0].astype(np.uint32)]) if key in self.blocks else ops[0].astype(np.uint32)
+
+    def bmap_and_reader(self, order=("r0", "r1"), mutate=None):
+        """Binding map entries (request-local element ranges + element_offset) and a committed reader over packed members."""
+        packed: dict[tuple[int, str, str], list] = {}
+        for (step, rid, op, mem), blk in sorted(self.blocks.items(), key=lambda kv: (kv[0][0], kv[0][2], kv[0][3], order.index(kv[0][1]))):
+            packed.setdefault((step, op, mem), []).append((rid, blk))
+        entries, store = [], {}
+        dtype_of = lambda op, mem: "i64" if op == IX.SAMPLER_OP else ("i32" if mem == "in" else "bf16")  # noqa: E731
+        for (step, op, mem), parts in packed.items():
+            name = f"{op}/{mem}"
+            off, arrs = 0, []
+            for rid, blk in parts:
+                entries.append({"identity": {"program_digest": "t" * 64, "request_id": rid, "step": step, "invocation": 0, "op_path": op, "output_member": mem,
+                                             "element_range": [0, int(blk.size)], "rank": 0}, "name": name, "element_offset": off,
+                                "encoding": {"dtype": self.dtypes.get((step, rid, op, mem), dtype_of(op, mem))},
+                                "family": "moe_block_stream" if op.startswith("moe/") else "instance_outputs"})
+                off += int(blk.size)
+                arrs.append(blk)
+            store[(step, name)] = np.concatenate(arrs).tobytes()
+        if mutate:
+            mutate(store, entries)
+        self.store = store
+
+        def committed(step, name, lo, hi):
+            b = store.get((int(step), name))
+            return None if b is None else b[lo:hi]
+
+        return {"schema": "test", "entries": entries}, committed
+
+
 def test_struct_parser_declaration_order_and_counts():
     fs = IX.parse_struct("{a: Array<3,Array<2,Value<16>>>, b: Array<4,Value<16>>, c: Value<16>}")
     assert [(n, c, s) for n, c, s, _b in fs] == [("a", 6, [3, 2]), ("b", 4, [4]), ("c", 1, [])]
-
-
-def _bnd(n_req):
-    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 def test_token_select_first_max_tie_rule():
@@ -178,25 +271,6 @@ def test_token_select_first_max_tie_rule():
     nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
     assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
     assert [evaluate(bind(b1.TokenSelect, V=len(r)), r)[0] for r in nan] == [0, 2, 0]
-
-
-# ------------------------------------------------------------------------------------------------
-# the Hopper GEMM `Gemm_v2{K,N,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}` (targets.gemm_spec on a cc 9.0 step; the spec text of every Hopper row
-# of record, e.g. qwen25-15b H100 B1 1024/128) has a registered evaluator: the same VU as Gemm_v1 (one token row x[K] @ W[N,K]^T
-# -> [N]) under the wgmma k16 step (one group of 16, 26-bit adder, floor -133).  Positive (honest Hopper world replays exact; the biased
-# linear composes), negatives (a flipped committed input byte -> mismatch named; Ampere-committed bytes under a Hopper Program -> the two
-# adders are told apart on an adversarial lane; an unregistered / absent DOT -> unresolved BY NAME, never another chain).
-
-HOPPER_DOT = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"}'
-
-
-def _hopper_program(inst: dict, dot: str = HOPPER_DOT) -> dict:
-    """Every Gemm_v1{K,N} row -> Gemm_v2{K,N,<dot>} (the statics-lifted GEMM a non-(Ampere, FA2) target binds)."""
-    out = json.loads(json.dumps(inst))
-    for r in out["rows"]:
-        if r["spec"].startswith("Gemm_v1{"):
-            r["spec"] = "Gemm_v2{" + r["spec"][len("Gemm_v1{"):-1] + "," + dot + "}"
-    return out
 
 
 def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_weights_root_pins():
@@ -266,116 +340,6 @@ def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
     got = read("tid2eid", 0, 6)
     assert got.dtype == np.uint32 and got.tolist() == [3, 0xFFFFFFFF, 7, 2, 0, 5]
     assert read("wide", 0, 2) is None
-
-
-# --- RoPE_v1: an evaluator, not a NOT_YET label -----------------------------------------------------------------
-
-
-# --- Attention_v3 / Attention_v2 row relation: state-linked resolution over the committed K/V history ------------------
-
-
-# ------------------------------------------------------------------------------------------------------------- fused-MoE planes
-E_MOE, TOPK, VPT = 16, 2, 8               # experts, routed slots, values per router thread (E/VPT = 2 threads -> a real xor butterfly)
-
-
-def _moe_program():
-    """One request Program with an OLMoE-shaped fused-MoE layer per token row: Embedding -> RMSNormTriton -> gate Gemm (router logits) ->
-    MoeRouterTopK -> TOPK x [MoeExpertGemm (w13) -> SiluMul under `.experts` -> MoeExpertGemmW (w2, routed weight)] -> MoeSum -> fused norm
-    fed by the sum (residual = the embedding); per step logits Gemm -> TokenSelect.  Row order, names and args are the real derive_step
-    shape (OLMoE B1 256/32 Program): pair-major p = t*TOPK + k, `[p]` / `[t]` name indices, the up row reads router id slot k, the down row
-    reads act row p + id slot k + weight slot k, the sum row reads the TOPK down rows in slot order."""
-    fields = [("model.model.embed_tokens.weight", V * H, f"Array<{V},Array<{H},Value<16>>>"),
-              ("model.model.layers.0.input_layernorm.weight", H, f"Array<{H},Value<16>>"),
-              ("model.model.layers.0.mlp.gate.weight", E_MOE * H, f"Array<{E_MOE},Array<{H},Value<16>>>"),
-              ("model.model.layers.0.mlp.experts.routed_experts.w13_weight", E_MOE * 2 * INTER * H, f"Array<{E_MOE},Array<{2 * INTER},Array<{H},Value<16>>>>"),
-              ("model.model.layers.0.mlp.experts.routed_experts.w2_weight", E_MOE * H * INTER, f"Array<{E_MOE},Array<{H},Array<{INTER},Value<16>>>>"),
-              ("model.model.norm.weight", H, f"Array<{H},Value<16>>")]
-    off, woff = 0, {}
-    for n, c, _t in fields:
-        woff[n] = (off, off + c)
-        off += c
-    wtype = "{" + ", ".join(f"{n}: {t}" for n, _c, t in fields) + "}"
-    rows, i = [], 0
-
-    def add(spec, name, args):
-        nonlocal i
-        rows.append({"i": i, "spec": spec, "form": "call", "name": name, "args": args})
-        i += 1
-        return i - 1
-
-    W = lambda n: [["p", 1, woff[n][0], woff[n][1]]]  # noqa: E731
-    X = "model.model.layers.0.mlp.experts"
-    sel_prev = None                                            # the row that selected the previous step's token
-    for s in range(1 + T):
-        toks = list(range(LP)) if s == 0 else [0]
-        norm_rows = []
-        for t in toks:
-            ids = [["p", 0, t, t + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
-            e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{t}]", [ids, W("model.model.embed_tokens.weight")])
-            ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{t}]",
-                     [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
-            lg = add(f"Gemm_v1{{K={H},N={E_MOE}}}", f"model.model.layers.0.mlp.gate/triton_launch_{s}g[{t}]", [[["n", ln, 0, H]], W("model.model.layers.0.mlp.gate.weight")])
-            rt = add(f"MoeRouterTopK_v1{{E={E_MOE},TOPK={TOPK},VPT={VPT}}}", f"{X}/topk_softmax_{s}[{t}]", [[["n", lg, 0, E_MOE]]])
-            ups = [add(f"MoeExpertGemm_v1{{E={E_MOE},K={H},N={2 * INTER}}}", f"{X}/triton_launch_{s}u[{t * TOPK + k}]",
-                       [[["n", ln, 0, H]], [["n", rt, TOPK + k, TOPK + k + 1]], W("model.model.layers.0.mlp.experts.routed_experts.w13_weight")]) for k in range(TOPK)]
-            acts = [add(f"SiluMul_v1{{I={INTER}}}", f"{X}/silu_and_mul_{s}[{t * TOPK + k}]", [[["n", ups[k], 0, 2 * INTER]]]) for k in range(TOPK)]
-            dns = [add(f"MoeExpertGemmW_v1{{E={E_MOE},K={INTER},N={H}}}", f"{X}/triton_launch_{s}d[{t * TOPK + k}]",
-                       [[["n", acts[k], 0, INTER]], [["n", rt, TOPK + k, TOPK + k + 1]], [["n", rt, k, k + 1]], W("model.model.layers.0.mlp.experts.routed_experts.w2_weight")])
-                   for k in range(TOPK)]
-            sm = add(f"MoeSum_v1{{TOPK={TOPK},H={H}}}", f"{X}/moe_sum_{s}[{t}]", [[["n", d, 0, H] for d in dns]])
-            nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{t}]",
-                     [[["n", sm, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight")])
-            norm_rows.append(nm)
-        lgt = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", norm_rows[-1], 0, H]], W("model.model.embed_tokens.weight")])
-        sel_prev = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lgt, 0, V]]])
-    return {"schema": "cb-a/instance-sequence/v1", "digest": "m" * 64, "params": [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]], "rows": rows}, woff
-
-
-MOE_FAMS = {"MoeRouterTopK_v1", "MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeSum_v1"}
-
-
-def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="moe/L0"):
-    """Flip one committed word of request `rid`'s plane slice (request-local element `elem`) in the packed step tensor."""
-    e = next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == step and e["identity"]["op_path"] == op_path and e["identity"]["output_member"] == plane)
-    isz = 4 if e["encoding"]["dtype"] in ("f32", "i32") else 2
-    key = (step, e["name"])
-    b = bytearray(store[key])
-    o = (int(e["element_offset"]) + elem) * isz
-    b[o] ^= (flip & 0xFF) if isz == 2 else 0x01
-    if isz == 2:
-        b[o + 1] ^= (flip >> 8) & 0xFF
-    store[key] = bytes(b)
-
-
-def _alias_up_to_down(store, entries, rid, step):
-    """Replay the pre-FLUSH-03 defect on one request's slice: the committed `up` words of (rid, step) become the `down` words of the same
-    layer (the collector read the staged up view after the block's w2 launch had overwritten the shared workspace).  Widths differ in this
-    fixture (2I vs H): the common prefix is what the aliased base pointer would have produced."""
-    def _slice(plane):
-        e = next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == step and e["identity"]["op_path"] == "moe/L0" and e["identity"]["output_member"] == plane)
-        o = int(e["element_offset"]) * 2
-        n = int(e["identity"]["element_range"][1]) * 2
-        return e, o, n
-    eu, ou, nu = _slice("up")
-    ed, od, nd = _slice("down")
-    n = min(nu, nd)
-    down = store[(step, ed["name"])][od:od + n]
-    b = bytearray(store[(step, eu["name"])])
-    b[ou:ou + n] = down
-    store[(step, eu["name"])] = bytes(b)
-
-
-def _r0_rows_cover_r1(planes):
-    """The binding a B=2 step got before binding.py refused a MoE plane whose rows are not a multiple of the step's tokens: the committed
-    plane carries r0's rows only, and r1's entry is that whole plane at offset 0 (request-local range [0, r0's words])."""
-    def mutate(store, entries):
-        for plane in planes:
-            r0, r1 = (next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == 0 and e["identity"]["op_path"] == "moe/L0"
-                           and e["identity"]["output_member"] == plane) for rid in ("r0", "r1"))
-            n0 = int(r0["identity"]["element_range"][1])
-            store[(0, r0["name"])] = store[(0, r0["name"])][:n0 * (4 if r0["encoding"]["dtype"] in ("f32", "i32") else 2)]
-            r1["identity"]["element_range"], r1["element_offset"] = [0, n0], 0
-    return mutate
 
 
 def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step():
