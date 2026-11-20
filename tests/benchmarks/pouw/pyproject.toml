@@ -25,7 +25,6 @@ verity-exact-kit = { workspace = true }
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "test_ffill.py",
     "test_pearl_c_hash_decode.py",
     "test_pearl_c_hash_host.py",
     "test_pearl_c_hash_wide.py",
@@ -180,10 +179,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["test_dc.py"]
-paths = ["calibration/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
 tests = ["test_pearl_c_sm90_glm53.py"]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
 
@@ -194,14 +189,6 @@ paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/P
 [[tool.verity.tests.reads]]
 tests = ["test_facet_break.py"]
 paths = ["calibration/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ffill.py"]
-paths = ["verity/circuits/ops"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_hidden_zk_summarize_rows.py"]
-paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_pearl_c_sm120.py", "test_pearl_c_sm90.py"]

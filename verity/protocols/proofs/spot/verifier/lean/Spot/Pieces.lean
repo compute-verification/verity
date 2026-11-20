@@ -166,6 +166,9 @@ public import Spot.HistoryTable
 public import Spot.PublicUnits
 public import Spot.LinkPoints
 public import Spot.Edges
+public import Spot.Levels
+meta import Spot.Select
+meta import Spot.Levels
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -1179,10 +1182,37 @@ def table : List (String × (Json → V Json)) :=
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]
 
-/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
+/-- The verifier's `run`: `run`, with a two-stage rule refused by name (`Levels.TWO_LEVELS_REFUSED`) before anything
+else is read; the difftest's table keeps `run` itself, which its twin holds to the Python. -/
+def runOfRecord (j : Json) : V Json := do
+  if (← Select.Rule.ofJson (getD j "rule")) matches .twoStage .. then throw Levels.TWO_LEVELS_REFUSED
+  run j
+
+/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them, with `run` as
+`runOfRecord`. -/
 def verifier : List (String × (Json → V Json)) :=
-  table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
+  (table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
     "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
-    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
+    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1)
+  |>.map fun p => if p.1 == "run" then ("run", runOfRecord) else p
+
+/-- **The verifier's `run` refuses a two-stage rule by name**: on any input whose rule parses as two-stage, it is
+exactly `Levels.TWO_LEVELS_REFUSED`, never an output, so never `accept`; `Run.run` is not reached. -/
+theorem runOfRecord_refuses_two_stage {j : Json} {g : Json} {t : String} {k : Select.Counts}
+    (hr : Select.Rule.ofJson (getD j "rule") = .ok (.twoStage g t k)) :
+    runOfRecord j = .error Levels.TWO_LEVELS_REFUSED := by
+  unfold runOfRecord
+  simp only [hr, bind, Except.bind]
+  rfl
+
+private def twoStageRule : Json :=
+  Json.mkObj [("rule", "two-stage"), ("replay", "rate:1/2"), ("k", Lean.toJson (1 : Nat)),
+    ("grain", Json.mkObj [("name", "Q_template_instance"), ("version", Lean.toJson (0 : Nat)),
+      ("params", Json.mkObj [("template", "t")])])]
+
+#guard (verifier.filter (·.1 == "run")).length == 1
+#guard match (verifier.lookup "run").map (· (Json.mkObj [("rule", twoStageRule)])) with
+  | some (Except.error e) => e == Levels.TWO_LEVELS_REFUSED
+  | _ => false
 
 end Spot.Pieces
