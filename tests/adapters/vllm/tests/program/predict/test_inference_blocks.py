@@ -130,7 +130,7 @@ def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
         IB.budgets(circuit)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    with pytest.raises(ValueError, match="a served window's blocks, a request each of its own positions, have no one"):
+    with pytest.raises(ValueError, match="slots 0 and 1 hold different units .* a window of requests of different lengths is not counted yet"):
         BC.session(doc)
 
 
