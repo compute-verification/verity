@@ -637,7 +637,6 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     """An -h3 transcript is accepted by an -h3 verifier.  Every tree is ``frame-v3-sha512`` with hm96-sha512 leaves under
     the prover's fresh salts, rebuilt here from core's pieces: A's and B's rows over their ``sha512/row-seg/v1``
     digests, the tiles over their 64-byte leaves.  A wrong salt, or h0's verifier (SHA-256 trees), refuses the opening."""
-    from dataclasses import replace
 
     from verity.commitments import CommitmentDomain, hm96
     from verity.commitments.merkle import tree_levels
