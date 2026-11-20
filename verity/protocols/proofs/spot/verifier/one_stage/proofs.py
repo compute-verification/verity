@@ -72,6 +72,7 @@ from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
+from .settings import TMPL_SWITCH, door_tmpl
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
@@ -85,8 +86,6 @@ STATEMENT = "verity/flock-circuit"
 #: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 TMPL_FORMAT = "flock-circuit/tmpl"
-#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
-TMPL_SWITCH = "VERITY_DOOR_TMPL"
 TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
 TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -205,7 +204,7 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
 
 def statement() -> str:
     """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
-    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+    return TMPL_STATEMENT if door_tmpl() else STATEMENT
 
 
 def tmpl_why(circuit: Path) -> str | None:
@@ -218,7 +217,7 @@ def tmpl_why(circuit: Path) -> str | None:
     try:
         meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
     except ValueError:
-        meta = None
+        return TMPL_FLAT_WHY
     if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
             or meta.get("statement") != TMPL_STATEMENT:
         return TMPL_FLAT_WHY
@@ -274,11 +273,16 @@ def _refusal(why: str) -> str:
 def reads_registered(program: bytes) -> bool:
     """Whether the program descriptor `program` has an input bound at docket (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
+    return not _reads_none_registered(program)
+
+
+def _reads_none_registered(program: bytes) -> bool:
+    """Whether `program` is JSON whose `definitions` object names no `RegisteredInput<w>_v1`; False for any other text."""
     try:
         defs = json.loads(program)["definitions"]
     except (ValueError, KeyError, TypeError):
-        return True
-    return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
+        return False
+    return isinstance(defs, dict) and not any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
 #: `OneStageZk.WORD`: the bound on each length a session's statement holds, which writes every length in an 8-byte word
@@ -743,7 +747,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
 
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
+           "SIZE_CLASS_MAX", "TMPL_SWITCH", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
            "draw_fits_why", "drawn_block", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "not_zk_why", "order_why", "own_tables", "population_why", "printed", "printed_size",
            "proved_units", "reads_registered", "tables_match_why", "tables_why", "template_why", "units_exactly",

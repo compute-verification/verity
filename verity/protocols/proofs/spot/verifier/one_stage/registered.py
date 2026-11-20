@@ -834,14 +834,17 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
     return out
 
 
-def _commitment_place(b: bytes) -> int | None:
-    """The place a held commitment was registered at: its JSON's ``place``, a natural; None for a text that is no JSON object
-    of one (`Supplied.commitmentPlace`)."""
+def _commitment_place(c: str, b: bytes) -> int:
+    """The place `c`'s held commitment `b` was registered at: its JSON's ``place``, a natural; ValueError for a text that is
+    no JSON object of one (`Supplied.commitmentPlace`)."""
+    why = f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows"
     try:
         doc = json.loads(b.decode("utf-8"))
-    except ValueError:
-        return None
-    return _nat(doc.get("place")) if isinstance(doc, dict) else None
+    except ValueError as e:
+        raise ValueError(why) from e
+    if (p := _nat(doc.get("place")) if isinstance(doc, dict) else None) is None:
+        raise ValueError(why)
+    return p
 
 
 def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
@@ -870,9 +873,7 @@ def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[
     if cms and cos:
         placed = {}
         for c in cms:
-            if (p := _commitment_place(commit[c])) is None:
-                raise ValueError(f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows")
-            placed[f"commitment {c}"] = p
+            placed[f"commitment {c}"] = _commitment_place(c, commit[c])
         for f in cos:
             if f not in (released or {}):
                 raise ValueError(f"released: the verifier names no place of {f}'s coin, which follows a commitment it holds")
