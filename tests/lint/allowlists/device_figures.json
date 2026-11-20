@@ -1,10 +1,8 @@
 {
   "rule": "a device figure outside its card, to be read from it (tests/lint/test_device_figures.py)",
   "entries": [
-    {"file": "adapters/vllm/manifests/capture-maps/deepseek-v4-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
     {"file": "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json", "count": 2, "lane": "circuits"},
     {"file": "adapters/vllm/verity_vllm/definitions/numerics/fa3_model.py", "count": 1, "lane": "proofs"},
-    {"file": "adapters/vllm/verity_vllm/definitions/numerics/mhc_twin.py", "count": 3, "lane": "proofs"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/cublas_routes.json", "count": 3, "lane": "proofs"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/device_pins/NVIDIA_B200.json", "count": 1, "lane": "proofs"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/device_pins/NVIDIA_H200.json", "count": 1, "lane": "proofs"},

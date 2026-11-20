@@ -1851,8 +1851,9 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
         for r in rs:
             why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
             skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
-            print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
-                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+            verdict_text = ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)" if r["failed"]
+                            else f"no spot failed, {len(r['missing'])} not checked here (--ranges checks them all)")
+            print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), " + verdict_text
                   + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")

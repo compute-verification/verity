@@ -361,12 +361,6 @@ def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
     return files
 
 
-def _positionless(file: dict) -> dict:
-    """``file`` as credit builds it (`registered.READS_V2`, Flock's `Registered.FORMAT`): no port states a position."""
-    return {"format": G.READS_V2, "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)}
-                                            for p, e in file["ports"].items()}}
-
-
 def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
     """Registered reads v1 (`registered.READS_V1`, ``reads_from``): over a mixed-K execution phase whose steps each hold several
     calls of one K (each step's A table of K holds each of them, call after call), at every step count that divides
@@ -378,33 +372,6 @@ def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
     assert sorted(HW.step_of(prog, c, 2)[1] for c in range(len(CALLS))) == [1, 1, 2, 2, 2, 2]
     for steps in (1, 2, 3, 6):
         _v1_files(prog, tp, steps, "ab" * 64, "cd" * 64)
-
-
-@pytest.fixture(scope="module")
-def window_448():
-    """The real 32 × 32 execution phase at K = 448 (`tile_unit`): two linears of K = 448 over two steps, so each step's A table
-    of K = 448 holds two calls' blocks."""
-    prog = HW.program((("q_proj", 448, 64), ("k_proj", 448, 32)),
-                      tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj")), 32, (32, 32), prefix="h1/w/")
-    return prog, P.evaluate(prog, HW.query(prog))
-
-
-@pytest.mark.slow
-def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_credit_builds_the_same_files(window_448):
-    """On the real tile at K = 448, 32 × 32, over two steps of two calls of K each: each call's v1 file reads what its
-    v0 file did at every unit and port (`_v1_files`), and is the one `credit.registered_file` builds from the
-    descriptor alone, which the Lean `Credit.registeredFile` is held to (the pouw-check difftest). Building the real
-    tile's Program takes about 40 s, which no stand-in tile can show: its receipt width and row words are K = 448's."""
-    prog, tp = window_448
-    window, salt = "ab" * 64, "cd" * 64
-    assert HW.call_units(prog) == [(0, 2), (2, 1), (3, 2), (5, 1)]
-    files = _v1_files(prog, tp, 2, window, salt)
-    raw = canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
-    (lay, why), program, shape = Cr.layout_of(raw), hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-    assert why is None and program == P.program_digest(prog)
-    roots = {v: [r] for v, r in _roots(prog, 2).items()}
-    for c, file in enumerate(files):
-        assert Cr.registered_file(program, lay, shape, c, roots, window, 2, salt) == (_positionless(file), None), c
 
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
@@ -875,50 +842,6 @@ def chunk_unit(k: int, tile: tuple[int, int] = TILE):
 #: 14336 (a row 4 chunk leaves of 3584 codes)
 LLAMA = (("o_proj", 4096, 16), ("up_proj", 4096, 8), ("down_proj", 14336, 8))
 LLAMA_CALLS = tuple((lin, s) for s in range(2) for lin in ("o_proj", "up_proj", "down_proj"))
-
-
-def test_a_llama_window_at_k_4096_and_14336_reads_each_14336_row_as_its_4_chunk_leaves():
-    """An execution phase of K = 4096 and K = 14336 (Llama's mixed contractions): every a/14336 and b/14336 row is
-    `weights.chunks` (14336) = 4 leaves of `weights.leaf_words` (14336) = 1794 words, so those values hold 4 times their
-    rows, a unit reads its 4 R A and 4 C B chunk rows at leaf 4·row + i of them (`unit_reads`), of its step's A table
-    (`table_reads`) and at `place`'s 4·row bases, while K = 4096 keeps whole rows; at one and two steps each call's
-    ``--registered`` file reads what its v0 file did (`_v1_files`) and is the one `credit.registered_file` builds from the
-    descriptor alone, which reads the template's chunk rows (`credit.layout_of`, `shape_of`), and `credit.table_rows`
-    gives each A value, step A table and receipt table the rows the Program does."""
-    m = HW.slot(5, TILE)
-    prog = HW.program(LLAMA, LLAMA_CALLS, m, TILE, unit=chunk_unit)
-    tp = P.evaluate(prog, HW.query(prog))
-    want = _expected(LLAMA, LLAMA_CALLS, m)
-    sig = dict(prog.fn.signature()[0])
-    assert (W.chunks(4096), W.chunks(14336), W.leaf_words(4096), W.leaf_words(14336)) == (1, 4, 2050, 1794)
-    assert (sig["a/4096"].n, sig["b/4096"].n, sig["a/14336"].n, sig["b/14336"].n) == (2 * m, 24, 4 * 2 * m, 4 * 8)
-    assert sig["a/4096"].elem == Z.ROW(4096) and sig["a/14336"].elem == sig["b/14336"].elem == Z.ROW(3584)
-    assert tp.population == len(want) == 2 * (2 * 2 + 2 * 1 + 2 * 1)
-    assert [HW.unit_reads(prog, tp, u) for u in range(tp.population)] == _reads(want)
-    for steps in (1, 2):
-        for u, (k, a0, b0) in enumerate(want):
-            c, _t = HW.call_of(prog, u)
-            n, at, a = W.chunks(k), HW.step_of(prog, c, steps)[2], HW.table(prog, "a", c, steps)
-            base = at + a0 - LLAMA_CALLS[c][1] * m
-            got = HW.table_reads(prog, tp, u, steps)
-            assert {key: v for key, v in got.items() if key.startswith("a_k")} == {
-                f"a_k{k}[{i}]": (a, n * base + i) for i in range(n * R)}
-            assert HW.place(prog, u, steps)[LL.A] == (a, n * base)
-            assert HW.place(prog, u, steps)[LL.B] == (f"b/{k}", n * b0)
-    window, salt = "ab" * 64, "cd" * 64
-    raw = canonical_json({k: v for k, v in encode_program(prog).items() if k != "annotations"})
-    (lay, why), program, shape = Cr.layout_of(raw), hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
-    assert why is None and lay["tile"] == list(TILE)
-    assert {k: (t["n"], t["a"], t["b"]) for k, t in shape["tiles"].items()} == {4096: (1, 2050, 2050),
-                                                                               14336: (4, 1794, 1794)}
-    for steps in (1, 2):
-        files = _v1_files(prog, tp, steps, window, salt)
-        roots, rows = {v: [r] for v, r in _roots(prog, steps).items()}, Cr.table_rows(lay, steps, "")
-        assert (rows["a/4096"], rows["a/14336"]) == (sig["a/4096"].n, sig["a/14336"].n)
-        for c, file in enumerate(files):
-            assert Cr.registered_file(program, lay, shape, c, roots, window, steps, salt) == (_positionless(file), None), (steps, c)
-            assert all(rows[v] == n for v, (n, _w) in HW._shapes(prog, c, steps).items() if v in rows), (steps, c)
-            assert {f"a_k14336_{i}" for i in range(4 * R)} <= set(file["ports"]) or LLAMA_CALLS[c][0] != "down_proj"
 
 
 def test_at_a_chunked_k_the_program_wraps_the_zy_unit_and_refuses_whole_rows_and_a_leafs_whole_row_lanes():

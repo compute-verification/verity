@@ -609,34 +609,29 @@ def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(devi
 
 def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     """On the recording stand-in nothing is written, so every pass's tile digests are the poison: the repeat holds, and
-    the negative control (the call with its tile leaves omitted) and the fresh salts' differing roots must tell, for every
-    shape."""
+    the fresh salts' differing roots must tell, for every shape."""
     make, _, weights, *_ = device_run
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     rows = E2E.gate(make(), weights)
     calls = [r for r in rows if r["check"] == "call"]
     assert [(r["n"], r["m"]) for r in calls] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
-    assert all(r["digests_repeat"] and not r["omitted_leaves_rejected"] and not r["salts_fresh"] and not r["ok"]
-               for r in calls)
+    assert all(r["digests_repeat"] and not r["salts_fresh"] and not r["ok"] for r in calls)
     (check,) = [r for r in rows if r["check"] == "screen"]
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
 def test_the_call_check_compares_under_the_salt():
     """`call_verdict`: with every leaf's salt fresh, the same call twice passes on equal tile digests under different
-    roots; equal roots (salts not fresh), differing digests (a call that isn't deterministic) and an omitted call whose
-    digests are the first's (leaves the call didn't write) each fail; y beyond `ERR` fails; a call without hashing checks
+    roots; equal roots (salts not fresh) and differing digests (a call that isn't deterministic) each fail; y beyond `ERR` fails; a call without hashing checks
     y alone."""
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
-    a, b, omitted = ({"transcript_root": r, "digests": d} for r, d in ((b"r1", b"d"), (b"r2", b"d"), (b"r3", b"\xa5")))
-    assert E2E.call_verdict([a, b, omitted], 0.05)["ok"]
-    assert not E2E.call_verdict([a, b, omitted], 0.09)["ok"]
-    got = E2E.call_verdict([a, {**b, "transcript_root": b"r1"}, omitted], 0.05)
+    a, b = ({"transcript_root": r, "digests": d} for r, d in ((b"r1", b"d"), (b"r2", b"d")))
+    assert E2E.call_verdict([a, b], 0.05)["ok"]
+    assert not E2E.call_verdict([a, b], 0.09)["ok"]
+    got = E2E.call_verdict([a, {**b, "transcript_root": b"r1"}], 0.05)
     assert not got["ok"] and not got["salts_fresh"] and got["digests_repeat"]
-    got = E2E.call_verdict([a, {**b, "digests": b"e"}, omitted], 0.05)
+    got = E2E.call_verdict([a, {**b, "digests": b"e"}], 0.05)
     assert not got["ok"] and not got["digests_repeat"]
-    got = E2E.call_verdict([a, b, {**omitted, "digests": b"d"}], 0.05)
-    assert not got["ok"] and not got["omitted_leaves_rejected"]
     assert E2E.call_verdict([{"units": 1}], 0.05)["ok"] and not E2E.call_verdict([{"units": 1}], 0.09)["ok"]
 
 
@@ -1438,7 +1433,7 @@ def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
 
 
 def short_y(path: Path, pos: int, drop: int) -> None:
-    """Call `pos`'s y rows file less its last `drop` bytes, committed as the verifier's opener reads it (`VR.f32_row`: row
+    """Call `pos`'s y rows file less its last `drop` bytes, committed as the verifier's opener reads it (`VR.PO.f32_row`: row
     i is the words the file holds of its bytes [2ni, 2n(i + 1)), a ragged row's whole ones here) under a new root, which the
     manifest then names: a prover's own y whose last real row is short, and opens."""
     man = json.loads(path.read_text())
@@ -1450,7 +1445,7 @@ def short_y(path: Path, pos: int, drop: int) -> None:
     data = data[:len(data) - drop]
     rows = [data[2 * n * i:2 * n * (i + 1)] for i in range(real)]
     d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
-    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
+    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.PO.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
                         for i, r in enumerate(rows)])
     u["y"] = {"root": tree[-64:].hex(), "rows": PPDR._write(file, data, digest=False),
               "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree), "salts": u["y"]["salts"]}
@@ -1498,7 +1493,7 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
                                   epoch=types.SimpleNamespace(salt=salt, workload=types.SimpleNamespace(
                                       matmuls=[types.SimpleNamespace(index=index)])),
                                   man={"matmuls": [{"real_rows": real, "y": {"root": tree[-64:].hex()}}]})
-        return VR.check_y(p, 0, tile, v, (VR.opening(tree, real, 7, values[7], 64),))
+        return VR.check_y(p, 0, tile, v, (VR.PO.opening(tree, real, 7, values[7], 64),))
 
     words = lambda *w: np.array(w, "<u4").tobytes()  # noqa: E731
     assert reason(words(5, 5, 0, 0)) is None
@@ -2753,7 +2748,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
         return {"path": path, "bytes": size}
 
     def tree(path: str, count: int) -> dict:
-        return named(path, 64 * (2 * VR.pow2(count) - 1))
+        return named(path, 64 * (2 * VR.PO.pow2(count) - 1))
 
     roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
     weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],

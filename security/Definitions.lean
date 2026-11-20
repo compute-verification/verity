@@ -63,7 +63,6 @@ public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
-public import Definitions.Claims.SamplingLevels
 public import Definitions.Claims.SamplingTwoServedX
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.SamplingTable
@@ -104,6 +103,8 @@ public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.ResourceAccounting.Guarantees
+public import Definitions.Compose.Blocks
+public import Definitions.Compose.Guarantees.Blocks
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.Certifier.Guarantees.MonitoringPeriodFails

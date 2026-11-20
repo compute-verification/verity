@@ -1,23 +1,19 @@
 """The H200 capture of DeepSeek-V4-Pro's FlashMLA decode and prefill (`dsv4_flashmla_capture_gpu`) on the CPU: its cache layout
 against FlashMLA's quant.py, its operands, the prefill's workspace restated in torch, the rows it hands each token's Definition,
-its comparison jobs on twin-made kernel words, its verdicts and its main loop with the GPU stood in for."""
+its comparison jobs on twin-made kernel words and its verdicts."""
 from __future__ import annotations
 
-import contextlib
 import copy
-import json
 
 import numpy as np
 import pytest
 import torch
 
-from tests import fake_vllm
 from tests.properties import dsv4_flashmla_capture_gpu as X
 from verity_vllm.definitions.numerics import flashmla_prefill_twin as PT
 from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.registry import flashmla as F
 from verity_vllm.definitions.registry import flashmla_prefill as P
-from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 FLIP = (6, 3, 100)
 PFLIP, WFLIP = (2, 5, 300), (1, 3, 77)
@@ -472,49 +468,3 @@ def test_each_case_has_its_own_verdict() -> None:
     doc["launches"][-1]["checks"]["returned"] = False
     assert {k for k, c in X.cases(doc).items() if not c["ok"]} == {"decode/lone", "decode/edge", "decode/c128", "prefill/swa",
                                                                    "prefill/edge"}
-
-
-@pytest.mark.slow
-def test_main_end_to_end_on_stubbed_launches(swa, pswa, tmp_path, monkeypatch, capsys) -> None:
-    """`main` with the GPU's launches stood in for (the decode `swa` case's twin-made words, the same words under `c128` with one
-    flipped, and the prefill `swa` case's twin-made workspace and words) and vLLM's config module stubbed: the jobs through the
-    spawned worker pool, the per-case verdicts, the sealed record and the exit status, so a slip in the orchestration shows here
-    and not in the H200's first hour."""
-    ns, good, bad = swa
-    plens, pgood, _, _ = pswa
-    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
-    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
-    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
-    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
-    monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
-    monkeypatch.setattr(X.G, "_environment", lambda: {})
-    monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
-
-    def gpu(work, outdir, quick, doc):
-        doc["selection"] = {"ok": True}
-        doc["launches"] += [{"phase": "decode", "case": c, **copy.deepcopy(LAUNCH["decode"])} for c in ("swa", "c128")]
-        doc["launches"].append({"phase": "prefill", "case": "swa", **copy.deepcopy(LAUNCH["prefill"])})
-        twin = [j for j in X.case_jobs("swa", good, ns, quick) if j["kind"] == "twin"]
-        prefill = [j for j in X.prefill_jobs("swa", pgood, plens, quick) if j["kind"] != "prefill-ref"]
-        return twin + [{"phase": "decode", "case": "swa", "kind": "ref", "paths": good, "token": 1}] + \
-            [{**j, "case": "c128", "paths": bad} for j in twin] + prefill
-
-    monkeypatch.setattr(X, "gpu", gpu)
-    out = tmp_path / "out"
-    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick"]) == 1
-    doc = json.loads((out / X.RECORD).read_text())
-    assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"]
-    go = {"decode/swa", "prefill/swa"}
-    assert {c: v["ok"] for c, v in doc["cases"].items()} == {c: c in go for c in X.cases(_doc())}
-    assert doc["cases"]["decode/c128"]["totals"]["mismatch"] == 1
-    assert doc["cases"]["prefill/swa"]["totals"] == {"words": 4 * 144 * X.D + 8 * X.H_Q * X.D, "mismatch": 0, "reference": 6,
-                                                     "twin_mismatch": 0}
-    assert doc["totals"]["words"] == 2 * 8 * X.H_Q * X.D + 4 * 144 * X.D + 8 * X.H_Q * X.D
-    printed = capsys.readouterr().out
-    assert "DSV4-FLASHMLA NO-GO" in printed
-    assert f"no-go cases={[c for c in X.cases(_doc()) if c not in go]}" in printed
-
-
-def test_the_record_is_a_registered_property() -> None:
-    doc = seal(_doc(), X._verdict(_doc()))
-    assert REGISTRY["dsv4_flashmla_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

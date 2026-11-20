@@ -1,6 +1,6 @@
 """`one_linear_arms.py`, which `one_linear.sh` gates its one honest audit on: it passes only on an accept, a crash is an
-ERROR wherever its log holds it, and a reject stays a reject, named at the record's failed check (at roots, with no
-session root named, `Record.checks`' emptiness refusal) or at the checks a5 refused before the draw. `accept_line.py`
+ERROR wherever its log holds it, and a reject stays a reject, named at the record's failed check or at the checks a5
+refused before the draw. `accept_line.py`
 prints that refusal as its one line, and on an accept its lines without C."""
 from __future__ import annotations
 
@@ -23,10 +23,9 @@ CASES = {
                "ARM honest ACCEPT status 0, summary ok", 0),
     "status 0, not ok": (0, WINDOW, NOT_OK, "ARM honest ERROR status 0 with a summary that is not ok", 1),
     "reject": (1, WINDOW, NOT_OK, "ARM honest REJECT status 1: ", 1),
-    "refused at roots, none named": (
-        1, WINDOW, {"ok": False, "audit": {"accepted": False, "checks_failed": {"roots": {"ports": []}}}},
-        "ARM honest REJECT status 1: at roots: the audit record refuses a window whose evidence names no session root "
-        "(Record.checks' emptiness refusal)", 1),
+    "refused at roots, a wrong port": (
+        1, WINDOW, {"ok": False, "audit": {"accepted": False, "checks_failed": {"roots": {"ports": ["y"]}}}},
+        'ARM honest REJECT status 1: at roots: {"roots": {"ports": ["y"]}}', 1),
     "refused before the draw, read off a5's line after the arm log's cut copy": (
         1, WINDOW + 'A5 {"refused_before_draw": {"registration": false}, "che\n'
         'A5 {"refused_before_draw": {"registration": false}, "checks": {"registration": {"ok": false, "codes": '
@@ -66,10 +65,9 @@ def test_a_crash_is_an_error_even_past_the_logs_tail_and_with_status_0(tmp_path)
 def test_the_accept_line_names_the_roots_refusal_and_states_an_accept_without_c():
     sys.path.insert(0, str(ARMS.parent))
     import accept_line as AL
-    refused = {"ok": False, "audit": {"accepted": False, "checks_failed": {"roots": {"ports": []}}}}
+    refused = {"ok": False, "audit": {"accepted": False, "checks_failed": {"roots": {"ports": ["y"]}}}}
     assert AL.lines(refused, None, None) == ["NO ACCEPT " + AL.refusal(refused)]
-    assert AL.refusal(refused).startswith("REJECT at roots: the audit record refuses a window whose evidence names no "
-                                          "session root")
+    assert AL.refusal(refused).startswith('REJECT at roots: {"roots": {"ports": ["y"]}}')
     accepted = {"ok": True, "draw": [45, 56, 63, 210], "audit": {
         "accepted": True, "members_lean": {"ran": True, "ok": True, "codes": [], "detail": {"lean": {"verdict": "accept"}}},
         "wrong_units": {"of": 288, "bound": 45, "delta": 0.5}}}

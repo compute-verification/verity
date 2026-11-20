@@ -418,7 +418,8 @@ def main(argv: list[str]) -> int:
                       "partition": str(c["partition"]), "run_root": c["run_root"], "weights_root": c["weights_root"],
                       "checkpoint": str(c["checkpoint"]), "checkpoints_manifest": str(c["checkpoints_manifest"]), "tables": c["tables"],
                       "hook": str(hook(c, root / "hook")), "request": REQUEST, "units": UNITS,
-                      "served": {k: s[k] for k in ("row_dir", "bundle", "manifest_sha256")}}))
+                      "served": {"row_dir": s["row_dir"], "bundle": s["bundle"],
+                                 "manifest_sha256": RB.open_bundle(s["bundle"])["manifest_sha256"]}}))
     return 0
 
 

@@ -2016,6 +2016,27 @@ OPT_IN = {
     "adapters/vllm": {
         "VERITY_VLLM_HISTORY_E2E": (
             "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
+    "verity/circuits/evaluate": {"VERITY_SLOW": (
+        "test_difftest.py::test_random_boolean_composites",
+        "test_difftest.py::test_layout_gates_sampled",
+        "test_difftest.py::test_scalar_primitives_sampled",
+        "test_difftest.py::test_the_fmas_on_their_edge_grids",
+        "test_difftest.py::test_float_primitives_sampled",
+        "test_difftest.py::test_tc_steps_on_their_edge_grids",
+        "test_difftest.py::test_tc_steps_on_the_accumulator_sweep",
+        "test_difftest.py::test_tc_steps_sampled",
+        "test_difftest.py::test_the_sm120_captures",
+        "test_difftest.py::test_word_primitives_on_their_families",
+        "test_difftest.py::test_word_primitives_sampled",
+        "test_difftest.py::test_sampler_primitives_on_their_grids",
+        "test_difftest.py::test_the_logs_on_sampled_words",
+        "test_difftest.py::test_sampler_primitives_sampled",
+        "test_difftest.py::test_mufu_primitives_on_their_grids",
+        "test_difftest.py::test_the_tanh_table_is_the_library_table",
+        "test_difftest.py::test_mufu_primitives_sampled",
+        "test_difftest.py::test_decimal_primitives_sampled",
+        "test_difftest.py::test_activations_on_their_grids",
+        "test_difftest.py::test_activations_sampled")},
     "benchmarks/prove_path": {"VERITY_SLOW": (
         "test_prove_path.py::test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint",
         "test_prove_path.py::test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint")},

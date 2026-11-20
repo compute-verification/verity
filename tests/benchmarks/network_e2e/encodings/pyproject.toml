@@ -14,8 +14,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # derived.py builds and charges advice v0 with network attestation's I1
 # (verity_vllm.pipeline.advice_code.format), which reads the package inits on the way;
-# cache_vectors.py runs network attestation's CacheStep_v1 (`cache_step`, through `head_check` and the circuits it
-# imports) and writes network attestation's difftest vectors, which a test reads back; test_arith_vectors holds
+# cache_vectors.py runs network attestation's CacheStep_v1 (`cache_step`, through the circuits it imports)
+# and writes network attestation's difftest vectors, which a test reads back; test_arith_vectors holds
 # network attestation's arith_encode vectors to what this directory's coders code now.
 inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py", "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/resource_accounting/network", 
@@ -70,8 +70,7 @@ inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_s
           "adapters/vllm/verity_vllm/compiler",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py",
-          # network attestation's `head_check` counts a Definition's ANDs with the census
-          # (`census.BooleanWork`), and the advice code's codec imports it (`window_code`, network
+          # the census (`census.BooleanWork`): the advice code's codec imports it (`window_code`, network
           # attestation's `window_charge`, `arith_encode`):
           # test_arith_vectors, the first test to load v1.py, reads it
           "verity/circuits/census.py", "benchmarks/network_e2e/encodings"]

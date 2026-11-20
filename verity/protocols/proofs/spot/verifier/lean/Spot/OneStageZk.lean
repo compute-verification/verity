@@ -757,14 +757,15 @@ def RUN_OWN_ROOT_WHY (member port : String) (w : Nat) : String :=
 
 /-- **A member's ports at C's run input nodes' trees**: the member `name` whose first unit is `u`, its roots `own` and
 the record's roots by port `byPort` (`rootsByPort`): for each parameter of the Definition of `u`'s root node in C
-(`HmLinks.unitAt`) that `u` reads at a run input node `w` (`OneCircuit.regRow`, `Registered.runNode`), the record's root
-of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which `headerHeldAt` holds as it holds a field
-tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a registered input, at another block's
-output or in a form `regRow` refuses gets none, and so does one whose tree the record holds no root of; where the record
-holds it, a root of the member's own at the port refuses by name (`RUN_OWN_ROOT_WHY`). -/
-def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Array Json)
-    (byPort : Std.HashMap String Json) : V (Array Json) := do
-  let some (k, j) := Flock.HmLinks.unitAt (Flock.HmLinks.nodes P) u | return own
+(`TemplateQuery.locate` over the partition's ranges `rs`) that `u` reads at a run input node `w` (`OneCircuit.regRow`,
+`Registered.runNode`), the record's root of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which
+`headerHeldAt` holds as it holds a field tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a
+registered input, at another block's output or in a form `regRow` refuses gets none, and so does one whose tree the
+record holds no root of; where the record holds it, a root of the member's own at the port refuses by name
+(`RUN_OWN_ROOT_WHY`). -/
+def runInputRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (name : String) (u : Nat)
+    (own : Array Json) (byPort : Std.HashMap String Json) : V (Array Json) := do
+  let some (k, j, _) := Flock.TemplateQuery.locate rs u | return own
   let some node := (Flock.Registered.rootNodes P)[k]? | return own
   let some f := P.defs[node.fn]? | return own
   f.params.foldlM (fun (got : Array Json) (p, _) => do
@@ -776,14 +777,14 @@ def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Ar
     return got.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str p),
       ("root", getD r "root"), ("tree", .str t)])) own
 
-/-- `runInputRootsAt` for each member of `ms`, at its first unit, over the roots `roots` and the record `rec`. Its cost
-is the members' number times their Definitions' parameters. -/
-def runInputRoots (P : Flock.Program.Prog) (ms : Array Member) (rec : Json)
+/-- `runInputRootsAt` for each member of `ms`, at its first unit, over the partition's ranges `rs`, the roots `roots` and
+the record `rec`. Its cost is the members' number times their Definitions' parameters. -/
+def runInputRoots (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Array Member) (rec : Json)
     (roots : Std.HashMap String (Array Json)) : V (Std.HashMap String (Array Json)) :=
   let byPort := rootsByPort rec
   ms.foldlM (fun acc m => match m.units[0]? with
     | none => pure acc
-    | some (u, _) => return acc.insert m.name (← runInputRootsAt P m.name u (acc.getD m.name #[]) byPort)) roots
+    | some (u, _) => return acc.insert m.name (← runInputRootsAt P rs m.name u (acc.getD m.name #[]) byPort)) roots
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
 output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
@@ -799,7 +800,7 @@ def membersRootsWired (p : Params) (ms : Array Member) (rec : Json) : V (Std.Has
   let rs ← Partition.evaluate P (getD p.own.partition "query")
   fieldTreesHeld (← derivedFieldTrees P.prog rs ms) ts rec
   let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
-  let roots ← runInputRoots P.prog ms rec roots
+  let roots ← runInputRoots P.prog rs ms rec roots
   if !hasEdge P.prog then return roots
   let W ← derivedWiring P.prog rs
   fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots
@@ -850,48 +851,6 @@ def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMa
   portsOnceAll (fun m => m.slice rec roots) ms.toList >>= fun _ =>
   pure roots
 
-theorem portTwice_nodup : ∀ {ps : List String}, portTwice ps = none → ps.Nodup
-  | [], _ => List.nodup_nil
-  | p :: ps, h => by
-    unfold portTwice at h
-    split at h
-    · cases h
-    · rename_i hp
-      exact List.nodup_cons.2 ⟨hp, portTwice_nodup h⟩
-
-/-- Where `Member.portsOnce` passes on the slice `s`, every root of `s` names a port as a string, and no two the same. -/
-theorem Member.portsOnce_ok {m : Member} {s : Json} (h : m.portsOnce s = .ok ()) :
-    ∃ ps, slicePorts s = some ps ∧ ps.Nodup := by
-  unfold Member.portsOnce at h
-  split at h
-  · cases h
-  · rename_i ps hps
-    split at h
-    · cases h
-    · rename_i hn
-      exact ⟨ps, hps, portTwice_nodup hn⟩
-
-theorem portsOnceAll_ok {slice : Member → Json} :
-    ∀ {ms : List Member}, portsOnceAll slice ms = .ok () → ∀ m ∈ ms, ∃ ps, slicePorts (slice m) = some ps ∧ ps.Nodup
-  | [], _, _, hm => by cases hm
-  | m0 :: ms, h, m, hm => by
-    rw [portsOnceAll] at h
-    obtain ⟨⟨⟩, h0, h⟩ := Flock.HmNets.bind_ok h
-    rcases List.mem_cons.1 hm with rfl | hm
-    · exact Member.portsOnce_ok h0
-    · exact portsOnceAll_ok h m hm
-
-/-- **Where `membersRootsOf` returns, every member's slice names each port once**: at the roots it returns, each
-member of `ms`, sampled or not, has a slice whose every root names a port as a string, and no two the same. -/
-theorem membersRootsOf_portsOnce {p : Params} {ms : Array Member} {rec : Json} {roots : Std.HashMap String (Array Json)}
-    (h : membersRootsOf p ms rec = .ok roots) :
-    ∀ m ∈ ms, ∃ ps, slicePorts (m.slice rec roots) = some ps ∧ ps.Nodup := by
-  unfold membersRootsOf at h
-  obtain ⟨roots', _, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨⟨⟩, hp, h⟩ := Flock.HmNets.bind_ok h
-  cases h
-  exact fun m hm => portsOnceAll_ok hp m (Array.mem_toList_iff.2 hm)
-
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
 member's, with each member's wired ports at their writers' (`membersRootsOf`), every reader of a held or tied
@@ -915,18 +874,6 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact ⟨roots, hr, runMembers_files h⟩
-
-/-- **Where the per-member form's run returns, every member's slice names each port once** (`membersRootsOf_portsOnce`):
-at the roots `membersRootsOf` gives each member, each member of the parameters, sampled or not, has a slice of the
-registration whose every root names a port as a string, and no two the same. -/
-theorem membersRun_portsOnce {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
-    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
-    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧
-      ∀ m ∈ ms, ∃ ps, slicePorts (m.slice c.record roots) = some ps ∧ ps.Nodup := by
-  unfold membersRun at h
-  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  obtain ⟨roots, hr, -⟩ := Flock.HmNets.bind_ok h
-  exact ⟨roots, hr, membersRootsOf_portsOnce hr⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
 evidence's `proved_units`** (`runMembers_proved`), which the record's checks hold to the sample (`Record.checks`'
@@ -1011,17 +958,6 @@ theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Com
       · cases h
     · cases h
     · cases h
-
-/-- **Where the per-member form's check accepts, every member's slice names each port once** (`membersRun_portsOnce`):
-at the roots `membersRootsOf` gives each member, each member of the parameters, sampled or not, has a slice of the
-registration whose every root names a port as a string, and no two the same. -/
-theorem checkMembersAt_portsOnce {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
-    {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : checkMembersAt p ms c ξ e sts bs = .accept pub prof) :
-    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧
-      ∀ m ∈ ms, ∃ ps, slicePorts (m.slice c.record roots) = some ps ∧ ps.Nodup :=
-  let ⟨_, hr, _⟩ := checkMembersAt_accept h
-  membersRun_portsOnce hr
 
 /-- The per-member form's check refuses evidence naming no session roots object, whatever else it names. -/
 theorem checkMembersAt_noRoots {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}

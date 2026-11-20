@@ -333,6 +333,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `application_runs/` | one application run's verdicts that accept, of how many, and its minutes, written by the run that measures (`run.py`, which runs `verity run`) | maintained |
+| `application_census/` | where each application in `applications/` stops: `verity run NAME` for each, its furthest step, its refusal or error and its seconds, in one table; exit 0 only if every one ends in the verifier's accept (`run.py`) | maintained |
 | `demo_minutes/` | the onsite application's minutes from its first command to its verdict, read off its two `verity run` runs' records (`onsite_minutes.py`, on `run_minutes.py`) | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
@@ -351,7 +352,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `kernels/` | the served path's exact kernels and what a kernel build ships with: vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
+| `kernels/` | the served path's exact kernels and what a kernel build ships with: vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `../calibration/tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `../calibration/tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |

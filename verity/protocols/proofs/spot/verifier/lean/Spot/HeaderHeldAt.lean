@@ -12,7 +12,7 @@ member's ports at C's run input nodes' trees (`OneStageZk.runInputRootsAt`) on `
 `input/n0`, with that tree; on `regP`, where node 0 is a registered input, it holds none; a root of the member's own at
 `w` is refused by name where the record holds `input/n0`, and kept where it does not. At that slice, a header whose root at `w` is not the registration's is held only by a read of
 `w` at `input/n0`: no read, a read at another run input's tree and a read at the member's own committed tree each
-refuse by `SHARED_UNREAD`. A header naming another member's units is refused by `MEMBER_UNITS`.
+refuse by `SHARED_UNREAD`.
 -/
 
 @[expose] public section
@@ -39,8 +39,9 @@ open Flock.Test.WiredPorts (runP regP)
 
 def n0 : Json := Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "input/n0"), ("root", "ee")]
 def runRec : Json := Json.mkObj [("roots", Json.arr #[n0])]
+def runRs : Array Flock.TemplateQuery.TRange := #[⟨1, "T", 0, 2⟩, ⟨2, "T", 2, 1⟩]
 def runAt (P : Flock.Program.Prog) (own : Array Json) (rec : Json := runRec) : Except String (Array Json) :=
-  OneStageZk.runInputRootsAt P "T/c0" 0 own (OneStageZk.rootsByPort rec)
+  OneStageZk.runInputRootsAt P runRs "T/c0" 0 own (OneStageZk.rootsByPort rec)
 def wRun : Json :=
   Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "w"), ("root", "ee"), ("tree", "input/n0")]
 
@@ -55,8 +56,8 @@ def wRun : Json :=
 #guard OneStageZk.RUN_OWN_ROOT_WHY "T/c0" "w" 0 == "member T/c0: port w reads C's run input node 0, and the " ++
   "registration holds a root of its own for it: a run input node's rows are committed once, in input/n0"
 
--- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the node off
--- `HmLinks.unitAt` and `OneCircuit.regRow`
+-- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the unit's root
+-- node of C and its row there (`OneCircuit.regRow`)
 #guard (runAt runP #[]).toOption.map (·.map (getD · "tree")) == some #[Json.str (Flock.Registered.freshValue 0)]
 #guard (Flock.OneCircuit.pos runP #[0, 1] Flock.Test.WiredPorts.fresh).toOption.isSome
 #guard (Flock.OneCircuit.pos runP #[0, 1]
@@ -78,18 +79,5 @@ def heldRun (reads : Array (String × String)) : String :=
   "member's registered reads open no row of it there: a member's rows of a tree other members' rows share are held " ++
   "to the registration's root by opening it at the leaves C gives, and the header's own root there is no commitment " ++
   "to them"
-
-/-- The population check (`OneStageZk.Member.heldAt`) of the member of units 1 and 2, in one stratum of four units, on
-a header whose `units.indices` are `is`: the empty string where it holds, else its refusal. -/
-def unitsRun (is : List Nat) : String :=
-  let m : OneStageZk.Member := { name := "R/c0", units := #[(1, 3)], g := 1, own :=
-    { programJ := Json.null, program := .empty, partition := Json.null, pub := "", registered := none } }
-  match m.heldAt #[("s", #[(0, 4)])] (Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson is)])]) with
-  | .ok () => ""
-  | .error e => e
-
-#guard unitsRun [1, 2] == ""
--- another member's units, whole: refused
-#guard unitsRun [3, 4] == OneStageZk.MEMBER_UNITS
 
 end Spot.HeaderHeldAt

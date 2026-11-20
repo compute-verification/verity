@@ -66,7 +66,7 @@ VARIABLES = {
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
     "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "POUW": "pearlplus", "PRODUCT": "onsite",
-    "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
+    "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B", "ROW_ID": "unsloth-llama-3-2-1b__bfloat16__s4",
     "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
     "WIPE_CMD": 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"', "WIPE_KEY_SHA512": WIPE_PIN,
@@ -747,7 +747,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|ROW_ID|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -791,21 +791,23 @@ def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is
 
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
 NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
-                 "SERVE_ROOT", "ROW", "ROW_ID")
+                 "SERVE_ROOT", "ROW")
 
 
 def test_the_workloads_piece_hands_the_runner_the_nodes_settings(tmp_path, capsys, monkeypatch):
     settings = {k: str(tmp_path / "node" / k.lower()) for k in NODE_SETTINGS}
     for k, v in settings.items():
         monkeypatch.setenv(k, v)
-    names = "|".join(NODE_SETTINGS)
+    monkeypatch.setenv("ROW_ID", "a-traced-row's-name")
+    names = "|".join((*NODE_SETTINGS, "ROW_ID"))
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", f'mkdir -p "$OUT"\n/usr/bin/env | grep -E '
                                                                     f"'^({names})=' | sort > \"$OUT/node.txt\"\n"))
     state = tmp_path / "state"
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, *SERVED_PARTIES, "--bindings", bindings(tmp_path), "--state",
                      str(state)], REG)
     assert rc == 0, capsys.readouterr().err
-    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings
+    assert dict(x.split("=", 1) for x in (state / "out" / "node.txt").read_text().splitlines()) == settings | {
+        "ROW_ID": VARIABLES["ROW_ID"]}
 
 
 def test_serve_openais_flags_are_every_listed_pieces():
