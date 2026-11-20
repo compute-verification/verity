@@ -535,13 +535,13 @@ def test_gathers_count_fresh_index_bits(indices, bits):
 
 
 def test_index_bits_of_two_kinds_from_one_index_add():
-    """The low 4 bits and the range test of one index tell apart more than either: a TableRead and a gather of it pay both."""
-    tr = stand_in("TableRead4x1", (("index", S32), ("table", Array(1, Array(64, S16)))), S16)
+    """The low 6 bits and the range test of one index tell apart more than either: a TableRead and a gather of it pay both."""
+    tr = stand_in("TableRead6x1", (("index", S32), ("table", Array(1, Array(64, S16)))), S16)
     fn = comp("TestTwoKinds", (("i", S32), ("t", Array(1, Array(64, S16))), ("col", Array(16, S16))),
               TupleT((S16, S16, S16)), lambda B, _S, i, t, col: tuple_of(B.call(tr, i, t), B.call(GATHER, i, col),
                                                                          B.call(GATHER, i, col)))
     program = Program(fn, registered=("t", "col"))
-    assert P.analyze(program, census(program, [len(program.root.body.nodes)])).steps[0]["units"] == {**FREE, "gathers": 9}
+    assert P.analyze(program, census(program, [len(program.root.body.nodes)])).steps[0]["units"] == {**FREE, "gathers": 11}
 
 
 @pytest.mark.parametrize("registered,units", [((), 6), (("col",), 5), (("i",), 0)])

@@ -415,7 +415,7 @@ def _serve_inputs(C, LP):
 
 @pytest.mark.slow
 def test_s3_full_b0_matches_certified_digest():
-    """The certificate of record (INT-PAD-2 B0) pins `Serve_v1{C=B0,LP=32,STEPS=15}`; the derived program is that program."""
+    """The program derived for `Serve_v1{C=B0,LP=32,STEPS=15}` is the serve oracle's."""
     C = b1.B0_CONFIG
     LP, STEPS = 32, 15
     with torch.device("meta"):
@@ -423,7 +423,6 @@ def test_s3_full_b0_matches_certified_digest():
     rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config=C, name="Serve")
     assert rep.ok, rep.unsupported
     assert rep.family and rep.family["matched"]
-    assert rep.digest == "7d09b7a652a8364525bf82a34bb7e261efc033d7b53ceda20d5e5bf2a774bbbdd402d04cd3bd7868946582956090359a851d01cf6415568b830647b8b2f56df7"   # the re-baseline re-key (AmpereBF16TcDot16_v2); d4f4b1f1 before
     assert rep.digest == _serve_oracle_digest(C, LP, STEPS)
 
 

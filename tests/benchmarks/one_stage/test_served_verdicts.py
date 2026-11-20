@@ -2347,37 +2347,43 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
 
 @pytest.mark.parametrize("served, verified, reason", [
     (True, False, "Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"),
-    (True, None, "no verdict: served_passes.py verify wrote no document"),
-    (None, None, "no served run: served_passes.py serve wrote no document"),
 ])
-def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects_and_one_that_wrote_nothing(tmp_path, served, verified,
-                                                                                               reason, live):
-    """A run Pearl+'s verdict rejects, or that has no verdict, still carries its shares, its declared linears beside a
-    credit of 0; a run that served nothing has none."""
+def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects(tmp_path, served, verified, reason, live):
+    """A run Pearl+'s verdict rejects still carries its shares, its declared linears beside a credit of 0."""
     s, v = _pearlplus_run(verified is not False)
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, None if verified is None else v, **live[1])
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s, v, **live[1])
     assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
-    if served:
-        rho = 4096 * 132 * 1830e6
-        assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
-        assert doc["shares"]["verdict"] == (None if verified is None else "reject")
-        assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
-    else:
-        assert doc["shares"] is None
+    rho = 4096 * 132 * 1830e6
+    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
+    assert doc["shares"]["verdict"] == "reject"
+    assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["reason"]) == ("reject", "; ".join(doc["reasons"]))
 
 
-def test_the_pearlplus_command_writes_a_reject_where_a_step_wrote_no_document(tmp_path, capsys):
-    """`served_pearlplus.sh` names both documents whether or not its steps wrote them: a serve that wrote neither gets a
-    piece that rejects, naming both, and its POUW-DEV line."""
+@pytest.mark.parametrize("served, verified, wrote_none", [
+    (False, False, "served_passes.py serve wrote no document and served_passes.py verify wrote no document"),
+    (True, False, "served_passes.py verify wrote no document"),
+    (False, True, "served_passes.py serve wrote no document"),
+])
+def test_the_pearlplus_command_refuses_by_name_where_a_step_wrote_no_document(tmp_path, capsys, served, verified,
+                                                                              wrote_none):
+    """`served_pearlplus.sh` names both documents whether or not its steps wrote them: where either wrote none there is
+    no verdict, so the piece refuses (`PEARLPLUS_NO_VERDICT`) with one sentence naming what is missing, exits 2 and
+    writes no answer, not even one left by an earlier run, and the record's row is refused with that sentence."""
+    s, v = _pearlplus_run(True)
+    for name, doc, there in (("served.json", s, served), ("v.json", v, verified)):
+        if there:
+            (tmp_path / name).write_text(json.dumps(doc))
     out = tmp_path / "pieces" / "pouw"
-    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 0
-    doc = json.loads((out / S.DEVELOPMENT).read_text())
-    assert (doc["verdict"], doc["reasons"]) == ("reject", ["no served run: served_passes.py serve wrote no document",
-                                                           "no verdict: served_passes.py verify wrote no document"])
-    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
-    assert (line["verdict"], line["credited"], line["passes"]) == ("reject", False, None)
+    out.mkdir(parents=True)
+    (out / S.DEVELOPMENT).write_text("{}")
+    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 2
+    sentence = f"{S.PEARLPLUS_NO_VERDICT}: {wrote_none}, so Pearl+ has no verdict and the piece writes no answer"
+    assert capsys.readouterr().out == f"POUW-REFUSED {sentence}\n"
+    assert not (out / S.DEVELOPMENT).exists() and (out / S.REFUSED).read_text() == sentence + "\n"
+    assert S.piece_row("work", tmp_path / "pieces") == {"verdict": BR.REFUSED, "owner": "compute-accounting",
+                                                        "reason": sentence}
 
 
 PUBLIC = bytes(range(80))
@@ -2510,8 +2516,8 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     """Under PEARLPLUS_TIE (``--tie W``) the piece is the window's own Pearl+ epoch: on in-process coins it claims no
     verdict and says so of the window's epoch (`PEARLPLUS_WHY_TIED_IN_PROCESS`, its epoch
     `PEARLPLUS_EPOCH_TIED_IN_PROCESS`), not of a seeded load of its own after the window's serve; its load is the
-    window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok, or missing, rejects,
-    naming the window's arm."""
+    window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok rejects, and a missing
+    one refuses, each naming the window's arm."""
     window, verified, w = _tied_epoch(tmp_path)
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w)
     assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
@@ -2526,8 +2532,8 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     assert S.pearlplus(tmp_path / "b", window, verified, tie=tmp_path / "none.json")["tie"]["record"] is None
     bad = S.pearlplus(tmp_path / "c", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified, tie=w)
     assert bad["reasons"] == ["the window's Pearl+ epoch isn't one round a Commit step: pass 2 retained no manifest"]
-    none = S.pearlplus(tmp_path / "d", None, verified, tie=w)
-    assert none["reasons"][0] == "no served run: serve-openai's Pearl+ arm wrote no served.json for the window"
+    with pytest.raises(S.PearlplusRefused, match="serve-openai's Pearl\\+ arm wrote no served.json for the window"):
+        S.pearlplus(tmp_path / "d", None, verified, tie=w)
 
 
 def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_windows_steps(tmp_path):
@@ -2757,10 +2763,9 @@ def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refu
     from verity.protocols.compose import schemes
 
     pearl, get = schemes.get("pearl-plus"), schemes.get
-    assert S.declared_unchecked(pearl.protocol) == (
-        "coins' signatures checked on the served node only; not checked by the auditor; the tie covers a workload served "
-        "eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a step's linear runs at the capture size, "
-        "with rows no request owns, and those rows are outside what the tie covers")
+    said = S.declared_unchecked(pearl.protocol)
+    assert pearl.unchecked and said == "; ".join(schemes.S.sentences(pearl))
+    assert not any(name in said for name in pearl.unchecked)
     stand_in = dataclasses.replace(pearl, unchecked={})
     monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
     assert S.declared_unchecked(pearl.protocol) == ""
@@ -3471,15 +3476,13 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
 
 
 @pytest.mark.parametrize("n, said", [
-    (40, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: accept, against c "),
-    (1, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: refuse: the blocks' exact count "
-        "is more than n = 1, against c "),
+    (40, "BLOCK-COUNTS class 4,32,4 refused (ValueError, exit 1)"),
     (None, "BLOCK-COUNTS: none, since the run declares no c, k and n"),
 ])
-def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_count_private(tmp_path, n, said):
-    """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
-    `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
-    count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
+def test_block_counts_refuses_a_window_circuit_no_registration_binds(tmp_path, n, said):
+    """`served_verdicts.sh block-counts 0` runs the real `verity-vllm block-counts` on window 0's circuit record at the
+    class beside the window's advice registration, which binds no circuit record: the count is refused and nothing is
+    published or kept; with no policy it says so and judges nothing."""
     from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
@@ -3504,14 +3507,9 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     (line,) = (out / "verdicts.txt").read_text().splitlines()
     assert rc == 0 and line.startswith(said), line
     public, private = out / "block-counts-4-32-4.json", d / "private" / "block-counts-4-32-4.json"
-    if n is None:
-        assert not public.exists() and not private.exists()
-        return
-    doc, held = json.loads(public.read_text()), json.loads(private.read_text())
-    assert (doc["verdict"], doc["n"]) == ("accept" if n == 40 else "refuse", n)
-    assert not {"blocks", "total", "windows"} & set(doc) and not any("blocks" in c for c in doc["classes"])
-    assert (held["total"], held["windows"], private.stat().st_mode & 0o777) == (2, 1, 0o600)
-    assert " 2 blocks" not in line and "count 2" not in line
+    assert not public.exists() and not private.exists()
+    if n is not None:
+        assert "is not the circuit record the registration binds (None)" in (d / "block-counts-4-32-4.err").read_text()
 
 
 W63K4 = "8,32,4,4,16"
@@ -4325,12 +4323,14 @@ PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE
 
 
 #: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
-#: FAKE_COMPARE_RC 0 or 1 a CUT line naming W, its verdicts in --out and its SERVED-COMPARE line, and above 1 it dies
-#: before a verdict
+#: FAKE_COMPARE_RC 0 or 1 a CUT line naming W, its verdicts in --out and its SERVED-COMPARE line, above 1 it dies
+#: before a verdict, and at ``raise`` it ends on a traceback, a NOT EQUAL's status
 FAKE_COMPARE = '''import json, os, sys
 from pathlib import Path
-rc = int(os.environ.get("FAKE_COMPARE_RC") or 0)
 Path(os.environ["ORDER"] + ".compare").write_text(json.dumps({"argv": sys.argv[1:], "cuda": os.environ.get("CUDA_VISIBLE_DEVICES")}))
+if os.environ.get("FAKE_COMPARE_RC") == "raise":
+    raise RuntimeError("died before a verdict")
+rc = int(os.environ.get("FAKE_COMPARE_RC") or 0)
 if rc > 1:
     sys.stderr.write("served_compare.py: died before a verdict\\n")
     sys.exit(rc)
@@ -4345,13 +4345,14 @@ sys.exit(rc)
 PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 
-@pytest.mark.parametrize("case", ["equal", "unequal", "died", "untied"])
+@pytest.mark.parametrize("case", ["equal", "unequal", "died", "raised", "untied"])
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
     record, runs served_compare.py with no GPU on the serve dir, the workload of record, V3C's class, Pearl+'s scheme, PRED and
     the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
     served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
-    dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without
+    dies before a verdict, or ends on a traceback with a NOT EQUAL's status, says ERROR with its exit and its exception's
+    class, not NOT EQUAL, and no earlier compare's verdict stands for it; without
     PEARLPLUS_TIE it isn't run."""
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks").mkdir(parents=True)
@@ -4362,7 +4363,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     (d / "served-compare").mkdir(parents=True)
     stale = d / "served-compare" / "served_compare.json"
     stale.write_text(json.dumps({"ok": True, "line": "SERVED-COMPARE: EQUAL (an earlier compare's)"}))
-    rc = {"unequal": 1, "died": 2}.get(case, 0)
+    rc = {"unequal": 1, "died": 2, "raised": "raise"}.get(case, 0)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
            "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
@@ -4382,8 +4383,10 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
         "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare",
         "--revision": "ccf98f3652864935e2973dd22fe15fffd514f865"})
     published = tmp_path / "out" / "served-compare" / "served_compare.json"
-    if case == "died":
-        assert (run.returncode, lines) == (2, [f"SERVED-COMPARE: NOT EQUAL (served_compare.py (no exception, exit 2): {PRIVATE})"]), run.stderr
+    if case in ("died", "raised"):
+        status, why = (2, "no exception") if case == "died" else (1, "RuntimeError")
+        assert (run.returncode, lines) == (status, [
+            f"SERVED-COMPARE: ERROR served_compare.py ended with no verdict ({why}, exit {status}): {PRIVATE}"]), run.stderr
         assert not stale.exists() and not published.exists()
         return
     said = f"SERVED-COMPARE: {'NOT EQUAL' if rc else 'EQUAL'} (the serve against row {PEARL_ROW}'s Build of record)"
@@ -6561,6 +6564,7 @@ sys.exit(1)
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
+    shutil.rmtree(out / "composite")
     (d / "private/logs/sampled-proofs/keep/served" / "window").mkdir(parents=True)
     (d / "private/logs/sampled-proofs/keep/served" / "window" / "case.json").write_text("{}")
     assert run().returncode == 0
@@ -6626,6 +6630,15 @@ UNSHOWN = {"remote-v1": ["COMPOSITE remote-v1: NOT_ESTABLISHED the tree is no gi
 #: Onsite's run as served_table.py's pearl-plus piece sets it: remote v1 composes beside onsite where the tree has its Lean
 ONSITE_POUW = {"POUW": "pearlplus"}
 REMOTE_V1_MAIN = "verity/protocols/compose/verifier/remote/RemoteV1Main.lean"
+#: composite.py and the files of the tree it loads, at their paths in the tree
+COMPOSITE_FILES = ("benchmarks/one_stage/composite.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py",
+                   "verity/protocols/proofs/spot/verifier/one_stage/settings.py", "verity/lean_process.py")
+
+
+def _copy_composite(tree: Path) -> None:
+    for f in COMPOSITE_FILES:
+        (tree / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(HERE.parents[2] / f, tree / f)
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
@@ -6658,8 +6671,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -6724,8 +6736,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != attester}
     for p, where in own.items():
@@ -6761,6 +6772,55 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
         assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
             p for p in C.COMPONENTS[x] if p not in want]
     assert (kept / "case.json").read_text() == case and not list(out.rglob("case.json"))
+
+
+#: Stand-ins for remote's Lean (`NO_LEAN` but for its end) and each one's lines in OUT/verdicts.txt; None: the tree lacks
+#: lean_child, so composite.py ends on a traceback, with a reject's status
+CRASHES = {
+    "reject": (NO_LEAN, ["COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in"]),
+    "panic": (NO_LEAN.replace("sys.exit(1)", 'print("PANIC at Verity.x Verity.X:1:2: oops", file=sys.stderr)'),
+              ["COMPOSITE remote: ERROR lean-panic: the Lean verifier wrote a panic: its answer is not read"]),
+    "status 3": (NO_LEAN.replace("sys.exit(1)", "sys.exit(3)"),
+                 ["COMPOSITE remote: ERROR lean-exit: the Lean verifier ended with a status it does not document: its "
+                  "answer is not read: status 3"]),
+    "traceback": (None, ["COMPOSITE remote: ERROR composite.py ended with status 1 and printed no verdict, its log on "
+                         "the node"]),
+}
+
+
+@pytest.mark.parametrize("stand_in", list(CRASHES))
+def test_a_composite_that_printed_no_verdict_is_an_error_and_a_reject_stays_a_reject(tmp_path, stand_in):
+    """served_composite.sh under PRODUCT=remote with a stand-in lake whose remote is ``stand_in``: a reject prints its
+    VERDICT line and the step exits 0; a panic line (under an accept and status 0), a status the check doesn't document,
+    or a composite.py that ends on a traceback (a toy tree without the lean_child it loads) prints an ERROR line and no
+    VERDICT, writes no public composite, and the step exits 1."""
+    lean, want = CRASHES[stand_in]
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{lean or NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
+    (tree / "verity/protocols/compose/verifier/remote").mkdir(parents=True)
+    if lean is None:
+        (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+        shutil.copy(HERE.parents[2] / COMPOSITE_FILES[0], tree / COMPOSITE_FILES[0])
+    else:
+        _copy_composite(tree)
+    (d / "private" / "sampled").mkdir(parents=True)
+    (d / "private" / "sampled" / "case.json").write_text(json.dumps({"commitment": "c0", "evidence": "beef",
+                                                                     "params": {}}))
+    (d / "private" / "sampled" / "answer.json").write_text(json.dumps({"protocol": "verity/sampled-proofs/v1",
+                                                                       "verdict": "accept"}))
+    out.mkdir()
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "the-served-node"}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d),
+                        str(out)], cwd=tree, env=env, check=False, capture_output=True, text=True)
+    said = [x for x in (out / "verdicts.txt").read_text().splitlines() if x.startswith("COMPOSITE remote: ")
+            and " NOT_ESTABLISHED " not in x]
+    assert (said, r.returncode) == (want, 0 if stand_in == "reject" else 1), r.stderr
+    assert (out / "composite" / "remote" / "composite.json").is_file() == (stand_in == "reject")
 
 
 DIGEST = "5e" * 64

@@ -264,6 +264,17 @@ def Part.count : Part → Nat
   | .explicit it => it.size
   | .grid run lanes => lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0)
 
+/-- The first node at or after node `k` that a part of `ps` holding a reference names (`codec._forward`). -/
+def Part.forwardOf (ps : Array Part) (k : Nat) : Option Nat :=
+  ps.findSome? fun q => if q.count == 0 then none else match q with
+    | .affine p i _ _ | .strided p i _ _ _ _ _ => if !p && k ≤ i then some i else none
+    | .explicit it => it.findSome? fun r => if !r.p && k ≤ r.i then some r.i else none
+    | .grid _ lanes => lanes.findSome? fun l => if !l.p && k ≤ l.i then some l.i else none
+
+/-- The refusal of node `k`'s argument naming node `i`, `i ≥ k` (`codec.forward_refusal`). -/
+def forwardRefusal (k i : Nat) : String :=
+  s!"forward-reference: node {k} reads node {i}, which is not before it; a node reads the body's parameters and earlier nodes only"
+
 @[inline] def Part.get : Part → Nat → Ref
   | .affine p i b _, k => ⟨p, i, b + k⟩
   | .strided p i b inner os is _, k => ⟨p, i, (b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat⟩
@@ -661,8 +672,9 @@ def recordFunctionIds (fid : String) : Array String :=
 
 `E_REINTERPRET` (`defs.Builder.finish`): a node's argument or a body's return that names a leaf of a parameter or of an
 earlier node (any node, for the return) of another width than its own type gives that position is a silent
-reinterpretation, and the decoder refuses the Definition as it finishes decoding it, with the codec's message. A reference
-to the node itself or a later one is not this check's. The check reads the description: each reference part is compared
+reinterpretation, and the decoder refuses the Definition as it finishes decoding it, with the codec's message. A node's
+argument naming the node itself or a later one never reaches this check: the decoder refuses it as it reads the argument
+(`forwardRefusal`). The check reads the description: each reference part is compared
 by the structure of the two types, against the widths its own slice of the type it is read as gives it. A strided or
 grid part is decided lane by lane, by the source's widths between the lane's extremes or by the residues the lane
 reaches in the period of the array holding them (`laneWidth`); one neither decides is refused by name as not decided
@@ -1458,6 +1470,7 @@ private def composite (fuel : Nat) (desc : Desc) (fid : String) (d : Json) (form
         | .error e => throw s!"{pre}: {e}"
       let seq := Seq.ofParts ps
       if seq.count != ty.leaves then throw s!"{pre}: reference count {seq.count} does not match type {ty.render} ({ty.leaves} leaves)"
+      if (Part.forwardOf ps k).isSome then throw s!"{pre}: {forwardRefusal k ((Part.forwardOf ps k).getD 0)}"
       pure ({ ty, seq } : Arg))
     let (out, args) ← liftV (buildNode fid k form callee args axes n nxs)
     if !(out == outs[k]!) then throw s!"{pre}: declares out {outs[k]!.render}, computes {out.render}"

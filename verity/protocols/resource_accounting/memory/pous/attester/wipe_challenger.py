@@ -90,13 +90,17 @@ logger = logging.getLogger(__name__)
 class WipeMemoryAttester:
     """The memory attester's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
     docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
-    completes unless a test gives it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
+    completes unless a test gives it, and `salt`, the session record's, when the session opens unless its caller gives
+    it.  `mark_source` takes the start message and returns the network attester's start certificate for it, as bytes;
     with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
     whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
                  log: SessionLog, clock: Callable[[], int] = raw_clock_ns, resolution_ns: int | None = None,
-                 coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
+                 coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None,
+                 salt: bytes | None = None) -> None:
+        if salt is not None and len(salt) != mc.RECORD_SALT_BYTES:
+            raise ValueError(f"a session record's salt is {mc.RECORD_SALT_BYTES} bytes")
         if resolution_ns is None:
             resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC_RAW) * 1e9 if clock is raw_clock_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:
@@ -106,6 +110,7 @@ class WipeMemoryAttester:
         self.commitment = WipeCommitment(server, session, params)
         self.signer, self.clock, self._coin_secret = signer, clock, coin_secret
         self._mark_source = mark_source
+        self._salt = os.urandom(mc.RECORD_SALT_BYTES) if salt is None else salt
         self.start_certificate = b""
         self.start_mark = b""
         self.filled = 0
@@ -211,9 +216,10 @@ class WipeMemoryAttester:
         if self.signed is None:
             assert self.fill_start_ns is not None and self.fill_end_ns is not None
             batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches)
-            self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
-                                     batches, self.signer.scheme, self.signer.public_key,
+            m = message(self.commitment, self._salt, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
+                        batches)
+            self.signed = SignedWipe(self.commitment, self._salt, self.ended, self.start_mark, self.fill_start_ns,
+                                     self.fill_end_ns, batches, self.signer.scheme, self.signer.public_key,
                                      self.signer.sign(self.commitment.session, m))
         return self.signed
 
@@ -296,7 +302,7 @@ class MemoryAttesterParty:
         except ValueError:
             return self._finish("schema")
         self.phase = Phase("Coins")
-        return [Send("coins", Message("CoinsDraw", {"n": 64}))]
+        return [Send("coins", Message("CoinsDraw", {"n": 64 + mc.RECORD_SALT_BYTES}))]
 
     def _clock(self) -> int:
         """The reading the challenger asked its clock for, used once: `WipeMemoryAttester` reads it
@@ -324,9 +330,9 @@ class MemoryAttesterParty:
         except Refused as e:
             return self._finish(e.name)
         if m.type == "Coins" and self.c is None:
-            secret, session = m.body[:32], m.body[32:]
+            secret, session, salt = m.body[:32], m.body[32:64], m.body[64:]
             self.c = WipeMemoryAttester(secret, self.request["node"].encode(), session, self.wp, self.signer,
-                                             log=self.log, clock=self._clock)
+                                             log=self.log, clock=self._clock, salt=salt)
             self.phase.expect()
             return [LogEntry({"commitment": self.c.commitment.to_json()}, "structure"),
                     *self._after_reading(self._fill_start)]

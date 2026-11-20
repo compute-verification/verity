@@ -23,3 +23,15 @@ off_gate = ["circuit-check", "ratchet-gate", "added-lines"]
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed. A recorded check runs each test a `suite NAME::TEST`
 # entry at its base names as a non-strict expected failure (`suites.py --allowances`), so that suite passes and is reused.
+
+[[allow]]
+id = "circuit-check partition/over-size-class AllReduceMnnvl_v1"
+owner = "circuits"
+expires = "2026-11-28T02:00:00Z"
+reason = "TOP-447: GLM-5.3's eight-card all-reduce of three or more rows is one unit of more than 262,144 output bits, a true finding the verifier also refuses (partition_query._check_units); the unit is cut by its rows when a proof block is a range of a Definition's body, due 2026-11-27"
+
+[[allow]]
+id = "circuit-check partition/over-size-class AllReduceMultimem_v1"
+owner = "circuits"
+expires = "2026-11-28T02:00:00Z"
+reason = "TOP-447: GLM-5.3's eight-card all-reduce at 41 rows and more is one unit of more than 262,144 output bits, a true finding the verifier also refuses (partition_query._check_units); the unit is cut by its rows when a proof block is a range of a Definition's body, due 2026-11-27"

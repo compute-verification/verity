@@ -16,9 +16,7 @@ arrives (`Attached.step`); outside an epoch a block is the workload's own. At a 
 ``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
 in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
-linears it computes, whose calls commit their A rows and y. Its credited product is one block per grid tile of every
-call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
-(`drawn_blocks`). Its settings are `SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
+linears it computes, whose calls commit their A rows and y. Its settings are `SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
 record, and credits nothing.
 """
 
@@ -53,63 +51,6 @@ def tile_macs(statics: Mapping[str, int]) -> int:
     return statics["TR"] * statics["TN"] * statics["K"]
 
 
-@dataclass(frozen=True)
-class CreditedBlock:
-    """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
-    its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
-    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
-    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
-
-    id: tuple[int, int]
-    record: int
-    unit: int
-    rows: tuple[int, ...]
-    cols: tuple[int, ...]
-    col: int
-    size: tuple[int, int, int, int]
-    real: int
-    ticket: int
-
-
-def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[CreditedBlock]:
-    """The run's credited product as blocks, one per grid tile of every call of every pass (``passes``, each pass's
-    `UnitRecord`s in order), in the Lean verifier's order (`Run.lean`'s `tile?` and `tickets`): pass by pass, call by call,
-    each call's tiles row-major (`audit.tile_refs` over `grid_tiles`), each ticketed at its credited cells' `wref` share
-    (`clear_work.tickets` over every pass's records together). A tile with no credited cell has ticket 0 and is never
-    drawn."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.clear import clear_work as CW
-    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Workload, tile_refs
-
-    tickets = iter(CW.tickets(scheme, [r for records in passes for r in records]))
-    tn, out = scheme.tile[1], []
-    for i, records in enumerate(passes):
-        for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
-            _, tile, ticket = next(tickets)
-            r = records[ref.matmul]
-            u = r.matmul
-            assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
-            out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
-                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
-                                     sum(row < r.real_rows for row in tile.rows), ticket))
-    return out
-
-
-def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
-                 draw: Callable[..., Any] | None = None) -> list[CreditedBlock]:
-    """The ``t`` blocks of `credited_blocks` that ``key`` draws (``draw``, `clear_work.draw` unless a caller holding
-    `clear_work` by its bare name gives its own: work-weighted with replacement, in its order): `Run.lean`'s `draw` under
-    `drawKey`."""
-    if draw is None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_work import draw
-
-    blocks, at = credited_blocks(scheme, passes), [0]
-    for records in passes:
-        at.append(at[-1] + len(records))
-    by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
-    return [by_tile[(pos, tile.rows[0], tile.cols[0])]
-            for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
-
-
 #: a credited tile's template in C before C is laid (`prover.circuit.pearl_plus_credited.PearlPlusTileCoreWords`): its
 #: statics are the tile's, and `tile_macs` of them is what the tile is credited
 TILE = "PearlPlusTileCoreWords_v5"
@@ -117,41 +58,60 @@ TILE = "PearlPlusTileCoreWords_v5"
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
 #: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; a tile's device or
-#: inert-work bounds are not the kernel scheme of record's (`scheme_statics`); C laid has a digest
+#: inert-work bounds are not the kernel scheme of record's (`scheme_statics`); a tile's N is not its linear's columns in
+#: C (`tile_columns`); C laid has a digest
 #: other than the one registered before any coin, so its tiles are not those of the C the blocks are proved against
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
 TILE_FOREIGN = "tile-body-foreign"
 TILE_SCHEME = "tile-statics-not-the-scheme"
+TILE_COLUMNS = "tile-columns-not-the-linears"
 C_DIGEST = "tile-c-digest-differs"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
-#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
+#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum; a tile
+#: is below the served floor (`test_instance`), so the passed audit is a test instance's and credits nothing
 AUDIT_SHORT = "tile-audit-short"
 AUDIT_STRAY = "tile-audit-stray"
+TEST_INSTANCE = "tile-test-instance"
+
+
+def test_instance(statics: Mapping[str, Any]) -> str | None:
+    """Why a tile of ``statics`` is a test instance's, or None when it is at the served floor: its depth K at least
+    `pearl_c.K_MIN` and its tile `pearl_c.TILE` × `pearl_c.TILE` (TM × TN), the constants the Lean credit's `plan` reads
+    (`Check.K_MIN`, `Check.TILE`), below which a pass credits nothing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+
+    k, tm, tn = statics["K"], statics["TM"], statics["TN"]
+    if k >= C.K_MIN and (tm, tn) == (C.TILE, C.TILE):
+        return None
+    return (f"is K = {k} at {tm} × {tn}, not the served K of at least {C.K_MIN} at {C.TILE} × {C.TILE}: a test "
+            "instance, which credits nothing")
 
 
 @dataclass(frozen=True)
 class LaidTile:
     """A credited tile of C as C's laying lays it: ``index`` its place among C's tiles in C's root order, ``gates`` its
     gates [lo, hi) in C, ``amount`` its credited MACs (`tile_macs` on its template's statics, public in C before any
-    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, and ``kinds`` its m_s: its blocks in each
-    stratum, by the stratum's descriptor id."""
+    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, ``kinds`` its m_s: its blocks in each
+    stratum, by the stratum's descriptor id, and ``test`` why it is a test instance's (`test_instance`), or None."""
 
     index: int
     gates: tuple[int, int]
     amount: int
     blocks: tuple[int, ...]
     kinds: Mapping[str, int]
+    test: str | None = None
 
 
 #: Every static of `TILE`, by what holds it. ``credit``: `tile_macs` reads it. ``scheme``: `KERNEL` fixes it at the tile's
-#: shape (its device, its tile inert-work bound ρ = 1/RHO, its row bound ρr = 1/RHOR), `scheme_statics`. ``free``: TM,
-#: the tile's rows with its filler rows, which its body holds to zero word for word and `tile_macs` does not count; N, the
-#: linear's columns, which its body's inert-work bound reads only as the row's credit over N columns divided by N, so
-#: the bound stays 1/RHO of the tile's own cells. A static not listed here is refused (`scheme_statics`).
+#: shape (its device, its tile inert-work bound ρ = 1/RHO, its row bound ρr = 1/RHOR), `scheme_statics`. ``columns``: N,
+#: the linear's columns, held to the columns C gives the linear (`tile_columns`): the inert-work bound charges the tile
+#: TN/N of its forming, so an N above the linear's would admit more inert work. ``free``: TM, the tile's rows with its
+#: filler rows, which its body holds to zero word for word, `tile_macs` does not count, and the bound charges the forming
+#: of, so a TM above the tile's rows admits no more. A static not listed here is refused (`scheme_statics`).
 TILE_STATICS: Mapping[str, str] = MappingProxyType({"K": "credit", "TR": "credit", "TN": "credit", "DEV": "scheme",
-                                                    "RHO": "scheme", "RHOR": "scheme", "TM": "free", "N": "free"})
+                                                    "RHO": "scheme", "RHOR": "scheme", "N": "columns", "TM": "free"})
 SCHEME_STATICS = tuple(s for s, why in TILE_STATICS.items() if why == "scheme")
 
 
@@ -171,6 +131,48 @@ def scheme_statics(fn: Any) -> str | None:
         return f"has no shape {KERNEL} binds ({type(e).__name__}: {e})"
     if bad := [s for s in SCHEME_STATICS if b.get(s) != want[s]]:
         return ", ".join(f"{s} = {b.get(s)!r} where {KERNEL} binds {want[s]!r}" for s in bad)
+    return None
+
+
+def tile_columns(program: Any, partition: Any, tiles: Sequence[tuple[int, Any]]) -> str | None:
+    """Why a tile's N is not the columns C gives its linear, or None when every tile's is: each tile ``(u, fn)``, root
+    unit u of ``partition`` (C's template partition), reads its W operand (port ``b``, one column tile of TN rows of W)
+    as one whole row of a parameter of C, whose rows are the linear's column tiles, so the linear has TN × its rows
+    columns, which must be the tile's N; and every row of that parameter is read by some tile, so no column C does not
+    compute counts toward N."""
+    from verity.circuits.refs import runs
+
+    spans = []
+    for i, (name, _t) in enumerate(program.fn.signature()[0]):
+        rs = list(runs(program.input_coll(i).refs))
+        if rs and all(x[3] == y[2] for x, y in zip(rs, rs[1:])):
+            spans.append((range(rs[0][2], rs[-1][3]), name))
+    read: dict[str, set[int]] = {}
+    rows_of: dict[str, int] = {}
+    for u, fn in tiles:
+        at, per = 0, None
+        for name, t in fn.signature()[0]:
+            if name == "b":
+                per = t.leaves
+                break
+            at += t.leaves
+        gates = list(partition.inputs(u)[at:at + (per or 0)])
+        hit = next(((r, v) for r, v in spans if gates and gates[0] in r), None)
+        if per is None or hit is None:
+            return f"C's root unit {u} reads its W operand from no parameter of C"
+        (r, v), off = hit, gates[0] - hit[0].start
+        if len(r) % per or off % per or gates != list(range(gates[0], gates[0] + per)):
+            return f"C's root unit {u} reads its W operand as no one whole row of parameter {v!r}"
+        rows, b = len(r) // per, fn.bindings
+        if b["N"] != rows * b["TN"]:
+            return (f"C's root unit {u} binds N = {b['N']}, and parameter {v!r}, its W operand, holds {rows} column "
+                    f"tiles of TN = {b['TN']}: {rows * b['TN']} columns")
+        read.setdefault(v, set()).add(off // per)
+        rows_of[v] = rows
+    for v, got in read.items():
+        if unread := sorted(set(range(rows_of[v])) - got):
+            return (f"no tile of C reads column tile {unread[0]} of parameter {v!r}, so its {rows_of[v]} column tiles "
+                    "are not the linear's columns C computes")
     return None
 
 
@@ -235,7 +237,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     C's gates in C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do.
     C must hold a tile (`TILE_ABSENT`), each tile's device and inert-work bounds must be `KERNEL`'s at its shape
     (`TILE_SCHEME`, `scheme_statics`), each tile must be the registry's `TILE` at its statics, its body and every
-    Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), and the laid C must be the one ``registered`` names, its
+    Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), each tile's N the columns C gives its linear (`TILE_COLUMNS`,
+    `tile_columns`), and the laid C must be the one ``registered`` names, its
     `codec.program_digest` registered before any coin (`C_DIGEST`): the tiles credited are those of the C the
     blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
     template-instance query): their blocks must be its root units, each of the one template its stratum names
@@ -258,6 +261,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         if why := foreign_tile(fn):
             raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
                              "are not what it computes")
+    if why := tile_columns(program, before, tiles):
+        raise ValueError(f"{TILE_COLUMNS}: {why}")
     laid = LY.lay(program, fits)
     if (got := program_digest(laid)) != registered:
         raise ValueError(f"{C_DIGEST}: C laid has digest {got[:16]}…, and the digest registered before any coin is "
@@ -293,7 +298,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         kinds: dict[str, int] = {}
         for b in blocks:
             kinds[of[b]] = kinds.get(of[b], 0) + 1
-        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds)))
+        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds),
+                            test_instance(fn.bindings)))
     return out
 
 
@@ -309,7 +315,8 @@ def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequen
     its draw, an empty one included, is no evidence. Then every tile is credited when each of those verdicts passed, and
     none when any failed: the bound on spoiled tiles counts bad blocks over all of S at the draw's rate, which holds for
     the tiles together and clears no tile by the strata it holds alone. A stratum outside S neither credits nor spoils.
-    A verdict on a block of no stratum is refused (`AUDIT_STRAY`)."""
+    A verdict on a block of no stratum is refused (`AUDIT_STRAY`). An audit that passed over a tile below the served floor
+    is refused (`TEST_INSTANCE`): a test instance credits nothing."""
     import bisect
 
     if not tiles:
@@ -329,7 +336,11 @@ def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequen
         raise ValueError(f"{AUDIT_SHORT}: {len(short)} strata holding a tile's block lack their registered count of "
                          f"drawn blocks with a verdict, first {short[0]}: {drawn[short[0]]} drawn of "
                          f"{counts.get(short[0], 0)}")
-    return [] if failed else list(tiles)
+    if failed:
+        return []
+    if test := next((t for t in tiles if t.test), None):
+        raise ValueError(f"{TEST_INSTANCE}: tile {test.index} {test.test}")
+    return list(tiles)
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served

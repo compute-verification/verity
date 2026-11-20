@@ -31,7 +31,7 @@ It needs the node's pinned vLLM venv and the C4 shard `benchmarks/ppl/datasets.j
 variables and resources. It writes each corpus to `OUT/corpus/<model>-<variant>/`: per trace its `steps.jsonl` and
 `requests.jsonl`, the corpus's `summary.json`, and a README that says what each field is (with `JOIN=0`, `join.sh` summarizes it later on a CPU node). `corpus.py`'s docstring has
 every trace, variant and subcommand, and each script's header has its command. A summarized corpus is published in the
-evidence store as `vllm-trace-corpus/v1`, which `benchmarks/network_e2e/encodings/trace_corpus.py` reads.
+evidence store as `vllm-trace-corpus/v1`.
 
 For the 8B model, attention is vLLM's own, not the int8 attention: `verity_vllm.engine.int8_ops._requests` refuses a
 request whose query rows are neither its whole window nor one row. Every prefix-cache hit and every later prefill chunk is

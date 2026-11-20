@@ -113,6 +113,8 @@ import re
 import socket
 import struct
 import subprocess
+import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -124,6 +126,7 @@ from verity.commitments import domains as DM
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 
+from . import lean_child as LC
 from .rec_algebra import fast100
 from .record_text import session_text
 
@@ -1031,8 +1034,10 @@ class LeanZkServer:
 
     def __init__(self, binary: str | Path, schedule: dict, tree: dict | None = None):
         self.binary = str(binary)
+        # its standard error goes to this process's, through a file read after each answer for a panic line
+        self._err, self._err_read = tempfile.TemporaryFile(), 0
         self.proc = subprocess.Popen([self.binary, "live"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                                     encoding="utf-8")
+                                     encoding="utf-8", stderr=self._err, env=LC.lean_env())
         try:
             got = self._ask(json.dumps({"schedule": schedule, **({} if tree is None else {"coin_tree": tree})}))
         except ValueError:
@@ -1049,8 +1054,15 @@ class LeanZkServer:
             out = self.proc.stdout.readline()
         except OSError as e:
             raise ValueError(f"{self.binary} live: {e}") from None
+        self._err.seek(self._err_read)
+        err = self._err.read()
+        self._err_read += len(err)
+        sys.stderr.write(err.decode("utf-8", "replace"))
+        if (panic := LC.panic_line(err)) is not None:
+            raise ValueError(f"{LC.LEAN_PANIC}: {panic}")
         if not out:
-            raise ValueError(f"{self.binary} live: exited ({self.proc.poll()})")
+            rc = self.proc.wait()
+            raise ValueError(f"{self.binary} live: {LC.exit_why(rc) or f'exited ({rc})'}")
         try:
             got = json.loads(out)
         except json.JSONDecodeError:

@@ -67,10 +67,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Collection, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
 from verity.commitments import session_coins as SC
+from verity.commitments.crypto import lms
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.circuits import supplied as SU
@@ -619,7 +620,8 @@ def _held_object(tbl: Mapping[str, bytes], kind: str, name: str, f: str) -> Mapp
 
 def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[str],
                     nats: Sequence[tuple[str, int]]) -> dict[str, Any]:
-    """The held commitment's fields ``hexes`` (lowercase hex of whole bytes) and ``nats`` (naturals below ``2 ** bits``)."""
+    """The held commitment's fields ``hexes`` (lowercase hex of whole bytes, the session id 32 bytes) and ``nats`` (naturals
+    below ``2 ** bits``)."""
     c = rel.get("commitment")
     if not isinstance(c, dict):
         raise _no_statement(name, f, "commitment holds no commitment object")
@@ -629,6 +631,8 @@ def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[s
         if not (isinstance(v, str) and _EVEN_HEX.fullmatch(v)):
             raise _no_statement(name, f, f"commitment's {k} is no lowercase hex")
         out[k] = bytes.fromhex(v)
+        if k == "session" and len(out[k]) != 32:
+            raise _no_statement(name, f, f"commitment's session is {len(out[k])} bytes, not 32")
     for k, bits in nats:
         v = c.get(k)
         if type(v) is not int or not 0 <= v < 1 << bits:
@@ -640,18 +644,25 @@ def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[s
 def _round_coin(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str,
                 m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
     """Round ``round``'s index, the last opening of the round that the coin holds, opened under the coin root of the
-    commitment the verifier holds (never one the coin carries)."""
+    commitment the verifier holds (never one the coin carries) with the coin key the coin releases, which hashes to the
+    commitment's ``coin_key_sha512``."""
     f = m["supplied"]
     j = _arg(name, m, "round", int)
     rel = _held_object(commitments, "commitment", name, f)
-    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key"), (("blocks", 64), ("k", 32)))
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key_sha512"), (("blocks", 64), ("k", 32)))
     if j >= 1 << 32:
         raise _no_statement(name, f, f"round {j} is no u32")
     if j >= c["k"]:
         raise _no_statement(name, f, f"round {j} is no round of the session's {c['k']}")
     coin = _held_object(coins, "coin", name, f)
-    if set(coin) - {"openings"}:
-        raise _no_statement(name, f, "coin holds more than its openings: the coin root is the verifier's own")
+    if set(coin) - {"openings", "coin_key"}:
+        raise _no_statement(name, f, "coin holds more than its openings and its key: the coin root is the verifier's own")
+    key = coin.get("coin_key")
+    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
+        raise _no_statement(name, f, "coin's coin_key is no lowercase hex")
+    key = bytes.fromhex(key)
+    if hashlib.sha512(key).digest() != c["coin_key_sha512"]:
+        raise _no_statement(name, f, "coin's key is not the one the commitment holds the hash of")
     ops = coin.get("openings")
     if not isinstance(ops, list):
         raise _no_statement(name, f, "coin holds no openings list")
@@ -666,30 +677,33 @@ def _round_coin(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], na
         raise _no_statement(name, f, f"round {j}'s index {index} is no u64")
     if index >= c["blocks"]:
         raise _no_statement(name, f, f"round {j}'s index {index} is no block of the session's {c['blocks']}")
-    if not SC.verify(c["session"], c["coin_root"], c["coin_key"], c["blocks"], c["k"], j, index, bytes.fromhex(salt),
+    if not SC.verify(c["session"], c["coin_root"], key, c["blocks"], c["k"], j, index, bytes.fromhex(salt),
                      [bytes.fromhex(p) for p in path]):
         raise _no_statement(name, f, f"round {j}'s index {index} is not its committed coin")
     return [("bytes", (j.to_bytes(4, "big") + index.to_bytes(8, "big")).hex())], 12
 
 
-def _header(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
-    """The held commitment's signed header with ``"ended": "complete"`` and ``"rounds": k``, which the commitment's own
-    ``ended`` and ``rounds`` are compared with, so a late or short session has no statement."""
+def _header(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str,
+            m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's signed header (the coin key by its hash) with ``"ended": "complete"`` and ``"rounds": k``, which
+    the ``ended`` and ``rounds`` the session's release holds (the coin held under the function) are compared with, so a late
+    or short session has no statement."""
     f = m["supplied"]
     want = _arg(name, m, "head", int)
     rel = _held_object(commitments, "commitment", name, f)
-    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key", "binding"),
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key_sha512", "binding"),
                         (("blocks", 64), ("k", 32), ("limit_ns", 64), ("block_bytes", 64)))
-    ended, rounds = rel.get("ended"), rel.get("rounds")
+    released = _held_object(coins, "coin", name, f)
+    ended, rounds = released.get("ended"), released.get("rounds")
     if not isinstance(ended, str):
-        raise _no_statement(name, f, "commitment holds no ended string")
+        raise _no_statement(name, f, "coin holds no ended string")
     if type(rounds) is not int or not 0 <= rounds < 1 << 32:
-        raise _no_statement(name, f, "commitment's rounds is no u32")
+        raise _no_statement(name, f, "coin's rounds is no u32")
     if ended != SC.COMPLETE:
         raise _no_statement(name, f, "session did not end complete")
     if rounds != c["k"]:
         raise _no_statement(name, f, f"session has {rounds} rounds, not its {c['k']}")
-    head = SC.header(c["session"], c["coin_root"], c["coin_key"], c["binding"], c["blocks"], c["k"], c["limit_ns"],
+    head = SC.header(c["session"], c["coin_root"], c["coin_key_sha512"], c["binding"], c["blocks"], c["k"], c["limit_ns"],
                      c["block_bytes"], SC.COMPLETE, c["k"])
     if len(head) != want:
         raise _no_statement(name, f, f"header is {len(head)} bytes, not {want}")
@@ -697,42 +711,97 @@ def _header(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -
     return [("bytes", row.hex())], len(row)
 
 
-def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
-    """The held commitment's session id and the first 16 bytes of the held key, as the signature's message hashes them."""
+UNPINNED = "key is not one the configuration pins for the memory attester"
+BAD_SIGNATURE = "signature does not verify over the message under the pinned key"
+
+
+def _pinned_key(rel: Mapping[str, Any], name: str, f: str, pinned: Collection[bytes]) -> bytes:
+    """The held commitment's LMS public key, refused unless its SHA-512 is one of ``pinned``, the configuration's pins of the
+    memory attester's keys: the session's own object never names the key it is checked under."""
+    key = rel.get("key")
+    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
+        raise _no_statement(name, f, "commitment's key is no lowercase hex")
+    k = bytes.fromhex(key)
+    if hashlib.sha512(k).digest() not in pinned:
+        raise _no_statement(name, f, UNPINNED)
+    return k
+
+
+def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any],
+             pinned: Collection[bytes]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's session id and the first 16 bytes of the pinned key, as the signature's message hashes them."""
     f = m["supplied"]
     if m["args"]:
         raise ValueError(f"supplied input {name}: {f} takes no args")
     rel = _held_object(commitments, "commitment", name, f)
-    key = rel.get("key")
-    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
-        raise _no_statement(name, f, "commitment's key is no lowercase hex")
     session = _session_fields(name, f, rel, ("session",), ())["session"]
-    ident = bytes.fromhex(key)[:16]
+    ident = _pinned_key(rel, name, f, pinned)[:16]
     if len(ident) != 16:
         raise _no_statement(name, f, f"key is {len(ident)} bytes, not an LMS identifier's 16")
-    if len(session) != 32:
-        raise _no_statement(name, f, f"session is {len(session)} bytes, not 32")
     ctx = SC.signed_context(ident, session)
     return [("bytes", ctx.hex())], len(ctx)
 
 
-def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+def _message(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any],
+             pinned: Collection[bytes]) -> tuple[list[tuple[str, str]], int]:
+    """The ``message`` the session releases (the coin held under the function, `{message, signature}`), the 64-byte salted
+    commitment the memory attester signed, released in the clear with its ``signature``, which verifies over it under the
+    pinned key the commitment holds, at the deployed parameters (`lms.DEPLOYED`)."""
+    f = m["supplied"]
+    if m["args"]:
+        raise ValueError(f"supplied input {name}: {f} takes no args")
+    rel = _held_object(commitments, "commitment", name, f)
+    session = _session_fields(name, f, rel, ("session",), ())["session"]
+    key = _pinned_key(rel, name, f, pinned)
+    released = _held_object(coins, "coin", name, f)
+    msg = released.get("message")
+    if not (isinstance(msg, str) and _EVEN_HEX.fullmatch(msg)):
+        raise _no_statement(name, f, "coin's message is no lowercase hex")
+    if len(msg) != 128:
+        raise _no_statement(name, f, f"message is {len(msg) // 2} bytes, not 64")
+    sig = released.get("signature")
+    if not (isinstance(sig, str) and _EVEN_HEX.fullmatch(sig)):
+        raise _no_statement(name, f, "coin's signature is no lowercase hex")
+    try:
+        ok = len(key) == 16 + lms.DEPLOYED.N and lms.verify(
+            lms.DEPLOYED, key, lms.memory_attester_message(key[:16], session, bytes.fromhex(msg)),
+            lms.Signature.decode(lms.DEPLOYED, bytes.fromhex(sig)))
+    except ValueError:
+        ok = False
+    if not ok:
+        raise _no_statement(name, f, BAD_SIGNATURE)
+    return [("bytes", msg)], 64
+
+
+def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any],
+         pinned: Collection[bytes] = ()) -> tuple[list[tuple[str, str]], int]:
     """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
     statement" where the verifier can't compute it. ``coins`` and ``commitments`` are what the verifier holds of each function
-    as a coin and as a released commitment, by function name. The storage session's three functions read the commitment, a
-    JSON object `{commitment, ended, rounds, key}` (`SessionCommitment.to_json`, how the session ended and its rounds, the
-    registered LMS public key's hex), and `pous.session.round_coin/v1` the coin, `{openings}` (`CoinOpening.to_json`):
-    `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin below the commitment's blocks;
-    `pous.session.header/v1` the header of a session that ended complete with all its rounds in `head` bytes, padded to whole
-    u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the record. Each number they read
-    is canonical (`_canonical_numbers`) and within its field's width."""
+    as a coin and as a commitment, by function name. The storage session's four functions read the session in two entries by
+    when each of its parts exists. The commitment, held before the first coin, is a JSON object `{commitment, key, place}`:
+    the header's fields (`SessionCommitment.header`: the session id, the coin root, the hash of the coin key, the blocks, `k`,
+    the limit, the answer's size, the binding), the LMS public key's hex and the place it was registered at. The coin,
+    released after the session, is `{openings, coin_key}` for `pous.session.round_coin/v1` (`CoinOpening.to_json` and the
+    coin key itself, which hashes to the commitment's), `{ended, rounds}` for `pous.session.header/v1` and
+    `{message, signature}` for `pous.session.message/v1`.
+    `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin
+    below the commitment's blocks; `pous.session.header/v1` the header of a session that ended complete with all its rounds in
+    `head` bytes, padded to whole u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the
+    record; `pous.session.message/v1` the 64-byte message m the signature signs. The context and the message read the
+    commitment's key only once its SHA-512 is one of ``pinned``, the configuration's pins of the memory attester's keys
+    (`UNPINNED`): no body takes the key the session's own object names. The message is read only once the coin's
+    ``signature`` verifies over it under that key (`BAD_SIGNATURE`): m and the signature are public, and the signature's
+    leaf q shows how many signatures the attester has made. Each number they read is canonical (`_canonical_numbers`) and
+    within its field's width."""
     f = m["supplied"]
     if f == "pous.session.round_coin/v1":
         return _round_coin(coins, commitments, name, m)
     if f == "pous.session.header/v1":
-        return _header(commitments, name, m)
+        return _header(coins, commitments, name, m)
     if f == "pous.session.context/v1":
-        return _context(commitments, name, m)
+        return _context(commitments, name, m, pinned)
+    if f == "pous.session.message/v1":
+        return _message(coins, commitments, name, m, pinned)
     if f == "const.u16/v1":
         x = _arg(name, m, "value", int)
         if x >= 1 << 16:
@@ -764,10 +833,11 @@ def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str
     raise ValueError(f"supplied input {name}: no statement: {f}'s body is not the verifier's yet")
 
 
-def of_mark(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list[list[tuple[str, str]]]:
+def of_mark(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any],
+            pinned: Collection[bytes] = ()) -> list[list[tuple[str, str]]]:
     """A supplied input's one row of sources (`Supplied.ofMark`): its body's, led by ``(LE, "")`` where its layout is
     `le`."""
-    sources, n = body(coins, commitments, name, m)
+    sources, n = body(coins, commitments, name, m, pinned)
     if 8 * n != m["bits"]:
         raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * n} bits, and the mark says {m['bits']}")
     return [([(LE, "")] if m["layout"] == "le" else []) + sources]
@@ -775,13 +845,14 @@ def of_mark(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: 
 
 def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],
                 coins: Mapping[str, str] | None, commitments: Mapping[str, str] | None = None,
-                released: Mapping[str, int] | None = None, records: int = 0) -> dict[str, list[list[tuple[str, str]]]]:
+                released: Mapping[str, int] | None = None, records: int = 0,
+                pinned: Collection[bytes] = ()) -> dict[str, list[list[tuple[str, str]]]]:
     """The rows of `program`'s supplied inputs (`marks`), each its function's value under the verifier's `coins` and
     `commitments` (`{function: hex}` each: what it holds of a function as a coin and as a released commitment, which the
     order rule counts the first of alone; `OneStage.markedRows`): ValueError where the verifier registers no read of the input, where
     `supplied` (the scheme's) has rows for it too, or where its layout is `digest` and its leaves aren't whole digests or
     the other way round; and refused by the order rule (`order`) at `released`, the verifier's place of each coin, after
-    `records` records of the log."""
+    `records` records of the log; ``pinned``, the SHA-512s of the memory attester's keys the configuration pins."""
     got = marks(json.loads(b"".join(descriptor_chunks(program))))
     if not isinstance(coins or {}, Mapping):
         raise ValueError("coins are an object of hex by supplied function")
@@ -815,19 +886,22 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
         if (m["layout"] == "digest") != digests(params[v]):
             raise ValueError(f"supplied input {v}: layout {m['layout']} reads whole digests only into a parameter of "
                              "whole digests")
-        out[v] = of_mark(held, commit, v, m)
+        out[v] = of_mark(held, commit, v, m, pinned)
     order(got, out, held, commit, released, records)
     return out
 
 
-def _commitment_place(b: bytes) -> int | None:
-    """The place a held commitment was registered at: its JSON's ``place``, a natural; None for a text that is no JSON object
-    of one (`Supplied.commitmentPlace`)."""
+def _commitment_place(c: str, b: bytes) -> int:
+    """The place `c`'s held commitment `b` was registered at: its JSON's ``place``, a natural; ValueError for a text that is
+    no JSON object of one (`Supplied.commitmentPlace`)."""
+    why = f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows"
     try:
         doc = json.loads(b.decode("utf-8"))
-    except ValueError:
-        return None
-    return _nat(doc.get("place")) if isinstance(doc, dict) else None
+    except ValueError as e:
+        raise ValueError(why) from e
+    if (p := _nat(doc.get("place")) if isinstance(doc, dict) else None) is None:
+        raise ValueError(why)
+    return p
 
 
 def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
@@ -856,9 +930,7 @@ def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[
     if cms and cos:
         placed = {}
         for c in cms:
-            if (p := _commitment_place(commit[c])) is None:
-                raise ValueError(f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows")
-            placed[f"commitment {c}"] = p
+            placed[f"commitment {c}"] = _commitment_place(c, commit[c])
         for f in cos:
             if f not in (released or {}):
                 raise ValueError(f"released: the verifier names no place of {f}'s coin, which follows a commitment it holds")
