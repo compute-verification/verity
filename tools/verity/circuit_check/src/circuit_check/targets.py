@@ -239,20 +239,10 @@ def _record(text: str) -> Any:
     return _RECORDS[text]
 
 
-def _lift(fam: str) -> None:
-    """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
-    has yet: unregistered, `call_scope.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
-    `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
-    from . import sidecars as SC
-
-    if (made := SC.composite_lift(fam)) is not None and made.id != fam:
-        raise LookupError(f"{fam} names no Definition: {made.lifted_from.id}'s lift is {made.id}")
-
-
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
-    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way; a composite's lift, `_lift`, the
-    one a body calling it binds), or else, of a family a binding file's `BODY_FAMILIES` holds, that file's target of that id
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else, of a family a
+    binding file's `BODY_FAMILIES` holds, that file's target of that id
     (`sidecar_targets`, without the catalog), or else the suite's target of that id: a Definition that only tracing the
     catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its
     digest, such as `gf2k.GfResiduals`'s schema."""
@@ -264,7 +254,6 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
-    _lift(fam)
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
@@ -341,7 +330,6 @@ HOOKS = {
     "boolean_table": "the Boolean table's two lookups and its import errors (exact, by_name, errors)",
     "made_on_demand": "the Boolean version of a word Definition made on demand, by its id, or None",
     "boolean_version": "the Boolean version of a word Definition, and the error it raises for one that has none",
-    "lift_composite": "the lift of a registered composite Definition",
     "handed_packages": "the packages and modules, dotted, whose circuits circuit-check is handed and names none of "
                        "(`tests/test_handed_names.py`)",
 }

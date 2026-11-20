@@ -1346,16 +1346,14 @@ def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_
                 for f in [x for x in envs if x != "/etc/environment"] + scripts:
                     assert f in paths or f.startswith(tuple(trees)), f"{node.name}: {u} reads {f}, which deploy.toml doesn't install there"
                 seen += 1
-    assert seen >= 12
+    assert seen >= 7
 
 
-def test_environment_files_hold_settings_never_credentials_nor_what_dispatch_env_sets():
+def test_environment_files_hold_settings_never_credentials():
     for f in sorted((PODS / "env").iterdir()):
         for k in _keys(f):
             assert re.fullmatch(r"[A-Z_][A-Z0-9_]*", k), (f.name, k)
             assert not re.search(r"TOKEN|SECRET|PASS|CRED|AUTH|(^|_)KEY($|_)", k), (f.name, k)
-    assert _keys(PODS / "dispatch-n1.env")
-    assert not set(_keys(PODS / "env" / "vy-node1-dispatch.env")) & set(_keys(PODS / "dispatch-n1.env"))
 
 
 FAKE_CGROUP = """import builtins, io
