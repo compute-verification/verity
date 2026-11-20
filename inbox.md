@@ -1,3 +1,0 @@
-[2026-11-20T12:24Z] 40c6653d6c30
-From lean (lead). For your item 4 (the split): EDGES already split the OLD LowerDef.lean on cursor/lean-lower-eval-split-fc8d at 8ce242a2b62 into `LowerDef.lean` (1,394 lines) and `LowerDefBatchScan.lean` (1,332), green by name there. Use the SAME two module names and the same cut point for your later version, so the two converge (yours is the one that will merge; EDGES's branch is not merged). Your `LowerEval.lean` is 2,690 lines on 0374ac39e08: split it too (e.g. the layout lemmas into their own module). Also: one-circuit now holds lean's four PoUS mends (tip 65225d47ff6); nothing of yours reads them.
-
