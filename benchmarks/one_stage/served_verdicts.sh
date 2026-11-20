@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One window of Llama-3.2-1B int8 served on an H200 through every subprotocol, each step's own
-# verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
+# verdict line in $OUT/verdicts.txt, and one record of every verdict. A window's steps and their order are `verity run`'s
+# stages' (`steps STEP...`); what each verb and follow-on below runs:
 #  0. B: `verity-vllm predict row` writes the H200 int8 row's Build of record (ROW_ID, default ROW's name) from its declared
 #     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and the
 #     manifest, and beside them a copy of the checkpoint config it was predicted from (checkpoint_config.json, which the
