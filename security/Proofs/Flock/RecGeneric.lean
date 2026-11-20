@@ -16,6 +16,7 @@ public import Proofs.Flock.RecGeneric.AtFlockReruns
 public import Proofs.Flock.RecGeneric.AtFlockTerms
 public import Proofs.Flock.RecGeneric.AtFlockContract
 public import Proofs.Flock.RecGeneric.AtFlockKS
+public import Proofs.Flock.RecGeneric.AtFlockCommitted
 public import Proofs.Flock.RecGeneric.AtFlockNontrivial
 public import Proofs.Flock.RecGeneric.AtFlockCompiled
 public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
@@ -41,6 +42,9 @@ public import Proofs.Flock.RecGeneric.ZKSessionsProof
 public import Proofs.Flock.RecGeneric.ZKAtFlockProof
 public import Proofs.Flock.RecGeneric.ZKAtRecProof
 public import Proofs.Flock.RecGeneric.CompiledCost
+public import Proofs.Flock.RecGeneric.LinkCost
+public import Proofs.Flock.RecGeneric.AtFlockLinkBits
+public import Proofs.Flock.RecGeneric.LinkEpsDeployed
 
 /-! The recursion as a compiler, generic in Π_in, Π_out and the server, over Π_in with repetition extractors: its
 statements (`Definitions.Claims.RecursionGeneric`: `CompositionKS`, L1, and `CompilerKS`, L2), their honest and

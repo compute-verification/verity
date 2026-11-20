@@ -43,6 +43,9 @@ TABLES_MAX = 64
 # The recursion's outer proof, `Verity.Recursive.Dep.ksAt` (`security/Proofs/Properties/Verity/Recursive.lean`):
 # min(κ + t·ε, t·2^-λ₂) at the deployment's tables, t·2^-λ₂ off them; λ₂ ≥ 135.7 at an accepted statement (`calls_lam`).
 REC_KAPPA, REC_EPS, REC_LAM = -167.7, -174.95, 135.7
+# The generic composition at Flock (`RecursiveKSEveryDeployed`): its binding term, the gated link's, is at most t·2^REC_LINK
+# at the deployment's sizes and call bounds n, v, w ≤ 2^32 (`RecDeploy.epsLink_deployed`, `Claims.RecGeneric.linkTerm_le`).
+REC_LINK = -175.65
 # `RecursiveAuditC3`'s δ_s: the sample's miss, a hypothesis, at the epoch's δ.
 REC_DELTA_S = Fraction(1, 100)
 

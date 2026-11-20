@@ -28,6 +28,7 @@ LEMMA = HERE.parents[2] / "security" / "Proofs" / "Pouw" / "PearlC" / "ServedH10
 NUMBERS = HERE.parents[2] / "security" / "Proofs" / "Flock" / "Claims" / "NumbersDeploy.lean"
 RECURSIVE = HERE.parents[2] / "security" / "Proofs" / "Properties" / "Verity" / "Recursive.lean"
 AUDIT = RECURSIVE.with_suffix("") / "Audit.lean"
+LINK = HERE.parents[2] / "security" / "Proofs" / "Flock" / "RecGeneric" / "LinkEpsDeployed.lean"
 NUM = r"\(-?\(?([\d.]+) : ℝ\)\)?"
 
 
@@ -55,6 +56,8 @@ def test_numerals_are_the_leans():
     assert (-float(ks[1]), -float(ks[2])) == (R.REC_KAPPA, R.REC_EPS)
     lam = re.search(r"theorem calls_lam .*?" + NUM + r" ≤ Claims\.Recursion\.lamLin2", AUDIT.read_text(), re.S)
     assert float(lam[1]) == R.REC_LAM
+    link = re.search(r"theorem epsLink_deployed .*?FlockDeploy\.KS\.CpDep x n v c ≤ 2 \^ " + NUM, LINK.read_text(), re.S)
+    assert -float(link[1]) == R.REC_LINK
 
 
 def test_recursive_audit_rows():

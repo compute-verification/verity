@@ -10,4 +10,5 @@ inputs = ["benchmarks/served_errors", "benchmarks/spot_figures/cards/workload.gl
     "security/Proofs/Flock/Claims/NumbersDeploy.lean",
     "security/Proofs/Properties/Verity/Recursive.lean",
     "security/Proofs/Properties/Verity/Recursive/Audit.lean",
+    "security/Proofs/Flock/RecGeneric/LinkEpsDeployed.lean",
 ]

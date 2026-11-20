@@ -4064,6 +4064,10 @@
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
    "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
   },
+  "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
+   "honest": ["RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest"],
+   "nontrivial": "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKS_nontrivial"
@@ -10454,6 +10458,37 @@
    },
    "type_hash": "d9b8e7b73eac9ecfe5a11f3aac654fa4c7271ac81a31d054620e4857781dd60f"
   },
+  "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial (h : RecDeploy.KSFixture) :",
+    "  Exists fun aux =>",
+    "    Exists fun nOf =>",
+    "      Exists fun hd =>",
+    "        Exists fun recRest =>",
+    "          ∀ (b : RecDeploy.Brings),",
+    "            Not",
+    "              (Claims.RecGeneric.KSLinkOnC FlockDeploy.sha512",
+    "                (RecDeploy.recBoundAt Flock.Readable.relation",
+    "                    (have __src := RecDeploy.deployedB b;",
+    "                    { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC, rd := __src.rd,",
+    "                      zl := __src.zl, ref := __src.ref, setup := __src.setup })",
+    "                    (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll",
+    "                (RecDeploy.bdDeployed Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)",
+    "                  (FlockDeploy.deployPlainTrimR Flock.Readable.relation RecDeploy.DeployedR.rdR).cols",
+    "                  RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR",
+    "                  RecDeploy.DeployedR.wR)",
+    "                (RecDeploy.deployZkRec Flock.Readable.relation) FlockDeploy.KS.CpDep (fun x => True) 0)"
+   ],
+   "assumptions": ["RecDeploy.KSFixture"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Hm96Hiding", "RecDeploy.KSFixture"],
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+   },
+   "type_hash": "5dbd55ce6cc5a3a5afc8e743f7ae1f843e78b8088f49bba2f9d98126ed0e1777"
+  },
   "Flock.Guarantees.recursiveKSEvery_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -11590,6 +11625,19 @@
    },
    "type_hash": "b0762ee76e540857155f04ce96e2067f673eb3eeb64c5c4e8bc40079397be698",
    "unfolded_hash": "a4fdf17f7e8431732f8b34b3a574606fa957f1d8aed73fa3d80ed872214c345f"
+  },
+  "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveKSEveryDeployed : Flock.Guarantees.RecursiveKSEveryDeployed"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Hm96Hiding"],
+    "reads": []
+   },
+   "type_hash": "ce7333947c7502b4d1e45e6b98da6c3b6d135d807d604023475fd39b757c030a",
+   "unfolded_hash": "86b0e9851bf0d40ebc741d9805f0fac770902002d02df80be67e91dcfaf34371"
   },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
@@ -17546,6 +17594,84 @@
     "reads": ["RecDeploy.TopsAt"]
    },
    "type_hash": "919b736c4f268f4e62f60470e03dc36df20b42a164798dbf71c33334c1a0d8df"
+  },
+  "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest (h : RecDeploy.HonestFixture) :",
+    "  Exists fun mask =>",
+    "    Exists fun b0 =>",
+    "      Exists fun x =>",
+    "        Exists fun aux =>",
+    "          Exists fun nOf =>",
+    "            Exists fun hd =>",
+    "              Exists fun recRest =>",
+    "                Exists fun decI =>",
+    "                  Exists fun w =>",
+    "                    Exists fun ω =>",
+    "                      Exists fun r =>",
+    "                        And",
+    "                          (∀ (s : Nat),",
+    "                            instLTNat.lt s (RecDeploy.nS x) →",
+    "                              Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512",
+    "                                (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd recRest)",
+    "                                (RecDeploy.deployZkRec Flock.Readable.relation)",
+    "                                (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) Claims.Recursion.Form.Dense",
+    "                                (RecDeploy.showsPart RecDeploy.recRead",
+    "                                  (have __src :=",
+    "                                    RecDeploy.VStarHonest.bringsAt mask (RecDeploy.VStarBuild.IrDep x)",
+    "                                      (RecDeploy.deployedB b0) x;",
+    "                                  { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC,",
+    "                                    rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup }))",
+    "                                (RecDeploy.cmtTr RecDeploy.recRead) s x (Claims.coinSeq r)",
+    "                                (List.map Prod.fst",
+    "                                  (Claims.run FlockDeploy.sha512",
+    "                                      (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                        (RecDeploy.HonestHalf.bLAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest)",
+    "                                        w)",
+    "                                      (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest).V",
+    "                                      x ω r).msgs))",
+    "                          (And",
+    "                            (∀ (T : Type)",
+    "                              (C :",
+    "                                Claims.Bridge.CoinTree FlockDeploy.Coin T",
+    "                                  ((RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest).V.k",
+    "                                    x))",
+    "                              (τ : T),",
+    "                              Eq",
+    "                                (Claims.Bridge.runCM FlockDeploy.sha512",
+    "                                    (Claims.Bridge.CProver.ofProver",
+    "                                      (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                        (RecDeploy.HonestHalf.bLAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest)",
+    "                                        w))",
+    "                                    (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                        recRest).V",
+    "                                    x C ω r τ).out",
+    "                                Claims.Out.acc)",
+    "                            (And",
+    "                              (Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My",
+    "                                FlockSoundness.Discharge.ZkView.saltHash",
+    "                                (ENNReal.ofReal",
+    "                                  (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                    FlockSoundness.Discharge.ZkView.saltHash)))",
+    "                              (Ne",
+    "                                (ENNReal.ofReal",
+    "                                  (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                    FlockSoundness.Discharge.ZkView.saltHash))",
+    "                                ENNReal.instTop.top)))"
+   ],
+   "assumptions": ["RecDeploy.HonestFixture"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["RecDeploy.HonestFixture"],
+    "reads": ["RecDeploy.TopsAt"]
+   },
+   "type_hash": "fcc93145433a01d0578c2742a1a2fd3bcf6263722fd6c8512df54ed024976d02"
   },
   "ResourceAccounting.SecurityProofs.AccelAdditive": {
    "owner": "@compute-research",
@@ -27561,6 +27687,7 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityPooled on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
+   "Flock.SecurityProofs.RecursiveKSEveryDeployed": "restatable: a probability statement (KSLinkOnC, through RecursiveKSEveryDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the composite extractor's success at the simulating prover and RecursiveKSEvery's bound there, at every statement; KSLinkOnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "ResourceAccounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (ResourceAccounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Pouw.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by ResourceAccounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record carries its number and counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
@@ -51913,6 +52040,13 @@
     "Flock.Guarantees.RecursiveKSEveryAtRec": "6973164900252223a5f8960d548f8e8967714212276790bb666edd9d169793fc"
    }
   },
+  "Proofs.Flock.RecGeneric.AtFlockCommitted": {
+   "digest": "c34dd4da70f93b8a45b4fcf192abb05e97003c8bbb46d965aecf0ad393b17b13",
+   "definitions": {
+    "Claims.RecGeneric.KSLinkOnC": "ed0bceeda24be8e0d05e2622fd4e98ef3f8b90d4775930dfeaf6aa1d38fd1d8a",
+    "Claims.RecGeneric.linkRhs": "c4ecaab4b86e9129f94d6e4c55d7d857546546c030cc08ba9e8aa2ebbf9b5167"
+   }
+  },
   "Proofs.Flock.RecGeneric.AtFlockCompiled": {
    "digest": "200dcd907c5193fbd3bc33e1393eab07001a13e266ee52991f466b0d48ebae0c",
    "definitions": {
@@ -52110,6 +52244,13 @@
    "digest": "07f6076027a8730806da2c9746ccff167890da067568b99a4beb49d538aaa83b",
    "definitions": {
     "Claims.Bridge.CProver.ofProver": "b85c8160bfbe49a2e681eaed7b3432d1305ff4c9ba5ecf4f4ca8003c1f0fa35a"
+   }
+  },
+  "Proofs.Flock.Recursive.KSEveryCoinTreeStatement": {
+   "digest": "43fcaf81638ec58c8aa083cc87fd5435eee4fcd5dd003487bf37ac395d5ef167",
+   "definitions": {
+    "Flock.Guarantees.RecursiveKSEveryDeployed": "f1ae6d6a624e3f5088f279458f876af108799e01d84b26013fc0ea66d01a8978",
+    "Flock.Guarantees.RecursiveKSEveryDeployedAt": "63d2ecbb2733e01b370d9d68c257085467876d5846e9661c2106b577628ae017"
    }
   },
   "Proofs.Flock.Recursive.KSNontrivial": {
