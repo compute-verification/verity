@@ -211,11 +211,12 @@ def test_on_bits_agrees_with_its_word_view(target) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
-def test_the_v2_forms_keep_their_word_views() -> None:
-    """The switch maps `_v1` to `_v2` and `_v3{DOT}` to `_v4{DOT on bits}`: a DOT form never stands for the Hopper-pinned `_v1`."""
+def test_a_dot_form_never_stands_for_the_hopper_pinned_v1() -> None:
+    """The switch maps `_v3{DOT}` to `_v4{DOT on bits}`, and refuses the Hopper-pinned `_v1`, which has no Boolean version."""
     v1 = bind(M.MoeExpertFp8BlockCoordinate, K=64, G=32, KB=32, SWAP=False)
     v3 = bind(M.MoeExpertFp8BlockCoordinateV3, K=64, G=32, KB=32, SWAP=False, DOT=HP)
-    assert SW.boolean_version(v1).id == "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}"
+    with pytest.raises(SW.NoBooleanVersion, match="MoeExpertFp8BlockCoordinate_v1"):
+        SW.boolean_version(v1)
     assert SW.boolean_version(v3).id == "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3QgmmaDot32_v2}"
     with pytest.raises(ValueError, match="from 1 to 1024 experts"):
         BM.gather_e4m3(1025)
