@@ -711,11 +711,11 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
             continue
         if (p, t) in reads:
             drop.add(p)
-        elif p in roots and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
+        elif roots.get(p) is not None and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
             raise _Refused(shared_unread(p, t))
     ported = {r.get("port") for r in slice_["roots"]}
     for p, v in sorted(reads):
-        if p not in ported and p in roots:
+        if p not in ported and roots.get(p) is not None:
             if not registered_at(held, p, v):
                 raise _Refused(unregistered_why(p, v))
             drop.add(p)

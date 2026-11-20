@@ -22,13 +22,14 @@ SCHEME = "frame-v3-sha512/hm96-sha512"
 SLICE = {"population": 2, "scheme": SCHEME,
          "roots": [{"domain": "daa", "leaves": 4, "port": "x", "root": "aa"},
                    {"domain": "dee", "leaves": 4, "port": "o0", "root": "ee", "tree": "t/o0"}]}
-READS = [["w", "h/w"], ["v", "h/w"], ["x", "h/w"], ["o0", "t/o0"], ["w", "t/o0"], ["w", "u/o1"], ["w", "input/n3"],
-         ["w", "committed/w"]]
+READS = [["w", "h/w"], ["w", "h/z"], ["v", "h/w"], ["x", "h/w"], ["z", "h/w"], ["o0", "t/o0"], ["w", "t/o0"],
+         ["w", "u/o1"], ["w", "input/n3"], ["w", "committed/w"]]
 
 
-def header(n: int, roots: dict[str, str]) -> dict:
-    return {"frame_v3": {"domain_ids": {p: "d" + r for p, r in roots.items()}, "roots": roots}, "instances": n,
-            "scheme": SCHEME}
+def header(n: int, roots: dict[str, str | None]) -> dict:
+    """A header of the ports given, each its root (a null root a null domain too)."""
+    return {"frame_v3": {"domain_ids": {p: None if r is None else "d" + r for p, r in roots.items()}, "roots": roots},
+            "instances": n, "scheme": SCHEME}
 
 
 def registered(ports: dict[str, str] | None) -> dict | None:
@@ -56,7 +57,7 @@ INPUTS = st.builds(case,
                    st.lists(st.sampled_from(READS), max_size=3, unique_by=tuple),
                    st.one_of(st.none(), st.dictionaries(st.sampled_from(["w", "v", "x"]),
                                                         st.sampled_from(["h/w", "h/z", "t/o0", "committed/w"]))),
-                   st.dictionaries(st.sampled_from(["x", "o0", "w", "v"]), st.sampled_from(["aa", "ee", "77", "ab"]),
+                   st.dictionaries(st.sampled_from(["x", "o0", "w", "v"]), st.sampled_from(["aa", "ee", "77", "ab", None]),
                                    min_size=1),
                    st.sampled_from([2, 5]))
 HELD = D.Port(PIECES, "header_held_at", reference, INPUTS, package=PACKAGE, of_record="lean", need_rejects=False)
@@ -80,6 +81,17 @@ CASES = [
     ([["w", "h/w"]], {"w": "h/w"}, {"x": "ab", "o0": "ee", "w": "77"}, 2,
      "public file: not the registration's: roots, domains"),
     ([["w", "h/w"]], {"w": "h/w"}, W, 5, M.POPULATION_WHY),
+    # a port in the header's roots at a null root is no port of the header's: neither held by the reads nor compared
+    ([["w", "h/w"]], {"w": "h/w"}, HONEST | {"w": None}, 2, M.unwired_why("w")),
+    ([["w", "h/z"]], {"w": "h/w"}, HONEST | {"w": None}, 2, M.unwired_why("w")),
+    ([], None, {"x": "aa", "o0": None}, 2, "public file: not the registration's: roots, domains"),
+    # a port the slice holds and the reads name: compared to the slice, as with no read
+    ([["x", "h/w"]], {"x": "h/w"}, HONEST, 2, ""),
+    ([["o0", "t/o0"]], {"o0": "h/w"}, {"x": "aa", "o0": "ab"}, 2, ""),
+    # a read of a port the header does not name: nothing
+    ([["z", "h/z"]], {"w": "h/w"}, HONEST, 2, ""),
+    # one port read at two values: each read held, the one at a value the file does not hold there refused
+    ([["w", "h/w"], ["w", "h/z"]], {"w": "h/w"}, W, 2, M.unregistered_why("w", "h/z")),
 ]
 
 
