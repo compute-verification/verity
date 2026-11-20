@@ -9,8 +9,8 @@ import all Circuits.Descriptor
 /-!
 # Each fuelled twin is the function it unfolds
 
-`qsortFueled_eq`: `qsortFueled` is `Array.qsort` of the whole array, since the fuel of a range `[lo, hi]` it passes,
-`hi - lo + 1`, is more than the recursion on it takes. `canonFueled_eq`, `fnRefsFueled_eq` and `subFnsFueled_eq`: at
+`qsortFueled_eq`: `qsortFueled` is `Array.qsort` of the whole array: the fuel of a range `[lo, hi]` it passes,
+`hi - lo + 1`, is more than the recursion on it takes, which each twin carries as a hypothesis, so fuel `0` is refuted. `canonFueled_eq`, `fnRefsFueled_eq` and `subFnsFueled_eq`: at
 every fuel, a twin is its original, each falling back to it at fuel `0`.
 -/
 
@@ -29,36 +29,35 @@ open Flock.Program
 variable {α : Type} {n : Nat}
 
 private theorem qpartLoopFueled_eq (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) :
-    ∀ (f : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k < f →
-      qpartLoopFueled lt lo hi hhi pivot f as i k ilo ik w = Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w := by
+    ∀ (f : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi) (hf : hi + 1 ≤ k + f),
+      qpartLoopFueled lt lo hi hhi pivot f as i k ilo ik w hf = Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w := by
   intro f
   induction f with
-  | zero => intro _ _ _ _ _ _ h; omega
+  | zero => intro _ _ _ _ _ w h; omega
   | succ f ih =>
-    intro as i k ilo ik w h
+    intro as i k ilo ik w hf
     unfold qpartLoopFueled
     rw [Array.qpartition.loop.eq_def]
     by_cases hk : k < hi
     · simp only [hk, dite_true]
       cases hc : lt as[k] pivot
       · simp only [Bool.false_eq_true, ite_false]
-        exact ih _ _ _ _ _ _ (by omega)
+        exact ih _ _ _ _ _ _ _
       · simp only [ite_true]
-        exact ih _ _ _ _ _ _ (by omega)
+        exact ih _ _ _ _ _ _ _
     · simp only [hk, dite_false]
 
 theorem qpartitionFueled_eq (as : Vector α n) (lt : α → α → Bool) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n)
     (hhi : hi < n) : qpartitionFueled as lt lo hi w hlo hhi = Array.qpartition as lt lo hi w hlo hhi := by
   unfold qpartitionFueled Array.qpartition
-  refine qpartLoopFueled_eq lt hhi _ _ _ _ _ _ _ _ ?_
-  omega
+  exact qpartLoopFueled_eq lt hhi _ _ _ _ _ _ _ _ _
 
 private theorem qsortSortFueled_eq (lt : α → α → Bool) :
-    ∀ (f : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo < f →
-      qsortSortFueled lt f as lo hi w hlo hhi = Array.qsort.sort lt as lo hi w hlo hhi := by
+    ∀ (f : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n) (hf : hi + 1 ≤ lo + f),
+      qsortSortFueled lt f as lo hi w hlo hhi hf = Array.qsort.sort lt as lo hi w hlo hhi := by
   intro f
   induction f with
-  | zero => intro _ _ _ _ _ _ h; omega
+  | zero => intro _ _ _ w _ _ h; omega
   | succ f ih =>
     intro as lo hi w hlo hhi hf
     unfold qsortSortFueled
@@ -73,7 +72,7 @@ private theorem qsortSortFueled_eq (lt : α → α → Bool) :
       · simp only [h₂, dite_false]
         have hm : mid < n := by omega
         rw [ih as' lo mid hmid.1 hlo hm (by omega)]
-        exact ih _ (mid + 1) hi (by omega) (by omega) hhi (by omega)
+        exact ih _ (mid + 1) hi (by omega) (by omega) hhi _
     · simp only [h₁, dite_false]
 
 /-- The sort's twin sorts: at the fuel it passes, the array's size, it is `Array.qsort` of the whole array. -/
@@ -82,7 +81,7 @@ theorem qsortFueled_eq (as : Array α) (lt : α → α → Bool) : qsortFueled a
   split
   · rfl
   · simp only [Nat.zero_min, Nat.min_self, Nat.zero_max]
-    rw [qsortSortFueled_eq lt _ _ _ _ _ _ _ (by omega : as.size - 1 - 0 < as.size)]
+    rw [qsortSortFueled_eq lt _ _ _ _ _ _ _ _]
 
 theorem canonFueled_eq : ∀ (f : Nat) (j : Json), canonFueled f j = canon j
   | 0, _ => by simp only [canonFueled]
