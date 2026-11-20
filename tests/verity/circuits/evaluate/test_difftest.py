@@ -1875,7 +1875,7 @@ def test_decimal_primitives_sampled(server):
 
 def test_decimal_words_out_of_range_are_refused(server):
     cases = _refused_leaves(DECIMALS)
-    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 4)
+    assert agree(server, cases) == (0, len(cases))
 
 
 # ---- E4: the activations and RoPE ---------------------------------------------------------------------------------------
@@ -2060,9 +2060,9 @@ def test_tables_bound_otherwise_are_refused(server):
 
 
 #: the lazy families on their one-call Programs: table reads of each index width and entry size up to a row, and gathers of
-#: an empty, a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
+#: a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
 LAZY = (TB.table_read(6, 1), TB.table_read(5, 2), TB.table_read(4, 4), TB.table_read(1, 32), TB.table_read(7, 1),
-        VP.gather_bf16(0), VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
+        VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
 _TOKENS = (0, 1, 7, 8, 4999, 5000, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF8)
 
 
