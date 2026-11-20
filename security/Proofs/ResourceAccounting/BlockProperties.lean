@@ -51,9 +51,9 @@ theorem sizeExclusive {L : Type*} {Dv : Division L} (P : Dv.Runs) (F : Finset Dv
   obtain ⟨hp, hn⟩ := hF j hj
   unfold Division.Runs.size
   cases h : P.blocks r with
-  | none => simp
+  | none => simp [h]
   | some B =>
-    simp only
+    simp only [h]
     have hnot : j ∉ Dv.inference.filter (Dv.parent · = some (encl j)) := by simp [hn]
     have := sizeAdds B (P.π r) (encl j) (insert j (Dv.inference.filter (Dv.parent · = some (encl j)))) (by
       intro i hi
@@ -126,11 +126,12 @@ theorem honest_feasible : oneBlock.FeasibleSet (placed 1) (fun _ => 1) ∅ := by
     simp only [Placed.region, Finset.mem_filter]
     refine ⟨hg, by simp [oneBlock], ?_⟩
     simp only [Division.ticks, oneBlock, Set.mem_Ico]
+    have hg2 : g.val < 2 := g.isLt
     exact ⟨Nat.zero_le _, by simp only [placed]; omega⟩
   · exact fun g hg => ⟨(), rfl, hg⟩
   · intro i j h; simp [oneBlock] at h
   · intro i j h; simp [oneBlock] at h
-  · intro i i' h; exact absurd (Subsingleton.elim i i') h
+  · intro i i' h; exact (h rfl).elim
   · intro i q hq
     simp only [oneBlock, List.mem_singleton] at hq
     subst hq
@@ -145,13 +146,12 @@ theorem two_not_feasible (π : Fin (placed 2).N → ℕ) (θ : Finset (Fin (plac
   have hsize := hB () (.sizeAtMost 1) (by simp [oneBlock])
   have hc : ∀ g : Fin 3, g ≠ 0 → g ∈ (placed 2).computed := by
     intro g hg
-    simp only [Circuit.computed, Finset.mem_filter, Finset.mem_univ, true_and]
-    show decide (g.val = 0) = false
-    simpa [Fin.ext_iff] using hg
+    simp only [Circuit.computed, placed, line, decide_eq_false_iff_not, Fin.val_eq_zero_iff]
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hg⟩
   have hin : ∀ g : Fin 3, g ≠ 0 → g ∈ (B.block ()).gates := by
     intro g hg
     obtain ⟨i, -, h⟩ := B.covers g (hc g hg)
-    exact (Subsingleton.elim i ()) ▸ h
+    exact h
   have h12 : ({1, 2} : Finset (Fin 3)) ⊆ (B.block ()).gates := by
     intro g hg
     simp only [Finset.mem_insert, Finset.mem_singleton] at hg
@@ -160,9 +160,9 @@ theorem two_not_feasible (π : Fin (placed 2).N → ℕ) (θ : Finset (Fin (plac
     · exact hin 2 (by decide)
   have hle : ∑ g ∈ ({1, 2} : Finset (Fin 3)), π g ≤ (placed 2).work π (B.block ()).gates :=
     Finset.sum_le_sum_of_subset_of_nonneg h12 fun _ _ _ => Nat.zero_le _
-  have h1 := hπ 1 (hc 1 (by decide))
-  have h2 := hπ 2 (hc 2 (by decide))
-  rw [Finset.sum_pair (by decide)] at hle
+  have h1 := hπ (1 : Fin 3) (hc 1 (by decide))
+  have h2 := hπ (2 : Fin 3) (hc 2 (by decide))
+  have hpair : ∑ g ∈ ({1, 2} : Finset (Fin 3)), π g = π (1 : Fin 3) + π (2 : Fin 3) := Finset.sum_pair (by decide)
   change (placed 2).work π (B.block ()).gates ≤ 1 at hsize
   omega
 
