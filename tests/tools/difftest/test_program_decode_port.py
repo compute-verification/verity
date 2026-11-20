@@ -3,8 +3,9 @@
 format test's refusals of the descriptor vector (`E_SCHEMA` and the Boolean map's `E_BODY_*` among them), a `boolean` key
 named twice, the GEMM chain with the catalog's Boolean bodies, and `tests/verity/circuits/test_codec_refusals.py`'s descriptors
 (each the smallest that trips one refusal of the Python decoder; three it takes against its registry, Lean's decoder having none, `LEAN_TAKES`). Both answer an accept with the program's digest and its
-Boolean map, and a refusal with its first `E_` code, which must be the same code. Lean's encoder (`Flock.Program.encode`) of what Lean decodes is held
-to `codec.descriptor_chunks` of what the codec decodes, byte for byte."""
+Boolean map, and a refusal with its first `E_` code, which must be the same code. Lean's encoder
+(`Flock.Program.Prog.encode`) of what Lean decodes is held to `codec.descriptor_chunks` of what the codec decodes, byte for
+byte."""
 
 from __future__ import annotations
 

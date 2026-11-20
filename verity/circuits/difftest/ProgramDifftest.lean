@@ -13,7 +13,7 @@ public import Circuits.Program
 `tests/verity/circuits/decode_difftest.py`'s). `decode` reads `{"descriptor": TEXT}` and answers
 `{"ok": true, "program_digest": HEX, "boolean": MAP}` or `{"ok": false, "error": CODE}`, CODE the refusal's first `E_` code
 or null: a refusal is an output, so which refusal is compared, and not only the fact of one. `encode` answers with
-`Flock.Program.encode` of the decoded Program, which the same test holds to `codec.descriptor_chunks` byte for byte. -/
+`Flock.Program.Prog.encode` of the decoded Program, which the same test holds to `codec.descriptor_chunks` byte for byte. -/
 
 @[expose] public section
 
@@ -66,7 +66,7 @@ def encode : Difftest.Fn := fun j => do
   let text ← match j.getObjValAs? String "descriptor" with
     | .ok s => pure s
     | .error _ => throw "descriptor: not a string"
-  return match Flock.Program.decode text.toUTF8 >>= Flock.Program.encode with
+  return match Flock.Program.decode text.toUTF8 >>= Flock.Program.Prog.encode with
     | .ok b => match String.fromUTF8? b with
       | some s => Json.mkObj [("ok", true), ("encoded", Json.str s)]
       | none => Json.mkObj [("ok", false), ("message", "encode: not UTF-8")]

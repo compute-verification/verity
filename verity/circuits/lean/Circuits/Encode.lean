@@ -1,6 +1,6 @@
 /-
-`Flock.Program.encode`: a Program's descriptor as the codec writes it (`codec.descriptor_chunks`, `verity/circuits/PROTOCOL.md`
-§4), the canonical bytes without `annotations` that the program digest hashes.
+`Flock.Program.Prog.encode`: a Program's descriptor as the codec writes it (`codec.descriptor_chunks`,
+`verity/circuits/PROTOCOL.md` §4), the canonical bytes without `annotations` that the program digest hashes.
 -/
 module
 
@@ -18,9 +18,6 @@ open Lean (Json)
 deriving instance Hashable for Ref, Lane
 deriving instance BEq, Hashable for Part
 
-/-- How many trailing parts an alias may leave written out (`codec.ALIAS_WINDOW`, §4.5). -/
-def ALIAS_WINDOW : Nat := 8
-
 private def spaceJ (p : Bool) : Json := .str (if p then "p" else "n")
 
 /-- A part as §3 spells it (`refs.*.to_json`). -/
@@ -33,6 +30,11 @@ def Part.toJson : Part → Json
   | .grid run lanes => Json.mkObj [("grid", .arr #[Lean.toJson run, .arr (lanes.map fun l =>
       .arr #[spaceJ l.p, Lean.toJson l.i, Lean.toJson l.b, Lean.toJson l.e,
         .arr (l.lv.toArray.map fun (r, d) => .arr #[Lean.toJson r, Lean.toJson d])])])]
+
+namespace Encode
+
+/-- How many trailing parts an alias may leave written out (`codec.ALIAS_WINDOW`, §4.5). -/
+def ALIAS_WINDOW : Nat := 8
 
 /-- §4.6's interning tables as a writer fills them: each entry once, in first-seen order, types compared by their JSON. -/
 structure Tables where
@@ -130,30 +132,33 @@ def entry (P : Prog) (T : Tables) (d : Defn) : V (Json × Tables) := do
 
 /-- The Definitions Definition `d` reaches first: its nodes' callees in node order, then the functions its binding record
 names, in record order (§4.6). -/
-def Prog.reaches (P : Prog) (d : Defn) : Array Nat :=
+def reaches (P : Prog) (d : Defn) : Array Nat :=
   if d.prim then #[] else d.body.nodes.map (·.fn) ++ (recordFunctionIds d.key).filterMap (P.index[·]?)
 
 /-- §4.6's post-order walk from Definition `i`, each Definition once (`codec._walk`), through at most `fuel` nested
 Definitions. -/
-def Prog.walk (P : Prog) : Nat → Nat → Std.HashSet Nat × Array Nat → V (Std.HashSet Nat × Array Nat)
+def walk (P : Prog) : Nat → Nat → Std.HashSet Nat × Array Nat → V (Std.HashSet Nat × Array Nat)
   | 0, _, _ => throw "definitions nest deeper than this encoder follows"
   | fuel + 1, i, (seen, order) => do
     if seen.contains i then return (seen, order)
-    let (seen, order) ← (P.reaches P.defs[i]!).foldlM (fun acc c => P.walk fuel c acc) (seen.insert i, order)
+    let (seen, order) ← (reaches P P.defs[i]!).foldlM (fun acc c => walk P fuel c acc) (seen.insert i, order)
     return (seen, order.push i)
 
+end Encode
+
+open Encode in
 /-- **The encoder**: the canonical bytes (§1) of `P`'s descriptor without `annotations` (§4.1), as `codec.descriptor_chunks`
 writes them: the Definitions the root, `program_fn`'s record and the Boolean map's bodies reach, the tables in §4.6's
 order and each body's sequences by §4.5's writer. A Definition's `ports` (§12) are written by no one: `Prog` holds none. -/
-def encode (P : Prog) : V ByteArray := do
+def Prog.encode (P : Prog) : V ByteArray := do
   let fuel := P.defs.size + 1
-  let mut acc ← P.walk fuel P.root ({}, #[])
+  let mut acc ← walk P fuel P.root ({}, #[])
   for f in recordFunctionIds P.programFn do
-    if let some i := P.index[f]? then acc ← P.walk fuel i acc
+    if let some i := P.index[f]? then acc ← walk P fuel i acc
   let bm := P.boolean.toArray.qsort (·.1 < ·.1)
   for (w, b) in bm do
     let some i := P.index[b]? | throw s!"boolean: {w}'s body '{b}' is no Definition of the Program"
-    acc ← P.walk fuel i acc
+    acc ← walk P fuel i acc
   let mut T : Tables := {}
   let mut defs := #[]
   for i in acc.2 do
@@ -168,8 +173,8 @@ def encode (P : Prog) : V ByteArray := do
 
 /-- A Program that `encode` writes as the bytes it was decoded from is what decoding its encoding gives: the difference
 test's byte equality on a descriptor is its round trip. -/
-theorem decode_encode {b : ByteArray} {P : Prog} (hd : decode b = .ok P) (he : encode P = .ok b) :
-    (encode P >>= decode) = .ok P := by
+theorem Prog.decode_encode {b : ByteArray} {P : Prog} (hd : decode b = .ok P) (he : P.encode = .ok b) :
+    (P.encode >>= decode) = .ok P := by
   rw [he]
   exact hd
 
@@ -223,7 +228,7 @@ private def RECUT_WRITTEN : String :=
 
 /-- `encode` of what `decode` reads from `text`, as text; none where either refuses. -/
 private def reencode (text : String) : Option String :=
-  match decode text.toUTF8 >>= encode with
+  match decode text.toUTF8 >>= Prog.encode with
   | .ok b => String.fromUTF8? b
   | .error _ => none
 
