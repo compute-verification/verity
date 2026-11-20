@@ -1607,7 +1607,7 @@ theorem lvStep_mem (I : Ivs) (r : ℕ) (d : ℤ) (a : ℕ) :
     rw [Int.lt_toNat] at h2
     have hb : 0 ≤ (a : ℤ) - c * d := by omega
     have hbe := Int.toNat_of_nonneg hb
-    exact ⟨c, hc, _, ⟨x, hx, by omega, by omega⟩, by omega⟩
+    exact ⟨c, hc, ((a : ℤ) - c * d).toNat, ⟨x, hx, by omega, by omega⟩, by omega⟩
   · rintro ⟨c, hc, b, ⟨x, hx, h1, h2⟩, h⟩
     refine ⟨_, ⟨c, hc, x, hx, rfl⟩, ?_, ?_⟩ <;> dsimp only
     · rw [Int.toNat_le]; omega

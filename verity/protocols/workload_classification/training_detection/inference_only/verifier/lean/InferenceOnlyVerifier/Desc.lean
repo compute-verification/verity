@@ -293,7 +293,7 @@ def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
 /-- Positions `[a, b)` of `s`: part of a copy, the whole copies, part of a copy. -/
 def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
   if b ≤ a then #[]
-  else if s.reps ≤ 1 then (slicePieces s.ps a b).map Seg.one
+  else if s.reps ≤ 1 && !s.rowed then (slicePieces s.ps a b).map Seg.one
   else
     let part (m x y : Nat) : Array Seg := (slicePieces (s.copy m) x y).map Seg.one
     let (m0, t0, m1, t1) := (a / s.len, a % s.len, b / s.len, b % s.len)

@@ -87,6 +87,16 @@ theorem flatMap_range_getElem? {α : Type} (f : Nat → List α) (L : Nat) (hf :
         apply List.getElem?_eq_none
         rw [hf]; omega
 
+private theorem flatMap_congr_mem {α β : Type} {f g : α → List β} : ∀ {l : List α}, (∀ x ∈ l, f x = g x) →
+    l.flatMap f = l.flatMap g
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.flatMap_cons, List.flatMap_cons, h a (by simp), flatMap_congr_mem (fun x hx => h x (by simp [hx]))]
+
+theorem flatMap_range_congr {β : Type} {n : Nat} {f g : Nat → List β} (h : ∀ m < n, f m = g m) :
+    (List.range n).flatMap f = (List.range n).flatMap g :=
+  flatMap_congr_mem fun m hm => h m (List.mem_range.1 hm)
+
 /-- A piece's positions in order: row `r`, column `t` is `(tgt, base + rowOff r + t·stride)`. -/
 def pos (q : Piece) : List (Tgt × Int) :=
   (List.range q.rows).flatMap fun (r : Nat) => (List.range q.len).map fun (t : Nat) =>
@@ -406,10 +416,10 @@ theorem pos_shiftGate (δ : Int) (q : Piece) :
     pos (match q.tgt with
       | .gate _ => { q with base := q.base + δ }
       | _ => q) = (pos q).map (shiftPos δ) := by
-  rcases q with ⟨t, base, stride, len, rows, rowStride⟩
+  rcases q with ⟨t, base, stride, len, rows, rowStride, lv, start⟩
   cases t with
   | gate w =>
-    simp only [pos, List.map_flatMap, List.map_map]
+    simp only [pos, List.map_flatMap, List.map_map, Desc.Piece.rowOff]
     congr 1; funext r; congr 1; funext t
     simp only [Function.comp, shiftPos]
     congr 1; omega
@@ -441,12 +451,31 @@ theorem segsPos_empty : segsPos #[] = [] := rfl
 
 theorem segsPos_singleton (s : Seg) : segsPos #[s] = segPos s := by simp [segsPos]
 
-theorem copy_pos (s : Seg) (m : Nat) : posAll (s.copy m) = (posAll s.ps).map (shiftPos ((m : Int) * s.shift)) :=
-  shiftGates_pos _ _
+theorem copy_flat (s : Seg) (h : s.rowed = false) (m : Nat) : s.copy m = Desc.shiftGates (m * s.shift) s.ps := by
+  simp [Desc.Seg.copy, h]
+
+theorem copy_rowed (s : Seg) (h : s.rowed = true) (m : Nat) : s.copy m = s.ps.map (·.row m) := by
+  simp [Desc.Seg.copy, h]
+
+theorem posAll_map (ps : Array Piece) (f : Piece → Piece) : posAll (ps.map f) = ps.toList.flatMap fun p => pos (f p) := by
+  simp [posAll, List.flatMap_map]
+
+/-- Row `r` of `p`: its `len` positions from `base + rowOff r`. -/
+theorem pos_row (p : Piece) (r : Nat) :
+    pos (p.row r) = (List.range p.len).map fun t => (p.tgt, p.base + p.rowOff r + (t : Int) * p.stride) := by
+  simp [pos, Desc.Piece.row, Desc.Piece.rowOff]
+
+theorem pos_row_rowsFrom (p : Piece) (lo n m : Nat) (hm : m < n) : pos ((p.rowsFrom lo n).row m) = pos (p.row (lo + m)) := by
+  obtain ⟨ht, hs, hl, -, hoff⟩ := rowsFrom_spec p lo n
+  rw [pos_row, pos_row, ht, hs, hl, hoff m hm]
+
+theorem copy_pos (s : Seg) (h : s.rowed = false) (m : Nat) :
+    posAll (s.copy m) = (posAll s.ps).map (shiftPos ((m : Int) * s.shift)) := by
+  rw [copy_flat s h]; exact shiftGates_pos _ _
 
 theorem segPos_one (q : Piece) : segPos (Seg.one q) = pos q := by
-  simp only [segPos, Seg.one, Desc.Seg.copy, List.range_one, List.flatMap_singleton, shiftGates_pos,
-    Int.mul_zero, shiftPos_zero, List.map_id, posAll_singleton]
+  simp only [segPos, Seg.one, Desc.Seg.copy, Bool.false_eq_true, ↓reduceIte, List.range_one, List.flatMap_singleton,
+    shiftGates_pos, Int.mul_zero, shiftPos_zero, List.map_id, posAll_singleton]
 
 theorem segsPos_one (ps : Array Piece) : segsPos (ps.map Seg.one) = posAll ps := by
   simp only [segsPos, posAll, Array.toList_map, List.flatMap_map, segPos_one]
@@ -476,25 +505,29 @@ theorem list_eq_map {α : Type} (l : List α) (d : α) : l = (List.range l.lengt
     simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h]
   · rw [List.getElem?_eq_none (by omega), List.getElem?_eq_none (by simp; omega)]; rfl
 
-theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll s.ps).length := by
-  rw [copy_pos, List.length_map]
+/-- Every copy of a segment names as many positions as copy 0. -/
+theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll (s.copy 0)).length := by
+  cases h : s.rowed
+  · rw [copy_flat s h, copy_flat s h, shiftGates_length, shiftGates_length]
+  · rw [copy_rowed s h, copy_rowed s h, posAll_map, posAll_map]
+    simp only [List.length_flatMap, pos_row, List.length_map, List.length_range]
 
-theorem copy_zero (s : Seg) : posAll (s.copy 0) = posAll s.ps := by
-  rw [copy_pos, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
+theorem copy_zero (s : Seg) (h : s.rowed = false) : posAll (s.copy 0) = posAll s.ps := by
+  rw [copy_pos s h, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
 
-theorem segPos_one_rep {s : Seg} (h : s.reps = 1) : segPos s = posAll s.ps := by
+theorem segPos_one_rep {s : Seg} (h : s.reps = 1) (hr : s.rowed = false) : segPos s = posAll s.ps := by
   unfold segPos
-  rw [h, List.range_one, List.flatMap_singleton, copy_pos]
+  rw [h, List.range_one, List.flatMap_singleton, copy_pos s hr]
   simp [shiftPos_zero]
 
-theorem copy_copy (s : Seg) (lo m : Nat) :
+theorem copy_copy (s : Seg) (h : s.rowed = false) (lo m : Nat) :
     posAll (Desc.shiftGates ((m : Int) * s.shift) (s.copy lo)) = posAll (s.copy (lo + m)) := by
-  rw [shiftGates_pos, copy_pos, copy_pos, List.map_map, shiftPos_shiftPos, Int.natCast_add, Int.add_mul]
+  rw [shiftGates_pos, copy_pos s h, copy_pos s h, List.map_map, shiftPos_shiftPos, Int.natCast_add, Int.add_mul]
 
 /-- Position `t` of a segment whose pieces name `s.len` positions: position `t % len` of copy `t / len`. -/
 def spt (s : Seg) (t : Nat) : Tgt × Int := (posAll (s.copy (t / s.len))).getD (t % s.len) default
 
-theorem segPos_eq_map (s : Seg) (hlen : (posAll s.ps).length = s.len) :
+theorem segPos_eq_map (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) :
     segPos s = (List.range s.count).map (spt s) :=
   blocks_eq_map (fun m => posAll (s.copy m)) s.len (fun m => by rw [copy_length, hlen]) default s.reps
 
@@ -506,7 +539,7 @@ theorem spt_add (s : Seg) (m t : Nat) (ht : t < s.len) :
     Nat.add_mul_mod_self_left, Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, Nat.zero_add]
 
 /-- **A slice of a segment** is its positions `[a, b)`. -/
-theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat) (hb : b ≤ s.count) :
+theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b : Nat) (hb : b ≤ s.count) :
     segsPos (s.slice a b) = sl (segPos s) a b := by
   rw [segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
   unfold Desc.Seg.slice
@@ -518,14 +551,16 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
     rcases Nat.eq_zero_or_pos s.len with h0 | h0
     · rw [hcnt, h0, Nat.mul_zero] at hb; omega
     · exact h0
-  by_cases hr : s.reps ≤ 1
+  by_cases hr : (s.reps ≤ 1 && !s.rowed) = true
   · rw [if_pos hr, segsPos_one, slicePieces_pos]
+    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_eq_eq_not, Bool.not_true] at hr
+    have hlen' := hlen
+    rw [copy_zero s hr.2] at hlen'
     have hr1 : s.reps = 1 := by
       rcases Nat.lt_or_ge s.reps 1 with h | h
       · rw [hcnt, show s.reps = 0 by omega, Nat.zero_mul] at hb; omega
       · omega
-    have e : segPos s = posAll s.ps := by
-      simp only [segPos, hr1, List.range_one, List.flatMap_singleton, copy_zero]
+    have e : segPos s = posAll s.ps := segPos_one_rep hr1 hr.2
     rw [← e, segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
   rw [if_neg hr]
   dsimp only
@@ -543,16 +578,17 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
     simp only [Function.comp, Nat.one_mul]
     rw [spt_add s m _ (by omega)]
   have hmid : ∀ lo m1 : Nat, lo ≤ m1 →
-      segsPos (if lo < m1 then #[{ s with ps := s.copy lo, reps := m1 - lo }] else #[]) =
+      segsPos (if lo < m1 then
+          (if s.rowed && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
+          else #[{ s with ps := s.copy lo, reps := m1 - lo, rowed := false }]) else #[]) =
         (List.range' (lo * s.len) (m1 * s.len - lo * s.len)).map (spt s) := by
     intro lo m1 hlo
-    split
-    · rw [segsPos_singleton]
-      have e : segPos { s with ps := s.copy lo, reps := m1 - lo } =
-          (List.range (m1 - lo)).flatMap fun m => posAll (s.copy (lo + m)) := by
-        unfold segPos
-        congr 1; funext m
-        exact copy_copy s lo m
+    have hgen : ∀ X : Seg, X.reps = m1 - lo → (∀ m < m1 - lo, posAll (X.copy m) = posAll (s.copy (lo + m))) →
+        segsPos #[X] = (List.range' (lo * s.len) (m1 * s.len - lo * s.len)).map (spt s) := by
+      intro X hX hc
+      rw [segsPos_singleton]
+      have e : segPos X = (List.range (m1 - lo)).flatMap fun m => posAll (s.copy (lo + m)) := by
+        unfold segPos; rw [hX]; exact flatMap_range_congr hc
       rw [e, blocks_eq_map (fun m => posAll (s.copy (lo + m))) s.len (fun m => by rw [copy_length, hlen]) default,
         List.range'_eq_map_range, List.map_map, Nat.sub_mul]
       apply List.map_congr_left
@@ -560,6 +596,21 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
       simp only [Function.comp, spt]
       rw [show lo * s.len + t = t + s.len * lo by rw [Nat.mul_comm]; omega, Nat.add_mul_div_left _ _ hL,
         Nat.add_mul_mod_self_left, Nat.add_comm (t / s.len) lo]
+    split
+    · split
+      · rename_i hrw
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hrw
+        refine hgen _ rfl fun m hm => ?_
+        rw [copy_rowed _ hrw.1, copy_rowed s hrw.1, posAll_map, posAll_map, Array.toList_map, List.flatMap_map]
+        exact flatMap_congr_mem fun p _ => pos_row_rowsFrom p lo _ m hm
+      · rename_i hrw
+        refine hgen _ rfl fun m hm => ?_
+        rw [copy_flat _ rfl]
+        cases hs : s.rowed
+        · exact copy_copy s hs lo m
+        · simp only [hs, Bool.true_and, decide_eq_true_eq] at hrw
+          obtain rfl : m = 0 := by omega
+          simp [shiftGates_pos, shiftPos_zero]
     · rw [segsPos_empty, show m1 * s.len - lo * s.len = 0 by
         have : m1 = lo := by omega
         subst this; omega]
@@ -608,8 +659,8 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll s.ps).length = s.len) (a b : Nat)
 
 /-! ## Sequences of segments -/
 
-/-- A segment whose pieces name `len` positions. -/
-def SegOk (s : Seg) : Prop := (posAll s.ps).length = s.len
+/-- A segment whose copies name `len` positions each. -/
+def SegOk (s : Seg) : Prop := (posAll (s.copy 0)).length = s.len
 
 theorem segPos_length (s : Seg) (h : SegOk s) : (segPos s).length = s.count := by
   unfold segPos Seg.count
@@ -1263,12 +1314,6 @@ private theorem range_mul_map {α : Type} (f : Nat → α) (m : Nat) : ∀ n,
     rw [Nat.succ_mul, List.range_add, List.map_append, range_mul_map f m n, List.range_succ, List.flatMap_append,
       List.flatMap_singleton, List.map_map]
     rfl
-
-private theorem flatMap_congr_mem {α β : Type} {f g : α → List β} : ∀ {l : List α}, (∀ x ∈ l, f x = g x) →
-    l.flatMap f = l.flatMap g
-  | [], _ => rfl
-  | a :: l, h => by
-    rw [List.flatMap_cons, List.flatMap_cons, h a (by simp), flatMap_congr_mem (fun x hx => h x (by simp [hx]))]
 
 /-- Reference `t·(g·run) + m·run + o` of a grid of `g` lanes: lane `m`, period `t`, offset `o` in its run. -/
 theorem grid_index (g run t m o : Nat) (hm : m < g) (ho : o < run) :

@@ -244,7 +244,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
     unfold segGates at h
     split_ifs at h
     · simp [piecesGates, h0] at h
-    · simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0] at h
+    · cases hr : s.rowed <;> simp [piecesGates, Desc.Seg.copy, Desc.shiftGates, Array.toList_map, h0, hr] at h
   · exact ⟨q, rfl⟩
 
 /-! ## `FreshExact` -/
