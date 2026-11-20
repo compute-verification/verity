@@ -217,20 +217,46 @@ theorem sizeIn_le_of_claim (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) (c : ℕ
     omega
   | _ => simp [InferenceOnly.sizeAtMost] at hpc
 
+/-- A block's claimed size is one of its claims when it has a size claim. -/
+theorem claimedSize_mem : ∀ (l : List Property),
+    l.any InferenceOnly.isSize = true → Property.sizeAtMost (InferenceOnly.claimedSize l) ∈ l
+  | [], h => by simp at h
+  | p :: t, h => by
+    cases p with
+    | sizeAtMost k => simp [InferenceOnly.claimedSize]
+    | function f =>
+      simp only [InferenceOnly.claimedSize, List.any_cons, InferenceOnly.isSize, Bool.false_or] at h ⊢
+      exact List.mem_cons_of_mem _ (claimedSize_mem t h)
+    | inputAtMost s k =>
+      simp only [InferenceOnly.claimedSize, List.any_cons, InferenceOnly.isSize, Bool.false_or] at h ⊢
+      exact List.mem_cons_of_mem _ (claimedSize_mem t h)
+    | outputAtMost k =>
+      simp only [InferenceOnly.claimedSize, List.any_cons, InferenceOnly.isSize, Bool.false_or] at h ⊢
+      exact List.mem_cons_of_mem _ (claimedSize_mem t h)
+
+/-- A block with a size claim, all held, has size at most its claimed size. -/
+theorem sizeIn_le_claimedSize (P : Runs L) (r : P.Run) (u : Fin (P.nIn r))
+    (hcl : ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p)
+    (hany : (P.claimsIn r u).any InferenceOnly.isSize = true) :
+    P.sizeIn r u ≤ InferenceOnly.claimedSize (P.claimsIn r u) := by
+  have := hcl _ (claimedSize_mem (P.claimsIn r u) hany)
+  simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, Runs.sizeIn] at this ⊢
+  exact this
+
 /-- **The check bites**: under a run that passes the inference-only check and realizes its claims, with each server-day
 block's own capacity `serverCap i` (the second cap on the same gates) and the assumed hidden hardware size `lim.hidden`,
-the whole circuit's work is at most, for each server-day block, the smaller of its capacity and its inference and free
-blocks' claimed sizes, plus the hidden hardware size. -/
+the whole circuit's work is at most, for each server-day block, the smaller of its capacity and its inference blocks' size
+cap and its free blocks' summed claimed size (the sum the conversion gives), plus the hidden hardware size. -/
 theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     (serverCap : Fin (P.nOut r) → ℕ) (hc : InferenceOnly.check lim P r = true) (hreal : P.Realizes r)
     (hserver : ∀ i, P.kind r i = true → P.sizeOut r i ≤ serverCap i)
     (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
     (P.actual r).work (P.π r) (P.actual r).computed ≤
       (∑ i ∈ univ.filter (fun i => P.kind r i = true),
-        min (serverCap i) ((P.infChildren r i).card * lim.c + (P.freeChildren r i).card * lim.freeSize)) +
+        min (serverCap i) ((P.infChildren r i).card * lim.c + lim.freeSize)) +
         lim.hidden := by
   simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨_, hinf⟩, _⟩, hfree⟩, _⟩ := hc
+  obtain ⟨⟨⟨⟨⟨_, hinf⟩, _⟩, hfreeAny⟩, hfreeSum⟩, _⟩ := hc
   obtain ⟨-, -, -, hcl_in, -⟩ := hreal
   rw [work_eq_outer_sum, ← Finset.sum_filter_add_sum_filter_not univ (fun i => P.kind r i = true) (P.sizeOut r)]
   have hfalse : (univ.filter fun i => ¬ P.kind r i = true) = univ.filter fun i => P.kind r i = false := by
@@ -248,11 +274,12 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
             simp only [Runs.infChildren, mem_filter, mem_univ, true_and] at hu
             exact sizeIn_le_of_claim P r u lim.c (hcl_in u) (hinf u hu.2).1
       _ = (P.infChildren r i).card * lim.c := by rw [Finset.sum_const, smul_eq_mul]
-  · calc ∑ u ∈ P.freeChildren r i, P.sizeIn r u ≤ ∑ _u ∈ P.freeChildren r i, lim.freeSize :=
+  · calc ∑ u ∈ P.freeChildren r i, P.sizeIn r u
+          ≤ ∑ u ∈ P.freeChildren r i, InferenceOnly.claimedSize (P.claimsIn r u) :=
           Finset.sum_le_sum fun u hu => by
             simp only [Runs.freeChildren, mem_filter, mem_univ, true_and] at hu
-            exact sizeIn_le_of_claim P r u lim.freeSize (hcl_in u) (hfree u hu.2)
-      _ = (P.freeChildren r i).card * lim.freeSize := by rw [Finset.sum_const, smul_eq_mul]
+            exact sizeIn_le_claimedSize P r u (hcl_in u) (hfreeAny u hu.2)
+      _ ≤ lim.freeSize := hfreeSum i hki
 
 /-! ## The feasible set is not everything -/
 

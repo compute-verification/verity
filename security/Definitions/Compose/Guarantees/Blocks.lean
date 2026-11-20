@@ -73,7 +73,9 @@ at or after its epoch's challenge tick `salt u`, outside a set `M` whose declare
 `tol`, implements its declared block `f u`, at size at most `c u` gates (the declared size times a stated overhead) and
 input at most `k u` bits from its own past, another block and the outside world, except with probability at most `ε`.
 Nothing in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it.
-An inference block before its salt, with no row here, is free work the partition declares a free block. -/
+An inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is
+the tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M`
+pass into correct ones (the injected information) is the `.block` source of the inference blocks' input here. -/
 def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
     (c k : (r : P.Run) → Fin (P.nIn r) → ℕ)
     (decl : (r : P.Run) → Finset (Fin (P.nIn r)) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
