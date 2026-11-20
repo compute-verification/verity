@@ -186,15 +186,14 @@ def test_the_base_is_refused(server) -> None:
     assert PORT.lean(server, case(base()))[0] == "reject"
 
 
-#: One honest two-stage play's case, as ``sampled_two_small.sh`` with no arguments keeps it (its ``$OUT/form``:
-#: params.json, commitment.json, evidence.json and blobs/, the play's circuit, public file and session's files). Its
-#: files are past what git holds, so `artifacts.json` registers the directory and `suites.py` fetches it.
+#: One honest two-stage play's case (params.json, commitment.json, evidence.json and blobs/, the play's circuit, public
+#: file and session's files). Its files are past what git holds, so `artifacts.json` registers the directory and
+#: `suites.py` fetches it.
 CASE = Path(__file__).resolve().parent / "fixtures" / "sampled-two-case"
-#: What mends a kept case SPOT no longer accepts because an honest play changed: a play made afresh, which the script
-#: accepts before it keeps it.
-AFRESH = ("if an honest play changed, keep one made afresh: `bash benchmarks/one_stage/sampled_two_small.sh` on a "
-          "node, its $OUT/form's params.json, commitment.json, evidence.json and blobs/ as a directory, `research "
-          "data put --kind fixture/v1 --tree DIR --preserve`, and its id at this path in artifacts.json")
+#: No command makes a two-level play while two levels are refused, so the kept case is not remade: the check must
+#: refuse it by name before it reads what an honest play would change.
+AFRESH = ("the kept two-level case is refused by another name than levels.TWO_LEVELS_REFUSED: the refusal must come "
+          "before the check reads the case's evidence, which no command remakes while two levels are refused")
 
 
 def _case_dir() -> Path:
