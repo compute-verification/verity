@@ -36,8 +36,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover import serving, wo
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
-                                                             Scheme, Term, register)
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Credited, Executable, Lacks, Launch,
+                                                             LaunchRefused, Order, Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -87,6 +87,44 @@ def test_instance(statics: Mapping[str, Any]) -> str | None:
         return None
     return (f"is K = {k} at {tm} × {tn}, not the served K of at least {C.K_MIN} at {C.TILE} × {C.TILE}: a test "
             "instance, which credits nothing")
+
+
+def served_instance(scheme: Any) -> str | None:
+    """Why a run's scheme instance (`prover.schemes.get`'s) is not the served one, ``k_min`` `pearl_c.K_MIN` at
+    `pearl_c.TILE` × `pearl_c.TILE` tiles, or None when it is: a pass of another is a test instance's, read only as
+    one, crediting nothing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+
+    if (scheme.k_min, tuple(scheme.tile)) == (C.K_MIN, (C.TILE, C.TILE)):
+        return None
+    return (f"k_min {scheme.k_min} at {scheme.tile[0]} x {scheme.tile[1]} tiles, not the served {C.K_MIN} at {C.TILE} "
+            f"x {C.TILE}: a test instance is read only as one, crediting nothing")
+
+
+#: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
+#: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
+#: (`pearl_c.PearlC.credit_of`). At the H100's record it is its own named Prop.
+ASSUMPTION_DEV = "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"
+ASSUMPTION_H100 = "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
+
+
+def assumption_of(scheme: Any) -> str:
+    """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
+    record, and at its prices where they are another device's)."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100
+
+    own = scheme.prices == scheme.device.prices
+    if scheme.device == H100 and own:
+        return ASSUMPTION_H100
+    return f"{ASSUMPTION_DEV} at {scheme.device.name}" + ("" if own else f", priced at {scheme.prices.device}")
+
+
+def credited_circuit(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -> Any:
+    """C over one linear of ``m`` rows of depth ``k`` and ``n`` columns at ``tile`` (`credited_linear.linear`), with its
+    units' public rows, honest values and reference outputs."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import credited_linear
+
+    return credited_linear.linear(k, m, n, tile, reader)
 
 
 @dataclass(frozen=True)
@@ -791,7 +829,7 @@ PEARL_PLUS = register(Scheme(
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block(TILE, tile_macs),),
-    assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
+    assumptions=(ASSUMPTION_H100,),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
              Charge("excluded-rows", "give_up")),
@@ -823,6 +861,8 @@ PEARL_PLUS = register(Scheme(
                                   "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
                                   "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
+    credited=Credited(circuit=credited_circuit, laid=laid_tiles, credit=credited_tiles, served=served_instance,
+                      assumption=assumption_of),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
                "coins' signatures checked on the served node only; not checked by the auditor",

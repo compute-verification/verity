@@ -38,7 +38,7 @@
 
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one sample source ("The run's
 sample" below), sampled once every pass's roots are read, keys t samples over all the passes' tickets together, and an accept credits
-the run's credited MACs at the scheme's named assumption (`assumption_of`), less what ε of the tickets' weight could hold
+the run's credited MACs at the scheme's named assumption (`CREDITED.assumption`), less what ε of the tickets' weight could hold
 at δ, in core's answer form.
 With an execution phase record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
@@ -147,7 +147,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CA
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape, Tile, call_place, tagged
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import H100, K_MIN, TILE
 from verity.protocols.resource_accounting.compute.pouw.verifier.window import LIVE_SCHEME, pad as grid_pad
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.scheme import declared
@@ -174,11 +173,9 @@ DRAWS = 3
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
-#: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
-#: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
-#: (`pearl_c.PearlC.credit_of`). At the H100's record it is its own named Prop.
-ASSUMPTION_DEV = "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"
-ASSUMPTION_H100 = "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
+#: what the scheme declares for its credit reader (`resource_accounting.scheme.Credited`), each part taken by name:
+#: ``served``, why a pass's instance is not the served one, and ``assumption``, the named assumption a run is credited at
+CREDITED = declared(schemes.get("pearl-plus"), "credited")
 DELTA = Fraction(1, 100)
 #: `verify_passes`' rules on an opened tile over its inert-work bound (``over_cap``): the run is rejected, or the tile is
 #: credited nothing; `served_passes.OVER_INERT_BOUND` names the same two
@@ -699,15 +696,6 @@ def pass_macs(p: Pass) -> int:
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
 
-def assumption_of(scheme: Any) -> str:
-    """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
-    record, and at its prices where they are another device's)."""
-    own = scheme.prices == scheme.device.prices
-    if scheme.device == H100 and own:
-        return ASSUMPTION_H100
-    return f"{ASSUMPTION_DEV} at {scheme.device.name}" + ("" if own else f", priced at {scheme.prices.device}")
-
-
 def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict[tuple[int, int], tuple[list[int], Fraction]], Fraction]:
     """`credit_at_assumption`'s deduction record by record: each record with a credited cell, by (pass, position), its
     tiles' credited cells and the MACs taken off it, and ε."""
@@ -727,7 +715,7 @@ def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict
 
 
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
-    """The run's credit at the scheme's named assumption (`assumption_of`): a tile that passes the rule cost its credited cells' MACs,
+    """The run's credit at the scheme's named assumption (`CREDITED.assumption`): a tile that passes the rule cost its credited cells' MACs,
     (1 − ρ) of them at the scheme's cap.  Of t samples by ticket weight, ``over`` (X_O) landed on tiles over their
     inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
     tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
@@ -866,7 +854,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     (``over_cap``, and the profile's).  The run of record is ``uncredited`` over passes with no voluntary row, since one
     uncredits its whole band or block (`pearl_c_work.UnitRecord.credited`; ``served_passes.py verify``).
 
-    The passes are all of one salt, and each one's instance is the served one, ``k_min`` `K_MIN` at `TILE` × `TILE` tiles:
+    The passes are all of one salt, and each one's instance is the served one (`CREDITED.served`):
     a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
     0).
 
@@ -922,11 +910,9 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
             raise ValueError("the passes are not all of one scheme")
         if len({p.epoch.salt for p in passes}) != 1:
             raise ValueError("the passes are not all of one salt")
-        if not test_instance and (odd := next(((i, p.scheme) for i, p in enumerate(passes)
-                                               if (p.scheme.k_min, tuple(p.scheme.tile)) != (K_MIN, (TILE, TILE))), None)):
-            i, s = odd
-            raise ValueError(f"pass {i}'s instance is k_min {s.k_min} at {s.tile[0]} x {s.tile[1]} tiles, not the served "
-                             f"{K_MIN} at {TILE} x {TILE}: a test instance is read only as one, crediting nothing")
+        if not test_instance and (odd := next(((i, why) for i, p in enumerate(passes)
+                                               if (why := CREDITED.served(p.scheme))), None)):
+            raise ValueError(f"pass {odd[0]}'s instance is {odd[1]}")
         tied = None if window is None else tie(window, passes, rounds, dropped)
         if cls is not None:
             if not held_to_load(cls, passes, rounds, dropped):
@@ -991,7 +977,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                          for i, t, g, r, over, _ in verdicts])
     if bad:
         return reject("; ".join(bad))
-    public = {"work": credit, "unit": "MAC", "assumption": assumption_of(scheme), "scheme": scheme.name,
+    public = {"work": credit, "unit": "MAC", "assumption": CREDITED.assumption(scheme), "scheme": scheme.name,
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
                           "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
               **({"tie": tied} if tied is not None else {}),
@@ -1021,7 +1007,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "
                      f"{credit['credited']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
-                     f"δ {delta} ({assumption_of(scheme)}); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
+                     f"δ {delta} ({CREDITED.assumption(scheme)}); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
 
 

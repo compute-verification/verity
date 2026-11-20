@@ -10,9 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.scheme import declared
 
 VERIFY_RUN = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "pearl_c_vllm" / "verify_run.py"
 
@@ -28,7 +30,20 @@ def _verify_run():
 
 def test_the_verifiers_protocol_and_assumption() -> None:
     vr = _verify_run()
-    assert PS.PEARL_PLUS.protocol == vr.PROTOCOL and PS.PEARL_PLUS.assumptions == (vr.ASSUMPTION_H100,)
+    assert PS.PEARL_PLUS.protocol == vr.PROTOCOL and PS.PEARL_PLUS.assumptions == (PS.ASSUMPTION_H100,)
+
+
+def test_the_readers_take_the_credited_parts_by_name() -> None:
+    """The circuit builder and the credit reader take what the scheme declares (`Scheme.credited`) by name, each part
+    the scheme's own: C over one linear, its laid tiles and their credit, the served instance and the assumption."""
+    vr, got = _verify_run(), declared(PS.PEARL_PLUS, "credited")
+    assert vr.CREDITED is got
+    assert (got.laid, got.credit, got.served, got.assumption) == (PS.laid_tiles, PS.credited_tiles, PS.served_instance,
+                                                                   PS.assumption_of)
+    served = pouw_schemes.get("pearl-c-h100-v1-h3")
+    assert got.served(served) is None
+    small = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=128, tile=(32, 16))
+    assert "k_min 128 at 32 x 16 tiles, not the served" in got.served(small)
 
 
 def test_block_cost_is_the_credits_macs() -> None:

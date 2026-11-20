@@ -1,9 +1,10 @@
 """A credited linear of C whose nodes write its y, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v5`
-(`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
-prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``, ``root``, ``unit``,
-``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each
+C is one linear y = x · Wᵀ over M rows of K and N columns, built by the scheme's declared ``credited.circuit``
+(`resource_accounting.scheme.Credited`, `credited_linear.linear`), whose nodes are its grid's units of
+`PearlPlusTileCoreWords_v5` (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and
+W's rows (``a``, ``b``), the prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`:
+``salt``, ``root``, ``unit``, ``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each
 writing its tile of y (``o1``), which
 a reader of the linear takes by wire: the residual add of each row of y and the residual stream's row (``r``,
 `Bf16AddRow_v1`), C's output. y is no value C holds. No unit fits one proof block whole, so C is laid
@@ -13,12 +14,13 @@ ports and ANDs): each unit opens into its noise's seed, lines and Gram rows and 
 registered as the record its reader holds them to: its digest and y under hiding salts, its ``ok`` (one u16) as 1 under
 public salts. The noise is seeded by the
 epoch's salt and W's registered root: the stager forms its tiles under them, and the verifier's side fills the public row
-from the salt, W's registered root and each tile's place alone (`public_values`), no noise value among them, and its
+from the salt, W's registered root and each tile's place alone (`Linear.public_values`), no noise value among them, and its
 registered roots from that row, which every staged file's roots must equal; the door doesn't yet bind the salt and the
 root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear, places each laid block in its tile and each tile's amount
-(`scheme.laid_tiles` over the laid C's strata and its digest, recorded before the coin, `tile_macs` on the tile's
-statics; a tile below the served floor is a test instance's, `scheme.test_instance`, and credits nothing), draws one
+(the scheme's declared ``credited.laid`` over the laid C's strata and its digest, recorded before the coin, its block's
+``cost`` on the tile's statics; a tile below the served floor is a test instance's, which ``credited.credit`` refuses,
+crediting nothing), draws one
 block uniformly of every block of the laid C (``--steer TEMPLATE``: of that template's blocks only, recorded as steered),
 printing the population by Definition and each template's fan-out (the readers of a block's outputs), cuts it
 (`restrict`), lowers it by the door (`one_circuit.lower` under C's `one_circuit.cuts`, with the door's check of the block
@@ -52,10 +54,18 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import declared
 
 SCHEME = "pearl-c-h100-v1-h3"
+#: what the scheme declares for C's builder (`resource_accounting.scheme.Credited`), each part taken by name: ``circuit``
+#: C over one linear, ``laid`` its tiles as C's laying lays them, ``credit`` those tiles credited on an audit's verdicts
+CREDITED = declared(schemes.get("pearl-plus"), "credited")
+#: the block a tile is (`Scheme.blocks`): its template's id and its credited MACs of its statics (``cost``)
+(TILE_BLOCK,) = declared(schemes.get("pearl-plus"), "blocks")
 #: the values C holds that the prover commits; every other value is the public row the verifier fills itself
 PRIVATE = ("x", "w", "cert", "r")
 
@@ -125,148 +135,7 @@ def words16(bits: list[int]) -> list[int]:
     return [sum(bits[16 * w + j] << j for j in range(16)) for w in range(len(bits) // 16)]
 
 
-@dataclasses.dataclass(frozen=True)
-class Linear:
-    """C: ``program`` over its values, ``tiles`` its units in order, ``types`` each value's row type, ``reads`` each
-    unit's ports as (value, row), and ``m`` and ``n`` the linear's rows and columns."""
-
-    program: object
-    tiles: list
-    types: dict
-    reads: list
-    m: int
-    n: int
-
-
-def linear(k: int, m: int, n: int, tile: tuple[int, int], reader: bool = True) -> Linear:
-    """C over ``m`` rows of depth ``k`` and ``n`` columns at ``tile``: its grid's units, and with ``reader`` the residual
-    add of each row of y (`Bf16AddRow_v1`), which takes the row by wire from the units that wrote it; without, C's
-    output is its units' (digest, y, ok), y the record a later reader is held to."""
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.ops.prims import BF16
-    from verity.circuits.ops.rows import Bf16AddRow
-    from verity.circuits.program import Program
-    from verity.circuits.refs import Coll, concat, tuple_of
-    from verity.circuits.types import Array
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
-
-    tm, tn = tile
-    ts = PC.tiles(SCHEME, k, m, n, tile)
-    if len({t.real for t in ts}) != 1:
-        raise ValueError(f"every row tile of M = {m} at TM = {tm} has the same real rows, so C's tiles are one template: "
-                         "M below TM or a multiple of it")
-    port, ret = ts[0].core.signature()
-    port = dict(port)
-    rt, ct = len({t.rows for t in ts}), n // tn
-    row = {"x": port["a"], "w": port["b"], "cert": port["cert"], "r": Array(n, BF16), "rows": port["rows"],
-           "col": port["col"]}
-    count = {"x": rt, "w": ct, "cert": len(ts), "r": m, "rows": rt, "col": ct}
-    names = ("x", "w", "cert") + (("r",) if reader else ()) + PC.PUBLIC
-    params = tuple((v, Array(count[v], row[v])) if v in count else (v, port[v]) for v in names)
-    types = {v: row.get(v, t) for v, t in params}
-    reads = []
-    for i, t in enumerate(ts):
-        r = t.rows[0] // tm
-        reads.append({"a": ("x", r), "b": ("w", t.col), "cert": ("cert", i), "salt": ("salt", 0), "root": ("root", 0),
-                      "unit": ("unit", 0), "rows": ("rows", r), "col": ("col", t.col)})
-    add = bind(Bf16AddRow, N=n)
-
-    def body(B, S, *xs):
-        held = dict(zip((v for v, _ in params), xs))
-        outs = {}
-        for t, rd in zip(ts, reads):
-            args = []
-            for p, pt in t.core.signature()[0]:
-                v, j = rd[p]
-                got = held[v][j] if v in count else held[v]
-                assert got.type == pt, (p, got.type, pt)
-                args.append(got)
-            outs[t.rows[0], t.col] = B.call(t.core, *args)
-        tiles_out = Coll(Array(len(ts), ret), concat([outs[t.rows[0], t.col].refs for t in ts]))
-        if not reader:
-            return tiles_out
-        z = []
-        for i in range(m):
-            r0 = i - i % tm
-            y = Coll(Array(n, BF16), concat([outs[r0, c][1][i - r0].refs for c in range(ct)]))
-            z.append(B.call(add, y, held["r"][i]))
-        return tuple_of(tiles_out, Coll(Array(m, Array(n, BF16)), concat([o.refs for o in z])))
-
-    from verity.circuits.types import Tuple
-    out = Tuple(Array(len(ts), ret), Array(m, Array(n, BF16))) if reader else Array(len(ts), ret)
-    root = CompositeDefinition("PearlPlusCreditedLinear", 2, (), lambda S: (params, out), body, register=False)
-    return Linear(Program(root, registered=[v for v, _ in params]), ts, types, reads, m, n)
-
-
-def public_values(ln: Linear, k: int, unit: int, salt: bytes, root: bytes) -> dict:
-    """The public row of call ``unit`` as C's values (`pearl_plus_credited.public` of each tile): ``salt``, ``root`` and
-    ``unit`` one row each, ``rows`` a row tile's, ``col`` a column tile's."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
-
-    pub: dict = {"rows": {}, "col": {}}
-    for t in ln.tiles:
-        p = PC.public(SCHEME, k, t, unit, salt, root)
-        pub["rows"][t.rows[0] // len(t.rows)], pub["col"][t.col] = p["rows"], p["col"]
-        shared = {v: p[v] for v in ("salt", "root", "unit")}
-    return {**shared, **{v: [pub[v][r] for r in range(len(pub[v]))] for v in ("rows", "col")}}
-
-
-def honest(k: int, m: int, n: int, ln: Linear, unit: int, seed: str, salt: bytes, root_of) -> tuple[dict, list]:
-    """An honest linear: x and W BF16 (widened to FP32), each tile's certificates under the epoch's ``salt`` and W's
-    registered root (``root_of`` of W's values), the residual stream's rows and the public row, every value as C holds
-    it, a row a port's read (x a row tile's rows, W a column tile's); and beside them the linear's served y
-    (`PearlC.checked`'s U unscaled, BF16, `pearl_c_u.y`), M rows of N words, which C's tiles must write."""
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as CU
-
-    rng = random.Random(seed)
-
-    def bf16_row() -> list[int]:
-        return [int(np.float32(rng.uniform(-2, 2)).view(np.uint32)) & 0xFFFF0000 for _ in range(k)]
-
-    tm, tn = len(ln.tiles[0].rows), len(ln.tiles[0].cols)
-    x = [bf16_row() if i < m else [0] * k for i in range(-(-m // tm) * tm)]
-    w = [bf16_row() for _ in range(n)]
-    r = [[int(np.float32(rng.uniform(-4, 4)).view(np.uint32)) >> 16 for _ in range(n)] for _ in range(m)]
-    w_values = [[[v >> 16 for v in w[j]] for j in range(c * tn, (c + 1) * tn)] for c in range(n // tn)]
-    root = root_of(w_values)
-    s = pouw_schemes.get(SCHEME, k_min=k, tile=(tm, tn))
-    dev = s.device.name
-    _d, ng = inert_bound._promoted(dev, k)
-    y = [[0] * n for _ in range(m)]
-    certs = []
-    for t in ln.tiles:
-        ctx = C.Context(salt, C.Matmul(unit, C.Shape(len(x), k, n), 0), bytes(64), root)
-        a, b = [x[i] for i in t.rows], [w[j] for j in t.cols]
-        ops = s.encode(ctx, s.noise(ctx), [C.f32_row(r_) for r_ in a], [C.f32_row(r_) for r_ in b], C.Tile(t.rows, t.cols))
-        checked = s.checked(ctx, ops)
-        certs.append([[[list(inert_bound.certificates(ops.a.codes[i], ops.b.codes[j], dev))[2 * z:2 * z + 2]
-                        for z in range(ng - 1)] for j in range(tn)] for i in range(tm)])
-        for i in range(t.real):
-            for j, c in enumerate(t.cols):
-                y[t.rows[i]][c] = CU.y(checked.u[i][j], ops.a.alpha[i], ops.b.alpha[j])
-    row_tiles = sorted({t.rows: t.real for t in ln.tiles}.items())
-    held = {"x": [[x[i] for i in rs] for rs, _ in row_tiles], "w": w_values, "cert": certs, "r": r}
-    names = [v for v, _ in ln.program.fn.signature()[0]]
-    return {v: held[v] for v in held if v in names} | public_values(ln, k, unit, salt, root), y
-
-
-def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
-    """`pearl_plus_tile.reference`'s (digest, y, ok) of unit ``index`` on ``vals``: the digest's 64 bytes, its real rows'
-    TN y words, then ok."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
-    t = ln.tiles[index]
-    r, s = t.rows[0] // len(t.rows), t.core.bindings
-    b = [[v << 16 for v in row] for row in vals["w"][t.col]]
-    salt, root = (b"".join(w.to_bytes(2, "little") for w in vals[v]) for v in ("salt", "root"))
-    d, y, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["cert"][index], salt, root,
-                            unit, list(t.rows), list(t.cols), s["RHO"], s["RHOR"], t.real)
-    return [*(d or bytes(64)), *(w for row in (y or [[0] * len(t.cols)] * t.real) for w in row), ok]
-
-
-def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
+def tamper(ln: Any, index: int, vals: dict, bad: str) -> dict:
     """``vals`` with unit ``index``'s tile made false: ``cert``, its first certificate word's low bit flipped; ``filler``,
     its last row, a filler row, with word 3 set to 1.0; ``y`` and ``out``, unchanged (the forgery is in the outputs it
     claims); ``eb``, unchanged (the forgery is in the wired eb row its statement reads, `stage`)."""
@@ -288,7 +157,7 @@ def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
 MANY = ("x", "w", "cert", "r", "rows", "col")
 
 
-def rows_of(ln: Linear, values: dict) -> dict[str, list[list[int]]]:
+def rows_of(ln: Any, values: dict) -> dict[str, list[list[int]]]:
     """Each value's registered rows (a many-row value's rows, a one-row value its one), each its leaves packed into the
     value's registered width (`registered.width`, `registered.bit_words`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
@@ -507,8 +376,6 @@ def stage(a) -> int:
     from verity.circuits.ops.rows import Bf16AddRow
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    from verity.protocols.resource_accounting.compute.pouw import scheme as PS
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.commitments import registered_value as RV
     from verity_flock import circuit as FC
 
@@ -522,7 +389,7 @@ def stage(a) -> int:
         print(f"PHASE {name} {json.dumps(rec['phases'][name])}", flush=True)
         t = now
 
-    ln = linear(k, m, n, (tm, tn), a.reader)
+    ln = CREDITED.circuit(k, m, n, (tm, tn), a.reader)
     units = len(ln.tiles)
     rec["reader"] = a.reader
     phase("program", units=units)
@@ -531,9 +398,9 @@ def stage(a) -> int:
     m_ = LY.Measure(program, query)
     population = len(m_.units)
     laid = [descriptor_id(nd.fn) for nd in program.root.body.nodes if input_id(nd.fn.id) is None]
-    cut = [descriptor_id(u) for t in ln.tiles for u, _n in PC.cut(t.core)]
+    cut = [descriptor_id(u) for t in ln.tiles for u, _n in ln.cut(t)]
     assert laid == cut + ([descriptor_id(bind(Bf16AddRow, N=n))] * m if a.reader else []), (laid[:12], cut[:12])
-    core = bind(PC.PearlPlusTileCoreWired, **ln.tiles[0].core.bindings)
+    core = ln.core
     blocks = {}
     for u in range(population):
         ins, outs, ands = m_.block(u, u + 1)
@@ -550,16 +417,21 @@ def stage(a) -> int:
     phase("lay", descriptor_bytes=len(c), population=population)
 
     strata = PQ.strata(program, part["query"])
-    tiles = PS.laid_tiles(ln.program, fits, strata, rec["laid"]["digest"])
+    tiles = CREDITED.laid(ln.program, fits, strata, rec["laid"]["digest"])
     rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata],
                       "tiles": [{"index": tl.index, "gates": tl.gates, "amount": tl.amount, "blocks": len(tl.blocks),
                                  "kinds": dict(tl.kinds), "test_instance": tl.test} for tl in tiles]}
     print("AMOUNTS " + json.dumps(rec["amounts"]), flush=True)
-    assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
+    assert [tl.amount for tl in tiles] == [TILE_BLOCK.cost(tl.core.bindings) for tl in ln.tiles]
     test = next((tl for tl in tiles if tl.test), None)
+    try:
+        CREDITED.credit(tiles, strata, {rs[0][0]: True for _tid, rs in strata}, {tid: 1 for tid, _rs in strata})
+        refusal = None
+    except ValueError as e:
+        refusal = str(e)
     rec["credit"] = {"credits": "nothing" if test else "each tile its amount, when every stratum it has a block in "
                                                          "passed (credited_tiles)",
-                     "refusal": f"{PS.TEST_INSTANCE}: tile {test.index} {test.test}" if test else None}
+                     "refusal": refusal}
     print("CREDIT " + json.dumps(rec["credit"]), flush=True)
 
     coin = os.urandom(64)
@@ -598,7 +470,7 @@ def stage(a) -> int:
         w_reg.update(register(program, rows_of(ln, {"w": w}), supplied))
         return w_reg["w"].root
 
-    good, served = honest(k, m, n, ln, unit, "credited-in-c", salt, root_of)
+    good, served = ln.honest(k, unit, "credited-in-c", salt, root_of)
     ti = 0 if index is None else index
     drawn = ln.tiles[ti]
     bad = tamper(ln, ti, good, a.bad)
@@ -622,7 +494,7 @@ def stage(a) -> int:
 
     (got_h, z_h), (got_d, _z_d) = run(good), run(bad)
     got = {"honest": got_h, "dishonest": got_d}
-    want = {tag: reference(ln, ti, vals, unit) for tag, vals in (("honest", good), ("dishonest", bad))}
+    want = {tag: ln.reference(ti, vals, unit) for tag, vals in (("honest", good), ("dishonest", bad))}
     y_rows = [[0] * n for _ in range(m)]
     for tile, g in zip(ln.tiles, got_h):
         for i in range(tile.real):
@@ -709,12 +581,12 @@ def stage(a) -> int:
                           "trees": sorted({f"{descriptor_id(program.root.body.nodes[kw].fn)}/o{f}" for kw, f in trees})}
     print("WRITER-ROWS " + json.dumps(rec["writer_rows"]), flush=True)
     skip = {descriptor_id(core), descriptor_id(bind(Bf16AddRow, N=n))} - ({drawn_tid} if not is_core else set())
-    verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)
+    verifier_row = ln.public_values(k, unit, salt, w_reg["w"].root)
     verifier_roots = {v: r.root.hex() for v, r in register(program, rows_of(ln, verifier_row), supplied).items()}
     rec["public_row"] = {"of": "the verifier's: `public_values` from the salt, W's registered root and the tiles' places "
-                         "alone, no noise value", "ports": list(PC.PUBLIC),
+                         "alone, no noise value", "ports": list(ln.ports),
                          "salt": salt.hex(), "w_root": w_reg["w"].root.hex(), "supplied": list(supplied)}
-    other = PC.public(SCHEME, k, drawn, unit + 1, salt, w_reg["w"].root)
+    other = ln.public(k, drawn, unit + 1, salt, w_reg["w"].root)
     wrong_unit = rows_of(ln, {"unit": other["unit"]})
     rec["registered"] = {}
     for tag, vals in (("honest", good), ("dishonest", bad)):

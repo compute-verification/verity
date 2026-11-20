@@ -1322,27 +1322,31 @@ def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
 
 
 def test_answer_names_its_schemes_assumption():
-    """An accepted Pearl+ answer's ``public.assumption`` (`verify_run.assumption_of`) is the named Prop its scheme's credit,
+    """An accepted Pearl+ answer's ``public.assumption`` (the scheme's declared ``credited.assumption``,
+    `pouw.scheme.assumption_of`, which `verify_run` takes by name) is the named Prop its scheme's credit,
     (1 − ρ)·`creditDevRev1`, is at: TT_OUT(1/400) per audit tile, rev1, at the scheme's device record. The served scheme,
     ``pearl-c-h100-v1-h3``, is at `TTOutTilePearlCH100Rev1`, every other scheme the device path runs at
     `TTOutTilePearlCDevRev1` at its record, a def of `TTOutRev1.lean`, which the H100's is at `devH100` (a def of the
     records Proofs/Pouw/PearlC/Records.lean keeps since 12b47061986); the Lean port's `ASSUMPTION` is the H100's. Neither
     Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no TT_OUT accounting,
     is ever named."""
+    from verity.protocols.resource_accounting.compute.pouw import scheme as POUW
+
+    assert VR.CREDITED.assumption is POUW.assumption_of
     root = Path(__file__).resolve().parents[3]
     lean = (root / "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean").read_text()
     records = (root / "security/Proofs/Pouw/PearlC/Records.lean").read_text()
-    dev, h100 = (name.rsplit(".", 1)[1] for name in (VR.ASSUMPTION_DEV, VR.ASSUMPTION_H100))
-    assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV))
+    dev, h100 = (name.rsplit(".", 1)[1] for name in (POUW.ASSUMPTION_DEV, POUW.ASSUMPTION_H100))
+    assert all(name.startswith("Pouw.PearlC.Assumptions.") for name in (POUW.ASSUMPTION_H100, POUW.ASSUMPTION_DEV))
     assert f"def {dev} " in lean, dev
     assert re.search(rf"^def {h100} .*\n(?:.*\n)*?  {dev} CM devH100 sem ρ$", records, re.M), h100
-    assert VR.assumption_of(pouw_schemes.get("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
+    assert VR.CREDITED.assumption(pouw_schemes.get("pearl-c-h100-v1-h3")) == POUW.ASSUMPTION_H100
     for scheme in map(pouw_schemes.get, kernel_names("pearl-c")):
-        got = VR.assumption_of(scheme)
-        assert got == (VR.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{VR.ASSUMPTION_DEV} at {scheme.device.name}")
+        got = VR.CREDITED.assumption(scheme)
+        assert got == (POUW.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{POUW.ASSUMPTION_DEV} at {scheme.device.name}")
         assert "pearl_kw" not in got
     run = (root / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean").read_text()
-    assert f'def ASSUMPTION : String := "{VR.ASSUMPTION_H100}"' in run
+    assert f'def ASSUMPTION : String := "{POUW.ASSUMPTION_H100}"' in run
 
 
 @pytest.mark.slow
@@ -1362,7 +1366,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     work = answer["public"]["work"]
     assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
-    named = VR.assumption_of(pouw_schemes.get(answer["public"]["scheme"]))
+    named = VR.CREDITED.assumption(pouw_schemes.get(answer["public"]["scheme"]))
     assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())

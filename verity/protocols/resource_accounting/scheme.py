@@ -154,6 +154,24 @@ class Block:
 
 
 @dataclass(frozen=True)
+class Credited:
+    """What a scheme whose blocks are units of the registered circuit gives that circuit's readers, each part by name, so
+    that no reader imports the scheme's package for it. The circuit builder's: ``circuit``, the credited circuit of one
+    product with its units, their public rows, honest values and reference outputs (each part's own arguments, in its
+    docstring); ``laid``, its credited units as the circuit's laying lays them, each with its amount and the proof blocks
+    it holds, from the laid circuit's strata and the digest registered before any coin; ``credit``, those units credited
+    on an audit's verdicts, or refused by name. The credit reader's: ``served``, why a run's scheme instance is not the
+    served one (a test instance's, which credits nothing), or None; ``assumption``, the named assumption a run of a
+    scheme instance is credited at."""
+
+    circuit: Callable[..., Any]
+    laid: Callable[..., Any]
+    credit: Callable[..., Any]
+    served: Callable[[Any], str | None]
+    assumption: Callable[[Any], str]
+
+
+@dataclass(frozen=True)
 class Order:
     """A condition on the verifier's log (`Verity.Scheme.logOK`): ``committed`` is logged ``direction`` (``before`` or
     ``after``) ``coin``, a coin drawn or another logged event, and, where ``within_ns`` is set, within that many
@@ -364,7 +382,9 @@ class Scheme:
     it (`Launch`), a `Lacks` where it launches nothing. ``reads``, by party, what that party's start reads beside its
     bindings: each binding's name to (scheme, party), the state directory of that party's run of a scheme among
     ``depends`` on the same machine; empty where none reads any. ``answers``, the entry (``module:attribute``) of the functions
-    that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
+    that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``credited``,
+    what a scheme whose blocks are units of the registered circuit gives that circuit's builder and its credit reader
+    (`Credited`). ``tie``, the
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
     says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
@@ -423,6 +443,7 @@ class Scheme:
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
     reads: Mapping[str, Mapping[str, tuple[str, str]]] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
+    credited: Credited | Lacks = UNDECLARED
     unchecked: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
