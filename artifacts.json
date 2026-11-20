@@ -43,7 +43,6 @@
   "art:844ad075fdd79a0e8723ed46a765d7422847d4edf1edb6ab70b3af3a5f2d0c7c": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_vectors.json",
   "art:70f4d6ec7fc238d2dee69c6b90b832660934f67c2631d7884eaadc46b360fb75": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json",
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "tests/adapters/vllm/tests/regression/files.toml",
-  "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
   "art:08ab3b7ebebddff3d18d66ef890c8594b41c52388749aee610f3b117fad27de2": "adapters/vllm/data/logs/m6/log.jsonl.gz",
   "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "calibration/machine_model/data/cover/corpus.json",
   "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "calibration/machine_model/data/cover/bu_12_9.json",
