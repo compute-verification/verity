@@ -158,33 +158,6 @@ path for this user (`${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv`, w
 relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
 (`uv run tools/check/suites.py verity-vllm` from the root).
 
-To serve on a machine of your own, clone this repository without the history's file contents and run the script from the
-clone's root (`--dry-run` first shows every path and step):
-
-```bash
-git clone --filter=blob:none https://github.com/compute-verification/verity && cd verity
-bash adapters/vllm/verity_vllm/ops/serve_fresh.sh
-```
-
-It builds the environment, fetches the public Llama 3.2 1B and makes its INT8 checkpoint, serves
-one request with every value committed, and seals it, all under `./.verity-work` (or `--work DIR`), whatever your environment
-names. `--gpu N` picks the card by its `nvidia-smi` index; without it the script takes `CUDA_VISIBLE_DEVICES`, else the
-first card of compute capability 9.0. The tree does not make the machine:
-- an H100 or H200 (the row is H200's, compute capability 9.0) and an NVIDIA driver that runs CUDA 12.9;
-- the CUDA 12.9 toolkit with `nvcc`, where `CUDA_HOME` names it (the script refuses without it; where it
-  lacks the math headers the script takes them from the environment's NVIDIA wheels), and a C++ compiler (`g++`) for it;
-- `uv` ([its installer](https://docs.astral.sh/uv/getting-started/installation/)) and `curl` 7.66 or later on the `PATH`;
-- 35 GB free at the work directory (the install holds the environment twice until it removes its cache, where the disk
-  can't hardlink);
-- network access to GitHub, PyPI, download.pytorch.org, Hugging Face (no token) and the store's public site, from which
-  the workload step fetches the workload file with no key: its address is `research.store.fetchset.PUBLIC_URL`, which
-  `RESEARCH_PUBLIC_URL` overrides.
-
-Building the six CUDA taps is the longest step: it builds the attention taps for the row's head size (64) only, with one
-compile job per CPU the script may run on (`MAX_JOBS`, which the dry run prints), so its time falls with the CPUs you give
-it. Each step's log is in `DIR/logs`. The last line is the result: `SERVE-FRESH SERVED AND SEALED window 0, root <hex>`, with
-the seal in `DIR/serve/seals.jsonl`, or `SERVE-FRESH FAILED <step>: <why>`.
-
 ## Vocabulary
 
 Serialized field names (`member`, `op_path`, `output_member`, `query: Q_module_v1`, `weights_pin`, `vu_*`) keep their
