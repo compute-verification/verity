@@ -58,7 +58,7 @@ lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchai
 def lowered(member: str) -> bytes:
     """The member's circuit file: its block's C_S, lowered by Lean (`one_circuit.lower`)."""
     return OC.lower(OC.restrict(DESCRIPTOR, PARTITION, UNITS[member]), PARTITION, PF.lower_executable,
-                    cut=OC.cuts(DESCRIPTOR, PARTITION))
+                    cut=OC.cuts(DESCRIPTOR, PARTITION), formed=OC.formed_in(DESCRIPTOR, PARTITION, UNITS[member]))
 
 
 def frame(member: str, out: tuple[str, str] | None = None, **more: tuple[str, str]) -> dict:
