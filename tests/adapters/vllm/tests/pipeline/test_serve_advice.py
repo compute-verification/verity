@@ -37,6 +37,7 @@ from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict import close_plan as CP
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps
 from verity_vllm.program.predict.window_class import WindowClass
 
@@ -252,8 +253,8 @@ def test_a_windows_advice_names_its_commit_from_its_seal_while_its_line_waits_fo
 
 def test_a_windows_close_commits_its_advice_and_compiles_its_circuit_from_it_once_its_line_is_written(tmp_path):
     """With a close plan (`close_plan.ClosePlan`) each window with steps has its advice committed at its close, under the run root
-    its line names, and its circuit compiled from that advice and its bodies: the outcome is `served_lowering`'s on them, with
-    the templates it names under the prover's floor."""
+    its line names, and its circuit compiled from that advice and its bodies: the outcome is `served_lowering`'s on them, here
+    the lowering's refusal at TINY, by name."""
     cls = WindowClass(4, 12, 6)
     with Server(tmp_path) as s:
         s.windows.plan = CP.ClosePlan(tmp_path, cls, registered=REG, compiler=C, flush=s.trace.drain)
@@ -265,9 +266,9 @@ def test_a_windows_close_commits_its_advice_and_compiles_its_circuit_from_it_onc
         d = tmp_path / "advice" / f"w{w}"
         reg = json.loads((d / "registration.json").read_text())
         assert reg["commit"]["run_root"] == commits[w]["run_root"] and got["advice"] == reg["binding"]["advice"]["root"]
-        _compiled, low = WC.served_lowering(REG, cls, (d / "private" / "advice.bin").read_bytes(), ADV.bodies(tmp_path, w))
-        assert "refused" not in got, got["refused"]
-        assert got["unprovable_alone"] == sorted(low.unprovable)
+        with pytest.raises(Unexpressible) as e:
+            WC.served_lowering(REG, cls, (d / "private" / "advice.bin").read_bytes(), ADV.bodies(tmp_path, w))
+        assert got["refused"] == f"Unexpressible: {e.value}"[:500]
 
 
 def test_advice_leaves_a_window_still_open_for_a_later_call(tmp_path):
