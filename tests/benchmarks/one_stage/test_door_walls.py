@@ -308,6 +308,39 @@ def _lean_restrict(lean: Path, tmp_path: Path, c: bytes, partition: dict, lo: in
                            str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
 
 
+#: a drawn C one of whose templates has no gate, outside the last block's own: (the spec, its case seed)
+GATELESS = ({"templates": [{"params": [-16, 32, -2048], "steps": [[6, [1, 1]], [4, [3, 1, 3]]], "ret": [4], "nested": False},
+                           {"params": [8, 7, -5], "steps": [], "ret": [0], "nested": False}],
+             "root": [{"t": 1, "form": "batch", "n": 2, "args": [[["p", 0], ["p", 1]], [["p", 2], ["p", 3]], [["p", 4], ["p", 5]]]},
+                      {"t": 1, "form": "batch", "n": 3,
+                       "args": [[["n", 0, 1], ["p", 6], ["p", 7]], [["p", 8], ["p", 9], ["p", 10]], [["p", 11], ["p", 12], ["p", 13]]]},
+                      {"t": 0, "form": "batch", "n": 2, "args": [[["p", 14], ["p", 15]], [["p", 16], ["p", 17]], [["p", 18], ["p", 19]]]}],
+             "root_params": [8, 8, 7, 7, -5, -5, 8, 8, 7, 7, 7, -5, -5, -5, -16, -16, 32, 32, -2048, -2048],
+             "registered": [8, 13], "blocks": [[0, 2], [2, 6], [6, 7]]}, 2615796738)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_template_of_no_gate_anywhere_in_c_is_refused_by_both_doors_alike(tmp_path):
+    """On every block of `GATELESS`, Lean's door (`spot-one-stage-zk restrict`, `Partition.checkTemplates`) and Python's
+    steps (`one_circuit.cuts`) refuse the query with one text, the last block's own template having gates."""
+    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    s = W.Spec(**GATELESS[0])
+    c, q, _fns = W.realise(s)
+    door = W.Door(c, q, [tuple(b) for b in s.blocks], lambda: _stub(tmp_path))
+    (tmp_path / "C.json").write_bytes(c)
+    (tmp_path / "partition.json").write_text(json.dumps(door.partition, sort_keys=True, separators=(",", ":")))
+    why = "query-refused: template WallsT1_v1 has no gate"
+    for k, (lo, hi) in enumerate(s.blocks):
+        py = door.run(k, lo, hi).text
+        run = LC.run([str(PF.v2_executable()), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
+                      str(lo), str(tmp_path / "c_s.txt")])
+        assert run.returncode != 0 and run.stderr.strip() == f"restrict: {why}", (k, run.stderr[-600:])
+        assert py is not None and py.endswith(why), (k, py)
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
@@ -371,3 +404,53 @@ def test_an_internal_read_is_refused_under_the_unit_form_and_a_column_under_the_
     assert whole["step"] is None and whole["ported"] == "yes", whole
     assert whole["honest_ok"] and not whole["wrong_accepted"] and not whole["forged_accepted"], whole
     assert whole["in_ports"] == ["p0"] and whole["in_bits"] == [16 + 2 * 2048], whole
+
+
+def _lean_stub(tmp_path: Path, name: str, refusal: str | None) -> Path:
+    """A `spot-one-stage-zk` whose ``restrict`` writes its block circuit (``refusal`` None) or refuses with ``refusal``."""
+    exe = tmp_path / name
+    body = "echo circuit > \"$5\"\nexit 0\n" if refusal is None else f"echo '{refusal}' >&2\nexit 1\n"
+    exe.write_text(f"#!/bin/sh\n{body}")
+    exe.chmod(0o755)
+    return exe
+
+
+def test_restrict_of_spot_one_stage_zk_decides_and_a_difference_is_reported_as_one(tmp_path):
+    """Lean's door, asked as the accepting path asks it, labels every block and its class; Python's verdict stays
+    beside it, and where the two disagree the block carries the difference, both texts kept."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    W._catalog()
+    exe = _stub(tmp_path)
+    c, q = W.internal_read()
+    why = f"{OC.NOT_ADMITTED}, operands-outside: unit 1 reads gate 4112, which unit 0 of the block computes"
+    refuses, admits = _lean_stub(tmp_path, "refuses", why), _lean_stub(tmp_path, "admits", None)
+    same, = W.census(c, q, "0-2", lambda: exe, rows=False, lean=lambda: refuses)
+    assert same.decider == W.LEAN_DOOR == "spot-one-stage-zk restrict" and same.lean_door == f"refused: {why}"
+    assert same.klass.startswith("lean: ") and W.clause(same.python_door) == "operands-outside" and not same.difference
+    other, = W.census(c, q, "0-2", lambda: exe, rows=False, lean=lambda: admits)
+    assert other.lean_door == W.ADMITTED and other.klass == "" and other.python_door.startswith("refused: ")
+    assert other.difference == "lean admits, python refuses at lower (operands-outside)"
+    row, = W.table([other])
+    assert (row["class"], row["decider"], row["differences"]) == ("through", W.LEAN_DOOR, 1)
+    big = "unit/Block_v1: an instance needs a block of 2^31 bits (at most 2^27)"
+    assert W.clause(f"refused: restrict: {big}") == W.clause(
+        f"refused: Refused: E_LOWER: flock-lower-check compose (1): flock-lower-check compose: {big}")
+    plain, = W.census(c, q, "0-2", lambda: exe, rows=False)
+    assert plain.decider == "python's steps" and not plain.lean_door and not plain.difference
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain: spot-one-stage-zk cannot be built")
+def test_spot_one_stage_zk_restrict_refuses_the_internal_read_where_python_is_stubbed_off(monkeypatch):
+    """On the built executable: Lean's door refuses the internal read by `operands-outside` as Python's predicate does;
+    with Python's predicate stubbed off, the census reports the block as a difference (Python admits, Lean refuses)."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    c, q = W.internal_read()
+    agreed, = W.census(c, q, "0-2", W._exe(None), rows=False, lean=PF.v2_executable)
+    assert W.clause(agreed.lean_door) == W.clause(agreed.python_door) == "operands-outside", agreed
+    assert not agreed.difference
+    monkeypatch.setattr(OC, "formed_in", lambda *_a, **_k: (lambda _key: None))
+    got, = W.census(c, q, "0-2", W._exe(None), rows=False, lean=PF.v2_executable)
+    assert got.python_door == W.ADMITTED and got.difference == "python admits, lean refuses (operands-outside)", got

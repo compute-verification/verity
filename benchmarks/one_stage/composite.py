@@ -319,7 +319,7 @@ def run(a: argparse.Namespace) -> int:
            *blobs]
     rc, verdict, ran = 0, None, None
     if a.exe:
-        p = LC.run(cmd, check=False)
+        p = LC.run(cmd, check=False, ok_statuses=LC.CHECK_EXITS)
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
         write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
         verdict = outcome(PRODUCTS[a.product], answer)
