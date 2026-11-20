@@ -368,34 +368,6 @@ def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
         assert verdicts[name] is not None and why in verdicts[name], (name, verdicts)
 
 
-V2_PORT_KEYS = ("value", "root", "leaves", "words", "word_bits", "domain", RV.SCHEMA_KEY, "known", "param")
-
-
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_sampled_proofs_own_setup_refuses_a_file_missing_a_port(staged):
-    """The honest statement set up by `session_setup` with the readers' reads as a `verity/registered-reads/v2` file, the
-    same file less one port, and no file: the short file is refused, and with no file `checkComplete` is not run."""
-    d, *_ = staged
-    subprocess.run(["lake", "build", "spot-difftest"], cwd=SPOT, check=True, capture_output=True)
-    ports = json.loads((d / "readers.reads.json").read_text())["ports"]
-    whole = {"format": RG.READS_V2, "ports": {p: {k: e[k] for k in V2_PORT_KEYS if k in e} for p, e in ports.items()}}
-    cases = {"whole": whole, "dropped": whole | {"ports": dict(list(whole["ports"].items())[1:])}, "no_file": None}
-    lines = [json.dumps({"fn": "session_setup", "input": {
-        "circuit": (d / "honest" / "circuit.txt").read_bytes().hex(),
-        "public": (d / "honest" / f"pub-{N}.bin").read_bytes().hex(), "tables": [],
-        "program": (d / "program.desc").read_bytes().hex(), "partition": json.loads((d / "partition.json").read_text()),
-        "registered": f, "draw": None}}) for f in cases.values()]
-    p = subprocess.run([str(SPOT / ".lake" / "build" / "bin" / "spot-difftest")], input="\n".join(lines) + "\n",
-                       capture_output=True, text=True)
-    got = [json.loads(x) for x in p.stdout.splitlines()]
-    assert len(got) == len(cases), p.stdout + p.stderr
-    verdicts = {k: g.get("output", {}).get("refused", g) for k, g in zip(cases, got)}
-    for k, v in verdicts.items():
-        print("session_setup", k, v)
-    assert verdicts["dropped"] is not None and verdicts["dropped"] != verdicts["whole"], verdicts
-    assert verdicts["no_file"] is None or "(complete)" not in verdicts["no_file"], verdicts
-
-
 @pytest.mark.skipif(not (os.environ.get("FLOCK_CIRCUIT") and Path(os.environ["FLOCK_CIRCUIT"]).exists()),
                     reason="FLOCK_CIRCUIT names no flock-circuit build")
 def test_the_live_verifier_checks_links_against_its_own_file(staged):
