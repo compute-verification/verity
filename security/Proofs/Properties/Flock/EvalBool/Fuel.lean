@@ -181,4 +181,18 @@ theorem evalBool_body (P : Prog) {p b : Nat} {defn : Defn} {x : List Bool} {v : 
   rw [show 2 * P.defs.size + 2 = (2 * P.defs.size + 1) + 1 from rfl, evalDef?_body P hd hp hg hb, hv,
     evalDef?_mono_succ P _ b x v hv]
 
+/-- A composite Definition's value has one bit for each reference of its return, whatever its input. -/
+theorem evalStep_length (P : Prog) {ev : Nat → List Bool → Option (List Bool)} {d : Nat} {defn : Defn}
+    {x y : List Bool} (hd : P.defs[d]? = some defn) (hp : defn.prim = false) (h : evalStep P ev d x = some y) :
+    y.length = defn.body.ret.count := by
+  simp [evalStep, hd, hp, Option.bind_eq_some_iff] at h
+  obtain ⟨_, _, rfl⟩ := h
+  simp
+
+theorem evalDef?_length (P : Prog) {fuel d : Nat} {defn : Defn} {x y : List Bool} (hd : P.defs[d]? = some defn)
+    (hp : defn.prim = false) (h : evalDef? P fuel d x = some y) : y.length = defn.body.ret.count := by
+  cases fuel with
+  | zero => cases h
+  | succ n => rw [evalDef?_succ] at h; exact evalStep_length P hd hp h
+
 end FlockSoundness.EvalBool

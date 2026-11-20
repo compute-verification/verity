@@ -14,7 +14,8 @@ revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
 precision = "bfloat16"
 slots = 4
 window-steps = 2
-load = "fixed"
+dataset = "llama32_1b_fixed_4_27_2"
+timing = "at-once"
 
 [service]
 law = "rate:1/3481648"

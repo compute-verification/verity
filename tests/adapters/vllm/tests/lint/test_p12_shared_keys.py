@@ -12,8 +12,8 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
   how code identity gets defined outside the one ``code_identity()``.
 
 The row-id grammar's owner is ``config.py``; code identity's, ``pipeline/identity.py``, does not exist yet.  The modules
-that become them (``target_family.py`` into ``config.py``; ``pipeline/source_identity.py`` and
-``pipeline/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
+that become them (``target_family.py`` into ``config.py``; ``pipeline/source_identity.py`` into
+``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
 (no single literal shape to scan for), and the rule's test that editing a core file in a temp tree changes the identity.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ from . import _ratchet as R
 NAME = "p12_shared_keys"
 RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
-                    "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
+                    "verity_vllm/pipeline/source_identity.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
 CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.circuits.kernels|verity.protocols|research|adapters/vllm|tools/research)(?:/|$)"
                        r"|verity/circuits/(?!census)|verity/circuits/kernels/|verity/protocols/)")

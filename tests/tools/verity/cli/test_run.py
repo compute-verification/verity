@@ -20,6 +20,7 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity import config as K
 from verity.protocol import Channel, Role
+from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
@@ -165,6 +166,13 @@ def test_the_composites_are_remote_and_onsite():
     assert "verity/onsite/v0" not in K.COMPOSITES and "verity/onsite/v0" not in SP.SUBPROTOCOLS
 
 
+def test_each_subprotocols_id_is_its_declarations():
+    """`parties.IDS` gives each declared subprotocol its declaration's ``protocol``, but the sampled proofs, whose id
+    outside a composite is the one-stage manifest's (`SP.ID`)."""
+    assert {n: i for n, i in SP.IDS.items() if n in schemes.DECLARATIONS and i != schemes.get(n).protocol} == {
+        "sampled-proofs": SP.ID}
+
+
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
     bare = dataclasses.replace(REG.workloads["toy"], provides=frozenset({"windows", "ingress-relay"}))
     with pytest.raises(K.Refused) as e:
@@ -206,8 +214,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash with neither the network attester's bound on a response's tokens nor its lengths
 #: rows' form set: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("9b4816cf6ec07897e4625e3e5bf44f782af8d0826d587fa988f048bcf4bf1315"
-                    "0097f52430810a5afbcdb79e4abca85b03389c4cecce4b8518d6a38e10e37d0a")
+UNBOUNDED_ONSITE = ("2fc7e9f06b0bc50426ffb093843ecfeba3e33368d545c34b1ea32496aa8b7cd7"
+                    "2b55c23fe8023a32df1060b322d9ec6b0c23b634886fb062bdf01b9b90e86e51")
 
 
 def bounded(tokens):
