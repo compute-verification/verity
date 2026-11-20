@@ -1092,6 +1092,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
+    # the prover's Lean session loop is set up on the statement its environment names, fixed here, before `stage`
+    for mm, _ in drawn:
+        if mm["circ"].meta.get("statement") == FC.TMPL_STATEMENT:
+            mm["st"]["statement"] = FC.TMPL_STATEMENT
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
     def staged(mm: dict, local: list[int]) -> dict:
