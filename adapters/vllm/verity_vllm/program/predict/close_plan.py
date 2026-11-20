@@ -139,8 +139,8 @@ def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path, 
         u = units[slot_of[(P.anchor, P.lane)]]
         if u.digest not in dirs:
             named = compiled.named[u.digest]
-            dirs[u.digest] = write_build(str(builds / trace_dir({**named.shape, "policy": named.shape["sampling"]})),
-                                         compiled.programs[u.digest], named)
+            dirs[u.digest] = str(builds / trace_dir({**named.shape, "policy": named.shape["sampling"]}))
+            write_build(dirs[u.digest], compiled.programs[u.digest], named)
         pi = ProgramIndex(MF.load_program(dirs[u.digest])["instances"], program_dir=dirs[u.digest])
         out.append(Served.of_record(pi, store, u.id, u.first_step))
     return out
