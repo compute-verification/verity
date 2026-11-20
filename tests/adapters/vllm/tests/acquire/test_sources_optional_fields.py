@@ -7,8 +7,7 @@ Each reader below takes a document whose writer may leave a field out: a require
 Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
 recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
 (`verity_vllm.acquire.sources.partial_source`), and a capture map's taps, whose `commit` block names the source that commits them
-(`verity_vllm.acquire.sources.attention_source`, `verity_vllm.acquire.sources.dsv4_attention_source`,
-`verity_vllm.acquire.sources.mhc_source`).  CPU only."""
+(`verity_vllm.acquire.sources.attention_source`).  CPU only."""
 from __future__ import annotations
 
 import json
@@ -23,8 +22,6 @@ from tests.check.opened import commit_steps
 from verity_vllm.acquire.sources import attention_source as AT
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources import dsv4_attention_source as D4
-from verity_vllm.acquire.sources import mhc_source as MH
 from verity_vllm.acquire.sources import narrowed_source as NR
 from verity_vllm.acquire.sources import partial_source as P
 from verity_vllm.acquire.sources import route_source as RS
@@ -280,13 +277,10 @@ def _tap(block: Any) -> dict[str, Any]:
     return tap if block is ... else {**tap, "commit": block}
 
 
-@pytest.mark.parametrize("source", [AT, D4, MH])
 @pytest.mark.parametrize("block", NOT_THE_SOURCES)
-def test_a_tap_whose_commit_block_does_not_name_a_sources_binder_is_not_the_sources(source, block):
-    """`binds` of the three capture-map sources, and `ports_of` of the two that read ports: a tap is a source's when its `commit` block
-    names the source's binder; a tap with no block, an empty one, or another binder's is committed by another source or by none."""
+def test_a_tap_whose_commit_block_does_not_name_a_sources_binder_is_not_the_sources(block):
+    """`binds` of the capture-map attention source: a tap is the source's when its `commit` block names the source's binder; a tap
+    with no block, an empty one, or another binder's is committed by another source or by none."""
     cmap = {"id": "m", "taps": [_tap(block)]}
-    assert not source.binds(cmap)
-    assert source.binds({"id": "m", "taps": [_tap(block), _tap({"binder": source.BINDER, "name": "a/b"})]})
-    if source is not AT:
-        assert source.ports_of(cmap) == {}
+    assert not AT.binds(cmap)
+    assert AT.binds({"id": "m", "taps": [_tap(block), _tap({"binder": AT.BINDER, "name": "a/b"})]})
