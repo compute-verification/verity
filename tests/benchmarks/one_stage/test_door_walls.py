@@ -308,6 +308,39 @@ def _lean_restrict(lean: Path, tmp_path: Path, c: bytes, partition: dict, lo: in
                            str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
 
 
+#: a drawn C one of whose templates has no gate, outside the last block's own: (the spec, its case seed)
+GATELESS = ({"templates": [{"params": [-16, 32, -2048], "steps": [[6, [1, 1]], [4, [3, 1, 3]]], "ret": [4], "nested": False},
+                           {"params": [8, 7, -5], "steps": [], "ret": [0], "nested": False}],
+             "root": [{"t": 1, "form": "batch", "n": 2, "args": [[["p", 0], ["p", 1]], [["p", 2], ["p", 3]], [["p", 4], ["p", 5]]]},
+                      {"t": 1, "form": "batch", "n": 3,
+                       "args": [[["n", 0, 1], ["p", 6], ["p", 7]], [["p", 8], ["p", 9], ["p", 10]], [["p", 11], ["p", 12], ["p", 13]]]},
+                      {"t": 0, "form": "batch", "n": 2, "args": [[["p", 14], ["p", 15]], [["p", 16], ["p", 17]], [["p", 18], ["p", 19]]]}],
+             "root_params": [8, 8, 7, 7, -5, -5, 8, 8, 7, 7, 7, -5, -5, -5, -16, -16, 32, 32, -2048, -2048],
+             "registered": [8, 13], "blocks": [[0, 2], [2, 6], [6, 7]]}, 2615796738)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_template_of_no_gate_anywhere_in_c_is_refused_by_both_doors_alike(tmp_path):
+    """On every block of `GATELESS`, Lean's door (`spot-one-stage-zk restrict`, `Partition.checkTemplates`) and Python's
+    steps (`one_circuit.cuts`) refuse the query with one text, the last block's own template having gates."""
+    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    s = W.Spec(**GATELESS[0])
+    c, q, _fns = W.realise(s)
+    door = W.Door(c, q, [tuple(b) for b in s.blocks], lambda: _stub(tmp_path))
+    (tmp_path / "C.json").write_bytes(c)
+    (tmp_path / "partition.json").write_text(json.dumps(door.partition, sort_keys=True, separators=(",", ":")))
+    why = "query-refused: template WallsT1_v1 has no gate"
+    for k, (lo, hi) in enumerate(s.blocks):
+        py = door.run(k, lo, hi).text
+        run = LC.run([str(PF.v2_executable()), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
+                      str(lo), str(tmp_path / "c_s.txt")])
+        assert run.returncode != 0 and run.stderr.strip() == f"restrict: {why}", (k, run.stderr[-600:])
+        assert py is not None and py.endswith(why), (k, py)
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
