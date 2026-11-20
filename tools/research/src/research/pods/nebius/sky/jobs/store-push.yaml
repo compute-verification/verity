@@ -3,7 +3,7 @@
 # a store remote. Once a run's files are on the remote, the hourly `vy-store-evict` can drop their local
 # copies. The pod runs as uid 1000, ubuntu, the job store's owner, with `research` from the item's tree (`tree`, a commit's
 # /workspace/research/src/<sha>). Its report is /workspace/jobs/store-push/<MODE>-<UTC stamp>.json. The push takes no attempt
-# without a run record (--skip-record-less): R2's write-once key would keep it without its logs, and n1_custody.sh holds those until
+# without a run record (--skip-record-less): R2's write-once key would keep it without its logs, and custody holds those until
 # a person rules. A ready file:
 #   {"template": "store-push", "tree": "/workspace/research/src/<sha>", "env": {"MODE": "pending"}}
 name: store-push

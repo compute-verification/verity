@@ -189,7 +189,7 @@ A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally 
 `rate_usd_per_hour`, reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
 reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `launch.sh` brings one up (`--dry-run`
-needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
+needs no credentials), `teardown.sh` stops or deletes it, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 `--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
