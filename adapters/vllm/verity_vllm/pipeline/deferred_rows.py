@@ -10,7 +10,7 @@ the bundle in trees of their own (`ml.windows.rows`: a ``frame-v3-sha512`` tree 
 commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root and
 this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
 hash.  A window is ``served`` when its roots are serving's own, made before sampling (the in-Commit hook's, `serving_rows.readers`,
-which a deferred Commit with ``--serving-rows`` runs at its C2 site before its bundle is sealed, `c2_replay.serving_rows`); a
+run before the bundle is sealed); a
 window from the bundle becomes ``served`` only once a circuit opens the record's own leaves (rows-sha512's ``hm96-sha512/row/v2``
 stream rows, vllm-v1's SHA-256 leaves)."""
 from __future__ import annotations

@@ -12,7 +12,6 @@ import sys
 
 import pytest
 
-from verity_vllm.check.replay import driver as DR
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay.fork import die_with_parent, fork_pool
 
@@ -178,54 +177,3 @@ def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count
     assert FK.cpu_quota() == machine
 
 
-def test_the_cgroups_memory_is_none_where_it_states_no_limit_or_a_file_of_it_does_not_open(tmp_path, monkeypatch):
-    lim, cur = tmp_path / "memory.max", tmp_path / "memory.current"
-    monkeypatch.setattr(DR, "CGROUP_MEMORY", (str(lim), str(cur)))
-    assert DR._cgroup_memory() is None                                          # no cgroup v2 memory controller
-    lim.write_text("1000\n")
-    assert DR._cgroup_memory() is None                                          # one of the two files
-    cur.write_text("400\n")
-    assert DR._cgroup_memory() == (1000, 400)
-    lim.write_text("max\n")
-    assert DR._cgroup_memory() is None
-    cur.unlink()
-    cur.mkdir()                                                                 # there, and not a file that opens
-    assert DR._cgroup_memory() is None
-
-
-def test_the_evaluation_carries_the_fit_s_note_only_where_the_pool_was_cut(tmp_path, monkeypatch, capsys):
-    """Three picks at a worker's peak of 1000 bytes, the prewarm and the pool stood in for by the parent.  Where the cgroup has
-    room for three workers, three run and the evaluation carries no note: the fit's sentence is in its record and on the log.  One
-    byte less and two run under the fit's note; with room for one the picks run in the parent under it; a cgroup without a limit
-    fits nothing and records nothing."""
-    lim, cur = tmp_path / "memory.max", tmp_path / "memory.current"
-    monkeypatch.setattr(DR, "CGROUP_MEMORY", (str(lim), str(cur)))
-    monkeypatch.setattr(DR, "_prewarm_weights", lambda indices, picked, weights: None)
-    monkeypatch.setattr(DR, "_prewarm_evaluators", lambda picked: {})
-    pools: list[int] = []
-
-    def pool(one, picked, workers):
-        pools.append(workers)
-        return [one(vu) for vu in picked]
-
-    monkeypatch.setattr(DR, "_parallel_replay", pool)
-    picked = [{"spec": "X_v1{}", "i": i} for i in range(3)]
-    cur.write_text("0\n")
-
-    def evaluated(limit: str) -> tuple:
-        lim.write_text(f"{limit}\n")
-        results, workers, note, prewarmed, memory = DR._evaluated(lambda vu: (vu, {}, 0.0), picked, {}, lambda field, lo, hi: None, 3, 1000)
-        assert results == [(vu, {}, 0.0) for vu in picked] and prewarmed == {}
-        return workers, note, memory, capsys.readouterr().out
-
-    workers, note, memory, logged = evaluated("3000")
-    assert (workers, note, memory["workers_fitted"], memory["fitted_bytes"]) == (3, None, 3, 3000)
-    assert memory["note"].startswith("3 requested, all fit after the prewarm: 3 workers at the largest picks' peaks")
-    assert logged == f"[replay] WORKERS: {memory['note']}\n"
-    workers, note, memory, logged = evaluated("2999")
-    assert (workers, note, memory["workers_fitted"], memory["fitted_bytes"]) == (2, memory["note"], 2, 2000)
-    assert note.startswith("3 requested, fitted to 2 after the prewarm: 2 workers") and logged == f"[replay] WORKERS: {note}\n"
-    workers, note, memory, logged = evaluated("1000")
-    assert (workers, note, memory["workers_fitted"]) == (1, memory["note"], 1) and note.startswith("3 requested, fitted to 1 after")
-    assert pools == [3, 2]
-    assert evaluated("max") == (3, None, None, "") and pools == [3, 2, 3]

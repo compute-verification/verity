@@ -27,7 +27,6 @@
   "verity_vllm.observe.runtime_tree": "only its tests run it since its command went; the next cut deletes it with them",
   "verity_vllm.pipeline.compiled_merge": "only its tests run it since its command went; the next cut deletes it with them",
   "verity_vllm.pipeline.release_json": "only its tests run it since its command went; the next cut deletes it with them",
-  "verity_vllm.pipeline.research_result": "only its tests run it since its command went; the next cut deletes it with them",
-  "verity_vllm.pipeline.verdict_record": "only its tests run it since its command went; the next cut deletes it with them"
+  "verity_vllm.pipeline.research_result": "only its tests run it since its command went; the next cut deletes it with them"
  }
 }

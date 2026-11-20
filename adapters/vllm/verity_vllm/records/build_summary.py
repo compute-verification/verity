@@ -1,5 +1,5 @@
 """The build summary (`build_summary.json`): each wrapper's derive (its outcome and Program digests) and the composed workload Program,
-as the Commit's verdict reads the Build's `runtime-correspondence/v1` digest from it (`check.verdict.correspondence_of_build`).
+as the Commit's verdict reads the Build's `runtime-correspondence/v1` digest from it.
 
 Its writers lay it out three ways (`layout`):
 

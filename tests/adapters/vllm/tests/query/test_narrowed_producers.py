@@ -11,7 +11,6 @@ from __future__ import annotations
 import copy
 import gzip
 import json
-import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -23,10 +22,6 @@ except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
 from tests.query.test_boolean_manifest import _write
-from verity_vllm.check.replay import coverage as COV
-from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as RP
-from verity_vllm.check.replay.evaluate import evaluate
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.definitions.registry import b1
 from verity_vllm.query.program_view import from_instances
@@ -82,24 +77,6 @@ def test_the_manifest_models_the_narrowed_qkv_and_the_whole_last_row_as_two_iden
     assert _rows(man, "lm.model.layers.0.qkv_proj") == {(0, "out"): (LP, 128, [0, LP * 128], "Gemm_v1", None),
                                                         (1, "out"): (1, 128, [0, 128], "Gemm_v1", None)}
     assert not [r for r in man["identities"] if "@" in r["output_member"] and r["op_path"] != LAST_QKV]
-
-
-def test_the_replay_addresses_each_producer_at_its_own_identity_and_names_a_manifest_missing_either(build):
-    """The replay's index reads the members off the same population: the narrowed rows at `out@64`, the whole row at `out`.  Its
-    reconciliation passes against the manifest, and refuses one without either producer, naming that producer's VU."""
-    d, man, inst = build
-    addrs: dict[tuple, dict] = {}
-    RP.population(IX.ProgramIndex(inst, program_dir=str(d)), "r0", addresses=addrs)
-    assert {k[3]: (a["rows"], a["spec"]) for k, a in addrs.items() if k[:3] == ("r0", 0, LAST_QKV)} == {
-        "out": (1, "Gemm_v1{K=64,N=128}"), "out@64": (LP - 1, "Gemm_v1{K=64,N=64}")}
-    checks = COV.query_population(man, addrs, set(), ranks=[0])["query_checks"]
-    assert checks["ok"] is True, checks
-    for member in ("out", "out@64"):
-        checks = COV.query_population(_without(man, 0, member), addrs, set(), ranks=[0])["query_checks"]
-        assert checks["ok"] is False
-        assert [(v["op_path"], v["member"]) for v in checks["vus_outside_query"]["first"]] == [(LAST_QKV, member)]
-
-
 
 
 def test_the_manifest_places_the_last_layers_prompt_identities_at_the_last_runtime_row(build):
@@ -164,11 +141,6 @@ def _bf16(a: np.ndarray) -> np.ndarray:
     return (a.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _gemm(x: np.ndarray, w: np.ndarray, spec: str) -> np.ndarray:
-    """A `Gemm_v1` Call's Values on token row `x` and weight rows `w`: its registered row kernel."""
-    return evaluate("Gemm_v1", {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", spec)}, [[x], []], [None, w.reshape(-1)])["out"]
-
-
 def _metas(acquired: list) -> list:
     metas, off = [], 0
     for i, (name, t) in enumerate(acquired):
@@ -177,7 +149,5 @@ def _metas(acquired: list) -> list:
                                      dtype="bf16", ordinal=i))
         off += -(-nb // 256) * 256
     return metas
-
-
 
 

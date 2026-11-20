@@ -10,8 +10,7 @@ from typing import Any
 
 import pytest
 from verity_vllm.check import commit_rules as CR
-from verity_vllm.check import verdict as V
-from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check import result as V
 
 from tests.check.test_verdict import _base, _both
 
@@ -124,38 +123,11 @@ def test_a_field_the_commit_record_leaves_out_null_or_empty_decides_alike(make, 
     assert [decided(put(make(), path, value)) for value in (ABSENT, None, empty)] == [decision] * 3
 
 
-@pytest.mark.parametrize("path", [("openings", "deferred_positions"), ("binding", "openings_population", "deferred_positions"),
-                                  ("openings_after_release", "deferred_received_positions")])
-@pytest.mark.parametrize("stated, decision", [(ABSENT, (True, SCOPED, V.PASS)), (None, (False, BY_COUNT, V.FAIL)), ([], (False, BY_COUNT, V.FAIL))])
-def test_a_deferred_positions_key_tells_a_record_that_knows_positions_from_an_older_one(path, stated, decision):
-    commit = put(one_pick_deferred(), path, stated)
-    assert decided(commit) == decision
-    assert check(commit, AFTER_RELEASE).differences == ([] if decision[0] else [
-        {"name": "deferred_positions_missing", "challenge": 1, "population": 0, "positions": [0, 0]}])
-
-
 def test_a_pick_deferred_without_a_record_of_the_openings_after_release_is_not_enough():
     commit = _base()
     commit["binding"]["openings_population"]["deferred_replay_n"] = 1
     assert decided(commit) == (False, NO_RELEASE_RECORD, V.INSUFFICIENT)
     assert check(commit, AFTER_RELEASE).differences == [{"name": "deferred_picks_unopened", "challenge": 0, "population": 1}]
-
-
-@pytest.mark.parametrize("value", [ABSENT, None, {}])
-def test_under_a_floor_of_no_openings_a_record_without_openings_passes_where_no_stage_deferred_a_pick(value):
-    commit = put(_base(), ("openings",), value)
-    assert commit_verdict(commit, True, min_openings=0) == (True, SCOPED)
-    checks = V.run_checks(commit, True, min_openings=0)
-    assert [(c.outcome, c.differences) for c in checks if c.name in (OPENINGS, AFTER_RELEASE)] == [(V.PASS, []), (V.NOT_RUN, [])]
-    commit["binding"]["openings_population"]["deferred_replay_n"] = 1
-    assert commit_verdict(commit, True, min_openings=0) == (False, NO_RELEASE_RECORD)
-
-
-@pytest.mark.parametrize("stated, decision", [(ABSENT, (True, "PASS", V.PASS)), (None, (True, "PASS", V.PASS)),
-                                              ({}, (False, "binding-map context: None", V.FAIL))])
-def test_a_record_without_a_binding_block_is_decided_by_the_older_rule_and_an_empty_block_is_refused(stated, decision):
-    commit = put(one_pick_deferred(), ("binding",), stated)
-    assert decided(commit) == decision and check(commit, AFTER_RELEASE).outcome == V.PASS
 
 
 @pytest.mark.parametrize("value", [ABSENT, None, []])

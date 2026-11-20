@@ -176,11 +176,6 @@ PUBLIC = {
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
                                             "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
                                             "opens (load)",
-    "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
-                                          "(interior, register), the block parameters it registers as values, the "
-                                          "verifier's (Supply) and the replay's own (Operand), and the challenger's "
-                                          "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
                                      "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
                                      "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
@@ -278,8 +273,8 @@ PUBLIC = {
     "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor device's challenger, one challenge phase a Commit "
                                          "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
                                          "Pearl-C arm take their coins from",
-    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
-                                          "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a sealed window leaves (MANIFEST, open_bundle), which "
+                                          "benchmarks/one_stage opens",
     "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
                                              "benchmarks/serve_tax states and refuses a public write by",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "

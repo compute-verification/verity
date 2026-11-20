@@ -1,12 +1,8 @@
 """What the readers of `verity_vllm.check.replay` answer for a field its document leaves out: a Program row without operands and
-an instances document without supplied inputs (`verity_vllm.check.replay.index`, and the row's readers in `evaluate`, `population`
-and `driver`), a binding map without entries and an entry without an identity or an encoding (`verity_vllm.check.replay.opening`),
-a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps and a workload
-request without steps or prompt ids (`verity_vllm.check.replay.linkage`), a population without reasons
-(`verity_vllm.records.replay_codes`), a row's description without statics, a stop rule's block without problems and an
-executed prefix without its lag (`verity_vllm.check.replay.population`), a step's geometry without a plane row's module.  Each
-field is given absent, null and empty, and the answer is the same for the three; where a document can state the field, the stated
-answer stands beside them."""
+an instances document without supplied inputs (`verity_vllm.check.replay.index`), a binding map without entries and an entry without
+an identity or an encoding, and a manifest without aliases (`verity_vllm.check.replay.opening`), an engine schedule without observed
+arrive steps (`verity_vllm.check.replay.linkage`), a step's geometry without a plane row's module.  Each field is given absent, null
+and empty, and the answer is the same for the three; where a document can state the field, the stated answer stands beside them."""
 from __future__ import annotations
 
 import copy
@@ -17,17 +13,10 @@ import numpy as np
 import pytest
 
 from tests.check import test_sampled_replay as T
-from verity_vllm.check.replay import coverage as COV
-from verity_vllm.check.replay import driver as DR
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import linkage as LK
 from verity_vllm.check.replay import opening as OP
-from verity_vllm.check.replay import population as POP
-from verity_vllm.query.required import Q_MODULE_BODY_ID
-from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.required_manifest import SCHEMA
-from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 ABSENT: Any = object()
 NO_LIST = pytest.mark.parametrize("left_out", [ABSENT, None, []], ids=["absent", "null", "empty"])
@@ -65,20 +54,6 @@ def world() -> Any:
     inst, woff = T._program()
     weights = T._bf16(np.random.default_rng(7), max(hi for _lo, hi in woff.values()), 0.5)
     return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
-
-
-@NO_DICT
-def test_a_cross_check_that_counts_no_identities_says_none_for_each_engine(left_out):
-    cross = _with({"agree": True, "primary_engine": "traversal", "other_engine": "inventory"}, "identities", left_out)
-    manifest = {"schema": SCHEMA, "program_digest": "p" * 8, "manifest_digest": "m" * 8, "requests": ["r0"], "identities": [], "cross_check": cross}
-    line = COV.query_population(manifest, {}, set(), ranks=[])["scope"]
-    assert line.endswith("cross-check AGREED (traversal vs inventory: None / None identities))")
-
-
-@pytest.mark.parametrize("manifest", [None, {}, {"query": None}, {"query": {}}, {"query": {"query_id": "a query the population does not know"}}])
-def test_a_manifest_that_names_no_query_it_knows_is_read_under_the_query_of_record(manifest):
-    assert DR.manifest_query(manifest) is None
-    assert DR.manifest_query({"query": {"query_id": Q_MODULE_BODY_ID}}) == Q_MODULE_BODY_ID
 
 
 @NO_LIST
@@ -128,80 +103,6 @@ def test_an_entry_without_an_encoding_has_no_dtype_the_store_knows(left_out):
 
 
 @NO_DICT
-def test_plane_entries_without_an_identity_are_no_committed_plane(left_out):
-    """The store indexes no such entry itself; the check reads whatever the index holds."""
-    store = OP.CommittedStore({"entries": []}, _committed)
-    entry = _with({"name": "moe/L0/up"}, "identity", left_out)
-    store.idx = {("r0", 0, "moe/L0", "up"): [entry], ("r0", 0, "moe/L0", "down"): [entry]}
-    fact = POP.moe_plane_alias_check(store)
-    assert (fact["result"], fact["compared"], fact["per_layer"]) == (None, 0, {})
-
-
-def test_a_plane_whose_entry_states_no_encoding_is_named_unread_and_its_layer_is_not_compared():
-    """The store knows no dtype for such an entry, so the check reads no words of the plane.  Of thirteen it names the first
-    twelve (`ALIAS_NAMED`), as it does of the pairs it reads and finds identical: here every pair, the store's bytes being zeros."""
-    bf16 = {"dtype": "bf16"}
-
-    def check(layers: int, up: Any = ABSENT, down: Any = ABSENT) -> dict:
-        entries = [_entry(up if mem == "up" else down, op_path=f"moe/L{layer}", output_member=mem, element_range=[0, 8])
-                   for layer in range(layers) for mem in ("up", "down")]
-        return POP.moe_plane_alias_check(OP.CommittedStore({"entries": entries}, _committed))
-
-    fact = check(1, up=bf16)
-    assert (fact["schema"], fact["result"], fact["compared"], fact["read_errors_n"]) == (MOE_PLANE_ALIAS_CHECK_SCHEMA, None, 0, 1)
-    assert fact["read_errors"] == [{"request_id": "r0", "step": 0, "layer": 0, "plane": "down",
-                                    "why": "unknown dtype '' of (r0, step 0, moe/L0/down)"}]
-    many = check(13)
-    assert many["compared"] == 0 and [e["layer"] for e in many["read_errors"]] == list(range(12))
-    assert {e["plane"] for e in many["read_errors"]} == {"up"}
-    stated = check(13, up=bf16, down=bf16)
-    assert (stated["result"], stated["compared"], stated["identical_n"], stated["read_errors"]) == (False, 13, 13, [])
-    assert [pair["layer"] for pair in stated["identical"]] == list(range(12))
-
-
-@NO_LIST
-def test_a_binding_map_whose_entries_state_no_rank_is_rank_0s(left_out, monkeypatch):
-    class Reached(Exception):
-        pass
-
-    def populate(programs, ranks, *args, **kw):
-        raise Reached(ranks)
-
-    monkeypatch.setattr(DR, "populate", populate)
-
-    def ranks_of(bmap: dict) -> list[int]:
-        with pytest.raises(Reached) as reached:
-            DR.sampled_replay({}, bmap, _committed, lambda field, lo, hi: None, seed=1)
-        return reached.value.args[0]
-
-    assert ranks_of(_with({"schema": "test"}, "entries", left_out)) == [0]
-    unstated: list[Any] = [ABSENT, None, {}]
-    for identity in unstated:
-        assert ranks_of({"entries": [_with({"name": "m/out"}, "identity", identity)]}) == [0]
-    assert ranks_of({"entries": [_entry(), _entry(rank=None)]}) == [0]
-    assert ranks_of({"entries": [_entry(rank=1), _entry(rank=0), _entry(rank=1)]}) == [0, 1]
-
-
-@NO_LIST
-def test_a_row_without_operands_composes_no_interior_producer_and_prewarms_no_weight(left_out, pi):
-    row = _with({"i": 0, "spec": "X_v1{}", "name": "x"}, "args", left_out)
-    assert POP._interior_feeders_without_evaluator(pi, row) == set()
-    read: list[tuple] = []
-    DR._prewarm_weights({"r0": SimpleNamespace(pnames=["prompt", "weights"], by_i={0: row})}, [{"request_id": "r0", "i": 0}],
-                        lambda field, lo, hi: read.append((field, lo, hi)))
-    assert read == []
-
-
-@NO_LIST
-def test_a_row_without_operands_gives_its_evaluator_no_input(left_out, pi):
-    """No Program states such a row for a family that reads an operand; the evaluator is called on no inputs and refuses the first it asks for."""
-    row = _with(pi.rows[0], "args", left_out)
-    assert pi.describe(row)["family"] == "Embedding_v1"
-    with pytest.raises(IndexError, match="list index out of range"):
-        EV._evaluate_row(pi, OP.CommittedStore({}, _committed), lambda field, lo, hi: None, row, "r0", 0, [], depth=0)
-
-
-@NO_DICT
 def test_an_instances_document_without_supplied_inputs_supplies_none(left_out, inst):
     assert IX.ProgramIndex(_with(inst, "supplied", left_out)).supplied == {}
 
@@ -238,57 +139,6 @@ def test_the_embedding_path_passes_over_a_row_without_operands(left_out, pi):
 def test_a_plane_row_without_operands_is_named_as_not_in_pair_major_order(left_out, kind, named):
     index: Any = SimpleNamespace(by_i={5: _with({"i": 5}, "args", left_out)}, _moe_kind={}, _moe_ord={}, _moe_fused=set())
     assert IX.ProgramIndex._plane_dataflow_error(index, 5, kind, 3, 2, "moe/L0") == named
-
-
-@NO_DICT
-def test_a_population_without_reasons_has_no_codes(left_out):
-    assert RC.not_evaluable_codes(_with({"evaluable": 4}, "not_evaluable", left_out)) == {}
-    why = "no evaluator for family X_v1"
-    assert RC.not_evaluable_codes({"not_evaluable": {why: 3}}) == {why: {"class": "no-evaluator", "family": None, "domain": False, "tags": []}}
-
-
-@NO_LIST
-def test_a_request_that_states_no_steps_is_linked_over_none(left_out, world):
-    bmap, committed = world.bmap_and_reader()
-    stated = {"request_id": "r0", "arrive_step": 0, "prompt_token_ids": [1, 2], "steps": [0, 1, 2], "max_tokens": 3, "seed": 3}
-    request = _with(stated, "steps", left_out)
-    lk = LK.boundary_linkage(bmap, committed, [request])
-    assert (lk["pairs"], lk["linked"], lk["horizon"]["r0"]["linked_steps"]) == (0, 0, 0)
-    seed = LK.prescribed_input_linkage(OP.CommittedStore(bmap, committed), [request])
-    assert seed["seed"]["checked"] == 0 and [(u["kind"], u["engine_step"]) for u in seed["unlinked"]] == [("seed", None)]
-    assert seed["unlinked"][0]["why"].startswith("r0: no committed sampled_token_ids at any of its 0 declared steps")
-    lk = LK.boundary_linkage(bmap, committed, [stated])
-    assert (lk["pairs"], lk["linked"], lk["horizon"]["r0"]["linked_steps"]) == (3, 3, 3)
-    assert LK.prescribed_input_linkage(OP.CommittedStore(bmap, committed), [stated])["seed"]["checked"] == 3
-
-
-@NO_LIST
-def test_a_request_that_states_no_prompt_ids_declares_an_empty_prompt(left_out, world):
-    """Its arrival step is still a pair; a later step's link reads no prompt."""
-    bmap, committed = world.bmap_and_reader()
-    stated = {"request_id": "r0", "arrive_step": 0, "prompt_token_ids": [1, 2], "steps": [0, 1, 2]}
-    lk = LK.boundary_linkage(bmap, committed, [_with(stated, "prompt_token_ids", left_out)])
-    assert (lk["pairs"], lk["linked"]) == (3, 3)
-    assert LK.boundary_linkage(bmap, committed, [stated | {"prompt_token_ids": [1, 3]}])["unlinked"][0]["kind"] == "prompt"
-
-
-
-
-
-
-
-@NO_DICT
-def test_a_description_that_states_no_statics_keys_its_stratum_by_its_spec(left_out, pi):
-    class NoStatics:
-        def __getattr__(self, name: str) -> Any:
-            return getattr(pi, name)
-
-        def describe(self, row: dict) -> dict | None:
-            d = pi.describe(row)
-            return d if d is None else _with(d, "statics", left_out)
-
-    index: Any = NoStatics()
-    assert [v["stratum"] for v in POP.population(index, "r0")[0]] == [v["stratum"] for v in POP.population(pi, "r0")[0]]
 
 
 @NO_DICT

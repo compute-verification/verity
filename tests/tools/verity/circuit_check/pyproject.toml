@@ -197,7 +197,7 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           # serve_seal is the home of `target_of`, which the package's `__all__` lists: a check run in a process of its
           # own (test_named_targets.py's C++ model test) reads it when the package's names are resolved
           "adapters/vllm/verity_vllm/pipeline/serve_seal.py", "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
-          "adapters/vllm/verity_vllm/pipeline/interior_rows.py", "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+          "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
           "adapters/vllm/verity_vllm/pipeline/interior_links.py",
           "tests/adapters/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/protocols/proofs/spot/verifier/__init__.py",

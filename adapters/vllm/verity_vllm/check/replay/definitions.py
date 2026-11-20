@@ -37,16 +37,11 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
-__all__ = ["of_record", "premises"]
+__all__ = ["of_record"]
 
 SHOWN = 5
 #: the instances of each check specialisation a row kernel is sampled on, against its Definition and against a Boolean row's gates
 SAMPLES = 6
-#: what a replay that evaluates a Boolean Definition's row holds of its kernel and what it does not, on its record (`premises`)
-BOOLEAN_PREMISE = (f"the replay holds a Boolean row's kernel to the gates of the Boolean Definition its Build bound by sample only: "
-                   f"{SAMPLES} inputs at each of the kernel check's small statics, where a function-valued static the Build binds "
-                   f"nowhere is this tree's newest Boolean version and the body may reach Definitions the served one does not; "
-                   f"nothing holds the kernel to the gates at a served binding")
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}
 #: (word family, Boolean family) -> why the word family's row kernel is not that Boolean family's gates ([] when it is) and the
@@ -67,12 +62,6 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows if spec_family(str(r["spec"])) in ROWS})
-
-
-def premises(rows: Iterable[dict[str, Any]]) -> list[str]:
-    """What a replay of ``rows`` holds only in part, for its record: `BOOLEAN_PREMISE` when it evaluates a Boolean Definition's
-    row."""
-    return [BOOLEAN_PREMISE] if any(bound != spec for spec, bound in evaluated_specs(rows)) else []
 
 
 def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[dict[str, Any]]], *, what: str) -> None:

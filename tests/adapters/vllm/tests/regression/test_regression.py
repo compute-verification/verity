@@ -29,19 +29,18 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           build_workload/workload_program.json, the Build's own sampling-event count (result.json spec_histogram),
                           chronology.json's component_steps_equal_cap + members with no segment                             STRONG   T0
     global_match_checks   GM-01 verdict, G1..G8 status + problem counts, X-09 verdict / XREQ total, alternate criterion, lag account   weak*   T0
-    stoch_value           stochastic rows: stoch_recompute re-run over the capture's sampler-chain snapshots (GumbelTopPTokenSelect_v1
+    stoch_value           stochastic rows: the sampler value check of record over the capture's sampler-chain snapshots (GumbelTopPTokenSelect_v1
                           lane walk under the declared seed / T / top-p) == match_stoch.json verdict, summary, per-row tokens and
                           statuses (sha256), declared facts, Program S; the snapshot steps (every engine step)             STRONG   T0
     executed_prefix       executed_prefix_of_record re-run over the record's served tokens / caps / declared EOS + LAG == tokens.json,
                           G6 lengths, eos_stop_requests                                                                               weak*   T0
     commit_summary        commit_summary.summarize re-derivation == recorded (stable fields) + commit/verdict.json lifted as the verdict   STRONG   T0
                           (commit_summary.json is deprecated as a verdict in favour of verdict.json; its execution-configuration fields stay the contract)
-    verdict               verdict.json (vllm-verdict/v1; read, or rebuilt in memory from the Commit evidence): outcome == the fixture
+    verdict               verdict.json (vllm-verdict/v1; read from the row or the candidate): outcome      == the fixture
                           class, compat.commit_pass == v1, every check group == the v1 facts of runs.jsonl, #57 names fa2_layers_bad     STRONG   T0
     replay_partition      the sampled-replay PARTITION of sampled_replay_p0.json (population by family / not-evaluable by name / strata
                           sizes / lifetime split / not-executed split / the seeded sample's per-stratum counts and picks per
-                          (request, step) / phase anchors) recomputed over the Programs + manifest of record; the evaluations
-                          themselves (binding map, vault only) are carried as facts, not recomputed                                   STRONG   T1
+                          (request, step) / phase anchors), read from a record kept on the node or the candidate's       STRONG   T1
 
     * weak = PASS-side only (no reference row fails a G-check) or a rule no reference row exercises (no EOS stop anywhere: lag.exercised
       is false on every row) -- the check catches a v2 that changes a verdict or a count, not one that changes the unexercised branch.

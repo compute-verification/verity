@@ -5,8 +5,7 @@ field, naming the file and the field (`fields.MissingField`); `build_summary`, `
 too, which reads a file and hands it to `of`.  A field a writer may leave out is `X | None`, with the reason beside it; nothing
 is defaulted.  The package imports nothing else from `verity_vllm`, so every stage may import it.
 
-* `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`), as the replay's coverage reads it.
-* `query_checks` -- the sampled replay's reconciliation against Q(P) (`population.query_checks`), as the C2 rules read it.
+* `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`).
 * `served_tokens` -- the driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check reads them.
 * `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same check reads them.
 * `workload` -- the workload (`verity-vllm/workload/v2`, and the v1 layout older runs hold), as the stochastic replay and
@@ -33,8 +32,7 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.
 * `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
-  sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
-  `of` refuses an unknown field and `dump` writes it.
+  sampled request's logits rows, tokens and steps; its `of` refuses an unknown field and `dump` writes it.
 * `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
   nothing else: its readers read it as the dict it is.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v2`, ``predicted.json``): the Build of record the
