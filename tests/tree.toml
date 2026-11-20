@@ -70,7 +70,11 @@ path = "tools/"
 means = "the `verity` command, the check's steps and the test harnesses"
 
 [[tree]]
-path = "input_datasets/"
+path = "library/"
+means = "what applications and benchmarks share and Verity never looks at"
+
+[[tree]]
+path = "library/datasets/"
 means = "the input datasets a workload reads its circuits' inputs from: one read API, a definition a dataset and the generators; no protocol imports it"
 
 [[tree]]
