@@ -32,8 +32,10 @@ its nodes' arguments resolve to (§7), restricted to the parameter leaves the ca
 computed in the decoder's order (callees first) and shared by every activation:
 * `ret`: its return leaves as segments (`Seg`) of pieces (`Piece`). A piece is `rows` runs `base + r * rowStride +
   t * stride` of the activation's own gates (of one width) or of one parameter's leaves (a pass-through); a strided part
-  is one piece of rows. A segment is one piece, or `reps` copies of one batch member's return pieces, each `shift` gates
-  after the one before (a batch's whole members, read as a block). Gate pieces that continue one progression, then runs
+  is one piece of rows, and a grid's lane one piece whose rows are its periods, row `r` at the lane's levels' offset of
+  period `r` (`lv`, arithmetic in the period's digits). A segment is one piece, `reps` copies of one batch member's
+  return pieces, each `shift` gates after the one before (a batch's whole members, read as a block), or a grid of
+  several lanes, copy `t` each lane's run at period `t` (`rowed`). Gate pieces that continue one progression, then runs
   of one length at one step, are joined (`coalesce`): a body unrolled element by element returns one piece, not one per
   node, and every read of it is one segment;
 * `used`: per parameter, the leaves some gate of it reads, as intervals (`ivsOf`: a piece of rows as periodic intervals,
@@ -55,8 +57,8 @@ followed back through the step's return (`carry`, `carriesRead`: a run returned 
 other leaf a chain of positions to where it leaves the carry or to its cycle, `Chain`), never iteration by iteration.
 What has no closed form here is walked one by one up to `WALK` and refused past it (`unwalked`, with what it would have
 walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
-that aren't, a scan's ys read iteration by iteration, chains longer than `WALK`, and a grid part's pieces, one a lane a
-period (`ofPart`, `gridWalk`). Still walked unbounded: the leaves
+that aren't, a scan's ys read iteration by iteration, chains longer than `WALK`, and a grid of several lanes whose
+lanes don't each resolve to one piece of their periods (`segDown`). Still walked unbounded: the leaves
 of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
 same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
@@ -70,8 +72,7 @@ root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, w
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
 iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
 decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
-layout can't resolve), `unwalked` (a grid part of more than `WALK` pieces, `gridWalk`, or what `analyze` would walk
-one by one past `WALK`; its `message` says what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `InferenceOnlyCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -109,8 +110,9 @@ inductive Tgt where
   | gate (w : Nat)
   deriving Inhabited, BEq
 
-/-- `rows · len` elements in order, element `r · len + t` being `base + r * rowStride + t * stride` (a strided part's rows,
-or a batch's members): one row (`rows = 1`) unless the rows are what makes the piece. -/
+/-- `rows · len` elements in order, element `r · len + t` being `base + q.rowOff r + t * stride` (a strided part's rows,
+a batch's members, or a grid lane's periods): one row (`rows = 1`) unless the rows are what makes the piece. Row `r` is
+`r * rowStride` past the first when `lv` is empty, else the lane's levels `lv` (`Lane.lv`) at period `start + r`. -/
 structure Piece where
   tgt : Tgt
   base : Int
@@ -118,18 +120,33 @@ structure Piece where
   len : Nat
   rows : Nat := 1
   rowStride : Int := 0
+  lv : List (Nat × Int) := []
+  start : Nat := 0
   deriving Inhabited
 
 def Piece.at (q : Piece) (t : Nat) : Int := q.base + t * q.stride
 
 def Piece.count (q : Piece) : Nat := q.rows * q.len
 
+/-- How far row `r` of `q` starts past `base`: `r` row steps, or the lane's levels at period `start + r` (`Lane.leafAt`'s
+arithmetic in the period's digits). -/
+def Piece.rowOff (q : Piece) (r : Nat) : Int :=
+  if q.lv.isEmpty then r * q.rowStride else Lane.leafAt.go q.lv (q.start + r)
+
 /-- `q`'s elements `e` as gates `A + e * F` of width `w`: a batch's output read where its members' returns make one run. -/
 def Piece.affine (q : Piece) (w : Nat) (A F : Int) : Piece :=
-  { q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F, rowStride := q.rowStride * F }
+  { q with tgt := .gate w, base := A + q.base * F, stride := q.stride * F, rowStride := q.rowStride * F,
+           lv := q.lv.map fun (r, d) => (r, d * F) }
 
 /-- Row `r` of `q`. -/
-def Piece.row (q : Piece) (r : Nat) : Piece := { q with base := q.base + r * q.rowStride, rows := 1, rowStride := 0 }
+def Piece.row (q : Piece) (r : Nat) : Piece :=
+  { q with base := q.base + q.rowOff r, rows := 1, rowStride := 0, lv := [], start := 0 }
+
+/-- Rows `[lo, lo + n)` of `q`, as one piece. -/
+def Piece.rowsFrom (q : Piece) (lo n : Nat) : Piece :=
+  if q.lv.isEmpty then { q with base := q.base + lo * q.rowStride, rows := n }
+  else if n == 1 then q.row lo
+  else { q with start := q.start + lo, rows := n }
 
 def Piece.rowsOf (q : Piece) : Array Piece := (Array.range q.rows).map q.row
 
@@ -144,7 +161,7 @@ def Piece.slice (q : Piece) (a b : Nat) : Array Piece :=
     else
       let first := if t0 == 0 then #[] else part r0 t0 q.len
       let lo := if t0 == 0 then r0 else r0 + 1
-      let mid : Array Piece := if lo < r1 then #[{ q with base := q.base + lo * q.rowStride, rows := r1 - lo }] else #[]
+      let mid : Array Piece := if lo < r1 then #[q.rowsFrom lo (r1 - lo)] else #[]
       first ++ mid ++ part r1 0 t1
 
 /-- A set of naturals `⋃_{c < cnt} [lo + c·period, lo + c·period + len)`. -/
@@ -154,17 +171,35 @@ structure PI where
   period : Nat
   cnt : Nat
 
-/-- `q`'s elements as periodic intervals: each row a run or each column one when its rows are consecutive, else its
-elements. -/
+/-- One row's elements as periodic intervals: a run, or its elements. -/
+def Piece.rowPis (q : Piece) : Array PI :=
+  if q.len == 0 then #[]
+  else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
+  else
+    let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
+    if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
+
+/-- The periodic intervals of `xs` as intervals. -/
+def PI.ivs (xs : Array PI) : Array (Nat × Nat) := xs.foldl PI.emit #[]
+
+/-- A whole lane's elements (`lv` its levels, from period 0 to the last) as intervals: row 0's, then level by level,
+innermost first, its radix copies of the intervals so far a step apart, merged. The work is the levels' radices times
+the intervals after merging, so a lane whose runs merge costs its radices' sum, not its periods. -/
+def Piece.levelIvs (q : Piece) : Ivs :=
+  q.lv.foldl (init := Ivs.norm (PI.ivs (q.row 0).rowPis)) fun I (r, d) =>
+    Ivs.norm ((Array.range r).flatMap fun c => I.map fun (a, b) =>
+      (((a : Int) + (c : Int) * d).toNat, ((b : Int) + (c : Int) * d).toNat))
+
+/-- `q`'s elements as periodic intervals: each row a run or each column one when its rows are consecutive, a whole
+lane's level by level (`levelIvs`), else its rows'. -/
 def Piece.pis (q : Piece) : Array PI :=
   let n := q.len
-  let one (q : Piece) : Array PI :=
-    if q.len == 0 then #[]
-    else if q.stride == 0 || q.len == 1 then #[⟨q.base.toNat, 1, 1, 1⟩]
-    else
-      let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
-      if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
+  let one := Piece.rowPis
   if q.rows ≤ 1 || n == 0 then one (q.row 0)
+  else if !q.lv.isEmpty then
+    if q.start == 0 && q.rows == q.lv.foldl (fun a (r, _) => a * r) 1 then
+      q.levelIvs.map fun (a, b) => ⟨a, b - a, 1, 1⟩
+    else q.rowsOf.flatMap one
   else
     let rlo (s : Int) (k : Nat) (b : Int) : Nat := (if s ≥ 0 then b else b + (k - 1 : Nat) * s).toNat
     if q.stride.natAbs == 1 || n == 1 then
@@ -208,12 +243,14 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
 
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
 of a batch whose members' return isn't one run, read by whole members. Leaves never shift: `ps` names a leaf with
-`reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). -/
+`reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). When `rowed`, copy `m`
+is instead row `m` of each of `ps`, each piece of `reps` rows: a grid of several lanes, copy `m` its period `m`. -/
 structure Seg where
   ps : Array Piece
   len : Nat
   reps : Nat := 1
   shift : Int := 0
+  rowed : Bool := false
   deriving Inhabited
 
 def Seg.one (q : Piece) : Seg := { ps := #[q], len := q.count }
@@ -221,16 +258,17 @@ def Seg.one (q : Piece) : Seg := { ps := #[q], len := q.count }
 def Seg.count (s : Seg) : Nat := s.reps * s.len
 
 /-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
-def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with reps := 1 } else s
+def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 && !s.rowed then { s with reps := 1 } else s
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
 read is kept, and its inference block found, by its first piece. Copies that shift stay one read, since they lie in one node: they
 name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
-offsets a callee's into one member), and copies naming leaves never shift. -/
+offsets a callee's into one member), and copies naming leaves never shift. A rowed segment's reads are its pieces, each
+one lane's every period. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
-  if s.reps == 1 then s.ps.map .one else #[s]
+  if s.reps == 1 || s.rowed then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
   ps.map fun q => match q.tgt with
@@ -238,7 +276,7 @@ def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
     | _ => q
 
 /-- Copy `m`'s pieces. -/
-def Seg.copy (s : Seg) (m : Nat) : Array Piece := shiftGates (m * s.shift) s.ps
+def Seg.copy (s : Seg) (m : Nat) : Array Piece := if s.rowed then s.ps.map (·.row m) else shiftGates (m * s.shift) s.ps
 
 /-- Positions `[a, b)` of the pieces `ps` laid end to end. -/
 def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
@@ -262,7 +300,11 @@ def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
     else
       let first := if t0 == 0 then #[] else part m0 t0 s.len
       let lo := if t0 == 0 then m0 else m0 + 1
-      let mid : Array Seg := if lo < m1 then #[{ s with ps := s.copy lo, reps := m1 - lo }] else #[]
+      let mid : Array Seg :=
+        if lo < m1 then
+          if s.rowed then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
+          else #[{ s with ps := s.copy lo, reps := m1 - lo }]
+        else #[]
       first ++ mid ++ part m1 0 t1
 
 /-- A sequence of segments with each one's first position. -/
@@ -299,29 +341,42 @@ def PS.slice (s : PS) (lo hi : Nat) : Array Seg := Id.run do
 def PS.pieces (s : PS) (lo hi : Nat) : Array Piece :=
   (s.slice lo hi).flatMap fun g => (Array.range g.reps).flatMap g.copy
 
-/-- A reference part as pieces: an affine part is one, a strided part its whole rows as one and a part of a row, a grid
-one a lane a period (`Grid.pieces`). -/
-def ofPart : Part → Array Piece
-  | .affine p i b c => #[{ tgt := .ref p i, base := b, stride := 1, len := c }]
+/-- Lane `l` of a grid of runs of `run`, every period: one piece of a row a period, its rows the lane's levels (one level
+as a row step). -/
+def lanePiece (run : Nat) (l : Lane) : Piece :=
+  match l.lv with
+  | [] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run }
+  | [(r, d)] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := r, rowStride := d }
+  | lv => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := l.periods, lv }
+
+/-- A grid part as segments: one lane's is its piece (`lanePiece`), several lanes' one segment whose copy `t` is the lanes'
+runs at period `t` (`Seg.rowed`), in `Part.get`'s order. -/
+def ofGrid (run : Nat) (lanes : Array Lane) : Array Seg :=
+  if lanes.size == 1 then #[.one (lanePiece run lanes[0]!)]
+  else #[{ ps := lanes.map (lanePiece run), len := lanes.size * run, reps := (lanes[0]?.map Lane.periods).getD 0,
+           rowed := true }]
+
+/-- A reference part as segments, each of one piece but a grid's: an affine part is one, a strided part its whole rows as
+one and a part of a row, a grid `ofGrid`'s. -/
+def ofPart : Part → Array Seg
+  | .affine p i b c => #[.one { tgt := .ref p i, base := b, stride := 1, len := c }]
   | .strided p i b inner os is c =>
     if c == 0 then #[]
-    else if inner == 1 then #[{ tgt := .ref p i, base := b, stride := os, len := c }]
-    else if os == (inner : Int) * is then #[{ tgt := .ref p i, base := b, stride := is, len := c }]
+    else if inner == 1 then #[.one { tgt := .ref p i, base := b, stride := os, len := c }]
+    else if os == (inner : Int) * is then #[.one { tgt := .ref p i, base := b, stride := is, len := c }]
     else
       let whole : Piece := { tgt := .ref p i, base := b, stride := is, len := inner, rows := c / inner, rowStride := os }
       let rest : Piece := { tgt := .ref p i, base := b + ((c / inner : Nat) : Int) * os, stride := is, len := c % inner }
-      #[whole, rest].filter (·.count > 0)
-  | .explicit it => it.foldl (init := #[]) fun acc r =>
+      (#[whole, rest].filter (·.count > 0)).map Seg.one
+  | .explicit it => Array.map Seg.one <| it.foldl (init := #[]) fun acc r =>
     let one : Piece := { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 }
     match acc.back? with
     | some q => if q.tgt == .ref r.p r.i && q.stride == 1 && q.at q.len == r.j then acc.pop.push { q with len := q.len + 1 }
       else acc.push one
     | none => acc.push one
-  | .grid run lanes =>
-    (Array.range ((lanes[0]?.map Lane.periods).getD 0)).flatMap fun t =>
-      lanes.map fun l => { tgt := .ref l.p l.i, base := l.leafAt t 0, stride := l.e, len := run }
+  | .grid run lanes => ofGrid run lanes
 
-def ofSeq (s : Seq) : PS := PS.of ((s.parts.foldl (fun acc q => acc ++ ofPart q) #[]).map Seg.one)
+def ofSeq (s : Seq) : PS := PS.of (s.parts.foldl (fun acc q => acc ++ ofPart q) #[])
 
 /-! ## The summaries -/
 
@@ -375,7 +430,7 @@ def walkAtMost (what : String) (n : Nat) : Except String Unit :=
 
 /-- `q` as one row when its rows are consecutive (`rowStride` one row's span): the same elements in the same order. -/
 def Piece.flat (q : Piece) : Piece :=
-  if q.rows ≤ 1 then q
+  if q.rows ≤ 1 || !q.lv.isEmpty then q
   else if q.len == 1 then { q with stride := q.rowStride, len := q.rows, rows := 1, rowStride := 0 }
   else if q.rowStride == q.len * q.stride then { q with len := q.rows * q.len, rows := 1, rowStride := 0 }
   else q
@@ -434,7 +489,7 @@ def throughPS (ap : PS) (q : Piece) : Option Piece :=
   match ap.segs with
   | #[s] => match s.ps with
     | #[p] =>
-      if s.reps > 1 || p.rows > 1 || q.count == 0 then none else
+      if s.reps > 1 || p.rows > 1 || q.count == 0 || !q.lv.isEmpty then none else
       let first : Int := q.base + (if q.stride < 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
         (if q.rowStride < 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0)
       let hi : Int := q.base + (if q.stride > 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
@@ -444,6 +499,33 @@ def throughPS (ap : PS) (q : Piece) : Option Piece :=
                   rows := q.rows, rowStride := q.rowStride * p.stride }
     | _ => none
   | _ => none
+
+/-- `x`, one piece of the elements of a piece of `rows` rows of `len`, in their order, as such a piece: row `r` of it the
+elements of that piece's row `r`. -/
+def Piece.reshape (x : Piece) (rows len : Nat) : Option Piece :=
+  if x.rows == rows && x.len == len then some x
+  else if x.rows ≤ 1 && x.lv.isEmpty && x.len == rows * len then
+    some { x with len, rows, rowStride := (len : Int) * x.stride }
+  else none
+
+/-- Segment `s` resolved by `f` (a piece resolved, `down`), copy by copy. A rowed segment's pieces are resolved once each,
+and stay a rowed segment when each resolves to one piece of its rows (`Piece.reshape`); else its periods are resolved
+one by one, up to `WALK`. -/
+def segDown (f : Piece → Except String (Array Seg)) (s : Seg) : Except String (Array Seg) := do
+  if !s.rowed then
+    let mut out := #[]
+    for q in (Array.range s.reps).flatMap s.copy do out := out ++ (← f q)
+    return out
+  let rs ← s.ps.mapM f
+  let one (q : Piece) (r : Array Seg) : Option Piece := match r with
+    | #[x] => if x.reps == 1 && x.ps.size == 1 then x.ps[0]!.reshape q.rows q.len else none
+    | _ => none
+  if let some ps := (s.ps.zip rs).mapM fun (q, r) => one q r then return #[{ s with ps }]
+  walkAtMost "periods of a grid of several lanes resolved one by one" s.reps
+  let mut out := #[]
+  for m in [0:s.reps] do
+    for q in s.copy m do out := out ++ (← f q)
+  return out
 
 mutual
 
@@ -592,7 +674,12 @@ def fromCallee (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String
     let o : Int := c.body.offsets[k]! + m * callee.gates
     let mut out := #[]
     for s in (c.memo[node.fn]!).ret.slice a b do
-      if s.reps > 1 then
+      if s.rowed then
+        out := out ++ (← segDown (fun g => match g.tgt with
+          | .gate _ => pure #[.one { g with base := o + g.base }]
+          | .ref false _ => throw "program"
+          | .ref true i => throughArg c fuel k m i g) s)
+      else if s.reps > 1 then
         if s.ps.all fun g => match g.tgt with | .gate _ => true | _ => false then
           out := out.push { s with ps := shiftGates o s.ps }
         else
@@ -627,7 +714,7 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
     let ap := c.arg k i
     let one (lo hi : Nat) : Except String (Array Seg) := do
       let mut out := #[]
-      for q in ap.pieces lo hi do out := out ++ (← down c fuel q)
+      for s in ap.slice lo hi do out := out ++ (← segDown (down c fuel) s)
       return out
     let elems : Array (Nat × Nat) := g.rowsOf.flatMap fun g =>
       if g.stride == 1 then #[(g.base.toNat, g.base.toNat + g.len)]
@@ -779,7 +866,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
     let ap := c.arg k i
     let mut out := #[]
     for (lo, hi) in spans do
-      for q in ap.pieces lo hi do out := out ++ (← down c fuel q)
+      for s in ap.slice lo hi do out := out ++ (← segDown (down c fuel) s)
     return out
   let whole (i : Nat) : Array (Nat × Nat) := #[(0, (c.arg k i).count)]
   let mut out := #[]
@@ -835,7 +922,7 @@ def Piece.stack (p q : Piece) : Option Piece :=
   | .ref _ _ => none
   | .gate _ =>
     let rs := if p.rows == 1 then q.base - p.base else p.rowStride
-    if p.tgt == q.tgt && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
+    if p.tgt == q.tgt && p.lv.isEmpty && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
         (p.len == 1 || q.stride == p.stride) && (p.rows + 1) * p.len ≤ WALK && q.base == p.base + p.rows * rs then
       some { p with rows := p.rows + 1, rowStride := rs }
     else none
@@ -865,8 +952,7 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
   let body := defn.body
   let c : Ctx := { P, memo, d, args := body.nodes.map fun n => n.args.map (ofSeq ·.seq) }
   let mut ret := #[]
-  for s in (ofSeq body.ret).segs do
-    for q in s.ps do ret := ret ++ (← down c Flock.Steps.FUEL q)
+  for s in (ofSeq body.ret).segs do ret := ret ++ (← segDown (down c Flock.Steps.FUEL) s)
   let mut acc : Array (Array Piece) := Array.replicate body.params.size #[]
   for k in [0:body.nodes.size] do
     for s in ← nodeReads c k do
@@ -1102,17 +1188,6 @@ def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (r
         if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)) into)
     (Array.replicate n #[])
 
-/-- The most pieces `ofPart` makes of one grid part of `P`'s bodies, one a lane a period. -/
-def gridPieces (P : Prog) : Nat :=
-  P.defs.foldl (init := 0) fun m defn => if defn.prim then m else
-    let parts := defn.body.nodes.foldl (fun acc n => n.args.foldl (fun acc a => acc ++ a.seq.parts) acc) defn.body.ret.parts
-    parts.foldl (init := m) fun m q => match q with
-      | .grid _ lanes => max m (lanes.size * (lanes[0]?.map Lane.periods).getD 0)
-      | _ => m
-
-/-- A grid part is summarized one piece a lane a period (`ofPart`), so one of more than `WALK` pieces is refused. -/
-def gridWalk (P : Prog) : Except String Unit := walkAtMost "pieces of a grid part, one a lane a period" (gridPieces P)
-
 /-- `analyze`'s refusal as `evaluate` gives it: a walk past `WALK` as itself (`unwalked: ` and the reason), any other as
 `program`. -/
 def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "program"
@@ -1124,7 +1199,6 @@ def evaluate (j : Json) : Except String Json := do
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
-  gridWalk P
   let reads ← match analyze P with
     | .ok r => pure r
     | .error e => throw (analyzeCode e)
