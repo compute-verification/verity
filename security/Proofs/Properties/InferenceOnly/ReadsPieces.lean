@@ -461,7 +461,7 @@ theorem posAll_map (ps : Array Piece) (f : Piece → Piece) : posAll (ps.map f) 
 
 /-- Row `r` of `p`: its `len` positions from `base + rowOff r`. -/
 theorem pos_row (p : Piece) (r : Nat) :
-    pos (p.row r) = (List.range p.len).map fun t => (p.tgt, p.base + p.rowOff r + (t : Int) * p.stride) := by
+    pos (p.row r) = (List.range p.len).map fun (t : Nat) => (p.tgt, p.base + p.rowOff r + (t : Int) * p.stride) := by
   unfold pos
   simp only [Desc.Piece.row, List.range_one, List.flatMap_singleton]
   apply List.map_congr_left
@@ -1220,7 +1220,7 @@ theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int
         have : c / inner * inner ≤ c := Nat.div_mul_le_self c inner
         omega
       rw [hget k hkc]
-      simp [ppt]
+      simp [ppt, Desc.Piece.rowOff]
     · rw [List.range'_eq_map_range, List.map_map]
       apply List.map_congr_left
       intro t ht
@@ -1250,8 +1250,8 @@ def exStep (acc : Array Piece) (r : Ref) : Array Piece :=
 theorem posAll_push (acc : Array Piece) (q : Piece) : posAll (acc.push q) = posAll acc ++ pos q := by
   simp [posAll]
 
-theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.rows = 1) :
-    posAll (exStep acc r) = posAll acc ++ [refPos r] ∧ ∀ q ∈ (exStep acc r).toList, q.rows = 1 := by
+theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.rows = 1 ∧ q.lv = []) :
+    posAll (exStep acc r) = posAll acc ++ [refPos r] ∧ ∀ q ∈ (exStep acc r).toList, q.rows = 1 ∧ q.lv = [] := by
   have hone : pos { tgt := .ref r.p r.i, base := r.j, stride := 1, len := 1 } = [refPos r] := by
     rw [pos_one]; simp [refPos]
   unfold exStep
@@ -1261,10 +1261,10 @@ theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.r
     rw [Array.toList_push, List.mem_append] at hx
     rcases hx with hx | hx
     · exact h x hx
-    · simp at hx; rw [hx]
+    · simp at hx; subst hx; exact ⟨rfl, rfl⟩
   · obtain ⟨ys, rfl⟩ := Array.back?_eq_some_iff.1 hb
-    have hq : q.rows = 1 := h q (by simp)
-    have hys : ∀ x ∈ ys.toList, x.rows = 1 := fun x hx => h x (by simp [hx])
+    have hq : q.rows = 1 ∧ q.lv = [] := h q (by simp)
+    have hys : ∀ x ∈ ys.toList, x.rows = 1 ∧ x.lv = [] := fun x hx => h x (by simp [hx])
     dsimp only
     split
     · rename_i hc
@@ -1275,8 +1275,10 @@ theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.r
       · rw [posAll_push, posAll_push, List.append_assoc]
         congr 1
         rcases q with ⟨t, base, stride, len, rows, rs, lv, st⟩
-        simp only at hq hst hat htgt
-        subst hq hst
+        obtain ⟨hq1, hq2⟩ := hq
+        simp only at hq1 hq2 hst hat htgt
+        subst hq1 hq2 hst
+        dsimp only
         rw [pos_one, pos_one, List.range_succ, List.map_append]
         simp only [Desc.Piece.at, Int.mul_one] at hat
         rw [tgt_eq_of_beq htgt]
@@ -1285,15 +1287,15 @@ theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.r
         rw [Array.toList_push, List.mem_append] at hx
         rcases hx with hx | hx
         · exact hys x hx
-        · simp at hx; rw [hx]; exact hq
+        · simp at hx; subst hx; exact hq
     · refine ⟨by rw [posAll_push, hone], ?_⟩
       intro x hx
       rw [Array.toList_push, List.mem_append] at hx
       rcases hx with hx | hx
       · exact h x hx
-      · simp at hx; rw [hx]
+      · simp at hx; subst hx; exact ⟨rfl, rfl⟩
 
-theorem exFold_spec : ∀ (l : List Ref) (acc : Array Piece), (∀ q ∈ acc.toList, q.rows = 1) →
+theorem exFold_spec : ∀ (l : List Ref) (acc : Array Piece), (∀ q ∈ acc.toList, q.rows = 1 ∧ q.lv = []) →
     posAll (l.foldl exStep acc) = posAll acc ++ l.map refPos
   | [], acc, _ => by simp
   | r :: l, acc, h => by
@@ -1444,14 +1446,16 @@ theorem ofPart_ok (q : Part) : ∀ g ∈ (Desc.ofPart q).toList, SegOk g := by
     rw [Array.toList_map, List.mem_map] at hg
     obtain ⟨x, -, rfl⟩ := hg
     exact segOk_one x
+  have hone1 : ∀ (x : Piece) g, g ∈ #[Seg.one x].toList → SegOk g := fun x g hg => by
+    simp at hg; subst hg; exact segOk_one x
   cases q with
-  | affine p i b c => exact hone #[_]
+  | affine p i b c => exact hone1 _
   | strided p i b inner os is c =>
     simp only [Desc.ofPart]
     split_ifs
     · intro g hg; simp at hg
-    · exact hone #[_]
-    · exact hone #[_]
+    · exact hone1 _
+    · exact hone1 _
     · exact hone _
   | explicit it => exact hone _
   | grid run lanes =>
@@ -1462,12 +1466,10 @@ theorem ofPart_ok (q : Part) : ∀ g ∈ (Desc.ofPart q).toList, SegOk g := by
       obtain ⟨l, -, rfl⟩ := hg
       exact segOk_one _
     · intro g hg
-      simp only [List.mem_singleton, Array.toList_singleton] at hg
+      simp at hg
       subst hg
       show (posAll (Desc.Seg.copy _ 0)).length = _
-      simp only [Desc.Seg.copy, ↓reduceIte, posAll_map, Array.toList_map, List.flatMap_map, List.length_flatMap,
-        pos_lane_row, List.length_map, List.length_range, List.map_const', List.sum_replicate, Array.length_toList,
-        smul_eq_mul]
+      simp [Desc.Seg.copy, posAll_map, List.length_flatMap, pos_lane_row, Nat.mul_comm]
 
 theorem partsFold_ok : ∀ (l : List Part) (acc : Array Seg), (∀ g ∈ acc.toList, SegOk g) →
     ∀ g ∈ (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc).toList, SegOk g
