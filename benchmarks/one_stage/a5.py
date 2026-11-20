@@ -532,7 +532,8 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
 
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
              "registered-read-against-another-root": (at({"root": "00" * 64}), "does not open", None)}
-    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1), None)
+    # the door's file (`door_reads`) names no rows: C gives them, so there is no other row for the file to name
+    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1 and "reads" in e), None)
     if many is not None:
         e = honest["ports"][many]
         cases["registered-reads-another-row"] = (
