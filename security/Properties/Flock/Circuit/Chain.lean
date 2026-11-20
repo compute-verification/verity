@@ -512,6 +512,45 @@ def TreeMapOne : Prop :=
     ∀ (blocks : Array (Array (ℕ × ℕ))) (g : Fin (ofProgram Pp.prog).N), g ∈ (partOf Pp.prog blocks).committed →
       ∀ tl tl', TreeAt Pp.prog ms rs g.val tl → TreeAt Pp.prog ms rs g.val tl' → tl = tl'
 
+/-- Gate `g` of C is in root node `i`, a run Input node (`Spot.Partition.sharedInputs`' reading), and `i`'s gates lie
+in none of the intervals `held`. -/
+def RunInputOutside (P : Prog) (held : Array (ℕ × ℕ)) (g : ℕ) : Prop :=
+  ∃ (i : ℕ) (x : Flock.Program.Node) (f : Flock.Program.Defn),
+    (Flock.Registered.rootNodes P)[i]? = some x ∧ P.defs[x.fn]? = some f ∧
+    f.prim = true ∧ f.binding = some Flock.Program.RUN ∧
+    (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD i 0 ≤ g ∧
+    g < (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD (i + 1) 0 ∧
+    ¬ ∃ fc ∈ held, fc.1 ≤ (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD i 0 ∧
+      (((P.defs[P.root]?).map (·.body.offsets)).getD #[]).getD (i + 1) 0 ≤ fc.1 + fc.2
+
+/-- **`ReadAloneOneReader`** (stated, open): where R8 accepts (`Partition.readAlone` outside the gates of the
+parameters the verifier holds and of its tied values, `Docket.heldGates`, `Docket.tiedGates`), a committed gate of a
+run Input node outside those gates is read by one block of the accepted partition. -/
+def ReadAloneOneReader : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    Spot.Partition.readAlone p.base.verifier.program p.base.verifier.query
+      (Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier) = true →
+    ∀ (blocks : Array (Array (ℕ × ℕ))) (g : Fin (ofProgram Pp.prog).N) (u u' : Fin blocks.size),
+      g ∈ (partOf Pp.prog blocks).committed →
+      RunInputOutside Pp.prog (Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier) g.val →
+      g ∈ (partOf Pp.prog blocks).io u.castSucc → g ∈ (partOf Pp.prog blocks).io u'.castSucc → u = u'
+
+/-- **`HeldReadersCarryFiles`** (placeholder, open until the door refuses its negation by name): on an accept, a
+member whose block reads a gate of a parameter the verifier holds or of a tied value carries its file
+(`Own.registered`). -/
+def HeldReadersCarryFiles : Prop :=
+  ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
+    ∀ m ∈ ms, ∀ (fr : Spot.BlockFront.Front) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size),
+      Spot.BlockFront.front Pp.prog m.indices = .ok fr → BlockIs Pp.prog blocks u fr →
+      ∀ g ∈ (partOf Pp.prog blocks).io u.castSucc,
+        (∃ fc ∈ Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier,
+          fc.1 ≤ g.val ∧ g.val < fc.1 + fc.2) → m.own.registered.isSome
+
+/-- **`TreeMapOneOfReadAlone`** (stated, open): one reader for every committed run Input gate outside the held and
+tied gates (`ReadAloneOneReader`), and a file for every member reading one inside them (`HeldReadersCarryFiles`),
+give `TreeMapOne`. -/
+def TreeMapOneOfReadAlone : Prop := ReadAloneOneReader → HeldReadersCarryFiles → TreeMapOne
+
 /-- **`TreeMapInjective`**: on an accept, two gates of C at one tree leaf are one gate. -/
 def TreeMapInjective : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
