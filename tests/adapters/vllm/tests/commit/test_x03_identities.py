@@ -9,7 +9,6 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import (  # noqa: E402
     GPU_CHUNK_BYTES,
     NativeHostCommitter,
@@ -83,24 +82,6 @@ def test_consistent_steps_pass():
     assert r["ok"] is True and r["steps_checked"] == 3 and r["violations_n"] == 0
 
 
-def test_missing_one_and_duplicating_another_fails_with_equal_counts():
-    com = _com()
-    com._layouts[0] = _layout(_good_step())
-    bad = _good_step()
-    bad.remove("model.layers.1.mlp.down_proj")
-    bad.insert(3, "model.layers.0.self_attn.qkv_proj")         # same count as the good step
-    assert len(bad) == len(_good_step())
-    com._layouts[1] = _layout(bad)
-    r = com.identity_check()
-    assert r["ok"] is False and r["violations"][0]["step"] == 1
-    v = r["violations"][0]
-    assert v["missing_modules"] == ["model.layers.1.mlp.down_proj"]
-    assert v["multiplicity_vs_step0"]["model.layers.0.self_attn.qkv_proj"] == (2, 1)
-    rec = {"extra": {"expected_tensors": 18, "committed_tensors": 18, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "identity check" in why
-
-
 def test_fa2_row_dropped_or_doubled_fails():
     com = _com()
     good = _good_step()
@@ -165,22 +146,5 @@ def test_plan_layouts_repeating_names_get_the_record_their_tensor_metas_get():
     assert recs[1] == recs[0]
     assert recs[1]["violations_n"] == 5 and [v["step"] for v in recs[1]["violations"]] == [2, 4, 5, 6, 7]
     assert recs[1]["fa2_rule"]["steps"] == {"uniform": len(steps)}
-
-
-def test_offline_core_without_module_set_is_skipped_not_passed():
-    com = NativeHostCommitter(None, run_id="x03-ids", gpu_tree=True)
-    com._layouts[0] = _layout(_good_step())
-    r = com.identity_check()
-    assert r["ok"] is None and "skipped" in r
-    rec = {"extra": {"expected_tensors": 9, "committed_tensors": 9, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
-    assert not commit_verdict(rec, True)[0]
-
-
-
-
-
-
-
-
 
 

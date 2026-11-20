@@ -30,7 +30,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 No entry holds a private file (`private`), wherever it sits, and these stay on the node, prover-side:
-- a replay bundle or a slim keep (`cpu_replay.keep`), which hold clear values: committed values with their salts, the requests and
+- a replay bundle or a slim keep, which hold clear values: committed values with their salts, the requests and
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts

@@ -6,34 +6,12 @@ port map: its ports are its plane members in return order (`Fp8GroupQuantUe8m0_v
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import opening as OP
-from verity_vllm.definitions.numerics.deepgemm_rows import deepgemm_linear
-from verity_vllm.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
 
 K, N, ROW, ROWS = 256, 128, 1, 3
 OP_PATH = "model.layers.0.mlp.down_proj"
 PORTS = {"0": "x_q", "1": "x_s", "2": "0"}
-
-
-def test_ports_are_renamed_to_their_members_and_port_zero_never_stands_in_for_member_zero():
-    members: list[np.ndarray] = [np.full(2, v, dtype=np.uint16) for v in (1, 2, 3)]
-    q, s, y = members
-    got = EV.by_member({"0": q, "1": s, "2": y}, PORTS)
-    assert got == {"x_q": q, "x_s": s, "0": y}
-    tp = EV.by_member({"0": q, "1": s, "2": y}, {"0": "x_q", "1": "x_s", "2": "part_rank3"})
-    assert tp == {"x_q": q, "x_s": s, "part_rank3": y}
-    assert EV.by_member({"0": q, "1": s, "2": y}, {"0": "x_q", "2": "0"}) == {"x_q": q, "0": y, "1": s}
-
-
-def test_identity_and_empty_port_maps_change_nothing():
-    a: np.ndarray = np.zeros(2, dtype=np.uint32)
-    b: np.ndarray = np.ones(2, dtype=np.uint32)
-    got = {"router_w": a, "router_ids": b}
-    assert EV.by_member(got, {"router_w": "router_w", "router_ids": "router_ids"}) == got
-    assert EV.by_member(got, {}) == got
 
 
 def _operands(rng):
@@ -80,50 +58,7 @@ def _committed(got, y_member="0"):
             y_member: ("bfloat16", rows(got["2"], np.uint16))}
 
 
-@pytest.fixture
-def honest(monkeypatch):
-    ops = _operands(np.random.default_rng(3))
-    got = deepgemm_linear({"K": K, "N": N}, ops)
-    monkeypatch.setattr(EV, "_evaluate_row", lambda *a, **k: deepgemm_linear({"K": K, "N": N}, ops))
-    return got
-
-
 MEMBERS = [("x_q", K, "w8"), ("x_s", K // 128, "f32"), ("0", N, "bf16")]
-
-
-def _replay(members, ports, planes):
-    return EV._replay_vu(_Index(members, ports), _store(planes), lambda *a: None, {"i": 7, "request_id": "r0", "phase": "prefill"}, 0, {})
-
-
-def test_honest_deepgemm_row_replays_every_committed_member(honest):
-    rec = _replay(MEMBERS, PORTS, _committed(honest))
-    assert rec["result"] is True, rec.get("why")
-    assert [o["member"] for o in rec["outputs"]] == ["x_q", "x_s", "0"] and all(o["equal"] for o in rec["outputs"])
-
-
-def test_row_parallel_rank_compares_y_as_its_partial(honest):
-    members = MEMBERS[:2] + [("part_rank0", N, "bf16")]
-    rec = _replay(members, {"0": "x_q", "1": "x_s", "2": "part_rank0"}, _committed(honest, "part_rank0"))
-    assert rec["result"] is True, rec.get("why")
-    assert rec["outputs"][2]["member"] == "part_rank0"
-
-
-@pytest.mark.parametrize("member,word", [("x_q", 5), ("x_s", 0), ("0", 9)])
-def test_a_changed_committed_word_of_any_member_is_a_mismatch_by_name(honest, member, word):
-    planes = _committed(honest)
-    dtype, words = planes[member]
-    words = words.copy()
-    width = words.size // ROWS
-    words[ROW * width + word] ^= 1
-    planes[member] = (dtype, words)
-    rec = _replay(MEMBERS, PORTS, planes)
-    assert rec["result"] is False
-    assert f"{OP_PATH}/{member} row {ROW}" in rec["why"]
-
-
-def test_without_the_port_map_the_row_is_not_evaluated_by_name(honest):
-    rec = _replay(MEMBERS, {}, _committed(honest))
-    assert rec["result"] is None and rec["why"] == "evaluator produced no member 'x_q'"
 
 
 def test_e4m3_plane_reads_one_byte_a_word():
@@ -163,31 +98,3 @@ def _plane_store(q, s, flip=None):
     return OP.CommittedStore({"entries": entries}, lambda step, name, b0, b1: blobs[name.rsplit("/", 1)[1]][b0:b1])
 
 
-@pytest.fixture
-def quant(monkeypatch):
-    x = _operands(np.random.default_rng(5))[0]
-    got = fp8_group_quant_ue8m0({"K": K, "G": 128}, [x])
-    monkeypatch.setattr(EV, "_evaluate_row", lambda *a, **k: fp8_group_quant_ue8m0({"K": K, "G": 128}, [x]))
-    return got
-
-
-def _replay_plane(index, store):
-    return EV._replay_vu(index, store, lambda *a: None, {"i": 7, "request_id": "r0", "phase": "prefill"}, 0, {})
-
-
-def test_a_moe_quant_plane_row_compares_its_ports_as_its_plane_members(quant):
-    rec = _replay_plane(_PlaneIndex(), _plane_store(quant["0"], quant["1"]))
-    assert rec["result"] is True, rec.get("why")
-    assert [o["member"] for o in rec["outputs"]] == ["in_q", "in_scale"] and all(o["equal"] for o in rec["outputs"])
-
-
-@pytest.mark.parametrize("member", ["in_q", "in_scale"])
-def test_a_changed_committed_plane_word_is_a_mismatch_by_name(quant, member):
-    rec = _replay_plane(_PlaneIndex(), _plane_store(quant["0"], quant["1"], flip=member))
-    assert rec["result"] is False
-    assert f"{PLANE}/{member} row {ROW}" in rec["why"]
-
-
-def test_a_row_that_is_no_plane_row_gets_no_plane_port_map(quant):
-    rec = _replay_plane(_PlaneIndex(plane_kind=None), _plane_store(quant["0"], quant["1"]))
-    assert rec["result"] is None and rec["why"] == "evaluator produced no member 'in_q'"

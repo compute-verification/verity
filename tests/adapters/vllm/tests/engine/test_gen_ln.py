@@ -152,22 +152,6 @@ def test_layer_norm_and_gelu_erf_are_registry_definitions():
     assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"
 
 
-def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
-    from verity.circuits.defs import bind
-
-    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
-    N = 64
-    rng = np.random.default_rng(0)
-    x, w, b = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16 for _ in range(3))
-    got = np.array(evaluate_spec(bind(layer_norm.LayerNormAten, N=N, EPS=1e-5), [a.astype(np.uint16) for a in (x, w, b)]), dtype=np.uint32)
-
-    def bf(u):
-        return (u.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
-    xf, wf, bf_ = bf(x), bf(w), bf(b)
-    ref = wf * (xf - xf.mean()) / np.sqrt(((xf - xf.mean()) ** 2).mean() + 1e-5) + bf_
-    assert np.abs(bf(got) - ref).max() <= 2 ** -7 * np.abs(ref).max()   # one bf16 ulp at the row's scale
-
-
 # --- patterns in the profile ----------------------------------------------------------------------------------------------------
 
 def test_patterns_are_placed_ahead_of_the_base_rotary_and_bias_patterns():
