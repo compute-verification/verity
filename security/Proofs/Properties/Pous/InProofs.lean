@@ -233,11 +233,15 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 
 
 theorem honestDigest_size : honestDigest.size = 64 := by decide
 
+/-- The honest session's record salt: `RECORD_SALT_BYTES` zero bytes. -/
+def honestRecordSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+theorem honestRecordSalt_size : honestRecordSalt.size = RECORD_SALT_BYTES := by
+  simp [honestRecordSalt, ByteArray.size]
+
 theorem honest_message (leaf : ByteArray) :
-    ∃ m, message (honestCommitment leaf) MemoryAttester.Session.Properties.SecurityProofs.oneSalt COMPLETE
-      #[honestRound] = .ok m :=
-  MemoryAttester.Session.Properties.SecurityProofs.message_one _
-    MemoryAttester.Session.Properties.SecurityProofs.oneSalt_size _ honestDigest_size
+    ∃ m, message (honestCommitment leaf) honestRecordSalt COMPLETE #[honestRound] = .ok m :=
+  MemoryAttester.Session.Properties.SecurityProofs.message_one _ honestRecordSalt_size _ honestDigest_size
 
 theorem runGives_honest : RunGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
@@ -262,7 +266,7 @@ theorem runGives_honest : RunGivesHonest := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, Bind.bind, Except.bind]
   have hcoin := honest_coin hleaf
-  let V : Vals := ⟨m, sig.encode, MemoryAttester.Session.Properties.SecurityProofs.oneSalt, COMPLETE, #[honestRound],
+  let V : Vals := ⟨m, sig.encode, honestRecordSalt, COMPLETE, #[honestRound],
     honestRound⟩
   have hlook : SCHEMES.lookup LMS = some Lms.deployed := rfl
   have hpiece : ∀ u, PieceOk SCHEMES LMS k.publicKey (honestCommitment leaf) (fun _ => some honestDigest) (fun _ => 0) u
