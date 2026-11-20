@@ -1558,13 +1558,13 @@ theorem liftSeqRefs : LiftSeqRefs := by
       exact hG _
     | some w =>
       dsimp only
-      simp only [Part.count, Flock.Program.Part.get]
+      simp only [Part.count]
       rw [range_mul_map, List.flatMap_map]
       apply List.flatMap_congr
       intro k _
-      try dsimp only
+      show List.map (fun t => (⟨p, i, b * w + (k * w + t)⟩ : Ref)) (List.range w) =
+        List.map (fun t => ({ p := p, i := i, j := (at_ p i (b + k)).1 + t } : Ref)) (List.range (at_ p i (b + k)).2)
       rw [hh p i w hw (b + k)]
-      try dsimp only
       apply List.map_congr_left
       intro t _
       simp [Nat.add_mul, Nat.add_assoc]
@@ -1589,7 +1589,7 @@ theorem walkStep_congr {W : Type} [Inhabited W] (I : Flock.Program.Wires Option 
   cases hD : P.defs[d]? with
   | none => simp [hI]
   | some defn =>
-    simp only [hI]
+    simp only [hI, Option.bind_eq_bind, Option.bind_some]
     by_cases hp : defn.prim = true
     · obtain ⟨hb, hbe⟩ := hprim defn hD hp
       simp only [hp, ↓reduceIte, hb]
