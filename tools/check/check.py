@@ -3484,9 +3484,10 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         pre = preflight()
         steps.live.plan([name for name, _, _ in pre])
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
+        refused = None
         if not steps.stopping and (keep_going or all(r["status"] == "passed" for r in results)) and (refused := prebuild(out, steps)):
             results.append(refused)
-        if not steps.stopping and (keep_going or all(r["status"] == "passed" for r in results)):
+        if not steps.stopping and not refused and (keep_going or all(r["status"] == "passed" for r in results)):
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
