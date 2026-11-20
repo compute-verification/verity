@@ -1255,7 +1255,7 @@ inference_only() {  # in TREE, once step 3 counted window K's circuit at the cla
     --circuit "$D/window-circuit-w$K-${c//,/-}.json" --registration "$D/advice/w$K/registration.json" --pins "$WREG" \
     "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
-  say "${out:+$out; $BASIS_129}${out:-INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node}"
+  if [ -n "$out" ]; then say "$out; $BASIS_129"; else say "INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node"; fi
   return "$rc"
 }
 pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the run serves, asked of the piece itself
