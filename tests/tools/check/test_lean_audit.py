@@ -293,7 +293,7 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_limits_the_repaired_loc
     package fails and nothing is repaired. The flag goes only with --regenerate, over every package: `--package` naming
     each, as check.py's `lean-audit:PKG` parts of a deferred run do, is every package, and one that leaves a package out
     fails."""
-    limits = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
+    limits = 'UNWITNESSED = {"pkg/b": 1}\n\nUNREASONED = {"pkg/b": 2}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
     root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: limits})
     (root / "tools/verity/lean/check.py").write_text(BOOK_AUDIT)
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"unlisted": True}))
@@ -584,20 +584,36 @@ def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
     """A count above its limit is raised to, and a limit above its count by more than its room lowered to, the count and
     its room, which changes queued on `next` still use; a limit within its room stays, and a package no limit names with
     nothing listed gets none. A limits file without the line fails."""
-    text = ('X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9, "e": 6}\nINLINE = {"a": 3}\n'
-            'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
+    text = ('X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9, "e": 6}\nUNREASONED = {"a": 1, "b": 2, "c": 10, "e": 2}\n'
+            'INLINE = {"a": 3}\nROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
     locks = {"a": {"unwitnessed": {"t": "h"}, "shape": {"inline": {"t": {"x": "why", "y": "why"}}}},
              "b": {"unwitnessed": {"t": "h", "u": "h"}}, "c": {"unwitnessed": dict.fromkeys("tuvwxyzpqr", "h")}, "d": {},
              "e": {"unwitnessed": {"t": "h", "u": "h"}}}
     new, warned = LA.held_caps(text, locks)
-    assert new == ('X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10, "e": 3}\nINLINE = {"a": 2}\n'
-                   'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
+    assert new == ('X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10, "e": 3}\nUNREASONED = {"a": 1, "b": 2, "c": 10, "e": 2}\n'
+                   'INLINE = {"a": 2}\nROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
     assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: UNWITNESSED['a']", "bookkeeping: UNWITNESSED['c']",
                                                     "bookkeeping: UNWITNESSED['e']", "bookkeeping: INLINE['a']"]
     assert warned[2].endswith("6 -> 3, the count its lock has and its room of 1")
     assert LA.held_caps(new, locks) == (new, [])
     with pytest.raises(LookupError):
         LA.held_caps("UNWITNESSED = {}\n", locks)
+
+
+def test_the_lock_run_lowers_the_count_of_exemptions_without_a_reason_and_fails_rather_than_raise_it():
+    """`UNREASONED` counts the whole `unwitnessed` exemptions without a `why` (a bare hash, {type_hash, unfolded_hash});
+    one with its reason, or one of a half, is not counted. The lock run lowers the cap as owners give reasons and never
+    raises it: a count above it fails the run, naming the form to write."""
+    text = 'UNWITNESSED = {"a": 4}\nUNREASONED = {"a": 3}\nINLINE = {}\nROOM = {}\n'
+    reasons = {"r": {"type_hash": "h", "why": "its owner's reason"}, "s": {"type_hash": "h", "missing": "honest", "why": "w"}}
+    lowered = {"a": {"unwitnessed": {"t": "h", "u": {"type_hash": "h", "unfolded_hash": "u"}} | reasons}}
+    new, warned = LA.held_caps(text, lowered)
+    assert 'UNREASONED = {"a": 2}' in new and warned == [
+        f"bookkeeping: UNREASONED['a'] in {LA.CAPS_TEST} (@lean): 3 -> 2, the count its lock has"]
+    grown = {"a": {"unwitnessed": {"t": "h", "u": "h", "v": "h", "w": "h"}}}
+    with pytest.raises(ValueError, match=r"UNREASONED\['a'\].*4, above its cap of 3, and no run raises it: a whole "
+                                         r"`unwitnessed` exemption is \{type_hash, why\}"):
+        LA.held_caps(text, grown)
 
 
 def test_raised_unread_raises_the_areas_above_their_limits_and_keeps_the_rest():

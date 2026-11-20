@@ -1,8 +1,8 @@
 # network_e2e
 
 The network chain's steps after N2 and the proofs, over varied traffic, held to their contracts on fakes and on recorded
-endpoint runs. Nothing here serves or proves: the network attester's runner is
-`benchmarks/network_traces/chain_record.py`, whose endpoint step reads `chain.served_advice`.
+endpoint runs. Nothing here serves or proves:
+`benchmarks/network_traces/chain_record.py`'s endpoint step reads `chain.served_advice`.
 
 - `chain.py`: the steps. The advice's (I1 v0) bits per execution phase, v0's beside the
   derived rules' residual (`encodings/derived.py`); the endpoint's own advice (`served_advice`: `verity-vllm advice`

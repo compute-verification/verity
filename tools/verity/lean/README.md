@@ -160,8 +160,9 @@ Each section, with the function of `check.py` whose docstring has its rule. A li
 keeps or drops from and never adds to.
 
 - `roots`: the modules the audit imports; every module under them is audited. `exempt`: the module prefixes nothing
-  imports, each with the reason; every other `.lean` file of the package is imported by a root, and an entry that
-  matches no file fails (`judge`).
+  imports, each with the reason, or, for a file left out of the roots until its issue ends, {why, owner, issue, due}
+  (`exempt_owed`); every other `.lean` file of the package is imported by a root, and an entry that matches no file, or
+  in neither form, fails (`judge`).
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
@@ -187,7 +188,9 @@ keeps or drops from and never adds to.
   names has one, written by hand, and `--update` drops an entry whose premise the lock no longer lists (`id_failures`).
   `claim_ids.py --write` writes `verity.claims`' table of each id's premises (`LEAN`) from every lock's.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
-  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
+  {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system, each with an
+  honest lemma under `witnesses` (`deployed_witness_failures`; `unwitnessed` excuses a deployed guarantee's `nontrivial`
+  half alone), and the report counts them (`deployed_witnesses`).
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
@@ -204,7 +207,8 @@ keeps or drops from and never adds to.
 - `claims`: every predicate the spec declares under `claims.modules` has its `fails` and `meets` witnesses under
   `claims.witnesses`, a reason under `claims.not`, or its guarantee under `claims.generic` (`claim_failures`).
 - `witnesses`, `unwitnessed`, `witnesses_assumed`: a guarantee of an acceptance or an exclusion has `honest` and
-  `nontrivial` witnesses, or an `unwitnessed` entry, which only shrinks (`witness_failures`, `witness_scope`,
+  `nontrivial` witnesses, or an `unwitnessed` entry: {type_hash, why}, its owner's reason on soundness's word, which no
+  run writes; the entries carried without a reason only go (`UNREASONED`; `witness_failures`, `witness_scope`,
   `assumed_failures`).
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,
