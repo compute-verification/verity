@@ -57,10 +57,10 @@ def test_the_population_command_writes_the_sampling_design_and_names_the_class_s
 
 
 #: the population's program and its Q_template_instance partition object, as the staged circuit's META binds them
-PARTITION_DIGEST = ("d299900a9cc0344297d35733b612e76c654329977eb6d3185d7eb535e58413d3"
-                    "e8389e0f0b8a381f80150eb8742a802c294818eb1ecbb513bafc38592626d0f8")
-PROGRAM_SHA512 = ("7984ebfb4f2a801208943042c48b4be318fa2c2dad283263e1aa2140e9e5e103"
-                  "b8a78eff760855ce50e9748eabeb755b75bb28ade6a233c9db2f203af68870a8")
+PARTITION_DIGEST = ("f1e4efcce8ad7301b734a26b9562413f83ba7a7a67b9405cbc141329085aa45b"
+                    "a917fe4722001a25c71723ba8ba8330efca4768ff3c2a4ab8846f06aa448149f")
+PROGRAM_SHA512 = ("0e9d59777eee004c7366e6161e1894f4f6cd94e8c1b6cda893d36997e1a9501c"
+                  "ae960c7dda39d3ee3932c78c4b2f049e1fcfe574638d8b15728266768e1f72e1")
 
 
 def test_the_verifiers_partition_and_program_are_the_ones_the_circuit_binds(tmp_path, capsys):

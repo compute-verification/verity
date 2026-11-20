@@ -349,9 +349,10 @@ def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
     assert said.startswith("1 sets: 48 of 48 sessions agree, 0 disagree; 0 accepted") and "NO SESSION IS ACCEPTED" in said
     both = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 3, "passed_every_check": 2}]
     said = CHECK.agreement_outcome(both)
-    assert "3 accepted by the Lean verifier and by upstream, 2 refused last" in said and "NO SESSION" not in said
+    assert ("3 accepted by the Lean verifier and by upstream, 2 pass every Lean check before the form's and are refused at it"
+            in said and "NO SESSION" not in said)
     split = [{"set": 0, "sessions": 50, "agree": 49, "disagree": ["s7"], "accepted": 3, "passed_every_check": 0}]
-    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 refused" in CHECK.agreement_outcome(split)
+    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 pass" in CHECK.agreement_outcome(split)
     assert "NO SESSION" not in CHECK.agreement_outcome([])
 
 
@@ -424,11 +425,12 @@ def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, m
 
 
 def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
-    """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
+    """Every pinned binary a set replays on has a stored honest session or a selftest record for the preflight to replay."""
     import json
 
     sets = json.loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
-    assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
+    smoked = {s["pr83"] for s in sets if (s.get("sessions") or s.get("selftest")) and "tables" not in s["statement"]}
+    assert smoked and smoked == {s["pr83"] for s in sets}
 
 
 def test_the_rule_the_gate_reads(monkeypatch):
@@ -1321,6 +1323,24 @@ def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
     assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
+
+
+def test_the_agreements_smoke_replay_takes_a_selftest_case_upstream_accepted_live(tmp_path, monkeypatch):
+    """A set with only a selftest record smokes on a case upstream accepted live; without one, the preflight would find no
+    session to replay."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    (v / "selftest_records.py").write_text(
+        "import json, sys\nfrom pathlib import Path\nfor c, ok in (('a-forged', False), ('b-honest', True)):\n"
+        "    d = Path(sys.argv[2]) / c\n    d.mkdir(parents=True)\n"
+        "    (d / 'case.json').write_text(json.dumps({'live': {'accepted': ok}}))\n")
+    sets = [{"pr83": "cc", "lean_statement": "s", "statement": {"circuit": "art:cc/c", "public": "art:cc/p"},
+             "selftest": ["art:cc/records"]}]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    [(c, cmd, e)] = CHECK.upstream_smoke(tmp_path)
+    assert (c, Path(cmd[-1]).name, e) == ("cc", "b-honest", {"accepted": True})
 
 
 def _fake_run(monkeypatch, groups, pre=()):

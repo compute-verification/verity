@@ -18,6 +18,7 @@
 #      binaries, as 70-class-sweep.sh)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 if [ -z "${RG_PINNED:-}" ]; then
   if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
     . verity/protocols/proofs/flock/prover/pod/cpu-slices.sh

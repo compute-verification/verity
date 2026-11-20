@@ -30,6 +30,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 
 def ask(p: subprocess.Popen, line: str, body: bytes) -> tuple[bytes | None, str]:
@@ -54,14 +56,14 @@ def stopped(lean: str, args: list[str], dump: Path, t: int, r: int) -> dict:
     rng = random.Random(f"zk-server-finish-agree/{t}/{r}")
     for k in range(16 * n):
         req[off + k] ^= rng.randrange(256)
-    p = subprocess.Popen([lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = LR.start([lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     got, head = ask(p, f"table {t}", (dump / f"table{t}.req").read_bytes())
     if got is not None:
         got, head = ask(p, f"salts {t} {r}", b"")
     if got is not None:
         got, head = ask(p, f"rep {t} {r}", bytes(req))
     p.stdin.close()
-    p.wait()
+    LR.ended(p, LR.REFUSES)
     ok = got is None and head.startswith("err PROVER-STOPPED: the constraints ") and head.endswith(" fail on the rep's pads")
     return {"what": f"table {t} rep {r} {STOPPED}", "ok": ok, "lean": head}
 
@@ -95,7 +97,7 @@ def main(argv=None) -> int:
                    "lean": f"{lp.stat().st_size} bytes" if lp.exists() else "no file"}
             rows.append(row)
             ok &= row["ok"]
-    p = subprocess.Popen([a.lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = LR.start([a.lean, "finish", *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     for t in tables:
         t0 = time.monotonic()
         got, head = ask(p, f"table {t}", (a.dump / f"table{t}.req").read_bytes())
@@ -108,7 +110,7 @@ def main(argv=None) -> int:
         if got is None:
             break
     p.stdin.close()
-    p.wait()
+    LR.ended(p, LR.REFUSES)
     for t in tables:
         for f in sorted(a.dump.glob(f"table{t}-rep*.vals")):
             r = int(re.fullmatch(rf"table{t}-rep(\d+)\.vals", f.name).group(1))

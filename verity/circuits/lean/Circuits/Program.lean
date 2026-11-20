@@ -156,10 +156,15 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
   if at_ < todo.size then return some (Json.mkObj [("why", Json.str "a walk of more steps than this verifier follows")])
   return none
 
-/-- The root body's Calls (`partition_object.calls`): every node that is not an input node, with its root-body index. -/
+/-- The root body's Calls (`partition_object.calls`): every node that is not an input node, with its root-body index.
+A node whose callee is no Definition is a Call, which its reader refuses at its callee; a root that is no Definition has
+none. -/
 def Prog.calls (P : Prog) : Array Nat :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  (Array.range nodes.size).filter fun k => let f := P.defs[nodes[k]!.fn]!; !(f.prim && isInputId f.key)
+  match P.defs[P.root]? with
+  | none => #[]
+  | some r => r.body.nodes.zipIdx.filterMap fun (x, k) => match P.defs[x.fn]? with
+    | some f => if f.prim && isInputId f.key then none else some k
+    | none => some k
 
 def Prog.rootScope (P : Prog) : Scope := .top P.root 0 none
 

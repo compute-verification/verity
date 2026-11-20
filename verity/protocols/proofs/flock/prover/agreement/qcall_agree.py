@@ -12,12 +12,14 @@
   and its `Q_word` v1 units (`qword-program`) against core's: registering an input changes no cut.
 Writes DIR/result.json; exits 1 unless everything agrees.
 """
-import argparse, importlib, json, subprocess, sys
+import argparse, importlib, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 
 def run(a, cmd, tag, *args):
-    p = subprocess.run([a.lean, cmd, *map(str, args)], capture_output=True, text=True)
+    p = LR.run([a.lean, cmd, *map(str, args)], ok_statuses=LR.REFUSES)
     line = next((l for l in p.stdout.splitlines() if l.startswith(tag + " ")), None)
     if line is None:
         raise RuntimeError(p.stdout + p.stderr)
