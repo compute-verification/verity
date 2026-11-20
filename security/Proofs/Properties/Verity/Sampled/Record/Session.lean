@@ -125,6 +125,7 @@ def scopeOf (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : V Unit := 
 
 /-! ## v2's setup, unfolded -/
 
+set_option maxHeartbeats 1000000 in
 /-- **`buildSessionOf`, unfolded**: an hm96-sha512 row statement, `Stmt.setupTables` (under hidden outputs, on
 `ProvedScope.circuitOf`'s parse, which is it: `Stmt.setupTables_eq`), each table's registered reads (at the reads
 `Registered.withPositions` derives) and the identifier's
@@ -149,22 +150,17 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
       (∀ st ∈ x.2, (Flock.Registered.withPositions st.c st.pub program registered >>= Flock.checkRegistered st) = .ok () ∧
         Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
-    split at hb
+    obtain ⟨x, hs, hb⟩ := bind_ok hb
+    obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
+    obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
+    refine ⟨x, ?_, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
+      (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
+      Except.ok.inj hb⟩
+    split at hs
     · next hhid =>
-      obtain ⟨x, hs, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      refine ⟨x, ?_, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
-        (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
-        Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, eq_self_iff_true, ↓reduceIte] using hs
-    · obtain ⟨x, hs, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-      exact ⟨x, hs, fun st hst => (body_bind_ok (W := fun st => Flock.Registered.withPositions st.c st.pub program registered)
-        (C := Flock.checkRegistered) (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_bind_yield hloop st hst), hfull,
-        Except.ok.inj hb⟩
+    · exact hs
   obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
   simp only [Prod.mk.injEq] at hx
   obtain ⟨rfl, rfl⟩ := hx
