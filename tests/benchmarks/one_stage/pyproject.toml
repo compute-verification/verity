@@ -15,9 +15,7 @@
 testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-# The suite also tests v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
-# a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
-# `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
+# The suite also tests v2's case (`v2_case.py`, on a served window's compose.log).
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
@@ -37,7 +35,6 @@ untraced = [
     "test_served_overhead.py",
     "test_served_verdicts.py",
     "test_kept_bootstrap.py",
-    "test_toy.py", "test_guard.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
@@ -95,8 +92,6 @@ parts = 7
 # `security/lean-audit.json` and `security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
 # and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
 # `DISCHARGES`), which the locks record by digest and no other way.
-# `tests/benchmarks/one_stage/test_two_stage_driver.py`: the stop class and sessions `test_stop_audit` drives, the
-# adapter's test of the two-stage driver on its dockets.
 # block_record derives the record's subprotocols from the onsite application
 # `adapters/vllm/workloads/SHA256SUMS`: the workloads' digests verity_vllm's config reads as the served window's circuit loads
 inputs = ["tests/verity/circuits/stand_in.py", "applications/onsite_full.toml", "tools/config/verity_config", "verity/protocols/resource_accounting/compute/pouw/prover/clear", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c",
@@ -131,7 +126,7 @@ inputs = ["tests/verity/circuits/stand_in.py", "applications/onsite_full.toml", 
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm", "adapters/vllm/workloads/SHA256SUMS",
-          "tests/benchmarks/one_stage/test_two_stage_driver.py", "benchmarks/kernels/machine.py",
+          "benchmarks/kernels/machine.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",
