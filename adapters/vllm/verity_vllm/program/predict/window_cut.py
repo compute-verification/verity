@@ -5,7 +5,7 @@ unit `LinearARow_v3{K, R}` (`registry.linear_cut`), reading its x as its writers
 the call's A rows, and one unit `LinearOut_v3{N, W}` reading its row of the call's y and handing it on as N / W rows of W
 words (`linears`), which its readers read as they would its slices (`cut_linear`). A template is a shape, every call of it
 its members, and a member's registered read names its call's table; the circuit's program takes the tables as its values
-(`cut_values`), and `census` counts the cut linears by shape.
+(`cut_values`).
 
 Refused by name (`Unexpressible`): a class Program with an int8 linear or no linear but its LM heads, a position whose
 linears aren't the first position's, and a linear whose y no rows of ``words`` doubled hand on in one unit.
@@ -116,29 +116,4 @@ def cut_values(t: PearlTables, cls: WindowClass, layout: Linears) -> tuple[str, 
     return tuple(v for s in range(cls.outputs) for c in range(len(layout.calls)) for v in (t.a(s, c), t.y(s, c)))
 
 
-#: why a cut linear's y is untied: the prover's registered value, held to nothing PoUW credits
-UNTIED = ("Pearl+'s verifier holds its own trees of each call's A rows and y (row-seg rows of FP32 words under PoUW's "
-          "bindings) to its credited product, and the circuit reads the window's registered values of them in that "
-          "format; unless the window's registration reuses those trees' roots, nothing holds the two to each other, so "
-          "the y the circuit reads is the prover's")
-
-
-def census(lowered: Any) -> list[dict[str, Any]]:
-    """The cut linears of ``lowered``'s class (`window_circuit.Lowered`), a row a round's call: its round and call (its
-    index among a position's cut linears), its K, N and W, its rows (the round's, `PearlTables.rows`) and multiply-adds, its
-    A rows' value and rows (`PearlTables.a_rows`) and its y's, PoUW's scheme whose credited product a tie would hold y to,
-    and whether one does (none yet: `UNTIED`). Empty for a circuit not cut."""
-    P = lowered.programs[0]
-    if P.cut is None:
-        return []
-    t, cls, out = P.tables, P.cls, []
-    for s in range(cls.outputs):
-        m = t.rows(cls, s)
-        for c, (k, n, w) in enumerate(P.cut.calls):
-            out.append({"round": s, "call": c, "k": k, "n": n, "w": w, "rows": m, "macs": m * n * k,
-                        "a": {"value": t.a(s, c), "rows": t.a_rows(cls, s)}, "y": {"value": t.y(s, c), "rows": m},
-                        "scheme": t.scheme, "tied": False, "untied": UNTIED})
-    return out
-
-
-__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "cut_linear", "cut_values", "linears"]
+__all__ = ["Linears", "ROW_FORMAT", "cut_linear", "cut_values", "linears"]

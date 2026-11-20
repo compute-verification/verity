@@ -16,7 +16,9 @@ primitive and does not fit, or a body that holds a scan, is refused (`Unlaid`).
 ports are its in(S) and out(S), so a wire between two of its units is no port of it. A block closes at each of ``ends``
 (a coarser level's ends, which the blocks then refine). With a floor ``enough(ins, outs, ands, units)``, a block under it
 (it took every unit the limit and the next end let it) joins the block before it where that block, so grown, still fits
-and is not at an end; elsewhere `pack` is refused (`pack-floor`) and returns nothing.
+and is not at an end; elsewhere `pack` is refused (`pack-floor`) and returns nothing. A block holds no unit that reads another
+unit of it (the door's `operands-outside`): a block closes before a unit that reads a unit of it, and where the floor would join
+such a unit to the block it reads, `pack` is refused (`pack-inside-read`).
 """
 
 from __future__ import annotations
@@ -182,6 +184,24 @@ class Measure:
             if o is not None:
                 by.setdefault(o, []).append((lo, hi, w, len(self.units)))
         self.held = {o: _last(ev) for o, ev in by.items()}
+        self.reads_unit: list[list[int]] = []
+        for v, runs in enumerate(self.reads):
+            us: set[int] = set()
+            for lo, hi, _w, _b in runs:
+                u = max(bisect.bisect_right(self.lo, lo) - 1, 0)
+                while u < v and self.lo[u] < hi:
+                    if lo < self.hi[u]:
+                        us.add(u)
+                    u += 1
+            self.reads_unit.append(sorted(us))
+
+    def inside_read(self, lo: int, hi: int) -> tuple[int, int] | None:
+        """The first unit ``v`` of ``[lo, hi)`` and a unit ``u`` of it that ``v`` reads, where a block of those units holds
+        one: a proof block's units read no unit of their own block."""
+        for v in range(lo, hi):
+            if (u := next((u for u in self.reads_unit[v] if u >= lo), None)) is not None:
+                return u, v
+        return None
 
     def block(self, a: int, b: int) -> tuple[tuple[int, ...], tuple[int, ...], int]:
         for c, cost in self.grow(a):
@@ -458,6 +478,11 @@ def _merge(runs: list) -> list[tuple[int, int, int, str]]:
     return out
 
 
+def _inside_read(lo: int, hi: int, writer: int, reader: int) -> Unlaid:
+    return Unlaid("pack-inside-read", f"units [{lo}, {hi}) would be one proof block to meet the floor, and unit {reader} reads unit "
+                  f"{writer} of it: a proof block holds no unit that reads a unit of its own")
+
+
 def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None, enough: Enough | None = None,
          ends: Sequence[int] = ()) -> list[tuple[int, int]]:
     m = m or Measure(program, q or query(program))
@@ -471,17 +496,24 @@ def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None, enou
             raise Unlaid("lay-primitive" if isinstance(m.root.nodes[k].fn, PrimitiveDefinition) else "pack-unit",
                          f"unit {a} (root node {k}, {descriptor_id(m.root.nodes[k].fn)}) alone does not fit: `lay` it first")
         e = next((x for x in stops if x > a), n)
-        b, got = a, None
+        b, got, reader = a, None, None
         for c, cost in m.grow(a):
             if c > e or not fits(*cost):
+                break
+            if m.reads_unit[c - 1] and m.reads_unit[c - 1][-1] >= a:
+                reader = c - 1
                 break
             b, got = c, cost
         if enough is not None and not enough(*got, b - a):
             lo = out[-1][0] if out and a not in stops else None
             j = None if lo is None else m.block(lo, b)
             if j is None or not fits(*j) or not enough(*j, b - lo):
+                if reader is not None:
+                    raise _inside_read(a, reader + 1, m.reads_unit[reader][-1], reader)
                 raise Unlaid("pack-floor", f"units [{a}, {b}) are under the floor, the next unit does not join them within "
                              "the limit or past an end, and the block before does not take them")
+            if (held := m.inside_read(lo, b)) is not None:
+                raise _inside_read(lo, b, *held)
             out[-1] = (lo, b)
         else:
             out.append((a, b))
