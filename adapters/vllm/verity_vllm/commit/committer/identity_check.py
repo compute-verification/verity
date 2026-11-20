@@ -114,7 +114,7 @@ def identity_check(man: dict[str, Any], layouts: dict[int, Any], sources: list[A
     differ), else the uniform rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
     module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
     the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
-    duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
+    duplicates another keeps its count and FAILS (1) or (4).  With a route source (the capture map's
     model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
     covers the hooked modules the map has no entry for.  `step_rows` is the collector's row record of each step's active sequences
     and `policy` the committer's own staging rule, each None where it has none (`step_sequences`, `plane_policy`)."""

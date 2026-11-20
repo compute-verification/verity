@@ -123,8 +123,7 @@ def egress_row(span: Span, output_cap: int, head: bool = True) -> np.ndarray:
 
 def id_rows(span: Span, outputs: int) -> np.ndarray:
     """Span's rows of its replay block's return in a class of O outputs, (O, 2) u16: row j the id of output j, and past
-    the ids served the last one again, as the block's instances past them are copies of its last
-    (`interior_rows.Span.padded`). A span served no id has no instance to copy, and its rows are zero: no replay
+    the ids served the last one again, as the block's instances past them are copies of its last. A span served no id has no instance to copy, and its rows are zero: no replay
     reproduces it."""
     if len(span.served) > outputs:
         raise ValueError(f"{span.engine_id}: {len(span.served)} ids served past the class's {outputs}")

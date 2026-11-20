@@ -294,13 +294,10 @@ def _vllm(path: str) -> str:
     return f"tests/adapters/vllm/{path}" if path.startswith("tests/") else f"adapters/vllm/{path}"
 
 
-#: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the continuation
-#: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
-#: ``CAP`` in capitals is the same cap
+#: the vLLM adapter's files of a request's length cap, its ``max_tokens``, which name no Pearl term: the workload and executed
+#: prefix that declare it, whose ``CAP`` in capitals is the same cap
 REQUEST_CAPS = tuple(_vllm(p) for p in (
-    "verity_vllm/check/replay/continuation.py", "verity_vllm/program/workload.py",
-    "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
-    "tests/program/test_continuation.py"))
+    "verity_vllm/program/workload.py", "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
 SOFTCAP_CAPS = tuple(_vllm(p) for p in (
@@ -378,11 +375,9 @@ OWN_NAMES = {
          "vLLM's workload of record: retired_terms.md's row of \"row\" for a workload keeps \"row of record\" "
          "(`manifests/records.json`) in `adapters/vllm/` until vLLM's workloads move",
          tuple(_vllm(p) for p in (
-             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/pipeline/test_neutrality.py",
-             "tests/pipeline/test_row_chain.py", "tests/program/test_compact.py", "verity_vllm/config.py",
-             "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
-             "verity_vllm/pipeline/neutrality.py", "verity_vllm/pipeline/research.py", "verity_vllm/pipeline/row.py",
-             "verity_vllm/pipeline/row_config.py", "verity_vllm/pipeline/workload.py",
+             "tests/pipeline/test_circuit_db.py", "tests/pipeline/test_done_source.py", "tests/program/test_compact.py",
+             "verity_vllm/config.py", "verity_vllm/pipeline/circuit_db.py", "verity_vllm/pipeline/config_record.py",
+             "verity_vllm/pipeline/workload.py",
              "verity_vllm/program/gemm_target_correspondence.py"))),
     ),
 }

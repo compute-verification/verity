@@ -56,7 +56,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     v = R.check(rec, program, query, RND.parse_design(DESIGN), CS.SCHEME, ports, leaf_layer=CS.leaf_layer({ROPE: pub}))
     assert v.ok, v.detail
     # the same copies from the record alone, as the audit's verifier derives them (no committed value read)
-    mine = DRW.window_of_record(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]))
+    mine = DRW.window_of(DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"])), str(c["partition"]))
     assert (mine.partition_digest, mine.run, CS.expected_ports(mine)) == (win["partition_digest"], c["run_root"], ports)
     # and from the window's own records: its circuit record, whose SHA-512 the registration binds
     assert w["circuit"] == hashlib.sha512((wdir / "circuit.json").read_bytes()).hexdigest()

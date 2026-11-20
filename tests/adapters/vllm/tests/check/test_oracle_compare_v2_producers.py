@@ -9,11 +9,9 @@ no selector; `member_bytes` resolves a member through the Value when the fold ha
 """
 from __future__ import annotations
 
-import json
 import types
 from typing import Any
 
-import pytest
 
 from tests.check.test_oracle_compare import (
     ROWS,
@@ -31,7 +29,6 @@ from tests.check.test_oracle_compare_promoted_key import (
     _promoted_bmap,
 )
 from verity_vllm.check import oracle_compare as OC
-from verity_vllm.check.replay.coverage import form_b_families
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline import commit_plan as C
 from verity_vllm.query import program_view as pv
@@ -39,7 +36,6 @@ from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import QUERIES, request_manifest
 from verity_vllm.query.units import ValueRef as R
-from verity_vllm.records.fields import MissingField
 
 NORM, MLP, LAYER = "model.layers.0.input_layernorm", "model.layers.0.mlp", "model.layers.0"
 EMBED_W, NORM_W, MLP_W = "model.embed_tokens.weight", f"{NORM}.weight", f"{MLP}.weight"
@@ -230,15 +226,3 @@ def test_only_a_value_every_reader_of_which_is_inside_the_producer_subtree_is_pr
     assert OC.promote_handed_down(None, derived) == {"members": {}, "rows": 0}
 
 
-def test_form_b_families_are_the_required_outputs_the_replay_cannot_evaluate():
-    header = {"schema": MF.SCHEMA, "program_digest": "ab" * 64, "manifest_digest": "cd" * 64, "requests": ["r0"]}
-    man = dict(header, identities=[
-        {"family": "instance_outputs", "spec": "LayerNormAten_v1"}, {"family": "instance_outputs", "spec": "LayerNormAten_v1{N=4}"},
-        {"family": "instance_outputs", "spec": "Gemm_v1"}, {"family": "instance_outputs", "spec": "AttentionHead_v1"},
-        {"family": "instance_outputs", "spec": "TokenSelect_v1"}, {"family": "sampled_token_ids", "spec": "Bf16MulScalar_v1"},
-        {"family": "instance_outputs"}, {"family": "moe_block_stream", "spec": "MoeExpertGemm_v1"}])
-    assert form_b_families(man) == {"LayerNormAten_v1": 2}
-    assert form_b_families(None) == {} and form_b_families(dict(header, identities=[{"family": "instance_outputs", "spec": "Gemm_v1"}])) == {}
-    assert json.loads(json.dumps(form_b_families(man))) == {"LayerNormAten_v1": 2}
-    with pytest.raises(MissingField, match="field 'schema' is missing"):          # identities without the header its writers write
-        form_b_families({"identities": man["identities"]})
