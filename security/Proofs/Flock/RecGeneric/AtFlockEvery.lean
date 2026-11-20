@@ -5,12 +5,10 @@ public import Proofs.Flock.RecGeneric.AtFlockProof
 public import Proofs.Flock.RecGeneric.StatementProof
 public import Proofs.Flock.Claims.Recursion.DeployFacts
 public import Proofs.Flock.Claims.Recursion.OuterKS
-public import Proofs.Flock.Claims.Recursion.KSFlockLinR
 public import Proofs.Flock.Claims.Recursion.BindsDeployed
 public import Proofs.Flock.Claims.Recursion.DeploySessions
 public import Proofs.Flock.Claims.Recursion.BoundRoute
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
-public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.KS.PlainSimR
 public import Proofs.Flock.Claims.Assembled

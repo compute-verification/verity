@@ -2,7 +2,6 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record.Runs
 public import Proofs.Properties.Verity.Sampled.Record.Accepts
-public import Proofs.Properties.Verity.Sampled.Record.Nums
 public import Proofs.Flock.Bridge.V5.Session
 public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Claims.Recursion.VStarParts
@@ -156,7 +155,7 @@ theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.
   rw [hidx] at his
   obtain rfl := Option.some.inj his
   try dsimp only at hu
-  rw [getD_of_arr ha] at hu
+  rw [FlockDeploy.BaseSetup.getD_of_arr ha] at hu
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
   obtain ⟨xs, hxs, rfl⟩ := hu
   intro u hu

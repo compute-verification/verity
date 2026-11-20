@@ -523,7 +523,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
                  compiler: Any, window: int | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl, or
-    from seals.jsonl while the window's line waits for its PoUW H1 release, which reads this advice: `serve_tie`).  The
+    from seals.jsonl while the window's line is not yet written).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
     ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
     is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the

@@ -1,7 +1,19 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.DeployedBrings
-public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.C3.Reps.LigNames
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.OpenedDecode
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.VBridge.Family.Setup
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 public import Proofs.Flock.Claims.Recursion.KSLinks
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
