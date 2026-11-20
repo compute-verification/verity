@@ -30,7 +30,7 @@ tree):
 * `BlockEvalDoor`: each instance of the admitted template, lifted to bits, evaluates on its arguments' values in block
   `u`'s local evaluation to that evaluation at its return leaves, an argument outside the block or inside it alike.
 * `BlockCorrectDoor`: rows of every instance's copy, agreeing with a trace of C at the copy's arguments and return
-  leaves, make block `u` correct.
+  leaves, make block `u` correct, where no unit reads a gate of the block (`OperandsOutside`).
 * `DoorJoin`: an accepted session's copies' rows (`V5Rows`'s conclusion, a copy a unit) and the statement's openings at
   each copy's arguments and return leaves (`StatementOpens`), with block `u`'s own (`Partition.Rblk`), give
   `BlockCorrectDoor`'s hypothesis, or SHA-512 collides.
@@ -151,8 +151,9 @@ def LowerEvalDoor : Prop :=
 
 /-- **`RestrictBodyAgrees`**: the block's Program `restrict P units` keeps `P`'s word primitives evaluating as their
 Boolean Definitions (`BodyAgrees`). With `decode_body_agrees`, which gives `BodyAgrees P` of every Program `decode`
-accepts whose root has no recut, it is what the Door statements read for `BodyAgrees`; the door's reader refuses a root
-with a recut (`Spot.Program.parse`, `recut-root`). -/
+accepts whose root has no recut, it is what the Door statements read for `BodyAgrees`. A root with a recut is refused
+where C is read through `Spot.Program.parse` (`recut-root`, the per-member run's `membersRootsOf`); the restrict path
+decodes C with `Flock.Program.decode`, which keeps it. -/
 def RestrictBodyAgrees : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (S : Prog), BodyAgrees P → Spot.Restrict.restrict P units = .ok S → BodyAgrees S
 
@@ -170,16 +171,22 @@ def BlockEvalDoor : Prop :=
       let Y := (partOf P blocks).localEval X u.castSucc
       Prog.evalBool L e (argBits Y g) = outBits Y g
 
+/-- **`OperandsOutside`**, the second check's clause (a), until the door's constant for it has a name: every argument of
+every unit of the block is a gate outside it, so each is a port of the front (`Spot.BlockFront.Front.ins`). -/
+def OperandsOutside (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) : Prop :=
+  ∀ g ∈ units, ∀ q ∈ unitArgs P g, Spot.BlockFront.inside fr.ranges q.gate = false
+
 /-- **`BlockCorrectDoor`, the block is correct.** For a block `Spot.OneStageZk.admitted` admits: where, for every unit
 `g` of the block, rows of the net its template unrolls to hold at some `z` with the constant 1, and `z` at the door's
-input and output columns is a trace `X` of C at `g`'s arguments and return leaves, block `u` is correct in C. -/
+input and output columns is a trace `X` of C at `g`'s arguments and return leaves, block `u` is correct in C. Its units
+read no gate of the block (`OperandsOutside`), so every input column is C's value at a port of the front. -/
 def BlockCorrectDoor : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) (nt : Net),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr → Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt →
-    nt.unitLog ≤ 32 →
+    Spot.BlockFront.front P units = .ok fr → OperandsOutside P units fr →
+    Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt → nt.unitLog ≤ 32 →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       (∀ g ∈ units, ∃ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) ∧ z t.constPos = true ∧
@@ -205,10 +212,9 @@ def StatementOpens {P : Prog} {n : ℕ} {α : Type} (Sc : _root_.Hash.StringComm
 /-- **`DoorJoin`, an accepted session to the block's rows at C's committed values.** The session's copies, one a unit
 of the block, each satisfying its rows with the constant 1 (`V5Rows`'s conclusion), the statement's openings at each
 copy's arguments and return leaves (`StatementOpens`) and block `u`'s own (`Partition.Rblk`), at one commitment, give
-`BlockCorrectDoor`'s hypothesis at `X`, or two messages the openings hashed collide. An argument inside the block is
-opened where its writer's return leaf is committed: under `partOf P blocks` such a gate has no position
-(`Partition.pos` is `none` off `Partition.boundary`), so the join reads a commitment of each copy's input row that the
-block partition does not give. -/
+`BlockCorrectDoor`'s hypothesis at `X`, or two messages the openings hashed collide. Its units read no gate of the block
+(`OperandsOutside`), so each copy's input columns are opened at the front's ports, gates of in(S) with a position; an
+argument inside the block would have none (`Partition.pos` is `none` off `Partition.boundary`). -/
 def DoorJoin : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) (nt : Net)
@@ -218,7 +224,8 @@ def DoorJoin : Prop :=
     (π : Fin (ofProgram P).N → Sc.Op) (z : ℕ → ℕ → Bool) (π' : ℕ → Fin (ofProgram P).N → Sc.Op),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr → Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt →
+    Spot.BlockFront.front P units = .ok fr → OperandsOutside P units fr →
+    Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt →
     BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) → Sc.Binds H →
     (partOf P blocks).Rblk Sc H enc L c u.castSucc X π →
     (∀ j < units.size, ∃ hb : Built nt, (Rows.ofNet hb).Sat (fun x => z j x.val) ∧ z j t.constPos = true) →
