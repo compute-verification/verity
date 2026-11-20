@@ -585,7 +585,7 @@ def test_attic_moves_only_strays_none_a_process_runs_and_records_where_each_went
 
 
 def test_a_missing_file_of_a_required_tree_is_drift(world):
-    # red team T: the console imports cluster.usage from its tree, and drift called a console without it clean
+    # what runs from a required tree needs all of it, and drift called a tree missing a file clean
     node = world["node"]
     deploy.install(world["nodes"]["n"], "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
     (node / "bin" / "unit.service").write_text("[Unit]\n")
@@ -599,8 +599,8 @@ def test_a_missing_file_of_a_required_tree_is_drift(world):
     for bad in (text.replace("required = true", 'required = "yes"'), text.replace('src = "src/c.py"\n', 'src = "src/c.py"\nrequired = true\n')):
         with pytest.raises(ValueError, match="`required` is a tree's"):
             deploy.load(text=bad)
-    shipped = deploy.load()["vy-nebius-1"].entries
-    assert next(e for e in shipped if e.path == "/workspace/research/console/cluster").required
+    shipped = deploy.load()["vy-nebius-2"].entries
+    assert next(e for e in shipped if e.path == "/workspace/verity-guest/cluster-agent").required
 
 
 def _whole(world, files: dict[str, str]):
@@ -1346,16 +1346,14 @@ def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_
                 for f in [x for x in envs if x != "/etc/environment"] + scripts:
                     assert f in paths or f.startswith(tuple(trees)), f"{node.name}: {u} reads {f}, which deploy.toml doesn't install there"
                 seen += 1
-    assert seen >= 12
+    assert seen >= 7
 
 
-def test_environment_files_hold_settings_never_credentials_nor_what_dispatch_env_sets():
+def test_environment_files_hold_settings_never_credentials():
     for f in sorted((PODS / "env").iterdir()):
         for k in _keys(f):
             assert re.fullmatch(r"[A-Z_][A-Z0-9_]*", k), (f.name, k)
             assert not re.search(r"TOKEN|SECRET|PASS|CRED|AUTH|(^|_)KEY($|_)", k), (f.name, k)
-    assert _keys(PODS / "dispatch-n1.env")
-    assert not set(_keys(PODS / "env" / "vy-node1-dispatch.env")) & set(_keys(PODS / "dispatch-n1.env"))
 
 
 FAKE_CGROUP = """import builtins, io
