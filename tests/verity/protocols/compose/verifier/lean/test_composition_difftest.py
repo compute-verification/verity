@@ -832,7 +832,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     on R with a session's proofs granted and the tie on a window on R or on W."""
     PPC, made = R.POUW_PERIOD_CASES, []
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
-        random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
+        random.Random("remote/reusing"), windows=1, commit=reusing(made), real=True, **PPC.COVERED)))
     reused = reusing_audit(made[0])
     audit = as_component(R.SPOT, reused)
     policy = policy_on(audit)

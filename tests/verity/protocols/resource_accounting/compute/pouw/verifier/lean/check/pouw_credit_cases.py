@@ -892,6 +892,10 @@ def registry_window(k: int, tile: str = "v1") -> dict:
     return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), unit=lambda _k: unit))
 
 
+#: `registry_window`'s layout at K = 64, as `credit.layout_of` reads it
+REGISTRY_LAYOUT = {"calls": [["w", 0]], "linears": [["w", 64, 8]], "m": 4, "tile": [4, 8]}
+
+
 def shared_window(base: Path, k: int = 64, tile: str = "v1") -> bytes:
     """`registry_window` (K, `tile`)'s bytes (`desc_bytes`), built by the first process of a session to ask and written
     under `base`, the directory a session's processes share (pytest-xdist workers' base temp's parent), so the other
@@ -1928,7 +1932,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
                     period_pin: str | None = None, pin_floor: int | None = None,
                     stale_window: int | None = None, j10r: bool = False, nks: int | None = None,
                     tile: int | None = None, program_fn: str | None = None, windows: int | None = None,
-                    commit: Callable[[dict, int, str, str], str] | None = None) -> dict:
+                    commit: Callable[[dict, int, str, str], str] | None = None, real: bool = False) -> dict:
     """One `period` case: one to three honest execution phases in one credit period of the auditor's ledger, each proving the circuit
     whose SHA-512 the credit period's open committed (one execution phase layout's descriptor, `descriptor`), presented in its close's
     order, and an execution phase of no credit period opened after the close; then mutation `name`. The credit period's open commits
@@ -1936,13 +1940,19 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     and which execution phase runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor. `j10r`, `nks`
     and `tile` make its circuits J10-R's, at `nks` K, over ``PouwH1Tile_v<tile>`` (`layout`, `descriptor`), and
     `program_fn` replaces its circuit's program function. With `windows` it has that many execution phases, and with `commit`
-    each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`)."""
+    each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`). `real`: its circuit is the
+    registry's window at K = 64 over `tile`'s H1 tile (`registry_window`, `REGISTRY_LAYOUT`), a template
+    `credit.TILE_PINS` pins, for a mutation that leaves the circuit as it is."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3) if windows is None else windows
     pname = rng.choice(rc.PERIODS)
-    lay = layout(rng, nks=nks)
+    if real and name in ("bad-circuit", "tile-k", "other-circuit"):
+        raise ValueError(f"a real period's circuit is the registry's window, which {name} would change")
+    lay = json.loads(json.dumps(REGISTRY_LAYOUT)) if real else layout(rng, nks=nks)
     t = table_rows(rng, lay)
-    prefix = f"h1/w-{rng.randrange(100)}/"
-    desc = (_break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
+    prefix = "" if real else f"h1/w-{rng.randrange(100)}/"
+    desc = (desc_bytes(registry_window(64, {None: "v5" if j10r else "v1", 1: "v1", 3: "v3", 5: "v5"}[tile])).hex()
+            if real else
+            _break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
             _break_desc(rng, lay, "tile-k", j10r, tile) if name == "tile-k" else
             descriptor(rng, lay, prefix, j10r=j10r, tile=tile))
     if program_fn is not None:
