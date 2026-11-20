@@ -145,9 +145,9 @@ def test_the_tiles_of_a_c_other_than_the_registered_one_are_refused(c) -> None:
     """Slow: as above: the tiles credited are those of the C the blocks are proved against, the one whose digest was
     registered before any coin; C laid under another limit, or another C's digest, is refused."""
     ts, program, laid, strata, _tiles, _add = c
-    with pytest.raises(ValueError, match=PS.C_UNREGISTERED):
+    with pytest.raises(ValueError, match=PS.C_DIGEST):
         PS.laid_tiles(program, _fits(ts), strata, "00" * 64)
-    with pytest.raises(ValueError, match=PS.C_UNREGISTERED):
+    with pytest.raises(ValueError, match=PS.C_DIGEST):
         PS.laid_tiles(program, lambda _ins, _outs, _a: True, strata, program_digest(laid))
 
 

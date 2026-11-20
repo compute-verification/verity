@@ -116,13 +116,13 @@ TILE = "PearlPlusTileCoreWords_v5"
 #: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
-#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; C laid is not the C
-#: registered before any coin, so its tiles are not those of the C the blocks are proved against
+#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; C laid has a digest
+#: other than the one registered before any coin, so its tiles are not those of the C the blocks are proved against
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
 TILE_FOREIGN = "tile-body-foreign"
-C_UNREGISTERED = "tile-c-unregistered"
+C_DIGEST = "tile-c-digest-differs"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
 #: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
 AUDIT_SHORT = "tile-audit-short"
@@ -204,7 +204,7 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     C's gates in C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do.
     C must hold a tile (`TILE_ABSENT`), each tile must be the registry's `TILE` at its statics, its body and every
     Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), and the laid C must be the one ``registered`` names, its
-    `codec.program_digest` registered before any coin (`C_UNREGISTERED`): the tiles credited are those of the C the
+    `codec.program_digest` registered before any coin (`C_DIGEST`): the tiles credited are those of the C the
     blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
     template-instance query): their blocks must be its root units, each of the one template its stratum names
     (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile (`TILE_STRADDLES`)."""
@@ -226,7 +226,7 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
                              "are not what it computes")
     laid = LY.lay(program, fits)
     if (got := program_digest(laid)) != registered:
-        raise ValueError(f"{C_UNREGISTERED}: C laid is {got[:16]}…, and the C registered before any coin is "
+        raise ValueError(f"{C_DIGEST}: C laid has digest {got[:16]}…, and the digest registered before any coin is "
                          f"{registered[:16]}…: its tiles are not the proved C's")
     after = PO.TemplatePartition(laid, LY.query(laid))
     of: list[str | None] = [None] * after.population
