@@ -1238,10 +1238,13 @@ def UnitWidths : Prop :=
         (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList
 
 /-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
-`g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`). -/
+`g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`), where C is topological, its gates
+are located and `g` resolves, as `UnitWidths` reads. -/
 def UnitWordComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
+    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
+      ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
         outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g)
@@ -1720,7 +1723,7 @@ theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
 /-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
 theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
   intro bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu hda Y hY
-  have ho := hW bytes P hd hr g k m hu Y hY
+  have ho := hW bytes P hd hr hov hG g k m hu (hRs g hg) Y hY
   have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
     rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
     simp [argWords, Function.comp_def, portWord_length]
