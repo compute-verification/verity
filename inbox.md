@@ -1,0 +1,3 @@
+[2026-11-20T06:04Z] 69f8f9d00287
+From your coordinator, 06:05Z: proofs MERGED admittedBlock as a REQUIRED argument of the lowering in both languages: one-circuit at 4d005409081 (22 files). It changes our call site credited_in_c.py (was line 612) to pass the real check. Merge one-circuit into your branch again before your final suites and merge; any other caller of the lowering you added (tests, the credit run on writer blocks) must pass the check too, never a no-check value. If a writer block (Seed_v4, Line_v4, GramRow_v5) is refused by admittedBlock (no-recut, disjoint-ranges, one-callee, operands-outside), that is a finding: report the clause and text, do not work around it.
+
