@@ -4,11 +4,10 @@
     sudo -n nice -n 19 ionice -c3 python3 write_probe.py probe --node vy-nebius-N [--every 60] [--mbps 10] [--out DIR]
     uv run --no-sync python -m research.pods.nebius.write_probe relay [--every 120]                  where Slack works
 
-`probe` reads every thread's `write_bytes` (/proc/<pid>/task/<tid>/io, as root, so pods' processes count too) once a tick
+`probe` reads every thread's `write_bytes` (/proc/<pid>/task/<tid>/io, as root) once a tick
 and sums each process's deltas; not /proc/<pid>/io, which also holds what every child the process reaped wrote. A process
 that wrote at least --mbps MB/s over the tick and has a file open for writing under /workspace, or works there, is a line
 of <out>/writes.jsonl, with the allocation that covers it:
-  kueue:<cluster queue>/<pod>   a pod Kueue admitted (node 1)
   system:<namespace or unit>    a cluster namespace or a system service
   fill:<scope or job>, lease:<scope>   a job node 2's fill runner or GPU lease started (its fill-* or gpu-lease-* scope, or
                                 the fill runner's running/<job>.sh it descends from; `fill:runner` is the runner itself)
@@ -17,7 +16,7 @@ A writer none of them covers is also a line of <out>/unmatched.jsonl. <out>/stat
 status shows a timed window running or waiting, the probe reads nothing. Bytes written by a process or thread that exits
 before the next tick are missed. Stdlib only; it reads /proc and writes only under <out>.
 
-`relay` posts each new unmatched writer from both nodes to #agent-alerts, once per process and again hourly while it writes.
+`relay` posts each new unmatched writer from node 2 to #agent-alerts, once per process and again hourly while it writes.
 The nodes hold no Slack credentials, so it runs where `research msg` works.
 """
 from __future__ import annotations
@@ -31,16 +30,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable
 
 WORKSPACE = "/workspace"
 OUT = "/workspace/verity-guest/write-probe"
 FILL_STATUS = "/workspace/pouw/fill/status.txt"
-KUBECONFIG = "/home/research/.kube/config"
-SYSTEM_NAMESPACES = {"kube-system", "gpu-operator", "kueue-system", "monitoring", "skypilot"}
-POD_UID = re.compile(r"pod([0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12})")
-
-Pods = Callable[[], dict[str, tuple[str, str, str | None]]]
 
 
 def _read(path: str, binary: bool = False) -> str | bytes | None:
@@ -144,30 +137,8 @@ def fill_job(pid: int, proc: str = "/proc") -> str | None:
     return None
 
 
-def kube_pods(kubeconfig: str = KUBECONFIG) -> dict[str, tuple[str, str, str | None]]:
-    """pod uid -> (namespace, name, Kueue cluster queue or None); {} when kubectl can't be read."""
-    try:
-        r = subprocess.run(["kubectl", "get", "pods", "-A", "-o", "json"], capture_output=True, text=True, timeout=60,
-                           env={**os.environ, "KUBECONFIG": kubeconfig})
-        items = json.loads(r.stdout)["items"]
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
-        print(f"write_probe: kubectl's pods unread, so no pod is named ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
-        return {}
-    return {p["metadata"]["uid"]: (p["metadata"]["namespace"], p["metadata"]["name"],
-                                   (p["metadata"].get("labels") or {}).get("kueue.x-k8s.io/cluster-queue-name")) for p in items}
-
-
-def allocation(pid: int, cgroup: str, pods: Pods, proc: str = "/proc") -> tuple[str, bool]:
+def allocation(pid: int, cgroup: str, proc: str = "/proc") -> tuple[str, bool]:
     """The allocation that covers the process, and whether there is one."""
-    m = POD_UID.search(cgroup)
-    if m:
-        uid = m.group(1).replace("_", "-")
-        if uid not in pods():
-            return f"pod:{uid} (not in kubectl's list)", False
-        ns, name, cq = pods()[uid]
-        if cq:
-            return f"kueue:{cq}/{name}", True
-        return (f"system:{ns}/{name}", True) if ns in SYSTEM_NAMESPACES else (f"pod:{ns}/{name} (no Kueue admission)", False)
     m = re.search(r"/((fill|gpu-lease)-[^/]+)\.scope", cgroup)
     if m:
         return f"{'fill' if m.group(2) == 'fill' else 'lease'}:{m.group(1)}", True
@@ -184,15 +155,8 @@ def allocation(pid: int, cgroup: str, pods: Pods, proc: str = "/proc") -> tuple[
     return f"none:{cgroup}", False
 
 
-def writers(prev: dict, now: dict, seconds: float, mbps: float, pods: Pods, node: str, proc: str = "/proc") -> list[dict]:
+def writers(prev: dict, now: dict, seconds: float, mbps: float, node: str, proc: str = "/proc") -> list[dict]:
     """The processes that wrote at least `mbps` MB/s to /workspace between two snapshots, each with its allocation."""
-    cache: dict[str, dict] = {}
-
-    def cached_pods() -> dict:
-        if "pods" not in cache:
-            cache["pods"] = pods()
-        return cache["pods"]
-
     rows = []
     for (pid, start), threads in now.items():
         if (pid, start) not in prev:
@@ -208,7 +172,7 @@ def writers(prev: dict, now: dict, seconds: float, mbps: float, pods: Pods, node
         if not paths and not (cwd + "/").startswith(WORKSPACE + "/"):
             continue
         cgroup = ((_read(f"{proc}/{pid}/cgroup") or "").strip().splitlines() or [""])[-1].split(":", 2)[-1]
-        alloc, matched = allocation(pid, cgroup, cached_pods, proc)
+        alloc, matched = allocation(pid, cgroup, proc)
         uid = re.search(r"^Uid:\s*(\d+)", _read(f"{proc}/{pid}/status") or "", re.M)
         try:
             user = pwd.getpwuid(int(uid.group(1))).pw_name if uid else "?"
@@ -247,7 +211,7 @@ def probe(ns: argparse.Namespace) -> int:
         else:
             now, t1 = snapshot(), time.monotonic()
             if prev is not None:
-                rows = [dict(r, ts=stamp) for r in writers(prev, now, t1 - t0, ns.mbps, kube_pods, node)]
+                rows = [dict(r, ts=stamp) for r in writers(prev, now, t1 - t0, ns.mbps, node)]
             prev, t0 = now, t1
         _append(out / "writes.jsonl", rows)
         _append(out / "unmatched.jsonl", [r for r in rows if not r["matched"]])
@@ -262,7 +226,7 @@ def probe(ns: argparse.Namespace) -> int:
 
 def alert_text(row: dict) -> str:
     return (f"*Unmatched /workspace writer on {row['node']}* ({row['ts']}): {row['mb_per_s']} MB/s, PID {row['pid']} "
-            f"({row['user']}), no Kueue admission, fill job, GPU lease or research run covers it.\n"
+            f"({row['user']}), no fill job, GPU lease or research run covers it.\n"
             f"• cmd: `{row['cmd'][:200]}`\n• writing: `{', '.join(row['paths'])[:300]}`\n• cgroup: `{row['cgroup'][:160]}` "
             f"({row['allocation'][:80]})")
 
@@ -322,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--once", action="store_true", help="one tick (no delta on the first), for a smoke test")
     p.set_defaults(fn=probe)
     r = sub.add_parser("relay", help="post the nodes' new unmatched writers to #agent-alerts")
-    r.add_argument("--nodes", nargs="+", default=["n1", "n2"])
+    r.add_argument("--nodes", nargs="+", default=["n2"])
     r.add_argument("--out", default=OUT)
     r.add_argument("--every", type=float, default=120.0)
     r.add_argument("--state", default=str(Path.home() / ".research" / "write-probe-relay.json"))
