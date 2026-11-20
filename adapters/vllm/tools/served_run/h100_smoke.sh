@@ -97,7 +97,7 @@ got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else
 p = got[-1] if got else {"error": "no plan line"}
 why = p.get("refused") or p.get("error") or p.get("pending")
 print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}, seconds {json.dumps(p.get('seconds'))}, "
-      "unprovable " + ("; ".join(f"{why} {len(u['templates'])} templates, {u['units']} units: {' '.join(u['templates'])}"
+      "unprovable " + ("; ".join(f"{why} {len(u['templates'])} templates, {u['units']} units"
                                  for why, u in (p.get('unprovable') or {}).items()) or "none named")))
 h = p.get("handoff") or {"error": "no handoff"}
 print(f"WINDOW-HANDOFF window {k}: " + (f"none, {str(h['error'])[:200]}" if "error" in h else
@@ -122,13 +122,16 @@ print(f"WINDOW-RECORD window {k} at the serve's close: members {r['members']}, p
       f"seconds {json.dumps(r['seconds'])}")
 EOF
 }
-if [ "$DRY" != 1 ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then  # SR holds the keys and salts: custody's statement names it private
+# SR holds the keys and salts, and $OUT/window the circuit's description, which is the auditor's secret, with the
+# window's plan and handoff: custody's statement names them private
+if [ "$DRY" != 1 ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then
   "$PY" - "$RESEARCH_RUN_DIR/private-paths.json" "$SR" <<'EOF'
 import json, os, pathlib, sys
 f, sr = pathlib.Path(sys.argv[1]), os.path.realpath(sys.argv[2])
 doc = json.loads(f.read_text()) if f.is_file() else {}
+names = {*doc.get("names", []), "window/", "plans.jsonl", "handoff/", "handoff.json", "circuit.json"}
 f.write_text(json.dumps({"schema": "private-paths/v1", "private": sorted({*doc.get("private", []), sr}),
-                         "names": list(doc.get("names", []))}, indent=1) + "\n")
+                         "names": sorted(names)}, indent=1) + "\n")
 EOF
 fi
 if [ "${1:-}" != card ]; then  # the row's Build of record, which the serve binds, before the lease
