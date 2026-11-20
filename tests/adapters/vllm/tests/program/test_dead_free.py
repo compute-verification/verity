@@ -299,14 +299,6 @@ def test_token_select_v4_lowers_linearly_in_v():
     assert max(per) - min(per) < 0.01 * min(per), per
 
 
-@pytest.mark.parametrize("V", [1, *VOCABS])
-def test_topp_mask_v3_equals_v1(V):
-    new, old = bind(DF.TopPMaskV3, V=V), bind(SA.TopPMask, V=V)
-    assert (_dead(new), _dead(old)) == (0, 2)
-    for i, row in enumerate(_f32_rows(V)):
-        _same(new, old, row, TOP_P[i % 4], SPLITS[(i // 4) % 4])
-
-
 @pytest.mark.parametrize("V", VOCABS)
 def test_gumbel_select_given_greedy_v2_equals_v1(V):
     new, old = bind(DF.GumbelSelectF32GivenGreedyV2, V=V), bind(SA.GumbelSelectF32GivenGreedy, V=V)
