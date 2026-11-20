@@ -1467,16 +1467,16 @@ theorem nestedTyped : NestedTyped := by
     · exact outWidths_gate h hr hd hk (hform _ (Array.getElem_mem hk))
         (hgate _ (Array.getElem_mem hk) hpt (by simpa using hwp)) ys hys
 
-/-- **`LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates**: the lift of a
+/-- **`LiftWordEval` for a template of batches on any axis over word primitives, gates and earlier such templates**: the lift of a
 template of a C `decode` accepts whose root has no recut, each of whose reached Boolean Definitions evaluates through gates
 alone, computes its words. -/
 theorem liftWordEval_nested :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → Batch0Nested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → BatchNested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
-  liftWordEval_nested_of nestedTyped
+  liftWordEval_batchNested_of nestedTyped
 
 /-- **`Batch0Typed`** holds: a template of word-primitive calls and axis-0 batches in a C `decode` accepts whose root has
 no recut, whose nodes' Boolean bodies evaluate through gates alone, has its references, callees, output widths,
@@ -1600,7 +1600,7 @@ theorem refOf_refOk_comp {P : Prog} {d n : ℕ} (hB : Resolve.BodyOk P d) (hn : 
     rw [hf] at hup
     exact (hB.1 n hn).2.1 i _ hup
 
-/-- **The words of an activation's walk**: in activation `sc` of a template of axis-0 batches over word primitives, gates and
+/-- **The words of an activation's walk**: in activation `sc` of a template of batches on any axis over word primitives, gates and
 earlier such templates, each of whose reached Boolean Definitions evaluates through gates alone, and whose gates the
 trace computes, the walk on words, each the word at the gate its parameter leaf resolves to, returns at each return leaf
 the word at the gate that leaf resolves to. -/
@@ -1612,7 +1612,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     (Y : (Flock.OfProgram.ofProgram P).Trace) {lo hi : ℕ} (hiN : hi ≤ (Flock.OfProgram.ofProgram P).N)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, lo ≤ h.val → h.val < hi → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
-    ∀ d (sc : Scope), sc.d = d → Resolve.Good P sc → Batch0Nested P d → GateBodiesDeep P d → lo ≤ sc.off →
+    ∀ d (sc : Scope), sc.d = d → Resolve.Good P sc → BatchNested P d → GateBodiesDeep P d → lo ≤ sc.off →
       sc.off + (P.defs[d]!).gates ≤ hi → ∀ x : List (List Bool),
       (∀ i j q, i < (P.defs[d]!).params.size → j < ((P.defs[d]!).params[i]!).2.leaves →
         resolve P sc ⟨true, i, j⟩ = .ok q → q < (Flock.OfProgram.ofProgram P).N →
@@ -1668,11 +1668,11 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     have hcntL := fun hf => cntOf_params (P := P) (nd := ((P.defs[sc.d]!).body.nodes[n]!)) hnok hf
     obtain ⟨hsz, -, hprimp, hcallp, hsh, -, -⟩ := hnok
     cases hpf : (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim
-    · have hnc : Batch0Nested P ((P.defs[sc.d]!).body.nodes[n]!).fn := hnest _ hmemn hpf
+    · have hnc : BatchNested P ((P.defs[sc.d]!).body.nodes[n]!).fn := hnest _ hmemn hpf
       have hgdc : GateBodiesDeep P ((P.defs[sc.d]!).body.nodes[n]!).fn := fun y hy => hgd y (reach_trans (.callee .root hp hmemn) hy)
       obtain ⟨hbpc, hcntc, holc⟩ := (hD _ hfnP).1.2 hpf
       have hf : ((P.defs[sc.d]!).body.nodes[n]!).form = .call ∨ ((P.defs[sc.d]!).body.nodes[n]!).form = .batch := by
-        rcases hform with h | h | ⟨h, -⟩
+        rcases hform with h | h | h
         · have := hprimp h; rw [hpf] at this; cases this
         · exact Or.inl h
         · exact Or.inr h
@@ -1797,7 +1797,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
       have hev : ∀ y, wordDef? P sc.d ((P.defs[sc.d]!).body.nodes[n]!).fn y = some [Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y.flatten] := fun y => by
         rw [wordDef_fuel P _ _ y hfnlt]; exact wordDef_prim hfnP hpf y
       have hf : ((P.defs[sc.d]!).body.nodes[n]!).form = .prim ∨ ((P.defs[sc.d]!).body.nodes[n]!).form = .batch := by
-        rcases hform with h | h | ⟨h, -⟩
+        rcases hform with h | h | h
         · exact Or.inl h
         · have := hcallp (Or.inl h); rw [hpf] at this; cases this
         · exact Or.inr h
@@ -1874,14 +1874,14 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     rw [hget]
     exact refVal_word_res ho hx' ((hB sc hsc).2 l hl) hq hqN
 
-/-- **`UnitWordComputes` for a template of axis-0 batches over word primitives, gates and earlier such templates**: where C is
+/-- **`UnitWordComputes` for a template of batches on any axis over word primitives, gates and earlier such templates**: where C is
 topological, its gates are located, unit `g` resolves and each Boolean Definition its callee's reached composites lead to
 evaluates through gates alone. -/
 theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
-    (hn : Batch0Nested P (P.child P.rootScope k m).d) (hgd : GateBodiesDeep P (P.child P.rootScope k m).d)
+    (hn : BatchNested P (P.child P.rootScope k m).d) (hgd : GateBodiesDeep P (P.child P.rootScope k m).d)
     (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
@@ -2003,8 +2003,8 @@ theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode byte
       simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1']
     rw [hwsl, hwr l hlc q hretq hqN, portWord_lt Y hqN, portWord_lt Y hqN]
 
-/-- **`UnitComputes` for a template of axis-0 batches over word primitives, gates and earlier such templates**: each unit of the
-block computes, bit for bit, the lift of the template `admitted` gives, where that template is in `Batch0Nested`. The
+/-- **`UnitComputes` for a template of batches on any axis over word primitives, gates and earlier such templates**: each unit of the
+block computes, bit for bit, the lift of the template `admitted` gives, where that template is in `BatchNested`. The
 Boolean bodies' fact is the lowering's (`lowerGateBodies`). -/
 theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
     (cuts : List (String × List (String × ℕ))) (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog)
@@ -2013,7 +2013,7 @@ theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Jso
     (hab : Spot.OneStageZk.admittedBlock P units a.key = .ok ()) (hl : Flock.Lift.lift S a.d = .ok (L, e))
     (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
-    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : Batch0Nested P a.d)
+    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : BatchNested P a.d)
     (g : ℕ) (hg : g ∈ units) (k m : ℕ) (hu : Spot.BlockFront.unitAt P g = .ok (k, m))
     (hda : (P.child P.rootScope k m).d = a.d) (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
@@ -2038,8 +2038,8 @@ theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Jso
   change (outWords Y g).flatten = Prog.evalBool L e (argWords Y g).flatten
   rw [ho, liftWordEval_nested bytes P units S a.d L e hd hr hs hlt hn hgb hl _ hw]
 
-/-- **`BlockEvalDoor` for a block whose template is in `Batch0Nested`**: `BlockEvalDoor`'s conclusion, under its
-hypotheses and that the template `admitted` gives is of axis-0 batches over word primitives, gates and earlier such templates. -/
+/-- **`BlockEvalDoor` for a block whose template is in `BatchNested`**: `BlockEvalDoor`'s conclusion, under its
+hypotheses and that the template `admitted` gives is of batches on any axis over word primitives, gates and earlier such templates. -/
 theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
     (cuts : List (String × List (String × ℕ))) (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit)
     (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl) (hd : decode bytes = .ok P)
@@ -2049,7 +2049,7 @@ theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Js
     (_ : units.toList.Pairwise (· < ·)) (hl : Flock.Lift.lift S a.d = .ok (L, e))
     (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
-    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : Batch0Nested P a.d)
+    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : BatchNested P a.d)
     (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (hB : BlockIs P blocks u fr)
     (X : (Flock.OfProgram.ofProgram P).Trace) (g : ℕ) (hg : g ∈ units) :
     let Y := (Flock.OfProgram.partOf P blocks).localEval X u.castSucc
