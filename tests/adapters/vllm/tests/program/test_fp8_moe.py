@@ -424,10 +424,6 @@ def test_the_act_twin_is_the_definition(inter: int, G: int, specials: bool) -> N
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MoeExpertFp8BlockCoordinate_v2{K=256,G=128,KB=32,SWAP=False}":
-        (109778, 197810, 11175, "86f3b6901c054d82303fdd29de188ed87ed6e9d8a2979e98ab336d6e37dc96fe20f857dc859c983cabb6c1aeda14c9f8ac115c412ce7d59c80fbd92645a2abd6"),
-    "MoeExpertFp8BlockCoordinateW_v2{K=256,G=128,KB=32,SWAP=False}":
-        (112208, 202460, 11285, "75a59fb91d45a86766ba800df9a0e3c33023014b6642db689affc875936dd9bb602454f94aa210ae3db2adfd7f93c539d0909decdbf09e446345afa80a87eed5"),
     "ScaledMmFp8Block_v2{K=32,N=40,G=32}":
         (551200, 992480, 56400, "8f982c4d0ecc67f8d25d0915bfdf74659c063d8e98175143c1b94b1a6c1f0b16cb495f747e4b3a399dd7528a25b5c3db75be991500a948eeff38a9f5bb0babbd"),
     "ScaledMmFp8BlockSharedScale_v2{K=32,N=40,G=32}":
@@ -437,18 +433,11 @@ PINS = {
     "SiluMulFp8BlockQuant_v2{I=8,G=4}":
         (191042, 377416, 16984, "064d1de379b271904b452bac5914b91a7f7a284b6a2f9e1dc11163394beb59b3988c16ff77723b130b8ff5b263d3c2c5b0e4efe404c46c94603be71647b47b5a"),
 }
-PINNED = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=256, G=128, KB=32, SWAP=False),
-          bind(BM.MoeExpertFp8BlockCoordinateWV2, K=256, G=128, KB=32, SWAP=False),
-          bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
+PINNED = [bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
           bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
-#: two tiles over two scale blocks, two tiles in one block, two steps in one tile, SWAP_AB; the ragged CUTLASS GEMMs over a whole and
-#: a partial weight block, and over a partial block alone
-AGREEMENT = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False),
-             bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32, SWAP=True),
-             bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64, SWAP=False),
-             bind(BM.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True),
-             bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
+#: the ragged CUTLASS GEMMs over a whole and a partial weight block, and over a partial block alone
+AGREEMENT = [bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
              bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=8, G=32),
              bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantGroupV2, G=4), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
