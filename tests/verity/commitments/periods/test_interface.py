@@ -464,6 +464,42 @@ def test_several_templates_are_one_population():
     assert I.layout(ACC).outs == (("o0", 2),)
 
 
+def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path):
+    """With ``run_inputs``, C is the same circuit and each input port is read from its run input node's one tree
+    ``input/n<w>`` (`run_input_reads`): no member holds a tree of it, the registration holds its root beside the
+    members', each member's header names its units' rows of it, the verifier's period from the record is the prover's,
+    and a record naming other reads is refused."""
+    got = {}
+
+    def record(*a, **_k):
+        got["roots"] = a[4]
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    win = I.Window(I.Circuit("test", ((COORD, 10),), run_inputs=True), RUN, SAMPLING_DESIGN, 4)
+    assert codec.program_digest(win.window.program) == codec.program_digest(I.Circuit("test", ((COORD, 10),)).program()[0])
+    names = [r.param for r in win.runs]
+    assert [r.port for r in win.runs] == ["x", "sx", "wrow", "sw"] and len(set(names)) == 4
+    assert all(re.fullmatch(r"input/n\d+", v) for v in names)
+    ins, outs = values(10)
+    win.record(COORD, ins, outs)
+    doc = win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)
+    roots = {r["port"]: r for r in got["roots"]}
+    x = win.inputs[names[0]]
+    assert roots[names[0]]["root"] == x.root.hex() and x.leaves == 10
+    assert not any(p.endswith("/x") for p in roots)
+    m1 = doc["members"][1]
+    assert m1["registered"]["x"] == {"value": names[0], "positions": [4, 5, 6, 7]}
+    rec = json.loads(I.circuit_bytes(win.circuit_record()))
+    mine = I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    files = I.registered_file(rec, mine, {}, got["roots"])
+    assert files[m1["name"]]["ports"]["x"]["value"] == names[0]
+    assert files[m1["name"]]["ports"]["x"]["root"] == x.root.hex()
+    with pytest.raises(ValueError, match="run_inputs"):
+        I.window_of_record({**rec, "run_inputs": rec["run_inputs"][:1]}, SAMPLING_DESIGN, BY_ID.__getitem__)
+
+
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
 def test_the_verifiers_period_is_the_circuit_records(templates):
     win = I.Window(I.Circuit("rec", templates), RUN, SAMPLING_DESIGN, 4)
