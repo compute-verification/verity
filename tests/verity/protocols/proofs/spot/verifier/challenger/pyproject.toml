@@ -43,7 +43,6 @@ inputs = [
     "tools/verity/circuit_check/src/circuit_check/entries.py",
     "tools/verity/circuit_check/src/circuit_check/targets.py",
     "benchmarks/one_stage/interfaces/verity_e2e_demo",
-    "verity/commitments/cuda/commit_slots/slots.py",
     "adapters/vllm/tools/served_run/serve_load.py",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",

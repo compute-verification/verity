@@ -31,7 +31,6 @@
   "infra/control/top_watch.py": 1,
   "tools/research/src/research/pods/nebius/common.sh": 1,
   "tools/research/src/research/pods/nebius/vm_setup.sh": 1,
-  "verity/commitments/cuda/commit_slots/slots.py": 1,
   "verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh": 1,
