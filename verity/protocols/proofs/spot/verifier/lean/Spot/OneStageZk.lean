@@ -791,7 +791,7 @@ output ports at its template's fields' trees (`ownFieldsOf`, among the window's 
 member's ports at C's run input nodes' trees (`runInputRoots`), and where
 C has an edge, each member's wired ports at their writers' output fields' trees (`fieldRoots`, at C's wiring under the
 verifier's partition, `derivedWiring`). -/
-def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
+def membersRootsWired (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
   let roots ← rootsOf ms rec
   let ts := templatesOf (ms.toList.map (·.name))
   let ft := fieldTreesOf ts rec
@@ -803,6 +803,94 @@ def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMa
   if !hasEdge P.prog then return roots
   let W ← derivedWiring P.prog rs
   fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots
+
+/-- The refusal of a member's slice holding a root that names no port. -/
+def SLICE_NO_PORT_WHY (member : String) : String :=
+  s!"member {member}: a root of its slice names no port"
+
+/-- The refusal of a member's slice whose roots name its port `p` twice (`Member.portsOnce`). -/
+def PORT_TWICE_WHY (member p : String) : String :=
+  s!"member {member}: its slice names port {p} twice: a member's slice holds one root of each port, the one its " ++
+    "public file's root there is held to"
+
+/-- The ports of the slice `s`'s roots, each its string, in the slice's order; none where the roots are not a list or
+one names no port as a string. -/
+def slicePorts (s : Json) : Option (List String) :=
+  match getD s "roots" with
+  | .arr rs => rs.toList.mapM fun r => match getD r "port" with
+    | .str p => some p
+    | _ => none
+  | _ => none
+
+/-- The first port of `ps` a later one names again, the two compared as strings; none where each is named once. -/
+def portTwice : List String → Option String
+  | [] => none
+  | p :: ps => if p ∈ ps then some p else portTwice ps
+
+/-- **A member's slice `s` names each port once**, its ports compared as strings (`slicePorts`): a root that names no
+port refuses (`SLICE_NO_PORT_WHY`), and so does a port named twice (`PORT_TWICE_WHY`), whatever the two roots are. -/
+def Member.portsOnce (m : Member) (s : Json) : V Unit :=
+  match slicePorts s with
+  | none => throw (SLICE_NO_PORT_WHY m.name)
+  | some ps =>
+    match portTwice ps with
+    | some p => throw (PORT_TWICE_WHY m.name p)
+    | none => pure ()
+
+/-- `Member.portsOnce` on each member of `ms` at its slice `slice m`, in order. -/
+def portsOnceAll (slice : Member → Json) : List Member → V Unit
+  | [] => pure ()
+  | m :: ms => m.portsOnce (slice m) >>= fun _ => portsOnceAll slice ms
+
+/-- **The registration's roots each member's statement reads, each port once**: `membersRootsWired`'s, then every
+member's slice of the registration `rec` at them (`Member.slice`), sampled or not, naming each port once
+(`portsOnceAll`). -/
+def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) :=
+  membersRootsWired p ms rec >>= fun roots =>
+  portsOnceAll (fun m => m.slice rec roots) ms.toList >>= fun _ =>
+  pure roots
+
+theorem portTwice_nodup : ∀ {ps : List String}, portTwice ps = none → ps.Nodup
+  | [], _ => List.nodup_nil
+  | p :: ps, h => by
+    unfold portTwice at h
+    split at h
+    · cases h
+    · rename_i hp
+      exact List.nodup_cons.2 ⟨hp, portTwice_nodup h⟩
+
+/-- Where `Member.portsOnce` passes on the slice `s`, every root of `s` names a port as a string, and no two the same. -/
+theorem Member.portsOnce_ok {m : Member} {s : Json} (h : m.portsOnce s = .ok ()) :
+    ∃ ps, slicePorts s = some ps ∧ ps.Nodup := by
+  unfold Member.portsOnce at h
+  split at h
+  · cases h
+  · rename_i ps hps
+    split at h
+    · cases h
+    · rename_i hn
+      exact ⟨ps, hps, portTwice_nodup hn⟩
+
+theorem portsOnceAll_ok {slice : Member → Json} :
+    ∀ {ms : List Member}, portsOnceAll slice ms = .ok () → ∀ m ∈ ms, ∃ ps, slicePorts (slice m) = some ps ∧ ps.Nodup
+  | [], _, _, hm => by cases hm
+  | m0 :: ms, h, m, hm => by
+    rw [portsOnceAll] at h
+    obtain ⟨⟨⟩, h0, h⟩ := Flock.HmNets.bind_ok h
+    rcases List.mem_cons.1 hm with rfl | hm
+    · exact Member.portsOnce_ok h0
+    · exact portsOnceAll_ok h m hm
+
+/-- **Where `membersRootsOf` returns, every member's slice names each port once**: at the roots it returns, each
+member of `ms`, sampled or not, has a slice whose every root names a port as a string, and no two the same. -/
+theorem membersRootsOf_portsOnce {p : Params} {ms : Array Member} {rec : Json} {roots : Std.HashMap String (Array Json)}
+    (h : membersRootsOf p ms rec = .ok roots) :
+    ∀ m ∈ ms, ∃ ps, slicePorts (m.slice rec roots) = some ps ∧ ps.Nodup := by
+  unfold membersRootsOf at h
+  obtain ⟨roots', _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hp, h⟩ := Flock.HmNets.bind_ok h
+  cases h
+  exact fun m hm => portsOnceAll_ok hp m (Array.mem_toList_iff.2 hm)
 
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
@@ -827,6 +915,18 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact ⟨roots, hr, runMembers_files h⟩
+
+/-- **Where the per-member form's run returns, every member's slice names each port once** (`membersRootsOf_portsOnce`):
+at the roots `membersRootsOf` gives each member, each member of the parameters, sampled or not, has a slice of the
+registration whose every root names a port as a string, and no two the same. -/
+theorem membersRun_portsOnce {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧
+      ∀ m ∈ ms, ∃ ps, slicePorts (m.slice c.record roots) = some ps ∧ ps.Nodup := by
+  unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨roots, hr, -⟩ := Flock.HmNets.bind_ok h
+  exact ⟨roots, hr, membersRootsOf_portsOnce hr⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
 evidence's `proved_units`** (`runMembers_proved`), which the record's checks hold to the sample (`Record.checks`'
@@ -911,6 +1011,17 @@ theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Com
       · cases h
     · cases h
     · cases h
+
+/-- **Where the per-member form's check accepts, every member's slice names each port once** (`membersRun_portsOnce`):
+at the roots `membersRootsOf` gives each member, each member of the parameters, sampled or not, has a slice of the
+registration whose every root names a port as a string, and no two the same. -/
+theorem checkMembersAt_portsOnce {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkMembersAt p ms c ξ e sts bs = .accept pub prof) :
+    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧
+      ∀ m ∈ ms, ∃ ps, slicePorts (m.slice c.record roots) = some ps ∧ ps.Nodup :=
+  let ⟨_, hr, _⟩ := checkMembersAt_accept h
+  membersRun_portsOnce hr
 
 /-- The per-member form's check refuses evidence naming no session roots object, whatever else it names. -/
 theorem checkMembersAt_noRoots {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
@@ -1628,6 +1739,24 @@ private def headerT (n : Nat) (roots : List (String × String)) : Json :=
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb")] "t/c0") (headerT 5 [("x", "aa")])) ==
   "public file: not the registration's: population"
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa")] "t/c1") (headerT 3 [])) == ""
+
+/-- `Member.portsOnce` of the member `name` of `keyedT` at its slice on the roots given (`sliceT`). -/
+private def portsOnceT (roots : List (String × String)) (name : String) : String :=
+  match keyedT.find? (·.name == name) with
+  | some m => refusal (m.portsOnce (sliceT roots name))
+  | none => "no member"
+
+-- a slice naming port x twice, at its true root aa and at another, bb: refused by name, where `headerHeld` alone holds
+-- a header at bb
+#guard portsOnceT [("t/c0/x", "aa"), ("t/c0/x", "bb")] "t/c0" == PORT_TWICE_WHY "t/c0" "x"
+#guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c0/x", "bb")] "t/c0") (headerT 2 [("x", "bb")])) == ""
+-- the same roots with x named once in the slice: accepted
+#guard portsOnceT [("t/c0/x", "aa"), ("t/c1/x", "bb")] "t/c0" == ""
+#guard portsOnceT [("t/c0/x", "aa"), ("t/c1/x", "bb")] "t/c1" == ""
+#guard PORT_TWICE_WHY "t/c0" "x" == "member t/c0: its slice names port x twice: a member's slice holds one root of " ++
+  "each port, the one its public file's root there is held to"
+#guard refusal ((memberT "t/c0" #[(0, 2)]).portsOnce
+  (Json.mkObj [("roots", Json.arr #[Json.mkObj [("port", (1 : Nat)), ("root", "aa")]])])) == SLICE_NO_PORT_WHY "t/c0"
 
 /-- The member `name` of `keyedT`'s slice with its template's fields' trees at the fields it has no root of
 (`ownFieldsOf`, as `membersRootsOf` gives them). -/
