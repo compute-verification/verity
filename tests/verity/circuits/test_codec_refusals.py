@@ -142,6 +142,14 @@ def _reads_later_input(d: dict) -> None:
     body["ret"] = {"affine": ["n", 1, 0, n]}
 
 
+def _later(refs: dict):
+    """Node 1 reads node 2 through ``refs``: `_reads_later_input`'s order, the read spelt in another form."""
+    def edit(d: dict) -> None:
+        _reads_later_input(d)
+        _node(d, 1)["args"][0]["refs"] = refs
+    return edit
+
+
 #: (label, the honest descriptor, the read in honest order, the same read naming a later node, the honest read's outcome: the
 #: decoder's recut refusal, or the recut it records)
 FORWARD = [("an 8-bit parameter reading a later 16-bit input", byte, _reads_input, _reads_later_input,
@@ -189,6 +197,17 @@ DECODER = [
     ("an 8-bit parameter reading a later 16-bit input", byte, _reads_later_input,
      "definition 'Root[TRecutByte_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
     ("a batch of 1-bit values reading a later batch of 16-bit inputs", bits, _reads_later_input,
+     "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
+    ("a node reading itself", tiny, lambda d: _node(d, 2)["args"][0].update(refs={"affine": ["n", 2, 0, 1]}),
+     f"definition '{ROOT}' node 2: " + codec.forward_refusal(2, 2)),
+    ("an explicit part naming a later node", bits, _later({"explicit": [["n", 0, j] for j in range(15)] + [["n", 2, 0]]}),
+     "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
+    ("a strided part naming a later node", bits, _later({"strided": ["n", 2, 0, 4, 1, 4, 16]}),
+     "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
+    ("a grid lane naming a later node", bits, _later({"grid": [2, [["n", 0, 0, 1, [[4, 2]]], ["n", 2, 0, 1, [[4, 2]]]]]}),
+     "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
+    ("a later node after a part of no references", bits,
+     _later({"concat": [{"affine": ["n", 0, 0, 0]}, {"affine": ["n", 2, 0, 16]}]}),
      "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
     ("an alias to no earlier node", tiny, _alias_forward,
      f"definition '{ROOT}' node 2: alias to argument 0 of node 2: aliases name an argument of an earlier node"),
