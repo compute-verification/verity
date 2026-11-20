@@ -130,15 +130,17 @@ def test_each_function_has_its_lean_body(name):
 
 
 #: the storage session's released material and each body's value for it, as the memory attester writes them: the session
-#: commitment (`SessionCommitment.to_json`), three coin openings, the registered LMS key, and the values of the round coins,
-#: the header and the context
+#: commitment (`SessionCommitment.to_json`), three coin openings, the registered LMS key (at the deployed parameters), the
+#: message m and its signature at leaf 0, and the values of the round coins, the header and the context
 VECTORS = json.loads((Path(__file__).parent / "pous_session_vectors.json").read_text())
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
 MESSAGE = "pous.session.message/v1"
 #: what the verifier holds of the session as a released commitment: the commitment, how the session ended and its rounds, the key,
-#: the signed message, and the place the verifier registered it at (before the place its coin is released at, 1)
+#: the signed message and its signature, and the place the verifier registered it at (before the place its coin is released at, 1)
 RELEASE = {"commitment": VECTORS["commitment"], "ended": "complete", "rounds": 3, "key": VECTORS["key"],
-           "message": hashlib.sha512(b"pous session message").hexdigest(), "place": 0}
+           "message": VECTORS["message"], "signature": VECTORS["signature"], "place": 0}
+#: the configuration's pin of the memory attester's key: its SHA-512
+PINNED = (hashlib.sha512(bytes.fromhex(VECTORS["key"])).digest(),)
 
 
 def text(doc) -> str:
@@ -161,9 +163,9 @@ def mark(fn: str, **args) -> dict:
     return {"supplied": fn, "args": args, "layout": "le", "bits": 8}
 
 
-def refusal(tables, fn: str, **args) -> str:
+def refusal(tables, fn: str, pinned=PINNED, **args) -> str:
     with pytest.raises(ValueError) as e:
-        G.body(*tables, "x", mark(fn, **args))
+        G.body(*tables, "x", mark(fn, **args), pinned)
     return str(e.value)
 
 
@@ -190,18 +192,24 @@ def test_header_of_an_even_length_has_no_padding():
 
 
 def test_context_vector():
-    assert G.body(*held(), "x", mark(CONTEXT)) == ([("bytes", VECTORS["context"])], 106)
+    assert G.body(*held(), "x", mark(CONTEXT), PINNED) == ([("bytes", VECTORS["context"])], 106)
 
 
 def test_message_vector():
-    """The message is the 64 bytes released in the clear, as released."""
-    assert G.body(*held(), "x", mark(MESSAGE)) == ([("bytes", RELEASE["message"])], 64)
+    """The message is the 64 bytes released in the clear, as released, once its signature verifies under the pinned key."""
+    assert G.body(*held(), "x", mark(MESSAGE), PINNED) == ([("bytes", RELEASE["message"])], 64)
+
+
+def test_no_pin_refuses_the_key():
+    """With no key pinned, the context and the message have no statement: the session's own key is never taken."""
+    for fn in (CONTEXT, MESSAGE):
+        assert refusal(held(), fn, pinned=()) == NO_STATEMENT + fn + "'s " + G.UNPINNED
 
 
 def test_the_marks_reach_the_leaves_their_layouts_read():
     rows = G.of_mark(*held(), "x", {"supplied": ROUND, "args": {"round": 2}, "layout": "halves", "bits": 96})
     assert G.row_leaves_of(rows[0], lambda _k, n: bytes.fromhex(n), 32, False) == [2, 0, 70000]
-    rows = G.of_mark(*held(), "x", {"supplied": CONTEXT, "args": {}, "layout": "le", "bits": 848})
+    rows = G.of_mark(*held(), "x", {"supplied": CONTEXT, "args": {}, "layout": "le", "bits": 848}, PINNED)
     assert len(G.row_leaves_of(rows[0], lambda _k, n: bytes.fromhex(n), 16, False)) == 53
 
 
@@ -286,7 +294,17 @@ REFUSALS = [
     ("a session of 4 rounds", held(rounds=4), HEADER, {"head": 753}, HEADER + "'s session has 4 rounds, not its 3"),
     ("a session of rounds past u32", held(rounds=1 << 32), HEADER, {"head": 753}, HEADER + "'s commitment's rounds is no u32"),
     ("a late session of too few rounds", held(ended="late", rounds=1), HEADER, {"head": 753}, HEADER + "'s session did not end complete"),
-    ("a key of 15 bytes", held(key="ab" * 15), CONTEXT, {}, CONTEXT + "'s key is 15 bytes, not an LMS identifier's 16"),
+    ("a key of 15 bytes", held(key="ab" * 15), CONTEXT, {}, CONTEXT + "'s " + G.UNPINNED),
+    ("a key the configuration doesn't pin", held(key=_flip(VECTORS["key"], 40)), CONTEXT, {}, CONTEXT + "'s " + G.UNPINNED),
+    ("a message under a key not pinned", held(key=_flip(VECTORS["key"], 40)), MESSAGE, {}, MESSAGE + "'s " + G.UNPINNED),
+    ("a message the signature doesn't sign", held(message=_flip(VECTORS["message"])), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a signature of another session", with_commitment(session=_flip(VECTORS["commitment"]["session"])), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a truncated signature", held(signature=VECTORS["signature"][:-2]), MESSAGE, {}, MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a signature of another leaf", held(signature="00000001" + VECTORS["signature"][8:]), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("no signature", held(signature=None), MESSAGE, {}, MESSAGE + "'s commitment's signature is no lowercase hex"),
     ("a key that is no hex", held(key="x"), CONTEXT, {}, CONTEXT + "'s commitment's key is no lowercase hex"),
     ("a session of 31 bytes", with_commitment(session="ab" * 31), CONTEXT, {}, CONTEXT + "'s session is 31 bytes, not 32"),
     ("a message of 63 bytes", held(message="ab" * 63), MESSAGE, {}, MESSAGE + "'s message is 63 bytes, not 64"),
@@ -319,7 +337,7 @@ def test_what_has_no_statement_is_refused_by_name(name, tables, fn, args, why):
 def test_a_number_in_a_string_is_not_one():
     """`1e2` or `-0` inside a string is text: only the numbers of the JSON are held to the canonical form."""
     doc = {**RELEASE, "note": "limit -0 and 1e2, 03 + 3.0 \\\" 5e1"}
-    assert G.body(*held(commitment=text(doc)), "x", mark(CONTEXT)) == ([("bytes", VECTORS["context"])], 106)
+    assert G.body(*held(commitment=text(doc)), "x", mark(CONTEXT), PINNED) == ([("bytes", VECTORS["context"])], 106)
 
 
 def test_a_last_opening_stands_for_its_round():

@@ -627,7 +627,8 @@ def decode_params(j) -> dict:
             raise D.Reject(str(e)) from None
     try:
         G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
-                      j.get("commitments"), j.get("released"), len(j["log"]))
+                      j.get("commitments"), j.get("released"), len(j["log"]),
+                      [bytes.fromhex(k) for k in j.get("attester_keys", [])])
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "pinned" in j:

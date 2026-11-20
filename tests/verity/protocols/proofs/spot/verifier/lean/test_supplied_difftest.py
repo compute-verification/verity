@@ -58,9 +58,14 @@ def reference(j):
         if binding is not None and not (isinstance(binding, dict) and isinstance(binding.get("stream"), str)
                                         and isinstance(binding.get("prover"), str)):
             raise ValueError("binding")
+        keys = j.get("attester_keys", [])
+        if not (isinstance(keys, list) and all(isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h) for h in keys)):
+            raise ValueError("attester_keys")
+        pinned = [bytes.fromhex(h) for h in keys]
         held = {f: bytes.fromhex(h) for f, h in coins.items()}
         commit = {f: bytes.fromhex(h) for f, h in commitments.items()}
-        G.order(ms, {v: G.of_mark(held, commit, v, m) for v, m in ms.items()}, held, commit, j.get("released"), len(log))
+        G.order(ms, {v: G.of_mark(held, commit, v, m, pinned) for v, m in ms.items()}, held, commit, j.get("released"),
+                len(log))
         out = {}
         for v, m in ms.items():
             w = G._nat(widths.get(v))
@@ -68,7 +73,7 @@ def reference(j):
                 raise ValueError("width")
             out[v] = [G.row_leaves_of(r, lambda k, n: G._source_bytes(rec, v, k, n, list(ms), log, binding), w,
                                       m["layout"] == "digest")
-                      for r in G.of_mark(held, commit, v, m)]
+                      for r in G.of_mark(held, commit, v, m, pinned)]
             c = j["cuts"].get(v) if isinstance(j.get("cuts"), dict) else None
             if c is not None:
                 if not (isinstance(c, list) and len(c) == 2 and all(G._nat(x) is not None for x in c)):
@@ -235,6 +240,8 @@ _spec = importlib.util.spec_from_file_location("session_cases", _CASES)
 CASES = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CASES)
 VECTORS = CASES.VECTORS
+#: the configuration's pin of the memory attester's key, hex
+PINNED = [h.hex() for h in CASES.PINNED]
 
 
 def fixed(label: str, n: int) -> bytes:
@@ -261,21 +268,22 @@ def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int |
     coins, commitments = tables
     released = {ROUND: 1} if released is ... and fn == ROUND else None if released is ... else released
     return {"program": desc([["x0", 1, mark]], [2]), "coins": {f: c.hex() for f, c in coins.items()},
-            "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {"x0": 16}, "record": RECORD, "log": [],
-            "binding": BINDING, **({} if released is None else {"released": released})}
+            "commitments": {f: c.hex() for f, c in commitments.items()}, "attester_keys": PINNED, "widths": {"x0": 16},
+            "record": RECORD, "log": [], "binding": BINDING, **({} if released is None else {"released": released})}
 
 
 @functools.cache
 def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...]) -> dict:
     """A session the memory attester writes: ``k`` coins over ``blocks`` blocks, each at ``picks[j] % blocks``: the commitment
-    the verifier holds (with how the session ended and its rounds, and the key) and the coin (the openings)."""
-    session = fixed(f"session{seed}", 32)
+    the verifier holds (with how the session ended and its rounds, the key, the message and its signature: the vectors', over
+    their session) and the coin (the openings)."""
+    session = bytes.fromhex(VECTORS["commitment"]["session"])
     key = MA.HM96.key_from_label(f"difftest-key{key_label}".encode())
     salts = [fixed(f"salt{seed}/{j}", MA.HM96.salt_bytes) for j in range(k)]
     tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
     c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
     return {"commitment": c.to_json(), "ended": "complete", "rounds": k, "place": 0,
-            "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex(), "message": fixed(f"message{seed}", 64).hex(),
+            "key": VECTORS["key"], "message": VECTORS["message"], "signature": VECTORS["signature"],
             "openings": [tree.opening(j).to_json() for j in range(k)]}
 
 
@@ -343,6 +351,12 @@ MUTATIONS = {
     "message upper": lambda d, j: d.update(message=d["message"].upper()),
     "message number": lambda d, j: d.update(message=5),
     "no message": lambda d, j: d.pop("message"),
+    "message flipped": lambda d, j: d.update(message=_flip(d["message"])),
+    "key unpinned": lambda d, j: d.update(key=_flip(d["key"], 40)),
+    "signature flipped": lambda d, j: d.update(signature=_flip(d["signature"], 200)),
+    "signature short": lambda d, j: d.update(signature=d["signature"][:-2]),
+    "signature leaf": lambda d, j: d.update(signature="00000001" + d["signature"][8:]),
+    "no signature": lambda d, j: d.pop("signature"),
     "ended late": lambda d, j: d.update(ended="late"),
     "ended number": lambda d, j: d.update(ended=1),
     "no ended": lambda d, j: d.pop("ended"),
@@ -381,7 +395,7 @@ def sessions(draw) -> dict:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
         except (KeyError, IndexError, TypeError, AttributeError):
             pass
-    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "message", "place") if x in doc})
+    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "message", "signature", "place") if x in doc})
     coin = CASES.text({x: doc[x] for x in ("openings", "carried", "coin_root") if x in doc})
     if draw(st.integers(0, 6)) == 0:
         commit = _formed(commit, draw(st.sampled_from(COMMITMENT_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
@@ -508,7 +522,8 @@ def _programmed(marks, tables, released) -> dict:
     inputs = [[f"x{i}", 1, mark_of(fn, args, args.get("head"))] for i, (fn, args) in enumerate(marks)]
     coins, commitments = tables
     return {"program": desc(inputs, [2] * len(inputs)), "coins": {f: c.hex() for f, c in coins.items()},
-            "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {f"x{i}": 16 for i in range(len(marks))},
+            "commitments": {f: c.hex() for f, c in commitments.items()}, "attester_keys": PINNED,
+            "widths": {f"x{i}": 16 for i in range(len(marks))},
             "record": RECORD, "log": [], "binding": BINDING, "released": released}
 
 
