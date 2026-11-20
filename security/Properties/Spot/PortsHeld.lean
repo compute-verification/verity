@@ -73,10 +73,16 @@ def IsRecordRoot (rec : Json) (q : String) (r : Json) : Prop :=
   ∃ r0 ∈ Properties.Spot.rootsOf rec, getD r0 "port" = .str q ∧ (∀ r1 ∈ Properties.Spot.rootsOf rec, getD r1 "port" = .str q → r1 = r0) ∧
     getD r "root" = getD r0 "root" ∧ getD r "domain" = getD r0 "domain" ∧ getD r "leaves" = getD r0 "leaves"
 
+/-- **The wire `w` of C's wiring under the verifier's partition is one into the member `m`**: its reader is the
+template of a range of the partition's ranges `rs` that holds `m`'s units. -/
+def WireInto (rs : Array Flock.TemplateQuery.TRange) (m : OneStageZk.Member) (w : Spot.Wires.Wire) : Prop :=
+  ∃ x ∈ rs, x.template = w.reader ∧ x.first ≤ m.first ∧ m.first + m.count ≤ x.first + x.count
+
 /-- **What the per-member form's check accepts reads each member's slice root as the record's root for its port**:
 every root of every member's slice (`OneStageZk.Member.slice`, at the roots `OneStageZk.membersRootsOf` returned) is
 the committed record's root for a port `q` (`IsRecordRoot`): the member's own port `<member>/<port>`, the tree the
-slice root names, or a window's tree of a template's field `<template>/<field>`, which a wired port reads. -/
+slice root names, or, for a wired port, `<writer>/<field>`, the window's tree of the exact output field that a wire
+of C's wiring under the verifier's partition (`OneStageZk.derivedWiring`) into the member at that port names. -/
 def MembersRootsRecord : Prop :=
   ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
@@ -86,6 +92,9 @@ def MembersRootsRecord : Prop :=
         ∀ m ∈ ms, ∀ r ∈ (match getD (m.slice c.record roots) "roots" with | .arr rs => rs | _ => #[]),
           ∃ q, IsRecordRoot c.record q r ∧
             ((∃ b, getD r "port" = .str b ∧ q = m.name ++ "/" ++ b) ∨ getD r "tree" = .str q ∨
-              ∃ t f, OneStageZk.templateOf q = some (t, f))
+              ∃ P rs W, Program.parse p.own.program = .ok P ∧
+                Partition.evaluate P (getD p.own.partition "query") = .ok rs ∧
+                OneStageZk.derivedWiring P.prog rs = .ok W ∧
+                ∃ w ∈ W.wires, WireInto rs m w ∧ getD r "port" = .str w.port ∧ q = w.writer ++ "/" ++ w.out)
 
 end Properties.Spot
