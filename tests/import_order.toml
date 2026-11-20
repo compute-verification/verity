@@ -40,6 +40,7 @@ order = [
     ["verity/protocols/compose/verifier/onsite"],
     ["verity/protocols/compose"],
     ["security"],
+    ["input_datasets"],
     ["adapters"],
     ["tools"],
     ["applications"],
