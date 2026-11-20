@@ -3533,7 +3533,12 @@
    },
    "Claims.ZKmalRx": {
     "fails": "Claims.ZKmalRx_fails",
-    "meets": ["Claims.Sampling.masked_meets_zk"]
+    "meets": [
+     "Claims.Witness.Recursion.ZKStop_meets",
+     "Claims.Sampling.masked_meets_zk",
+     "Claims.Witness.Recursion.ZK_meets",
+     "Claims.Witness.Recursion.ZKPriv_meets"
+    ]
    },
    "Claims.Recursion.Bits": {
     "fails": "Claims.Witness.Recursion.Bits_fails",
@@ -3586,55 +3591,6 @@
    "Claims.Recursion.ZKPriv": {
     "fails": "Claims.Witness.Recursion.ZKPriv_fails",
     "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
-   },
-   "Claims.Sampling.Binding": {
-    "fails": "Claims.Sampling.Binding_fails",
-    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
-   },
-   "Claims.Sampling.BitsLin": {
-    "fails": "Claims.Sampling.BitsLin_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
-   },
-   "Claims.Sampling.Complete": {
-    "fails": "Claims.Sampling.Complete_fails",
-    "meets": ["Claims.Sampling.scope_meets"]
-   },
-   "Claims.Sampling.Nontrivial": {
-    "fails": "Claims.Sampling.Nontrivial_fails",
-    "meets": ["Claims.Sampling.scope_meets"]
-   },
-   "Claims.Sampling.ScopeMatches": {
-    "fails": "Claims.Sampling.ScopeMatches_fails",
-    "meets": ["Claims.Sampling.scope_meets"]
-   },
-   "Claims.Sampling.Universal": {
-    "fails": "Claims.Sampling.Universal_fails",
-    "meets": ["Claims.Sampling.universal_meets"]
-   },
-   "Claims.Sampling.ZK": {
-    "fails": "Claims.Sampling.ZK_fails",
-    "meets": ["Claims.Sampling.masked_meets_zk"]
-   },
-   "Claims.ScopeMatches": {
-    "fails": "Claims.ScopeMatches_fails",
-    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
-   },
-   "Claims.ZKmalR": {
-    "fails": "Claims.ZKmalR_fails",
-    "meets": ["Claims.Flock.masked_meets_zk"]
-   },
-   "Claims.Sampling.KSLinOn": {
-    "fails": "Claims.Sampling.KSLinOn_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
-   },
-   "Claims.ZKmalRx": {
-    "fails": "Claims.ZKmalRx_fails",
-    "meets": [
-     "Claims.Witness.Recursion.ZKStop_meets",
-     "Claims.Sampling.masked_meets_zk",
-     "Claims.Witness.Recursion.ZK_meets",
-     "Claims.Witness.Recursion.ZKPriv_meets"
-    ]
    },
    "Claims.Recursion.KSBound": {
     "fails": "Claims.Witness.Recursion.KSBound_fails",
