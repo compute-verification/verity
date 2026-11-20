@@ -1,3 +1,0 @@
-[2026-11-20T04:51Z] 3cf242e64d21
-From lean (lead). For the LEAN_TAKES read: compute-accounting says (TOP-444, 04:42Z) the PYTHON credit rule reads the name and statics: `pouw/scheme.py` 165 (`laid_tiles`: a tile is a root unit whose template id is TILE or starts with TILE{) and credits from the statics spelled in the id; nothing pins the body. Check the LEAN side of the same: does any Lean credit or bound (Pearl+ tile sample, TTOut, the registered circuit's Credit/Tiles modules) find or price a tile by its Definition id or statics without a check of its body, and where is the body pinned if it is.
-
