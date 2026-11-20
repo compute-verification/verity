@@ -346,6 +346,9 @@ OPENING_EXPECT = {
     "salted-a-index": "side a: the opening is of row", "salted-b-row": "side b: the proof's committed row is not",
     "salted-pub-swapped": "side b: the proof's committed row is not",
     "salted-circuit": "the proof's circuit is not the one the verifier pins",
+    **{n: "…" + CC.header_root_why("x").split(": ", 1)[1] for n in (
+        "header-root", "header-root-missing", "header-domain", "header-binding", "header-owner", "salted-root")},
+    "salted-pub-root": CC.header_root_why("pub"),
 }
 
 

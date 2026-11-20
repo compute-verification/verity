@@ -22,6 +22,9 @@ refused, never read in its own order.
 A salted unit's tile (i, j) is A rows R·i + k and B rows C·j + k, each opened the same way, and the b ‖ c after them is
 its public row's, which must be `publicBc` of the execution phase's context, the certified salt, the unit's position and the
 entry's side roots.
+Each opened row's `frame_v3` root in the header, the public row's too, is the one-row tree of its b ‖ c
+(`headerRootHeld`, `HEADER_ROOT_WHY`), so the roots the proof is verified under are the rows that open under the
+registration.
 Python's reading is kept where its outcome depends on it: hex as `bytes.fromhex` reads it, integers as `struct`
 packs them (a boolean is one), an entry as `Entry.from_json` reads it.
 -/
@@ -147,6 +150,26 @@ def header? (pub : ByteArray) : Option (Json × ByteArray) := do
   | .obj _ => some (h, pub.extract (nl + 1) pub.size)
   | _ => Option.none
 
+/-- `header_root_why`: the refusal of an opened row whose header root is not its committed row's tree. -/
+def HEADER_ROOT_WHY (port : String) : String :=
+  s!"port {port}: the proof's frame_v3 root is not the one-row tree of its committed row"
+
+/-- `_header_root_held`: the header's `frame_v3` (`f`) root of `port` is the one-row tree over its committed `bc`
+(`Flock.PortRoots.pubRoot` at one instance): the leaf at rank 0, under the domain the port's binding and the header's
+owner give over one position, which is the domain its `domain_ids` entry names. -/
+def headerRootHeld (f : Json) (port : String) (bc : ByteArray) (schema : String) : Bool :=
+  let get (k : String) : Option Json := match pyGet? f k with
+    | some o@(.obj _) => pyGet? o port
+    | _ => Option.none
+  match (get "bindings").bind (fromHex? 64), (get "roots").bind (fromHex? 64), (pyGet? f "owner").bind strictInt? with
+  | some binding, some root, some owner =>
+    if owner < -2 then false
+    else match Domain.mk? .sha512 binding owner 1 with
+      | .ok d => (get "domain_ids").bind (fromHex? 64) == some d.id &&
+          d.leaf 0 schema (Flock.Hm96.Default512.treeLeaf bc) == root
+      | .error _ => false
+  | _, _, _ => false
+
 /-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else
 why not, `core_check.opening`'s reason. `salt` is a certified execution phase's salt (`certified_salt`). -/
 def opening (p : Params) (c : ExecutionPhaseCommitmentRecord) (units : Option (List Int)) (unit : Int) (pub : ByteArray)
@@ -188,6 +211,7 @@ def opening (p : Params) (c : ExecutionPhaseCommitmentRecord) (units : Option (L
   if n != 1 then return some s!"the proof has {n} instances, not one tile"
   unless t.any (fun t => pyGet? h "circuit_sha512" == some (.str t.circuit)) do
     return some "the proof's circuit is not the one the verifier pins for the check's template"
+  let frame := (pyGet? h "frame_v3").getD Json.null
   let fv := (pyGet? h "frame_v3").bind (pyGet? · "schemas")
   let ports := portsOf lay
   match lay with
@@ -214,13 +238,19 @@ def opening (p : Params) (c : ExecutionPhaseCommitmentRecord) (units : Option (L
       if idx != (want : Int) then
         return some s!"side {side.name}: the opening is of row {idx}, not the unit's row {want}"
       let schema := if lay.isNone then schema else Flock.HmRow.ROW_SCHEMA_V2
-      let leaf := sdom.leaf want schema (Flock.Hm96.Default512.treeLeaf (body.extract (k * bcBytes) ((k + 1) * bcBytes)))
+      let bc := body.extract (k * bcBytes) ((k + 1) * bcBytes)
+      let leaf := sdom.leaf want schema (Flock.Hm96.Default512.treeLeaf bc)
       if !(want < sdom.count && verifyPath sdom (entry.root side) want leaf path) then
         return some s!"side {side.name}: the proof's committed row is not entry {e}'s row {want}"
+      if !headerRootHeld frame (ports.getD k "") bc schema then
+        return some (HEADER_ROOT_WHY (ports.getD k ""))
       k := k + 1
-  if lay.isSome && body.extract (k * bcBytes) ((k + 1) * bcBytes) !=
-      publicBc p.context (salt.getD ByteArray.empty) unit.toNat (entry.rootA, entry.rootB) then
-    return some s!"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s side roots"
+  if lay.isSome then
+    let bc := body.extract (k * bcBytes) ((k + 1) * bcBytes)
+    if bc != publicBc p.context (salt.getD ByteArray.empty) unit.toNat (entry.rootA, entry.rootB) then
+      return some s!"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s side roots"
+    if !headerRootHeld frame "pub" bc Flock.HmRow.ROW_SCHEMA_V2 then
+      return some (HEADER_ROOT_WHY "pub")
   return Option.none
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as

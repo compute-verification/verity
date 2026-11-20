@@ -40,8 +40,7 @@ incorrect set of the trace the extractor recovers.
    its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`):
    for every decoder within Flock's list-decoding radius and every dense statement, Pr[the recursive verifier accepts ∧
    the extractor recovers no witness] ≤ κ + √(γ·Pr[B]) plus the inner verifier's bad-abort, forked-coin and first-coin
-   terms. `Flock.Guarantees.RecursiveKSDeployed` (`Proofs/Flock/Recursive/KSCoinTreeStatement.lean`) is that bound plus
-   2·k(x)·δ₁ at the coins the challenger commits at Hello, in an hm96 tree whose leaves hide within δ₁.
+   terms.
    - Domain: the dense statements (`RecDeploy.DenseAt`); the decoders within the radius (`Claims.Flock.ListWithin`; the
      deployed ones meet it).
    - Real: SHA-512 collision resistance bounds Pr[B], and `Claims.Hm96Hiding` bounds δ₁.

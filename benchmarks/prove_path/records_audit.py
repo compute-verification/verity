@@ -232,11 +232,12 @@ PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")
 
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
-    its blocks), and Pearl+'s (`pearl_plus_tile`, the tile's blocks, and `pearl_plus_credited`, its credit reader), which
-    `interface`'s own walk can't import, being a later place's; a refusal names the registry modules that failed to import."""
+    its blocks), and Pearl+'s, its scheme's ``catalog`` (the tile's blocks and its credit reader), which `interface`'s
+    own walk can't import, being a later place's; a refusal names the registry modules that failed to import."""
     from verity_vllm.definitions.registry.catalog import load
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited, pearl_plus_tile  # noqa: F401  (they register as they load)
 
+    for part in schemes.get("pearl-plus").catalog:
+        schemes.catalog("pearl-plus", part)
     _, errors = load()
     try:
         return IF.resolve(tid)
@@ -1111,7 +1112,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted(set(histories) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's history tables")
         pins |= histories
-        reads = IF.registered_file(doc, mine, pins)
+        reads = IF.registered_file(doc, mine, pins, docket.get("roots") or ())
         if a.day_ledger:
             from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))

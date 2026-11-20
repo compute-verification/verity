@@ -72,12 +72,11 @@ def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
     """The stated policy's work is the class's fixed load priced as a served step, its model's shape is the declared
     one, and its k is the outside linears' outputs and the scan state row, with nothing left over."""
     import served_shares as SS
-    import served_verdicts as SV
 
     p, sh = P.stated(), P.shape(P.stated().model)
     assert p.label == "served" and p.check["verdict"] == "not run"
     assert p.work == B.block_work(p.cls, B.MODEL)
-    layers, linears = SV.DECLARED[B.MODEL]
+    layers, linears = SS.MODELS[B.MODEL]["layers"], SS.MODELS[B.MODEL]["linears"]
     assert (sh.layers, [x[1:] for x in sh.linears]) == (layers, [x[1:] for x in linears])
     assert sh.head == (SS.MODELS[B.MODEL]["vocab"], SS.MODELS[B.MODEL]["hidden"])
     assert p.unexplained == 0 and p.outside == p.k - P.scan_state_bits(p.cls) > 0

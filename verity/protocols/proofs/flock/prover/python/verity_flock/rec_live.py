@@ -1029,8 +1029,10 @@ class LeanZkServer:
     """The inner phase's send check, Lean's ``flock-zk-server live`` (`Flock.ZkServer.liveWith`) on one session held to
     ``schedule``: `step` hands it a request before the proxy handles it, and it answers with every message the challenger's live-coin part
     gets for the request (`Flock.ZkServer.sentJson`) and the salts it drew for them, ``{"sent", "salts"}``, or the refusal
-    that stops the session, ``{"stop": why}``. A ZK server that exits or answers otherwise stops the session too. ``tree``:
-    the session is on the challenger's coin tree of that spec (`coin_tree.Spec.to_json`), whose ``Hello`` Lean holds to it."""
+    that stops the session, ``{"stop": why}``. A ZK server that exits or answers otherwise stops the session too. Its end
+    is a check of its answers: one between requests refuses the next request, and one other than `liveWith`'s 0 at the end
+    of its input, or a panic line, raises at `close`, by name (`lean-exit`, `lean-panic`). ``tree``: the session is on the
+    challenger's coin tree of that spec (`coin_tree.Spec.to_json`), whose ``Hello`` Lean holds to it."""
 
     def __init__(self, binary: str | Path, schedule: dict, tree: dict | None = None):
         self.binary = str(binary)
@@ -1041,19 +1043,36 @@ class LeanZkServer:
         try:
             got = self._ask(json.dumps({"schedule": schedule, **({} if tree is None else {"coin_tree": tree})}))
         except ValueError:
-            self.close()
+            self.discard()
             raise
         if got != {"ok": True}:
-            self.close()
+            self.discard()
             raise ValueError(f"{self.binary} live: the schedule is refused: {canonical(got)}")
 
+    def _ended(self, input_ended: bool) -> str | None:
+        """Why the process, which ended, has no answer to read: a panic line, a signal, or a status other than 0; any
+        status where its input had not ended (``input_ended``), which `liveWith` ends only at. None where it ended at 0
+        after its input did."""
+        self._err.seek(self._err_read)
+        err = self._err.read()
+        self._err_read += len(err)
+        sys.stderr.write(err.decode("utf-8", "replace"))
+        self._err.seek(0)
+        if (panic := LC.panic_line(self._err.read())) is not None:
+            return f"{LC.LEAN_PANIC}: {panic}"
+        rc = self.proc.returncode
+        return LC.exit_why(rc, LC.OK) if input_ended else LC.exit_why(rc, LC.OK) or f"{LC.LEAN_EXIT}: status {rc}"
+
     def _ask(self, line: str) -> dict:
+        if self.proc.poll() is not None:
+            raise ValueError(f"{self.binary} live ended after its last answer, before this request: {self._ended(False)}")
         try:
             self.proc.stdin.write(line + "\n")
             self.proc.stdin.flush()
             out = self.proc.stdout.readline()
         except OSError as e:
-            raise ValueError(f"{self.binary} live: {e}") from None
+            self.proc.wait()
+            raise ValueError(f"{self.binary} live: {e}: {self._ended(False)}") from None
         self._err.seek(self._err_read)
         err = self._err.read()
         self._err_read += len(err)
@@ -1061,8 +1080,10 @@ class LeanZkServer:
         if (panic := LC.panic_line(err)) is not None:
             raise ValueError(f"{LC.LEAN_PANIC}: {panic}")
         if not out:
-            rc = self.proc.wait()
-            raise ValueError(f"{self.binary} live: {LC.exit_why(rc) or f'exited ({rc})'}")
+            self.proc.wait()
+            raise ValueError(f"{self.binary} live: {self._ended(False)}")
+        if self.proc.poll() is not None:
+            raise ValueError(f"{self.binary} live ended with its answer: {self._ended(False)}")
         try:
             got = json.loads(out)
         except json.JSONDecodeError:
@@ -1083,8 +1104,24 @@ class LeanZkServer:
             raise ValueError(f"{self.binary} live: a salt not of {hm96.SHA512.salt_bytes} bytes")
         return got["sent"], salts
 
+    def _end(self) -> str | None:
+        """Ends the process, its standard input closed so that `liveWith` returns; `_ended`'s why."""
+        if self.proc.poll() is None:
+            # every request is flushed as it is written, so the close writes nothing to a pipe that may be broken
+            self.proc.stdin.close()
+            self.proc.wait()
+        self.proc.stdout.close()
+        return self._ended(True)
+
     def close(self) -> None:
-        self.proc.communicate()
+        """Ends the session. Raises `ValueError` naming `lean-panic` or `lean-exit` where the process wrote a panic line or
+        did not end at 0 once its input ended: the answers it gave were read before its end, and stand on nothing."""
+        if (why := self._end()) is not None:
+            raise ValueError(f"{self.binary} live did not end as documented at its close: {why}")
+
+    def discard(self) -> None:
+        """Ends the process of a session refused before any of its answers is read, which leaves nothing to check."""
+        self._end()
 
 
 class Proxy:
@@ -1525,7 +1562,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 except Refused as e:
                     conn.close()
                     if check is not None:
-                        check.close()
+                        check.discard()
                     print("STOPPED\t" + json.dumps({"session": len(res), "refused": str(e)}), flush=True)
                     res.append({"session": None, "refused": str(e), "rounds": 0, "firewall": None})
                     if done:
@@ -1534,7 +1571,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 except BaseException:
                     conn.close()
                     if check is not None:
-                        check.close()
+                        check.discard()
                     raise
             proxy = Proxy(LiveCoinPart(rand, tree, source), schedule=schedule, draw=draw, lean=check)
             try:
@@ -1550,7 +1587,13 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 pass
             finally:
                 if check is not None:
-                    check.close()
+                    try:
+                        check.close()
+                    except ValueError as e:
+                        was = proxy.stopped
+                        proxy.stop(f"rec proxy: {e}")
+                        if was is None:
+                            print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
             if proxy.verdict is None and proxy.stopped is None:
                 proxy.stop("rec proxy: the session ended without Finish")
                 print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
