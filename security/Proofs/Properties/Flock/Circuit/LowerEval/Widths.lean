@@ -1188,8 +1188,11 @@ inductive Reach (S : Prog) (d : ℕ) : ℕ → Prop
   | callee {y : ℕ} {nd : Node} : Reach S d y → (S.defs[y]!).prim = false → nd ∈ (S.defs[y]!).body.nodes →
       Reach S d nd.fn
 
-/-- Each Boolean Definition a node of a composite reached from `d` leads to evaluates through gates alone (`GateBodies` at
-every reached composite). -/
+/-- Each Boolean Definition a node of a composite reached from `d` in `P` leads to evaluates through gates alone
+(`GateBodies` at every composite `Reach P d` walks). Its `Reach` walks `P`, the decoded C; for a Program that keeps C's
+Definitions, as the restricted Program the lift walks does, the two walks from a `d` placed in C reach the same
+Definitions: `reach_restrict` (C's walk within the keeping Program's) and `reach_of_restrict` (the keeping Program's within
+C's). -/
 def GateBodiesDeep (P : Prog) (d : ℕ) : Prop :=
   ∀ y, Reach P d y → (P.defs[y]!).prim = false → GateBodies P y
 
