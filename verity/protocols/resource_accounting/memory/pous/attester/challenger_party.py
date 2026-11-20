@@ -217,21 +217,22 @@ class Challenger:
         return [_read_clock()]
 
     def _coins(self, body: bytes) -> list[Any]:
-        """The session's coins, then the coin tree's hiding key, then each round's salt, each sampled in turn; once all
-        are in, the session's challenger."""
+        """The session's coins, then the coin tree's hiding key, then each round's salt, then the session record's salt,
+        each sampled in turn; once all are in, the session's challenger."""
         q, self._sampled = self.request, [*self._sampled, body]
-        if len(self._sampled) < q["k"] + 2:
+        if len(self._sampled) < q["k"] + 3:
             self.phase.expect("Coins")
-            n = mc.HM96.key_bytes if len(self._sampled) == 1 else mc.HM96.salt_bytes
+            n = (mc.HM96.key_bytes if len(self._sampled) == 1 else
+                 mc.RECORD_SALT_BYTES if len(self._sampled) == q["k"] + 2 else mc.HM96.salt_bytes)
             return [Send("coins", Message("CoinsDraw", {"n": n}))]
-        coins, key, *salts = self._sampled
+        coins, key, *salts, salt = self._sampled
         binding = bytes.fromhex(q["binding"])
         if self.sid is None:
             self.sid = coin_session_id(coins, self.domain, q["node"], binding)
         tree = mc.CoinTree.draw(coins, self.sid, q["blocks"], q["k"], key=mc.coin_key(key), salts=salts)
         self.c = mc.MemoryAttester(tree, self.signer, log=self.log, limit_ns=q["limit_ns"],
                                      block_bytes=q["block_bytes"], binding=binding, clock=self._clock,
-                                     resolution_ns=self.resolution_ns)
+                                     resolution_ns=self.resolution_ns, salt=salt)
         return self._warmup()
 
     def _warmup(self) -> list[Any]:

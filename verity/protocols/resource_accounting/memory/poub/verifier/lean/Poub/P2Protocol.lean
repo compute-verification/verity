@@ -356,11 +356,11 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose �
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=
   (MemoryAttester.message { (default : MemoryAttester.ChallengePhaseCommitment) with session := toyRecord }
-    Flock.SessionCoins.COMPLETE #[]).toOption
+    ⟨Array.replicate MemoryAttester.RECORD_SALT_BYTES 6⟩ Flock.SessionCoins.COMPLETE #[]).toOption
 private def wipeRecord : Option ByteArray :=
   (MemoryAttester.StreamedWipe.message
     { (default : MemoryAttester.StreamedWipe.Commitment) with session := toyRecord }
-    MemoryAttester.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
+    ⟨Array.replicate MemoryAttester.RECORD_SALT_BYTES 6⟩ MemoryAttester.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
 
 private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.size - 1]! ^^^ 1)
 
