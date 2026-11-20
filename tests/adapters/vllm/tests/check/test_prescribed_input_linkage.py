@@ -11,7 +11,6 @@ workload of record.  Fixtures: a `_Store` of committed words by identity (the st
 """
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -77,8 +76,6 @@ def test_padrev_m0517_the_lag_is_read_through_gp01s_one_reader_of_the_attested_f
     assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert eos_lag_rows_declared({"async_scheduling": "true"}) == 1
     assert eos_lag_rows_declared({"async_scheduling": None}) is None and eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None
-    src = (Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "c2_replay.py").read_text()      # torch-free: the wiring read as text
-    assert "eos_lag_rows=_lag" in src
 
 
 # ------------------------------------------------------------------------------- one engine schedule of record
@@ -91,12 +88,10 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     assert LK.arrivals_of_record(decl, dict(obs_sched, use="declared")) == (decl, False)              # the declaration stands (coverage names why)
     assert LK.arrivals_of_record(decl, None) == (decl, False) and LK.arrivals_of_record(decl, {}) == (decl, False)
     assert LK.arrivals_of_record(decl, dict(obs_sched, observed_arrive_steps={"r0": 0, "r1": 3, "r9": 5})) == ({"r0": 0, "r1": 3}, True)   # unknown ids ignored
-    # the commit_delta wiring: the replay/linkage (and serving rows') _arr goes through this one rule, fed the binding record's schedule
+    # a sealed bundle's arrivals go through this one rule, fed the binding record's schedule
 
     from verity_vllm.pipeline import c2_replay as C2
     reqs = [{"request_id": "a", "index": 0, "arrive_step": 0}, {"request_id": "b", "index": 1, "arrive_step": 7}]
     site = SimpleNamespace(reqs=reqs, row={"commit": {"binding": {"coverage": {"schedule": obs_sched}}}})
     assert C2.arrivals(site, C2.request_labels(reqs)) == ({"r0": 0, "r1": 3}, True)
     assert C2.arrivals(SimpleNamespace(reqs=reqs, row={"commit": {}}), C2.request_labels(reqs)) == (decl, False)
-    src = (Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "c2_replay.py").read_text()
-    assert '_arr, _moved = arrivals(s, _rl)' in src

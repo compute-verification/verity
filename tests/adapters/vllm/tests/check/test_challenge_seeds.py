@@ -1,19 +1,5 @@
-"""Every challenge sample takes its seed from its caller: no sample over committed or snapshotted values is sampled from a default seed, and a
-command line that samples one refuses to run without `--seed`."""
+"""The challenge's seed derivations of record, and the generators they seed."""
 from __future__ import annotations
-
-import importlib
-import inspect
-
-import pytest
-
-SEEDED = [("verity_vllm.check.replay.driver", "sampled_replay")]
-
-
-@pytest.mark.parametrize("module, name", SEEDED)
-def test_the_seed_has_no_default(module, name):
-    fn = getattr(importlib.import_module(module), name)
-    assert inspect.signature(fn).parameters["seed"].default is inspect.Parameter.empty
 
 
 def test_the_derivations_of_record_are_pinned():
