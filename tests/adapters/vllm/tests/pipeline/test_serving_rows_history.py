@@ -124,7 +124,7 @@ def served(monkeypatch):
 
 def cut(rows, histories=True, caps=CAPS):
     plan = HR.Plan(TMPLS, rows, histories)
-    return plan, HR.cut(SRW.members(TMPLS, rows, None, caps, HR.seg(TMPLS, histories)), plan)
+    return plan, SRW.CH.shared_tables(HR.cut(SRW.members(TMPLS, rows, None, caps, HR.seg(TMPLS, histories)), plan))
 
 
 def binding(ms) -> CS.Binding:
