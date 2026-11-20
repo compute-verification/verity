@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Flock.Circuit.LowerEval.Lift
+public import Proofs.Properties.Flock.Circuit.LowerEval.Places
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
 
