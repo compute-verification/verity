@@ -445,7 +445,7 @@ No statement or table claims that a Program's values are always hidden until the
 The format does not refuse a program that holds data: a descriptor's bytes and digests mean what they meant, and programs move
 to registered inputs under new ids.
 
-### 5.4 Supplied inputs and held outputs
+### 5.4 Supplied inputs
 
 A *supplied* input is a parameter of the program function whose value the verifier computes, by a public function C names,
 from public things only: live coins (the proof service's, or a trusted device's signed coin) with their openings against a
@@ -539,7 +539,7 @@ PoUW block's salt, its log's base and its operands' roots, which its seed Defini
 of input, with no case per scheme.
 
 **What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (a mark's form is `supplied.mark_of`'s; a mark's
-function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`; no verifier checks a held output yet):
+function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`):
 
 - `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
 - `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
@@ -548,25 +548,18 @@ function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`; no verifier 
 - `E_SUPPLIED_FN`: the function is not in the registry;
 - `E_SUPPLIED_ARGS`: the args are not the function's, or the function has no value at them;
 - `E_SUPPLIED_WIDTH`: the parameter's leaves are not of one width w, `bits` is not the function's length at `args`, or the
-  leaves' `n · w` bits are not `bits` read whole by `layout`;
-- `E_HELD`: a held output (below) names no run of leaves of a supplied input of its width whose length divides the row's.
+  leaves' `n · w` bits are not `bits` read whole by `layout`.
 
 A supplied leaf's origin (§12) is `coin` when its function's is (the value is the coin itself: `window.salt/v1`), and
 `supplied` otherwise. §12's rules read `coin` as they do for a coin input, so a salt reaches only noise primitives, receipt
 folds and seeds, and a value computed from a coin (a round's index) reaches any port but a coin port. A supplied node's port
 is never `"kind": "static"` or `"kind": "position"`, and it is `"kind": "coin"` exactly when its origin is (`E_PORT_KIND`).
 
-**Held outputs.** A root `ret` port row may carry `"equals": [name, at, n]`: leaf `lo + i` of the row is held to leaf
-`at + (i mod n)` of the supplied input `name`, of the same width. With `const.u16/v1` at 1 and `n` = 1 it holds every
-unit's verdict word to 1, which is what an opening's verdict and a check's `ok` are; a block whose held output differs is
-refused inside the proof, since its row opens no root the verifier holds.
-
 **A block** (`restrict`). A maximal run of in(S) of one width whose gates are supplied-input gates of one parameter of C is
 a parameter of the block bound `supplied`, named `<name>/p<i>`; a run ends where the parameter does or skips a leaf. Its
 entry carries C's mark with `"of": [name, lo, hi]`, the leaves of C's parameter it covers (`0 <= lo < hi`, inside the
 value's bits), and `bits` the part's (`supplied.part`); a block's decoder checks the part as it checks C's mark, with
-`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The leaves a block's
-held outputs are held to join in(S) as such a part. The listing's binding of such an input bit is `supplied`. A block
+`bits` the part's in place of the value's (`E_SUPPLIED_MARK`, `E_SUPPLIED_WIDTH`). The listing's binding of such an input bit is `supplied`. A block
 whose one expanding unit reads the input and whose other units read that unit's outputs has the part in in(S) once, and
 the expansion's rows are the block's own gates; a block that holds only readers of the rows reads them as wires. A block that
 reads one leaf of an input reads that leaf alone: the key of an opening reads i_j's low half, leaf 2 of
@@ -576,7 +569,7 @@ reads one leaf of an input reads that leaf alone: the key of an opening reads i_
 leaves as the units read them, at the positions C gives (`OneCircuit.pos`, as for a registered input), row i salted by the
 public salt `registered_value.supplied_salts(<program digest>, <name>, i)` and committed under the value's registered
 domain. The verifier computes the root from the rows it computed (`Flock.Registered.checkKnown`), and the statement's rows
-open it as any registered read's do; a held output is a registered read of an output row against such a value. The base
+open it as any registered read's do. The base
 verifier is handed no other kind of public input. A supplied value is public, so each part's tree is listed in what the
 statement reveals (`Flock.Registered.knownList`). A value the verifier cannot compute (a coin's opening fails, a commitment
 it reads is missing) makes no statement, refused in the clear.
