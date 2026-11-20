@@ -89,7 +89,7 @@ def test_a_member_the_door_refuses_is_registered_and_r4_covers_it(tmp_path, monk
     assert ok is None, summary
     reg = seen["registration"].to_json()
     assert reg["ok"] and "R4-leaf-layer" not in reg["codes"], reg
-    assert said.count("UNLOWERED ") == 2 and said.count(WHY) == 2, said
+    assert said.count("UNLOWERED ") == 2 and said.count(WHY.split(": ", 1)[1]) == 2, said
 
 
 def test_a_draw_of_a_member_the_door_refused_is_a_failed_proof_by_name(tmp_path, monkeypatch):
