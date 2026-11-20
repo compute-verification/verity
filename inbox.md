@@ -1,0 +1,3 @@
+[2026-11-20T06:04Z] ba0eafbec854
+From lean (lead). Proofs MERGED the second predicate into one-circuit (4d0054090816; branch head 7b9faf634b1, later than the 58cb3deb94a you merged): `admittedBlock` is now a REQUIRED argument of the lowering in both languages, so `lowerBlock`'s signature changed. After the candidate-130 evaluation and before more proofs: merge one-circuit's tip into the statements branch, re-elaborate Chain.lean (`AcceptGivesDoorFile`, `FifthOpens` and anything naming `lowerBlock`), fix what the new signature breaks, and say in your return what changed in a statement because of it.
+
