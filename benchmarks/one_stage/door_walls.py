@@ -283,8 +283,8 @@ BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
 
 def load(spec: str) -> tuple[bytes, dict]:
     """C's bytes and its template query from a builder's name or a directory holding ``C.json`` and ``query.json``."""
+    _catalog()
     if spec in BUILDERS:
-        _catalog()
         return BUILDERS[spec]()
     d = Path(spec)
     return (d / "C.json").read_bytes(), json.loads((d / "query.json").read_text())
@@ -313,6 +313,8 @@ def owner(step: str, text: str) -> str:
     """A reading of whose wall a refusal is, by the step and the code that refused it."""
     if step == "rows":
         return "lean's lower (Flock.Lower)"
+    if step == "lower" and (m := re.search(r"\(Spot\.OneStageZk\.admitted\), ([a-z-]+):", text)):
+        return f"proofs' door predicate (Spot.OneStageZk.admitted, {m.group(1)})"
     if step == "lower" and "flock-lower-check" in text:
         if "lift" in text:
             return "lean's lift (Flock.Lift)"
@@ -1075,6 +1077,14 @@ def _prims():
 
 #: a parameter's type: ``w`` > 0 is ``Value(w)``, ``w`` < 0 is ``Array(-w, Value(1))``, a field of bits
 TYPES = (1, 7, 8, 32, -3, -5, -16)
+#: a step that packs 16 bit values into one field of 16 bits
+PACK = -1_000_000
+#: a word-mode template's parameter types (`_word_template`): fields of bits in whole 16-bit words
+WORD_TYPES = (-16, -16, -32)
+#: the share of the fuzzer's cases drawn in the door's admitted form (`draw(words=True)`)
+WORDS = 0.5
+#: the share of the fuzzer's cases drawn as a block in which one unit reads another (`draw_inner`)
+INNER = 0.3
 #: the bits of the trailing field a drawn template takes with probability 0.4, so that its unit is wide enough to compose
 WIDE = 2048
 
@@ -1103,7 +1113,90 @@ class Spec:
                 "registered": self.registered, "blocks": self.blocks}
 
 
-def draw(rng: random.Random, small: bool = False) -> Spec:
+def _template(rng: random.Random, prims: list, words: bool = False) -> dict:
+    if words:
+        return _word_template(rng)
+    params = [rng.choice(TYPES) for _ in range(rng.randint(1, 3))] + ([-WIDE] if rng.random() < 0.4 else [])
+    vals = list(enumerate(params))
+    steps = []
+    for _s in range(rng.randint(0 if rng.random() < 0.15 else 1, 4)):
+        ok = [i for i, (p, ts, r) in enumerate(prims) if all(any(w == t.w for _v, w in vals) for t in ts)]
+        fields = [(v, w) for v, w in vals if w < 0]
+        if fields and (not ok or rng.random() < 0.4):
+            v, w = rng.choice(fields)
+            steps.append([-1 - rng.randrange(-w), [v]])
+            vals.append((len(vals), 1))
+            continue
+        if not ok:
+            break
+        pi = rng.choice(ok)
+        _p, ts, r = prims[pi]
+        args = [rng.choice([v for v, w in vals if w == t.w]) for t in ts]
+        steps.append([pi, args])
+        vals.append((len(vals), r.w))
+    nested = bool(steps) and rng.random() < 0.25
+    ret = rng.sample([v for v, _w in vals], k=min(len(vals), rng.randint(1, 2)))
+    return {"params": params, "steps": steps, "ret": ret, "nested": nested}
+
+
+def _word_template(rng: random.Random) -> dict:
+    """A template in the form the door admits: fields of bits in whole 16-bit words, bit steps on picked bits, and a
+    return of one or two `PACK`ed fields of 16 of its bits (or a parameter passed through)."""
+    params = [rng.choice(WORD_TYPES) for _ in range(rng.randint(1, 3))]
+    vals = list(enumerate(params))
+    steps = []
+    for _s in range(rng.randint(1, 6)):
+        bits = [v for v, w in vals if w == 1]
+        if len(bits) < 2 or rng.random() < 0.4:
+            v, w = rng.choice([(v, w) for v, w in vals if w < 0])
+            steps.append([-1 - rng.randrange(-w), [v]])
+        else:
+            pi = rng.randrange(3)
+            steps.append([pi, rng.sample(bits, 1 if pi == 2 else 2)])
+        vals.append((len(vals), 1))
+    bits = [v for v, w in vals if w == 1]
+    ret = []
+    for _f in range(rng.randint(1, 2)):
+        if rng.random() < 0.2:
+            ret.append(rng.randrange(len(params)))
+            continue
+        steps.append([PACK, [rng.choice(bits) for _ in range(16)]])
+        vals.append((len(vals), -16))
+        ret.append(len(vals) - 1)
+    return {"params": params, "steps": steps, "ret": ret, "nested": rng.random() < 0.25}
+
+
+def draw_inner(rng: random.Random, words: bool = False) -> Spec:
+    """A block of 2-3 calls of one template in which each later call reads a whole return field of an earlier one
+    wherever a parameter's width is that field's (a field of bits as a run ``["r", node, leaf, n]``), the whole
+    population one block: a unit that reads another unit of its block."""
+    prims = _prims()
+    for _ in range(50):
+        T = _template(rng, prims, words)
+        if any(w in _ret_widths(T) for w in T["params"]):
+            break
+    fields, at = [], 0
+    for w in _ret_widths(T):
+        fields.append((at, w))
+        at += len(_value_leaves(w))
+    root_params: list[int] = []
+    root, avail = [], []
+    for ni in range(rng.randint(2, 3)):
+        srcs = []
+        for w in T["params"]:
+            cands = [(nd, a) for nd, a, fw in avail if fw == w]
+            if cands:
+                nd, a = rng.choice(cands)
+                srcs.append([["n", nd, a] if w > 0 else ["r", nd, a, -w]])
+            else:
+                root_params.append(w)
+                srcs.append([["p", len(root_params) - 1]])
+        root.append({"t": 0, "form": "call", "n": 1, "args": srcs})
+        avail += [(ni, a, w) for a, w in fields]
+    return Spec([T], root, root_params, [], [[0, len(root)]])
+
+
+def draw(rng: random.Random, small: bool = False, words: bool = False) -> Spec:
     """A random case: 1-3 templates, each 1-3 parameters of `TYPES` (and sometimes a field of `WIDE` bits after them), a body of 0-4 steps (a primitive, or step ``-1-j``
     taking bit ``j`` of a field of bits), or a call of a nested callee, returning 1-2 values (a parameter passed through among them, so a word parameter may reach no word
     primitive); a root of 1-4 nodes, each a call, a batch or a scan of a template, each argument a root parameter of
@@ -1112,27 +1205,7 @@ def draw(rng: random.Random, small: bool = False) -> Spec:
     nt = rng.randint(1, 2 if small else 3)
     templates = []
     for ti in range(nt):
-        params = [rng.choice(TYPES) for _ in range(rng.randint(1, 3))] + ([-WIDE] if rng.random() < 0.4 else [])
-        vals = list(enumerate(params))
-        steps = []
-        for _s in range(rng.randint(0 if rng.random() < 0.15 else 1, 4)):
-            ok = [i for i, (p, ts, r) in enumerate(prims) if all(any(w == t.w for _v, w in vals) for t in ts)]
-            fields = [(v, w) for v, w in vals if w < 0]
-            if fields and (not ok or rng.random() < 0.4):
-                v, w = rng.choice(fields)
-                steps.append([-1 - rng.randrange(-w), [v]])
-                vals.append((len(vals), 1))
-                continue
-            if not ok:
-                break
-            pi = rng.choice(ok)
-            _p, ts, r = prims[pi]
-            args = [rng.choice([v for v, w in vals if w == t.w]) for t in ts]
-            steps.append([pi, args])
-            vals.append((len(vals), r.w))
-        nested = bool(steps) and rng.random() < 0.25
-        ret = rng.sample([v for v, _w in vals], k=min(len(vals), rng.randint(1, 2)))
-        templates.append({"params": params, "steps": steps, "ret": ret, "nested": nested})
+        templates.append(_template(rng, prims, words))
     root_params: list[int] = []
     registered: list[int] = []
     root = []
@@ -1182,7 +1255,7 @@ def _ret_widths(T: dict) -> list[int]:
     ws = list(T["params"])
     prims = _prims()
     for pi, _a in T["steps"]:
-        ws.append(1 if pi < 0 else prims[pi][2].w)
+        ws.append(-16 if pi == PACK else 1 if pi < 0 else prims[pi][2].w)
     return [ws[v] for v in T["ret"]]
 
 
@@ -1203,6 +1276,9 @@ def realise(spec: Spec) -> tuple[bytes, dict, list]:
             from verity.circuits import boolean as BL
             vals = list(xs)
             for pi, args in T["steps"]:
+                if pi == PACK:
+                    vals.append(array_of([vals[a] for a in args]))
+                    continue
                 if pi < 0:
                     vals.append(vals[args[0]][-1 - pi])
                     continue
@@ -1225,6 +1301,8 @@ def realise(spec: Spec) -> tuple[bytes, dict, list]:
             fn = fns[nd["t"]]
 
             def src(s):
+                if s[0] == "r":
+                    return array_of(leaves_of[s[1]][s[2]:s[2] + s[3]])
                 return ps[s[1]] if s[0] == "p" else leaves_of[s[1]][s[2]]
 
             if nd["form"] == "call":
@@ -1282,8 +1360,9 @@ class Finding:
 
 
 def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
-    """Every block of the spec's partition through the door's static steps, then its lowered template's rows held to
-    the honest and wrong assignments."""
+    """Every block of the spec's partition through the door's static steps (one finding a block: ``through``, or the
+    step's refusal class), then its lowered template's rows held to the honest and wrong assignments and, where a unit
+    reads another unit of the block, to a wrong read (`wrong_read`)."""
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_id
     from verity.circuits.program import input_id
@@ -1300,16 +1379,15 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
     out = []
     for k, (lo, hi) in enumerate(spec.blocks):
         r = door.run(k, lo, hi)
+        out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k) if r.step is not None
+                   else Finding("through", "-", "", spec.doc(), k))
         if r.c_s is None:
-            out.append(Finding(r.klass, r.step or "", r.text[:600], spec.doc(), k))
             continue
         D = R.program(r.c_s)
         called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
         if len(called) != 1:
             if r.step is None:
                 out.append(Finding("rows: C_S calls several templates, unchecked", "rows", str(called), spec.doc(), k))
-            else:
-                out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
             continue
         key = called[0]
         fn = D.defs[key]
@@ -1327,8 +1405,8 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
             v = row_check(t, xs, ys, vb, rng)
         except Unchecked as e:
             if r.step is not None:
-                out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
-            elif isinstance(e, Unlowered):
+                continue
+            if isinstance(e, Unlowered):
                 out.append(Finding(f"rows: the door accepts what Lean's lowering refuses: {normalise(str(e))}", "rows",
                                    str(e)[:600], spec.doc(), k))
             else:
@@ -1343,9 +1421,53 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         for w in v.wrong_ok:
             out.append(Finding(f"rows: wrong output accepted: {w} ({door_says}{'' if v.exact else ', sampled'})", "rows",
                                f"free columns reaching an output: {v.free_reaching}; {v.detail}", spec.doc(), k))
-        if r.step is not None and v.honest_ok and not v.wrong_ok:
-            out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
+        if v.honest_ok:
+            read = wrong_read(c, query, door.tp, units, t, fn, cut, trace)
+            if read:
+                out.append(Finding(f"rows: a unit's read of another unit of its block is not tied: the reader given a "
+                                   f"value its writer did not produce is accepted ({door_says})", "rows", read,
+                                   spec.doc(), k))
     return out
+
+
+def inner_reads(tp: Any, units: Sequence[int]) -> list[tuple[int, int, int]]:
+    """Each (writer, reader, leaf) of the block: the reader's parameter leaf ``leaf`` is an output gate of the writer,
+    both units of the block."""
+    outs = {g: u for u in units for g in tp.outputs(u)}
+    return [(outs[g], v, j) for v in units for j, g in enumerate(tp.inputs(v)) if outs.get(g, v) != v]
+
+
+def wrong_read(c: bytes, query: dict, tp: Any, units: Sequence[int], t: Any, fn: Any, cut: dict,
+               trace: dict[int, int]) -> str:
+    """Where a unit of the block reads another's output: the reader's input row with that leaf's low bit flipped (a value
+    the writer did not produce) and its output the rows' own evaluation there. When the rows accept that pair, its output
+    differs from the honest one, and the writer's rows hold, this returns the pair, since nothing in the block circuit's
+    rows ties the reader's input row to the writer's output row. Otherwise it returns ""."""
+    from verity_flock import tmpl as T
+    pairs = inner_reads(tp, units)
+    if not pairs:
+        return ""
+    params, ret = fn.signature()
+    in_w = [w for _n, ty in params for w in ty.leaf_widths()]
+    ins_p, outs_p = ports(fn, cut)
+    _ins, out_cols = _parts(t.groups)
+    for u, v, j in pairs:
+        a = [trace[g] for g in tp.inputs(v)]
+        a[j] ^= 1
+        row: list[int] = []
+        for _p, leaves in ins_p:
+            row += _padded(_bits([in_w[i] for i in leaves], [a[i] for i in leaves]))
+        X = T.slice_lanes(np.asarray([row], np.uint8))
+        Y = T.evaluate(t, X, np.asarray(out_cols, np.int64))
+        y = [int(int(Y[b, 0]) & 1) for b in range(len(out_cols))]
+        _x, (honest,), (vb,) = honest_rows(c, query, [v], fn, cut, trace)
+        if y == honest:
+            continue
+        verdict = row_check(t, [row], [y], [vb], random.Random(0))
+        if verdict.honest_ok:
+            return (f"unit {v} reads unit {u}'s output at its parameter leaf {j}; given that leaf with its low bit "
+                    f"flipped, the rows accept the reader's output {y[:32]} against its honest {honest[:32]}")
+    return ""
 
 
 def _odd(c_s: bytes, key: str) -> str:
@@ -1407,7 +1529,7 @@ def _smaller(s: Spec):
         yield Spec(s.templates, s.root, s.root_params, [], s.blocks)
     if len(s.root) > 1:
         for ni in range(len(s.root) - 1, -1, -1):
-            if any(a[0] == "n" and a[1] >= ni for nd in s.root[ni + 1:] for src in nd["args"] for a in src):
+            if any(a[0] in ("n", "r") and a[1] >= ni for nd in s.root[ni + 1:] for src in nd["args"] for a in src):
                 continue
             root = copy.deepcopy(s.root[:ni] + s.root[ni + 1:])
             pop = sum(nd["n"] if nd["form"] == "batch" else 1 for nd in root)
@@ -1423,7 +1545,8 @@ def fuzz(seed: int, cases: int, minutes: float, exe: Callable[[], Path], log=Non
     for i in range(cases):
         if (time.perf_counter() - t0) / 60 > minutes:
             break
-        s = draw(rng, small=rng.random() < 0.5)
+        words = rng.random() < WORDS
+        s = draw_inner(rng, words) if rng.random() < INNER else draw(rng, small=rng.random() < 0.5, words=words)
         cs = rng.getrandbits(32)
         fs = check_case(s, exe, cs)
         tried += 1
