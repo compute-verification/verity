@@ -331,6 +331,56 @@ theorem block_bits_ax {α β : Type} [Inhabited α] (refs : List α) (G : α →
   · rw [block_index n m (List.mem_range.1 hc)]
   · rw [block_index n m (List.mem_range.1 hc)]
 
+/-- **A batch argument's bits, on any axis**: member `m` of an argument whose references' widths are `o` blocks of `n`
+copies of `V` reads on bits the bits of the words it reads. -/
+theorem axisBits_ax {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {o n m : ℕ} (hm : m < n) {V : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+      (List.replicate o (List.replicate n V).flatten).flatten) :
+    (List.range (o * V.sum)).map (fun t =>
+      Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+        (outs.map List.flatten)
+        ((Flock.Lift.liftSeq (atOf D) (homoOf D) s).toArray.getD (t / V.sum * n * V.sum + t % V.sum + m * V.sum)
+          default)) =
+      ((List.range (o * V.length)).map fun t =>
+        Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+          (s.toArray.getD (t / V.length * n * V.length + t % V.length + m * V.length) default)).flatten := by
+  have hA : ∀ (A : Array Ref) (i : ℕ), A.getD i default = A.toList.getD i default := by
+    intro A i
+    rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, List.getD_eq_getElem?_getD]
+  have hG : ∀ r ∈ s.toArray.toList,
+      ((List.range (atOf D r.p r.i r.j).2).map fun t => ({ p := r.p, i := r.i, j := (atOf D r.p r.i r.j).1 + t } : Ref)).map
+        (Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+          (outs.map List.flatten)) = Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r ∧
+      (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r).length = (tyAt D r).widths[r.j]! := by
+    intro r h
+    rw [List.map_map, (atOf_in (hr r h)).1]
+    exact refBits hx ho (hr r h)
+  have hls := liftSeqRefs (atOf D) (homoOf D) s (fun r h w hw j => by
+    rw [(atOf_in (hr r h)).1]; rw [(atOf_in (hr r h)).2] at hw; exact bitAt_homo hw j)
+  have key := block_bits_ax s.toArray.toList _ _ _ (fun r => (tyAt D r).widths[r.j]!) V o n m hm hG hw
+  rw [← hls] at key
+  refine (List.map_congr_left (fun t _ => ?_)).trans (key.trans ?_)
+  · rw [hA]
+  · congr 1
+    exact List.map_congr_left (fun t _ => by rw [hA])
+
+theorem liftDef_arg_ax (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (gatesOf : ℕ → ℕ) {k i ax : ℕ}
+    (hk' : k < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size) (hi : i < (D.body.nodes[k]'(by
+      simpa [Flock.Lift.liftDef] using hk')).args.size)
+    (hf : (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).form = .batch)
+    (hax : (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).axes[i]? = some (some ax)) :
+    (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.getD i default).dims =
+      (Ty.bitType ((D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).args.getD i default).ty).axisDims ax := by
+  have hsz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size =
+      (D.body.nodes[k]'(by simpa [Flock.Lift.liftDef] using hk')).args.size := by
+    simp [Flock.Lift.liftDef]
+  have hi' : i < ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size := by rw [hsz]; exact hi
+  have hg : ∀ (A : Array Arg) (h : i < A.size), A.getD i default = A[i] := fun A h => by simp [Array.getD, h]
+  rw [hg _ hi', hg _ hi]
+  simp [Flock.Lift.liftDef, hf, hax]
+
 end BatchAxes
 
 end Flock.Chain
