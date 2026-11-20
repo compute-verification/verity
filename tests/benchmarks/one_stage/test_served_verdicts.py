@@ -4323,12 +4323,14 @@ PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE
 
 
 #: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
-#: FAKE_COMPARE_RC 0 or 1 a CUT line naming W, its verdicts in --out and its SERVED-COMPARE line, and above 1 it dies
-#: before a verdict
+#: FAKE_COMPARE_RC 0 or 1 a CUT line naming W, its verdicts in --out and its SERVED-COMPARE line, above 1 it dies
+#: before a verdict, and at ``raise`` it ends on a traceback, a NOT EQUAL's status
 FAKE_COMPARE = '''import json, os, sys
 from pathlib import Path
-rc = int(os.environ.get("FAKE_COMPARE_RC") or 0)
 Path(os.environ["ORDER"] + ".compare").write_text(json.dumps({"argv": sys.argv[1:], "cuda": os.environ.get("CUDA_VISIBLE_DEVICES")}))
+if os.environ.get("FAKE_COMPARE_RC") == "raise":
+    raise RuntimeError("died before a verdict")
+rc = int(os.environ.get("FAKE_COMPARE_RC") or 0)
 if rc > 1:
     sys.stderr.write("served_compare.py: died before a verdict\\n")
     sys.exit(rc)
@@ -4343,13 +4345,14 @@ sys.exit(rc)
 PEARL_ROW = "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 
 
-@pytest.mark.parametrize("case", ["equal", "unequal", "died", "untied"])
+@pytest.mark.parametrize("case", ["equal", "unequal", "died", "raised", "untied"])
 def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and_w(tmp_path, case):
     """`served_verdicts.sh served-compare K`, the run's step under PEARLPLUS_TIE once Pearl+'s piece wrote W and before the
     record, runs served_compare.py with no GPU on the serve dir, the workload of record, V3C's class, Pearl+'s scheme, PRED and
     the row's Build of record, against W in pearlplus/w<k>/, at the run's REV: its verdicts in the serve dir's
     served-compare/, copied to $OUT, its lines published (W's path naming no window) and its exit the step's. One that
-    dies before a verdict says NOT EQUAL with its exit and error, and no earlier compare's verdict stands for it; without
+    dies before a verdict, or ends on a traceback with a NOT EQUAL's status, says ERROR with its exit and its exception's
+    class, not NOT EQUAL, and no earlier compare's verdict stands for it; without
     PEARLPLUS_TIE it isn't run."""
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks").mkdir(parents=True)
@@ -4360,7 +4363,7 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
     (d / "served-compare").mkdir(parents=True)
     stale = d / "served-compare" / "served_compare.json"
     stale.write_text(json.dumps({"ok": True, "line": "SERVED-COMPARE: EQUAL (an earlier compare's)"}))
-    rc = {"unequal": 1, "died": 2}.get(case, 0)
+    rc = {"unequal": 1, "died": 2, "raised": "raise"}.get(case, 0)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, "FAKE_COMPARE_RC": str(rc),
            "REV": "ccf98f3652864935e2973dd22fe15fffd514f865", **({"PEARLPLUS_TIE": ""} if case == "untied" else {})}
@@ -4380,8 +4383,10 @@ def test_the_served_compare_runs_on_the_cpu_against_the_rows_build_of_record_and
         "--pred": f"{d}/predicted", "--window-record": f"{d}/pearlplus/w7/registration.json", "--out": f"{d}/served-compare",
         "--revision": "ccf98f3652864935e2973dd22fe15fffd514f865"})
     published = tmp_path / "out" / "served-compare" / "served_compare.json"
-    if case == "died":
-        assert (run.returncode, lines) == (2, [f"SERVED-COMPARE: NOT EQUAL (served_compare.py (no exception, exit 2): {PRIVATE})"]), run.stderr
+    if case in ("died", "raised"):
+        status, why = (2, "no exception") if case == "died" else (1, "RuntimeError")
+        assert (run.returncode, lines) == (status, [
+            f"SERVED-COMPARE: ERROR served_compare.py ended with no verdict ({why}, exit {status}): {PRIVATE}"]), run.stderr
         assert not stale.exists() and not published.exists()
         return
     said = f"SERVED-COMPARE: {'NOT EQUAL' if rc else 'EQUAL'} (the serve against row {PEARL_ROW}'s Build of record)"

@@ -728,7 +728,14 @@ served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and befor
     --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --revision "$REV" --out "$dir") 2> "$dir/compare.err" \
     | publish_lines
   rc=${PIPESTATUS[0]}
-  [ "$rc" -le 1 ] || say "SERVED-COMPARE: NOT EQUAL (served_compare.py $(failed "$rc" "$dir/compare.err"))"
+  # its answer is 0 EQUAL or 1 NOT EQUAL with its verdicts written; a traceback exits 1 too, so any other end is an ERROR
+  # and leaves no verdict for the record to read
+  if ! { [ "$rc" -le 1 ] && grep -q "\"ok\": $([ "$rc" = 0 ] && echo true || echo false)," "$SERVED_COMPARE" 2>/dev/null \
+         && ! grep -q '^Traceback (most recent call last):' "$dir/compare.err"; }; then
+    say "SERVED-COMPARE: ERROR served_compare.py ended with no verdict $(failed "$rc" "$dir/compare.err")"
+    rm -f "$SERVED_COMPARE"
+    [ "$rc" != 0 ] || rc=1
+  fi
   cp "$dir/served_compare.json" "$dir/circuit_facts.json" "$OUT/served-compare/" 2>/dev/null
   return "$rc"
 }
