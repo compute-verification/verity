@@ -14,18 +14,39 @@ TAG = "verity/registration-commitment/v1"
 COIN_TAG = "verity/registration-commitment/coin/v1"
 OPENING = "registration-commitment-opening"
 DIGEST = "registration-commitment-digest"
+COMPILER = ("registration-commitment-compiler: the record names a compiler (window.compiler.digest) and the verifier read "
+            "no registration log's compiler, or a log that registers none: null commits only a log that registers no "
+            "compiler")
+#: the compiler of a verifier that read no registration log's compiler (Lean's none; None is a log that registers none)
+NO_LOG = "no-log"
 COIN_BYTES = 64
 KEY = HM.default_key
 
+Compiler = tuple[str, int] | None | str
+
 
 class Refused(ValueError):
-    """An opening `opens` refuses; its message is the refusal's name."""
+    """A commitment `whole` or `opens` refuses; its message is the refusal (`OPENING`, `DIGEST` or `COMPILER`)."""
 
 
-def whole(rec: Mapping[str, Any], compiler: tuple[str, int] | None) -> bytes:
-    """The whole registration digest: the docket's digest and the registration log's compiler, ``(digest, cap)``, or
-    None when the log registers none or the verifier reads none."""
-    c = None if compiler is None else {"cap": int(compiler[1]), "digest": compiler[0]}
+def _get(j: Any, k: str) -> Any:
+    return j.get(k) if isinstance(j, Mapping) else None
+
+
+def names_compiler(rec: Mapping[str, Any]) -> bool:
+    """The record names a compiler: its ``window.compiler.digest`` is not null."""
+    return _get(_get(_get(rec, "window"), "compiler"), "digest") is not None
+
+
+def whole(rec: Mapping[str, Any], compiler: Compiler) -> bytes:
+    """The whole registration digest: the docket's digest and the registration log's compiler, ``(digest, cap)``; null
+    for None (a log that registers none) or `NO_LOG` only where the record names no compiler, else `COMPILER`."""
+    if isinstance(compiler, tuple):
+        c = {"cap": int(compiler[1]), "digest": compiler[0]}
+    elif names_compiler(rec):
+        raise Refused(COMPILER)
+    else:
+        c = None
     return DD.record_digest(TAG, canonical_json({"compiler": c, "record": DD.digest(rec)}))
 
 
@@ -34,15 +55,16 @@ def commitment(d: bytes, salt: bytes) -> bytes:
     return HM.tree_leaf(KEY, HM.commit_string(KEY, d, salt))
 
 
-def commit(rec: Mapping[str, Any], compiler: tuple[str, int] | None) -> tuple[bytes, bytes, bytes]:
+def commit(rec: Mapping[str, Any], compiler: Compiler) -> tuple[bytes, bytes, bytes]:
     """The prover's side: ``(commitment, whole digest, salt)``, the salt fresh from the operating system."""
     d, salt = whole(rec, compiler), HM.fresh_salt()
     return commitment(d, salt), d, salt
 
 
-def opens(c: bytes, d: bytes, salt: bytes, rec: Mapping[str, Any], compiler: tuple[str, int] | None) -> None:
-    """`Spot.RegistrationCommitment.opens`: refuses `DIGEST` when ``d`` is not the whole digest of the registration the
-    verifier reads (``rec``, ``compiler``), `OPENING` when ``salt`` and that digest give another leaf than ``c``."""
+def opens(c: bytes, d: bytes, salt: bytes, rec: Mapping[str, Any], compiler: Compiler) -> None:
+    """`Spot.RegistrationCommitment.opens`: refuses `COMPILER` where `whole` does, `DIGEST` when ``d`` is not the whole
+    digest of the registration the verifier reads (``rec``, ``compiler``), `OPENING` when ``salt`` and that digest give
+    another leaf than ``c``."""
     mine = whole(rec, compiler)
     if bytes(d) != mine:
         raise Refused(DIGEST)
@@ -83,5 +105,5 @@ class Bound:
         return self._stream[self._at - n:self._at]
 
 
-__all__ = ["COIN_TAG", "DIGEST", "OPENING", "TAG", "Bound", "Refused", "bound_coin", "commit", "commitment", "opens",
-           "whole"]
+__all__ = ["COIN_TAG", "COMPILER", "DIGEST", "NO_LOG", "OPENING", "TAG", "Bound", "Compiler", "Refused", "bound_coin",
+           "commit", "commitment", "names_compiler", "opens", "whole"]
