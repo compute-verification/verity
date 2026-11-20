@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 public import Proofs.Flock.Claims.Sampling.EndToEndSample
 public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.Tolerance
 public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 public import Proofs.Spot.Sampling.Pooled
 public import Proofs.Flock.Claims.Sampling.InputSlot
