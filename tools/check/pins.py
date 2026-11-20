@@ -162,7 +162,6 @@ WRITERS = (
         ("boolean_vectors.json", "test_boolean.py"),
         ("count_vectors.jsonl", "test_count.py"),
         ("format_vectors.json", "test_format_spec.py"),
-        ("partition_v2_vectors.json", "test_partition_v2.py"),
         ("qcall_vectors.json", "test_qcall_vectors.py"),
         ("qword_vectors.json", "test_qword_vectors.py"),
         ("template_instance_vectors.json", "test_template_instance.py"),

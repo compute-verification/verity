@@ -13,7 +13,6 @@ Beside the engine (these need torch, Triton or vLLM, some only inside a function
     capture_draft   the capture's opt-in draft phase: the speculator's propose observed in its step
     capture_types   what a capture is given (its configuration), the run header its log opens with, and what it holds of
                     one step until it writes the step
-    runtime_tree    the runtime's module tree, as a command (its record is `verity_vllm.records.runtime_tree`)
 
 Anywhere (no torch):
 
