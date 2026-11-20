@@ -342,20 +342,20 @@ def PS.slice (s : PS) (lo hi : Nat) : Array Seg := Id.run do
 def PS.pieces (s : PS) (lo hi : Nat) : Array Piece :=
   (s.slice lo hi).flatMap fun g => (Array.range g.reps).flatMap g.copy
 
-/-- Lane `l` of a grid of runs of `run`, every period: one piece of a row a period, its rows the lane's levels (one level
-as a row step). -/
-def lanePiece (run : Nat) (l : Lane) : Piece :=
+/-- Lane `l` of a grid of runs of `run`, its `P` periods: one piece of a row a period, row `t` at the lane's levels'
+offset at period `t` (one level as a row step). -/
+def lanePiece (run P : Nat) (l : Lane) : Piece :=
   match l.lv with
-  | [] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run }
-  | [(r, d)] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := r, rowStride := d }
-  | lv => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := l.periods, lv }
+  | [] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := P }
+  | [(_, d)] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := P, rowStride := d }
+  | lv => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := P, lv }
 
 /-- A grid part as segments: one lane's is its piece (`lanePiece`), several lanes' of one period their pieces, and of
 several periods one segment whose copy `t` is the lanes' runs at period `t` (`Seg.rowed`), in `Part.get`'s order. -/
 def ofGrid (run : Nat) (lanes : Array Lane) : Array Seg :=
-  if lanes.size == 1 || (lanes[0]?.map Lane.periods).getD 0 ≤ 1 then lanes.map fun l => .one (lanePiece run l)
-  else #[{ ps := lanes.map (lanePiece run), len := lanes.size * run, reps := (lanes[0]?.map Lane.periods).getD 0,
-           rowed := true }]
+  let P := (lanes[0]?.map Lane.periods).getD 0
+  if lanes.size == 1 || P ≤ 1 then lanes.map fun l => .one (lanePiece run P l)
+  else #[{ ps := lanes.map (lanePiece run P), len := lanes.size * run, reps := P, rowed := true }]
 
 /-- A reference part as segments, each of one piece but a grid's: an affine part is one, a strided part its whole rows as
 one and a part of a row, a grid `ofGrid`'s. -/
@@ -912,7 +912,7 @@ def Piece.join (p q : Piece) : Option Piece :=
   | .gate _ =>
     let st := if p.len == 1 then q.base - p.base else p.stride
     if p.tgt == q.tgt && p.rows == 1 && q.rows == 1 && 0 < p.len && 0 < q.len && p.len + q.len ≤ WALK &&
-        (q.len == 1 || q.stride == st) && q.base == p.base + p.len * st then
+        (q.len == 1 || q.stride == st) && q.base == p.base + p.len * st && p.lv.isEmpty && q.lv.isEmpty then
       some { p with stride := st, len := p.len + q.len }
     else none
 
@@ -923,13 +923,14 @@ def Piece.stack (p q : Piece) : Option Piece :=
   | .ref _ _ => none
   | .gate _ =>
     let rs := if p.rows == 1 then q.base - p.base else p.rowStride
-    if p.tgt == q.tgt && p.lv.isEmpty && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
-        (p.len == 1 || q.stride == p.stride) && (p.rows + 1) * p.len ≤ WALK && q.base == p.base + p.rows * rs then
+    if p.tgt == q.tgt && 0 < p.rows && q.rows == 1 && 0 < p.len && q.len == p.len &&
+        (p.len == 1 || q.stride == p.stride) && (p.rows + 1) * p.len ≤ WALK && q.base == p.base + p.rows * rs &&
+        p.lv.isEmpty && q.lv.isEmpty then
       some { p with rows := p.rows + 1, rowStride := rs }
     else none
 
 /-- The piece of a segment of one copy of one piece. -/
-def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 then s.ps[0]? else none
+def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 && !s.rowed then s.ps[0]? else none
 
 /-- `out` then `s`, `s` joined by `f` to `out`'s last segment where both are one copy of one piece and `f` joins them. -/
 def Seg.joinWith (f : Piece → Piece → Option Piece) (out : Array Seg) (s : Seg) : Array Seg :=

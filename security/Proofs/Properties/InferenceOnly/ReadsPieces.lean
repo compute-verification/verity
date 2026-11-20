@@ -118,20 +118,19 @@ theorem rowsFrom_spec (q : Piece) (lo n : Nat) :
   by_cases h1 : q.lv.isEmpty = true
   · have hl : q.lv = [] := by simpa using h1
     simp only [h1, ↓reduceIte]
-    refine ⟨rfl, rfl, rfl, rfl, fun r _ => ?_⟩
-    rw [rowOff_flat _ hl, rowOff_flat _ hl]
+    refine ⟨by simp, by simp, by simp, by simp, fun r _ => ?_⟩
+    simp only [Desc.Piece.rowOff, hl, List.isEmpty_nil, ↓reduceIte]
     push_cast; ring
   · have hl : q.lv ≠ [] := by simpa using h1
     simp only [h1, Bool.false_eq_true, ↓reduceIte]
     by_cases h2 : (n == 1) = true
     · have hn : n = 1 := by simpa using h2
       simp only [h2, ↓reduceIte, Desc.Piece.row]
-      refine ⟨rfl, rfl, rfl, hn.symm, fun r hr => ?_⟩
+      refine ⟨by simp, by simp, by simp, by simp [hn], fun r hr => ?_⟩
       obtain rfl : r = 0 := by omega
-      rw [rowOff_flat _ rfl]
-      simp
+      simp [Desc.Piece.rowOff]
     · simp only [h2, Bool.false_eq_true, ↓reduceIte]
-      refine ⟨rfl, rfl, rfl, rfl, fun r _ => ?_⟩
+      refine ⟨by simp, by simp, by simp, by simp, fun r _ => ?_⟩
       simp [Desc.Piece.rowOff, hl, Nat.add_assoc]
 
 theorem pos_length (q : Piece) : (pos q).length = q.count := by
@@ -193,7 +192,7 @@ theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + q.rowOff 
       rw [Nat.add_assoc, Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt (by omega)]
     unfold ppt
     simp only [Nat.mod_eq_of_lt (show t < e - s by omega), Nat.div_eq_of_lt (show t < e - s by omega)]
-    rw [h1, h2, hB, rowOff_flat _ rfl]
+    rw [h1, h2, rowOff_flat ⟨q.tgt, B, q.stride, e - s, 1, 0, [], 0⟩ rfl, hB]
     push_cast; ring
   · rw [List.getElem?_eq_none (by simp; omega), if_neg h]; rfl
 
@@ -463,7 +462,11 @@ theorem posAll_map (ps : Array Piece) (f : Piece → Piece) : posAll (ps.map f) 
 /-- Row `r` of `p`: its `len` positions from `base + rowOff r`. -/
 theorem pos_row (p : Piece) (r : Nat) :
     pos (p.row r) = (List.range p.len).map fun t => (p.tgt, p.base + p.rowOff r + (t : Int) * p.stride) := by
-  simp [pos, Desc.Piece.row, Desc.Piece.rowOff]
+  unfold pos
+  simp only [Desc.Piece.row, List.range_one, List.flatMap_singleton]
+  apply List.map_congr_left
+  intro t _
+  simp [Desc.Piece.rowOff]
 
 theorem pos_row_rowsFrom (p : Piece) (lo n m : Nat) (hm : m < n) : pos ((p.rowsFrom lo n).row m) = pos (p.row (lo + m)) := by
   obtain ⟨ht, hs, hl, -, hoff⟩ := rowsFrom_spec p lo n
@@ -601,11 +604,12 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
       · rename_i hrw
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hrw
         refine hgen _ rfl fun m hm => ?_
-        rw [copy_rowed _ hrw.1, copy_rowed s hrw.1, posAll_map, posAll_map, Array.toList_map, List.flatMap_map]
+        rw [copy_rowed { s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo } hrw.1, copy_rowed s hrw.1,
+          posAll_map, posAll_map, Array.toList_map, List.flatMap_map]
         exact flatMap_congr_mem fun p _ => pos_row_rowsFrom p lo _ m hm
       · rename_i hrw
         refine hgen _ rfl fun m hm => ?_
-        rw [copy_flat _ rfl]
+        rw [copy_flat { s with ps := s.copy lo, reps := m1 - lo, rowed := false } rfl]
         cases hs : s.rowed
         · exact copy_copy s hs lo m
         · simp only [hs, Bool.true_and, decide_eq_true_eq] at hrw
@@ -910,9 +914,9 @@ def PartNonneg : Part → Prop
   | .grid run lanes => ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Flock.Program.Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o
   | _ => True
 
-theorem pos_one (t : Tgt) (base stride : Int) (len : Nat) (rs : Int) :
-    pos ⟨t, base, stride, len, 1, rs⟩ = (List.range len).map fun (k : Nat) => (t, base + (k : Int) * stride) := by
-  simp [pos]
+theorem pos_one (t : Tgt) (base stride : Int) (len : Nat) (rs : Int) (st : Nat) :
+    pos ⟨t, base, stride, len, 1, rs, [], st⟩ = (List.range len).map fun (k : Nat) => (t, base + (k : Int) * stride) := by
+  simp [pos, Desc.Piece.rowOff]
 
 theorem posAll_filter_count (ps : Array Piece) :
     posAll (ps.filter fun q => decide (q.count > 0)) = posAll ps := by
@@ -968,8 +972,8 @@ theorem gate_beq_eq {w : Nat} {t : Tgt} (h : (Tgt.gate w == t) = true) : t = .ga
 
 /-- **Joining two runs of a progression** names `p`'s positions then `q`'s. -/
 theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
-  rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
-  rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
+  rcases p with ⟨tp, bp, sp, lp, rp, rsp, lvp, stp⟩
+  rcases q with ⟨tq, bq, sq, lq, rq, rsq, lvq, stq⟩
   unfold Desc.Piece.join at h
   cases tp with
   | ref _ _ => cases h
@@ -979,10 +983,12 @@ theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = po
     split at h
     · rename_i hc
       simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
-      obtain ⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, -⟩, hst⟩, hb⟩ := hc
+      obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, -⟩, hst⟩, hb⟩, hlvp⟩, hlvq⟩ := hc
+      have hlvp' : lvp = [] := by simpa using hlvp
+      have hlvq' : lvq = [] := by simpa using hlvq
       cases h
       cases gate_beq_eq htq
-      subst hrp hrq
+      subst hrp hrq hlvp' hlvq'
       refine ⟨?_, by simp [Desc.Piece.count]; omega⟩
       rw [pos_one, pos_one, pos_one, List.range_add, List.map_append, List.map_map]
       have hfirst : ((List.range lp).map fun (k : Nat) => (Tgt.gate w, bp + (k : Int) * st)) =
@@ -1010,8 +1016,8 @@ theorem join_pos (p q r : Piece) (h : Desc.Piece.join p q = some r) : pos r = po
 
 /-- **Stacking a row under rows** names `p`'s positions then `q`'s. -/
 theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = pos p ++ pos q ∧ 0 < r.count := by
-  rcases p with ⟨tp, bp, sp, lp, rp, rsp⟩
-  rcases q with ⟨tq, bq, sq, lq, rq, rsq⟩
+  rcases p with ⟨tp, bp, sp, lp, rp, rsp, lvp, stp⟩
+  rcases q with ⟨tq, bq, sq, lq, rq, rsq, lvq, stq⟩
   unfold Desc.Piece.stack at h
   cases tp with
   | ref _ _ => cases h
@@ -1021,14 +1027,16 @@ theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = 
     split at h
     · rename_i hc
       simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
-      obtain ⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, hst⟩, -⟩, hb⟩ := hc
+      obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨htq, hrp⟩, hrq⟩, hlp⟩, hlq⟩, hst⟩, -⟩, hb⟩, hlvp⟩, hlvq⟩ := hc
+      have hlvp' : lvp = [] := by simpa using hlvp
+      have hlvq' : lvq = [] := by simpa using hlvq
       cases h
       cases gate_beq_eq htq
-      subst hrq hlq
+      subst hrq hlq hlvp' hlvq'
       refine ⟨?_, by simp only [Desc.Piece.count]; exact Nat.mul_pos (Nat.succ_pos _) hlp⟩
       rw [pos_one]
       unfold pos
-      dsimp only
+      simp only [Desc.Piece.rowOff, List.isEmpty_nil, ↓reduceIte]
       rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
       have hfirst : ((List.range rp).flatMap fun (r' : Nat) => (List.range lq).map fun (t : Nat) =>
             (Tgt.gate w, bp + (r' : Int) * rs + (t : Int) * sp)) =
@@ -1056,13 +1064,13 @@ theorem stack_pos (p q r : Piece) (h : Desc.Piece.stack p q = some r) : pos r = 
 
 /-- The piece of a segment of one copy of one piece names the segment's positions. -/
 theorem single_pos (s : Seg) (p : Piece) (h : s.single = some p) : segPos s = pos p := by
-  rcases s with ⟨⟨l⟩, len, reps, shift⟩
+  rcases s with ⟨⟨l⟩, len, reps, shift, rowed⟩
   unfold Desc.Seg.single at h
   split at h
   · rename_i hc
-    simp only [Bool.and_eq_true, beq_iff_eq] at hc
-    obtain ⟨hr, hsz⟩ := hc
-    subst hr
+    simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_eq_eq_not, Bool.not_true] at hc
+    obtain ⟨⟨hr, hsz⟩, hrw⟩ := hc
+    subst hr hrw
     obtain ⟨a, rfl⟩ := List.length_eq_one_iff.1 (by simpa using hsz)
     have : a = p := by simpa using h
     subst this
@@ -1149,15 +1157,15 @@ theorem coalesce_mem (Q : Seg → Prop) (hQ : ∀ r : Piece, 0 < r.count → Q (
   exact e _ (fun p q r h => (stack_pos p q r h).2) _ (e _ (fun p q r h => (join_pos p q r h).2) _ h)
 
 theorem ofPart_affine (p : Bool) (i b c : Nat) :
-    posAll (Desc.ofPart (.affine p i b c)) = (List.range c).map fun k => refPos ((Part.affine p i b c).get k) := by
-  simp only [Desc.ofPart, posAll_singleton, pos_one, Flock.Program.Part.get, refPos]
+    segsPos (Desc.ofPart (.affine p i b c)) = (List.range c).map fun k => refPos ((Part.affine p i b c).get k) := by
+  simp only [Desc.ofPart, segsPos_singleton, segPos_one, pos_one, Flock.Program.Part.get, refPos]
   apply List.map_congr_left
   intro k _
   simp
 
 theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int) (c : Nat)
     (hq : PartNonneg (.strided p i b inner os is c)) :
-    posAll (Desc.ofPart (.strided p i b inner os is c)) =
+    segsPos (Desc.ofPart (.strided p i b inner os is c)) =
       (List.range c).map fun k => refPos ((Part.strided p i b inner os is c).get k) := by
   have hget : ∀ k < c, refPos ((Part.strided p i b inner os is c).get k) =
       (.ref p i, b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is) := by
@@ -1181,14 +1189,14 @@ theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int
   · rename_i h1
     have : inner = 1 := by simpa using h1
     subst this
-    rw [posAll_singleton, pos_one]
+    rw [segsPos_singleton, segPos_one, pos_one]
     apply hmap
     intro k _
     simp
   split
   · rename_i h2
     have h2' : os = (inner : Int) * is := by simpa using h2
-    rw [posAll_singleton, pos_one]
+    rw [segsPos_singleton, segPos_one, pos_one]
     apply hmap
     intro k _
     have hk : (k : Int) = ((k / inner : Nat) : Int) * inner + ((k % inner : Nat) : Int) := by
@@ -1196,7 +1204,7 @@ theorem ofPart_strided (p : Bool) (i : Nat) (b : Int) (inner : Nat) (os is : Int
       rw [Nat.mul_comm] at this
       exact_mod_cast this.symm
     rw [h2', hk, Int.add_mul, ← Int.mul_assoc, Int.add_assoc]
-  · rw [posAll_filter_count, posAll_pair, pos_one, pos_eq_map]
+  · rw [segsPos_one, posAll_filter_count, posAll_pair, pos_one, pos_eq_map]
     simp only [Piece.count]
     have hc : c = c / inner * inner + c % inner := by
       have := Nat.div_add_mod c inner
@@ -1266,7 +1274,7 @@ theorem exStep_spec (acc : Array Piece) (r : Ref) (h : ∀ q ∈ acc.toList, q.r
       refine ⟨?_, ?_⟩
       · rw [posAll_push, posAll_push, List.append_assoc]
         congr 1
-        rcases q with ⟨t, base, stride, len, rows, rs⟩
+        rcases q with ⟨t, base, stride, len, rows, rs, lv, st⟩
         simp only at hq hst hat htgt
         subst hq hst
         rw [pos_one, pos_one, List.range_succ, List.map_append]
@@ -1293,12 +1301,12 @@ theorem exFold_spec : ∀ (l : List Ref) (acc : Array Piece), (∀ q ∈ acc.toL
     rw [List.foldl_cons, exFold_spec l _ h2, h1, List.map_cons, List.append_assoc, List.singleton_append]
 
 theorem ofPart_explicit (it : Array Ref) :
-    posAll (Desc.ofPart (.explicit it)) = (List.range it.size).map fun k => refPos ((Part.explicit it).get k) := by
-  have e : Desc.ofPart (.explicit it) = it.toList.foldl exStep #[] := by
+    segsPos (Desc.ofPart (.explicit it)) = (List.range it.size).map fun k => refPos ((Part.explicit it).get k) := by
+  have e : Desc.ofPart (.explicit it) = (it.toList.foldl exStep #[]).map Seg.one := by
     simp only [Desc.ofPart]
     rw [← Array.foldl_toList]
     rfl
-  rw [e, exFold_spec _ _ (by simp), posAll_empty, List.nil_append]
+  rw [e, segsPos_one, exFold_spec _ _ (by simp), posAll_empty, List.nil_append]
   apply List.ext_getElem?
   intro k
   rw [List.getElem?_map, List.getElem?_map]
@@ -1331,39 +1339,82 @@ theorem grid_index (g run t m o : Nat) (hm : m < g) (ho : o < run) :
     Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt ho]
   omega
 
-theorem leafAt_shift (l : Flock.Program.Lane) (t o : Nat) : l.leafAt t o = l.leafAt t 0 + (o : Int) * l.e := by
-  simp only [Flock.Program.Lane.leafAt, Int.natCast_zero, Int.zero_mul, Int.add_zero]
-  omega
+theorem pos_eq_rows (q : Piece) : pos q = (List.range q.rows).flatMap fun r => pos (q.row r) := by
+  simp only [pos_row]; rfl
 
-/-- A grid part as pieces, one a lane a period, names its references in order. -/
-theorem ofPart_grid (run : Nat) (lanes : Array Flock.Program.Lane) (hq : PartNonneg (.grid run lanes)) :
-    posAll (Desc.ofPart (.grid run lanes)) = (List.range (Part.grid run lanes).count).map fun k =>
-      refPos ((Part.grid run lanes).get k) := by
+theorem lanePiece_spec (run P : Nat) (l : Flock.Program.Lane) :
+    (Desc.lanePiece run P l).tgt = .ref l.p l.i ∧ (Desc.lanePiece run P l).base = l.b ∧
+      (Desc.lanePiece run P l).stride = l.e ∧ (Desc.lanePiece run P l).len = run ∧ (Desc.lanePiece run P l).rows = P ∧
+      ∀ r, (Desc.lanePiece run P l).rowOff r = Flock.Program.Lane.leafAt.go l.lv r := by
+  rcases h : l.lv with _ | ⟨⟨r, d⟩, _ | ⟨x, xs⟩⟩ <;>
+    simp [Desc.lanePiece, h, Desc.Piece.rowOff, Flock.Program.Lane.leafAt.go]
+
+/-- Row `t` of a lane's piece: the lane's run at period `t`. -/
+theorem pos_lane_row (run P : Nat) (l : Flock.Program.Lane) (t : Nat) :
+    pos ((Desc.lanePiece run P l).row t) = (List.range run).map fun o => (.ref l.p l.i, l.leafAt t o) := by
+  obtain ⟨h1, h2, h3, h4, -, h6⟩ := lanePiece_spec run P l
+  rw [pos_row, h1, h2, h3, h4, h6]
+  apply List.map_congr_left
+  intro o _
+  simp only [Flock.Program.Lane.leafAt, Prod.mk.injEq, true_and]
+  ring
+
+/-- A grid's lanes' runs, period by period, are its references in order. -/
+theorem grid_rows (run : Nat) (lanes : Array Flock.Program.Lane) (hq : PartNonneg (.grid run lanes)) :
+    ((List.range ((lanes[0]?.map Flock.Program.Lane.periods).getD 0)).flatMap fun t => lanes.toList.flatMap fun l =>
+      pos ((Desc.lanePiece run ((lanes[0]?.map Flock.Program.Lane.periods).getD 0) l).row t)) =
+      (List.range (Part.grid run lanes).count).map fun k => refPos ((Part.grid run lanes).get k) := by
   have hL : lanes.toList = (List.range lanes.size).map fun m => lanes[m]! := by
     apply List.ext_getElem (by simp)
     intro i h1 h2
     simp [getElem!_pos lanes i (by simpa using h1)]
   change ∀ l ∈ lanes, ∀ t < (lanes[0]?.map Flock.Program.Lane.periods).getD 0, ∀ o < run, 0 ≤ l.leafAt t o at hq
-  simp only [Desc.ofPart, Flock.Program.Part.count]
+  simp only [Flock.Program.Part.count]
   generalize (lanes[0]?.map Flock.Program.Lane.periods).getD 0 = P at hq ⊢
   rw [Nat.mul_comm (lanes.size * run) P, range_mul_map]
-  unfold posAll
-  rw [Array.toList_flatMap, List.flatMap_assoc, Array.toList_range]
   refine flatMap_congr_mem fun t ht => ?_
-  rw [range_mul_map, Array.toList_map, List.flatMap_map, hL, List.flatMap_map]
+  rw [range_mul_map, hL, List.flatMap_map]
   refine flatMap_congr_mem fun m hm => ?_
   rw [List.mem_range] at ht hm
-  rw [pos_one]
+  rw [pos_lane_row]
   refine List.map_congr_left fun o ho => ?_
   rw [List.mem_range] at ho
   obtain ⟨h1, h2, h3⟩ := grid_index lanes.size run t m o hm ho
   have hmem : lanes[m]! ∈ lanes := by rw [getElem!_pos lanes m hm]; exact Array.getElem_mem hm
   simp only [Flock.Program.Part.get, refPos, h1, h2, h3]
-  rw [Int.toNat_of_nonneg (hq _ hmem t ht o ho), leafAt_shift _ t o]
+  rw [Int.toNat_of_nonneg (hq _ hmem t ht o ho)]
+
+/-- A grid part as segments names its references in order: lane by lane when one lane or one period, else period by
+period (`Seg.rowed`). -/
+theorem ofPart_grid (run : Nat) (lanes : Array Flock.Program.Lane) (hq : PartNonneg (.grid run lanes)) :
+    segsPos (Desc.ofPart (.grid run lanes)) = (List.range (Part.grid run lanes).count).map fun k =>
+      refPos ((Part.grid run lanes).get k) := by
+  rw [← grid_rows run lanes hq]
+  simp only [Desc.ofPart, Desc.ofGrid]
+  generalize (lanes[0]?.map Flock.Program.Lane.periods).getD 0 = P
+  split
+  · rename_i h
+    simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    simp only [segsPos, Array.toList_map, List.flatMap_map, segPos_one]
+    rw [flatMap_congr_mem fun l _ => by rw [pos_eq_rows, (lanePiece_spec run P l).2.2.2.2.1]]
+    rcases h with h | h
+    · rcases hl : lanes.toList with _ | ⟨x, _ | ⟨y, l⟩⟩
+      · simp
+      · simp
+      · exfalso
+        have := congrArg List.length hl
+        simp only [Array.length_toList, List.length_cons] at this
+        omega
+    · rcases Nat.lt_or_ge P 1 with h0 | h0
+      · obtain rfl : P = 0 := by omega
+        simp
+      · obtain rfl : P = 1 := by omega
+        simp
+  · simp only [segsPos_singleton, segPos, Desc.Seg.copy, ↓reduceIte, posAll_map, Array.toList_map, List.flatMap_map]
 
 /-- **A part as pieces** names its references, in order. -/
 theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
-    posAll (Desc.ofPart q) = (List.range q.count).map fun k => refPos (q.get k) := by
+    segsPos (Desc.ofPart q) = (List.range q.count).map fun k => refPos (q.get k) := by
   cases q with
   | affine p i b c => exact ofPart_affine p i b c
   | strided p i b inner os is c => exact ofPart_strided p i b inner os is c hq
@@ -1374,29 +1425,70 @@ theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
 def partsPos (ps : Array Part) : List (Tgt × Int) :=
   ps.toList.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
 
-theorem partsFold_pos : ∀ (l : List Part) (acc : Array Piece), (∀ q ∈ l, PartNonneg q) →
-    posAll (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc) =
-      posAll acc ++ l.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
+theorem partsFold_pos : ∀ (l : List Part) (acc : Array Seg), (∀ q ∈ l, PartNonneg q) →
+    segsPos (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc) =
+      segsPos acc ++ l.flatMap fun q => (List.range q.count).map fun k => refPos (q.get k)
   | [], acc, _ => by simp
   | q :: l, acc, h => by
-    rw [List.foldl_cons, partsFold_pos l _ (fun q' hq' => h q' (by simp [hq'])), posAll_append,
+    rw [List.foldl_cons, partsFold_pos l _ (fun q' hq' => h q' (by simp [hq'])), segsPos_append,
       ofPart_pos q (h q (by simp)), List.flatMap_cons, List.append_assoc]
 
 theorem segOk_one (q : Piece) : SegOk (Seg.one q) := by
+  show (posAll (Desc.Seg.copy (Seg.one q) 0)).length = q.count
+  rw [copy_zero _ rfl]
   show (posAll #[q]).length = q.count
   rw [posAll_singleton, pos_length]
+
+theorem ofPart_ok (q : Part) : ∀ g ∈ (Desc.ofPart q).toList, SegOk g := by
+  have hone : ∀ (X : Array Piece) g, g ∈ (X.map Seg.one).toList → SegOk g := fun X g hg => by
+    rw [Array.toList_map, List.mem_map] at hg
+    obtain ⟨x, -, rfl⟩ := hg
+    exact segOk_one x
+  cases q with
+  | affine p i b c => exact hone #[_]
+  | strided p i b inner os is c =>
+    simp only [Desc.ofPart]
+    split_ifs
+    · intro g hg; simp at hg
+    · exact hone #[_]
+    · exact hone #[_]
+    · exact hone _
+  | explicit it => exact hone _
+  | grid run lanes =>
+    simp only [Desc.ofPart, Desc.ofGrid]
+    split
+    · intro g hg
+      rw [Array.toList_map, List.mem_map] at hg
+      obtain ⟨l, -, rfl⟩ := hg
+      exact segOk_one _
+    · intro g hg
+      simp only [List.mem_singleton, Array.toList_singleton] at hg
+      subst hg
+      show (posAll (Desc.Seg.copy _ 0)).length = _
+      simp only [Desc.Seg.copy, ↓reduceIte, posAll_map, Array.toList_map, List.flatMap_map, List.length_flatMap,
+        pos_lane_row, List.length_map, List.length_range, List.map_const', List.sum_replicate, Array.length_toList,
+        smul_eq_mul]
+
+theorem partsFold_ok : ∀ (l : List Part) (acc : Array Seg), (∀ g ∈ acc.toList, SegOk g) →
+    ∀ g ∈ (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc).toList, SegOk g
+  | [], _, h => h
+  | q :: l, acc, h => by
+    rw [List.foldl_cons]
+    refine partsFold_ok l _ fun g hg => ?_
+    rw [Array.toList_append, List.mem_append] at hg
+    rcases hg with hg | hg
+    · exact h g hg
+    · exact ofPart_ok q g hg
 
 /-- **A sequence as segments** (`Desc.ofSeq`) names its references, in order. -/
 theorem ofSeq_pos (s : Seq) (hq : ∀ q ∈ s.parts.toList, PartNonneg q) :
     PSOk (Desc.ofSeq s) ∧ psPos (Desc.ofSeq s) = partsPos s.parts ∧
       (Desc.ofSeq s).count = (partsPos s.parts).length := by
-  have hok : ∀ g ∈ ((s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]).map Seg.one).toList, SegOk g := by
-    intro g hg
-    rw [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, -, rfl⟩ := hg
-    exact segOk_one q
-  have hpos : segsPos ((s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]).map Seg.one) = partsPos s.parts := by
-    rw [segsPos_one, ← Array.foldl_toList, partsFold_pos _ _ hq, posAll_empty, List.nil_append]; rfl
+  have hok : ∀ g ∈ (s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]).toList, SegOk g := by
+    rw [← Array.foldl_toList]
+    exact partsFold_ok _ _ (by simp)
+  have hpos : segsPos (s.parts.foldl (fun acc q => acc ++ Desc.ofPart q) #[]) = partsPos s.parts := by
+    rw [← Array.foldl_toList, partsFold_pos _ _ hq, segsPos_empty, List.nil_append]; rfl
   obtain ⟨h1, h2, h3⟩ := of_ok _ hok
   exact ⟨h1, h2.trans hpos, h3.trans (by rw [hpos])⟩
 
