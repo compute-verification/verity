@@ -78,13 +78,6 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
 
-/-- **A decoded Program's nodes read only earlier nodes**: the decoder refuses an argument naming its own node or a
-later one (`forwardRefusal`). -/
-theorem decode_fwd (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) : ∀ i < P.defs.size, BodyFwd (P.defs[i]!).body := by
-  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P h hr
-  rw [hP]; exact hinv.2.2.2
-
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
 
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys

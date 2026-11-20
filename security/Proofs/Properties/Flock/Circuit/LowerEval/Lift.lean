@@ -942,10 +942,9 @@ theorem liftCalls_of (h : LiftPlaces) : LiftCalls := fun S L d e hc hl hd hp hn 
   obtain ⟨-, hpre, hb⟩ := liftKeeps hc hl
   exact ⟨he, hpre, hb, hex⟩
 
-/-- **`Batch0Refs`** (open): `Batch0Typed`'s references: in a C `decode` accepts whose root has no recut, a template of
+/-- **`Batch0Refs`**: `Batch0Typed`'s references: in a C `decode` accepts whose root has no recut, a template of
 word-primitive calls and axis-0 batches reads each of its parameters' and earlier nodes' leaves that exist, in sequences
-whose count is their references'. That a node reads only earlier nodes needs `decode` to refuse every forward
-reference, of every part. -/
+whose count is their references'. -/
 def Batch0Refs : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     ∀ d < P.defs.size, Batch0 P d →
@@ -954,7 +953,51 @@ def Batch0Refs : Prop :=
       ((P.defs[d]!).body.ret.count = (P.defs[d]!).body.ret.toArray.size ∧
         ∀ r ∈ (P.defs[d]!).body.ret.toArray.toList, RefIn (P.defs[d]!) (P.defs[d]!).body.nodes.size r)
 
-/-- **`Batch0Calls`** (open): `Batch0Typed` but for its references (`Batch0Refs`). -/
+/-- **`Batch0Callees`**: in a C `decode` accepts whose root has no recut, in a template of word-primitive calls and axis-0
+batches, every node of the template calls a Definition before it. -/
+def Batch0Callees : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ d < P.defs.size, Batch0 P d →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, nd.fn < d)
+
+/-- **`Batch0OutWidths`**: in a C `decode` accepts whose root has no recut, in a template of word-primitive calls and axis-0
+batches, each node's output is its members' words of its callee's value's width. -/
+def Batch0OutWidths : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ d < P.defs.size, Batch0 P d →
+      (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ ys : List (List Bool),
+        ys.length = ((P.defs[d]!).body.nodes[k]).members →
+        ((P.defs[d]!).body.nodes[k]).out.widths.toList =
+          ys.map fun y => (Prog.evalBool P ((P.defs[d]!).body.nodes[k]).fn y).length)
+
+/-- **`Batch0BoolEval`**: in a C `decode` accepts whose root has no recut, in a template of word-primitive calls and axis-0
+batches, each Boolean Definition of the template's primitives evaluates on every input. -/
+def Batch0BoolEval : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ d < P.defs.size, Batch0 P d →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, ∀ b, P.bodyOf? (P.defs[nd.fn]!).key = some b →
+        ∀ y, (Flock.Program.evalDef? P (b + 1) b y).isSome = true)
+
+/-- **`Batch0Axes`**: in a C `decode` accepts whose root has no recut, in a template of word-primitive calls and axis-0
+batches, each axis-0 batch argument is an array of the batch's length of its callee's parameter, its references of
+that parameter's leaf widths repeated, and any other batch argument is not batched. -/
+def Batch0Axes : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ d < P.defs.size, Batch0 P d →
+      (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ((P.defs[d]!).body.nodes[k]).form = .batch →
+        ∀ i < ((P.defs[d]!).body.nodes[k]).args.size,
+          (((P.defs[d]!).body.nodes[k]).axes[i]? = some (some 0) → ∃ E : Ty,
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).ty = .array ((P.defs[d]!).body.nodes[k]).n E ∧
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = some (((P.defs[d]!).body.nodes[k]).n, E.leaves) ∧
+            i < (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.size ∧
+            ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2 = E ∧
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).seq.toArray.toList.map
+              (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) =
+              (List.replicate ((P.defs[d]!).body.nodes[k]).n E.widths.toList).flatten) ∧
+          ((∀ ax, ((P.defs[d]!).body.nodes[k]).axes[i]? ≠ some (some ax)) →
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = none))
+
+/-- **`Batch0Calls`**: `Batch0Typed` but for its references (`Batch0Refs`). -/
 def Batch0Calls : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     ∀ d < P.defs.size, Batch0 P d →
@@ -977,6 +1020,11 @@ def Batch0Calls : Prop :=
               (List.replicate ((P.defs[d]!).body.nodes[k]).n E.widths.toList).flatten) ∧
           ((∀ ax, ((P.defs[d]!).body.nodes[k]).axes[i]? ≠ some (some ax)) →
             (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = none))
+
+/-- **`Batch0Calls`**, on its four clauses. -/
+theorem batch0Calls_of (h1 : Batch0Callees) (h2 : Batch0OutWidths) (h3 : Batch0BoolEval) (h4 : Batch0Axes) :
+    Batch0Calls := fun bytes P h hr d hd hb =>
+  ⟨h1 bytes P h hr d hd hb, h2 bytes P h hr d hd hb, h3 bytes P h hr d hd hb, h4 bytes P h hr d hd hb⟩
 
 /-- **`Batch0Typed`**: in a C `decode` accepts whose root has no recut, a template of word-primitive calls and
 axis-0 batches reads each of its parameters' and earlier nodes' leaves that exist, in sequences whose count is their

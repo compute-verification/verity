@@ -70,6 +70,16 @@ theorem batch0Refs : Batch0Refs := by
   · rw [hpsr] at hret ⊢
     exact refs_of_decoded hpar hret fun t ht hp => ((hret t ht).2 hp).1
 
+/-- **`Batch0Callees`**, from the decoder: each node calls a Definition decoded before its caller
+(`BodiesOk.BodyFacts`). -/
+theorem batch0Callees : Batch0Callees := by
+  intro bytes P hdec hr d hd _ nd hnd
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hnd
+  rw [← getElem!_pos _ k hk]
+  exact ((hok d hd).2.1 k hk).1
+
 theorem foldlM_inv {α β : Type} (l : List α) (f : β → α → Option β) (I : ℕ → β → Prop)
     (hstep : ∀ n (hn : n < l.length) b, I n b → ∃ b', f b l[n] = some b' ∧ I (n + 1) b') :
     ∀ k n b, k + n = l.length → I n b → ∃ o, (l.drop n).foldlM f b = some o ∧ I l.length o
