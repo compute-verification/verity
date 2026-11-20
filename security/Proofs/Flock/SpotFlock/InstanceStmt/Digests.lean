@@ -26,6 +26,34 @@ import all Std.Data.DTreeMap.Internal.Operations
 import all Std.Data.DTreeMap.Internal.Queries
 import all Std.Data.DTreeMap.Internal.Balancing
 import all Std.Data.DTreeMap.Internal.Def
+import all Circuits.Descriptor
+import all Base.Canon
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.Basic
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Char
+import all Init.Data.String.Pattern.Pred
+import all Init.Data.String.Extra
+import all Init.Data.String.Termination
+import all Init.Data.String.Search
+import all Init.Data.String.Iterate
+import all Init.Data.String.Decode
+import all Init.Data.String.ToSlice
+import all Init.Data.String.Substring
+import all Init.Data.String.Subslice
+import all Init.Data.String.PosRaw
+import all Init.Data.String.Modify
+import all Init.Data.String.Legacy
+import all Init.Data.String.Iterator
+import all Init.Data.String.Iter
+import all Init.Data.String.FindPos
+import all Init.Data.String.Bootstrap
+import all Init.Data.Array.Attach
+import all Init.Data.Array.Subarray
+import all Init.Data.Stream
+import all Init.Data.Nat.Fold
+import all Init.WF
 
 /-! # The program's and the partition's digests
 
