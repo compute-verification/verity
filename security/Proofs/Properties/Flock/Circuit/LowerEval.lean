@@ -210,6 +210,24 @@ theorem axes_comp_ax {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P
   exact ⟨hrm, hdm, hsz ▸ hi, arg_widths hpar hps (hcnt i hi)
     (hR _ (by rw [getElem!_pos x.args i hi]; exact Array.getElem_mem_toList hi)).2 (hW i hi)⟩
 
+/-- **A batch member's leaves**, on any axis: with `(n, L)` the argument's dimensions, member `m`'s leaf `l` of its
+parameter is the argument's reference `(l / L * n + m) * L + l % L`, of the parameter's width at `l`. -/
+theorem axes_comp_member {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) (hp : (P.defs[d]!).prim = false)
+    (k : ℕ) (hk : k < (P.defs[d]!).body.nodes.size) (hbat : ((P.defs[d]!).body.nodes[k]).form = .batch)
+    (i : ℕ) (hi : i < ((P.defs[d]!).body.nodes[k]).args.size) (ax : ℕ)
+    (hax : ((P.defs[d]!).body.nodes[k]).axes[i]? = some (some ax)) :
+    ∃ L, (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = some (((P.defs[d]!).body.nodes[k]).n, L) ∧
+      L ∣ ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2.leaves ∧
+      ∀ m < ((P.defs[d]!).body.nodes[k]).n,
+        ∀ l < ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2.leaves,
+          ((((P.defs[d]!).body.nodes[k]).args.getD i default).seq.toArray.toList.map
+            (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!))[(l / L * ((P.defs[d]!).body.nodes[k]).n + m) * L + l % L]? =
+            ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2.widths.toList[l]? := by
+  obtain ⟨hrm, hdm, -, hw⟩ := axes_comp_ax hdec hr hd hp k hk hbat i hi ax hax
+  obtain ⟨L, hL, hdvd, -⟩ := axisDims_of_removeAxis ax hrm
+  exact ⟨L, hdm.trans hL, hdvd, fun m hm l hl => by rw [hw]; exact removeAxis_widths ax hrm hL m hm l hl⟩
+
 /-- **`Batch0Axes`**: `axes_comp`. -/
 theorem batch0Axes : Batch0Axes := fun _ _ hdec hr _ hd hB => axes_comp hdec hr hd hB.1
 
