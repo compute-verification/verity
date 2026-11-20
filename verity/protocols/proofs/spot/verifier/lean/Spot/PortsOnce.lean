@@ -1,4 +1,4 @@
-/-! Each member's slice names each port once (`Member.portsOnce`), wherever the per-member form's run returns or its
+/- Each member's slice names each port once (`Member.portsOnce`), wherever the per-member form's run returns or its
 check accepts. -/
 module
 
