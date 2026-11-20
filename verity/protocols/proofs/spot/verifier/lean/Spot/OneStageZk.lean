@@ -507,12 +507,80 @@ def treePortsHeld (ms : Array Member) (rec : Json) : V Unit :=
   let byPort := rootsByPort rec
   ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1))
 
+/-- The refusal of a member with no registered file whose units read a held or tied parameter's run Input. -/
+def HELD_READ_WHY (member : String) (node : Nat) : String :=
+  s!"member {member}: its units read run Input node {node}, a held or tied parameter's, which R8 lets several proof " ++
+    "blocks read only as one registered tree, and it carries no registered file: a reader of a held or tied " ++
+    "parameter opens its rows by its registered reads"
+
+/-- **A reader of a held or tied parameter carries a registered file**: where R8 lets a run Input through as held or
+tied (`Docket.heldGates`, `Docket.tiedGates`, over the template query's ranges as `Partition.readAlone` derives them,
+`Partition.heldReads`),
+each member whose units meet a range whose instance node reads it carries a registered file, else it is refused by
+name (`HELD_READ_WHY`). Derived from C, the query and the verifier, never from a member's file; a member reading only
+its own run Inputs is untouched. Its cost is the ranges' arguments' runs and the members' unit ranges. -/
+def heldFiled (reads : Array (Flock.TemplateQuery.TRange × Nat)) (ms : Array Member) : V Unit :=
+  ms.forM fun m =>
+    if m.own.registered.isSome then pure () else
+    match reads.find? fun (r, _) => m.units.any fun (lo, hi) => r.first < hi && lo < r.first + r.count with
+    | some (_, i) => throw (HELD_READ_WHY m.name i)
+    | none => pure ()
+
+@[inherit_doc heldFiled]
+def heldReadsFiled (v : Docket.Verifier) (ms : Array Member) : V Unit :=
+  match Partition.templateRanges? v.program v.query with
+  | some rs => heldFiled (Partition.heldReads v.program.prog rs (Docket.heldGates v ++ Docket.tiedGates v)) ms
+  | none => pure ()
+
+section HeldReadExamples
+open Flock.Program (Prog Node Defn Ty)
+
+private def v16 : Ty := .value 16
+
+/-- Input node 0 (4 leaves, bound at the run) and an `A` batch of `n` members reading it whole. -/
+private def heldToy (n : Nat) : Prog :=
+  let input : Defn :=
+    { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
+      outLeaves := 1, binding := some Flock.Program.RUN }
+  let a : Defn := { key := "A", id := "A", prim := true, params := #[("x", .array 4 v16)], ret := v16, gates := 1,
+    paramLeaves := 4, outLeaves := 1 }
+  let nodes : Array Node := #[{ form := .batch, fn := 0, args := #[], out := .array 4 v16, n := 4 },
+    { form := .batch, fn := 1, out := .array n v16, n := n, axes := #[none],
+      args := #[{ ty := .array 4 v16, seq := Flock.Program.Seq.ofParts #[.affine false 0 0 4] }] }]
+  let root : Defn :=
+    { key := "R", id := "R", prim := false, params := #[], ret := v16, gates := 0, paramLeaves := 0, outLeaves := 1,
+      body := { params := #[], retType := v16, nodes := nodes, ret := default, offsets := #[0, 4, 4 + n] } }
+  { defs := #[input, a, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+
+private def heldMember (name : String) (u : Nat) (file : Bool) : Member :=
+  { name := name, units := #[(u, u + 1)], g := 1,
+    own := { programJ := .null, program := .empty, partition := .null, pub := "",
+             registered := if file then some (.arr #[]) else none } }
+
+/-- `heldFiled` over `heldToy n`'s one range at the gates `held`: none where it accepts, else its refusal. -/
+private def heldCase (n : Nat) (held : Array (Nat × Nat)) (ms : Array Member) : Option String :=
+  match heldFiled (Partition.heldReads (heldToy n) #[⟨1, "A", 0, n⟩] held) ms with
+  | .ok () => none
+  | .error e => some e
+
+-- a tied parameter (node 0's gates), two members, one without a file: refused by name
+#guard heldCase 2 #[(0, 4)] #[heldMember "A/m0" 0 true, heldMember "A/m1" 1 false] == some (HELD_READ_WHY "A/m1" 0)
+-- the same with both files: accepted through this check
+#guard heldCase 2 #[(0, 4)] #[heldMember "A/m0" 0 true, heldMember "A/m1" 1 true] == none
+-- an own input (no held or tied gates), no file: accepted
+#guard heldCase 2 #[] #[heldMember "A/m0" 0 false, heldMember "A/m1" 1 false] == none
+-- one member, a held parameter, no file: refused by name
+#guard heldCase 1 #[(0, 4)] #[heldMember "A/m0" 0 false] == some (HELD_READ_WHY "A/m0" 0)
+
+end HeldReadExamples
+
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
 v1's in order, the sessions' coins held to the trees the challenger logged in the order it must release them, each
 tree closed after its session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the
-registration's population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each
-registered value the members read one tree (`classHeld`), and each committed tree a member's registered file opens
+registration's population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each reader of
+a held or tied parameter with a registered file (`heldReadsFiled`), each registered value the members read one tree
+(`classHeld`), and each committed tree a member's registered file opens
 its window's (`treePortsHeld`). -/
 def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : V Unit := do
@@ -524,6 +592,7 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
   laidHeld ms c.record
+  heldReadsFiled p.base.verifier ms
   classHeld ms
   treePortsHeld ms c.record
 
