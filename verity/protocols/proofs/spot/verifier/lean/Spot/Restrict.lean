@@ -283,7 +283,7 @@ partial def firstDiff (a b : Json) (at_ : String) : Option String :=
       s!"{at_}/{k}").orElse fun _ => some at_
   | .arr x, .arr y =>
     if x.size != y.size then some s!"{at_} (lengths {x.size} and {y.size})" else
-    ((List.range x.size).findSome? fun i => firstDiff x[i]! y[i]! s!"{at_}/{i}").orElse fun _ => some at_
+    ((x.zip y).toList.zipIdx.findSome? fun ((u, v), i) => firstDiff u v s!"{at_}/{i}").orElse fun _ => some at_
   | _, _ => some at_
 
 /-- The `restrict` piece: `{descriptor, units, python}` (C's text, the block's units, Python's `restrict` bytes as text) to
@@ -318,5 +318,9 @@ def piece (j : Json) : Except String Json := do
 #guard !sameInput (inputDefn "supplied" 16) (inputDefn "run" 16)
 #guard !sameInput (inputDefn "supplied" 16) (inputDefn "registration" 16)
 #guard (inputId? (inputDefn "supplied" 16).id).map (·.1) == some SUPPLIED
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 2, toJson 3]) "" == some " (lengths 2 and 3)"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2, toJson 3]) (Json.arr #[toJson 1, toJson 2]) "" == some " (lengths 3 and 2)"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 4]) "" == some "/1"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 2]) "" == none
 
 end Spot.Restrict
