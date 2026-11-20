@@ -216,4 +216,16 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
     simpa using this
 
 
+/-- **`AdmitWhole`**, from `admitted_walk`'s `whole-words`. -/
+theorem admitWhole : AdmitWhole := by
+  intro partition cuts S a ha
+  obtain ⟨_, _, _, _, -, -, -, -, -, -, hi, hf⟩ := admitted_walk ha
+  refine ⟨fun r hr => ?_, fun r hr => ?_⟩
+  · have := hi r (Array.mem_def.2 hr)
+    simp at this
+    omega
+  · have := hf r (Array.mem_def.2 hr)
+    simp at this
+    omega
+
 end Flock.Chain
