@@ -860,6 +860,17 @@ def test_a_party_started_first_that_writes_no_bindings_in_time_is_refused_and_st
     assert said(captured.out) == [{"party": "network-attester", "exit": 0}]
     assert "verity run: refused bindings: network-attester wrote no " in captured.err
     assert "within 600 s, so no party that reads it starts" in captured.err
+    assert ("verity run: waiting up to 600 s for network-attester's bindings (it builds its verifier and keys first)\n"
+            in captured.err)
+
+
+def test_a_party_whose_bindings_are_already_written_is_waited_for_with_no_line(tmp_path, capsys):
+    start = R.Start({"network-attester": ("gate", "peer")}, lambda c, s: None, lambda c, s: None)
+    (tmp_path / "public" / "network-attester").mkdir(parents=True)
+    (tmp_path / "public" / "network-attester" / "bindings.json").write_text(
+        json.dumps({"network-attester": {"gate": "g", "peer": "p"}}))
+    R.wait_bindings(tmp_path, "network-attester", start, lambda: True)
+    assert capsys.readouterr().err == ""
 
 
 def test_a_party_started_first_is_stopped_when_a_later_party_fails(tmp_path, capsys, monkeypatch):
