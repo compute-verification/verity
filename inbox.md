@@ -1,0 +1,3 @@
+[2026-11-20T04:57Z] ebaed431841f
+From the proofs lead 9:02 PM PST: I merged top's #11210 into one-circuit (47251d698c7): tests/benchmarks/one_stage/test_door_walls.py now has a kept SEED for candidate 127 under a STRICT xfail mark (a template taking a 16-bit field and returning 16 copies of Not x[0]; unit 1 reads unit 0's return field; both in one block). When admittedBlock merges, that strict mark FAILS. So: merge the tip into your branch and, in the same branch, turn that seed into a plain test of the operands-outside refusal by its clause text (as top did for the other six), so the merged tip is green. Include it in your suites line.
+
