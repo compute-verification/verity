@@ -5007,7 +5007,7 @@ def test_a_refusal_on_the_closed_list_is_said_by_its_name_and_no_other_sentence_
     root, raised = Path(S.__file__).resolve().parents[2], set()
     for f in ("benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
               "benchmarks/one_stage/inference_only.py", "benchmarks/one_stage/served_compare.py",
-              "benchmarks/one_stage/served_verdicts.py"):
+              "benchmarks/one_stage/served_verdicts.py", "adapters/vllm/verity_vllm/program/predict/window_record.py"):
         raised |= {n.exc.args[0].value for n in ast.walk(ast.parse((root / f).read_text()))
                    if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
                    and getattr(n.exc.func, "id", None) in ("ValueError", "RuntimeError", "SystemExit") and n.exc.args
