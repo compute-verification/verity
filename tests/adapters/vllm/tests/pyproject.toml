@@ -48,6 +48,7 @@ untraced = [
     "pipeline/test_tp_gpu_lease.py",
     "program/predict/test_predict.py",
     "program/predict/test_row_floor_door.py",
+    "program/predict/test_window_road.py",
     "program/test_derive_transfer.py",
     "protocols/poub/test_commit_session.py",
     "tools/test_ratchet_gate.py",
