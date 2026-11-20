@@ -108,11 +108,13 @@ as parsed. -/
 theorem headerHeldAt_instances {reads : Array (String × String)} {held : Array _root_.Flock.Registered.Port}
     {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeldAt reads held rec hd = .ok ()) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.OneStageZk.headerHeldAt at h
-  split at h
-  · cases h
-  · rename_i hc
-    simpa using hc
+  cases hj : _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population")
+  · unfold _root_.Spot.OneStageZk.headerHeldAt at h
+    first
+      | (simp only [hj, Bool.not_false, eq_self_iff_true, if_true, ↓reduceIte, throw, throwThe, MonadExceptOf.throw,
+          reduceCtorEq] at h; done)
+      | (simp [hj, throw, throwThe, MonadExceptOf.throw] at h; done)
+  · rfl
 
 /-- A member's population check that passes read the public file's header, whose `instances` it held to the slice's
 population. -/
