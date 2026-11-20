@@ -184,9 +184,8 @@ def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
     Calls and each map's members."""
     s = t.bindings
     g = s["K"] // PT.F_ROWS
-    k, tn = s["K"], s["TN"]
-    return [(PT.seed(k, tn), 1), (PT.line("eb", 1, k, tn), tn), (PT.line("fa", g, k, tn), PT.F_ROWS),
-            (PT.line("fb", g, k, tn), PT.F_ROWS),
+    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("eb", 1), s["TN"]), (PT.line("fa", g), PT.F_ROWS),
+            (PT.line("fb", g), PT.F_ROWS),
             *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R)), (bind(PearlPlusTileCoreWired, **s), 1)]
 
 
