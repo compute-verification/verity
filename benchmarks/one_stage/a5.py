@@ -1633,31 +1633,51 @@ def member_negative_cases(case: dict) -> dict[str, tuple[dict, dict | None]]:
     if isinstance(e.get("domain"), str) and e["domain"]:
         other = ("1" if e["domain"][0] == "0" else "0") + e["domain"][1:]
         cases[f"n5-input-{inp}-read-at-its-root-another-domain"] = read({**ports, inp: {**e, "domain": other}})
+        cases[f"n5-input-{inp}-every-member-reads-at-its-root-another-domain"] = every_member(case, e["value"], other)
     cases[f"n5-input-{inp}-read-stating-positions"] = read({**ports, inp: {**e, "reads": [0]}})
     cases |= member_public_elsewhere(case, k)
     return cases
 
 
-def member_public_elsewhere(case: dict, k: str) -> dict[str, tuple[dict, dict]]:
-    """n5's position form: member ``k``'s public file with its ``units.indices`` moved to as many units before its own
-    (after, for the first member), so `withPositions` would read its run input at another member's positions; the
-    file is written beside the case's blobs and named by its SHA-512, as the parameters name a public file."""
+def every_member(case: dict, value: str, domain: str) -> tuple[dict, dict]:
+    """Every member's registered port of ``value`` read at its root under ``domain``: one entry across the members, so
+    `classHeld` holds and only the tree's own check (`TREE_OTHER`, the registration's domain) refuses it."""
     params = case["params"]
-    m = params["proofs"]["members"][k]
-    src = next((Path(b) for b in case["blobs"] if MB.PF.file_sha512(Path(b)) == m["public"]), None)
+    members = {name: m if not (m.get("registered") or {}).get("ports") else {**m, "registered": {
+        **m["registered"], "ports": {p: {**e, "domain": domain} if e.get("value") == value else e
+                                     for p, e in m["registered"]["ports"].items()}}}
+               for name, m in params["proofs"]["members"].items()}
+    p = {**params, "proofs": {**params["proofs"], "members": members}}
+    return {**case, "params": p}, p
+
+
+def member_public_elsewhere(case: dict, k: str) -> dict[str, tuple[dict, dict]]:
+    """n5's position form: member ``k``'s public file with its header's ``units`` another member's, whole (its indices
+    and blocks), so the file loads and `withPositions` would read its run input at that member's positions; the file is
+    written beside the case's blobs and named by its SHA-512, as the parameters name a public file."""
+    params = case["params"]
+    members = params["proofs"]["members"]
+    by_sha = {MB.PF.file_sha512(Path(b)): Path(b) for b in case["blobs"] if Path(b).is_file()}
+    src = by_sha.get(members[k]["public"])
     if src is None:
         return {}
     head, body = src.read_bytes().split(b"\n", 1)
     h = json.loads(head)
-    us = list(h.get("units", {}).get("indices") or [])
-    if not us:
+    us = (h.get("units") or {}).get("indices") or []
+    other = None
+    for j in sorted(members):
+        f = by_sha.get(members[j]["public"]) if j != k else None
+        if f is not None:
+            u = json.loads(f.read_bytes().split(b"\n", 1)[0]).get("units") or {}
+            if len(u.get("indices") or []) == len(us) and u.get("indices") != us:
+                other = u
+                break
+    if other is None:
         return {}
-    shift = -len(us) if min(us) >= len(us) else len(us)
-    h["units"] = {**h["units"], "indices": [u + shift for u in us]}
+    h["units"] = other
     to = src.parent / f"n5-elsewhere-{src.name}"
     to.write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n" + body)
-    p = {**params, "proofs": {**params["proofs"], "members": {
-        **params["proofs"]["members"], k: {**m, "public": MB.PF.file_sha512(to)}}}}
+    p = {**params, "proofs": {**params["proofs"], "members": {**members, k: {**members[k], "public": MB.PF.file_sha512(to)}}}}
     return {f"n5-{k}-public-file-at-another-members-units": ({**case, "params": p, "blobs": [*case["blobs"], str(to)]}, p)}
 
 

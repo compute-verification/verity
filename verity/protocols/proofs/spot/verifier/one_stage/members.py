@@ -162,6 +162,8 @@ UNREAD = ("refused: a circuit that does not parse (", "refused: a public file th
 #: the refusal (`flock_form`)
 Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
+#: `Flock.Registered.PORT_KEYS`, in its order, as its refusal prints them.
+PORT_KEYS = ("value", "root", "leaves", "words", "word_bits", "domain", "row_schema", "known", "param")
 #: the value a registered port reads a committed tree of the registration as, ``committed/<port>`` (`rows.own_value`)
 COMMITTED = "committed/"
 #: `OneStageZk.INPUT_MEMBER`
@@ -436,13 +438,18 @@ def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) ->
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
-    read. A file of another format is refused by name, as `Flock.Registered.portsOf` refuses it."""
+    read. A file of another format, or a port holding a key `Flock.Registered.PORT_KEYS` doesn't name, is refused by name,
+    as `Flock.Registered.portsOf` refuses it."""
     form = registered.get("format")
     if type(form) is str and form != REGISTERED_READS_V2:
         raise _Refused(f"member {name}: registered reads: not a {REGISTERED_READS_V2} file")
     ports = registered.get("ports")
     if not (isinstance(ports, dict) and ports):
         raise Outside(f"member {name}: its registered file names no ports")
+    for port, e in ports.items():
+        if isinstance(e, dict) and not set(e) <= set(PORT_KEYS):
+            raise _Refused(f"member {name}: registered reads: port {port}: a {REGISTERED_READS_V2} port holds keys of "
+                           f"[{', '.join(PORT_KEYS)}] and no other (no position: C and the partition give them)")
     out = []
     for port in sorted(ports):
         e = ports[port]
