@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding sample
-# level0_zk) priced on node 1's GPU prover, one build against another, on 85-rec-reprice.sh's statements (one Call of
+# level0_zk) priced on node 1's GPU prover, one build against another, on statements it stages itself (one Call of
 # Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances). One step per job (research run --queue --cwd source);
 # binaries and statements stay under $FLOCK_WORK for the next step, out/ gets the records:
-#   STEP=build  (CPU) this tree's GPU prover (60-circuit.sh's build, keyed by its sources as 85-rec-reprice.sh keys it) and the
+#   STEP=build  (CPU) this tree's GPU prover (60-circuit.sh's build, keyed by its sources) and the
 #               same build with the selftests' seed-injection beside it, Lean's verity-verify-proof (keyed by its sources), and each
 #               of STATEMENTS staged into data/k<K>/stage (class_statement --stage-only, BATCH=fixed N) with its partition object
 #   STEP=prove  (GPU) for each build of BUILDS (the keys build steps printed; default this tree's), in order, on statement K:
@@ -18,10 +18,10 @@
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
 #      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM (required: the GPU build's compute capability)
 #      RESOLVER=MODULE:FUNC (build: binds the statements' Gemm_v2 ids, class_statement --resolver; refused without)
-#      CUDA_TK (required: a CUDA 13.3 toolkit, as 85-rec-reprice.sh unpacks one; node 1's host CUDA 13.0 ptxas doesn't know the
+#      CUDA_TK (required: a CUDA 13.3 toolkit; node 1's host CUDA 13.0 ptxas doesn't know the
 #      kernels' clmad)
-#      WARM_FROM=/workspace/jobs/rec-reprice/flock-gpu-link (a checkout whose cargo target starts the first build warm)
-#      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its verity-verify-proof of the same sources is used, not rebuilt)
+#      WARM_FROM= (a flock-gpu-link checkout whose cargo target starts the first build warm; unset, the build is cold)
+#      LEAN_FROM= (read only, optional: its verity-verify-proof of the same sources is used, not rebuilt)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
@@ -31,7 +31,7 @@ FW=${FLOCK_WORK:-/workspace/jobs/zk-cpu-steps}; W=$FW/flock-circuit; L=$FW/cache
 mkdir -p $W $L || exit 1
 [ -w "$HOME" ] || { export HOME=$FW/home; mkdir -p $HOME; }
 unset CARGO_TARGET_DIR
-export CUDA_TK=${CUDA_TK:?set it to a CUDA 13.3 toolkit (85-rec-reprice.sh unpacks one under its FLOCK_WORK)}
+export CUDA_TK=${CUDA_TK:?set it to a CUDA 13.3 toolkit }
 [ -x $CUDA_TK/bin/nvcc ] || { echo "CUDA_TK=$CUDA_TK: no nvcc" >&2; exit 1; }
 export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 SM=${SM:?SM: the compute capability of the GPU build, 120 for sm_120, which every step names}; K=${K:-4096}; N=${N:-2048}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS))
@@ -49,7 +49,7 @@ BUILDS=${BUILDS:-$KEY}
 bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
 F=$FW/flock-gpu-link/flock
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_FROM=${LEAN_FROM:-/workspace/jobs/rec-reprice/cache}
+LEAN_FROM=${LEAN_FROM:-}
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; [ -x $LEAN_FROM/lean-$LSHA/verity-verify-proof ] && LEAN_BIN=$LEAN_FROM/lean-$LSHA/verity-verify-proof
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
@@ -259,7 +259,7 @@ EOF
   if [ ! -x $B ] || [ ! -x $BS ]; then
     exec 8>$W/build.lock; flock 8
     if [ ! -x $B ] || [ ! -x $BS ]; then
-      [ -d $F ] || { du -sh ${WARM_FROM:-/workspace/jobs/rec-reprice/flock-gpu-link}; cp -a ${WARM_FROM:-/workspace/jobs/rec-reprice/flock-gpu-link} $FW/flock-gpu-link; }
+      [ -d $F ] || [ -z "${WARM_FROM:-}" ] || { du -sh $WARM_FROM; cp -a $WARM_FROM $FW/flock-gpu-link; }
       RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=1 SM=$SM bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 \
         || { tail -40 $O/build.log; tail -40 $O/build/out/build-circuit.txt 2>/dev/null; exit 1; }
       mkdir -p $(dirname $B) && cp $F/target/release/flock-circuit $B

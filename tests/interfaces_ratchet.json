@@ -34,7 +34,6 @@
   "verity/commitments/cuda/commit_slots/slots.py": 1,
   "verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/86-zk-cpu-steps.sh": 1,
   "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh": 1,
   "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py": 1,
@@ -233,7 +232,6 @@
   "verity/protocols/proofs/flock/prover/pod/60-circuit.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh": 3,
-  "verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh": 1
+  "verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh": 3
  }
 }
