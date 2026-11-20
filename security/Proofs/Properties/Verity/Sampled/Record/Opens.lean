@@ -2,11 +2,11 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record.Runs
 public import Proofs.Properties.Verity.Sampled.Record.Accepts
-public import Proofs.Properties.Verity.Sampled.Record.Nums
 public import Proofs.Flock.Bridge.V5.Session
 public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
+import Proofs.Flock.Claims.Complete.Json.Stmt
 import all Init.Data.Array.QSort.Basic
 
 /-!
@@ -156,7 +156,7 @@ theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.
   rw [hidx] at his
   obtain rfl := Option.some.inj his
   try dsimp only at hu
-  rw [getD_of_arr ha] at hu
+  rw [FlockDeploy.BaseSetup.getD_of_arr ha] at hu
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
   obtain ⟨xs, hxs, rfl⟩ := hu
   intro u hu
@@ -374,7 +374,8 @@ theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : 
   obtain ⟨hun, huD⟩ := hpr d cs J D hdOk hJ hD u hud
   have hmPts : st.mPts = mPtsOf A.D.unroll.g (D.proved.size / nTab A.I) := by
     rw [nTab_one A hc1, Nat.div_one]
-    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat A.hD)
+    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_provedSt
+      ((FlockSoundness.Discharge.ZkExec.zkTags_typed A.I).trans A.ht) (Flock.Desc.parseStmt_stmt A.hD)
       (fun D' hD' => by rw [Except.ok.inj (hD'.symm.trans hD)]) hst
   obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.sampleSetupHP_of_setupHiddenI (I := inputsJ A.I 0)
     (own := none) (S := {(⟨u, hun⟩ : Fin A.n)}) (FlockSoundness.Discharge.Composed.typedJ A.ht 0) hstJ hf hD

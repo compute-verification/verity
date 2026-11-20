@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Record.Opens
 public import Proofs.Properties.Verity.Sampled.Record.Scope
-public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Flock.Claims.Bridge.Custody
 public import Proofs.Flock.Claims.Scope.Setup
 public import Proofs.Flock.Claims.KS.Range
@@ -31,7 +31,7 @@ namespace Verity.Sampled.Record
 
 open Claims (Msg)
 open FlockDeploy (Ins)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 
 variable {A : Live} {o : Own}
 

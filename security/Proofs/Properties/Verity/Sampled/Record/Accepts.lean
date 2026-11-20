@@ -40,7 +40,7 @@ namespace Verity.Sampled.Record
 open Lean (Json)
 open Claims (Msg Out Seen Prover Transcript stepWith run coinSeq)
 open FlockDeploy (Coin Final Ins)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 
 private theorem ok_bind' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
@@ -96,7 +96,7 @@ so the session is the one statement's on their own files; the committed circuit 
 the lookup tables the blobs hold and the program; `o`'s partition object and registered file read
 (`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
 structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Prop where
-  circuit : bs.get p.own.circuit "circuit" = .ok A.I.circuitFile
+  circuit : p.own.circuitFile = .ok A.I.circuitFile
   pub : bs.get p.own.pub "public file" = .ok A.I.publicFile
   tables : _root_.Spot.OneStageZk.tablesOf bs = A.I.tables
   program : A.I.program = some p.own.program
@@ -468,7 +468,6 @@ theorem registered_of_names (hn : Names A o p bs) {rd : _root_.Spot.OneStageZk.R
       rw [← hp] at hrd
       unfold _root_.Spot.OneStageZk.readsOf at hrd
       obtain ⟨own, hown, hrd⟩ := bind_ok hrd
-      obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd

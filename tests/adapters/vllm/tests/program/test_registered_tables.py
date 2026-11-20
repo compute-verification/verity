@@ -99,25 +99,6 @@ def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
     assert len(reads) == 2 * len(words)
 
 
-def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
-    """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
-    of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
-    active, a ⊥ and an invalid table word as the flat widths do."""
-    from verity.circuits.ops import scalar as SC
-
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import operand_widths as OW
-
-    assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
-    assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]
-    lp = L.lifted_prim_v1(T.table_read(16, 1))
-    words = list(range(1 << 16))
-    assert lp.evaluate(5, *words) == 5
-    assert lp.evaluate(5, *words[:9], L.enc_bot(16), *words[10:]) == L.enc_bot(16)
-    assert lp.evaluate(5, *words[:-1], L.inv(16)) == L.inv(16)
-    assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
-
-
 def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
     """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
     difftest runs it on every gate word)."""

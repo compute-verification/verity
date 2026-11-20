@@ -21,7 +21,6 @@ measured beside it, never credited.
 
 - `h1u.cu` (with the kernels, below): the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`).
   `verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
-- `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
 
 ## Kernels

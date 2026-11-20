@@ -17,8 +17,7 @@ the leaves the sampled blocks open.
   any sample once the window was released. The sealed bundle then holds the kept set with its leaves' salts, every step's root
   and the tree nodes an opening inside it reads (`store_dump.drawn`), so each kept leaf's opening path stays whole until the
   last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
-* **Where samples come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's sampling coin is
-  open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
+* **Where samples come in.** `Draws.put`, through `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a sample,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
   name, then renamed) once the window's ``windows.jsonl`` line, its commitment, is out. A file that doesn't parse, or names
   another window or protocol, fails that window's release by name; the server serves on.
@@ -281,10 +280,9 @@ class RetentionOptions:
                                      help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
                                           "every window awaiting its release and the open one, so at least --window-gb")
     release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
-                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose sample of each "
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. spot) whose sample of each "
                                      "window its release waits for; the union of the leaves their sampled proof blocks open is kept "
-                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
-                                     "through --draws-dir")
+                                     "(serve_release); each comes in through --draws-dir")
     draws_dir: str = option("--draws-dir", default="", metavar="DIR",
                             help="--release-after: where each sample comes in, w<k>.<protocol>.json (default OUT/draws)")
 

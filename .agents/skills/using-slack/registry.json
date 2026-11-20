@@ -312,7 +312,6 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
-        "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",

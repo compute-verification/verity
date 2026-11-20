@@ -1,3 +1,4 @@
+// The row tables' device code, kept here until proofs decides where it lives.
 // `ncp-v2`'s committed values, one unit at a time, as functions that compile for the host (g++) and the device (nvcc); the row-table and registered-row kernels build on its hashes. Hashes: SHA-256 and SHA-512 (FIPS 180-4), Keccak-p[1600, n_r] with SHAKE256 (FIPS 202) and
 // TurboSHAKE128 (RFC 9861). Floating point: every step is one IEEE binary32 operation, rounded to nearest, without
 // contraction (the host builds with -ffp-contract=off; the device uses the _rn intrinsics).

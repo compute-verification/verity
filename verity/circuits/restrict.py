@@ -49,12 +49,13 @@ from __future__ import annotations
 
 import bisect
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cached_property, lru_cache
 from typing import Any, Mapping, Sequence
 
 from . import boolean as BL
 from . import partition_object as PO
+from . import ports as PT
 from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
@@ -93,8 +94,13 @@ def _declared(desc: Mapping[str, Any]) -> DefinitionTable:
             lookup_primitive(DefinitionTable(), fid)
         except KeyError:
             name, _, version = fid.rpartition("_v")
-            reg.add(PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
-                                        type_from_json(d["ret"]), _unevaluated, register=False))
+            p = PrimitiveDefinition(name, int(version), tuple((n, type_from_json(t)) for n, t in d["params"]),
+                                    type_from_json(d["ret"]), _unevaluated, register=False)
+            if (pj := d.get("ports")) is not None:
+                runs = {k: v for k, v in pj.items() if k != "transfer"}
+                pt = PT.PortTypes.from_json(fid, runs, p.params, p.ret) if runs else PT.PortTypes(tuple(() for _ in p.params), ())
+                p.port_types = replace(pt, transfer=_unevaluated) if pj.get("transfer") else pt
+            reg.add(p)
     return reg
 
 
@@ -143,10 +149,7 @@ def _body(fn: Any) -> _Body:
 
 
 def _width(fn: PrimitiveDefinition) -> int:
-    _, ret = fn.signature()
-    if not isinstance(ret, Value):
-        raise Refused("E_LEAVES", f"{fn.id} returns {ret!r}, not one value")
-    return ret.w
+    return fn.signature()[1].w
 
 
 class Bits:
@@ -365,9 +368,9 @@ def _nodes(D: DecodedProgram, words: Sequence[tuple[int, int]]) -> list[tuple[in
             if node.form not in ("call", "batch"):
                 raise Refused("E_FORM", f"root node {k} is a {node.form}: a block holds calls and batches")
             per = node.fn.gates
+            if per == 0:
+                raise Refused("E_NO_GATE", f"root node {k} calls {node.fn.id}, which has no gate: no unit holds it")
             m0, m1 = (max(lo, a) - a) // per, (min(hi, b) - a) // per
-            if a + m0 * per != max(lo, a) or a + m1 * per != min(hi, b):
-                raise Refused("E_UNITS", f"the units cut root node {k} inside a member")
             out.append((k, m0, m1))
     return out
 

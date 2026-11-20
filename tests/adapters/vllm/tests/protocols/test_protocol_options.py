@@ -1,7 +1,7 @@
 """`verity_vllm.protocols`: the protocol set's one spelling, the profile field, the refusals, and a composition that
 installs innermost first, uninstalls to exactly what the model held, and records what each option committed to.
 
-CPU only.  PoUW's adapter and ``hold``, an option that wraps the site from outside, are stand-ins (`_fake_adapter`) over a toy linear layer whose ``quant_method.apply`` is
+CPU only.  ``exec``, an option that executes at the site, and ``hold``, an option that wraps it from outside, are stand-ins (`_fake_adapter`) over a toy linear layer whose ``quant_method.apply`` is
 the hook site both real adapters wrap; the SPOT adapter is the real one.
 """
 from __future__ import annotations
@@ -31,14 +31,14 @@ from verity_vllm.program.frontend.target_profile import (
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
-ALL = ("pouw:ncp-v1", "hold:band-chain/d12/v1", "sampled-proofs:rows-sha512")
+ALL = ("exec:ncp-v1", "hold:band-chain/d12/v1", "sampled-proofs:rows-sha512")
 
 
 @pytest.fixture(autouse=True)
 def _hold_between(monkeypatch):
-    """``hold``, the stand-in option that wraps a site from outside, installs between PoUW and SPOT: `config.PROTOCOLS`
+    """``hold``, the stand-in option that wraps a site from outside, installs between ``exec`` and SPOT: `config.PROTOCOLS`
     with it in its place, which `_fake_adapter` points at its module."""
-    monkeypatch.setattr(config, "PROTOCOLS", {"pouw": config.PROTOCOLS["pouw"], "hold": "not_landed_here",
+    monkeypatch.setattr(config, "PROTOCOLS", {"exec": "fake_exec", "hold": "not_landed_here",
                                               "sampled-proofs": config.PROTOCOLS["sampled-proofs"]})
 
 
@@ -46,14 +46,15 @@ def _hold_between(monkeypatch):
 
 def test_a_set_is_spelled_one_way_in_install_order():
     assert config.parse_protocols(None) == config.parse_protocols("") == config.parse_protocols("none") == ()
-    assert config.parse_protocols("sampled-proofs:rows-sha512, hold:band-chain/d12/v1,pouw:ncp-v1") == ALL
-    assert config.parse_protocols({"hold": "band-chain/d12/v1", "pouw": "ncp-v1"}) == ALL[:2]
+    assert config.parse_protocols("sampled-proofs:rows-sha512, hold:band-chain/d12/v1,exec:ncp-v1") == ALL
+    assert config.parse_protocols({"hold": "band-chain/d12/v1", "exec": "ncp-v1"}) == ALL[:2]
     assert config.parse_protocols(list(reversed(ALL))) == ALL
     assert tuple(e.partition(":")[0] for e in ALL) == tuple(config.PROTOCOLS)
 
 
 @pytest.mark.parametrize("value,match", [("zk:v1", "unknown protocol"), ("hold", "expected hold:<scheme>"), ("hold:", "expected"),
-                                         ("hold:a b", "expected"), ("hold:x,hold:y", "enabled twice")])
+                                         ("hold:a b", "expected"), ("hold:x,hold:y", "enabled twice"),
+                                         ("pouw:eps1-sm120-h1fx1", "pouw:eps1-sm120-h1fx1'?: the first stage is deleted; useful work is Pearl\\+'s")])
 def test_a_malformed_set_is_refused(value, match):
     with pytest.raises(ValueError, match=match):
         config.parse_protocols(value)
@@ -126,14 +127,14 @@ def _fake_adapter(monkeypatch, name, install, *, refuse=(), schemes=("s1",)):
     return mod
 
 
-def _pouw(log):
+def _exec(log):
     """Replaces the GEMM, reading the weight from the layer it is called with."""
     def install(scheme, target):
-        h = target.hooks(f"pouw:{scheme}")
+        h = target.hooks(f"exec:{scheme}")
         for m in target.model.modules():
-            h.wrap(m.quant_method, "apply", lambda orig: (lambda layer, x, bias=None: ("pouw", layer.weight, x)))
-        log.append("pouw")
-        return PO.Option(name=f"pouw:{scheme}", hooks=h, commits={"weight_roots": "w"})
+            h.wrap(m.quant_method, "apply", lambda orig: (lambda layer, x, bias=None: ("exec", layer.weight, x)))
+        log.append("exec")
+        return PO.Option(name=f"exec:{scheme}", hooks=h, commits={"weight_roots": "w"})
     return install
 
 
@@ -158,17 +159,17 @@ def _serve(*enabled, **kw):
 
 def test_the_composition_installs_innermost_first_and_unwinds_to_the_model_as_it_was(monkeypatch):
     log: list[str] = []
-    _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec(log), schemes=("ncp-v1",))
     _fake_adapter(monkeypatch, "hold", _hold(log), schemes=("band-chain/d12/v1",))
     model = Model()
     before = hooks.live()
-    with PO.install(model, _serve("hold:band-chain/d12/v1", "pouw:ncp-v1")) as comp:
-        assert comp.entries == ALL[:2] and log == ["pouw", "responder up", "hold"]
+    with PO.install(model, _serve("hold:band-chain/d12/v1", "exec:ncp-v1")) as comp:
+        assert comp.entries == ALL[:2] and log == ["exec", "responder up", "hold"]
         layer = model.layers[0]
-        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x")      # PoUW's GEMM reads the weight the wrapping option decoded
-        assert [e.tag for e in hooks.live()[len(before):]] == ["pouw:ncp-v1"] * 2 + ["hold:band-chain/d12/v1"] * 3
+        assert layer.quant_method.apply(layer, "x") == ("exec", 2, "x")      # the executor's GEMM reads the weight the wrapping option decoded
+        assert [e.tag for e in hooks.live()[len(before):]] == ["exec:ncp-v1"] * 2 + ["hold:band-chain/d12/v1"] * 3
         assert len(hooks.live("hold:band-chain/d12/v1")) == 3 and PO.undeclared(comp.entries) == ()
-        assert PO.undeclared(("hold:band-chain/d12/v1",)) == ("pouw:ncp-v1",)
+        assert PO.undeclared(("hold:band-chain/d12/v1",)) == ("exec:ncp-v1",)
     comp.close()
     assert log[3:] == ["responder down handle", "hold released"]
     assert all("apply" not in vars(m.quant_method) for m in model.layers) and hooks.live() == before
@@ -200,7 +201,7 @@ def test_the_records_schema_is_the_registered_id_letter_for_letter(monkeypatch):
 
 def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
     log: list[str] = []
-    _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec(log), schemes=("ncp-v1",))
 
     def broken(scheme, target):
         target.hooks("hold:s1").wrap(target.model.layers[0].quant_method, "apply", lambda o: o)
@@ -209,25 +210,25 @@ def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
     _fake_adapter(monkeypatch, "hold", broken)
     model, before = Model(), hooks.live()
     with pytest.raises(RuntimeError, match="encode failed"):
-        PO.install(model, _serve("pouw:ncp-v1", "hold:s1"))
+        PO.install(model, _serve("exec:ncp-v1", "hold:s1"))
     assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
 
 
 # --- refusals -----------------------------------------------------------------------------------------------------------
 
 def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), refuse=("compiled execution",), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec([]), refuse=("compiled execution",), schemes=("ncp-v1",))
     monkeypatch.setitem(config.PROTOCOLS, "hold", "not_landed_here")
-    ctx = _serve("pouw:ncp-v1", "hold:band-chain/d12/v1", "sampled-proofs:rows-sha512", world=2, settings={"pouw": {}, "zk": {}})
+    ctx = _serve("exec:ncp-v1", "hold:band-chain/d12/v1", "sampled-proofs:rows-sha512", world=2, settings={"exec": {}, "zk": {}})
     got = PO.refusals(ctx)
     assert any("TP 2" in r for r in got) and any("['zk']" in r for r in got)
-    assert "pouw:ncp-v1: compiled execution" in got
+    assert "exec:ncp-v1: compiled execution" in got
     assert any("verity_vllm.protocols.not_landed_here is not on this tree" in r for r in got)
     assert any(r.startswith("sampled-proofs:rows-sha512: SPOT runs in the Commit stage") for r in got)
     with pytest.raises(PO.Refused) as e:
         PO.install(Model(), ctx)
     assert e.value.reasons == got and str(e.value) == "protocol options refused: " + "; ".join(got)
-    assert PO.refusals(_serve("pouw:ncp-v2")) == ("pouw:ncp-v2: pouw registers no scheme 'ncp-v2' (registered: ncp-v1)",)
+    assert PO.refusals(_serve("exec:ncp-v2")) == ("exec:ncp-v2: exec registers no scheme 'ncp-v2' (registered: ncp-v1)",)
 
 
 def test_an_unknown_protocol_has_no_adapter():
@@ -279,22 +280,22 @@ AT_TP_2 = "protocol options at TP 2: each rank would install its own composition
 
 
 def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec([]), schemes=("ncp-v1",))
     _fake_adapter(monkeypatch, "hold", _hold([]))
     model = Model()
-    with PO.install(model, _serve("pouw:ncp-v1")):
+    with PO.install(model, _serve("exec:ncp-v1")):
         live = hooks.live()
         with pytest.raises(PO.Refused) as e:
             PO.install(model, _serve("hold:s1"))
-        assert e.value.reasons == ("options installed outside this composition are live: ['pouw:ncp-v1']",)
+        assert e.value.reasons == ("options installed outside this composition are live: ['exec:ncp-v1']",)
         assert hooks.live() == live
 
 
 def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(monkeypatch):
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec([]), schemes=("ncp-v1",))
     p = TargetProfile.default().with_overrides(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, SPOT: {}})
-    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"rounds": 7}})
+    ctx = PO.capture_context(p, settings={"exec": {"rounds": 7}, SPOT: {}})
+    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"exec": {"rounds": 7}})
     assert PO.capture_context(None) is None and PO.capture_context(TargetProfile.default()) is None
     with pytest.raises(PO.Refused) as e:
         PO.capture_context(p, settings={"hold": {}})
@@ -303,11 +304,11 @@ def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(mo
 
 
 def test_a_protocols_config_holds_one_object_a_protocol(tmp_path):
-    assert PO.load_settings(None) == {} and PO.load_settings({"pouw": {"rounds": 7}}) == {"pouw": {"rounds": 7}}
+    assert PO.load_settings(None) == {} and PO.load_settings({"exec": {"rounds": 7}}) == {"exec": {"rounds": 7}}
     (tmp_path / "protocols.json").write_text(json.dumps({"hold": {"rounds": 2}}))
     assert PO.load_settings(tmp_path / "protocols.json") == {"hold": {"rounds": 2}}
-    with pytest.raises(ValueError, match=r"protocols config: the entries of \['hold', 'pouw'\] are not objects"):
-        PO.load_settings({"pouw": 7, "hold": [], "zk": {}})
+    with pytest.raises(ValueError, match=r"protocols config: the entries of \['exec', 'hold'\] are not objects"):
+        PO.load_settings({"exec": 7, "hold": [], "zk": {}})
 
 
 def test_an_adapter_this_tree_does_not_hold_fills_nothing_from_the_engine(monkeypatch):
@@ -326,13 +327,13 @@ def test_a_composition_binds_only_what_it_installed_and_one_option_releases_a_we
             return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"), decoded=lambda: {"l0.weight": "W0"})
         return install
 
-    _fake_adapter(monkeypatch, "pouw", released("pouw"))
+    _fake_adapter(monkeypatch, "exec", released("exec"))
     _fake_adapter(monkeypatch, "hold", released("hold"))
     with PO.install(Model(), _serve("hold:s1")) as comp:
         assert comp.weights() == {"l0.weight": "W0"}
-        with pytest.raises(ValueError, match=r"no bindable option 'pouw' in \['hold:s1'\]"):
-            comp.bind("pouw", weight_roots="w")
-    with PO.install(Model(), _serve("pouw:s1", "hold:s1")) as comp, \
+        with pytest.raises(ValueError, match=r"no bindable option 'exec' in \['hold:s1'\]"):
+            comp.bind("exec", weight_roots="w")
+    with PO.install(Model(), _serve("exec:s1", "hold:s1")) as comp, \
             pytest.raises(ValueError, match=r"'l0.weight' is released by two options \(hold:s1 and an earlier one\)"):
         comp.weights()
 
@@ -366,10 +367,10 @@ def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_s
     versions: dict = {}
     assert PO.at_commit(TargetProfile.default(), Model(), versions) is None and versions == {}
     PO.into_verdict(None, versions, "/nonexistent", TargetProfile.default(), program_digest=None, manifest=None)
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "exec", _exec([]), schemes=("ncp-v1",))
     p = TargetProfile.default().with_overrides(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.commit_context(p, settings={"pouw": {"draws": 7}})
-    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.scheme("pouw"), ctx.settings_of("pouw")) == \
+    ctx = PO.commit_context(p, settings={"exec": {"draws": 7}})
+    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.scheme("exec"), ctx.settings_of("exec")) == \
         ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"draws": 7})
     with pytest.raises(PO.Refused, match="TP 2"):
         PO.commit_context(p, world=2)
@@ -478,31 +479,25 @@ def test_readers_of_live_weights_see_the_plaintext_an_option_released(monkeypatc
 
 
 
-def test_every_site_nests_in_install_order():
-    for site, outermost_first in PO.SITES.items():
-        rank = [list(config.PROTOCOLS).index(n) for n in outermost_first]
-        assert rank == sorted(rank, reverse=True), site
-
-
 APPLY = "LinearBase.quant_method.apply"
 
 
 def test_a_site_has_one_executor(monkeypatch):
-    pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1", "pearl-fp8-v4"))
-    pouw.EXECUTES = (APPLY,)
+    exec = _fake_adapter(monkeypatch, "exec", _exec([]), schemes=("ncp-v1", "pearl-fp8-v4"))
+    exec.EXECUTES = (APPLY,)
     hold = _fake_adapter(monkeypatch, "hold", _hold([]), schemes=("band-chain/d12/v1",))
-    assert PO.refusals(_serve("pouw:ncp-v1", "hold:band-chain/d12/v1")) == ()
+    assert PO.refusals(_serve("exec:ncp-v1", "hold:band-chain/d12/v1")) == ()
     hold.EXECUTES = (APPLY,)
-    assert PO.refusals(_serve("pouw:ncp-v1", "hold:band-chain/d12/v1")) == \
-        (f"hold:band-chain/d12/v1: {APPLY} already has an executor, pouw:ncp-v1; a site has one",)
+    assert PO.refusals(_serve("exec:ncp-v1", "hold:band-chain/d12/v1")) == \
+        (f"hold:band-chain/d12/v1: {APPLY} already has an executor, exec:ncp-v1; a site has one",)
 
 
-POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4")
+EXEC_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4")
 
 
 def _refused_beside_spot(scheme):
     """The refusal of an executor beside SPOT, word for word."""
-    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so SPOT "
+    return (f"exec:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so SPOT "
             f"would trace it as the stock computation")
 
 
@@ -526,9 +521,9 @@ def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):
 
         _fake_adapter(monkeypatch, name, install).commit_weights = commit_weights
 
-    adapter("pouw")
+    adapter("exec")
     adapter("hold")
-    with PO.install(Model(), _serve("pouw:s1", "hold:s1")) as comp:
+    with PO.install(Model(), _serve("exec:s1", "hold:s1")) as comp:
         pass
-    assert log == ["commit pouw", "commit hold", "install pouw seeing ['hold:s1', 'pouw:s1']", "install hold seeing ['hold:s1', 'pouw:s1']"]
-    assert [p.get("weights") for p in comp.record()["protocols"]] == [{"root": "pouw-w"}, {"root": "hold-w"}]
+    assert log == ["commit exec", "commit hold", "install exec seeing ['exec:s1', 'hold:s1']", "install hold seeing ['exec:s1', 'hold:s1']"]
+    assert [p.get("weights") for p in comp.record()["protocols"]] == [{"root": "exec-w"}, {"root": "hold-w"}]
