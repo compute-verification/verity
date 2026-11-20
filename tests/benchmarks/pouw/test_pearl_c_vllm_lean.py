@@ -192,6 +192,18 @@ def test_an_agreeing_rejection_is_written_and_the_lean_exit_code_must_be_its_ver
         assert (rc, answer, check["lean"]) == (2, None, None) and check["reason"].startswith(f"the Lean exited {code}")
 
 
+def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_name(run, tmp_path):
+    """A ``pouw-pearlplus`` that writes a panic line and prints the Python's own accept with exit 0 gives no answer: the
+    step runs it under `lean_child` and refuses it by `lean_child.LEAN_PANIC`, whatever it printed."""
+    from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    exe.write_text(exe.read_text().replace("cat ", "echo 'PANIC at PouwVerifier.PearlPlus.run M:1:2: boom' >&2\ncat ", 1))
+    rc, answer, check = lean(tmp_path, verify, d, exe)
+    assert (rc, answer) == (2, None) and check["reason"].startswith(f"{LC.LEAN_PANIC}: PANIC at "), check["reason"]
+
+
 def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_passes_or_an_executable(run, tmp_path):
     """No coin record (nothing pins the Lean's source to the Python's), passes other than those the verdict read (a pass's
     manifest changed since), or no executable: no answer, and the executable never runs."""

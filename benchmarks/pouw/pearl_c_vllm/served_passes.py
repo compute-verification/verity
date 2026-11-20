@@ -184,6 +184,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity_config.settings import of
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -785,10 +786,13 @@ def lean(args: argparse.Namespace) -> int:
                             doc.get("test_instance", False), of_record=live, load=doc.get("class"))
     t0 = CLOCK()
     try:
-        p = subprocess.run(rec["argv"], capture_output=True, text=True, timeout=args.timeout, check=False)
+        p = LC.run(rec["argv"], timeout=args.timeout, check=False)
     except subprocess.TimeoutExpired:
         rec["check_cost"] = check_cost(CLOCK() - t0)
         return done(f"the Lean gave no verdict within {args.timeout} s", 2)
+    except LC.LeanPanic as e:
+        rec["check_cost"] = check_cost(CLOCK() - t0)
+        return done(str(e), 2)
     rec["check_cost"] = check_cost(CLOCK() - t0)
     rec["rc"], rec["stderr"] = p.returncode, p.stderr[-2000:] or None
     said = p.stdout.strip().splitlines()
