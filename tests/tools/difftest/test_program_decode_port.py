@@ -3,10 +3,12 @@
 format test's refusals of the descriptor vector (`E_SCHEMA` and the Boolean map's `E_BODY_*` among them), a `boolean` key
 named twice, the GEMM chain with the catalog's Boolean bodies, and `tests/verity/circuits/test_codec_refusals.py`'s descriptors
 (each the smallest that trips one refusal of the Python decoder; three it takes against its registry, Lean's decoder having none, `LEAN_TAKES`). Both answer an accept with the program's digest and its
-Boolean map, and a refusal with its first `E_` code, which must be the same code."""
+Boolean map, and a refusal with its first `E_` code, which must be the same code. Lean's encoder (`Flock.Program.encode`) of what Lean decodes is held
+to `codec.descriptor_chunks` of what the codec decodes, byte for byte."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import sys
@@ -16,6 +18,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+from verity.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity" / "circuits" / "difftest"
@@ -91,6 +94,41 @@ def test_lean_takes_what_the_registry_refuses(server, name):
     text = next(t for n, t, _ in CASES if n == name)
     assert not reference({"descriptor": text})["ok"]
     assert json.loads(server.call("decode", {"descriptor": text})[1])["ok"] is True
+
+
+def codec_encoding(text: str, registry) -> bytes | None:
+    """`codec.descriptor_chunks` of the Program `codec.decode_program` reads from ``text``, or None where it refuses."""
+    try:
+        program = codec.decode_program(json.loads(text), registry)
+    except Exception:  # noqa: BLE001
+        return None
+    return b"".join(codec.descriptor_chunks(program))
+
+
+@pytest.mark.parametrize("name", [n for n, _, _ in CASES])
+def test_encode_writes_the_codecs_bytes(server, name):
+    """Lean's `Program.encode` of what Lean's decoder accepts: byte for byte the codec's encoding of what the codec decodes,
+    so a descriptor in the writer's form is written back as itself; an encoding Lean decodes to its own digest and writes
+    back unchanged."""
+    text = next(t for n, t, _ in CASES if n == name)
+    lean = json.loads(server.call("encode", {"descriptor": text})[1])
+    decoded = json.loads(server.call("decode", {"descriptor": text})[1])
+    assert lean["ok"] == decoded["ok"], lean.get("message")
+    if not lean["ok"]:
+        return
+    encoded = lean["encoded"].encode()
+    python = codec_encoding(text, REGISTRY[text])
+    if python is not None:
+        assert encoded == python
+    again = json.loads(server.call("decode", {"descriptor": lean["encoded"]})[1])
+    assert again == {"ok": True, "program_digest": hashlib.sha512(encoded).hexdigest(), "boolean": decoded["boolean"]}
+    assert json.loads(server.call("encode", {"descriptor": lean["encoded"]})[1]) == lean
+
+
+def test_encode_cases_hold_the_writers_form():
+    """The cases the encoder is held to include descriptors in the writer's form, which it must write back as themselves."""
+    canonical = {n for n, t, r in CASES if codec_encoding(t, r) == t.encode()}
+    assert {"format", "wide", "registered_program", "chain"} <= canonical, canonical
 
 
 def test_cases_reach_accepts_and_every_body_refusal():
