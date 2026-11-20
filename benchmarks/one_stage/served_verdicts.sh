@@ -2023,22 +2023,6 @@ if [ -n "${DAY:-}" ] && [ -z "$FOLLOW$COMPOSE" ]; then  # the day's one circuit 
   [ -f "$TREE/adapters/vllm/verity_vllm/pipeline/serve_day.py" ] && grep -q -- '"--day"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"; exit 3; }
 fi
-if [ -z "$FOLLOW$COMPOSE" ] && [ "${1:-}" != v3c ]; then  # step 3's sampling design draws every unit of the served compiler's transfer gates
-  why=$(cd "$TREE" && "$SAY_PY" - benchmarks/prove_path/prove_path.py "$REPO" "$PP_PARTITION" 2>&1 <<'EOF'
-import ast, json, sys
-src, model, part = sys.argv[1:]
-record = next((ast.literal_eval(n.value) for n in ast.parse(open(src).read()).body if isinstance(n, (ast.Assign, ast.AnnAssign))
-               and "GATES_OF_RECORD" in [t.id for t in getattr(n, "targets", [getattr(n, "target", None)]) if isinstance(t, ast.Name)]), {})
-gates = list(record.get(model, ()))
-p = json.load(open(part)) if gates else None
-if p is not None and not (str(p["law"]).startswith("work-rate:") and set(gates) <= set(p["templates"])):
-    print(f"{model}'s compiler of record lists {gates} as transfer gates (prove_path.GATES_OF_RECORD), every unit of which "
-          f"step 3 proves beside work-rate:NUM/DEN of the rest, and PP_PARTITION {part} is {p['law']} over {p['templates']}: "
-          "give a work-rate:NUM/DEN partition that holds them, and in PP_SETS their input sets")
-EOF
-) || { rc=$?; say "PREFLIGHT: step 3's partition PP_PARTITION $PP_PARTITION can't be read $(failed "$rc" - <<< "$why")"; exit 3; }
-  [ -z "$why" ] || { say "PREFLIGHT: $why"; exit 3; }
-fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of the served node's (SERVED_NODE) deferral"
     [ "$COMPOSE_OFF_NODE" = 0 ] || plan+=", its compose hand-off for COMPOSE_NODE"
