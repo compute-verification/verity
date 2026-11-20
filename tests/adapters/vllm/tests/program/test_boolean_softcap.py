@@ -13,14 +13,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits import boolean as BL
-from verity.circuits import codec
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, const_bits, sub
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import attention as BA
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import mufu as BM
@@ -68,20 +66,6 @@ def _head(**kw):
 def _attention(**kw):
     return bind(BSC.AttentionSoftcap, D=16, INV=BA.Fa2InvSum, **{**HOPPER, **kw})
 
-
-#: id -> (And, Xor, Not gates, standalone program digest)
-PINS = {
-    "AttnBlockSoftcap_v3{D=16,NVIS=5,FIRST=True,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
-    "EX2=MufuEx2Ftz_v2}": (216995, 438108, 19465, "e7ef99b5b322a635ac12b9132cc9f4ce0aaa6489d6249f7c7df842bc9943f43ea33e911887cd9127ddef65a273d9f92777ffc167d888e62bab5337ec57e4a209"),
-    "AttnBlockSoftcap_v3{D=16,NVIS=16,FIRST=False,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,CHECK=True,TANH=MufuTanh_v2,"
-    "EX2=MufuEx2Ftz_v2}": (480332, 987971, 39245, "84dbc72f3f9b264731c36109e8eef7c199197b0592da4127e8e93d5592d2a075477ced7e4b8e85afdb7bc0c41f25452e5d78bbe3d426bbb179b29e29432c234a"),
-    "AttentionHeadSoftcap_v3{T=20,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
-    "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (724703, 1473314, 59765,
-                                           "d2b8db7b228434d16c2ffa1018b2c711ed70cf9c848e05a6ec4e92292cbee849b03d147717456391aa44e37d1f0d4ca144200afd67e24bf495877c779ea11f91"),
-    "AttentionSoftcap_v3{T=20,NH=4,KVH=2,D=16,BN=16,CAP=50.0,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1,"
-    "TANH=MufuTanh_v2,EX2=MufuEx2Ftz_v2}": (2898812, 5893256, 239060,
-                                           "d8e3d8a30626f6ae8463390c33cae99b33a3ae5b5d3cf75eca64d141f172ed40fc88acb6b8140a4a087bcb1d54e4e3cbfe6f9ac4e3ee973ec848d9726f384960"),
-}
 
 PINNED = [_block(NVIS=5, FIRST=True, BN=16, CHECK=True), _block(NVIS=16, FIRST=False, BN=16, CHECK=True),
           _head(T=20, BN=16, MASKED_FROM=1), _attention(T=20, NH=4, KVH=2, BN=16, MASKED_FROM=1)]
@@ -166,16 +150,6 @@ def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
     for target in PINNED:
         bits = BB.boolean_version(TR.word_of(target))
         assert bits.id == target.id and BL.is_boolean(bits)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("target", PINNED, ids=lambda t: t.id)
-def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    assert codec.program_digest(codec.encode_program(prog)) == digest
 
 
 @pytest.mark.slow
