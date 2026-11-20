@@ -100,7 +100,8 @@ that names any. Both are declared only where the circuit has some, so a record w
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
 unit: ``proof``, the partition into proof blocks (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
-the entries tile each template's units exactly once, a slot digit's radix is the class's S and every step is below its T).
+the entries tile each template's units exactly once, every slot is below the class's S and every step below its T; an
+entry with no slot digit holds units of no request, each in no slot's block).
 Which host runs which units is private, so the blocks state no server and the members are cut by no placement. Blocks
 name units, ports, steps and row patterns, never a value.
 
@@ -1449,8 +1450,10 @@ _ENTRY_FIELDS = ("template", "at", "radix", "axes", "step")
 class InferenceEntry:
     """Template ``template``'s units ``[at, at + prod(radix))``: unit ``at + i`` has ``i``'s digits in mixed radix ``radix``
     (the first the slowest, as a `Wire`'s), ``axes`` names each digit (`AXES`), and the unit's inference block is (``slot`` +
-    its slot digit, ``step`` + its step digit). One digit is the slot, at most one the step. A record carries ``slot`` only
-    where it isn't 0: an entry of a served window's circuit covers the slots that lower its units, which need not be all."""
+    its slot digit, ``step`` + its step digit). At most one digit is the slot, at most one the step. A record carries ``slot``
+    only where it isn't 0: an entry of a served window's circuit covers the slots that lower its units, which need not be
+    all. An entry with no slot digit holds units of no request (`request` False): each is in no slot's block, and its
+    ``slot`` is 0."""
     template: str
     at: int
     radix: tuple[int, ...]
@@ -1464,9 +1467,17 @@ class InferenceEntry:
         if (not isinstance(self.template, str) or not _ints(self.at, self.step, self.slot, *self.radix) or self.at < 0
                 or self.step < 0 or self.slot < 0
                 or not self.radix or min(self.radix) < 1 or len(self.axes) != len(self.radix)
-                or not all(a in AXES for a in self.axes) or self.axes.count("slot") != 1 or self.axes.count("step") > 1):
+                or not all(a in AXES for a in self.axes) or self.axes.count("slot") > 1 or self.axes.count("step") > 1):
             raise ValueError(f"inference entry {self.doc()}: a template, a first unit and a step, naturals, and one axis of "
-                             f"{AXES} a digit of radix 1 or more, one of them the slot and at most one the step")
+                             f"{AXES} a digit of radix 1 or more, at most one of them the slot and at most one the step")
+        if not self.request and self.slot:
+            raise ValueError(f"inference entry {self.doc()}: units of no request at slot {self.slot}: a unit of no request is "
+                             "in no request's block")
+
+    @property
+    def request(self) -> bool:
+        """Its units are requests' (a slot digit), not units of no request."""
+        return "slot" in self.axes
 
     @property
     def units(self) -> int:
@@ -1514,10 +1525,19 @@ class Blocks:
         if self.plan is not None and not (isinstance(self.plan, str) and _PLAN.fullmatch(self.plan)):
             raise ValueError(f"a plan's digest is SHA-256 or SHA-512 in hex, not {self.plan!r}")
 
-    @property
-    def uniform(self) -> bool:
-        """Every entry's slot digit is every slot: each slot lowers the same units, a class circuit's blocks."""
-        return all(e.slot == 0 and e.radix_of("slot") == self.slots for e in self.inference)
+    def per_slot(self, weight: Mapping[str, int]) -> tuple[list[int], int]:
+        """Each slot's block's sum of ``weight`` (by template) over its units, and the same over the units of no request,
+        which are in no slot's block. The work is per entry, never per unit."""
+        out, none = [0] * self.slots, 0
+        for e in self.inference:
+            w = weight[e.template]
+            if not e.request:
+                none += e.units * w
+                continue
+            r = e.radix_of("slot")
+            for s in range(e.slot, e.slot + r):
+                out[s] += e.units // r * w
+        return out, none
 
     def check(self, units: Mapping[str, int]) -> None:
         """Refuse (ValueError) entries that name no template of ``units`` (each template's unit count), don't tile each
@@ -1525,7 +1545,7 @@ class Blocks:
         unit. The work is per entry, never per unit."""
         by: dict[str, list[InferenceEntry]] = {}
         free = 0
-        for e in sorted(self.inference, key=lambda e: e.slot):
+        for e in sorted((e for e in self.inference if e.request), key=lambda e: e.slot):
             if e.slot > free:
                 break
             free = max(free, e.slot + e.radix_of("slot"))
@@ -1534,7 +1554,7 @@ class Blocks:
         for e in self.inference:
             if e.template not in units:
                 raise ValueError(f"inference entry {e.doc()}: names no template of the circuit")
-            if e.slot + e.radix_of("slot") > self.slots:
+            if e.request and e.slot + e.radix_of("slot") > self.slots:
                 raise ValueError(f"inference entry {e.doc()}: slots [{e.slot}, {e.slot + e.radix_of('slot')}), each below "
                                  f"the circuit's {self.slots}")
             if e.step + e.radix_of("step") > self.steps:
@@ -1564,7 +1584,7 @@ class Blocks:
 
     def slots_steps(self, template: str, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
         """Template ``template``'s units ``[lo, hi)`` (which `check`'s tiling covers): each one's inference block, its slot
-        and its step."""
+        (-1 for a unit of no request) and its step."""
         starts, es = self._by_template.get(template, ([], []))
         slot, step = np.empty(hi - lo, dtype=np.int64), np.empty(hi - lo, dtype=np.int64)
         k = max(bisect.bisect_right(starts, lo) - 1, 0)
@@ -1572,7 +1592,8 @@ class Blocks:
             e = es[k]
             a, b = max(lo, e.at), min(hi, e.at + e.units)
             i = np.arange(a - e.at, b - e.at, dtype=np.int64)
-            slot[a - lo:b - lo], step[a - lo:b - lo] = e.slot + e.digit("slot", i), e.step + e.digit("step", i)
+            slot[a - lo:b - lo] = e.slot + e.digit("slot", i) if e.request else -1
+            step[a - lo:b - lo] = e.step + e.digit("step", i)
             k += 1
         return slot, step
 
@@ -2814,6 +2835,9 @@ class Window:
                              "as a run")
         for key, got in (("step", step), ("slot", slot)):
             seen = np.unique(got[first:last + 1]).tolist()
+            if key == "slot" and key in label and -1 in seen:
+                raise ValueError(f"{what}: units of no request labelled slot {label[key]}: a unit of no request is in no "
+                                 "request's block")
             if key in label and seen != [label[key]]:
                 raise ValueError(f"{what}: its units are at {key} {seen}, not its label's {label[key]}")
 
