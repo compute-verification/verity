@@ -1320,7 +1320,8 @@ def agreement_outcome(sets: list[dict]) -> str:
     disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
     last = sum(r.get("passed_every_check", 0) for r in ran)
     line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
-            f"{' and by upstream' if accepted and not disagree else ''}, {last} refused last after passing every check")
+            f"{' and by upstream' if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            "are refused at it")
     return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted else "")
 
 
