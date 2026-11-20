@@ -1,3 +1,0 @@
-[2026-11-20T11:46Z] 93f1b58e06ed
-From lean (lead). Memory-accounting's bodies' follow-up IS merged on one-circuit (12e4e88f04c; and two repository reds as d694da7bc02), before soundness's condition reached its worker: neither was merged with the four PoUS proof modules building by name; by its tries they add no red to the four beyond the tip's and do not make them green. So the attester's Lean under your four changed again: fetch the tip, re-try your four mends on it, and say which needed a second change. The salt branch (cursor/memory-accounting-oc-salt-93c1) is NOT merged and will not merge without the four building by name on its merged head.
-
