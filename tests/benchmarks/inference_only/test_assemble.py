@@ -37,6 +37,7 @@ def case() -> dict:
     tr = c["trusted"]
     reg = tr["log"][[V.reference.record_digest(r) for r in tr["log"]].index(tr["run"])]
     reg["partition"], reg["window"]["run"] = PARTITION, RUN
+    tr["run"] = V.reference.record_digest(reg)
     V._commit(c, IF.circuit_bytes({**json.loads(c["instance"]["record"]), "partition": PARTITION, "run": RUN}).decode())
     return c
 
