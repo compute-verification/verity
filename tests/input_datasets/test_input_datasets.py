@@ -2,17 +2,13 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import tomllib
 from pathlib import Path
 
 import pytest
 
 import input_datasets as D
 
-ROOT = Path(__file__).resolve().parents[2]
-REMOTE = "llama32_1b_fixed_4_27_2"
 
 
 def _define(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **files: str) -> None:
@@ -96,28 +92,6 @@ def test_the_recorded_workload_reads_as_its_requests():
     assert ds.kind == "completion-requests"
     assert ds.identity == "recorded:sha256=ea93af44cb5d59bb7da850d088e0cc01ba8c11332282c4d4f06a08ce341a261a:json:requests"
     assert (record["request_id"], record["prompt_len"], len(record["prompt_token_ids"])) == ("728a5686-cfb6-58db-a1a8-170c12d608a6", 32, 32)
-
-
-@pytest.mark.parametrize("seed,count,lo,hi", [(None, None, None, None), (0, 8, 16, 27)])
-def test_the_generator_builds_the_bodies_serve_loads_fixed_load_sends(monkeypatch, seed, count, lo, hi):
-    """`serve_load.py --fixed`'s bodies, byte for byte, at the remote definition's parameters and at another seed, count
-    and prompt range, its /tokenize answered from the definition's token ids. Deleted with serve_load.py's generator."""
-    spec = importlib.util.spec_from_file_location("serve_load", ROOT / "adapters/vllm/tools/served_run/serve_load.py")
-    sl = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(sl)
-    g = tomllib.loads((D.DEFINITIONS / f"{REMOTE}.toml").read_text())["generated"]
-    p = {**g["parameters"], **({"count": count, "prompt_tokens": [lo, hi]} if seed is not None else {})}
-    seed = g["seed"] if seed is None else seed
-    bos = [p["heads"][0][0]]
-    answers = {"": bos, sl.CHAT_TAIL: bos + p["tail"], sl.VARIED_FILLER: bos + p["filler"],
-               **{sl.CHAT_HEAD + q: h for q, h in zip(sl.QUESTIONS, p["heads"], strict=True)}}
-    monkeypatch.setattr(sl, "tokenize", lambda port, model, text: answers[text])
-    want = [q["body"] for q in sl.fixed(0, p["model"], p["count"], window_steps=p["window_steps"],
-                                        prompt_tokens=tuple(p["prompt_tokens"]), seed=seed)]
-    got = D.GENERATORS[(g["generator"], g["version"])](seed, p)
-    assert [json.dumps(b) for b in got] == [json.dumps(b) for b in want]
-    if count is None:
-        assert got == list(D.open(REMOTE)) and {len(b["prompt"]) for b in got} == {27}
 
 
 def test_a_timed_view_pairs_each_record_with_its_time_and_is_timed_once(monkeypatch, tmp_path):

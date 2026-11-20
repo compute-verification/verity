@@ -64,7 +64,8 @@ VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
-    "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLC_CHALLENGER_GATE": "gate-command",
+    "H1_KEY_SHA512": KEY, "LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once",
+    "V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "POUW": "pearlplus", "PRODUCT": "onsite",
     "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B", "ROW_ID": "unsloth-llama-3-2-1b__bfloat16__s4",
     "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
@@ -143,11 +144,14 @@ def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(dem
 
 
 TIED = {"model": "unsloth/Llama-3.2-1B", "precision": "bfloat16", "slots": 4,
-        "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "window-steps": 2, "load": "fixed"}
+        "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "window-steps": 2, "dataset": "llama32_1b_fixed_4_27_2",
+        "timing": "at-once"}
+#: the input dataset's load, and the class the runner commits, the adapter's statement's (`verity_vllm.inputs.serves`)
 TIED_WORKLOAD = {"REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2",
-                 "LOAD": "fixed"}
+                 "LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once", "V3C_CLASS": "4,27,2",
+                 "CLASSES": "4,27,2"}
 #: the runner's variables only Pearl+'s retired tie set
-TIE_VARIABLES = {"V3C_CLASS", "CLASSES", "PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"}
+TIE_VARIABLES = {"PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"}
 
 
 def test_remote_and_onsite_full_have_their_workload_values_pearl_plus_untied_and_the_smaller_sets_keep_the_defaults():
@@ -446,7 +450,7 @@ def test_two_pieces_setting_different_classes_are_refused_by_name(monkeypatch):
     with pytest.raises(Refused) as e:
         T.variables(cfg, BINDINGS)
     assert e.value.name == "params" and e.value.detail == (
-        "V3C_CLASS is 4,27,2 in pearl-plus's piece and 8,32,4,4,16 in network-attester's: the runner commits one class, so "
+        "V3C_CLASS is 4,27,2 in served-window's piece and 8,32,4,4,16 in network-attester's: the runner commits one class, so "
         "give one of them the class or list one of them alone")
     monkeypatch.setitem(T.PIECES["network-attester"], T.WORKERS, dataclasses.replace(
         side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": "4,27,2"}))
@@ -747,7 +751,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 #: coreutils' env by path: agent VMs put a redacting `env` ahead of it on PATH (`tools/agent-guard/env_guard.py`)
 RUNNER = """mkdir -p "$OUT"
-/usr/bin/env | grep -E '^(REPO|REV|ROW_ID|SLOTS|LOAD|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
+/usr/bin/env | grep -E '^(REPO|REV|ROW_ID|SLOTS|LOAD|DATASET|TIMING|V3C_LAW|V3C_CLASS|CLASSES|POUS_CMD|POUS_ARGS|ONSITE_PIECES|BANDWIDTH_CMD|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z_]+|POUW|PRODUCT|PEARLPLUS_TIE|PEARLPLUS_TIE_UNIFORM|PEARLC_[A-Z_]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 

@@ -1423,7 +1423,8 @@ def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, A
     """The values a period's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
     of its table's parameter alone (``entries``, core's ``Registered.entry()`` by parameter, as the verifier pinned it):
     the root's and the domain id's 64 bytes as a `Digest` port's 32 words (`digest_words`) and 1 as one word, each
-    committed as ``registered_value.Registered`` under ``program`` (the period's partition digest) at its public salts
+    committed as ``registered_value.Registered`` under ``program`` (the period's program digest, `rows.Binding.program_digest`:
+    the string the verifier's `Supplied.root` salts and domains with, as `Window.give` does) at its public salts
     (``supplied_salts``), so the prover and the verifier make the same value and the prover chooses none of it. A history
     table is a parameter of its own, its entry the verifier's pin of its root (`verity.commitments.periods.history`). A
     table whose parameter has no entry has none."""
@@ -2603,7 +2604,7 @@ def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Ma
     if not reads:
         return {}
     held = {r["port"]: r for r in roots if r.get("port") in {x.param for x in runs}}
-    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.program_digest).items()}}
     out: dict[str, dict[str, Any]] = {}
     index = _ReadIndex(reads)
     for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
@@ -2850,11 +2851,11 @@ class Window:
 
     def supply(self) -> None:
         """Add its tables' supplied values (`supplied`) to ``registered``, from its tables' parameters' committed values (each
-        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's partition digest."""
+        with core's ``entry()``, a history table's `history.HistoryTable.entry`) under the period's program digest."""
         reg = dict(self.registered or {})
         tables = (self.circuit.registered or Registered({})).readable.values()
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
-        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest)}
+        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.program_digest)}
 
     def give(self, param: str, value: bytes) -> None:
         """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``value`` its function's value as

@@ -330,6 +330,125 @@ theorem buildNode_spec (fid : String) (k : ℕ) (form : Form) (callee : Defn) (a
     all_goals (rw [hR] at h; conv at h => lhs; whnf)
     all_goals exact absurd h (by intro h; injection h)
 
+/-- A batch node's axis entries as `buildNode` reads them: one per argument; an argument of entry `none` is passed whole as
+its parameter's type, and one mapped along `ax` is an Array of the node's length `n` along `ax` of its parameter's type. -/
+theorem buildNode_axes (fid : String) (k : ℕ) (callee : Defn) (args : Array Arg)
+    (axes : Array (Option ℕ)) (n nxs : ℕ) (out : Ty) (args' : Array Arg)
+    (h : buildNode fid k .batch callee args axes n nxs = .ok (out, args'))
+    (hdims : ∀ i < args.size, (args[i]!).dims = none) :
+    axes.size = args'.size ∧ ∀ i < args'.size,
+      (axes[i]? = some none → (args'[i]!).dims = none ∧ (args'[i]!).ty = (callee.params[i]!).2) ∧
+      ∀ ax, axes[i]? = some (some ax) →
+        (args'[i]!).ty.removeAxis ax = some (n, (callee.params[i]!).2) ∧ (args'[i]!).dims = (args'[i]!).ty.axisDims ax := by
+  unfold buildNode at h
+  dsimp only at h
+  split at h
+  · exact absurd h (by intro h; injection h)
+  split at h
+  · exact absurd h (by intro h; injection h)
+  rename_i hax hsz
+  have hax' : axes.size = args.size := by simpa using hax
+  have hsz' : callee.params.size = args.size := by simpa using hsz
+  obtain ⟨⟨L, O, sa, sx⟩, hloop, hrest⟩ := Walk.except_bind_ok h
+  dsimp only at hrest
+  split at hrest
+  · exact absurd hrest (by intro h; injection h)
+  rename_i hL1
+  split at hrest
+  · exact absurd hrest (by intro h; injection h)
+  rename_i hL2
+  simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hrest
+  obtain ⟨rfl, rfl⟩ := hrest
+  rw [← Array.forIn_toList] at hloop
+  have hl := forIn_except_inv _ (fun _ => False) callee.params.toList
+    (fun i (st : Array ℕ × Array Arg × Subarray Arg × Subarray (Option ℕ)) =>
+      st.2.2.1.array = args ∧ st.2.2.1.start = i ∧ st.2.2.1.stop = args.size ∧
+      st.2.2.2.array = axes ∧ st.2.2.2.start = i ∧ st.2.2.2.stop = axes.size ∧ st.2.1.size = i ∧
+      ∀ j < i, (st.2.1[j]!).ty = (args[j]!).ty ∧ (st.2.1[j]!).seq = (args[j]!).seq ∧
+        ((axes[j]? = some none ∧ (st.2.1[j]!).dims = none ∧ (args[j]!).ty = (callee.params[j]!).2) ∨
+         ∃ ax mt ln, axes[j]? = some (some ax) ∧ (args[j]!).ty.removeAxis ax = some (ln, mt) ∧ mt = (callee.params[j]!).2 ∧
+           (st.2.1[j]!).dims = (args[j]!).ty.axisDims ax ∧ ln ∈ st.1)) _ _
+    (by
+      obtain ⟨h1, h2, h3⟩ := toStream_array args
+      obtain ⟨h4, h5, h6⟩ := toStream_array axes
+      exact ⟨h1, h2, h3, h4, h5, h6, rfl, fun j hj => by omega⟩)
+    (by
+      rintro i hi ⟨L, O, sa, sx⟩ t hI hf
+      dsimp only at hI ⊢
+      obtain ⟨ha, hst, hsp, hx, hxst, hxsp, hO, hall⟩ := hI
+      simp only [Array.length_toList] at hi
+      obtain ⟨sx', hnx, hx', hxst', hxsp'⟩ := next_at sx axes i hx hxst (by omega)
+      obtain ⟨sa', hna, ha', hst', hsp'⟩ := next_at sa args i ha hst (by omega)
+      dsimp only at hf
+      simp only [hnx, hna] at hf
+      have hpi : (callee.params.toList[i]'(by simpa using hi)) = callee.params[i]! := by
+        rw [getElem!_pos callee.params i (by omega), Array.getElem_toList]
+      rw [hpi] at hf
+      have hxi : axes[i]? = some axes[i]! := by
+        rw [getElem!_pos axes i (by omega)]; exact Array.getElem?_eq_getElem (by omega)
+      have hall' : ∀ j < i, ∀ L' : Array ℕ, (∀ x, x ∈ L → x ∈ L') → ∀ (O' : Array Arg), O'.size = i + 1 →
+          (∀ j < i, O'[j]! = O[j]!) →
+          (O'[j]!).ty = (args[j]!).ty ∧ (O'[j]!).seq = (args[j]!).seq ∧
+          ((axes[j]? = some none ∧ (O'[j]!).dims = none ∧ (args[j]!).ty = (callee.params[j]!).2) ∨
+           ∃ ax mt ln, axes[j]? = some (some ax) ∧ (args[j]!).ty.removeAxis ax = some (ln, mt) ∧ mt = (callee.params[j]!).2 ∧
+             (O'[j]!).dims = (args[j]!).ty.axisDims ax ∧ ln ∈ L') := by
+        intro j hj L' hL' O' _ hO'
+        rw [hO' j hj]
+        obtain ⟨h1, h2, h3⟩ := hall j hj
+        refine ⟨h1, h2, ?_⟩
+        rcases h3 with h3 | ⟨ax, mt, ln, h0, h4, h5, h6, h7⟩
+        · exact Or.inl h3
+        · exact Or.inr ⟨ax, mt, ln, h0, h4, h5, h6, hL' _ h7⟩
+      split at hf
+      · rename_i hnone
+        split at hf
+        · exact absurd hf (by intro h; injection h)
+        rename_i hc
+        injection hf with hf; subst hf
+        refine ⟨ha', hst', by rw [hsp', hsp], hx', hxst', by rw [hxsp', hxsp], by simp [hO], fun j hj => ?_⟩
+        rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
+        · exact hall' j hj L (fun x hx => hx) _ (by simp [hO])
+            (fun j hj => getElem!_push_lt _ _ (by omega)) 
+        · rw [← hO, getElem!_push_eq, hO]
+          exact ⟨rfl, rfl, Or.inl ⟨by rw [hxi, hnone], hdims j (by omega), ty_beq (by simpa using hc)⟩⟩
+      · rename_i ax hsome
+        split at hf
+        · rename_i ln mt hrm
+          split at hf
+          · exact absurd hf (by intro h; injection h)
+          rename_i hc
+          have hmt : mt = (callee.params[i]!).2 := ty_beq (by simpa using hc)
+          split at hf
+          all_goals
+            injection hf with hf; subst hf
+            refine ⟨ha', hst', by rw [hsp', hsp], hx', hxst', by rw [hxsp', hxsp], by simp [hO], fun j hj => ?_⟩
+            rcases Nat.lt_succ_iff_lt_or_eq.1 hj with hj | rfl
+            · exact hall' j hj _ (fun x hx => by simp [hx]) _ (by simp [hO])
+                (fun j hj => getElem!_push_lt _ _ (by omega))
+            · rw [← hO, getElem!_push_eq, hO]
+              refine ⟨rfl, rfl, Or.inr ⟨ax, mt, ln, by rw [hxi, hsome], hrm, hmt, rfl, ?_⟩⟩
+              first
+                | exact Array.mem_push.2 (Or.inr rfl)
+                | (rename_i hcon; simpa using hcon)
+        · exact absurd hf (by intro h; injection h)) hloop
+  simp only [Array.length_toList] at hl
+  rcases hl with ⟨-, -, -, -, -, -, hO, hl⟩ | hl
+  · refine ⟨by omega, fun i hi => ?_⟩
+    obtain ⟨h1, -, h3⟩ := hl i (by omega)
+    refine ⟨fun hx => ?_, fun ax' hx => ?_⟩
+    · rcases h3 with ⟨-, h3, h4⟩ | ⟨ax, mt, ln, h0, -⟩
+      · exact ⟨h3, by rw [h1, h4]⟩
+      · rw [hx] at h0; cases h0
+    · rcases h3 with ⟨h0, -⟩ | ⟨ax, mt, ln, h0, h4, h5, h6, h7⟩
+      · rw [hx] at h0; cases h0
+      · rw [hx] at h0
+        cases h0
+        have := len_eq L n ln h7 hL1 hL2
+        subst this
+        exact ⟨by rw [h1, h4, h5], by rw [h1]; exact h6⟩
+  · exact hl.elim
+
+
 /-- What the decoder establishes of a Definition a node may call: a primitive is one gate with one output leaf and an empty
 body, a composite's body has its parameters and returns as many references as its type has leaves. -/
 def CalleeOk (c : Defn) : Prop :=
@@ -340,12 +459,21 @@ def CalleeOk (c : Defn) : Prop :=
 def DimsOk (c : Defn) (nd : Node) : Prop :=
   ∀ i < nd.args.size, ∀ e L : ℕ, (nd.args[i]!).dims = some (e, L) → L = 0 → (c.params[i]!).2.leaves = 0
 
+/-- A batch node's axis entries (`buildNode_axes`): one per argument; an argument of entry `none` is passed whole as its
+parameter's type, and one mapped along `ax` is an Array of the node's length along `ax` of its parameter's type. -/
+def AxesOk (c : Defn) (nd : Node) : Prop :=
+  nd.form = .batch → nd.axes.size = nd.args.size ∧ ∀ i < nd.args.size,
+    (nd.axes[i]? = some none → (nd.args[i]!).dims = none ∧ (nd.args[i]!).ty = (c.params[i]!).2) ∧
+    ∀ ax, nd.axes[i]? = some (some ax) →
+      (nd.args[i]!).ty.removeAxis ax = some (nd.n, (c.params[i]!).2) ∧ (nd.args[i]!).dims = (nd.args[i]!).ty.axisDims ax
+
 /-- What the decoder establishes of a node calling `c`: one argument per parameter, each as many references as its type
-has leaves, a primitive node calling a primitive and a call or scan a composite, `buildNode`'s `Shape`, and `DimsOk`. -/
+has leaves, a primitive node calling a primitive and a call or scan a composite, `buildNode`'s `Shape`, `DimsOk` and
+`AxesOk`. -/
 def NodeOk (c : Defn) (nd : Node) : Prop :=
   nd.args.size = c.params.size ∧ (∀ i < nd.args.size, (nd.args[i]!).seq.count = (nd.args[i]!).ty.leaves) ∧
   (nd.form = .prim → c.prim = true) ∧ (nd.form = .call ∨ nd.form = .scan → c.prim = false) ∧
-  Shape c nd.form nd.args nd.out nd.n nd.nxs ∧ DimsOk c nd
+  Shape c nd.form nd.args nd.out nd.n nd.nxs ∧ DimsOk c nd ∧ AxesOk c nd
 
 theorem beq_prim_batch : (Form.prim == Form.batch) = false := rfl
 theorem beq_call_batch : (Form.call == Form.batch) = false := rfl
