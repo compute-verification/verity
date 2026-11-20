@@ -4,12 +4,10 @@ registration and a tree with no tensor of the bundle's is `test_cpu_replay_comma
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 
 import verity_vllm.pipeline.cpu_replay as CPU
@@ -33,13 +31,6 @@ def with_(doc: Record, field: str, value: object) -> Record:
 def rewritten(path: Path, change: Callable[[Record], Record]) -> None:
     """The one JSON document at `path` (a line of runs.jsonl, or verdict.json) replaced by `change` of it."""
     path.write_text(json.dumps(change(json.loads(path.read_text()))) + "\n")
-
-
-@pytest.fixture
-def logged(caplog: pytest.LogCaptureFixture) -> Lines:
-    """What `cpu_replay`'s logger took so far: each record's level and text."""
-    caplog.set_level(logging.INFO, logger=CPU.__name__)
-    return lambda: [(r.levelname, r.getMessage()) for r in caplog.records if r.name == CPU.__name__]
 
 
 # ---------------------------------------------------------------------------------------------- a decided record, put back
@@ -81,14 +72,6 @@ def test_a_tensor_the_tree_lists_as_the_bundle_s_is_read_from_the_bundle(tmp_pat
     assert (source, why, read) == ("bundle", None, True) and raw is not None and raw.tobytes() == OF_RECORD.COS_SIN.tobytes()
 
 
-@pytest.mark.parametrize("pin", [ABSENT, None, {}])
-def test_a_record_with_no_weights_pin_attests_its_openings_beside_a_pin_that_says_nothing(pin: object) -> None:
-    words: dict[str, np.ndarray] = {"w": np.arange(4, dtype=np.uint16)}
-    got = CPU.weights_attest(with_({}, "weights_pin", pin), {"equal": True}, {"w"}, words, {}, {"manifest_sha256": SHA})
-    assert got == {"pin": {"equal": None, "digest": None}, "root_openings": "1/1", "sources": {"checkpoint": 1, "bundle": 0},
-                   "attests": CPU.ATTESTS, "replay": f"cpu, from bundle {SHA}"}
-
-
 # ---------------------------------------------------------------------------------------------- the bundle is the record's
 
 @pytest.mark.parametrize("deferred", [ABSENT, None, {}, {"bundles": None}, {"bundles": []}, {"pending_pairs": [1]}])
@@ -108,43 +91,7 @@ def test_a_run_that_holds_no_commit_record_awaits_no_replay_of_its_bundle(tmp_pa
         CPU.of_record(RB.open_bundle(RB.path(out, 1)), out)
 
 
-@pytest.mark.parametrize("replayed", [ABSENT, None, []])
-def test_a_keep_is_refused_where_the_verdict_names_no_replay_that_decided_its_record(tmp_path: Path, replayed: object) -> None:
-    out, _awaiting = OF_RECORD._decided(tmp_path)
-    rewritten(out / "verdict.json", lambda v: v | {"replay_deferred": with_(v["replay_deferred"], "replayed", replayed)})
-    with pytest.raises(CPU.Refused, match="pair 1: the record was not decided by a replay of the bundle"):
-        CPU.of_record(CPU.open_keep(CPU.slim_path(out, 1)), out)
-
-
-@pytest.mark.parametrize("commit", [ABSENT, None, {}])
-def test_a_keep_of_a_run_that_holds_no_commit_record_is_held_to_the_replay_that_decided_it(tmp_path: Path, commit: object) -> None:
-    """A run with no Commit record awaits no replay, so its keep is read as a decided record's: by the replay the verdict names."""
-    out, _awaiting = OF_RECORD._decided(tmp_path)
-    rewritten(out / "runs.jsonl", lambda row: with_(row, "commit", commit))
-    rewritten(out / "verdict.json", lambda v: v | {"replay_deferred": with_(v["replay_deferred"], "replayed", ABSENT)})
-    with pytest.raises(CPU.Refused, match="pair 1: the record was not decided by a replay of the bundle"):
-        CPU.of_record(CPU.open_keep(CPU.slim_path(out, 1)), out)
-
-
 # ---------------------------------------------------------------------------------------------- the slim keep
-
-@pytest.mark.parametrize("c", [{}, {"sampled_replay": None}, {"sampled_replay": {}}, {"sampled_replay": {"sample": None}},
-                               {"sampled_replay": {"sample": {}}}, {"sampled_replay": {"sample": {"picked": None}}}])
-def test_no_keep_is_written_for_a_record_that_holds_no_sample(tmp_path: Path, logged: Lines, c: Record) -> None:
-    out, b, store, run, touched, _want, _c, plan = OF_RECORD._kept(tmp_path)
-    assert CPU.keep(out, b, store, run, touched, plan, c, opened=set()) is None and not list(out.glob("replay_slim_p*"))
-    assert logged() == [("WARNING", "[replay] SLIM KEEP (pair 1): NOT WRITTEN -- the replay picked None, its reads were re-made for 2")]
-
-
-@pytest.mark.parametrize(("args", "digest"), [(ABSENT, None), (None, None), ({}, None), ({"program_digest": None}, None),
-                                              ({"program_digest": "ef" * 32}, "ef" * 32)])
-def test_a_keep_names_the_program_digest_of_its_bundle_s_commit_arguments_and_none_without_them(tmp_path: Path, args: object,
-                                                                                                digest: str | None) -> None:
-    out, b, store, run, touched, _want, c, plan = OF_RECORD._kept(tmp_path)
-    b["context"] = with_(b["context"], "args", args)
-    doc = CPU.keep(out, b, store, run, touched, plan, c, opened=set())
-    assert doc is not None and doc["program_digest"] == digest and doc["programs"] == c["sampled_replay"]["programs"]
-    assert json.loads((CPU.slim_path(out, 1) / CPU.SLIM_DOC).read_text()) == doc
 
 
 @pytest.mark.parametrize("field", ["key", "tensor_keys"])

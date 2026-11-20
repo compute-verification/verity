@@ -481,6 +481,7 @@ list names whose body is not there yet.
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
 | `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.session.message/v1` | commitment | supplied | | 512 |
 | `pous.setup.salt/v1` | coin | supplied | | 192 |
 | `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
 | `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
@@ -491,20 +492,29 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-The storage session's three functions read the session in two entries by when each of its parts exists. The verifier holds,
+The storage session's four functions read the session in two entries by when each of its parts exists. The verifier holds,
 by function name, what exists before the first coin as a commitment (`commitments`: JSON `{commitment, key, place}`: the
-header's fields, which hold the coin key by its hash, the registered LMS public key's hex and the place the verifier
-registered it at), and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin
-and `{ended, rounds}` for the header). A commitment is registered before any coin, so the order rule counts `coins` alone as
-coins and holds each commitment's place before the place of every coin read beside it. `pous.session.round_coin/v1` is
-`u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
-commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused), with the
-coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended complete with all `k`
-rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no statement;
-`pous.session.context/v1` is the 106 bytes the signature's message hashes before the record. The session id is 32 bytes.
-Each number they read is a canonical natural (no sign, fraction, exponent or leading zero) within its field's width. Each
-refuses, by the name "no statement", what the held commitment or coin lacks or the arguments don't fit. Nothing reads these
-bodies through the door yet.
+header's fields, which hold the coin key by its hash, the LMS public key's hex and the place the verifier registered it at),
+and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin, `{ended, rounds}`
+for the header and `{message, signature}` for the message). A commitment is registered before any coin, so the order rule
+counts `coins` alone as coins and holds each commitment's place before the place of every coin read beside it.
+`pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at
+an index below the commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is
+refused), with the coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended
+complete with all `k` rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no
+statement; `pous.session.context/v1` is the 106 bytes the signature's message hashes before the record, of a key whose
+SHA-512 is one the verifier's `attester_keys` pin (the configuration's pins of the memory attester; no body takes the key
+the session's own object names); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only when the
+coin's signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
+signatures the attester has made. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
+fraction, exponent or leading zero) within its field's width. Each refuses, by the name "no statement", what the held
+commitment or coin lacks or the arguments don't fit. Nothing reads these bodies through the door yet.
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the

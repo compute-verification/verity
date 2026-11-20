@@ -167,8 +167,6 @@ WRITERS = (
         ("qword_vectors.json", "test_qword_vectors.py"),
         ("template_instance_vectors.json", "test_template_instance.py"),
     )),
-    Writer("tests/tools/verity/circuit_check/fixtures/split/prims_serve.json",
-           "tests/tools/verity/circuit_check/test_split_prims_serve.py"),
     Writer(POUW_PROVER_TESTS + "fixtures/pearl_plus_public_row.json", POUW_PROVER_TESTS + "test_pearl_plus_public_row.py"),
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)

@@ -68,7 +68,7 @@ untraced = [
 # served_y_device); hidden_zk's stage.py imports verity.protocols.experimental's package files above the modules named below.
 # test_salt_bind's served window reads vLLM's registered Definitions (verity_vllm.definitions) whole.
 inputs_only = true
-inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
+inputs = ["verity/lean_process.py", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/network/prover",
           "verity/protocols/resource_accounting/network",

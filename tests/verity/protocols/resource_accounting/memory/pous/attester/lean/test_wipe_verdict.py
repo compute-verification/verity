@@ -195,7 +195,7 @@ def test_the_format_is_v2(server):
         assert mark == s.signed.start_mark.hex() and len(mark) in (0, 128)
         assert rec["commitment"]["clock"] == rec["signed"]["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
         assert sorted(rec["signed"]) == ["batches", "commitment", "ended", "fill_end_ns", "fill_start_ns", "public_key",
-                                         "scheme", "signature", "start_mark"]
+                                         "salt", "scheme", "signature", "start_mark"]
         assert D.replay(port_, rec, server)[0] == "output"
         v1 = {"protocol": "verity-pous/streamed-wipe/v1"}
         unmarked = {k: v for k, v in rec["signed"].items() if k != "start_mark"}

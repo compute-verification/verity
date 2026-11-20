@@ -48,7 +48,8 @@ def Batch.toJson (r : Batch) : Json :=
     ("receipt_ns", intJ r.receiptNs), ("wrong", intJ r.wrong), ("digest", hexJ r.digest)]
 
 def Signed.toJson (s : Signed) : Json :=
-  Json.mkObj [("commitment", s.commitment.toJson), ("ended", .str s.ended), ("start_mark", hexJ s.startMark),
+  Json.mkObj [("commitment", s.commitment.toJson), ("salt", hexJ s.salt), ("ended", .str s.ended),
+    ("start_mark", hexJ s.startMark),
     ("fill_start_ns", intJ s.fillStartNs), ("fill_end_ns", intJ s.fillEndNs),
     ("batches", .arr (s.batches.map Batch.toJson)),
     ("scheme", .str s.scheme), ("public_key", hexJ s.publicKey), ("signature", hexJ s.signature)]
@@ -78,7 +79,8 @@ def Signed.ofJson (j : Json) : V Signed := do
   let startMark ← hexField j "start_mark" ctx
   if startMark.size != 0 && startMark.size != MARK_BYTES then
     throw s!"{ctx}.start_mark: a start mark is {2 * MARK_BYTES} lowercase hex digits, or empty"
-  pure { commitment := ← Commitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx, startMark,
+  pure { commitment := ← Commitment.ofJson (← J.get j "commitment" ctx), salt := ← hexField j "salt" ctx,
+         ended := ← J.str j "ended" ctx, startMark,
          fillStartNs := ← intField j "fill_start_ns" ctx, fillEndNs := ← intField j "fill_end_ns" ctx,
          batches := ← objs j "batches" ctx Batch.ofJson,
          scheme := ← J.str j "scheme" ctx, publicKey := ← hexField j "public_key" ctx,

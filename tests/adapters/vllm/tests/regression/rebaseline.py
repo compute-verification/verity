@@ -1,12 +1,11 @@
-"""Re-baseline the reference regression on the integration's (v2) outputs -- and keep the historical comparison runnable.
+"""Re-baseline the reference regression on the integration's (v2) outputs.
 
     cd adapters/vllm
-    python -m tests.regression.rebaseline run   --record DIR [--oracle expected|frozen] [--tier T0,T1,T2] [-- <pytest args>]
     python -m tests.regression.rebaseline table --record DIR                      # row x check -> PASS (oracle) | PASS by decision | FAIL
     python -m tests.regression.rebaseline write --record DIR --commit SHA --branch B --release R [--run-id ID ...] [--force] [--dry-run]
 
-`run` is `pytest tests/regression -m regression` with `VERITY_REGRESSION=1`, `VERITY_REGRESSION_RECORD_ACTUAL=DIR` (every check's
-`{expected, actual, problems, matched}` lands in `DIR/<row>/<check>.json`, `resolver.record_result`) and `VERITY_REGRESSION_ORACLE`:
+A record DIR holds each check's result document `{expected, actual, problems, matched}` at `DIR/<row>/<check>.json`, under the
+oracle (`VERITY_REGRESSION_ORACLE`) it was produced with:
 
     expected  (default)  the contract is `expected/<row>.json` -- after `write`, v2's own outputs; a difference is a regression of v2
     frozen               the contract is lifted from the R2 frozen v1 records (`check.expected(row)`); the labelled decisions of
@@ -25,8 +24,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,22 +33,6 @@ from .lift_expected import dumps_expected
 
 VOLATILE = ("source", "sanctioned_by", "decision_status")      # bookkeeping `actual` carries, never part of a contract
 BLOB_LIMIT = 5 * 1024 * 1024
-
-
-# ---- run ---------------------------------------------------------------------------------------------------------------------------------
-
-def run(a, extra: list[str]) -> int:
-    env = dict(os.environ)
-    env["VERITY_REGRESSION"] = "1"
-    env[resolver.RECORD_ACTUAL_ENV] = str(Path(a.record).resolve())
-    env[resolver.ORACLE_ENV] = a.oracle
-    if a.tier:
-        env["VERITY_REGRESSION_TIERS"] = a.tier
-    Path(a.record).mkdir(parents=True, exist_ok=True)
-    argv = [sys.executable, "-m", "pytest", str(resolver.HERE), "-m", "regression", "-q", "-p", "no:cacheprovider",
-            "--junit-xml", str(Path(a.record) / "junit.xml"), *extra]
-    print("$ " + " ".join(argv), flush=True)
-    return subprocess.call(argv, cwd=str(resolver.TESTS_ROOT), env=env)
 
 
 # ---- the recorded results ----------------------------------------------------------------------------------------------------------------
@@ -188,10 +169,6 @@ def write(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run")
-    r.add_argument("--record", required=True)
-    r.add_argument("--oracle", choices=resolver.ORACLES, default="expected")
-    r.add_argument("--tier", default=None, help="VERITY_REGRESSION_TIERS, e.g. T0,T1,T2")
     t = sub.add_parser("table")
     t.add_argument("--record", required=True)
     w = sub.add_parser("write")
@@ -202,14 +179,7 @@ def main(argv=None) -> int:
     w.add_argument("--run-id", action="append", default=[], help="research run / attempt ids of the recorded runs")
     w.add_argument("--force", action="store_true")
     w.add_argument("--dry-run", action="store_true")
-    argv = list(sys.argv[1:] if argv is None else argv)
-    extra: list[str] = []
-    if "--" in argv:
-        i = argv.index("--")
-        argv, extra = argv[:i], argv[i + 1:]
-    a = ap.parse_args(argv)
-    if a.cmd == "run":
-        return run(a, extra)
+    a = ap.parse_args(sys.argv[1:] if argv is None else argv)
     if a.cmd == "table":
         return table(a)
     return write(a)

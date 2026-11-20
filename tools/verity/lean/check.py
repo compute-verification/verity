@@ -5851,12 +5851,14 @@ class Sealed:
         lakefiles the dependency scans read, and the search path mapped to the copies.  The seeds are the package's modules
         under the lock's ``roots`` that are not under an ``exempt`` prefix, the set the build builds and `facts_of` reads:
         an exempt module (a scratch file, a `runs` test) is not built, so seeding it would send `Graph.lean` after an
-        `.olean` that is not there.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
+        `.olean` that is not there.  A root that is itself a module is always a seed, even under an ``exempt`` prefix (an
+        exempt `X` beside a root `X.A`), since `Facts.lean` imports every root by name.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
         builds, since it reads only paths a dependent cannot reach once the first `.olean` is copied: the caller takes it
         before the package's build is announced."""
         self.dir.mkdir(parents=True, exist_ok=True)
         lib = self.pkg / ".lake" / "build" / "lib" / "lean"
-        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m) and not under(exempt, m))
+        modules = lean_modules(self.pkg)
+        seeds = sorted({m for m in modules if under(roots, m) and not under(exempt, m)} | {r for r in roots if r in modules})
         if missing := [m for m in seeds if not (lib / Path(*m.split(".")).with_suffix(".olean")).is_file()]:
             it = "it" if len(missing) == 1 else "them"
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "

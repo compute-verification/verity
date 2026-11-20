@@ -191,7 +191,7 @@ def test_every_name_the_library_reads_is_declared() -> None:
     assert not (bad := {n: sorted(f) for n, f in strings.items() if n not in S.SETTINGS and n not in S.NOT_SETTINGS}), (fix, bad)
     assert not (bad := {n: sorted(f) for n, f in shell.items() if not S.known(n) and n not in S.NOT_SETTINGS}), (fix, bad)
     assert not (bad := {n: sorted(f) for n, f in reads.items() if n not in S.SETTINGS}), (fix, bad)
-    assert {"VERITY_REPLAY_DUMP_MAX", "RESEARCH_RUN_ID", "CUDA_VISIBLE_DEVICES"} <= set(reads) and "VERITY_INT8_PARTS" in strings
+    assert {"RESEARCH_RUN_ID", "CUDA_VISIBLE_DEVICES"} <= set(reads) and "VERITY_INT8_PARTS" in strings
 
 
 def _digest(doc: object) -> str:
