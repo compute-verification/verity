@@ -1661,11 +1661,10 @@ def salt_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session:
 def salt_of_record(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any,
                    requests_root: Any, opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """`salt`'s verdict of record: the Lean `PouwCheck.saltCheck`'s (`verifier.of_record`, which checks the challenger's
-    signatures itself), with `salt_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    python = salt_twin(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
+    signatures itself); `salt_twin` is its Python twin, for the difftest."""
     got = V.of_record("salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
                                "session": session, "weights": weights_root, "requests": requests_root,
-                               "opening": opening}, None if python is None else {"refused": list(python)})
+                               "opening": opening})
     return None if got is None else tuple(got["refused"])
 
 
@@ -1712,11 +1711,9 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
               ) -> tuple[bytes | None, tuple[str, str] | None]:
     """A live Pearl-C pass's salt of record and None, or None and the refusal: the Lean `PouwCheck.liveSaltCheck`'s
     (`verifier.of_record` on ``live-salt``, which checks the challenger's signatures itself), with `live_salt_twin` its
-    Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    salt, why = live_salt_twin(key, ledger, pins, main, session, manifest, verify)
+    Python twin, for the difftest."""
     got = V.of_record("live-salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "session": session,
-                                    "manifest": manifest},
-                      {"refused": list(why)} if why is not None else {"salt": salt.hex()})
+                                    "manifest": manifest})
     if "salt" in got:
         return bytes.fromhex(got["salt"]), None
     return None, tuple(got["refused"])
@@ -1726,11 +1723,9 @@ def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
            verify: Ch.Verify) -> tuple[str, str] | None:
     """A live execution phase's round coins' verdict of record, None or the refusal: the Lean `PouwCheck.roundsCheck`'s
     (`verifier.of_record` on ``rounds``, which checks the challenger's signatures itself), with `rounds_twin` its Python
-    twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    python = rounds_twin(key, ledger, pins, main, window, session, roots, openings, verify)
+    twin, for the difftest."""
     got = V.of_record("rounds", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
-                                 "session": session, "roots": roots, "openings": openings},
-                      None if python is None else {"refused": list(python)})
+                                 "session": session, "roots": roots, "openings": openings})
     return None if got is None else tuple(got["refused"])
 
 
@@ -1772,15 +1767,14 @@ def case_twin(j: Any) -> dict:
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`) on the case of these
-    bytes, with `answer_twin` its twin: a disagreement is a rejection."""
-    return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b),
-                             answer_twin(params_b, commitment_b, evidence_b))
+    bytes; `answer_twin` is its twin, for the difftest."""
+    return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b), ID)
 
 
 def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`),
-    with `case_twin` its twin: a disagreement is a rejection."""
-    return V.serve_of_record(EXE, j, case_twin(j))
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`);
+    `case_twin` is its twin, for the difftest."""
+    return V.serve_of_record(EXE, j, ID)
 
 
 def serve_case(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:

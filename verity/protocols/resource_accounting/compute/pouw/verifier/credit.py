@@ -8,8 +8,8 @@ the Lean decides which statements the verifier runs on, with which inputs, and w
 its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
 outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
 (`lean/check/tests/test_live_verified_difftest.py`). And so are the verdicts `window` and `period_credit` return: the Lean
-`Credit.executionPhase`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), the Python beside
-them as the twin they are held to, and a disagreement between the two is a refusal (``verifier.DISAGREE``).
+`Credit.executionPhase`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), with no
+Python answer beside them; where the Lean gives none the refusal is ``verifier.NO_ANSWER``.
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
@@ -1299,11 +1299,9 @@ def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: 
 def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
           ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The sampled proof blocks of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
-    ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
+    ``drawn``); `drawn_twin` is its Python twin, for the difftest."""
     said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,
-                                 "layout": layout, "k": k},
-                       {"refused": list(why)} if why is not None else {"drawn": got})
+                                 "layout": layout, "k": k})
     if "drawn" in said:
         return said["drawn"], None
     return None, tuple(said["refused"])
@@ -2507,22 +2505,22 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     the Lean's when `verifier.RECORD_VERDICT` is ``"lean"`` (`_lean_verified`, `_lean_live_verified`). `run` is the
     verifier (`proofs.verify`), the verifier's own, never the evidence's.
 
-    So is the window's verdict (`_of_record`): the Lean `PouwVerifier.Credit.executionPhase`'s on the outcomes those runs gave, with
-    `_window` its Python twin. A refusal the runs made themselves stands as theirs, and so does the refusal of live
-    evidence not in the statements' form (`LIVE_STATEMENTS_FORM`), which the Lean, reading outcomes, never sees.
+    So is the window's verdict (`_of_record`): the Lean `PouwVerifier.Credit.executionPhase`'s on the outcomes those runs
+    gave. `_window` drives the runs (which blocks and rounds, in which order), and its own verdict is the difftest's,
+    never the record's. A refusal the runs made themselves stands as theirs, and so does the refusal of live evidence not
+    in the statements' form (`LIVE_STATEMENTS_FORM`), which the Lean, reading outcomes, never sees.
 
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
     kept = _Outcomes(_runner(statements, circuit_files, entries, window, salt, run),
                      _live_runner(circuit_files, entries, run))
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, kept.proved, live, kept.lived, LIVE_STATEMENTS, k, rows, verify)
-    python = (None, why) if got is None else (got[0], None)
     if kept.refused is not None or not _live_formed(live):
-        return python
+        return (None, why) if got is None else (got[0], None)
     return _of_record("window", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
                                  "session": session, "salt": salt, "calls": calls, "served": served, "commit": commit,
                                  "rounds": rounds, "draw": draw, "descriptor": descriptor, "entries": entries,
-                                 "proofs": kept.proofs, "live": kept.live_of(live), "k": k, "rows": rows}, python)
+                                 "proofs": kept.proofs, "live": kept.live_of(live), "k": k, "rows": rows})
 
 
 class _Outcomes:
@@ -2563,11 +2561,10 @@ def _live_formed(live: Any) -> bool:
             and _HEX.fullmatch(live["descriptor"]) is not None)
 
 
-def _of_record(fn: str, value: dict, python: tuple[Any, tuple[str, str] | None]
-               ) -> tuple[Any, tuple[str, str] | None]:
+def _of_record(fn: str, value: dict) -> tuple[Any, tuple[str, str] | None]:
     """`verifier.of_record`'s answer to `fn` (``window`` or ``period``, ``{"credited": …}`` or ``{"refused": […]}``)
-    on `value`, `python` its Python twin's, as credit's ``(credit, refusal)``."""
-    got = V.of_record(fn, value, {"credited": python[0]} if python[1] is None else {"refused": list(python[1])})
+    on `value`, as credit's ``(credit, refusal)``."""
+    got = V.of_record(fn, value)
     return (got["credited"], None) if "credited" in got else (None, tuple(got["refused"]))
 
 
@@ -2989,20 +2986,16 @@ def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name
 
 def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """The verdict of record on a credit period's presented roots, (code, why) or None: the Lean `Credit.period`'s
-    (`verifier.of_record` on ``period-roots``), with `period_twin` its Python twin; a disagreement is the refusal
-    ``verifier.DISAGREE``."""
-    why = period_twin(key, ledger, name, roots, verify)
-    said = V.of_record("period-roots", {"key": key, "ledger": ledger, "name": name, "roots": roots},
-                       None if why is None else {"refused": list(why)})
+    (`verifier.of_record` on ``period-roots``); `period_twin` is its Python twin, for the difftest."""
+    said = V.of_record("period-roots", {"key": key, "ledger": ledger, "name": name, "roots": roots})
     return None if said is None else tuple(said["refused"])
 
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
     """The verdict of record on passes credited together, (code, why) or None: Pearl+'s Lean
     `PouwCheck.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
-    with `passes_distinct_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    why = passes_distinct_twin(passes)
-    said = V.of_record("passes-distinct", {"passes": passes}, None if why is None else {"refused": list(why)})
+    `passes_distinct_twin` is its Python twin, for the difftest."""
+    said = V.of_record("passes-distinct", {"passes": passes})
     return None if said is None else tuple(said["refused"])
 
 
@@ -3018,9 +3011,9 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
     (`PERIOD_KEYS`) carrying its statements' proof files, which `window` verifies on the circuit files the period's
     open committed (`committed_files`, else ``circuit``) with the verifier `run`. The verdict is the Lean
-    `PouwCheck.Credit.periodCredit`'s on the outcomes those runs gave (`_of_record`), with `_period_of` its Python twin; a
-    refusal of the windows' or their live evidence's statements' form, of the committed circuit files or of a run
-    itself stands as that step's."""
+    `PouwCheck.Credit.periodCredit`'s on the outcomes those runs gave (`_of_record`). `_period_of` drives the runs, and
+    its own verdict is the difftest's, never the record's; a refusal of the windows' or their live evidence's
+    statements' form, of the committed circuit files or of a run itself stands as that step's."""
     kept: list[_Outcomes] = []
     files = SimpleNamespace(refused=None)
     python = _period_of(key, ledger, pins, main, name, windows, verify, run, kept, files)
@@ -3029,7 +3022,7 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
         return python
     return _of_record("period", {"key": key, "ledger": ledger, "pins": pins, "main": main, "name": name,
                                  "windows": [(kept[i] if i < len(kept) else _Outcomes()).evidence(w)
-                                             for i, w in enumerate(windows)]}, python)
+                                             for i, w in enumerate(windows)]})
 
 
 def _formed(windows: Any, keys: tuple[str, ...]) -> bool:

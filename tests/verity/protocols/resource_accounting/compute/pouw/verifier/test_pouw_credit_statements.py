@@ -1,5 +1,5 @@
 """The challenger's salt check of record (`core_check.salt_of_record`): the Lean's, equal to its Python twin's on
-the salt difftest's cases, and a refusal wherever the two differ or the Lean gives no answer."""
+the salt difftest's cases, the Lean's alone where they differ, and a refusal where the Lean gives no answer."""
 from __future__ import annotations
 
 import importlib.util
@@ -36,17 +36,21 @@ def asked(monkeypatch):
     return out
 
 
-def _disagree(refused, fn: str) -> bool:
-    return refused[0] == V.DISAGREE and f"disagree on {fn}, so it stands refused: the Lean answered " in refused[1]
-
-
 @pytest.mark.parametrize("name", ["honest", *rc.SALT_NAMES])
-def test_the_salt_check_of_record_is_the_leans_with_its_python_twin_beside_it(name, asked):
+def test_the_salt_check_of_record_is_the_leans_alone(name, asked):
     case = rc.salt_instance(random.Random(f"{name}/0"), name)
     python = CC.salt_twin(*rc.salt_args(case))
     assert CC.salt_of_record(*rc.salt_args(case)) == python and asked.fns == ["salt"]
     assert python is None or name != "honest"
-    asked.say["salt"] = lambda _v: None if python is not None else {"refused": ["salt", "stub"]}
+    said = None if python is not None else {"refused": ["salt", "stub"]}
+    asked.say["salt"] = lambda _v: said
+    assert CC.salt_of_record(*rc.salt_args(case)) == (None if said is None else ("salt", "stub"))
+
+    def no_answer(_v):
+        raise V.LeanError("lake is not on the PATH")
+
+    asked.say["salt"] = no_answer
     refused = CC.salt_of_record(*rc.salt_args(case))
-    assert _disagree(refused, "salt"), refused
+    assert refused == (V.NO_ANSWER, "the Lean verifier gave no answer to salt, so it stands refused: lake is not on "
+                                    "the PATH"), refused
 
