@@ -24,7 +24,7 @@ layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_sessio
 `result`, `table`, `store`), `replay_ladder`, `route_capture`, `scan_cost`, `serve_tax`, `serving_cost` (`minify RUN`,
 `exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"; `profile RUN`, a serving
 profile's stored result), `served_commit`, `served_errors`,
-`served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_lowering`, `unit_walk`, `verifier_cost` and `word_codec`.
+`served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_walk`, `verifier_cost` and `word_codec`.
 
 `verity calibrate NAME [ARGS]` runs `calibration/NAME/`'s runner the same way. These measurements live there, not
 here: `attester_timing` (`run`, `guard`, `serve`, `observe`, `score`, `table`, `target`), `bandwidth` (the device
@@ -395,7 +395,6 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
 | `../calibration/circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
 | `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving and the kernels of each class's first steps, and the (route, statics) pairs those steps need that class G's registered Definitions don't cover, with their owners | maintained |
-| `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
 
 ### Compute
 

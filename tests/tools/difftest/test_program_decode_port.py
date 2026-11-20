@@ -25,6 +25,8 @@ import decode_difftest as C  # noqa: E402
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 CASES = C.cases()
+TEXTS = json.loads((Path(__file__).parent / "lean_decode_texts.json").read_text())
+REWRITE = "Lean's refusal differs from the pinned text; a change meant to move it rewrites `lean_decode_texts.json` with `write_lean_texts.py`"
 REGISTRY = {text: registry for _, text, registry in CASES}
 
 
@@ -45,10 +47,43 @@ LEAN_TAKES = ("refusal: a primitive with ports the registry lacks", "refusal: a 
               "refusal: a binding the registry's composite refuses")
 
 
-@pytest.mark.parametrize("name", [n for n, _, _ in CASES if n not in LEAN_TAKES])
+#: What Lean refuses and the Python decoder accepts: a part of references past `Widths.WALK` = 2^20 whose widths it would compare leaf by
+#: leaf, which Lean's decoder refuses by name (`UNCHECKED`) and the codec decides by arithmetic.
+LEAN_REFUSES = ("lean refusal: a grid read in leaves of two widths past what is walked",)
+
+
+@pytest.mark.parametrize("name", [n for n, _, _ in CASES if n not in LEAN_TAKES + LEAN_REFUSES])
 def test_decode_agrees(server, name):
     text = next(t for n, t, _ in CASES if n == name)
     assert D.replay(DECODE, {"descriptor": text}, server)[0] == "output"
+
+
+@pytest.mark.parametrize("name", [n for n, _, _ in CASES])
+def test_leans_refusal_text_is_the_pinned_one(server, name):
+    text = next(t for n, t, _ in CASES if n == name)
+    verdict = json.loads(server.call("decode_text", {"descriptor": text})[1])
+    assert verdict.get("message") == TEXTS.get(name), REWRITE
+
+
+@pytest.mark.parametrize("name", [n for n, _, _ in CASES])
+def test_decode_with_is_decode(server, name):
+    """`Program.decodeWith` at SHA-512 (what the verifier's setups call) gives `decode`'s digest and Boolean map, or its text."""
+    text = next(t for n, t, _ in CASES if n == name)
+    with_ = json.loads(server.call("decode_with", {"descriptor": text})[1])
+    plain = json.loads(server.call("decode", {"descriptor": text})[1])
+    refused = json.loads(server.call("decode_text", {"descriptor": text})[1])
+    assert with_["ok"] == plain["ok"] == refused["ok"]
+    if with_["ok"]:
+        assert with_ == plain
+    else:
+        assert with_["message"] == refused["message"]
+
+
+@pytest.mark.parametrize("name", LEAN_REFUSES)
+def test_lean_refuses_what_the_codec_decides(server, name):
+    text = next(t for n, t, _ in CASES if n == name)
+    assert reference({"descriptor": text})["ok"]
+    assert json.loads(server.call("decode", {"descriptor": text})[1])["ok"] is False
 
 
 @pytest.mark.parametrize("name", LEAN_TAKES)

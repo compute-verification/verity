@@ -196,9 +196,6 @@ theorem classOf_facts {mj : Lean.Json} {tables : List (String × ByteArray)} {kt
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h
   replace h := ite_throw_ok h
   simp (config := { zeta := false }) only [jp2] at h
-  extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp3 at h
-  replace h := ite_throw_ok h
-  simp (config := { zeta := false }) only [jp3] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h
   replace h := ite_throw_ok h

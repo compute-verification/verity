@@ -87,8 +87,9 @@ def archived(a, path):
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
-#: the Lean verifier's refusal of upstream's plain proof files (`FlockVerify.UPSTREAM_PLAIN`): `verify` refuses every such
-#: session with it, and `agree` reports it for a session no other refusal meets once every check has passed
+#: the Lean verifier's refusal of upstream's plain proof files (`UPSTREAM_PLAIN`, `Flock/CircuitRead.lean`): `verify`
+#: refuses every such session with it, and `agree` reports it for a session no other refusal meets once every check has
+#: passed
 UPSTREAM_PLAIN = ("refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; "
                   "verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts")
 

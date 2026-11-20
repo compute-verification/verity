@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import random
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,16 +45,16 @@ SEEDS = [
      {"templates": [{"params": [32, 8], "steps": [[4, [0, 0, 0]], [3, [0, 2]], [3, [2, 0]]], "ret": [0, 3], "nested": False}, {"params": [-3, 8, 7], "steps": [[5, [2, 1]], [5, [2, 1]]], "ret": [2, 4], "nested": False}, {"params": [8, -5, -3, -2048], "steps": [[-1, [1]], [-3, [2]]], "ret": [0], "nested": False}], "root": [{"t": 1, "form": "batch", "n": 3, "args": [[["p", 0], ["p", 1], ["p", 2]], [["p", 3], ["p", 4], ["p", 5]], [["p", 6], ["p", 7], ["p", 8]]]}, {"t": 2, "form": "batch", "n": 3, "args": [[["p", 9], ["n", 0, 5], ["p", 10]], [["p", 11], ["p", 12], ["p", 13]], [["p", 14], ["p", 15], ["p", 16]], [["p", 17], ["p", 18], ["p", 19]]]}, {"t": 1, "form": "batch", "n": 2, "args": [[["p", 20], ["p", 21]], [["n", 0, 1], ["n", 1, 2]], [["p", 22], ["p", 23]]]}, {"t": 2, "form": "batch", "n": 2, "args": [[["n", 0, 5], ["n", 0, 5]], [["p", 24], ["p", 25]], [["p", 26], ["p", 27]], [["p", 28], ["p", 29]]]}], "root_params": [-3, -3, -3, 8, 8, 8, 7, 7, 7, 8, 8, -5, -5, -5, -3, -3, -3, -2048, -2048, -2048, -3, -3, 7, 7, -5, -5, -3, -3, -2048, -2048], "registered": [7, 9, 14, 17, 18, 22, 24, 25], "blocks": [[0, 2], [2, 7], [7, 10]]},
      3772944590, 'restrict: ZeroDivisionError: integer division or modulo by zero',
      [("lower", "whole-words"), ("restrict", "E_NO_GATE"), ("lower", "whole-words")]),
-]
-
-#: findings still open, under a strict mark: (what it is, the spec, its case seed, the class it shows)
-OPEN = [
     ("a unit reads another unit of its block: the reader given a value its writer did not produce is accepted",
      {"templates": [{"params": [-16], "steps": [[-1, [0]], [2, [1]], [W.PACK, [2] * 16]], "ret": [3], "nested": False}],
       "root": [{"t": 0, "form": "call", "n": 1, "args": [[["p", 0]]]}, {"t": 0, "form": "call", "n": 1, "args": [[["r", 0, 0, 16]]]}],
       "root_params": [-16], "registered": [], "blocks": [[0, 2]]},
-     0, "rows: a unit's read of another unit of its block is not tied: the reader given a value its writer did not produce is accepted (door accepts)"),
+     0, "rows: a unit's read of another unit of its block is not tied: the reader given a value its writer did not produce is accepted (door accepts)",
+     [("lower", "operands-outside: unit 1 reads gate 16, which unit 0 of the block computes")]),
 ]
+
+#: findings still open, under a strict mark: (what it is, the spec, its case seed, the class it shows)
+OPEN: list[tuple] = []
 
 
 def _stub(tmp_path: Path) -> Path:
@@ -204,7 +205,8 @@ def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_r
     assert len(ins) == 16 + 2 * 2048 and len(outs) == 16
     whole, = W.census(c, q, "0-2", lambda: exe, rows=False, form="whole")
     unit, = W.census(c, q, "0-2", lambda: exe, rows=False)
-    assert (whole.step, unit.step) == ("lower", "lower") and "unit/Block_v1" in whole.text and "unit/WallsRead_v1" in unit.text
+    assert (whole.step, unit.step) == ("lower", "lower") and "unit/Block_v1" in whole.text
+    assert _clause(unit.text) == "operands-outside", unit.text
     assert (whole.row_bits, unit.row_bits) == (16 + 2 * 2048, 2048) and whole.tmpl_gates == 2 * unit.tmpl_gates
     from verity.circuits import boolean as BL
     from verity.circuits.types import Value
@@ -218,16 +220,79 @@ def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_r
     assert W.Result(0, (0, 1), (), ported="ported: x").klass == "ported: ported: x"
 
 
+def _drawn(rng: random.Random) -> W.Spec:
+    """C of two to four call or batch nodes of one template on a 16-bit field, each argument a parameter of C or a
+    member of an earlier node (a batch's stepped argument, at times one member read twice), cut into contiguous blocks."""
+    t = {"params": [-16], "steps": [[-1, [0]], [2, [1]], [W.PACK, [2] * 16]], "ret": [3], "nested": False}
+    root: list[dict] = []
+    params: list[int] = []
+
+    def src() -> list:
+        if root and rng.random() < 0.6:
+            j = rng.randrange(len(root))
+            return ["r", j, 16 * rng.randrange(root[j]["n"]), 16]
+        params.append(-16)
+        return ["p", len(params) - 1]
+
+    for _ in range(rng.randint(2, 4)):
+        n = rng.randint(1, 3)
+        members = [src() for _ in range(n)]
+        if n > 1 and rng.random() < 0.3:
+            members[1] = members[0]
+        root.append({"t": 0, "form": "call" if n == 1 and rng.random() < 0.5 else "batch", "n": n, "args": [members]})
+    units = sum(nd["n"] for nd in root)
+    cuts = sorted(rng.sample(range(1, units), rng.randint(0, units - 1)))
+    bounds = [0, *cuts, units]
+    return W.Spec([t], root, params, [], [list(b) for b in zip(bounds, bounds[1:])])
+
+
+def _predicate(text: str) -> str | None:
+    """The door predicate's refusal in ``text``, from its prefix to the line's end; None where it holds."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    i = text.find(OC.NOT_ADMITTED)
+    return None if i < 0 else text[i:].splitlines()[0]
+
+
+def _clause(text: str) -> str | None:
+    """The name of the door predicate's clause refusing in ``text``; None where it holds."""
+    p = _predicate(text)
+    return None if p is None else p.split(", ", 1)[1].split(":")[0]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_an_internal_read_is_free_under_the_unit_form_and_a_column_under_the_whole():
-    """On Lean's lowering: the unit form's rows take a reader whose x is not the writer's output (each copy's rows are
-    its own, the statement's hole); the whole form's rows hold C's values and refuse the block output
-    such a read gives."""
+def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
+    """On drawn circuits and partitions (batches, stepped arguments, a member read twice), Lean's door
+    (`spot-one-stage-zk restrict`: `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's
+    (`admitted_block` from `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text."""
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    exe, lean = _stub(tmp_path), PF.v2_executable()
+    seen: dict[str, int] = {}
+    for seed in range(40):
+        s = _drawn(random.Random(seed))
+        c, q, _fns = W.realise(s)
+        door = W.Door(c, q, [tuple(b) for b in s.blocks], lambda: exe)
+        (tmp_path / "C.json").write_bytes(c)
+        (tmp_path / "partition.json").write_text(json.dumps(door.partition, sort_keys=True, separators=(",", ":")))
+        for k, (lo, hi) in enumerate(s.blocks):
+            py = _predicate(door.run(k, lo, hi).text)
+            run = subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
+                                  str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
+            assert _predicate(run.stderr) == py, (seed, k, s.doc(), run.stderr[-600:], py)
+            clause = _clause(py or "") or "holds"
+            seen[clause] = seen.get(clause, 0) + 1
+    assert seen.get("holds") and seen.get("operands-outside"), seen
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_internal_read_is_refused_under_the_unit_form_and_a_column_under_the_whole():
+    """On Lean's lowering: the door refuses the unit form's block by `admittedBlock`'s clause; the whole form's rows
+    hold C's values and refuse the block output a reader given a value its writer did not produce gives."""
     got = W.internal_case(W._exe(None))
     unit, whole = got["unit"], got["whole"]
-    assert unit["honest_ok"] and unit["forged_accepted"], unit
-    assert unit["in_ports"] == ["x", "w"] and unit["in_bits"] == [16 + 2048, 16 + 2048], unit
+    assert unit["step"] == "lower" and _clause(unit["text"]) == "operands-outside", unit
     assert whole["step"] is None and whole["ported"] == "yes", whole
     assert whole["honest_ok"] and not whole["wrong_accepted"] and not whole["forged_accepted"], whole
     assert whole["in_ports"] == ["p0"] and whole["in_bits"] == [16 + 2 * 2048], whole
