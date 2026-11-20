@@ -833,7 +833,8 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                         program=mine.program, query=mine.query)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -1342,6 +1343,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
+    if isinstance(pm, dict):
+        members_lean(out, result)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1535,6 +1538,31 @@ def case_written(out: Path) -> dict:
         return {"written": True}
     said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
+
+
+def members_lean(out: Path, result: dict, check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+    """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
+    verdict ``result["checks"]["members_lean"]``: the audit accepts only where Lean accepts too, and where Lean and the
+    Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its detail both texts."""
+    case = out / "case-v2.json"
+    try:
+        verdict, why = check(json.loads(case.read_text())) if case.is_file() else ("reject", case_written(out)["why"])
+    except MB.LeanError as e:
+        verdict, why = "undecided", str(e)
+    checks = result.setdefault("checks", {})
+    failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))
+    python = bool(result.get("accepted"))
+    ok = verdict == "accept"
+    codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
+    checks["members_lean"] = {"ok": ok and python, "codes": codes, "detail": {
+        "lean": {"verdict": verdict, "reason": why},
+        "python": {"accepted": python, "failed": failed}}}
+    if not ok:
+        result["accepted"] = False
+
+
+#: the code of an audit whose Python verdict and Lean's `checkMembersAt` on its per-member case differ
+MEMBERS_DISAGREE = "members-lean-python-disagree"
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, public: str, registered: dict | None,
