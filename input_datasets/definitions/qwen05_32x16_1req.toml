@@ -1,0 +1,9 @@
+# The vLLM adapter's one-request Qwen2.5-0.5B workload: each record is one element of its `requests`.
+kind = "completion-requests"
+
+[recorded]
+source = "art:5467343b0a5b2030b21b6285b73a679823ec6404260a900139b66626094b76ec"
+path = "adapters/vllm/workloads/workload_qwen05_32x16_1req.json"
+sha256 = "ea93af44cb5d59bb7da850d088e0cc01ba8c11332282c4d4f06a08ce341a261a"
+format = "json"
+records = "requests"

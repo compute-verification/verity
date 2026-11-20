@@ -21,8 +21,8 @@ Every other unit holds its Definition's function of the window's values:
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
-- each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
-  ``registered_value.Registered`` of ``row-seg`` rows or one like it);
+- each embedding read's verdict word, 1 below V and 0 at or past it (`EmbeddingRead_v3`), its opening the table's row, salt
+  and path at the token (the table's registered value, ``registered_value.Registered`` of ``row-seg`` rows or one like it);
 - each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
@@ -547,8 +547,9 @@ class Rows:
         emb = [j for j, node in enumerate(nodes) if node_family(node.fn) == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
-            self._put(r.tid, r.unit, "o1", np.ones((1, 1), dtype=np.uint16), EVALUATED)
-            if t < nodes[j].fn.bindings["V"]:
+            inside = t < nodes[j].fn.bindings["V"]
+            self._put(r.tid, r.unit, "o1", np.full((1, 1), int(inside), dtype=np.uint16), EVALUATED)
+            if inside:
                 ins, table = self.inputs[r.tid], self.tables[r.tid]
                 ins["row"][r.unit] = np.asarray(table.rows[t], dtype=np.uint16)
                 ins["salt"][r.unit] = _be_words(table.salts[t])

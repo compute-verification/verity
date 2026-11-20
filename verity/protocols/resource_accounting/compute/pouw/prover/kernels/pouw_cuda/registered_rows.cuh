@@ -91,8 +91,8 @@ HD void row_leaf(const Table& t, uint32_t j, const uint8_t* row, const uint64_t*
   frame_leaf(t.did, j, REGROWS_SCHEMA, tl, leaf);
 }
 
-// A public table's salt head as the host lays it out (`pouw_h1_registered_device.Pub`): `core_check.public_row_salt`'s
-// domain, u64be context length and context, or `core_check.ok_salt`'s tag, context and 0, as big-endian words, the bytes
+// A public table's salt head as the host lays it out (`pouw_h1_registered_device.Pub`): `window.public_row_salt`'s
+// domain, u64be context length and context, or `window.ok_salt`'s tag, context and 0, as big-endian words, the bytes
 // past ``len`` zero.
 constexpr int PUB_WORDS = 40;
 struct Pub {
@@ -118,10 +118,10 @@ HD void counter_salt(const Pub& p, uint64_t pos, int width, uint64_t out[24]) {
   }
 }
 
-// Position ``pos``'s public salt (`core_check.public_row_salt`: a u8 counter).
+// Position ``pos``'s public salt (`window.public_row_salt`: a u8 counter).
 HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 1, out); }
 
-// Position ``pos``'s ok salt (`core_check.ok_salt`: a u32be counter).
+// Position ``pos``'s ok salt (`window.ok_salt`: a u32be counter).
 HD void ok_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 4, out); }
 
 // Level l of a tree of width W starts at node 2 W - 2 (W >> l) in its levels (level 0 the W leaves and pads, then each

@@ -46,14 +46,15 @@ def test_commit_cost_blake3_rows(tmp_path: Path) -> None:
 def test_hiding_leaf_cost_sha512_pos_leaf_is_the_pinned_leaf() -> None:
     import hashlib
 
-    from verity_vllm.commit import scheme
-
+    spec = importlib.util.spec_from_file_location("hiding_leaf_cost", ROOT / "benchmarks" / "commitments" / "hiding_leaf_cost.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
     pinned = {b"\x00" * 4: "57270a148d084b84aba8ab1e679e1cd01f11b2e9a8cca85aacdb63dde44b3085"
                            "6a5ecad7bc135f8e9ca5486666ad73fe23fa360826fe2d0a544b8fc7a7fd1b17",
               bytes(range(256)) * 12: "440a3c2d8e3031973f506bd4b86d9737c4c4a8054174364f6aad2ed4e1c50a58"
                                       "d5c7ab36a860507688bda813eccb9ccd1911f07a34aac3c24ba27cedb547cbe9"}
     for value, leaf in pinned.items():
-        assert scheme.pos_leaf(memoryview(value), hashlib.sha512).hex() == leaf
+        assert mod.pos_leaf(memoryview(value), hashlib.sha512).hex() == leaf
 
 
 def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:

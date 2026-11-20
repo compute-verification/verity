@@ -76,9 +76,8 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
@@ -95,18 +94,18 @@ SALT_BYTES = 192
 M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
 PUBLIC = HW.PUBLIC
-PUB_BITS = CC.PUBLIC_ROW_BITS
+PUB_BITS = Wd.PUBLIC_ROW_BITS
 #: STAND-INS for what the network attester and the execution phase's registration give a certified execution phase, which this harness
 #: runs without: the network attester's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
 STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
 PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
-OK_SALT_TAG = CC.OK_SALT_TAG
+OK_SALT_TAG = Wd.OK_SALT_TAG
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 A_TABLES_TAG = b"verity/pouw/h1-prove/a-tables/v0\0"
 STAND_IN_REQUESTS_TAG = b"verity/pouw/h1-prove/stand-in-requests/v0\0"
 #: the ok row the verifier accepts: the unit's one output bit, 1, in its one word
-OK = np.array(CC.OK_ROW, np.uint16)
+OK = np.array(Wd.OK_ROW, np.uint16)
 #: the value the verifier registers its ok rows as: the execution phase Program's output ``ok`` (`h1window.unit_reads`), row u unit u's
 OK_VALUE = "ok"
 
@@ -182,15 +181,15 @@ def unit_salt(reveal: bytes, window: int, stream: bytes = STREAM, prover: bytes 
 
 def pub_salt(window: str, position: int) -> bytes:
     """The public row's hm96 salt, which anyone derives from the execution phase and the unit's position:
-    `core_check.public_row_salt`, which credit registers served public rows under (`h1window.public_table`)."""
-    return CC.public_row_salt(window, int(position))
+    `window.public_row_salt`, which credit registers served public rows under (`h1window.public_table`)."""
+    return Wd.public_row_salt(window, int(position))
 
 
 def ok_salt(window: str, position: int) -> bytes:
     """The ok row's hm96 salt, which anyone derives from the execution phase and the unit's position: the row's content is the one
-    the verifier accepts (`OK`), so the salt hides nothing: `core_check.ok_salt`, which credit registers served ok rows
+    the verifier accepts (`OK`), so the salt hides nothing: `window.ok_salt`, which credit registers served ok rows
     under."""
-    return CC.ok_salt(window, position)
+    return Wd.ok_salt(window, position)
 
 
 #: the smoke's R × C tile (the served path's is 32 × 32, `pouw_h1.TILE`)
@@ -304,8 +303,8 @@ def value_words(name: str) -> int:
 
 def bound_root(name: str, window_root: str) -> str | None:
     """The execution phase root the registered value ``name``'s domain binds: none for the weights' b/<K>, held across execution phases
-    (`credit.is_held`), and ``window_root``, the execution phase's open root (`open_root`), for every other value."""
-    return None if CR.is_held(name) else window_root
+    (`window.is_held`), and ``window_root``, the execution phase's open root (`open_root`), for every other value."""
+    return None if Wd.is_held(name) else window_root
 
 
 def register(program: str, name: str, words: np.ndarray, salts: Sequence[bytes], window_root: str) -> RV.Registered:
@@ -399,7 +398,7 @@ def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: 
     doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": RV.WORD_BITS,
                         "domain": registered_domain(prog, OK_VALUE, T, window_root).domain_id.hex(),
                         **RV.schema_entry(G.SCHEMA_V2),
-                        **CC.call_reads(u0, rows), "known": known_ok(window, T)}
+                        **Wd.call_reads(u0, rows), "known": known_ok(window, T)}
     return doc
 
 
@@ -458,7 +457,7 @@ def statement_tables(z: dict, in_ports: list[str], out_ports: list[str]) -> dict
 class Shape:
     """One H1 tile unit's shape: R A rows and C B rows at contraction K. With ``j10r`` the unit is J10-R's
     (`h1tile.PouwH1Tile5` under `h1window.tile_unit`, chunked as `h1window.program` declares it), whose public row also
-    holds its call and blocks (`core_check.PUBLIC_ROW_J10R_BITS`), and its statement's rows are named by
+    holds its call and blocks (`window.PUBLIC_ROW_J10R_BITS`), and its statement's rows are named by
     `h1window.window_ports` (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports core's `credit.registered_file` reads. ``tile``
     is the H1 tile under a unit that is not J10-R's (`tile`)."""
 
@@ -499,7 +498,7 @@ class Shape:
 
     @property
     def pub_bits(self) -> int:
-        return CC.PUBLIC_ROW_J10R_BITS if self.j10r else PUB_BITS
+        return Wd.PUBLIC_ROW_J10R_BITS if self.j10r else PUB_BITS
 
     def ports(self) -> list:
         """The statement's rows as Flock's ports: the A and B rows, the record, the public row, then the receipt's and
@@ -629,8 +628,7 @@ def path(lv: Sequence[Sequence[bytes]], index: int) -> list[str]:
 
 
 def verify(dom: CommitmentDomain, root: bytes, index: int, bc: bytes, sibs: list[str]) -> bool:
-    from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-    return CC.verify_path(dom, root, index, leaves_one(dom, index, bc), [bytes.fromhex(s) for s in sibs])
+    return Wd.verify_path(dom, root, index, leaves_one(dom, index, bc), [bytes.fromhex(s) for s in sibs])
 
 
 def leaves_one(dom: CommitmentDomain, index: int, bc: bytes) -> bytes:

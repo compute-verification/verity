@@ -140,7 +140,7 @@ and to prove the circuit the credit period's open committed (its descriptor's SH
 `Spot.Challenger.creditedChallengePhase` over `pinnedChallengePhase`, the same bytes `layoutOf` reads) and credits it
 (`window`) sampled at the credit period's K, a refused one refusing
 the credit period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
-`pinnedChallengePhase`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
+`pinnedChallengePhase`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `window.round_root`
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
 (`credit.cover`): round s's share of an execution phase's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
 of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those

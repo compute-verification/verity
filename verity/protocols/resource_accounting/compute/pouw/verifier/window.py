@@ -67,12 +67,19 @@ round r commits, and round r's noise key is `round_key` of that coin and that ro
 execution phase's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
 (`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its execution phase's root
 (`salt.epoch_open_root`), so it ends complete once that coin is released.
+
+**What the window commits**, which the prover computes and the checks read: the period-open's fields (`K_FIELD`,
+`ROWS_FIELD`, `LENGTH_FIELD`), the window's table names (`window_table`), the draw's and each round's root (`draw_root`,
+`round_root`), each call's work (`call_work`), the public and ok rows and their salts (`public_row`, `ok_salt`), the
+pass's manifest schemas, the sample's stream arithmetic (`stream_subset`, `draw_key_context`), a side tree's path
+(`verify_path`) and the challenger's signature (`lms_verify`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import math
+import re
 import struct
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -83,13 +90,18 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
+from verity.commitments import registered_value as RV
+from verity.commitments.crypto import lms
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 
 GRID_BITS = 3
 
@@ -861,14 +873,225 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_BITS", "ENTRY_BYTES", "ENTRY_SCHEMA", "ENTRY_WORDS",
-           "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS", "KIND_CODE", "LEGACY_REGISTERED", "LENGTH_KEYS",
-           "LIVE_SCHEME", "MODES", "M_MAX", "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
-           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROW_STEP", "SALT", "SALT_FAMILIES", "SIDE_DOMAIN",
-           "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason",
-           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime",
-           "layout_problem", "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason",
-           "live_families", "miss_at_most", "mode", "on_grid", "pad", "pad_node", "pass_tiles", "point",
-           "public_inputs", "ratio_str", "record_digest", "record_problem", "round_key", "rounds_reason",
-           "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index", "side_levels",
-           "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+# ---- what the window commits, its public rows and its draw ----------------------------------------------------------
+
+DRAW_TAG = domains.POUW_H1_SAMPLING
+ROUND_TAG = domains.POUW_H1_ROUND_A
+#: each manifest row's credit bit
+CREDIT = "credit"
+#: a contraction K in a registered value's name: a canonical decimal, no leading zero
+_DIGITS = re.compile(r"[1-9][0-9]*")
+#: the period-open's field holding the sample's K, the proof system's selection, committed before any sample
+K_FIELD = "draw_k"
+#: the most a committed K may be
+MAX_K = 1 << 24
+#: the period-open's field holding the served tables' leaf count T (the pouw setting ``rows``: each round's request and
+#: slot tables' leaves), committed before any sample; a window's A slot M is `h1window.slot` of it
+ROWS_FIELD = "rows"
+#: the δ the period's ε is reported at
+DELTA = WINDOW_DELTA
+#: the period-open's field holding the workloads of record's fixed length: ``{max_tokens, stop}``,
+#: each request's public max_tokens in admission order and the stop mode `STOP_FIXED` (ignore_eos, circuits'
+#: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
+LENGTH_FIELD = "length"
+_COMMIT_NAME = re.compile(r"row-table/(0|[1-9][0-9]*)/k([1-9][0-9]*)|input-ids/(0|[1-9][0-9]*)")
+ONE_STAGE = domains.ONE_STAGE_PROTOCOL
+SALT_BYTES = 192
+#: a salted unit's public row: the execution phase's certified salt, the unit's position (a u64) and its entry's side roots
+PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * DIGEST_BYTES["sha512"])
+#: a J10-R unit's public row (`h1tile.PouwH1Tile5`'s): `PUBLIC_ROW_BITS`, then its call's first position ``call`` and its
+#: ``blocks``, its first row block and its first column block in its call's stream, each a u64
+PUBLIC_ROW_J10R_BITS = PUBLIC_ROW_BITS + 8 * 3 * 8
+PUBLIC_ROW_SALT_DOMAIN = domains.POUW_PUBLIC_ROW_SALT.encode() + b"\0"
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word
+OK_ROW = (1,)
+#: the ok row's hm96 salt tag
+OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
+MANIFEST_SCHEMA = domains.VLLM_PEARL_C_RUN
+#: a pass recorded before the execution phase's coins, salted from a beacon: only a replay of a recorded pass reads it
+MANIFEST_RECORDED = domains.VLLM_PEARL_C_RUN_V1
+DRAW_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
+
+
+def window_table(name: str, prefix: str) -> str:
+    """The window's table under `prefix` (the descriptor's ``PREFIX``) that the Commit's value `name` is (ROOTS1): round
+    s's A table of K ``<prefix>a/<K>@<s>`` for `credit.commit_rows` of (s, K), its input-ids table ``<prefix>ids@<s>`` for
+    `credit.commit_ids` of s. ValueError for any other name."""
+    m = _COMMIT_NAME.fullmatch(name) if isinstance(name, str) else None
+    if m is None:
+        raise ValueError(f"{name!r} is no Commit name of a window's table: row-table/<round>/k<K> or input-ids/<round>")
+    return f"{prefix}a/{m[2]}@{m[1]}" if m[1] is not None else f"{prefix}ids@{m[3]}"
+
+
+def draw_root(calls: bytes, receipts: bytes, rounds: Any) -> bytes:
+    """What the sampling coin opens after: the manifest's `credit.calls_root`, the last round's receipts and every round's root and
+    coin, so the sample follows every round coin by hash."""
+    return tagged(DRAW_TAG, calls, receipts, *(p for x in rounds for p in (
+        bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
+
+
+def call_work(layout: dict) -> list[tuple[int, int]]:
+    """Each call's units and the work of each of them, ``(size, work)`` in call order, of a layout `credit.strata` accepted."""
+    (r, c), m = layout["tile"], layout["m"]
+    ks = {name: (k, n) for name, k, n in layout["linears"]}
+    return [((m // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in layout["calls"]]
+
+
+def round_root(r: int, inner: bytes, segments: dict[str, list[tuple[int, int, bytes]]]) -> bytes:
+    """The root the challenger receives for round `r`: the serving process's own round root `inner` and, for each A
+    value by name, its segments (level, index and root) in row order."""
+    return tagged(ROUND_TAG, r, inner, *(p for v in sorted(segments) for level, index, root in segments[v]
+                                         for p in (v, level, index, root)))
+
+
+def is_held(value: Any) -> bool:
+    """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
+    (``…/b/<K>``, K a canonical decimal, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
+    among them, is the window's own."""
+    parts = value.split("/") if isinstance(value, str) else []
+    return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
+
+
+def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sibs: list[bytes]) -> bool:
+    """Leaf `index` with siblings `sibs` (leaf level first) hashes up to `root` in `dom`."""
+    if not 0 <= index < dom.count or len(sibs) != merkle_depth(dom.count):
+        return False
+    digest = leaf
+    for level, s in enumerate(sibs):
+        digest = dom.node(level, index >> 1, *((digest, s) if index % 2 == 0 else (s, digest)))
+        index >>= 1
+    return digest == root
+
+
+def public_row(salt: bytes, position: int, roots: tuple[bytes, bytes],
+               j10r: tuple[int, tuple[int, int]] | None = None) -> bytes:
+    """A salted unit's public row, its `PUBLIC_ROW_BITS` bits as `ml.circuits.seeds` lays them out:
+    `salt`, `position` as a u64 and the two roots, each 32 bits a u32 low bit first. With `j10r` ``(call, blocks)``, a
+    J10-R unit's (`PUBLIC_ROW_J10R_BITS`): then its call's first position and its two blocks (`j10r_blocks`), each a u64
+    in the same layout."""
+    x = salt + position.to_bytes(8, "big") + roots[0] + roots[1]
+    if j10r is not None:
+        x += b"".join(v.to_bytes(8, "big") for v in (j10r[0], *j10r[1]))
+    if len(x) * 8 != (PUBLIC_ROW_BITS if j10r is None else PUBLIC_ROW_J10R_BITS):
+        raise ValueError(f"a public row is {PUBLIC_ROW_BITS} bits, a J10-R unit's {PUBLIC_ROW_J10R_BITS}")
+    return b"".join(x[i:i + 4][::-1] for i in range(0, len(x), 4))
+
+
+def public_words(salt: bytes, position: int, roots: tuple[bytes, bytes],
+                 j10r: tuple[int, tuple[int, int]] | None = None) -> list[int]:
+    """`public_row` as a ``row/v2`` row of 16-bit leaves: word w its bits 16 w .. 16 w + 15, low byte first."""
+    x = public_row(salt, position, roots, j10r)
+    return [x[i] | x[i + 1] << 8 for i in range(0, len(x), 2)]
+
+
+def n_digits(k: int) -> int:
+    """H1's digit count m at contraction `k` (`segment.n_digits` of KS = k / 32): the least m with 128 KS <= 128^m and
+    127 KS // 128^(m - 1) <= 127."""
+    ks, m = k // 32, 1
+    while not (128 * ks <= 128 ** m and 127 * ks // 128 ** (m - 1) <= 127):
+        m += 1
+    return m
+
+
+def j10r_blocks(m: int, k: int, tile: tuple[int, int], i: int, j: int) -> tuple[int, int]:
+    """`h1tile.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one stream at
+    call scale, row block R I at R I RB and column block C J at M RB + C J CB, for a call of slot `m` (its A rows), an
+    R × C `tile` and K = `k`: RB = ⌈(K + 32 (m_K - 1)) / 512⌉ a row's blocks and CB = ⌈(K + 256) / 512⌉ a column's
+    (`h1tile.Layout`'s). Every input is the execution phase's public structure, so the verifier derives them."""
+    r, c = tile
+    rb, cb = -(-(k + 32 * (n_digits(k) - 1)) // 512), -(-(k + 256) // 512)
+    return r * i * rb, m * rb + c * j * cb
+
+
+def public_row_salt(context: str, position: int) -> bytes:
+    """The public row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: three SHA-512
+    blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
+    ctx = context.encode()
+    head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // DIGEST_BYTES["sha512"]))
+
+
+def ok_salt(context: str, position: int) -> bytes:
+    """The ok row's hm96 salt, which anyone derives from the execution phase's context and the unit's position: its content is
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. `SALT_BYTES` bytes of SHA-512 in counter mode
+    (`SHA-512(m ‖ u32be c)` for c < 3, each output whole) over m = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position)."""
+    head = OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(SALT_BYTES // 64))
+
+
+def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
+    """A ``--registered`` port's reads (`registered.READS_V1`) for a statement over one call's units from unit `u0`:
+    ``reads_from`` `u0` and ``reads`` the row each of the call's units reads, in unit order, trailing nones dropped, so
+    the file is as long as the call, not the execution phase (Flock's `Registered.Port.readAt`: none below ``reads_from``)."""
+    rows = list(rows)
+    while rows and rows[-1] is None:
+        rows.pop()
+    return {RV.READS_FROM: u0, "reads": rows}
+
+
+def width(n: int) -> int:
+    """Bytes per word of an exact uniform sample below `n` (Lean's ``Draw.width``, `Key.uniform`'s)."""
+    return (n.bit_length() + 64 + 7) // 8
+
+
+def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
+    w = width(n)
+    space = 1 << (8 * w)
+    while pos + w <= len(src):
+        x, pos = int.from_bytes(src[pos:pos + w], "big"), pos + w
+        if x < space - space % n:
+            return x % n, pos
+    return None
+
+
+def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
+    """Lean's ``Draw.subset`` on one stream (``verity-verify-proof draw --stream``): partial Fisher-Yates, each step an exact
+    uniform word of `width` bytes; None when the stream runs out."""
+    swapped: dict[int, int] = {}
+    pos = 0
+    for i in range(k):
+        r = _uniform(n - i, src, pos)
+        if r is None:
+            return None
+        j, pos = i + r[0], r[1]
+        swapped[i], swapped[j] = swapped.get(j, j), swapped.get(i, i)
+    return sorted(swapped.get(i, i) for i in range(k))
+
+
+def plain(s: Any) -> bool:
+    """A string of printable ASCII with no quote and no backslash, as a receipt's keys and values are."""
+    return isinstance(s, str) and all(" " <= c <= "~" and c not in '"\\' for c in s)
+
+
+def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
+    """The sample key's context: the stream, the registration and its receipt (as canonical JSON's SHA-512)."""
+    if not all(plain(x) and plain(v) for x, v in receipt.items()):
+        raise ValueError("a receipt is an object of printable ASCII strings")
+    body = "{" + ",".join(f'"{k}":"{receipt[k]}"' for k in sorted(receipt)) + "}"
+    return {"stream": stream, "registration": registration, "receipt": hashlib.sha512(body.encode()).hexdigest()}
+
+
+def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.commitments.crypto.lms`).
+    A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
+    verify."""
+    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+__all__ = ["COINS", "CREDIT", "DELTA", "DEPTHS", "DRAW", "DRAW_DOMAIN", "DRAW_FAMILIES", "DRAW_TAG", "ENTRY_BITS",
+           "ENTRY_BYTES", "ENTRY_SCHEMA", "ENTRY_WORDS", "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS",
+           "KIND_CODE", "K_FIELD", "LEGACY_REGISTERED", "LENGTH_FIELD", "LENGTH_KEYS", "LIVE_SCHEME",
+           "MANIFEST_RECORDED", "MANIFEST_SCHEMA", "MAX_K", "MODES", "M_MAX", "OK_ROW", "OK_SALT_TAG", "ONE_STAGE",
+           "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "PUBLIC_ROW_BITS", "PUBLIC_ROW_J10R_BITS",
+           "PUBLIC_ROW_SALT_DOMAIN", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROUND_TAG", "ROWS_FIELD", "ROW_STEP",
+           "SALT", "SALT_BYTES", "SALT_FAMILIES", "SIDE_DOMAIN", "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS",
+           "Work", "bucket", "call_reads", "call_work", "draw_challenger", "draw_epoch_reason", "draw_key_context",
+           "draw_root", "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "is_held",
+           "j10r_blocks", "k_prime", "layout_problem", "length_item", "length_problem", "level", "levels",
+           "live_challenger", "live_epoch_reason", "live_families", "lms_verify", "miss_at_most", "mode", "n_digits",
+           "ok_salt", "on_grid", "pad", "pad_node", "pass_tiles", "plain", "point", "public_inputs", "public_row",
+           "public_row_salt", "public_words", "ratio_str", "record_digest", "record_problem", "round_key", "round_root",
+           "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index",
+           "side_levels", "side_path", "side_row", "stream_subset", "tile_at", "tile_in", "tile_read", "tiles",
+           "verify_path", "width", "window_problem", "window_table"]
