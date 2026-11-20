@@ -451,6 +451,11 @@ theorem dispatch_params {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
   all_goals first
     | (cases h; done)
     | (cases h; exact ⟨_, by assumption⟩)
+    | (exfalso; generalize VStar.Recursive.SampledTwo.paramsOfJson j = x at h
+       cases x <;> first
+        | cases h
+        | simp [discard, Functor.discard, Functor.mapConst, Except.map, throw, throwThe, MonadExcept.throw,
+            MonadExceptOf.throw] at h)
 
 /-- The sampled component's one-stage evidence is `OneStageZk.evidenceEitherOf`'s, of either form, at the bytes it
 reads past the form. -/
