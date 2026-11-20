@@ -22,7 +22,8 @@ import a0  # noqa: E402
 #: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with
 #: `verify`'s lines on standard error; and ``verify-members``, that check for each line of standard input, a member's
 #: arguments, then its ``MEMBER`` line (`Flock.VerifyMembers`). A session's ``mode`` file makes the stand-in misbehave on it
-#: (``exit N``: its verdict, then status N).
+#: (``exit N``: its verdict, then status N; ``after abort``, ``after panic``: once its input ends, an abort or a panic
+#: line).
 FAKE = '''#!{python}
 import hashlib, json, pathlib, sys
 args = sys.argv[1:]
@@ -57,12 +58,18 @@ elif args[0] == "verify-members":
     if not program.is_file():
         print("program: no such object", file=sys.stderr)
         sys.exit(2)
+    statuses, after = [], ""
     for index, line in enumerate(sys.stdin):
         status, mode = verify(json.loads(line))
         if mode == "dies":
             sys.exit(3)
         end = {{"exit": status, "index": index + (mode == "another place")}}
         print("MEMBER " + ("no JSON" if mode == "no JSON" else json.dumps(end, separators=(",", ":"))), flush=True)
+        statuses.append(status)
+        after = mode[6:] if mode.startswith("after ") else after
+    if after == "panic":
+        print("PANIC at Flock.VerifyMembers.run Flock.VerifyMembers:1:2: index out of bounds", file=sys.stderr)
+    sys.exit(134 if after == "abort" else 0 if all(s == 0 for s in statuses) else 1)
 '''
 
 

@@ -45,7 +45,7 @@ from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.protocols.proofs.spot.verifier.one_stage.lean_child import (LEAN_PANIC, VERIFY_EXITS, exit_why, panic_line,
-                                                                        refuse_panic)
+                                                                        refuse_exit, refuse_panic)
 from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
 
 import r2_population as R2
@@ -443,7 +443,7 @@ class VerifyMembers:
         with self.stderr.open("wb") as err:
             self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
                                          env=environ(None))
-        self.members, self.ended = 0, None
+        self.members, self.ended, self.statuses = 0, None, []
         self._buf, self._err_read, self._ends = b"", 0, []
 
     def _stop(self, why: str, kill: bool = False) -> None:
@@ -509,6 +509,7 @@ class VerifyMembers:
                     end = f"not JSON ({e})"
                 if isinstance(end, dict) and end.get("index") == i and isinstance(end.get("exit"), int):
                     status = end["exit"]
+                    self.statuses.append(status)
                 else:
                     self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
         stderr = self._stderr()
@@ -528,7 +529,11 @@ class VerifyMembers:
 
     def close(self) -> int:
         """Ends the process, its standard input closed so that it exits once it has answered what it was handed: its exit
-        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs)."""
+        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs).
+        Where it answered every member and then did not end as `verify-members` documents (0 when every member's exit
+        was 0, else 1), wrote a panic line after its last answer or was killed, raises `LeanPanic`: the verdicts it
+        gave were read before its end, and stand on nothing."""
+        answered = self.ended is None
         if self.ended is None:
             self.proc.stdin.close()
             while isinstance(line := self._line(EXIT_WAIT), bytes):
@@ -539,9 +544,13 @@ class VerifyMembers:
                             f"# {self.members} members handed in; {self.ended}\n--- stdout\n"
                             + "".join(x + "\n" for x in self._ends) + self._buf.decode(errors="replace")
                             + f"\n--- stderr\n{self.stderr.read_text(errors='replace')}")
+        tail = self._stderr()
         self.stderr.unlink()
         for f in (self.proc.stdin, self.proc.stdout):
             f.close()
+        if answered:
+            refuse_panic(tail)
+            refuse_exit(self.proc.returncode, {0 if all(s == 0 for s in self.statuses) else 1})
         return self.proc.returncode
 
 

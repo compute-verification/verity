@@ -77,7 +77,7 @@ def test_a_member_verify_refuses_or_stops_on_is_that_members_alone(tmp_path):
                                                         (False, "no verdict (rc 2): usage: verify ...\n")]
     assert [{**v, "verify_s": None} for v in got] == [{**v, "verify_s": None} for v in alone]
     assert a0.lean_refused(got[1]) and not a0.lean_refused(got[2]) and kept.ended is None
-    assert kept.close() == 0
+    assert kept.close() == 1
 
 
 @pytest.mark.parametrize("mode, why", [
@@ -141,4 +141,19 @@ def test_an_accept_at_a_status_verify_does_not_document_is_no_verdict(tmp_path, 
     log = (out / "lean-verify.log").read_text()
     assert verdict_lines(out / "lean-verify.log") == [] and "not taken: VERDICT " in log and f"\n# {why}\n" in log
     assert a0.lean_verify(lean, st2, 8, out2, zk=True, members=kept)["accepted"] and kept.ended is None
-    assert kept.close() == 0
+    assert kept.close() == 1
+
+
+@pytest.mark.parametrize("after, why", [
+    ("abort", f"{LP.LEAN_EXIT}: status 134 (abort)"),
+    ("panic", f"{LP.LEAN_PANIC}: PANIC at Flock.VerifyMembers.run Flock.VerifyMembers:1:2: index out of bounds")])
+def test_a_kept_verifier_that_accepts_every_member_then_does_not_end_cleanly_is_refused_at_its_close(tmp_path, after,
+                                                                                                    why):
+    """The kept process answers every member, accepting each, and then aborts or writes a panic line once its input
+    ends: its close refuses by name (`LeanPanic`), so no caller keeps the accepts it read before the end."""
+    lean, members, kept = kept_window(tmp_path)
+    (members[2][1] / "sessions" / "s" / "mode").write_text(f"after {after}")
+    assert all(a0.lean_verify(lean, st, 8, out, zk=True, members=kept)["accepted"] for st, out in members)
+    with pytest.raises(LP.LeanPanic) as e:
+        kept.close()
+    assert str(e.value) == why
