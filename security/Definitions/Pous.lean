@@ -28,6 +28,7 @@ public import Definitions.Pous.Model.SampledAudit
 public import Definitions.Pous.Model.Scheme
 public import Definitions.Pous.Model.SegLift
 public import Definitions.Pous.Model.StreamedWipe
+public import Definitions.Pous.Model.StreamedWipeResidual
 public import Definitions.Pous.P2.Clip
 public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.P2.Mutable
