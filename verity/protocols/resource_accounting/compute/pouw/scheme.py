@@ -6,8 +6,8 @@ block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its rea
 since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
 many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048):
 `laid_tiles` gives each laid block its tile by a public rule from the laying of the C registered before any coin, each
-tile the registry's own Definition at its statics (`foreign_tile`), and `credited_tiles` credits the window's
-tiles all or none, on an audit that drew every stratum holding a tile's block at its registered count.
+tile the registry's own Definition at its statics (`foreign_tile`). The credit is the Lean's (`PouwPearlPlus`,
+`creditAtAssumption`).
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -68,11 +68,7 @@ TILE_FOREIGN = "tile-body-foreign"
 TILE_SCHEME = "tile-statics-not-the-scheme"
 TILE_COLUMNS = "tile-columns-not-the-linears"
 C_DIGEST = "tile-c-digest-differs"
-#: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
-#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum; a tile
-#: is below the served floor (`test_instance`), so the passed audit is a test instance's and credits nothing
-AUDIT_SHORT = "tile-audit-short"
-AUDIT_STRAY = "tile-audit-stray"
+#: a tile below the served floor (`test_instance`): a test instance's, which credits nothing
 TEST_INSTANCE = "tile-test-instance"
 
 
@@ -301,46 +297,6 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds),
                             test_instance(fn.bindings)))
     return out
-
-
-def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
-                   verdicts: Mapping[int, bool], counts: Mapping[str, int]) -> list[LaidTile]:
-    """The window's tiles credited: all of them or none, each its ``amount``, which C fixes before any coin. A credited
-    unit is a public set of blocks with one amount, credited on one event; the shared interface
-    (`resource_accounting.scheme.Block`) does not yet express it, and this stands in.
-
-    S, the strata holding a block of any tile, is fixed by the laying. ``verdicts`` are the drawn blocks, each with
-    whether its proof verified, and ``counts`` each stratum's registered count of drawn blocks. Unless every stratum of
-    S has its registered count, at least one, of drawn blocks with a verdict, it refuses `AUDIT_SHORT`: an audit short of
-    its draw, an empty one included, is no evidence. Then every tile is credited when each of those verdicts passed, and
-    none when any failed: the bound on spoiled tiles counts bad blocks over all of S at the draw's rate, which holds for
-    the tiles together and clears no tile by the strata it holds alone. A stratum outside S neither credits nor spoils.
-    A verdict on a block of no stratum is refused (`AUDIT_STRAY`). An audit that passed over a tile below the served floor
-    is refused (`TEST_INSTANCE`): a test instance credits nothing."""
-    import bisect
-
-    if not tiles:
-        raise ValueError(f"{TILE_ABSENT}: no tile to credit")
-    held = set().union(*(t.kinds for t in tiles))
-    ranges = sorted((lo, hi, tid) for tid, rs in strata for lo, hi in rs)
-    starts = [lo for lo, _hi, _tid in ranges]
-    drawn, failed = dict.fromkeys(held, 0), False
-    for b, ok in verdicts.items():
-        i = bisect.bisect_right(starts, b) - 1
-        if i < 0 or not b < ranges[i][1]:
-            raise ValueError(f"{AUDIT_STRAY}: a verdict on block {b}, which is in no stratum")
-        if (tid := ranges[i][2]) in held:
-            drawn[tid] += 1
-            failed = failed or ok is not True
-    if short := sorted(s for s in held if counts.get(s, 0) < 1 or drawn[s] != counts[s]):
-        raise ValueError(f"{AUDIT_SHORT}: {len(short)} strata holding a tile's block lack their registered count of "
-                         f"drawn blocks with a verdict, first {short[0]}: {drawn[short[0]]} drawn of "
-                         f"{counts.get(short[0], 0)}")
-    if failed:
-        return []
-    if test := next((t for t in tiles if t.test), None):
-        raise ValueError(f"{TEST_INSTANCE}: tile {test.index} {test.test}")
-    return list(tiles)
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
