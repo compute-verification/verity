@@ -59,8 +59,9 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
     verify = [{"task": BUILD, "output": "verity-verify-proof"}]
     assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[BUILD]["key"]
     assert {build.UNIT_CUT, "verity/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
-        build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
-        *(f for f in files if f.startswith("verity/circuits/"))}, "the script and what it imports, which reads no data"
+        build.UNIT_CUT, f"{build.VERIFIER}/lean_run.py", *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
+        *(f for f in files if f.startswith("verity/circuits/"))}, \
+        "the script, the helper it launches Lean through and what it imports, which reads no data"
     code = [f for f in files if not f.endswith(".md")]
     for t in _suites(doc):
         assert [f for f in t["inputs"] if not f.endswith(".md")] == code, f"{t['id']}: keyed by the whole tree but its prose"

@@ -43,6 +43,7 @@ from tests.program.predict.test_window_circuit_tables import FIXED
 from tests.program.predict.test_window_rows import (
     _registered,
 )
+from tests.program.predict.test_window_lowering import _int8_quant, _mixed
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_cut as WK
@@ -143,7 +144,7 @@ def test_a_linear_takes_its_name_and_body_and_an_lm_head_its_selects_name_or_bod
     s = next(j for j, n in enumerate(nodes) if n.fn.name == "TokenSelect")
     gb, sb, sel = nodes[g].fn.bindings, nodes[s].fn.bindings, nodes[s].fn.defn
     assert WK.linears(swapped(s, bind(like(sel, "LogitArgmax", 1, sel.body), **sb)), 16, 256) == honest
-    for fn, why in ((bind(like(Gemm, "Gemm", 2, zeros), **gb), "a unit named as the linear Gemm whose body is no registered "
+    for fn, why in ((bind(like(Gemm, "Gemm", 2, zeros), **gb), "a unit named as Gemm whose body is no registered "
                                                                  "Gemm's at its statics is refused"),
                     (bind(like(Gemm, "Matmul", 1, Gemm.body), **gb), "a registered Gemm's body under another name is refused")):
         with pytest.raises(Unexpressible, match=re.escape(f"{fn.id}: {why}")):
@@ -152,6 +153,21 @@ def test_a_linear_takes_its_name_and_body_and_an_lm_head_its_selects_name_or_bod
     with pytest.raises(ValueError, match=re.escape(f"{other.id}: a unit named as the token select TokenSelect whose body is "
                                                    "no registered select's at its statics is refused")):
         WK.linears(swapped(s, other), 16, 256)
+
+
+def test_a_position_takes_an_embeddings_name_and_body_and_an_int8_linear_its_quants_name_or_body(low):
+    """The cut opens a position only at a unit with `Embedding`'s name and a registered `Embedding`'s body, and refuses an
+    int8 linear at a unit with `Int8RowQuant`'s name and body: either without the other is refused by name."""
+    nodes, honest = low.fn.body.nodes, WK.linears(low.fn, 16, 256)
+    e = next(j for j, n in enumerate(nodes) if n.fn.name == "Embedding")
+    g = next(j for j, n in enumerate(nodes) if n.fn.name == "Gemm" and j not in honest.heads)
+    for j, fn, family, why in ((e, nodes[e].fn, "Embedding", "a position begins at each embedding"),
+                               (g, _int8_quant(), "Int8RowQuant", "an int8 linear is known by its quant's name")):
+        for mixed, refusal in _mixed(fn, family, why):
+            swapped = NS(id=low.fn.id, body=NS(nodes=[NS(fn=mixed if k == j else n.fn, args=n.args)
+                                                     for k, n in enumerate(nodes)]))
+            with pytest.raises(Unexpressible, match=re.escape(refusal)):
+                WK.linears(swapped, 16, 256)
 
 
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):

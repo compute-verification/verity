@@ -103,7 +103,8 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
-    shutil.copy(ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "agree.py", v / "agree.py")
+    for script in ("agree.py", "lean_run.py"):                        # agree.py imports its sibling lean_run
+        shutil.copy(ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / script, v / script)
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": [{
         "pr83": "abc", "lean_statement": "verity/flock-circuit@abc", "statement": {"circuit": "art:0123/c.txt", "public": "art:0123/pub.bin"},
         "sessions": [{"dir": "art:0456/honest", "expect": {"accepted": True, "why": ""}}]}]}}))
