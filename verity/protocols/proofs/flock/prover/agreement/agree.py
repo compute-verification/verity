@@ -36,6 +36,8 @@ misses an expectation.
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 #: `verity.commitments.domains.FLOCK_NETLIST`, as bytes: the agreement scripts import the standard library alone
 #: (`test_domains.STDLIB_COPIES` holds the two equal)
@@ -187,17 +189,18 @@ def verdicts(a, slots=None):
         if slots is not None:
             slots.acquire()
         try:
-            # verity_flock.lean_child's ABORT_ON_PANIC: the agreement scripts import the standard library alone
-            p = subprocess.run(t[1] + t[2], capture_output=True, text=True, env={**os.environ, "LEAN_ABORT_ON_PANIC": "1"})
+            p = subprocess.run(t[1] + t[2], capture_output=True, text=True, env=LR.lean_env())
         finally:
             if slots is not None:
                 slots.release()
-        panic = next((x for x in p.stderr.splitlines() if x.startswith(("PANIC", "INTERNAL PANIC"))), None)
-        if t[0] == "lean" and panic is not None:  # its answer is not read: its sessions have no Lean verdict to agree
-            return "", f"{p.stderr}lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}\n"
+        if t[0] == "lean" and (why := LR.why(p, LR.VERIFY_EXITS)) is not None:
+            # its answer is not read: its sessions have no Lean verdict to agree, and `main` fails the step
+            a.lean_refused.append(why)
+            return "", f"{p.stderr}{why}\n"
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
+    a.lean_refused = []
 
     def read(ts):
         with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
@@ -316,7 +319,9 @@ def main(argv=None, slots=None, quiet=False):
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))
-    return 1 if bad else 0
+    for why in a.lean_refused:
+        print(f"agree: FAILED: {why}", file=sys.stderr)
+    return 1 if bad or a.lean_refused else 0
 
 
 if __name__ == "__main__":
