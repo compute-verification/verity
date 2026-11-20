@@ -2137,32 +2137,60 @@ def CallsOnly (P : Prog) (d : ℕ) : Prop :=
   (P.defs[d]!).prim = false ∧ ∀ nd ∈ (P.defs[d]!).body.nodes,
     (nd.form = .prim ∨ nd.form = .call) ∧ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **`LiftCalls`** (open): the lift to bits of a template of word-primitive calls keeps `S`'s Definitions and Boolean
+/-- **A template of word-primitive nodes**: a composite whose every node calls a word primitive. -/
+def PrimNodes (P : Prog) (d : ℕ) : Prop :=
+  (P.defs[d]!).prim = false ∧ ∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
+
+/-- **A template of word-primitive calls and axis-0 batches**: a composite whose every node calls a word primitive, as a
+primitive or call node, or as a batch node each of whose arguments is batched on axis 0 or not batched. -/
+def Batch0 (P : Prog) (d : ℕ) : Prop :=
+  (P.defs[d]!).prim = false ∧ ∀ nd ∈ (P.defs[d]!).body.nodes,
+    (nd.form = .prim ∨ nd.form = .call ∨
+      (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
+    isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
+
+/-- **`LiftCalls`** (open): the lift to bits of a template of word-primitive nodes keeps `S`'s Definitions and Boolean
 Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node calling its primitive's
 Boolean Definition, where every value of `S`'s Boolean map is a key of its index. -/
 def LiftCalls : Prop :=
   ∀ (S L : Prog) (d e : ℕ), (∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true) →
-    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → CallsOnly S d →
+    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → PrimNodes S d →
     S.defs.size ≤ e ∧ (∀ i < S.defs.size, L.defs[i]? = S.defs[i]?) ∧ (∀ k, L.bodyOf? k = S.bodyOf? k) ∧
     ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
       ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
 
-/-- **`CallsTyped`** (open): in a C `decode` accepts whose root has no recut, a template of word-primitive calls reads
-each of its parameters' and earlier nodes' leaves that exist, in sequences whose count is their references', calls
-only Definitions before it, each node's output a word of its primitive's value's width, and each Boolean Definition of
-its primitives evaluates. -/
-def CallsTyped : Prop :=
+/-- **`Batch0Typed`** (open): in a C `decode` accepts whose root has no recut, a template of word-primitive calls and
+axis-0 batches reads each of its parameters' and earlier nodes' leaves that exist, in sequences whose count is their
+references', calls only Definitions before it, each node's output its members' words of its primitive's value's width,
+each Boolean Definition of its primitives evaluates, and each axis-0 batch argument is an array of the batch's length of
+its primitive's parameter, its references of that parameter's leaf widths repeated, and any other batch argument is not
+batched. -/
+def Batch0Typed : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ d < P.defs.size, CallsOnly P d →
+    ∀ d < P.defs.size, Batch0 P d →
       (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ a ∈ ((P.defs[d]!).body.nodes[k]).args.toList,
         a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn (P.defs[d]!) k r) ∧
       ((P.defs[d]!).body.ret.count = (P.defs[d]!).body.ret.toArray.size ∧
         ∀ r ∈ (P.defs[d]!).body.ret.toArray.toList, RefIn (P.defs[d]!) (P.defs[d]!).body.nodes.size r) ∧
       (∀ nd ∈ (P.defs[d]!).body.nodes, nd.fn < d) ∧
-      (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ y,
-        ((P.defs[d]!).body.nodes[k]).out.widths.toList = [(Prog.evalBool P ((P.defs[d]!).body.nodes[k]).fn y).length]) ∧
+      (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ ys : List (List Bool),
+        ys.length = ((P.defs[d]!).body.nodes[k]).members →
+        ((P.defs[d]!).body.nodes[k]).out.widths.toList =
+          ys.map fun y => (Prog.evalBool P ((P.defs[d]!).body.nodes[k]).fn y).length) ∧
       (∀ nd ∈ (P.defs[d]!).body.nodes, ∀ b, P.bodyOf? (P.defs[nd.fn]!).key = some b →
-        ∀ y, (Flock.Program.evalDef? P (b + 1) b y).isSome = true)
+        ∀ y, (Flock.Program.evalDef? P (b + 1) b y).isSome = true) ∧
+      (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ((P.defs[d]!).body.nodes[k]).form = .batch →
+        ∀ i < ((P.defs[d]!).body.nodes[k]).args.size,
+          (((P.defs[d]!).body.nodes[k]).axes[i]? = some (some 0) → ∃ E : Ty,
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).ty = .array ((P.defs[d]!).body.nodes[k]).n E ∧
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = some (((P.defs[d]!).body.nodes[k]).n, E.leaves) ∧
+            i < (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.size ∧
+            ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2 = E ∧
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).seq.toArray.toList.map
+              (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) =
+              (List.replicate ((P.defs[d]!).body.nodes[k]).n E.widths.toList).flatten) ∧
+          ((∀ ax, ((P.defs[d]!).body.nodes[k]).axes[i]? ≠ some (some ax)) →
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = none))
 
 theorem boolCall {bytes : ByteArray} {P L : Prog} (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
     (hle : P.defs.size ≤ L.defs.size) (hpre : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]!)
@@ -2209,11 +2237,246 @@ theorem wordDef_prim {P : Prog} {f fuel : ℕ} (hf : f < P.defs.size) (hprim : (
   unfold wordDef?
   simp [hdf, hprim]
 
-/-- **`LiftWordEval` for a template of word-primitive calls**, on `LiftCalls` and `CallsTyped`. -/
-theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
+theorem scanCarryBits : ScanCarryBits := by
+  intro d fnOf primOf gatesOf k x hk hs
+  obtain ⟨hk', hx⟩ := Array.getElem?_eq_some_iff.1 hk
+  have hk'' : k < (Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes.size := by
+    rw [liftDef_nodes_size]; exact hk'
+  refine ⟨(Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k], by simp, ?_, ?_, ?_, ?_⟩
+  · simp [Flock.Lift.liftDef, hx]
+  · have e1 : (Form.scan == Form.prim) = false := rfl
+    have e2 : (Form.scan == Form.scan) = true := rfl
+    have e3 : (Form.scan == Form.batch) = false := rfl
+    simp [Flock.Lift.liftDef, hx, hs, Node.members, e1, e2, e3]
+  · simp [Flock.Lift.liftDef, hx]
+  · intro i hi
+    have hi' : i < ((Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k]).args.size := by
+      simp [Flock.Lift.liftDef, hx, hi]
+    rw [getElem!_pos _ i hi', getElem!_pos x.args i hi]
+    simp [Flock.Lift.liftDef, hx]
+theorem list_range_getD_map {α β : Type} [Inhabited α] (l : List α) (f : α → β) :
+    (List.range l.length).map (fun t => f (l.getD t default)) = l.map f := by
+  apply List.ext_getElem (by simp)
+  intro t h1 _
+  simp only [List.length_map, List.length_range] at h1
+  simp [List.getD_eq_getElem?_getD, h1]
+
+theorem replicate_flatten_split {α : Type} (ew : List α) {m n : ℕ} (hm : m ≤ n) :
+    (List.replicate n ew).flatten = (List.replicate m ew).flatten ++ (List.replicate (n - m) ew).flatten := by
+  conv_lhs => rw [show n = m + (n - m) by omega, List.replicate_add, List.flatten_append]
+
+theorem length_replicate_flatten {α : Type} (ew : List α) (m : ℕ) :
+    (List.replicate m ew).flatten.length = m * ew.length := by
+  induction m with
+  | zero => simp
+  | succ m ih => rw [List.replicate_succ, List.flatten_cons, List.length_append, ih, Nat.succ_mul]; omega
+
+theorem sum_replicate_flatten (ew : List ℕ) (m : ℕ) : (List.replicate m ew).flatten.sum = m * ew.sum := by
+  induction m with
+  | zero => simp
+  | succ m ih => rw [List.replicate_succ, List.flatten_cons, List.sum_append, ih, Nat.succ_mul]; omega
+
+theorem length_flatMap_wid {α : Type} (G : α → List α) (wid : α → ℕ) :
+    ∀ l : List α, (∀ r ∈ l, (G r).length = wid r) → (l.flatMap G).length = (l.map wid).sum
+  | [], _ => rfl
+  | r :: l, hl => by
+    rw [List.flatMap_cons, List.length_append, List.map_cons, List.sum_cons, hl r (by simp),
+      length_flatMap_wid G wid l (fun q h => hl q (by simp [h]))]
+
+theorem flatMap_flatten_map {α β : Type} (l : List α) (f : α → List β) : l.flatMap f = (l.map f).flatten := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => rw [List.flatMap_cons, ih]; rfl
+
+/-- **An axis-0 slice's bits**: in a sequence of references whose widths repeat `ew` `n` times, the bits of slice `m`
+of the bit sequence (each reference `r` put as its bits `G r`) are the words of slice `m`, flattened. -/
+theorem block_bits {α β : Type} [Inhabited α] (refs : List α) (G : α → List α) (Vb : α → β) (Vw : α → List β)
+    (wid : α → ℕ) (ew : List ℕ) (n m : ℕ) (hm : m < n)
+    (hG : ∀ r ∈ refs, (G r).map Vb = Vw r ∧ (Vw r).length = wid r)
+    (hw : refs.map wid = (List.replicate n ew).flatten) :
+    (List.range ew.sum).map (fun t => Vb ((refs.flatMap G).getD (t + m * ew.sum) default)) =
+      ((List.range ew.length).map fun t => Vw (refs.getD (t + m * ew.length) default)).flatten := by
+  have hGl : ∀ r ∈ refs, (G r).length = wid r := fun r h => by
+    rw [← (hG r h).2, ← (hG r h).1, List.length_map]
+  have hsplit := replicate_flatten_split ew (Nat.le_of_lt hm)
+  obtain ⟨k, hk⟩ : ∃ k, n - m = k + 1 := ⟨n - m - 1, by omega⟩
+  have hA : (refs.take (m * ew.length)).map wid = (List.replicate m ew).flatten := by
+    rw [List.map_take, hw, hsplit, List.take_left' (length_replicate_flatten ew m)]
+  have hR : (refs.drop (m * ew.length)).map wid = ew ++ (List.replicate k ew).flatten := by
+    rw [List.map_drop, hw, hsplit, List.drop_left' (length_replicate_flatten ew m), hk, List.replicate_succ,
+      List.flatten_cons]
+  have hB : ((refs.drop (m * ew.length)).take ew.length).map wid = ew := by
+    rw [List.map_take, hR, List.take_left' rfl]
+  have hAlen : (refs.take (m * ew.length)).length = m * ew.length := by
+    have := congrArg List.length hA
+    rw [List.length_map, length_replicate_flatten] at this
+    exact this
+  have hBlen : ((refs.drop (m * ew.length)).take ew.length).length = ew.length := by
+    have := congrArg List.length hB
+    rw [List.length_map] at this
+    exact this
+  have hmA : ∀ r ∈ refs.take (m * ew.length), (G r).length = wid r := fun r h => hGl r (List.mem_of_mem_take h)
+  have hmB : ∀ r ∈ (refs.drop (m * ew.length)).take ew.length, r ∈ refs :=
+    fun r h => List.mem_of_mem_drop (List.mem_of_mem_take h)
+  have hAfl : ((refs.take (m * ew.length)).flatMap G).length = m * ew.sum := by
+    rw [length_flatMap_wid G wid _ hmA, hA, sum_replicate_flatten]
+  have hBfl : (((refs.drop (m * ew.length)).take ew.length).flatMap G).length = ew.sum := by
+    rw [length_flatMap_wid G wid _ (fun r h => hGl r (hmB r h)), hB]
+  have hrefs : refs = refs.take (m * ew.length) ++
+      (((refs.drop (m * ew.length)).take ew.length) ++ ((refs.drop (m * ew.length)).drop ew.length)) := by
+    rw [List.take_append_drop, List.take_append_drop]
+  have e1 : ∀ t < ew.sum, (refs.flatMap G).getD (t + m * ew.sum) default =
+      (((refs.drop (m * ew.length)).take ew.length).flatMap G).getD t default := by
+    intro t ht
+    conv_lhs => rw [hrefs]
+    rw [List.flatMap_append, List.flatMap_append, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+      List.getElem?_append_right (by omega), hAfl, show t + m * ew.sum - m * ew.sum = t by omega,
+      List.getElem?_append_left (by omega)]
+  have e2 : ∀ t < ew.length, refs.getD (t + m * ew.length) default =
+      ((refs.drop (m * ew.length)).take ew.length).getD t default := by
+    intro t ht
+    conv_lhs => rw [hrefs]
+    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+      List.getElem?_append_right (by omega), hAlen, show t + m * ew.length - m * ew.length = t by omega,
+      List.getElem?_append_left (by omega)]
+  calc (List.range ew.sum).map (fun t => Vb ((refs.flatMap G).getD (t + m * ew.sum) default))
+      = (List.range ew.sum).map (fun t => Vb ((((refs.drop (m * ew.length)).take ew.length).flatMap G).getD t
+          default)) := List.map_congr_left (fun t ht => by rw [e1 t (List.mem_range.1 ht)])
+    _ = (((refs.drop (m * ew.length)).take ew.length).flatMap G).map Vb := by
+        conv_lhs => rw [← hBfl]
+        exact list_range_getD_map _ _
+    _ = (((refs.drop (m * ew.length)).take ew.length).map Vw).flatten := by
+        rw [List.map_flatMap]
+        rw [show (((refs.drop (m * ew.length)).take ew.length).flatMap fun a => (G a).map Vb) =
+            ((refs.drop (m * ew.length)).take ew.length).flatMap Vw from
+          List.flatMap_congr (fun r h => (hG r (hmB r h)).1)]
+        exact flatMap_flatten_map _ _
+    _ = _ := by
+        congr 1
+        conv_rhs => rw [← hBlen]
+        rw [← list_range_getD_map]
+        rw [hBlen]
+        exact List.map_congr_left (fun t ht => by rw [e2 t (List.mem_range.1 ht)])
+theorem members_one {nd : Node} (h : nd.form = .prim ∨ nd.form = .call) : nd.members = 1 := by
+  rcases h with h | h <;> simp only [Node.members, h] <;> rfl
+
+theorem members_batch {nd : Node} (h : nd.form = .batch) : nd.members = nd.n := by
+  simp only [Node.members, h]; rfl
+
+theorem mapM_some {α β : Type} (f : α → Option β) (g : α → β) :
+    ∀ l : List α, (∀ a ∈ l, f a = some (g a)) → l.mapM f = some (l.map g)
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.mapM_cons, h a (by simp), mapM_some f g l (fun b hb => h b (by simp [hb]))]
+    rfl
+
+theorem flatten_map_singleton {α β : Type} (l : List α) (g : α → β) : (l.map fun a => [g a]).flatten = l.map g := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => rw [List.map_cons, List.flatten_cons, ih]; rfl
+
+/-- Argument `i` of member `m` of batch node `nd` calling `callee`, as the walk reads it. -/
+def batchArg {W : Type} [Inhabited W] (v : Ref → W) (callee : Defn) (nd : Node) (m i : ℕ) : List W :=
+  match (nd.args.getD i default).dims with
+  | none => Flock.Program.argVals v (nd.args.getD i default) (nd.args.getD i default).seq.count id
+  | some (dd, L) => Flock.Program.argVals v (nd.args.getD i default) ((callee.params.getD i default).2).leaves
+      fun t => (t / L * dd) * L + t % L + m * L
+
+theorem batchArg_none {W : Type} [Inhabited W] (v : Ref → W) (callee : Defn) (nd : Node) (m i : ℕ)
+    (h : (nd.args.getD i default).dims = none) :
+    batchArg v callee nd m i = Flock.Program.argVals v (nd.args.getD i default) (nd.args.getD i default).seq.count id := by
+  simp only [batchArg, h]
+
+theorem batchArg_some {W : Type} [Inhabited W] (v : Ref → W) (callee : Defn) (nd : Node) (m i : ℕ) {dd L : ℕ}
+    (h : (nd.args.getD i default).dims = some (dd, L)) :
+    batchArg v callee nd m i = Flock.Program.argVals v (nd.args.getD i default) ((callee.params.getD i default).2).leaves
+      fun t => (t / L * dd) * L + t % L + m * L := by
+  simp only [batchArg, h]
+
+theorem nodeStep_batch {W : Type} [Inhabited W] (I : Flock.Program.Wires Option W)
+    (hI : ∀ {α : Type} (o : Option α), I.lift o = o) (P : Prog) (ev : ℕ → List W → Option (List W)) (d : ℕ)
+    (x : List W) (defn : Defn) (outs : Array (List W)) (nd : Node) {callee : Defn} (hf : nd.form = .batch)
+    (hlt : nd.fn < d) (hc : P.defs[nd.fn]? = some callee) :
+    nodeStep I P ev d x defn outs nd = ((List.range nd.n).mapM fun m => ev nd.fn ((List.range nd.args.size).flatMap
+      fun i => batchArg (Flock.Program.refVal x (Flock.Program.paramStarts defn.params) outs) callee nd m i)) >>=
+        fun ms => pure (outs.push ms.flatten) := by
+  unfold nodeStep
+  rw [if_neg (by omega), show I.lift P.defs[nd.fn]? = some callee from by rw [hI, hc]]
+  simp only [Option.bind_eq_bind, Option.bind_some, hf]
+  rfl
+
+theorem liftDef_arg (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (gatesOf : ℕ → ℕ) {k i : ℕ}
+    (hk : k < D.body.nodes.size) (hk' : k < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size)
+    (hi : i < (D.body.nodes[k]).args.size) :
+    (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.getD i default).seq =
+        Flock.Lift.liftSeq (atOf D) (homoOf D) ((D.body.nodes[k]).args.getD i default).seq ∧
+      ((D.body.nodes[k]).form = .batch → (D.body.nodes[k]).axes[i]? = some (some 0) →
+        (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.getD i default).dims =
+          (Ty.bitType ((D.body.nodes[k]).args.getD i default).ty).axisDims 0) ∧
+      ((D.body.nodes[k]).form = .batch → (∀ ax, (D.body.nodes[k]).axes[i]? ≠ some (some ax)) →
+        (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.getD i default).dims = none) ∧
+      ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size = (D.body.nodes[k]).args.size := by
+  have hsz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size = (D.body.nodes[k]).args.size := by
+    simp [Flock.Lift.liftDef]
+  have hi' : i < ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[k]).args.size := by rw [hsz]; exact hi
+  have hg : ∀ (A : Array Arg) (h : i < A.size), A.getD i default = A[i] := fun A h => by simp [Array.getD, h]
+  rw [hg _ hi', hg _ hi]
+  refine ⟨?_, ?_, ?_, hsz⟩
+  · simp only [Flock.Lift.liftDef, Array.getElem_map, Array.getElem_mapIdx]
+    rfl
+  · intro hf hax
+    simp [Flock.Lift.liftDef, hf, hax]
+  · intro hf hax
+    match h : (D.body.nodes[k]).axes[i]? with
+    | none => simp [Flock.Lift.liftDef, hf, h]
+    | some none => simp [Flock.Lift.liftDef, hf, h]
+    | some (some ax) => exact absurd h (hax ax)
+
+/-- **An axis-0 batch argument's bits**: member `m` of an argument batched on axis 0, whose references' widths repeat
+`ew` `n` times, reads on bits the bits of the words it reads. -/
+theorem axisBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {n m : ℕ} (hm : m < n) {ew : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = (List.replicate n ew).flatten) :
+    (List.range ew.sum).map (fun t =>
+      Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+        (outs.map List.flatten)
+        ((Flock.Lift.liftSeq (atOf D) (homoOf D) s).toArray.getD (t / ew.sum * n * ew.sum + t % ew.sum + m * ew.sum)
+          default)) =
+      ((List.range ew.length).map fun t =>
+        Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+          (s.toArray.getD (t / ew.length * n * ew.length + t % ew.length + m * ew.length) default)).flatten := by
+  have hA : ∀ (A : Array Ref) (i : ℕ), A.getD i default = A.toList.getD i default := by
+    intro A i
+    rw [Array.getD_eq_getD_getElem?, ← Array.getElem?_toList, List.getD_eq_getElem?_getD]
+  have i1 : ∀ (L t : ℕ), t < L → t / L * n * L + t % L + m * L = t + m * L := by
+    intro L t ht
+    rw [Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht]; simp
+  have hG : ∀ r ∈ s.toArray.toList,
+      ((List.range (atOf D r.p r.i r.j).2).map fun t => ({ p := r.p, i := r.i, j := (atOf D r.p r.i r.j).1 + t } : Ref)).map
+        (Flock.Program.refVal x.flatten (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t)))
+          (outs.map List.flatten)) = Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r ∧
+      (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs r).length = (tyAt D r).widths[r.j]! := by
+    intro r h
+    rw [List.map_map, (atOf_in (hr r h)).1]
+    exact refBits hx ho (hr r h)
+  have hls := liftSeqRefs (atOf D) (homoOf D) s (fun r h w hw j => by
+    rw [(atOf_in (hr r h)).1]; rw [(atOf_in (hr r h)).2] at hw; exact bitAt_homo hw j)
+  have key := block_bits s.toArray.toList _ _ _ (fun r => (tyAt D r).widths[r.j]!) ew n m hm hG hw
+  rw [← hls] at key
+  refine (List.map_congr_left (fun t ht => ?_)).trans (key.trans ?_)
+  · rw [i1 _ t (List.mem_range.1 ht), hA]
+  · congr 1
+    exact List.map_congr_left (fun t ht => by rw [i1 _ t (List.mem_range.1 ht), hA])
+
+theorem mapM_some_map {α β : Type} (g : α → β) (l : List α) : l.mapM (fun a => some (g a)) = some (l.map g) :=
+  mapM_some _ g l (fun _ _ => rfl)
+
+/-- **`LiftWordEval` for a template of word-primitive calls and axis-0 batches**, on `LiftCalls` and `Batch0Typed`. -/
+theorem liftWordEval_batch0 (hLC : LiftCalls) (hT : Batch0Typed) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → CallsOnly P d → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → Batch0 P d → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten := by
   intro bytes P units S d L e h hr hs hd hco hl x hx
@@ -2221,14 +2484,14 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
   obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
   have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
   have hbodyS := bodyOf_eq hm hbool hidx
-  obtain ⟨hargs, hret, hord, hout, hsome⟩ := hT bytes P h hr d hd hco
+  obtain ⟨hargs, hret, hord, hout, hsome, hbat⟩ := hT bytes P h hr d hd hco
   have hSd : S.defs[d]! = P.defs[d]! := hpre d hd
-  have hcoS : CallsOnly S d := by
+  have hcoS : PrimNodes S d := by
     refine ⟨by rw [hSd]; exact hco.1, fun nd hnd => ?_⟩
     rw [hSd] at hnd
     have hlt : nd.fn < P.defs.size := by have := hord nd hnd; omega
     rw [hpre _ hlt]
-    exact hco.2 nd hnd
+    exact (hco.2 nd hnd).2
   have hcont : ∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true := by
     intro k v hv
     rw [hbool] at hv
@@ -2250,7 +2513,7 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
   have hLbP : ∀ k, L.bodyOf? k = P.bodyOf? k := fun k => by rw [hLbody, hbodyS]
   have hPd : P.defs[d]? = some (P.defs[d]!) := by rw [getElem!_pos P.defs d hd]; exact getElem?_pos P.defs d hd
   obtain ⟨hco1, hco2⟩ := hco
-  generalize hD : P.defs[d]! = D at hPd hco1 hco2 hx hargs hret hord hout hsome hLe hfn
+  generalize hD : P.defs[d]! = D at hPd hco1 hco2 hx hargs hret hord hout hsome hbat hLe hfn
   have hD'p : (Flock.Lift.liftDef D fnOf primOf gatesOf).prim = false := by rw [liftDef_prim]; exact hco1
   have hsz' : (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.toList.length = D.body.nodes.toList.length := by
     simp [liftDef_nodes_size]
@@ -2281,24 +2544,119 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
       rw [getElem!_pos P.defs _ hfnP]; exact getElem?_pos P.defs _ hfnP
     have hcalL : L.defs[fnOf (D.body.nodes[n]).fn]? = some (P.defs[fnOf (D.body.nodes[n]).fn]!) := by
       rw [hLP _ hbl, getElem!_pos P.defs _ hbl]; exact getElem?_pos P.defs _ hbl
+    have hB := boolCall h hr (by omega) hLP' hLbP hfnP hwp hbS (hsome _ hmem _ hbS)
+    by_cases hb : (D.body.nodes[n]).form = .batch
+    · have hax : ∀ i < (D.body.nodes[n]).args.size,
+          (D.body.nodes[n]).axes[i]? = some (some 0) ∨ ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax) := by
+        rcases hform with hf' | hf' | ⟨-, hax⟩
+        · rw [hf'] at hb; cases hb
+        · rw [hf'] at hb; cases hb
+        · exact hax
+      have hf := hb
+      have hf2 : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).form = .batch := by
+        simp only [Flock.Lift.liftDef, Array.getElem_map, hf]; rfl
+      have hn2 : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).n = (D.body.nodes[n]).n := by
+        simp [Flock.Lift.liftDef]
+      have hasz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size = (D.body.nodes[n]).args.size := by
+        simp [Flock.Lift.liftDef]
+      have hW := nodeStep_batch wordWires (fun _ => rfl) P (wordDef? P (2 * P.defs.size + 1)) d x D outs
+        (D.body.nodes[n]) hf hlt hcal
+      have hBt := nodeStep_batch Flock.Program.Wires.bool (fun _ => rfl) L
+        (Flock.Program.evalDef? L (2 * L.defs.size + 1)) e x.flatten (Flock.Lift.liftDef D fnOf primOf gatesOf)
+        (outs.map List.flatten) ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) hf2
+        (by rw [hfn']; omega) (by rw [hfn']; exact hcalL)
+      rw [liftDef_params] at hBt
+      obtain ⟨b', -, hbo, -, -, hpar, -⟩ := hmap _ hfnP hwp
+      obtain rfl : b' = fnOf (D.body.nodes[n]).fn := Option.some.inj (hbo.symm.trans hbS)
+      have hY : ∀ m < (D.body.nodes[n]).n,
+          ((List.range ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size).flatMap fun i =>
+            batchArg (Flock.Program.refVal x.flatten
+              (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
+              (P.defs[fnOf (D.body.nodes[n]).fn]!) ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m i) =
+          ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
+              batchArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs)
+                (P.defs[(D.body.nodes[n]).fn]!) (D.body.nodes[n]) m i).flatten := by
+        intro m hm'
+        rw [hasz, flatten_flatMap]
+        apply List.flatMap_congr
+        intro i hi
+        have hi' := List.mem_range.1 hi
+        obtain ⟨hseqi, hax0, haxn, -⟩ := liftDef_arg D fnOf primOf gatesOf hnD hnD' hi'
+        have hmemA : (D.body.nodes[n]).args.getD i default ∈ (D.body.nodes[n]).args.toList := by
+          simp [Array.getD, hi']
+        obtain ⟨hcnt, hrefs⟩ := hargs n hnD _ hmemA
+        have hrefs' : ∀ r ∈ ((D.body.nodes[n]).args.getD i default).seq.toArray.toList, RefIn D outs.size r :=
+          fun r h => by rw [hsz]; exact hrefs r h
+        rcases hax i hi' with h0 | hn0
+        · obtain ⟨E, hty, hdims, hip, hpe, hw⟩ := (hbat n hnD hf i hi').1 h0
+          have hd' : (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.getD i default).dims =
+              some ((D.body.nodes[n]).n, (Ty.bitType E).leaves) := by
+            rw [hax0 hf h0, hty]; simp [Ty.bitType, Ty.axisDims]
+          have hsb : (P.defs[fnOf (D.body.nodes[n]).fn]!).params.size =
+              (P.defs[(D.body.nodes[n]).fn]!).params.size := by
+            simpa using congrArg Array.size hpar
+          have hib : i < (P.defs[fnOf (D.body.nodes[n]).fn]!).params.size := by rw [hsb]; exact hip
+          have hpb : ((P.defs[fnOf (D.body.nodes[n]).fn]!).params.getD i default).2 = Ty.bitType E := by
+            have h1 := congrArg (·[i]?) hpar
+            simp only [Array.getElem?_map] at h1
+            rw [Array.getElem?_eq_getElem hib, Array.getElem?_eq_getElem hip] at h1
+            rw [← hpe, Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hib,
+              Array.getElem?_eq_getElem hip]
+            simpa using h1
+          rw [batchArg_some _ _ _ _ _ hd', batchArg_some _ _ _ _ _ hdims, hpb, hpe]
+          simp only [Flock.Program.argVals]
+          rw [hseqi, ← sum_widths E, show E.leaves = E.widths.toList.length by
+            rw [Array.length_toList, hb_widths_size]]
+          exact axisBits hx ho hrefs' hm' hw
+        · rw [batchArg_none _ _ _ _ _ (haxn hf hn0), batchArg_none _ _ _ _ _ ((hbat n hnD hf i hi').2 hn0)]
+          simp only [Flock.Program.argVals]
+          rw [hseqi]
+          exact seqBits hx ho hcnt hrefs'
+      refine ⟨(List.range (D.body.nodes[n]).n).map fun m => Prog.evalBool P (D.body.nodes[n]).fn ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
+              batchArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs)
+                (P.defs[(D.body.nodes[n]).fn]!) (D.body.nodes[n]) m i).flatten,
+        ?_, ?_, ?_⟩
+      · rw [hW]
+        simp only [wordDef_prim hfnP hprim]
+        rw [mapM_some_map]
+        exact congrArg (fun z => some (outs.push z)) (flatten_map_singleton _ _)
+      · rw [hBt, hfn']
+        simp only [hB]
+        rw [mapM_some_map, Array.map_push, hn2]
+        exact congrArg (fun z => some ((outs.map List.flatten).push z))
+          (congrArg List.flatten (List.map_congr_left fun m hm => by rw [hY m (List.mem_range.1 hm)]))
+      · apply outsOk_push ho
+        rw [hsz, show D.body.nodes.getD n default = D.body.nodes[n] from by simp [Array.getD, hnD]]
+        rw [hout n hnD ((List.range (D.body.nodes[n]).n).map fun m => ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
+              batchArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs)
+                (P.defs[(D.body.nodes[n]).fn]!) (D.body.nodes[n]) m i).flatten)
+          (by rw [List.length_map, List.length_range, members_batch hf])]
+        simp only [List.map_map]
+        try rfl
+    have hform2 : (D.body.nodes[n]).form = .prim ∨ (D.body.nodes[n]).form = .call := by
+      rcases hform with hf | hf | ⟨hf, -⟩
+      · exact Or.inl hf
+      · exact Or.inr hf
+      · exact absurd hf hb
+    have hout1 : ∀ y, (D.body.nodes[n]).out.widths.toList = [(Prog.evalBool P (D.body.nodes[n]).fn y).length] :=
+      fun y => by rw [hout n hnD [y] (by rw [members_one hform2]; rfl)]; rfl
     have hargsB := argsBits hx ho hseq (fun a ha => by
       obtain ⟨h1, h2⟩ := hargs n hnD a ha
       exact ⟨h1, fun r hr' => by rw [hsz]; exact h2 r hr'⟩)
     rw [← liftDef_params D fnOf primOf gatesOf] at hargsB
-    have hB := boolCall h hr (by omega) hLP' hLbP hfnP hwp hbS (hsome _ hmem _ hbS)
     refine ⟨[Prog.evalBool P (D.body.nodes[n]).fn
       ((D.body.nodes[n]).args.toList.flatMap fun a =>
         Flock.Program.argVals (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) a a.seq.count id).flatten],
       ?_, ?_, ?_⟩
-    · rcases hform with hf | hf <;>
+    · rcases hform2 with hf | hf <;>
         simp [nodeStep, wordWires, hf, hcal, show ¬ d ≤ (D.body.nodes[n]).fn by omega, wordDef_prim hfnP hprim]
-    · rcases hform' hform with hf | hf <;>
+    · rcases hform' hform2 with hf | hf <;>
         simp [nodeStep, Flock.Program.Wires.bool, hf, hfn', hcalL, show ¬ e ≤ fnOf (D.body.nodes[n]).fn by omega,
           hargsB, hB, Array.map_push]
     · apply outsOk_push ho
       rw [hsz]
       simp only [List.map_cons, List.map_nil, Array.getD, hnD, ↓reduceDIte]
-      exact (hout n hnD _).symm
+      exact (hout1 _).symm
   obtain ⟨o, g1, g2, g3, g4⟩ := fold_calls D D.body.nodes.toList
     (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.toList hsz' _ _ hstep D.body.nodes.toList.length 0 #[]
     (by omega) rfl (fun i hi => by simp at hi)
@@ -2315,22 +2673,18 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
   have hos : o.size = D.body.nodes.size := by simpa using g4
   exact seqBits hx g3 hret.1 (fun r hr' => by rw [hos]; exact hret.2 r hr')
 
-theorem scanCarryBits : ScanCarryBits := by
-  intro d fnOf primOf gatesOf k x hk hs
-  obtain ⟨hk', hx⟩ := Array.getElem?_eq_some_iff.1 hk
-  have hk'' : k < (Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes.size := by
-    rw [liftDef_nodes_size]; exact hk'
-  refine ⟨(Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k], by simp, ?_, ?_, ?_, ?_⟩
-  · simp [Flock.Lift.liftDef, hx]
-  · have e1 : (Form.scan == Form.prim) = false := rfl
-    have e2 : (Form.scan == Form.scan) = true := rfl
-    have e3 : (Form.scan == Form.batch) = false := rfl
-    simp [Flock.Lift.liftDef, hx, hs, Node.members, e1, e2, e3]
-  · simp [Flock.Lift.liftDef, hx]
-  · intro i hi
-    have hi' : i < ((Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k]).args.size := by
-      simp [Flock.Lift.liftDef, hx, hi]
-    rw [getElem!_pos _ i hi', getElem!_pos x.args i hi]
-    simp [Flock.Lift.liftDef, hx]
+
+theorem batch0_of_calls {P : Prog} {d : ℕ} (h : CallsOnly P d) : Batch0 P d :=
+  ⟨h.1, fun nd hnd => ⟨(h.2 nd hnd).1.elim Or.inl (fun h' => Or.inr (Or.inl h')), (h.2 nd hnd).2⟩⟩
+
+/-- **`LiftWordEval` for a template of word-primitive calls**, on `LiftCalls` and `Batch0Typed`. -/
+theorem liftWordEval_calls (hLC : LiftCalls) (hT : Batch0Typed) :
+    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
+      decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
+      d < P.defs.size → CallsOnly P d → Flock.Lift.lift S d = .ok (L, e) →
+      ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
+        Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
+  fun bytes P units S d L e h hr hs hd hco => liftWordEval_batch0 hLC hT bytes P units S d L e h hr hs hd (batch0_of_calls hco)
+
 end Flock.Chain
 
