@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Flock.Circuit.LowerAsm
 public import Proofs.Properties.Flock.Circuit.Chain
+public import Proofs.Properties.Flock.DecodeBoolean
 
 /-!
 # `LowerEval`, proved
@@ -447,7 +448,7 @@ theorem admitLeaves (hH : HomoBits) : AdmitLeaves := by
         · simp [k1]
         · simp only [k1, if_false]
           simp
-          first | omega | exact ⟨0, by omega, by first | rfl | simp⟩
+          omega
     have hge := count_flatMap_ge (fn.params.toList.map fun p => (p.1, p.2.widths.foldl (· + ·) 0))
       (fun x => (Spot.OneStageZk.cutRows cs #[x]).toList.map Prod.fst) r (fun x => x.1 == n) hrow
     have hlen : ((fn.params.toList.map fun p => (p.1, p.2.widths.foldl (· + ·) 0)).filter fun x => x.1 == n).length =
@@ -489,5 +490,220 @@ theorem admitLeaves (hH : HomoBits) : AdmitLeaves := by
 /-- **`LowerEvalDoor`**, on `HomoBits`. -/
 theorem lowerEvalDoor (hH : HomoBits) : LowerEvalDoor :=
   lowerEvalDoor_of admitWhole (admitLeaves hH)
+
+/-! ## `restrict` keeps C's Boolean Definitions -/
+
+/-- What `restrict` keeps of C in the block's Program `S`: C's Definitions, as a prefix of `S`'s; its Boolean map; each
+entry of its index; and a primitive `S` adds has a key C's index lacks. -/
+def RShape (P S : Prog) : Prop :=
+  P.defs.size ≤ S.defs.size ∧ (∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) ∧ S.boolean = P.boolean ∧
+    (∀ (k : String) (i : ℕ), P.index[k]? = some i → S.index[k]? = some i) ∧
+    ∀ i < S.defs.size, P.defs.size ≤ i → (S.defs[i]!).prim = true → P.index[(S.defs[i]!).key]? = none
+
+/-- **`RestrictShape`**: `restrict` keeps C as `RShape` says. -/
+def RestrictShape : Prop :=
+  ∀ (P : Prog) (units : Array ℕ) (S : Prog), Spot.Restrict.restrict P units = .ok S → RShape P S
+
+theorem bodyOf_eq {P S : Prog} (hm : P.BoolMapOk) (hb : S.boolean = P.boolean)
+    (hi : ∀ (k : String) (i : ℕ), P.index[k]? = some i → S.index[k]? = some i) (k : String) : S.bodyOf? k = P.bodyOf? k := by
+  unfold Prog.bodyOf?
+  rw [hb]
+  cases hv : P.boolean[k]? with
+  | none => rfl
+  | some v =>
+    obtain ⟨w, hw, -, hkey, hword⟩ := hm.2 k v hv
+    obtain ⟨b, -, hbo, -⟩ := hm.1 w hw (by rw [hkey]; exact hword)
+    rw [hkey] at hbo
+    unfold Prog.bodyOf? at hbo
+    rw [hv] at hbo
+    have hbo' : P.index[v]? = some b := hbo
+    show S.index[v]? = P.index[v]?
+    rw [hbo', hi v b hbo']
+
+theorem boolDef_lift {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) :
+    ∀ {d : ℕ}, P.BoolDef d → d < P.defs.size → S.BoolDef d := by
+  intro d h
+  induction h with
+  | prim hp hbp =>
+    intro hd
+    exact .prim (by rw [hpre _ hd]; exact hp) (by rw [hpre _ hd]; exact hbp)
+  | @comp d hpf hprimc hlt _ ih =>
+    intro hd
+    have hfn : ∀ nd ∈ (P.defs[d]!).body.nodes, nd.fn < P.defs.size := by
+      intro nd hnd
+      by_contra hc
+      have h0 : (P.defs[nd.fn]!).prim = false := by
+        rw [getElem!_neg P.defs nd.fn hc]; rfl
+      have := hlt nd hnd h0
+      omega
+    refine .comp (by rw [hpre _ hd]; exact hpf) (fun nd hnd hp => ?_) (fun nd hnd hp => ?_) (fun nd hnd hp => ?_)
+    all_goals rw [hpre _ hd] at hnd; rw [hpre _ (hfn nd hnd)] at hp
+    · rw [hpre _ (hfn nd hnd)]
+      exact hprimc nd hnd hp
+    · exact hlt nd hnd hp
+    · exact ih nd hnd hp (hfn nd hnd)
+
+open FlockSoundness.DecodeBoolean (decode_facts word_ids gateOf_none bool_none fuel_stable) in
+/-- **`RestrictBodyAgrees` for a decoded C**, on `RestrictShape`: the block's Program of a Program `decode` accepts
+whose root has no recut keeps its word primitives evaluating as their Boolean Definitions. -/
+theorem restrictBodyAgrees_decode (hR : RestrictShape) :
+    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog), decode bytes = .ok P →
+      (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S := by
+  intro bytes P units S h hr hs p hp b hprim hb
+  obtain ⟨hle, hpre, hbool, hidx, hnew⟩ := hR P units S hs
+  obtain ⟨⟨hmap, hkeys⟩, hids⟩ := decode_facts bytes P h hr
+  have hbo := bodyOf_eq ⟨hmap, hkeys⟩ hbool hidx
+  have hbP := hb
+  rw [hbo] at hbP
+  by_cases hpP : p < P.defs.size
+  swap
+  · exfalso
+    have hn := hnew p hp (by omega) hprim
+    unfold Prog.bodyOf? at hbP
+    cases hv : P.boolean[(S.defs[p]!).key]? with
+    | none => rw [hv] at hbP; cases hbP
+    | some v =>
+      obtain ⟨w, -, hiw, -⟩ := hkeys _ v hv
+      rw [hn] at hiw
+      cases hiw
+  rw [hpre p hpP] at hbP
+  have hprimP : (P.defs[p]!).prim = true := by rw [← hpre p hpP]; exact hprim
+  have hidxP := (InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys.decode_keys bytes P h).2 p hpP
+  have hb0 := hbP
+  unfold Prog.bodyOf? at hb0
+  cases hv : P.boolean[(P.defs[p]!).key]? with
+  | none => rw [hv] at hb0; cases hb0
+  | some v =>
+    obtain ⟨w, -, hiw, -, hword⟩ := hkeys _ _ hv
+    rw [hidxP] at hiw
+    obtain rfl := Option.some.inj hiw
+    obtain ⟨b', hb', hbo', hbody⟩ := hmap p hpP hword
+    have hbb : b' = b := Option.some.inj (hbo'.symm.trans hbP)
+    rw [hbb] at hb' hbody
+    obtain ⟨hid, hmis, -⟩ := hids p hpP hprimP
+    obtain ⟨hin, hbp⟩ := word_ids hword
+    have hg : Flock.Lower.gateOf? (P.defs[p]!).id = none := by
+      rw [hid]
+      exact gateOf_none hbp hmis hin
+    have hdS : S.defs[p]? = some (P.defs[p]!) := by
+      rw [← hpre p hpP, getElem!_pos S.defs p hp]
+      exact getElem?_pos S.defs p hp
+    have hBS : ∀ k, isBooleanPrim k = true → S.bodyOf? k = none := fun k hk => by
+      rw [hbo]
+      exact bool_none hkeys k hk
+    have hbS : S.bodyOf? (P.defs[p]!).key = some b := by rw [hbo]; exact hbP
+    funext x
+    unfold Prog.evalBool
+    rw [show 2 * S.defs.size + 2 = (2 * S.defs.size + 1) + 1 from rfl,
+      FlockSoundness.EvalBool.evalDef?_body S hdS hprimP hg hbS,
+      fuel_stable S hBS (boolDef_lift hpre hbody.1 hb') (by omega : b < 2 * S.defs.size + 1) x]
+
+/-! ## `RestrictShape`, proved -/
+
+/-- `restrict`'s Definitions and index while it adds the input primitives: `RShape` but the Boolean map. -/
+def RInv (P : Prog) (defs : Array Defn) (index : Std.HashMap String ℕ) : Prop :=
+  P.defs.size ≤ defs.size ∧ (∀ i < P.defs.size, defs[i]! = P.defs[i]!) ∧
+    (∀ (k : String) (i : ℕ), P.index[k]? = some i → index[k]? = some i) ∧
+    ∀ i < defs.size, P.defs.size ≤ i → (defs[i]!).prim = true → P.index[(defs[i]!).key]? = none
+
+theorem rinv_init (P : Prog) : RInv P P.defs P.index :=
+  ⟨Nat.le_refl _, fun _ _ => rfl, fun _ _ h => h, fun _ h1 h2 => absurd h1 (by omega)⟩
+
+theorem push_get!_lt {defs : Array Defn} {d : Defn} {i : ℕ} (h : i < defs.size) : (defs.push d)[i]! = defs[i]! := by
+  rw [getElem!_pos (defs.push d) i (by simp; omega), getElem!_pos defs i h, Array.getElem_push_lt h]
+
+theorem push_get!_eq {defs : Array Defn} {d : Defn} : (defs.push d)[defs.size]! = d := by
+  rw [getElem!_pos (defs.push d) defs.size (by simp), Array.getElem_push_eq]
+
+theorem rinv_push {P : Prog} {defs : Array Defn} {index : Std.HashMap String ℕ} {d : Defn} {n : ℕ}
+    (h : RInv P defs index) (hk : index[d.key]? = none) : RInv P (defs.push d) (index.insert d.key n) := by
+  obtain ⟨hle, hpre, hidx, hnew⟩ := h
+  refine ⟨by simp; omega, fun i hi => by rw [push_get!_lt (by omega)]; exact hpre i hi, fun k i hki => ?_,
+    fun i hi hPi hp => ?_⟩
+  · rw [Std.HashMap.getElem?_insert]
+    split
+    · rename_i he
+      have := hidx k i hki
+      rw [← eq_of_beq he, hk] at this
+      cases this
+    · exact hidx k i hki
+  · simp only [Array.size_push] at hi
+    by_cases hlt : i < defs.size
+    · rw [push_get!_lt hlt] at hp ⊢
+      exact hnew i hlt hPi hp
+    · obtain rfl : i = defs.size := by omega
+      rw [push_get!_eq]
+      cases hP : P.index[d.key]? with
+      | none => rfl
+      | some j => rw [hidx _ j hP] at hk; cases hk
+
+theorem rshape_of {P S : Prog} {defs : Array Defn} {index : Std.HashMap String ℕ} {blk : Defn}
+    (h : RInv P defs index) (hc : ¬ index.contains blk.key = true)
+    (hd : S.defs = defs.push blk) (hi : S.index = index.insert blk.key defs.size) (hb : S.boolean = P.boolean) :
+    RShape P S := by
+  have hk : index[blk.key]? = none := by
+    exact Std.HashMap.getElem?_eq_none (by simpa using hc)
+  obtain ⟨hle, hpre, hidx, hnew⟩ := rinv_push (n := defs.size) h hk
+  refine ⟨hd ▸ hle, hd ▸ hpre, hb, hi ▸ hidx, hd ▸ fun i hi' hPi hpi => hnew i hi' hPi hpi⟩
+
+section RestrictTriple
+open Std.Do
+set_option mvcgen.warning false
+
+theorem exc_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x ⦃⇓? _ => ⌜True⌝⦄ := by
+  cases x <;> exact fun _ => True.intro
+
+theorem exc_throw_spec {ε α : Type} (e : ε) (Q : PostCond α (.except ε .pure)) :
+    ⦃Q.2.1 e⦄ (MonadExceptOf.throw e : Except ε α) ⦃Q⦄ := fun h => h
+
+theorem exc_of_triple {ε α : Type} {x : Except ε α} {Q : α → Prop} {r : α}
+    (hT : ⦃⌜True⌝⦄ x ⦃⇓? a => ⌜Q a⌝⦄) (h : x = .ok r) : Q r := by
+  subst h; exact hT True.intro
+
+theorem exc_wp_true {ε α : Type} (x : Except ε α) (Q : α → Assertion (.except ε .pure)) (hQ : ∀ a, (Q a).down) :
+    (wp⟦x⟧ (Q, ExceptConds.true)).down := by
+  cases x with
+  | error e => exact True.intro
+  | ok a => exact hQ a
+
+theorem front_spec (P : Prog) (us : Array ℕ) : ⦃⌜True⌝⦄ Spot.BlockFront.front P us ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+theorem members_spec (P : Prog) (us : Array ℕ) : ⦃⌜True⌝⦄ Spot.BlockFront.members P us ⦃⇓? _ => ⌜True⌝⦄ :=
+  exc_spec _
+theorem spell_spec (P : Prog) r rs : ⦃⌜True⌝⦄ Spot.Restrict.spell P r rs ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+theorem resolve_spec (P : Prog) sc r : ⦃⌜True⌝⦄ Flock.Program.resolve P sc r ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+
+theorem restrict_triple (P : Prog) (units : Array ℕ) :
+    ⦃⌜True⌝⦄ Spot.Restrict.restrict P units ⦃⇓? S => ⌜RShape P S⌝⦄ := by
+  unfold Spot.Restrict.restrict
+  mvcgen [front_spec, members_spec, spell_spec, resolve_spec, exc_throw_spec, -Spec.throw_Except] invariants
+  · ⇓? ⟨_, defs, index, _, _⟩ => ⌜RInv P defs index⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  all_goals first
+    | trivial
+    | exact rinv_init P
+    | (exact rinv_push (by assumption) (by assumption))
+    | (exact rshape_of (by assumption) (by assumption) rfl rfl rfl)
+    | exact exc_wp_true _ _ (fun r => by cases r <;> exact True.intro)
+
+end RestrictTriple
+
+/-- **`restrict` keeps C** (`RestrictShape`). -/
+theorem restrictShape : RestrictShape := fun P units _ h => exc_of_triple (restrict_triple P units) h
+
+/-- **`RestrictBodyAgrees` for a decoded C**: the block's Program of a Program `decode` accepts whose root has no recut
+keeps its word primitives evaluating as their Boolean Definitions. -/
+theorem restrictBodyAgreesDecoded :
+    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog), decode bytes = .ok P →
+      (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S :=
+  restrictBodyAgrees_decode restrictShape
 
 end Flock.Chain
