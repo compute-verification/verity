@@ -116,7 +116,7 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
         if v is not None and v.lean is not None:
             v.lean.proc.terminate()
             v.lean.proc.kill()
-            v.stop()
+            v.stop(check=False)
 
 
 def store() -> NodeMemory:
