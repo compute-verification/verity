@@ -1843,7 +1843,7 @@ TPY=$TREE/.venv/bin/python
 RAN=() REFUSED=() FAILED=()
 step_refused() { REFUSED+=("$1"); say "$1: not run: $2"; }
 road_end() {
-  local sampled="no sampled verdict, so no δ or ε: the sampled proofs did not run"
+  local sampled="no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run"
   [[ " ${RAN[*]:-} " != *" sampled-proofs "* ]] || sampled="this line states no δ or ε of the sampled proofs that ran"
   say "ROAD END (the window's record): ran ${#RAN[@]} ($(IFS=,; echo "${RAN[*]:-}")); refused ${#REFUSED[@]} ($(IFS=,; echo "${REFUSED[*]:-}")); failed ${#FAILED[@]} ($(IFS=,; echo "${FAILED[*]:-}")); no verdict stands for a step that did not run; $sampled; the circuit digest is kept private and NO public value fixes it before the coins"
   exit "$1"

@@ -151,7 +151,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     end = _end(log)
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
     assert "no verdict stands for a step that did not run" in end
-    assert end.endswith("no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
+    assert end.endswith("no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
     assert [x for x in lines.splitlines() if x.startswith("CLASS ")] == [
         "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
         "slots and outputs are the application's)"], lines

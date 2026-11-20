@@ -117,7 +117,7 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     done = next(x for x in script.splitlines() if '"SMOKE DONE' in x)
     assert done.endswith('no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it '
                          'before the coins"'), done
-    assert "its circuit registered by the prover" in done
+    assert "its circuit registered by the prover; no proof is made, and Lean verifies nothing; " in done
     said = [x.lower() for x in script.splitlines() if re.search(r"\b(say|print)\b|said\+=", x)]
     assert not [x for x in said for p in ("compiled by the registered compiler", "charged", "bounded by", "capped at") if p in x]
     assert 'cp "$VW/registration.json" "$VW/circuit.json" "$DREG" "$OUT/window/"' in script
