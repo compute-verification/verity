@@ -62,9 +62,10 @@ lanes don't each resolve to one piece of their periods (`segDown`), a piece as i
 whole lane's first row run by run and its levels, each level's radix times the intervals before it: `Piece.pisWalk`,
 before a summary's `used` and on the root nodes' reads), a rowed segment's copies period by period (`readsWalk`;
 `Seg.split` leaves none in a read), and periodic intervals whose runs don't fill their period, run by run (`PI.emit`,
-counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`), and the
-leaves of a strided piece taken through a parameter (`throughArg`). Still walked unbounded: segments of copies that
-overlap other reads of the same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
+counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`), the
+leaves of a strided piece taken through a parameter (`throughArg`), and segments of copies that may overlap or go
+backwards, or that meet other reads of the same inference block, expanded copy by copy (`copiesStep`, `widthIn`:
+`freshWalk`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -1130,9 +1131,8 @@ def sweepStep (width : Array Nat → Nat) (acc : Nat × Array Nat × Nat) (it : 
   if !acc.2.1.isEmpty && it.1 ≥ acc.2.2 then (acc.1 + width acc.2.1, #[it.2.2], it.2.1)
   else (acc.1, acc.2.1.push it.2.2, max acc.2.2 it.2.1)
 
-/-- The total width of the distinct gates of `segs`. A segment of copies is copies of one frame; copies of one frame are
-counted as copies times one copy's width, alone in their span, and with what else meets their span as gates. -/
-def freshWidth (segs : Array Seg) : Nat :=
+/-- `segs`' intervals and frames swept by start, each component of the sweep counted by `w ivs frames`. -/
+def sweepWith (w : Array (Nat × Nat × Nat) → Array Cl → Array Nat → Nat) (segs : Array Seg) : Nat :=
   let acc := segs.foldl copiesStep (gateIvs (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)), #[])
   let ivs := acc.1
   let frames := (acc.2.toList.mergeSort fun x y =>
@@ -1140,21 +1140,40 @@ def freshWidth (segs : Array Seg) : Nat :=
   let n := ivs.size
   let items := (ivs.mapIdx fun i x => (x.1, x.2.1, i)) ++
     (frames.mapIdx fun i x => (x.lo, x.lo + (x.cnt - 1) * x.period + x.span, n + i))
-  let fin := (items.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (sweepStep (widthIn ivs frames)) (0, #[], 0)
-  if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1
+  let fin := (items.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (sweepStep (w ivs frames)) (0, #[], 0)
+  if fin.2.1.isEmpty then fin.1 else fin.1 + w ivs frames fin.2.1
+
+/-- The total width of the distinct gates of `segs`. A segment of copies is copies of one frame; copies of one frame are
+counted as copies times one copy's width, alone in their span, and with what else meets their span as gates. -/
+def freshWidth (segs : Array Seg) : Nat := sweepWith widthIn segs
+
+/-- How many intervals `widthIn` expands one component into: none for a frame alone. -/
+def expandCount (ivs : Array (Nat × Nat × Nat)) (frames : Array Cl) (comp : Array Nat) : Nat :=
+  if comp.size == 1 && comp[0]! ≥ ivs.size then 0
+  else comp.foldl (fun n j => n + if j < ivs.size then 1 else (frames[j - ivs.size]!).cnt * (frames[j - ivs.size]!).res.size) 0
 
 /-- How many intervals `gateIvs qs` gives (`ivsCount` by width). -/
 def gatesCount (qs : Array Piece) : Nat :=
   let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).toList.mergeSort (· ≤ ·) |>.eraseDups
   ws.foldl (fun n w => n + ivsCount (qs.filter (·.tgt == .gate w))) 0
 
-/-- `freshWidth`'s walks of an inference block's segments, refused past `WALK`: the intervals `gateIvs` gives, run by
-run (`gatesCount`), of its segments of one copy, of a rowed segment's copies and of one copy of any other. -/
-def freshWalk (segs : Array Seg) : Except String Unit :=
+/-- `freshWidth`'s walks of an inference block's segments, refused past `WALK`, each before it runs: the intervals
+`gateIvs` gives, run by run (`gatesCount`), of its segments of one copy, of a rowed segment's copies and of one copy of
+any other; a segment's copies that may overlap or go backwards, copy by copy (`copiesStep`); and the frames' copies a
+component of the sweep expands, copy by copy (`widthIn`, counted by `expandCount`). -/
+def freshWalk (segs : Array Seg) : Except String Unit := do
   walkAtMost "runs of a read, as intervals one by one" (gatesCount (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)) +
     segs.foldl (fun n s => if s.reps ≤ 1 then n
       else if s.lanes then (Array.range s.reps).foldl (fun n m => n + gatesCount (s.copy m)) n
       else n + gatesCount s.ps) 0)
+  walkAtMost "copies of a member's gates, expanded one by one" (segs.foldl (fun n s =>
+    if s.reps ≤ 1 || s.lanes then n else
+    let r := gateIvs s.ps
+    if r.isEmpty then n else
+    let lo := r.foldl (fun m x => min m x.1) r[0]!.1
+    let hi := r.foldl (fun m x => max m x.2.1) 0
+    if s.shift ≤ 0 || hi - lo > s.shift.toNat then n + s.reps * r.size else n) 0)
+  walkAtMost "copies of a member's gates, expanded one by one" (sweepWith expandCount segs)
 
 /-- An input node: its callee is an input primitive (§5.2). A composite's key may read as an input id (`Input16_v1` is a
 well-formed static-free composite key), and its gates are computed. -/

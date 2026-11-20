@@ -98,4 +98,11 @@ def main (args : List String) : IO UInt32 := do
       ((r.getObjValD "message").getStr?.toOption.getD "").startsWith "leaves of a parameter taken through an argument"
   | .error _ => false
 
+-- A batch of 1,048,577 members, each returning its two gates out of order, read whole with one gate inside it by a
+-- root node of another inference block, is refused by name: `freshWalk`'s frame expanded copy by copy.
+#guard match Json.parse r#"{"program":"{\"annotations\":{},\"boolean\":{\"Op_v1\":\"StandIn[Op]_v1\"},\"callees\":[\"Const1[0x0]_v1\",\"Op_v1\",\"G_v1\",\"R_v1\"],\"definitions\":{\"Const1[0x0]_v1\":{\"form\":\"primitive\",\"id\":\"Const1[0x0]_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"G_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[],\"ret\":{\"explicit\":[[\"n\",1,0],[\"n\",0,0]]},\"ret_type\":[\"Array\",2,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"G_v1\"},\"Op_v1\":{\"form\":\"primitive\",\"id\":\"Op_v1\",\"params\":[[\"a0\",[\"Array\",2097155,[\"Value\",1]]]],\"ret\":[\"Value\",8]},\"R_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":2,\"form\":\"batch\",\"n\":1048577,\"out\":1},{\"args\":[{\"refs\":{\"concat\":[{\"affine\":[\"n\",0,0,2097154]},{\"explicit\":[[\"n\",0,5]]}]},\"type\":2}],\"fn\":1,\"form\":\"primitive\",\"out\":3}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,1]},\"ret_type\":[\"Value\",8]},\"form\":\"composite\",\"id\":\"R_v1\"},\"StandIn[Op]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"fn\":0,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"a0\",[\"Array\",2097155,[\"Value\",1]]]],\"ret\":{\"strided\":[\"n\",0,0,1,0,0,8]},\"ret_type\":[\"Array\",8,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"StandIn[Op]_v1\"}},\"program_fn\":\"R_v1\",\"root\":\"R_v1\",\"schema\":\"verity-ir/descriptor/v2\",\"types\":[[\"Value\",1],[\"Array\",1048577,[\"Array\",2,[\"Value\",1]]],[\"Array\",2097155,[\"Value\",1]],[\"Value\",8]]}","theta":[],"owner":[0,1],"gamma":10,"alpha":[8,1]}"# with
+  | .ok j => let r := Desc.check j; r.getObjValD "error" == Json.str "unwalked" &&
+      ((r.getObjValD "message").getStr?.toOption.getD "").startsWith "copies of a member's gates, expanded one by one"
+  | .error _ => false
+
 end InferenceOnlyVerifier.DescDifftest
