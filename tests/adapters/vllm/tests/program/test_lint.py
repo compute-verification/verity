@@ -1,4 +1,4 @@
-"""The new query path decides nothing by a name pattern: no `.startswith(` anywhere under `verity_vllm/query/` or in its CLI command (`pipeline/manifest.py`; v1's family / module
+"""The new query path decides nothing by a name pattern: no `.startswith(` anywhere under `verity_vllm/query/` (v1's family / module
 tables were all `family.startswith(...)` / `leaf in _LINEAR_LEAVES` checks), and no reference model family is named."""
 
 from __future__ import annotations

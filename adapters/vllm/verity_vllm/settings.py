@@ -184,7 +184,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NATIVE_GATHER_BLOCKS", int, None, VALUE, "thread blocks per staged descriptor in the gather kernel; unset, 1024 size-adaptive, "
       "32 with native hooks, else 4"),
     S("NATIVE_GATHER_AUTO_BYTES", int, 32768, VALUE, "staged bytes per thread block of the size-adaptive gather"),
-    # ---- the Commit (pipeline/commit.py and its helpers)
+    # ---- the Commit
     S("VERITY_ADMIT_HIDDEN_FACTOR", float, 1.05, VALUE, "admission: the planned hidden-class bytes' safety factor"),
     S("VERITY_ADMIT_OTHER_FACTOR", float, 2.0, VALUE, "admission: the other planned bytes' safety factor"),
     S("VERITY_ADMIT_OVER_BOUND", one, False, VALUE, "admission: 1 runs a Commit whose plan is over its bound (recorded as an override)"),

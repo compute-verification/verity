@@ -29,10 +29,7 @@
 #     rows.device        the row engine's tests, `sha512_rows`: the device's leaves against the host's and the reference's
 #     slots.device       the slot commit's device tests, `commit_slots/test_gpu.py`: strided and misaligned salt buffers,
 #                        graph replay under `resalt`
-#     zy.device          the z/y commit's device tests, `test_pouw_h1_registered_device.py`; its one strict xfail (a window
-#                        served on the device, which waits for compute-accounting's switch) is named in the reason
-#     zy.h1_zy_gpu       `h1_zy_gpu.py` at one repetition: each call's device records equal to the two kernels apart
-#     device_libs.gate   the harness's gate on every device library the four steps above loaded, a build reused from the
+#     device_libs.gate   the harness's gate on every device library the two steps above loaded, a build reused from the
 #                        cache included, as the dynamic loader recorded it (LD_DEBUG) in a directory made fresh for the
 #                        run: a library an earlier run left in the scratch that nothing loaded is not gated, a shared
 #                        object with no device code (Triton's host modules) is named and passed over, and the reason
@@ -96,8 +93,7 @@ CG=$ROOT/verity/commitments/cuda/commit_gpu
 TAG=a0r0l
 ROWS_T=$ROOT/tests/verity/commitments/cuda/sha512_rows
 SLOTS_T=$ROOT/tests/verity/commitments/cuda/commit_slots
-ZY_T=$ROOT/tests/adapters/vllm
-ZY_FILE=tests/protocols/test_pouw_h1_registered_device.py
+VLLM_T=$ROOT/tests/adapters/vllm
 ROWS=$SCRATCH/rows.txt
 SKIPPED=77
 CUDA="" GENCODE="" NVCC_VERSION="" GPU="" CARD_OK=0 LOADED=""
@@ -274,7 +270,7 @@ p_cg_cases() {
 
 p_collect() {
   local n total=0 said=""
-  for pair in "$ROWS_T:test_engine.py" "$SLOTS_T:test_gpu.py" "$ZY_T:$ZY_FILE"; do
+  for pair in "$ROWS_T:test_engine.py" "$SLOTS_T:test_gpu.py"; do
     n=$(cd "${pair%%:*}" && "$PY" -m pytest --collect-only -q -p no:cacheprovider "${pair#*:}" | tee /dev/stderr | awk '/::/ { n++ } /^[^ ]+\.py: [0-9]+$/ { n += $2 } END { print n + 0 }')
     [ "${n:-0}" -gt 0 ] || { REASON="pytest collects nothing from ${pair#*:}"; return 1; }
     said="$said${said:+, }${pair#*:} $n"; total=$((total + n))
@@ -292,7 +288,7 @@ stamp() {
 # vLLM's reading of CARD_SKU (the first argument; empty: unset), from the suite's directory: the arch it builds for, or
 # its refusal's first line
 vllm_arch() {
-  (cd "$ZY_T" && if [ -n "$1" ]; then export CARD_SKU=$1; else unset CARD_SKU; fi
+  (cd "$VLLM_T" && if [ -n "$1" ]; then export CARD_SKU=$1; else unset CARD_SKU; fi
    "$PY" -c 'from verity_vllm import settings
 from verity_vllm.config import cuda_arch
 try:
@@ -408,19 +404,6 @@ device_tests() {
 }
 c_rows() { device_tests "$ROWS_T" rows.device test_engine.py; }
 c_slots() { device_tests "$SLOTS_T" slots.device test_gpu.py; }
-c_zy() { device_tests "$ZY_T" zy.device "$ZY_FILE"; }
-
-c_zy_gpu() {
-  held || return 1
-  mkdir -p "$SCRATCH/home" "$SCRATCH/zy"
-  (cd "$ZY_T" && HOME=$SCRATCH/home PATH=$CUDA/bin:$PATH LD_LIBRARY_PATH=$CUDA/lib64:${LD_LIBRARY_PATH:-} \
-    LD_DEBUG=files LD_DEBUG_OUTPUT=$LOADED/ld "$PY" tests/protocols/h1_zy_gpu.py --out "$SCRATCH/zy" --reps 1 > "$SCRATCH/zy/h1_zy_gpu.log" 2>&1)
-  local rc=$?
-  # the verdicts without the script's timings, which one repetition does not measure
-  sed -E 's/  kernels .*//; /^step \(/d' "$SCRATCH/zy/h1_zy_gpu.log"
-  [ $rc = 0 ] && grep -q '^h1_zy_gpu: PASS' "$SCRATCH/zy/h1_zy_gpu.log" || { REASON="a call's records differ, or the kernels did not build (exit $rc)"; return 1; }
-  REASON="each of the four calls' device records equal the two kernels apart"
-}
 
 c_libs_gate() {
   held || return 1
@@ -468,8 +451,6 @@ card_step card c_card
 card_step pearl_c.check c_pearl_check
 card_step rows.device c_rows
 card_step slots.device c_slots
-card_step zy.device c_zy
-card_step zy.h1_zy_gpu c_zy_gpu
 card_step device_libs.gate c_libs_gate
 card_step commit_gpu.selftest c_cg_selftest
 card_step commit_gpu.check c_cg_check

@@ -312,7 +312,6 @@
         "benchmarks/nci/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
-        "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
         "adapters/torch/verity_torch/pouw/pearl_c/passes.py",

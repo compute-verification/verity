@@ -725,6 +725,24 @@ def _members_roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> tuple[di
     return {name: _own_fields(ft, name, rs) for name, rs in roots.items()}, ft
 
 
+def _local_bases(ranges: Sequence[Sequence[Any]]) -> list[int]:
+    """`OneStageZk.localBases`: each range's base among its template's own units."""
+    lbase, seen = [], {}
+    for _k, t, _a, c in ranges:
+        lbase.append(seen.get(t, 0))
+        seen[t] = seen.get(t, 0) + c
+    return lbase
+
+
+def _wire_reaches(ranges: Sequence[Sequence[Any]], lbase: Sequence[int], first: int, n: int,
+                  w: Mapping[str, Any]) -> bool:
+    """`OneStageZk.wireReaches`: whether the wire `w` enters the member whose units start at `first`, `n` of them."""
+    units = max(w["cut"][1], 1)
+    return any(t == w["reader"] and a <= first and first + n <= a + c
+               and (lo := lbase[j] + first - a) < w["at"] + math.prod(w["radix"]) // units and w["at"] < lo + n
+               for j, (_k, t, a, c) in enumerate(ranges))
+
+
 def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
                  ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]],
                  roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
@@ -740,25 +758,17 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
         raise Outside(f"C's wiring: {e}") from None
     if "refusal" in got:
         raise Outside(f"C's wiring: {got['refusal']}")
-    lbase, seen = [], {}
-    for _k, t, _a, c in ranges:
-        lbase.append(seen.get(t, 0))
-        seen[t] = seen.get(t, 0) + c
+    lbase = _local_bases(ranges)
     out = {}
     for name, m in ms.items():
         first, n = m["units"][0][0], _count(m)
-
-        def meets(w: Mapping[str, Any]) -> bool:
-            units = max(w["cut"][1], 1)
-            return any(t == w["reader"] and a <= first and first + n <= a + c
-                       and (lo := lbase[j] + first - a) < w["at"] + math.prod(w["radix"]) // units and w["at"] < lo + n
-                       for j, (_k, t, a, c) in enumerate(ranges))
         own = roots.get(name, [])
-        if (w := next((w for w in got["wires"] if meets(w) and any(r.get("port") == w["port"] for r in own)), None)):
+        if (w := next((w for w in got["wires"] if _wire_reaches(ranges, lbase, first, n, w)
+                       and any(r.get("port") == w["port"] for r in own)), None)):
             raise _Refused(own_root_why(name, w["port"]))
         mine = list(own)
         for w in got["wires"]:
-            if meets(w) and not any(r.get("port") == w["port"] for r in mine):
+            if _wire_reaches(ranges, lbase, first, n, w) and not any(r.get("port") == w["port"] for r in mine):
                 e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
                 if e is not None:
                     mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],

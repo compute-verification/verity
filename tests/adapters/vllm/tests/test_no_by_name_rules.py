@@ -9,7 +9,7 @@ can only shrink.
 
 What is scanned: every ``*.py`` under ``adapters/vllm/verity_vllm`` (the served circuits' Definitions in its
 ``definitions/`` among them) except ``tests/`` directories and ``test_*.py`` files (test fixtures may name models).  Docstrings, comments, f-strings, ``raise``/``assert`` messages,
-message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) are not rule positions and are ignored.
+message-like keyword/dict positions (``hint=``, ``why=``, ``help=``, …) and ``__all__`` are not rule positions and are ignored.
 
 Three kinds of offender (``kind`` in the allowlist):
 
@@ -235,6 +235,8 @@ class _Finder(ast.NodeVisitor):
             self._emit("table", node, name, symbol=name)
 
     def visit_Assign(self, node: ast.Assign) -> None:
+        if any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets):   # names the module's own identifiers
+            return
         if not self.scope or self.scope[-1].startswith("class "):
             for t in node.targets:
                 self._table(t, node.value, node)
