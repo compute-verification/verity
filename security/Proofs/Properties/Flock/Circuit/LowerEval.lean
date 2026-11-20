@@ -3243,6 +3243,374 @@ theorem unit_node_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.ro
   rw [hps, ofParts_getD ps (by rw [← hps]; exact ht), ← hps]
   exact (hv i hi t ht _ hr (hlt' _ hmem)).symm
 
+/-- **A reference's word in a unit's walk**: where the nodes before `n` are primitive nodes of one leaf whose words are
+the gates they resolve to, and each parameter leaf's word is the gate it resolves to, so is the word of a reference of
+the body before node `n`. -/
+theorem refVal_word {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {sc : Scope} {W : ℕ → List Bool}
+    {Q : ℕ → Prop} {x : List (List Bool)} {n : ℕ} {outs : Array (List (List Bool))}
+    (hO : ∀ i < n, outs.getD i [] = [W (sc.off + (P.defs[sc.d]!).body.offsets[i]!)])
+    (hN : ∀ i < n, ((P.defs[sc.d]!).body.nodes[i]!).form = .prim ∧ ((P.defs[sc.d]!).body.nodes[i]!).out.leaves = 1)
+    (hx : ∀ i j q, i < (P.defs[sc.d]!).body.params.size → j < ((P.defs[sc.d]!).body.params[i]!).2.leaves →
+      resolve P sc ⟨true, i, j⟩ = .ok q → Q q →
+        x.getD ((Flock.Program.paramStarts (P.defs[sc.d]!).params).getD i 0 + j) default = W q)
+    {r : Ref} (hr : Resolve.RefOk P sc.d n r) {q : ℕ} (hq : resolve P sc r = .ok q) (hQ : Q q) :
+    Flock.Program.refVal x (Flock.Program.paramStarts (P.defs[sc.d]!).params) outs r = W q := by
+  obtain ⟨p, i, j⟩ := r
+  cases p with
+  | true =>
+    obtain ⟨h1, h2⟩ := hr.1 rfl
+    simp only [Flock.Program.refVal, ite_true]
+    exact hx i j q h1 h2 hq hQ
+  | false =>
+    obtain ⟨h1, h2⟩ := hr.2 rfl
+    obtain ⟨hf, hl⟩ := hN i h1
+    have hj : j = 0 := by simp only at h2; omega
+    subst hj
+    rw [resolve_prim_node hrc sc hf] at hq
+    obtain rfl := Except.ok.inj hq
+    simp [Flock.Program.refVal, hO i h1]
+
+theorem flatten_getElem?_sum {α : Type} : ∀ (L : List (List α)) {i j : ℕ} (hi : i < L.length)
+    (hj : j < L[i].length), L.flatten[((L.take i).map List.length).sum + j]? = some L[i][j]
+  | [], _, _, hi, _ => by simp at hi
+  | a :: L, 0, j, _, hj => by simp [List.getElem?_append_left (show j < a.length from hj)]
+  | a :: L, i + 1, j, hi, hj => by
+    simp only [List.take_succ_cons, List.map_cons, List.sum_cons, List.flatten_cons, List.getElem_cons_succ]
+    rw [Nat.add_assoc, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left]
+    exact flatten_getElem?_sum L (by simpa using hi) (by simpa using hj)
+
+/-- **A unit's parameter leaf's word**: leaf `j` of parameter `i` of unit `g`'s callee, resolving to gate `q` of C, is
+the word at `q` in the unit's arguments (`argWords`), at the leaf's place among the parameters' leaves. -/
+theorem unit_param_word {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[])
+    {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
+    (Y : (Flock.OfProgram.ofProgram P).Trace) {i j q : ℕ}
+    (hi : i < (P.defs[(P.child P.rootScope k m).d]!).params.size)
+    (hj : j < ((P.defs[(P.child P.rootScope k m).d]!).params[i]!).2.leaves)
+    (hq : resolve P (P.child P.rootScope k m) ⟨true, i, j⟩ = .ok q) (hqN : q < (Flock.OfProgram.ofProgram P).N) :
+    (argWords Y g).getD ((Flock.Program.paramStarts (P.defs[(P.child P.rootScope k m).d]!).params).getD i 0 + j)
+      default = portWord Y ⟨q, 0⟩ := by
+  obtain ⟨k', m', x, hu', hx0, ⟨ops, hops⟩, -⟩ := hR
+  rw [hu] at hu'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hu'
+  obtain ⟨rfl, rfl⟩ := hu'
+  have hx : (P.defs[P.root]!).body.nodes[k]? = some x := by rw [Array.getElem!_eq_getD]; exact hx0
+  have hk : k < (P.defs[P.root]!).body.nodes.size := (Array.getElem?_eq_some_iff.1 hx).1
+  have hxk : (P.defs[P.root]!).body.nodes[k]! = x := by
+    rw [getElem!_pos _ k hk]; exact (Array.getElem?_eq_some_iff.1 hx).2
+  have hx0' : (P.defs[P.root]?.getD default).body.nodes[k]? = some x := by
+    rw [← Array.getD_eq_getD_getElem?]; exact hx0
+  have hua : unitArgs P g = ops.map fun (q, w) => ({ gate := q, width := w } : Spot.BlockFront.Port) := by
+    simp [unitArgs, hu, hx0', hops, bind, Except.bind]
+  obtain ⟨raw, hraw, rfl⟩ := operandsW_ok hops
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_full bytes P hd hr
+  have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hrt, -, -⟩ := BodiesOk.decode_root bytes P hd hr
+  obtain ⟨hsh, -⟩ := unitAt_shape hu
+  have hq' := unit_param_resolve hr hsh hq
+  rw [hxk] at hsh hq'
+  rw [child_d, hxk] at hi hj
+  rw [child_d, hxk]
+  obtain ⟨L, hlen, hflat, hLi⟩ := OperandWidths.operands_lists P P.rootScope x m raw hraw
+  obtain ⟨-, hnd, -⟩ := (hD P.root hrt).2.1 k hk
+  obtain ⟨hsz, hcnt, -, -, hshape, -⟩ := hnd
+  rw [hxk] at hsz hcnt hshape
+  have hcntL : ∀ i < x.args.size, OperandWidths.cntOf P x i = ((P.defs[x.fn]!).params[i]!).2.leaves := by
+    intro i hi
+    unfold OperandWidths.cntOf
+    split
+    · rfl
+    · rename_i hnb
+      rw [hcnt i hi]
+      rcases hsh with hf | hf
+      · simp only [hf, BodiesOk.Shape] at hshape
+        rw [hshape.2 i hi]
+      · simp only [hf, BodiesOk.Shape] at hshape
+        rcases hshape.2 i hi with ⟨-, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
+        · rw [hty]
+        · obtain ⟨L', hax, -⟩ := BodiesOk.axis_spec ax _ _ mt hrem
+          exact (hnb (by rw [hf, hdims, hax]; rfl)).elim
+  have hiL : i < L.length := by rw [hlen, hsz]; exact hi
+  have hLlen : L.map List.length = (P.defs[x.fn]!).params.toList.map (·.2.leaves) := by
+    apply List.ext_getElem (by simp [hlen, hsz])
+    intro a h1 h2
+    simp only [List.getElem_map, Array.getElem_toList]
+    have ha : a < x.args.size := by simpa [hlen] using h1
+    rw [(hLi a (by simpa using h1)).1, hcntL a ha, getElem!_pos _ a (by rw [← hsz]; exact ha)]
+  have hjL : j < L[i].length := by rw [(hLi i hiL).1, hcntL i (by rw [← hlen]; exact hiL)]; exact hj
+  have hqL : L[i][j] = q := by
+    have h1 := (hLi i hiL).2 j hjL
+    rw [hq'] at h1
+    exact (Except.ok.inj h1).symm
+  have hpre : (Flock.Program.paramStarts (P.defs[x.fn]!).params).getD i 0 = ((L.take i).map List.length).sum := by
+    rw [paramStarts_getD _ hi, List.map_take, List.map_take, hLlen]
+  rw [hpre]
+  have hget := flatten_getElem?_sum L hiL hjL
+  rw [hqL, ← hflat] at hget
+  have hidx : ((L.take i).map List.length).sum + j < raw.toList.length := (List.getElem?_eq_some_iff.1 hget).1
+  have hws : raw.toList.length = (((P.defs[x.fn]!).params.map fun p => p.2.widths).flatten).toList.length := by
+    rw [hflat, List.length_flatten, hLlen]
+    simp [Array.toList_flatten, List.length_flatten, Function.comp_def]
+    congr 1
+    apply List.map_congr_left
+    intro p _
+    rw [← Array.length_toList, Flock.Sigma.widths_length]
+  have hz : (raw.toList.zip (((P.defs[x.fn]!).params.map fun p => p.2.widths).flatten).toList)[
+      ((L.take i).map List.length).sum + j]? = some (q, ((((P.defs[x.fn]!).params.map fun p => p.2.widths).flatten).toList)[
+        ((L.take i).map List.length).sum + j]'(by omega)) :=
+    List.getElem?_zip_eq_some.2 ⟨hget, List.getElem?_eq_getElem _⟩
+  unfold argWords
+  rw [hua, List.getD_eq_getElem?_getD]
+  simp only [Array.toList_map, Array.toList_zip, List.map_map, List.getElem?_map, hz, Option.map_some,
+    Option.getD_some, Function.comp_apply]
+  rw [portWord_lt Y hqN, portWord_lt Y hqN]
+
+/-- **`UnitWordComputes` for a template of word-primitive calls**, on `Batch0Typed`: where C is topological, its gates
+are located and unit `g` resolves. -/
+theorem unitWordComputes_calls (hT : Batch0Typed) {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
+    (hco : CallsOnly P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
+    (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+      Y h = (Flock.OfProgram.ofProgram P).op h Y) :
+    outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) := by
+  have hR' := hR
+  obtain ⟨k', m', x, hu', hx0, -, hres⟩ := hR
+  rw [hu] at hu'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hu'
+  obtain ⟨rfl, rfl⟩ := hu'
+  have hx : (P.defs[P.root]!).body.nodes[k]? = some x := by rw [Array.getElem!_eq_getD]; exact hx0
+  have hk : k < (P.defs[P.root]!).body.nodes.size := (Array.getElem?_eq_some_iff.1 hx).1
+  have hxk : (P.defs[P.root]!).body.nodes[k]! = x := by
+    rw [getElem!_pos _ k hk]; exact (Array.getElem?_eq_some_iff.1 hx).2
+  obtain ⟨st0, hP, hinv, -⟩ := BodiesOk.decode_full bytes P hd hr
+  have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
+  have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
+    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hL := OperandWidths.decoded_laid bytes P hd hr
+  obtain ⟨hsh, hmem⟩ := unitAt_shape hu
+  have hc0 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hco.1
+  have hgood : Resolve.Good P (P.child P.rootScope k m) :=
+    Resolve.good_child P (parent := P.rootScope) ⟨rfl, rfl, rfl⟩ hk rfl hc0 hmem rfl
+  obtain ⟨hdl, hpc⟩ := Resolve.good_d P hroot hB _ hgood
+  obtain ⟨-, hK, hnodes⟩ := hL _ hdl hpc
+  -- the unit's gates are C's
+  have hbound : (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates ≤
+      (Flock.OfProgram.ofProgram P).N := by
+    have hoff : (P.child P.rootScope k m).off = (P.defs[P.root]!).body.offsets[k]! +
+        m * (P.defs[(P.child P.rootScope k m).d]!).gates := by
+      show 0 + _ + _ = _; rw [Nat.zero_add]; rfl
+    obtain ⟨-, hKr, hnr⟩ := hL _ hrt hrp
+    have h1 := hnr k hk
+    have h2 := Resolve.offsets_mono P P.root (hL _ hrt) hrp (k + 1) _ (by omega) (Nat.le_refl _)
+    have h3 := Nat.mul_le_mul_right (P.defs[(P.child P.rootScope k m).d]!).gates
+      (show m + 1 ≤ ((P.defs[P.root]!).body.nodes[k]!).members by omega)
+    rw [Nat.add_mul, Nat.one_mul] at h3
+    have h4 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates =
+        (P.defs[(P.child P.rootScope k m).d]!).gates := rfl
+    rw [h4] at h1
+    show _ ≤ (P.defs[P.root]!).gates
+    omega
+  -- the template's nodes: primitive nodes of a word primitive of one gate and one leaf
+  have hnodeP : ∀ n (hn : n < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size),
+      ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).form = .prim ∧
+      ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn < P.defs.size ∧
+      ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn < (P.child P.rootScope k m).d ∧
+      (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).prim = true ∧
+      isWordPrim (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).prim
+        (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).key = true ∧
+      (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).gates = 1 ∧
+      (∃ w0, (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).ret = .value w0 ∧
+        ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).out = .value w0) := by
+    intro n hn
+    have hmemn : (P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]! ∈
+        (P.defs[(P.child P.rootScope k m).d]!).body.nodes := by
+      rw [getElem!_pos _ n hn]; exact Array.getElem_mem hn
+    obtain ⟨hform, hwp⟩ := hco.2 _ hmemn
+    have hprim : (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!).prim = true := by
+      simp only [isWordPrim, Bool.and_eq_true] at hwp
+      exact hwp.1.1
+    obtain ⟨hfnlt, hnok, -⟩ := (hD _ hdl).2.1 n hn
+    obtain ⟨-, -, -, hcallp, hshape, -⟩ := hnok
+    have hfnP : ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn < P.defs.size := by omega
+    have hf : ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).form = .prim := by
+      rcases hform with h | h
+      · exact h
+      · have := hcallp (Or.inl h); rw [hprim] at this; cases this
+    obtain ⟨-, hg1, -, w0, hret⟩ := (hD _ hfnP).1.1 hprim
+    rw [hf] at hshape
+    exact ⟨hf, hfnP, hfnlt, hprim, hwp, hg1, w0, hret, by rw [hshape.1, hret]⟩
+  have hbp : (P.defs[(P.child P.rootScope k m).d]!).body.params = (P.defs[(P.child P.rootScope k m).d]!).params :=
+    ((hD _ hdl).1.2 hpc).1
+  have hx' : ∀ i j q, i < (P.defs[(P.child P.rootScope k m).d]!).body.params.size →
+      j < ((P.defs[(P.child P.rootScope k m).d]!).body.params[i]!).2.leaves →
+      resolve P (P.child P.rootScope k m) ⟨true, i, j⟩ = .ok q → q < (Flock.OfProgram.ofProgram P).N →
+        (argWords Y g).getD ((Flock.Program.paramStarts (P.defs[(P.child P.rootScope k m).d]!).params).getD i 0 + j)
+          default = portWord Y ⟨q, 0⟩ := by
+    intro i j q h1 h2 hq hqN
+    rw [hbp] at h1 h2
+    exact unit_param_word hd hr hu hR' Y h1 h2 hq hqN
+  have hPd : P.defs[(P.child P.rootScope k m).d]? = some (P.defs[(P.child P.rootScope k m).d]!) := by
+    rw [getElem!_pos P.defs _ hdl]; exact getElem?_pos P.defs _ hdl
+  obtain ⟨-, -, -, hout, -, -⟩ := hT bytes P hd hr _ hdl (batch0_of_calls hco)
+  -- the walk over the template's nodes
+  have hstep : ∀ n (hn : n < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.toList.length)
+      (outs : Array (List (List Bool))),
+      (outs.size = n ∧ ∀ i < n, outs.getD i [] =
+        [portWord Y ⟨(P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[i]!, 0⟩]) →
+      ∃ b', nodeStep wordWires P (wordDef? P (2 * P.defs.size + 1)) (P.child P.rootScope k m).d (argWords Y g)
+          (P.defs[(P.child P.rootScope k m).d]!) outs (P.defs[(P.child P.rootScope k m).d]!).body.nodes.toList[n] =
+            some b' ∧
+        (b'.size = n + 1 ∧ ∀ i < n + 1, b'.getD i [] =
+          [portWord Y ⟨(P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[i]!, 0⟩]) := by
+    intro n hn outs ⟨hs, hO⟩
+    have hn' : n < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size := by simpa using hn
+    have hnn : (P.defs[(P.child P.rootScope k m).d]!).body.nodes.toList[n] =
+        (P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]! := by
+      rw [Array.getElem_toList, getElem!_pos _ n hn']
+    rw [hnn]
+    obtain ⟨hf, hfnP, hfnd, hprim, hwp, hg1, w0, hret, hout0⟩ := hnodeP n hn'
+    have hcal : P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]? =
+        some (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn]!) := by
+      rw [getElem!_pos P.defs ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn hfnP]
+      exact getElem?_pos P.defs _ hfnP
+    have hstep1 := (hnodes n hn')
+    rw [members_one (Or.inl hf), hg1, Nat.mul_one] at hstep1
+    have hend := Resolve.offsets_mono P _ (hL _ hdl) hpc (n + 1) _ (by omega) (Nat.le_refl _)
+    have hGN : (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[n]! <
+        (Flock.OfProgram.ofProgram P).N := by omega
+    have hw : ∀ y, (Prog.evalBool P ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn y).length = w0 := by
+      intro y
+      have h1 := hout n hn' [y] (by rw [← getElem!_pos _ n hn', members_one (Or.inl hf)]; rfl)
+      rw [← getElem!_pos _ n hn', hout0] at h1
+      simp [Ty.widths] at h1
+      exact h1.symm
+    have hseq : ∀ a ∈ ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args.toList,
+        ∃ ps, a.seq = Seq.ofParts ps := by
+      intro a ha
+      obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem ha
+      have hi' : i < ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args.size := by simpa using hi
+      obtain ⟨-, -, hargsF⟩ := (hD _ hdl).2.1 n hn'
+      obtain ⟨⟨ps, hps, -⟩, -⟩ := hargsF i hi'
+      exact ⟨ps, by rw [Array.getElem_toList, ← getElem!_pos _ i hi']; exact hps⟩
+    have hval := unit_node_word hroot hB hL hG hk hmem hc0 hn' rfl hf hprim hg1 hseq Y rfl hGN
+      (FlockSoundness.DecodeBoolean.word_ids hwp).1
+      (fun hin => hY ⟨_, hGN⟩ (by unfold InUnit; simp only [hPd, Option.map_some, Option.getD_some]; omega) hin)
+      hret hw
+      (Flock.Program.refVal (argWords Y g) (Flock.Program.paramStarts (P.defs[(P.child P.rootScope k m).d]!).params) outs)
+      (fun i hi t ht q hq hqG => refVal_word hr (W := fun q => portWord Y ⟨q, 0⟩)
+        (Q := fun q => q < (Flock.OfProgram.ofProgram P).N) (n := n)
+        hO (fun i hi => by
+          obtain ⟨hf', -, -, -, -, -, w1, -, ho1⟩ := hnodeP i (by omega)
+          exact ⟨hf', by rw [ho1]; simp [Ty.leaves]⟩) hx'
+        (((hB _ hgood).1 n hn').2.1 i t ht) hq (by omega)) 0
+    refine ⟨outs.push [Prog.evalBool P ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn
+      ((((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args.toList.flatMap fun a =>
+        Flock.Program.argVals (Flock.Program.refVal (argWords Y g)
+          (Flock.Program.paramStarts (P.defs[(P.child P.rootScope k m).d]!).params) outs) a a.seq.count id).flatten)],
+      ?_, by simp [hs], ?_⟩
+    · simp [nodeStep, wordWires, hf, hcal, show ¬ (P.child P.rootScope k m).d ≤
+        ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn by omega, wordDef_prim hfnP hprim]
+    · intro i hi
+      by_cases hin : i < n
+      · rw [← hO i hin]
+        simp [Array.getD, Array.getElem_push, hs, hin, show i < n + 1 by omega]
+      · have : i = n := by omega
+        subst this
+        simp [Array.getD, Array.getElem_push, hs]
+        exact hval.symm
+  obtain ⟨o, g1, ho1, ho2⟩ := foldlM_inv _ _ _ hstep (P.defs[(P.child P.rootScope k m).d]!).body.nodes.toList.length 0
+    #[] (Nat.add_zero _) ⟨rfl, fun i h => absurd h (Nat.not_lt_zero _)⟩
+  simp only [List.drop_zero] at g1
+  unfold wordEval
+  rw [show 2 * P.defs.size + 2 = (2 * P.defs.size + 1) + 1 from rfl]
+  unfold wordDef?
+  simp only [hPd, Option.bind_eq_bind, Option.bind_some, hpc, Bool.false_eq_true, ↓reduceIte]
+  rw [walkStep_comp wordWires (fun _ => rfl) P _ _ _ hPd hpc, g1]
+  simp only [Option.bind_eq_bind, Option.bind_some, Option.pure_def, Option.getD_some]
+  -- the return leaves
+  obtain ⟨-, hcount, houtL⟩ := (hD _ hdl).1.2 hpc
+  obtain ⟨ps, hps, -⟩ := (hD _ hdl).2.2.2
+  have hcd : (P.child P.rootScope k m).d = x.fn := by rw [child_d, hxk]
+  have hc : P.defs.getD x.fn default = P.defs[(P.child P.rootScope k m).d]! := by
+    rw [hcd]; exact Array.getElem!_eq_getD.symm
+  rw [hc] at hres
+  let F : ℕ → V Spot.BlockFront.Port := fun l => do
+    let q ← resolve P P.rootScope
+      { p := false, i := k, j := m * (P.defs[(P.child P.rootScope k m).d]!).ret.leaves + l }
+    pure ({ gate := q, width := (P.defs[(P.child P.rootScope k m).d]!).ret.widths.getD l 0 } : Spot.BlockFront.Port)
+  obtain ⟨r, hrm, h2⟩ := mapM_forall₂ F (List.range (P.defs[(P.child P.rootScope k m).d]!).ret.leaves) fun l hl => by
+    obtain ⟨q, hq⟩ := hres l (List.mem_range.1 hl)
+    exact ⟨_, by simp only [F, hq]; rfl⟩
+  have huo : unitOuts P g = r.toArray := by
+    unfold unitOuts
+    simp only [hu, hx0, hc, bind, Except.bind]
+    rw [Array.mapM_eq_mapM_toList, Array.toList_range]
+    change (match (Functor.map List.toArray
+      (List.mapM F (List.range (P.defs[(P.child P.rootScope k m).d]!).ret.leaves)) : V _) with
+      | .ok ps => ps | .error _ => #[]) = _
+    rw [hrm]
+    rfl
+  unfold outWords
+  rw [huo, List.toList_toArray]
+  have hrlen : r.length = (P.defs[(P.child P.rootScope k m).d]!).ret.leaves := by
+    rw [← List.Forall₂.length_eq h2, List.length_range]
+  apply List.ext_getElem (by simp [hrlen, hcount])
+  intro l h1 h1'
+  have hl : l < (P.defs[(P.child P.rootScope k m).d]!).ret.leaves := by rw [← hrlen]; simpa using h1
+  simp only [List.getElem_map, List.getElem_range]
+  have hF := List.Forall₂.get h2 (by simpa using hl) (by simpa using h1)
+  simp only [List.get_eq_getElem, List.getElem_range] at hF
+  cases hq : resolve P P.rootScope
+      { p := false, i := k, j := m * (P.defs[(P.child P.rootScope k m).d]!).ret.leaves + l } with
+  | error e => simp [F, hq, bind, Except.bind] at hF
+  | ok q =>
+    simp only [F, hq, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hF
+    rw [← hF]
+    have hsh' : (((P.defs[P.root]!).body.nodes[k]!).form = .call ∧ m = 0) ∨
+        ((P.defs[P.root]!).body.nodes[k]!).form = .batch := by
+      rcases hsh with h | h
+      · exact Or.inl ⟨h, by have := hmem; rw [members_one (Or.inr h)] at this; omega⟩
+      · exact Or.inr h
+    have hq0 : resolve P P.rootScope ⟨false, k,
+        m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l⟩ = .ok q := by
+      have h3 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves =
+          (P.defs[(P.child P.rootScope k m).d]!).ret.leaves := houtL
+      rw [h3]; exact hq
+    have hretq := unit_ret_resolve hr hc0 hsh' (by
+      have h3 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves =
+          (P.defs[(P.child P.rootScope k m).d]!).ret.leaves := houtL
+      rw [h3]; exact hl) hq0
+    have hlc : l < (P.defs[(P.child P.rootScope k m).d]!).body.ret.count := by rw [hcount]; exact hl
+    have hRef := (hB _ hgood).2 l hlc
+    have hqN : q < (Flock.OfProgram.ofProgram P).N := by
+      have hinv' : Resolve.Inv P ((P.child P.rootScope k m).off +
+          (P.defs[(P.child P.rootScope k m).d]!).body.offsets[(P.defs[(P.child P.rootScope k m).d]!).body.nodes.size]!)
+          (P.child P.rootScope k m, (P.defs[(P.child P.rootScope k m).d]!).body.ret.get l) := by
+        refine ⟨hgood, hRef, fun _ => Nat.le_add_right _ _, fun hp => ?_⟩
+        dsimp only at hp ⊢
+        have h4 := (hRef.2 hp).1
+        have := Resolve.offsets_mono P _ (hL _ hdl) hpc _ _ (show _ + 1 ≤ _ from h4) (Nat.le_refl _)
+        omega
+      have := Resolve.resolve_lt P hroot hB hL _ _ _ hinv' hretq
+      omega
+    have hO' : ∀ i < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size, o.getD i [] =
+        [portWord Y ⟨(P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[i]!, 0⟩] :=
+      fun i hi => ho2 i (by simpa using hi)
+    have hget : (P.defs[(P.child P.rootScope k m).d]!).body.ret.toArray.getD l default =
+        (P.defs[(P.child P.rootScope k m).d]!).body.ret.get l := by
+      rw [hps]; exact ofParts_getD ps (by rw [← hps]; exact hlc)
+    rw [hget, refVal_word hr (W := fun q => portWord Y ⟨q, 0⟩) (Q := fun q => q < (Flock.OfProgram.ofProgram P).N)
+      hO' (fun i hi => by
+        obtain ⟨hf', -, -, -, -, -, w1, -, ho1⟩ := hnodeP i hi
+        exact ⟨hf', by rw [ho1]; simp [Ty.leaves]⟩) hx' hRef hretq hqN]
+    rw [portWord_lt Y hqN, portWord_lt Y hqN]
+
 end UnitWordProof
 
 end Flock.Chain
