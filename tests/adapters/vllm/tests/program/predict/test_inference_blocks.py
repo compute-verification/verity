@@ -41,32 +41,39 @@ def window():
 
 
 def _slots(circuit, rs) -> dict[str, np.ndarray]:
-    """Each template's units' blocks, by descriptor id, from the table alone: each entry's units' slot digits."""
+    """Each template's units' blocks, by descriptor id, from the table alone: each entry's first slot plus its units' slot
+    digits, -1 for units of no request."""
     tid = {PV2.id_digest(circuit.template(t)): t for t in circuit.ids}
-    out = {t: np.full(n, -1, dtype=np.int64) for t, n in circuit.units.items()}
-    for digest, at, radix, d in IB.decode(rs)[2]:
+    out = {t: np.full(n, -2, dtype=np.int64) for t, n in circuit.units.items()}
+    for digest, at, radix, d, base in IB.decode(rs)[2]:
         i = np.arange(math.prod(radix), dtype=np.int64)
-        out[tid[digest]][at:at + len(i)] = i // math.prod(radix[d + 1:]) % radix[d]
+        out[tid[digest]][at:at + len(i)] = -1 if d is None else base + i // math.prod(radix[d + 1:]) % radix[d]
     return out
 
 
 def _unrolled(circuit, slots: dict[str, np.ndarray]) -> tuple[list[int], list[int]]:
-    """Each block's gates and fresh-input bits, unit by unit: a template's gates for each of its units in the block, and
-    the rows its units read from registered parameters outside θ (the scan state), every wire within one block and every
-    other input row wired or θ's."""
+    """Each request's block's gates and fresh-input bits, unit by unit: a template's gates for each of its units in the
+    block, and the rows its units read from registered parameters outside θ (the scan state) or by wire from the units of
+    no request (slot -1), no wire joining two requests' blocks and every other input row wired or θ's."""
     m = circuit.blocks.slots
+    lays, fresh = circuit.layouts, np.zeros(m + 1, dtype=np.int64)
+
+    def bits(reader, port):
+        return 16 * dict(lays[reader][0].rows)[port] // int(circuit.cuts.get(reader, {}).get(port, 1))
+
     for w in circuit.wires:
         i = np.arange(w.units, dtype=np.int64)
-        assert (slots[w.reader][w.at + i // w.cut[1]] == slots[w.writer][w.source(i)]).all(), w.doc()
-    gates = sum(np.bincount(slots[t], minlength=m) * circuit.template(t).gates for t in circuit.ids)
-    lays, fresh = circuit.layouts, np.zeros(m, dtype=np.int64)
+        mine, theirs = slots[w.reader][w.at + i // w.cut[1]] + 1, slots[w.writer][w.source(i)] + 1
+        assert not ((mine != theirs) & (mine > 0) & (theirs > 0)).any(), w.doc()
+        fresh += np.bincount(mine[mine != theirs], minlength=m + 1) * bits(w.reader, w.port)
+    gates = sum(np.bincount(slots[t] + 1, minlength=m + 1) * circuit.template(t).gates for t in circuit.ids)
     for r in circuit.registered.reads:
         if r.param.split("/", 1)[0] != WEIGHTS and r.port in dict(lays[r.reader][0].rows):
-            bits = 16 * dict(lays[r.reader][0].rows)[r.port] // int(circuit.cuts.get(r.reader, {}).get(r.port, 1))
-            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]], minlength=m) * bits
+            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]] + 1, minlength=m + 1) * bits(
+                r.reader, r.port)
     assert not circuit.ingress and all(t.param.split("/", 1)[0] == WEIGHTS for t in circuit.registered.tables)
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
-    return [int(g) for g in gates], [int(f) for f in fresh]
+    return [int(g) for g in gates[1:]], [int(f) for f in fresh[1:]]
 
 
 def test_the_table_is_the_windows_entries_one_block_a_slot(window):
@@ -78,7 +85,7 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
     assert IB.decode(rs)[:2] == (program, 2)
     entries = IB.decode(rs)[2]
     assert len(rs) == 1 + len(entries)
-    assert entries == [(PV2.id_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"))
+    assert entries == [(PV2.id_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"), e.slot)
                        for e in circuit.blocks.inference]
     assert all(len(r) == IB.ROW_BYTES for r in rs)
     labels, slots = _labels(circuit), _slots(circuit, rs)
@@ -103,34 +110,34 @@ def full():
 
 def test_a_served_window_of_equal_requests_has_blocks_of_equal_gates_and_fresh_bits_and_no_wire_across_them(full):
     """FULL, two requests of one length, served: by its record's blocks (`Blocks.slots_steps`), unrolled unit by unit,
-    no wire crosses blocks and its two blocks have the same gates and fresh-input bits."""
+    no wire joins its two blocks and they have the same gates and fresh-input bits."""
     gates, fresh = _unrolled(full, {t: full.blocks.slots_steps(t, 0, n)[0] for t, n in full.units.items()})
     assert gates[0] == gates[1] and fresh[0] == fresh[1], (gates, fresh)
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="the table takes only uniform blocks (`Blocks.uniform`): a served window's scan units are each "
-                          "lane's template of one unit in its own slot, so its equal blocks are refused")
 def test_a_served_window_of_equal_requests_has_a_table(full):
-    try:
-        rs = IB.rows(full, PROGRAM)
-    except ValueError as e:
-        assert "a served window's blocks are a request each of its own positions" in str(e), e
-        raise
+    """FULL's table, read back alone, puts every unit in its record's block, and its budgets are its unrolled blocks'."""
+    rs = IB.rows(full, PROGRAM)
     assert IB.decode(rs)[:2] == (PROGRAM, 2)
+    slots = _slots(full, rs)
+    assert all((slots[t] == full.blocks.slots_steps(t, 0, n)[0]).all() for t, n in full.units.items())
+    gates, fresh = _unrolled(full, slots)
+    c, k = IB.budgets(full)
+    assert gates == [c, c] and fresh == [k, k]
+    assert "others" not in IB.commit(full, PROGRAM)[0]
 
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
     """A served window's blocks are a request each of its own positions (WINDOW's 5 and 4), not blocks of one gate count,
-    so the partition and the block counts' session refuse them by name rather than give a slot an equal share."""
+    so the budgets and the block counts' session refuse them by name rather than give a slot an equal share."""
     from verity_vllm.program.predict import block_counts as BC
 
     circuit = _circuit(WINDOW)
-    with pytest.raises(ValueError, match="a served window's blocks are a request each of its own positions"):
+    with pytest.raises(ValueError, match="request blocks of unequal gates"):
         IB.budgets(circuit)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    with pytest.raises(ValueError, match="a served window's blocks, a request each of its own positions, have no one"):
+    with pytest.raises(ValueError, match="request blocks of other templates or units have no one session Definition"):
         BC.session(doc)
 
 

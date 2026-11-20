@@ -1,6 +1,7 @@
 """The inference-block table's public statement (`verity-vllm/inference-blocks/v1`), as B emits it beside its window circuit
 (`program.predict.inference_blocks.commit`): the label query, every block's gates ``c`` and fresh-input bits ``k``, the grid
-levels of the block count and of the table's rows, and the table's hiding root. The table itself is private; what this states
+levels of the block count and of the table's rows, the table's hiding root, and the units of no request's gates and
+fresh bits where there are any. The table itself is private; what this states
 of it is its budgets, its padded counts and its root."""
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ class InferenceBlocks:
     blocks: int                                       # the block count's grid level
     rows: int                                         # the table's rows' grid level
     root: str                                         # the table's hiding root, 64 bytes in hex
+    others: Mapping[str, int] | None = None           # the units of no request's gates and fresh bits, where there are any
 
     @classmethod
     def of(cls, doc: Any, where: str) -> InferenceBlocks:
@@ -34,14 +36,15 @@ class InferenceBlocks:
             raise RecordError(where, "format", f"cannot be read: the statement is a {type(doc).__name__}, not a JSON object")
         if doc.get("format") != SCHEMA:
             raise RecordError(where, "format", f"is {doc.get('format')!r}, not {SCHEMA}")
-        only(doc, ("format", "query", "c", "k", "blocks", "rows", "root"), where)
+        only(doc, ("format", "query", "c", "k", "blocks", "rows", "root", "others"), where)
         root = required(doc, "root", where, str)
         if not ROOT.fullmatch(root):
             raise RecordError(where, "root", "isn't 64 bytes in hex")
         return cls(query=required(doc, "query", where, Mapping), c=required(doc, "c", where, int),
                    k=required(doc, "k", where, int), blocks=required(doc, "blocks", where, int),
-                   rows=required(doc, "rows", where, int), root=root)
+                   rows=required(doc, "rows", where, int), root=root,
+                   others=dict(required(doc, "others", where, Mapping)) if "others" in doc else None)
 
     def dump(self) -> dict[str, Any]:
         return {"format": SCHEMA, "query": dict(self.query), "c": self.c, "k": self.k, "blocks": self.blocks,
-                "rows": self.rows, "root": self.root}
+                "rows": self.rows, "root": self.root, **({"others": dict(self.others)} if self.others is not None else {})}

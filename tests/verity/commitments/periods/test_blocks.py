@@ -76,7 +76,7 @@ def test_the_blocks_ride_in_the_circuit_record_and_the_verifier_holds_their_proo
 
 
 def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_classs_slots_and_steps():
-    """An entry is a run of a template's units in mixed radix, one digit the slot and at most one the step; the entries
+    """An entry is a run of a template's units in mixed radix, at most one digit the slot and at most one the step; the entries
     together cover every unit of every template once, each slot digit of the class's S and each step below its T. The work
     is per entry, so a gap, an overlap, a short tiling, an unknown template and a malformed entry are each refused by name."""
     e = chain_blocks().inference[0]
@@ -92,7 +92,7 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
         blocked(chain_blocks(slots=4))
     with pytest.raises(ValueError, match=r"slots \[1, 3\), each below the circuit's 2"):
         blocked(chain_blocks(inference=(replace(e, slot=1), replace(e, at=8))))
-    for edit, why in [(dict(axes=("-", "-", "-")), "one of them the slot"), (dict(axes=("slot", "step", "slot")), "one of them"),
+    for edit, why in [(dict(axes=("slot", "step", "slot")), "at most one of them the slot"),
                       (dict(axes=("step", "step", "slot")), "at most one the step"), (dict(axes=("x", "step", "slot")), "one axis"),
                       (dict(axes=("step", "slot")), "one axis"), (dict(step=-1), "naturals"), (dict(radix=(2, 0, 2)), "radix 1")]:
         with pytest.raises(ValueError, match=why):
@@ -113,12 +113,44 @@ def test_an_entry_from_a_later_slot_puts_its_units_at_its_slots():
     b = chain_blocks(inference=(four, *late))
     blocked(b)
     assert late[0].doc()["slot"] == 1 and "slot" not in late[1].doc() and "slot" not in e.doc()
-    assert I.InferenceEntry.of(late[0].doc()) == late[0] and not b.uniform and chain_blocks().uniform
+    assert I.InferenceEntry.of(late[0].doc()) == late[0]
+    assert b.per_slot({GID: 3}) == ([12, 12], 0) == chain_blocks().per_slot({GID: 3})
     assert [tuple(map(list, b.slots_steps(GID, u, u + 1))) for u in (4, 6)] == [([1], [0]), ([0], [0])]
     with pytest.raises(ValueError, match="at least one"):
         chain_blocks(steps=0)
     with pytest.raises(ValueError, match="are `Blocks`"):
         replace(TI.chain(), blocks=chain_blocks().doc(8, "00" * 64))
+
+
+def test_units_of_no_request_are_an_entry_of_no_slot_digit_and_in_no_requests_block():
+    """An entry with no slot digit holds units of no request: they tile with the requests' entries, each unit in exactly
+    one, and are in no slot's block (slot -1), their weight apart from every block's. A unit in two entries, a unit in
+    none, an entry of no request at a slot and a label putting such units at a slot are each refused by name."""
+    e = chain_blocks().inference[0]
+    req = replace(e, radix=(TI.STEPS, TI.REQUESTS), axes=("step", "slot"))
+    none = I.InferenceEntry(GID, 4, (4,), ("-",), 0)
+    b = chain_blocks(inference=(req, none))
+    blocked(b)
+    assert not none.request and req.request and "slot" not in none.doc() and I.InferenceEntry.of(none.doc()) == none
+    assert b.per_slot({GID: 3}) == ([6, 6], 12)
+    assert b.slots_steps(GID, 3, 6)[0].tolist() == [1, -1, -1]
+    for inference, why in [((req, replace(none, at=3, radix=(5,))), "unit 3 is in two inference entries"),
+                           ((req, replace(none, at=5, radix=(3,))), r"units \[4, 5\) are in no inference entry")]:
+        with pytest.raises(ValueError, match=why):
+            blocked(chain_blocks(inference=inference))
+    with pytest.raises(ValueError, match="units of no request at slot 1: a unit of no request is in no request's block"):
+        replace(none, slot=1)
+    blocks = I.Blocks(2, 3, (I.InferenceEntry(TI.TID, 0, (2, 2, 2), ("step", "slot", "-"), 0),
+                             I.InferenceEntry(TI.TID, 8, (4,), ("-",), 0)))
+    (ins, outs) = TI.values(12)
+    for label, why in [(None, None), ({"slot": 0}, "units of no request labelled slot 0")]:
+        win = I.Window(I.Circuit("test", ((TI.COORD, 12),), blocks=blocks), RUN, TI.SAMPLING_DESIGN, 4)
+        win.record(TI.COORD, [a[:8] for a in ins], [a[:8] for a in outs])
+        if why is None:
+            win.record(TI.COORD, [a[8:] for a in ins], [a[8:] for a in outs], label)
+            continue
+        with pytest.raises(ValueError, match=why):
+            win.record(TI.COORD, [a[8:] for a in ins], [a[8:] for a in outs], label)
 
 
 def test_an_output_row_read_names_a_values_leaves_and_fills_no_input_row():

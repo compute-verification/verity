@@ -72,13 +72,18 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
-    if not blocks.uniform:
-        raise ValueError(f"{doc.get('name')}: a served window's blocks, a request each of its own positions, have no one "
-                         "session Definition; a class circuit's do")
-    per: Counter[str]
-    m, per = blocks.slots, Counter()
+    if (none := [e.template for e in blocks.inference if not e.request]):
+        raise ValueError(f"{doc.get('name')}: units of no request ({len(none)} entries, {none[0]} first) are in no inference "
+                         "block, and the block counts report none of them")
+    m = blocks.slots
+    slots = [Counter() for _ in range(m)]
     for e in blocks.inference:
-        per[e.template] += e.units // m
+        r = e.radix_of("slot")
+        for s in range(e.slot, e.slot + r):
+            slots[s][e.template] += e.units // r
+    if any(c != slots[0] for c in slots):
+        raise ValueError(f"{doc.get('name')}: request blocks of other templates or units have no one session Definition")
+    per = slots[0]
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
     program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
     return program, m, blocks.steps
