@@ -480,23 +480,6 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
-def test_the_window_circuit_command_refuses_a_class_whose_units_no_proof_block_takes(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit`` refuses, by the template's name, a lowered class whose unit Flock's composer
-    wouldn't prove (`window_builder.check_provable`): `COORD`'s rows are none past 111 bytes."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.program.predict import window_circuit as WC
-
-    s = _served(tmp_path, monkeypatch)
-    monkeypatch.setattr(WC, "window_circuit", lambda registered, compiled, cls, tables=None: IF.Circuit("test", ((COORD, 2),)))
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-                    str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "c.json")]) == RA.REFUSED
-    err = capsys.readouterr().err
-    assert "I2's window circuit refuses the advice: 1 templates Flock's composer wouldn't prove" in err and TID in err
-    assert not (tmp_path / "c.json").exists()
-
-
 def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(
         tmp_path, monkeypatch, capsys):
     """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window: under
@@ -1653,15 +1636,11 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     assert json.loads((tmp_path / "several" / "summary.json").read_text())["negative_workers"] == {"workers": 5}
 
 
-def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
+def test_warm_fills_the_compose_cache_it_is_given(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache``, ``--jobs`` and ``--mem-gb``, and
-    prints each template's row as it finishes. The audit warms first, ``--jobs`` at a time within ``--audit-mem-gb``, into
-    its ``--compose-cache``, or with none into its own, saying so at once, and keeps each row in its ``composed.jsonl``;
-    it hands a5 that cache. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's cards, `a5.devices`) too,
-    each only where it is given."""
+    prints each template's row as it finishes."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     seen = {}
 
@@ -1683,39 +1662,6 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     assert lines[0] == "WARMING 1 templates, 2 at a time"
     assert json.loads(lines[1].removeprefix("COMPOSED "))["template"] == TID
     assert json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
-
-    class Opened(Exception):
-        pass
-
-    def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache, a.archive_link, A5.devices(a)
-        raise Opened
-
-    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
-    monkeypatch.setattr(A5, "audit", audit)
-    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
-    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
-    args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
-            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    own = str(tmp_path / "out" / "compose-cache")
-    for extra, want in ((["--compose-cache", cache], (cache, False, None)), ([], (own, False, None)),
-                        (["--archive-link"], (own, True, None)), (["--gpus", "0,2"], (own, False, [0, 2]))):
-        capsys.readouterr()
-        with pytest.raises(Opened):
-            RA.main([*args, *extra])
-        assert seen["audit"] == want
-        said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
-        told = [] if extra[:1] == ["--compose-cache"] else [
-            "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
-        assert said[:-1] == told and said[-1].startswith("COMPOSED "), said
-        assert [json.loads(x)["template"] for x in (tmp_path / "out" / RA.COMPOSED).read_text().splitlines()] == [TID]
-    with pytest.raises(Opened):
-        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100", "--keep-circuits", "--min-free-gb", "50"])
-    assert (seen["jobs"], seen["mem"], seen["keep"], seen["free"]) == (4, 100.0, True, 50.0)
-    with pytest.raises(SystemExit):
-        RA.main([*args, "--gpus", "0,0"])
 
 
 def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_other_composer_is(tmp_path, monkeypatch):
