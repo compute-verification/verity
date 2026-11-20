@@ -450,8 +450,7 @@ def test_a_members_port_of_a_registered_value_is_held_by_its_registered_reads():
     got = M.slices(UNITS, RECORD)[B]
 
     def own(out: str = ROOTS[B][0]) -> dict:
-        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "w": "dd" * 64},
-                                   "roots": {"out": out, "w": "77" * 64}})
+        return header(B, frame_v3=frame(B, (out, ROOTS[B][1]), w=("77" * 64, "dd" * 64)))
     assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/w")}) is None
     for reads in (set(), {("v", "h1/w")}, {("w", "b/o0")}, {("w", "input/n3")}, {("w", "committed/w")}):
         assert M.population_why(UNITS[B], strata, own(), got, reads) == M.unwired_why("w")
