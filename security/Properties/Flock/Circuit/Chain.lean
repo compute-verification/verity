@@ -194,13 +194,15 @@ def RestrictBodyAgrees : Prop :=
     (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S
 
 /-- **`BlockEvalDoor`**: in block `u`'s local evaluation `Y` of a trace of C, each unit `g` of the block, an instance of
-the template `Spot.OneStageZk.admitted` admits, lifted to bits (`Flock.Lift.lift`), evaluates on `Y` at its arguments to
-`Y` at its return leaves, bit for bit. An argument inside the block reads `Y` at another unit's return leaf. -/
+the template `Spot.OneStageZk.admitted` admits, the block's units admitted in C (`admittedBlock`), lifted to bits
+(`Flock.Lift.lift`), evaluates on `Y` at its arguments to `Y` at its return leaves, bit for bit. An argument inside
+the block reads `Y` at another unit's return leaf. -/
 def BlockEvalDoor : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.BlockFront.front P units = .ok fr → Flock.Lift.lift S a.d = .ok (L, e) →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace, ∀ g ∈ units,
