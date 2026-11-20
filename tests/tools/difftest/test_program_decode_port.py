@@ -132,6 +132,32 @@ def test_encode_cases_hold_the_writers_form():
     assert {"format", "wide", "registered_program", "chain"} <= canonical, canonical
 
 
+_V, _A0 = ["Value", 1], ["Array", 0, ["Value", 1]]
+#: A writer's descriptor with empty parts at a position (`Affine.slice` past a value's end): Lean's `Part` holds an empty part's
+#: space alone, so its encoder writes `["n",0,0,0]` where the codec keeps `["n",0,3,0]`.
+EMPTY_AT = codec.canonical_json({
+    "schema": "verity-ir/descriptor/v2", "boolean": {}, "root": "Root[P_v1]_v1", "program_fn": "P_v1",
+    "callees": ["Input1_v1", "E_v1"], "types": [["Array", 4, _V], _A0],
+    "definitions": {
+        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": _V},
+        "E_v1": {"form": "composite", "id": "E_v1", "bindings": {}, "body": {
+            "params": [["x", _A0]], "ret_type": _A0, "nodes": [], "ret": {"affine": ["p", 0, 0, 0]}}},
+        "Root[P_v1]_v1": {"form": "composite", "id": "Root[P_v1]_v1", "bindings": {}, "body": {
+            "params": [], "ret_type": _A0,
+            "nodes": [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": 4},
+                      {"form": "call", "fn": 1, "args": [{"type": 1, "refs": {"affine": ["n", 0, 3, 0]}}], "out": 1}],
+            "ret": {"affine": ["n", 1, 0, 0]}}}}}).decode()
+
+
+def test_codec_writes_an_empty_parts_position():
+    assert codec_encoding(EMPTY_AT, REGISTRY[next(t for n, t, _ in CASES if n == "format")]) == EMPTY_AT.encode()
+
+
+@pytest.mark.xfail(strict=True, reason="Lean's decoder drops an empty part's index and base, which the codec writes")
+def test_encode_writes_an_empty_parts_position(server):
+    assert json.loads(server.call("encode", {"descriptor": EMPTY_AT})[1])["encoded"] == EMPTY_AT
+
+
 def test_cases_reach_accepts_and_every_body_refusal():
     """The cases hold accepts with a non-empty map, and each of the Boolean map's refusals and `E_SCHEMA`."""
     seen = [reference({"descriptor": t}) for _, t, _ in CASES]
