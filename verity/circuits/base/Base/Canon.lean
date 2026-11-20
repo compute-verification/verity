@@ -88,6 +88,61 @@ decreasing_by
     omega
   · exact sizeOf_lt_of_mem_toArray p.2
 
+/-- `Array.qpartition`'s loop with its measure as fuel. -/
+def qpartLoopFueled {α : Type} {n : Nat} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
+    Nat → (as : Vector α n) → (i k : Nat) → lo ≤ i → i ≤ k → k ≤ hi → {m : Nat // lo ≤ m ∧ m ≤ hi} × Vector α n
+  | 0, as, i, _, ilo, ik, w => (⟨i, ilo, by omega⟩, as.swap i hi (by omega) hhi)
+  | f + 1, as, i, k, ilo, ik, w =>
+    if h : k < hi then
+      if lt as[k] pivot then qpartLoopFueled lt lo hi hhi pivot f (as.swap i k (by omega) (by omega)) (i + 1) (k + 1)
+        (by omega) (by omega) (by omega)
+      else qpartLoopFueled lt lo hi hhi pivot f as i (k + 1) ilo (by omega) (by omega)
+    else (⟨i, ilo, by omega⟩, as.swap i hi (by omega) hhi)
+
+/-- `Array.qpartition` by `qpartLoopFueled`. -/
+def qpartitionFueled {α : Type} {n : Nat} (as : Vector α n) (lt : α → α → Bool) (lo hi : Nat) (w : lo ≤ hi)
+    (hlo : lo < n) (hhi : hi < n) : {m : Nat // lo ≤ m ∧ m ≤ hi} × Vector α n :=
+  let mid := (lo + hi) / 2
+  let as := if lt as[mid] as[lo] then as.swap lo mid else as
+  let as := if lt as[hi] as[lo] then as.swap lo hi else as
+  let as := if lt as[mid] as[hi] then as.swap mid hi else as
+  qpartLoopFueled lt lo hi hhi as[hi] (hi - lo + 1) as lo lo (Nat.le_refl _) (Nat.le_refl _) w
+
+/-- `Array.qsort`'s sort with its measure as fuel. -/
+def qsortSortFueled {α : Type} {n : Nat} (lt : α → α → Bool) : Nat → (as : Vector α n) → (lo hi : Nat) → lo ≤ hi →
+    lo < n → hi < n → Vector α n
+  | 0, as, _, _, _, _, _ => as
+  | f + 1, as, lo, hi, w, hlo, hhi =>
+    if h₁ : lo < hi then
+      match qpartitionFueled as lt lo hi w hlo hhi with
+      | (⟨mid, hmid⟩, as') =>
+        if h₂ : mid ≥ hi then as'
+        else qsortSortFueled lt f (qsortSortFueled lt f as' lo mid hmid.1 hlo (by omega)) (mid + 1) hi (by omega)
+          (by omega) hhi
+    else as
+
+/-- `Array.qsort` of a whole array, each recursion with its measure as fuel, which the kernel unfolds: the fuel of a
+range `[lo, hi]` is `hi - lo + 1`, more than the recursion on it takes. -/
+def qsortFueled {α : Type} (as : Array α) (lt : α → α → Bool) : Array α :=
+  if h : as.size = 0 then as
+  else (qsortSortFueled lt as.size as.toVector 0 (as.size - 1) (by omega) (by omega) (by omega)).toArray
+
+/-- `canon` unfolded `f` times, `canon` itself past that, its sort `qsortFueled`: the kernel unfolds it. -/
+def canonFueled : Nat → Json → V String
+  | 0, j => canon j
+  | _ + 1, Json.null => pure "null"
+  | _ + 1, Json.bool b => pure (if b then "true" else "false")
+  | _ + 1, Json.num n =>
+    if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
+  | _ + 1, Json.str s => pure (canonStr s)
+  | f + 1, Json.arr a => do
+    let parts ← a.attach.mapM fun x => canonFueled f x.1
+    pure ("[" ++ ",".intercalate parts.toList ++ "]")
+  | f + 1, Json.obj kvs => do
+    let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonFueled f p.1.2)
+    let items := qsortFueled vals (fun a b => a.1 < b.1)
+    pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+
 /-- `canonStr` with DEL and every character from `0x80` on as itself, in UTF-8: a string of `canonUtf8`. -/
 def canonStrUtf8 (s : String) : String := Id.run do
   let mut out := "\""
