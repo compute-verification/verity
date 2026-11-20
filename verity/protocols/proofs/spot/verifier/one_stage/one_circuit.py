@@ -14,7 +14,7 @@ from typing import Any
 from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id
+from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
 from verity.circuits.program import input_id
 
 from .certified_rows import _fields
@@ -27,8 +27,8 @@ LOWER = "lower : C_S of a partition that is no template query (Q_template_instan
 
 #: Lean's lowering of C_S (`Flock.Lower.lower`, `Flock.Compose.compose`), a Lake target of Flock's verifier.
 LOWER_EXE = "flock-lower-check"
-#: Why a row or a return field not whole u16 words is refused: `Spot.OneStageZk.NOT_WHOLE`, word for word.
-NOT_WHOLE = "is not whole u16 words, and the lowering lays the leaves after it in its padding"
+#: The prefix of every refusal of `admitted`: `Spot.OneStageZk.NOT_ADMITTED`, word for word.
+NOT_ADMITTED = "lower: not the one form the door lowers (Spot.OneStageZk.admitted)"
 
 #: The templated statement's layout mode (`Flock.Tmpl`'s `iv/hybrid/T`) the door lowers C_S at.
 LAYOUT = "iv/hybrid/4"
@@ -118,40 +118,89 @@ def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None)
         raise Refused("E_LOWER", f"in(S)'s cuts: {e}") from e
 
 
-def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT,
-          cut: Mapping[str, Mapping[str, int]] | None = None) -> bytes:
-    """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
-    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S's template (the one Definition its root calls, which
-    the partition's template query lists): its input ports
-    the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j`` where ``cut`` (`cuts`, C's)
-    gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``, its bits in whole u16
-    words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the template's
-    `definition_digest`. `NotDerived` where the partition is no template query; `Refused` where C_S's root calls other
-    than one Definition, one the query does not list, a row or a return field not whole u16 words (`NOT_WHOLE`), or the
-    lowering refuses."""
+def _not_admitted(clause: str, detail: str) -> Refused:
+    return Refused("E_LOWER", f"{NOT_ADMITTED}, {clause}: {detail}")
+
+
+def _plain(n: str) -> bool:
+    return bool(n) and not any(c in ",:# \t\r\n" for c in n)
+
+
+def admitted(D: DecodedProgram, partition: Mapping[str, Any],
+             cut: Mapping[str, Mapping[str, int]] | None = None) -> tuple[str, list[tuple[str, int]], list[tuple[str, int]]]:
+    """`Spot.OneStageZk.admitted`: C_S (decoded, ``D``) in the one form the door lowers, as (its template, its input rows,
+    its return fields), each a ``(name, bits)``; `NotDerived` where the partition is no template query, else `Refused`
+    under `NOT_ADMITTED` by the first clause that fails, with Lean's text."""
     listed = _listed(partition.get("query") or {})
     if listed is None:
         raise NotDerived(LOWER)
-    D = R.program(c_s)
     called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
     if len(called) != 1:
-        raise Refused("E_LOWER", f"C_S's root calls {called}, and a block's units are instances of one template")
+        raise _not_admitted("one-template", f"C_S's root calls [{', '.join(called)}], and a block's units are instances "
+                                            "of one template")
     key = called[0]
     if key not in listed:
-        raise Refused("E_LOWER", f"C_S's template {key!r} is not one the partition's query lists")
+        raise _not_admitted("listed", f"C_S's template {key} is not one the partition's query lists")
+    rows, fields = template_form(D, key, (cut or {}).get(key, {}))
+    return key, rows, fields
+
+
+def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    """`admitted`'s clauses from `listed` on, on template ``key`` of ``D`` at its cuts ``ks``: (its input rows, its return
+    fields), or `Refused` by the first clause that fails."""
     fn = D.defs.get(key)
     if fn is None:
-        raise Refused("E_LOWER", f"C_S's template {key!r} is no Definition of C_S")
+        raise _not_admitted("listed", f"C_S's template {key} is no Definition of C_S")
     params, ret = fn.signature()
-    ks = (cut or {}).get(key, {})
     rows = [r for name, bits in ((name, sum(t.leaf_widths())) for name, t in params)
             for r in ([(name, bits)] if ks.get(name, 1) <= 1 else
                       [(f"{name}#{j}", bits // ks[name]) for j in range(ks[name])])]
     fields = [(f"o{j}", sum(f.leaf_widths())) for j, f in enumerate(_fields(ret))]
+    if bad := next((n for n, _ in params if not _plain(n)), None):
+        raise _not_admitted("port-names", f"C_S's template {key}: parameter '{bad}' is empty or holds ',', ':', '#' or a space")
+    names = [n for n, _ in rows + fields]
+    if twice := next((n for n in names if names.count(n) > 1), None):
+        raise _not_admitted("port-names", f"C_S's template {key}: port {twice} is named twice")
+    try:
+        wide = lift_shape(D.desc, key)[1]
+    except ValueError as e:
+        raise _not_admitted("on-bits", f"the lift to bits refuses C_S's template {key}: {e}") from e
+    if wide:
+        raise _not_admitted("on-bits", f"C_S's template {key} reaches {wide[0]}, whose leaves are not all one bit after "
+                                       "the lift to bits")
+    types = dict(params)
+    for p, k in ks.items():
+        if p not in types:
+            raise _not_admitted("cut-rows", f"C_S's template {key}: a cut names {p}, which is no parameter")
+        t = types[p]
+        if k < 2 or t.leaves == 0 or t.homogeneous_width() is None or t.leaves % k:
+            raise _not_admitted("cut-rows", f"C_S's template {key}: parameter {p} of {t.leaves} leaves cut {k} ways, not "
+                                            "into equal runs of leaves of one width")
+    if not fields:
+        raise _not_admitted("whole-words", f"C_S's template {key} returns no field")
     for what, rs in (("input row", rows), ("return field", fields)):
         for name, bits in rs:
-            if bits % 16:
-                raise Refused("E_LOWER", f"lower: C_S's template {key}: {what} {name} of {bits} bits {NOT_WHOLE}")
+            if bits == 0 or bits % 16:
+                raise _not_admitted("whole-words", f"C_S's template {key}: {what} {name} of {bits} bits is not a positive "
+                                                   "whole number of u16 words")
+    s_in, s_out = sum(b for _, b in rows), sum(b for _, b in fields)
+    n_in, n_out = sum(sum(t.leaf_widths()) for _, t in params), sum(ret.leaf_widths())
+    if (s_in, s_out) != (n_in, n_out):
+        raise _not_admitted("leaves-are-bits", f"C_S's template {key}: rows of {s_in} bits and fields of {s_out}, its "
+                                               f"lift's {n_in} parameter and {n_out} return leaves")
+    return rows, fields
+
+
+def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT,
+          cut: Mapping[str, Mapping[str, int]] | None = None) -> bytes:
+    """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
+    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S refused unless `admitted`, at the rows and fields
+    it gives: its input ports the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j``
+    where ``cut`` (`cuts`, C's) gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``,
+    in u16 words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the
+    template's `definition_digest`. `Refused` too where the lowering refuses."""
+    D = R.program(c_s)
+    key, rows, fields = admitted(D, partition, cut)
     ins = ",".join(f"{name}:{bits}" for name, bits in rows)
     outs = ",".join(f"{name}:{bits // 16}" for name, bits in fields)
     digests = json.dumps({key: definition_digest(D.desc["definitions"][key], D.desc)})
