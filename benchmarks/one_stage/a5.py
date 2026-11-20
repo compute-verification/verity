@@ -318,6 +318,12 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     one = "templates" not in params
     digests = tuple(P.program_digest(Program(u)) for u in units)
     schemas = {t: s for t, (s, _n) in mine.trees.items()}
+    # a run input node's tree input/n<w> is no member's: its leaves are in the schema its readers' files name
+    for mm in members:
+        if (f := mm["st"].get("registered_file")) is not None:
+            for e in json.loads(f.read_text())["ports"].values():
+                if REG.is_fresh_value(e.get("value")):
+                    schemas.setdefault(e["value"], e.get(RV.SCHEMA_KEY, RV.SCHEMA))
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
     taken = program_values(mine.program)
     public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
