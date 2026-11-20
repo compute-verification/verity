@@ -11,6 +11,12 @@
 #
 # The order, the distributions and each place's `paths` and `trusted` mark are kept by hand.  The tables after them are
 # the tree's own, written by `uv run tools/check/import_order.py`, and the test holds this file to what it writes.
+#
+# Two edges of `adapters` stand by name until a date (top's ruling, Fri 20 Nov 9:02 AM PST, TOP-447):
+# - `adapters/vllm` imports `SamplingDesign` and `params_sampling_design` from SPOT's verifier service
+#   (`serve.py`, `window_record.py`, `serving_rows.py`): owner proofs, gone by Tue 24 Nov, to a home the adapter may import;
+# - `adapters/vllm` imports `standin_rows` from network attestation's prover (`close_record.py`): owner
+#   network-accounting, gone by 2:00 PM PST Fri 20 Nov.
 
 order = [
     ["tools/config", "verity"],
