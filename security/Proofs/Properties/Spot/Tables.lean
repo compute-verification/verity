@@ -82,7 +82,8 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r, OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold OneStageZk.checkOneAt at h
+  replace h := OneStageZk.checkOneAt_body h
+  unfold OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   · cases h
