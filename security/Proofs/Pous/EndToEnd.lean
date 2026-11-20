@@ -233,8 +233,8 @@ theorem checkKey_coinKey (k : Bytes 256) : checkKey (coinKey k) = .ok () := by
   have hg : (coinKey k).get! 255 = (bytesOf k).get! 255 &&& 0x7f := by
     have h := get!_set!_self (bytesOf k) 255 ((bytesOf k).get! 255 &&& 0x7f) (by rw [size_bytesOf]; omega)
     exact h
-  unfold checkKey
-  rw [show HM96.keyBytes = 256 from rfl, hs, hg, uint8_clear]
+  unfold checkKey Flock.SessionCoins.checkKey
+  rw [show Flock.SessionCoins.HM96.keyBytes = 256 from rfl, hs, hg, uint8_clear]
   rfl
 
 theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
@@ -252,9 +252,12 @@ theorem coinLeaf_ok (key session : ByteArray) (j index : ℕ) (salt : ByteArray)
     (hj : j < 2 ^ 32) (hi : index < 2 ^ 64) (hs : salt.size = 192) : ∃ b, coinLeaf key session j index salt = .ok b := by
   obtain ⟨bj, hbj⟩ := beN_ok 4 j "j" hj
   obtain ⟨bi, hbi⟩ := beN_ok 8 index "index" hi
-  have hsalt : checkSalt salt = .ok () := by
-    unfold checkSalt; rw [hs]; rfl
-  simp only [coinLeaf, coinDigest, hbj, hbi, hk, hsalt]
+  have hsalt : Flock.SessionCoins.checkSalt salt = .ok () := by
+    unfold Flock.SessionCoins.checkSalt; rw [hs]; rfl
+  have hbj' : Flock.SessionCoins.beN 4 j "j" = .ok bj := hbj
+  have hbi' : Flock.SessionCoins.beN 8 index "index" = .ok bi := hbi
+  have hk' : Flock.SessionCoins.checkKey key = .ok () := hk
+  simp only [coinLeaf, Flock.SessionCoins.coinLeaf, Flock.SessionCoins.coinDigest, hbj', hbi', hk', hsalt]
   exact ⟨_, rfl⟩
 
 theorem ofFn_getElem! {α : Type} [Inhabited α] {n : ℕ} (f : Fin n → α) (a : ℕ) (h : a < n) :

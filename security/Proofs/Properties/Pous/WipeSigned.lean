@@ -504,7 +504,7 @@ private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commit
 
 private theorem beInt_of {n : Nat} {x : Int} (w : String) (h0 : 0 ≤ x) (hx : x.toNat < 2 ^ (8 * n)) :
     ∃ b, StreamedWipe.beInt n x w = .ok b := by
-  unfold StreamedWipe.beInt beN
+  unfold StreamedWipe.beInt beN Flock.SessionCoins.beN
   simp only [Int.not_lt.2 h0, ↓reduceIte, hx]
   exact ⟨_, rfl⟩
 
