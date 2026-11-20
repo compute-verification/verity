@@ -513,18 +513,17 @@ def Piece.reshape (x : Piece) (rows len : Nat) : Option Piece :=
   else none
 
 /-- Segment `s` resolved by `f` (a piece resolved, `down`), copy by copy. A rowed segment's pieces are resolved once each,
-and stay a rowed segment when each resolves to one piece of its rows (`Piece.reshape`); else its periods are resolved
-one by one, up to `WALK`. -/
+and stay a rowed segment when each, of a row a copy, resolves to one piece of its rows (`Piece.reshape`); else its
+periods are resolved one by one, up to `WALK`. -/
 def segDown (f : Piece → Except String (Array Seg)) (s : Seg) : Except String (Array Seg) := do
   if !s.rowed then
     let mut out := #[]
     for q in (Array.range s.reps).flatMap s.copy do out := out ++ (← f q)
     return out
   let rs ← s.ps.mapM f
-  let one (q : Piece) (r : Array Seg) : Option Piece := match r with
-    | #[x] => x.single.bind (·.reshape q.rows q.len)
-    | _ => none
-  if let some ps := (s.ps.zip rs).mapM fun (q, r) => one q r then return #[{ s with ps }]
+  let one (q : Piece) (r : Array Seg) : Option Piece :=
+    if r.size == 1 && q.rows == s.reps then r[0]!.single.bind (·.reshape q.rows q.len) else none
+  if let some ps := (s.ps.zip rs).mapM fun (q, r) => one q r then return #[{ s with ps, shift := 0 }]
   walkAtMost "periods of a grid of several lanes resolved one by one" s.reps
   let mut out := #[]
   for m in [0:s.reps] do
