@@ -7116,7 +7116,7 @@ theorem segDown_shapeOk {P : Prog} {d : Nat} (f : Piece → Except String (Array
     (hs1 : SegOk s) (hs2 : 1 ≤ s.reps) (hpos : ∀ p ∈ s.ps.toList, 0 < p.count) (out : Array Seg)
     (h : Desc.segDown f s = .ok out) : ∀ g ∈ out.toList, ShapeOk P d g ∧ Φ g := by
   intro g hg
-  rcases segDown_mem f s hpos out h g hg with ⟨q, v, h0, hsub, hfq, hgv⟩ | ⟨hxs, -, hcnt, hreps, hlen, -, hcl⟩
+  rcases segDown_mem f s hpos out h g hg with ⟨q, v, h0, hsub, hfq, hgv⟩ | ⟨hxs, -, hcnt, hreps, hlen, -, hcl, -⟩
   · exact hD q v h0 hsub hfq g hgv
   have hpt : ∀ x ∈ segPos g, ∃ g', ShapeOk P d g' ∧ Φ g' ∧ x ∈ segPos g' := fun x hx => by
     obtain ⟨q, v, h0, hsub, hfq, hxv⟩ := hxs x hx
