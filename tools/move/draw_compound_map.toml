@@ -76,7 +76,6 @@ strings = [
   "\"Proofs.Properties.Verity.Sampled.RecordDraw\"",
   "\"Proofs.Properties.Verity.Sampled.Window.Draw\"",
   "\"Proofs.Properties.Verity.SampledDraw\"",
-  "\"Proofs.Properties.Verity.SampledTwo.DrawRoots\"",
   "\"Proofs.Properties.Verity.SampledTwo.FormDraw\"",
   "\"Properties.Pouw.PearlPlusDraw\"",
   "\"Properties.Spot.Draw\"",

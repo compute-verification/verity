@@ -23,21 +23,3 @@ off_gate = ["circuit-check", "ratchet-gate", "added-lines"]
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed. A recorded check runs each test a `suite NAME::TEST`
 # entry at its base names as a non-strict expected failure (`suites.py --allowances`), so that suite passes and is reused.
-
-[[allow]]
-id = "suite repository::tests/test_lean_exempt.py::test_an_exempt_file_with_an_owner_is_owed[security/Proofs:Proofs.Properties.Verity.SampledTwo.MemberChecks]"
-owner = "proofs"
-expires = "2026-11-24T08:00:00Z"
-reason = "PRF-644: the module reads the session statement's tags as the circuit statement's, which the templated statement no longer is; out of the roots until it is moved onto the templated parser, due 2026-11-23"
-
-[[allow]]
-id = "suite repository::tests/test_lean_exempt.py::test_an_exempt_file_with_an_owner_is_owed[security/Proofs:Proofs.Properties.Verity.SampledTwo.RoundsRise]"
-owner = "proofs"
-expires = "2026-11-24T08:00:00Z"
-reason = "PRF-644: the module reads the session statement's tags as the circuit statement's, which the templated statement no longer is; out of the roots until it is moved onto the templated parser, due 2026-11-23"
-
-[[allow]]
-id = "suite repository::tests/test_lean_exempt.py::test_an_exempt_file_with_an_owner_is_owed[security/Proofs:Proofs.Properties.Verity.Sampled.Record.Nums]"
-owner = "proofs"
-expires = "2026-11-24T08:00:00Z"
-reason = "PRF-644: the module reads the session statement's tags as the circuit statement's, which the templated statement no longer is; out of the roots until it is moved onto the templated parser, due 2026-11-23"

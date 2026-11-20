@@ -1021,7 +1021,6 @@
         "security/Proofs/Properties/Remote.lean",
         "security/Proofs/Properties/Remote/",
         "security/Properties/Remote.lean",
-        "security/Proofs/Properties/Verity/SampledTwo/",
         "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
         "security/Proofs/Properties/Verity/InferenceOnly.lean",
         "security/Proofs/Properties/Verity/OnsiteCaller.lean",
