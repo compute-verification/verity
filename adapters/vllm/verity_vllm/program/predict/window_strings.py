@@ -201,16 +201,16 @@ def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None, block: Callabl
 
 
 def card_ports(circuit: Any, ports: Collection) -> dict[tuple[str, str], tuple[int, int, int]]:
-    """By each of ``ports`` (template id, port), the numbering `Window.leaf_rows` gives it as the circuit's layouts give
-    it: its template's ordinal, its ordinal among a member's rows then outputs, and its row's bytes (an output's words
-    zero-padded to whole SHA-512 blocks, `rows.Member.out_rows`). `handed_strings` holds it to the window's."""
+    """By each of ``ports`` (template id, port), the numbering `Window.leaf_rows` gives it as `interface.members` lays a
+    member's ports from the circuit: its template's ordinal, its ordinal among the member's cut rows then outputs, and its
+    row's bytes (a member names each port's schema, so an output's row is its own words). `handed_strings` holds it to
+    the window's."""
     tids = {t: i for i, t in enumerate(circuit.ids)}
     out = {}
     for tid, port in ports:
         lay = circuit.layouts[tid][0]
-        rows, outs = dict(lay.rows), dict(lay.outs)
-        words = rows[port] if port in rows else -(-outs[port] // 64) * 64
-        out[(tid, port)] = (tids[tid], [p for p, _ in lay.rows + lay.outs].index(port), 2 * words)
+        laid = [(p, w) for p, w, _ in lay.cut(circuit.cuts.get(tid, {}))] + list(lay.outs)
+        out[(tid, port)] = (tids[tid], [p for p, _ in laid].index(port), 2 * dict(laid)[port])
     return out
 
 
