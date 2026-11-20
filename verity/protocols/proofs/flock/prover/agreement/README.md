@@ -180,7 +180,7 @@ the first Hello, a second staging or one of other inputs, and a record that isn'
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
 parts). The record is the auditor's: it is read from the challenger's host (`trusted-device`), never from the prover's
 bundle. `verity_flock.rec_compose` is its Python mirror (`tests/verity/protocols/proofs/flock/prover/test_lean_rec_compose.py`). The pod's Lean step
-(`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
+(`lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=zk_server` (one session per staged statement) its
 oprove step keeps the record (`v-sess/rec-run.jsonl`, one event a line): it stages the rows file and the shared set of
 the files every part is given (`rec_compose.shared_of_args`, not read from any part's `VERDICT`) before any session, each

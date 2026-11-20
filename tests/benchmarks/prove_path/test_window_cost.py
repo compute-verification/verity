@@ -102,19 +102,6 @@ def test_the_attention_at_blocks_of_4_over_6_positions_is_the_hand_count():
     assert (packed[first % 4], packed[full], packed["AttnHeadEnd_v1{D=8}"]) == ((1, 11), (1, 12), (1, 1))
 
 
-@pytest.mark.parametrize("levers", [(), ("L3b",), ("W", "R"), ("L3b", "W", "R")])
-def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
-    doc = _census(WindowClass(2, 4, 2))
-    rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
-    us = W.window_units(rest, heads, frozenset(levers))
-    rows = nbytes = 0
-    for T in range(1, heads.P + 1):
-        for g in W.position_layout(rest, heads, frozenset(levers), T)["groups"]:
-            rows += heads.S * sum(len(u) for u in g["units"])
-            nbytes += heads.S * g["sources"][0]
-    assert (rows, nbytes) == (sum(u.n * u.out for u in us), sum(u.n * u.out_bytes for u in us))
-
-
 @pytest.mark.slow
 @pytest.mark.xfail(raises=ValueError, strict=True, reason="Llama-3.2-1B's probe lowers, and some of its templates have no "
                    "measured price on the H200")

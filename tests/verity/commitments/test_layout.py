@@ -19,7 +19,7 @@ LAYOUTS = Path(__file__).resolve().parent / "fixtures" / "layouts"
 SHARED = LAYOUTS / "families-shared-1024b.layout.json", "15fd14be19dea4d4d70b18771d0e185881894c3d5e480db35a9dbe4eb5141cd8"
 #: today's ``families/v1`` layout, whose gathers re-commit their parts' bytes, and its sha256
 TODAY = LAYOUTS / "families-today.layout.json", "c3f312ce597f368cb01b7db9c8298fff1c9613d7bf90907d7e72a45190a1e175"
-#: commit_slots' interface fixture: its "layout" is ``slots._layout_json(slots.edge_layout())``
+#: the slot commit's interface fixture: its "layout" is one edge layout's
 EDGE = Path(__file__).resolve().parents[0] / "fixtures" / "commit-slots-v1.json"
 
 DIGESTS = {
@@ -33,7 +33,7 @@ DIGESTS = {
 
 
 def written(layout: L.RowsPerSlot) -> bytes:
-    """The file ``commit_slots/step.py export`` writes: ``_layout_json``'s output, compact, then a newline."""
+    """A layout file's bytes: ``to_json``'s output, compact, then a newline."""
     return (json.dumps(L.to_json(layout), separators=(",", ":")) + "\n").encode()
 
 

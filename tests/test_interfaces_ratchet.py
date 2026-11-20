@@ -110,8 +110,6 @@ KEPT = {"scheme_name_tables": {
     "benchmarks/pouw/harness/native/build.sh":
         "the NVFP4 units and the CUTLASS baselines stating their one target, the block-scaled `mma.sync`, which no "
         "architecture file states (top, 18 Nov)",
-    "verity/commitments/cuda/commit_slots/slots.py":
-        "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
     "benchmarks/pouw/hidden_zk/registered.sh":
         "the registered semantics' name its template is generated at, an `INSTRUCTIONS` key of `verity/circuits/silicon` "
         "(compute-accounting, 18 Nov)"}}

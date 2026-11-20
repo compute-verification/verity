@@ -44,10 +44,10 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   own roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window's entries register them, and names at that known
   content. The window Program's one ``roots`` parameter is the layout's, not what a call's units are seeded under. A
   J10-R window's templates (`SHARED_J10R`) take two more, ``call`` and ``blocks``, its noise's call stream and its
-  unit's place in it, and its public row holds those as credit derives them from the layout (`core_check.j10r_blocks`),
+  unit's place in it, and its public row holds those as credit derives them from the layout (`window.j10r_blocks`),
   every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
-  ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt`, which credit registers itself and names at that known content. A unit that computed 0 opens no
+  ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `window.ok_salt`, which credit registers itself and names at that known content. A unit that computed 0 opens no
   row of it, and a session that opened ok at another root is refused.
 
 * **The credited set is fixed before the sample** (`_credited`). Each row of the window's manifest (the serving process's
@@ -208,11 +208,13 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lane
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import (
+    CREDIT, DELTA, DRAW_TAG, K_FIELD, LENGTH_FIELD, MAX_K, ROWS_FIELD, call_work, is_held, round_root, window_table,
+)
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.resource_accounting.compute.pouw.verifier.leaf_lanes import LEAST_K
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import CALL_RANGE, tagged
 from verity.protocols.resource_accounting.compute.pouw.verifier.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
-from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
@@ -227,10 +229,6 @@ from verity.commitments.merkle import root_from_subtrees
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
 CALLS_TAG = domains.POUW_H1_CALLS.encode() + b"\0"
-DRAW_TAG = domains.POUW_H1_SAMPLING
-ROUND_TAG = domains.POUW_H1_ROUND_A
-#: each manifest row's credit bit
-CREDIT = "credit"
 #: each manifest row's served rows m_s: its step's rows in slots 0 .. m_s - 1 of its call's M, the rest empty
 SERVED_ROWS = "served"
 #: how deep a manifest row nests
@@ -243,8 +241,6 @@ LEVELS = 64
 #: the layout's own (`table_rows`), every weights' value's too (`_weights`), and no entry's leaves are bounded otherwise
 MAX_ROWS = 1 << 24
 _DIGEST = re.compile(r"[0-9a-f]{128}")
-#: a contraction K in a registered value's name: a canonical decimal, no leading zero
-_DIGITS = re.compile(r"[1-9][0-9]*")
 _A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
 
@@ -261,15 +257,6 @@ CHANGED = ("the draw root over the manifest (each call's credit bit among it), i
            "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after "
            "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw "
            "root, and never change them after the draw coin")
-#: the period-open's field holding the sample's K, the proof system's selection, committed before any sample
-K_FIELD = "draw_k"
-#: the most a committed K may be
-MAX_K = 1 << 24
-#: the period-open's field holding the served tables' leaf count T (the pouw setting ``rows``: each round's request and
-#: slot tables' leaves), committed before any sample; a window's A slot M is `h1window.slot` of it
-ROWS_FIELD = "rows"
-#: the δ the period's ε is reported at
-DELTA = WINDOW_DELTA
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
 #: ``--model``), signed before any window's salt
 WEIGHTS_FIELD = "weights_root"
@@ -300,10 +287,6 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the workloads of record's fixed length: ``{max_tokens, stop}``,
-#: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
-#: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
-LENGTH_FIELD = "length"
 LENGTH_KEYS = ("max_tokens", "stop")
 K_FORM = f"the draw's K is not a positive integer at most 2^24 (the K its period's open committed as {K_FIELD})"
 #: a window's layout: `circuit.h1window.program`'s arguments
@@ -518,19 +501,6 @@ def commit_ids(s: int) -> str:
     return f"input-ids/{s}"
 
 
-_COMMIT_NAME = re.compile(r"row-table/(0|[1-9][0-9]*)/k([1-9][0-9]*)|input-ids/(0|[1-9][0-9]*)")
-
-
-def window_table(name: str, prefix: str) -> str:
-    """The window's table under `prefix` (the descriptor's ``PREFIX``) that the Commit's value `name` is (ROOTS1): round
-    s's A table of K ``<prefix>a/<K>@<s>`` for `commit_rows` of (s, K), its input-ids table ``<prefix>ids@<s>`` for
-    `commit_ids` of s. ValueError for any other name."""
-    m = _COMMIT_NAME.fullmatch(name) if isinstance(name, str) else None
-    if m is None:
-        raise ValueError(f"{name!r} is no Commit name of a window's table: row-table/<round>/k<K> or input-ids/<round>")
-    return f"{prefix}a/{m[2]}@{m[1]}" if m[1] is not None else f"{prefix}ids@{m[3]}"
-
-
 def _digest(x: Any) -> bytes | None:
     return bytes.fromhex(x) if isinstance(x, str) and _DIGEST.fullmatch(x) else None
 
@@ -540,11 +510,11 @@ def _nat(x: Any) -> bool:
 
 
 def _printable(x: Any) -> bool:
-    """A string of printable ASCII but ``"`` and ``\\``, as a receipt's keys and values are (`core_check.draw_key_context`)."""
+    """A string of printable ASCII but ``"`` and ``\\``, as a receipt's keys and values are (`window.draw_key_context`)."""
     return type(x) is str and all(" " <= ch <= "~" and ch not in '"\\' for ch in x)
 
 
-def _plain(x: Any, depth: int = DEPTH) -> bool:
+def plain(x: Any, depth: int = DEPTH) -> bool:
     """JSON of objects, lists, strings, integers, booleans and null nested at most `depth` deep: what the Lean writes
     as `json.dumps` does."""
     if depth == 0:
@@ -552,8 +522,8 @@ def _plain(x: Any, depth: int = DEPTH) -> bool:
     if x is None or type(x) in (bool, int, str):
         return True
     if type(x) is list:
-        return all(_plain(v, depth - 1) for v in x)
-    return type(x) is dict and all(type(k) is str and _plain(v, depth - 1) for k, v in x.items())
+        return all(plain(v, depth - 1) for v in x)
+    return type(x) is dict and all(type(k) is str and plain(v, depth - 1) for k, v in x.items())
 
 
 def calls_root(salt: bytes, rows: Any, served: bytes | None = None, commit: bytes | None = None) -> bytes:
@@ -581,13 +551,6 @@ def commit_of(commit: Any) -> tuple[tuple[bytes, list[dict]] | None, tuple[str, 
         return None, ("commit", COMMIT_FORM)
     d = hashlib.sha512(COMMIT_FORMAT.encode() + b"\0" + bytes.fromhex(commit)).digest()
     return (d, rec["registered"]), None
-
-
-def draw_root(calls: bytes, receipts: bytes, rounds: Any) -> bytes:
-    """What the sampling coin opens after: the manifest's `calls_root`, the last round's receipts and every round's root and
-    coin, so the sample follows every round coin by hash."""
-    return tagged(DRAW_TAG, calls, receipts, *(p for x in rounds for p in (
-        bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
 
 def no_bit(i: int) -> str:
@@ -652,7 +615,7 @@ def _credited(key: Any, ledger: Any, pins: Any, main: Any, salt: Any, calls: Any
         return None, ("manifest", CALLS_FORM)
     out = []
     for i, row in enumerate(calls):
-        if not (isinstance(row, dict) and _plain(row)):
+        if not (isinstance(row, dict) and plain(row)):
             return None, ("manifest", f"manifest row {i} is not an object of objects, lists, strings, integers, booleans "
                                       "and null")
         if not (type(row.get("index")) is int and row["index"] == i):
@@ -1094,17 +1057,17 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
     row t of the call's public table ``<prefix>pub@<call>`` (`h1window.public_table`), which the file names at its known
     content (``known``, `Flock.Registered.checkKnownAll`): the window's Program salt `salt` (hex), the unit's position
     u0 + t and the call's roots, root(``a/<K>@<s>``) and root(``b/<K>``) as the window registers them
-    (`core_check.public_words`), each under `core_check.public_row_salt` of `window` and its position, at the root of
+    (`window.public_words`), each under `window.public_row_salt` of `window` and its position, at the root of
     their registration. So a unit seeded under another salt, position or roots (another call's, or made up) opens no row
     of it, and the prover never chooses its own noise or fold keys. A J10-R window's (`shape_of`'s ``j10r``) row is that
-    and then the unit's ``call`` and ``blocks`` (`core_check.public_row`'s J10-R form), which the verifier derives from
+    and then the unit's ``call`` and ``blocks`` (`window.public_row`'s J10-R form), which the verifier derives from
     the window's layout too: ``call`` the call's first position u0 (its seed_c's) and ``blocks`` tile (I, J) = (t // (n/C),
-    t % (n/C))'s `core_check.j10r_blocks` at the call's slot M, its K and the tile, so a unit that samples its noise from
+    t % (n/C))'s `window.j10r_blocks` at the call's slot M, its K and the tile, so a unit that samples its noise from
     another call's stream or another unit's blocks of it opens no row either.
 
     The statement's output row ``ok`` (`OK_PORT`, o1) is the verifier's own too: unit u reads row u of the window's ok
     rows ``<prefix>ok`` (`OK_VALUE`, `ok_table`, one row a unit of the window), named at its known content, the one word
-    1 under `core_check.ok_salt` of `window` and u. So a unit that computed 0 opens no row of it; and a window whose entries
+    1 under `window.ok_salt` of `window` and u. So a unit that computed 0 opens no row of it; and a window whose entries
     register those rows themselves is refused (``registration``)."""
     (r, c), m, prefix = layout["tile"], layout["m"], shape["prefix"]
     ov = f"{prefix}{OK_VALUE}"
@@ -1165,8 +1128,8 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
                  blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """`h1window.public_table`: a call's public rows ``value`` over its `n` units from unit `u0`, their salts and their
     registration, unit u's row the window's Program salt `salt`, its position u and its call's `roots` (each hex,
-    `core_check.public_words`), and with `blocks` (a J10-R window's, one a unit) the call's first position `u0` and unit
-    u's blocks, under `core_check.public_row_salt` of the window's open root `window` and u, registered under the
+    `window.public_words`), and with `blocks` (a J10-R window's, one a unit) the call's first position `u0` and unit
+    u's blocks, under `window.public_row_salt` of the window's open root `window` and u, registered under the
     descriptor's SHA-512 `program` binding `window`."""
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
@@ -1177,7 +1140,7 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
 @functools.lru_cache(maxsize=8)
 def ok_table(program: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """`h1window.ok_table`: the window's ok rows ``value`` over its `population` units, their salts and their
-    registration: row u the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
+    registration: row u the one word 1 (`window.OK_ROW`) under `window.ok_salt` of
     the window's open root `window` and u, registered under the descriptor's SHA-512 `program` binding `window`. Every
     input is public, so the verifier and the prover compute the same root."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
@@ -1200,13 +1163,6 @@ def sampling_design(ss: list[dict], k: Any) -> tuple[str, str] | None:
     for s, n in zip(ss, sizes):
         s["k"] = CC.work_k(k, s["work"], n, total, s["floor"])
     return None
-
-
-def call_work(layout: dict) -> list[tuple[int, int]]:
-    """Each call's units and the work of each of them, ``(size, work)`` in call order, of a layout `strata` accepted."""
-    (r, c), m = layout["tile"], layout["m"]
-    ks = {name: (k, n) for name, k, n in layout["linears"]}
-    return [((m // r) * (ks[lin][1] // c), r * c * ks[lin][0]) for lin, _blk in layout["calls"]]
 
 
 def served_rows(calls: list[dict], layout: dict, steps: int, t: int
@@ -3031,7 +2987,6 @@ def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name
     return {"epochs": out, "passes": manifests}, None
 
 
-
 def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """The verdict of record on a credit period's presented roots, (code, why) or None: the Lean `Credit.period`'s
     (`verifier.of_record` on ``period-roots``), with `period_twin` its Python twin; a disagreement is the refusal
@@ -3209,13 +3164,6 @@ def cover(lo: int, hi: int) -> list[tuple[int, int]]:
     return out
 
 
-def round_root(r: int, inner: bytes, segments: dict[str, list[tuple[int, int, bytes]]]) -> bytes:
-    """The root the challenger receives for round `r`: the serving process's own round root `inner` and, for each A
-    value by name, its segments (level, index and root) in row order."""
-    return tagged(ROUND_TAG, r, inner, *(p for v in sorted(segments) for level, index, root in segments[v]
-                                         for p in (v, level, index, root)))
-
-
 def _segments(a: Any) -> dict[str, list[tuple[int, int, bytes]]] | None:
     if not isinstance(a, dict):
         return None
@@ -3293,14 +3241,6 @@ def is_tied(value: Any) -> bool:
 def _what(value: str) -> str:
     return ("A value" if is_a(value) else "input-ids table" if ids_step(value) is not None
             else "slot table" if slots_step(value) is not None else "receipt table")
-
-
-def is_held(value: Any) -> bool:
-    """A value held across windows: the weights' rows, a name whose last two parts are ``b`` and a contraction
-    (``…/b/<K>``, K a canonical decimal, `h1window.roles`). Every other value a window registers, its A rows and its calls' A and z tables
-    among them, is the window's own."""
-    parts = value.split("/") if isinstance(value, str) else []
-    return len(parts) >= 2 and parts[-2] == "b" and bool(_DIGITS.fullmatch(parts[-1]))
 
 
 def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | None = None) -> tuple[str, str] | None:
@@ -3499,14 +3439,14 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LANES_FORM", "LANES_KEYS",
-           "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_STATEMENT_KEYS", "LEAF_UNIT", "LENGTH_FIELD",
-           "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
-           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "DEPTH", "EARLIER_FORM", "INDEX", "LANES_FORM", "LANES_KEYS",
+           "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_STATEMENT_KEYS", "LEAF_UNIT",
+           "LENGTH_KEYS", "LEVELS",
+           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
-           "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
+           "credited_work", "domain_of", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_requests", "is_tied", "lanes_files", "lanes_shape", "sampling_design", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
-           "pearl_c_period_credit_twin", "period", "period_twin", "presented", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "pearl_c_period_credit_twin", "period", "period_twin", "presented", "period_credit", "registered_file", "requests_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows",
            "weights_root", "window"]

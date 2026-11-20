@@ -30,7 +30,7 @@ ROW = 1 << 20
 #: 4 requests of 8 ids, 2 steps an execution block: the prefill stages 32 MiB, over a 16 MiB budget, and a decode step 4 MiB
 SHAPE = ("--protocol", "plain", "--max-num-seqs", "4", "--max-num-batched-tokens", "32", "--window-steps", "2",
          "--max-model-len", "64", "--learn-host-budget-mb", "16")
-#: what ``serve_load.py --fixed 4 --window-steps 2 --prompt-range 8:8`` sends an execution block: (requests, ids, max_tokens)
+#: an execution block of 4 requests of 8 ids released together, 2 steps each: (requests, ids, max_tokens)
 FIXED = (4, 8, 2)
 
 

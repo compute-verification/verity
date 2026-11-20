@@ -702,7 +702,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
 def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
     earlier docket W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
-    entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
+    entry's, its ``outputs`` W's table of it under the prefix (`window.window_table`) and its schema v2, and the audit pins
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
     table are refused."""
