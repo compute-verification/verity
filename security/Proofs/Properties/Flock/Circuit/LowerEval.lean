@@ -1411,5 +1411,164 @@ theorem bitAtSpec : BitAtSpec := by
       have hj' : j < t.widths.toList.length := by simp; omega
       simp [Array.back!, List.getElem?_range, show j < t.widths.size by omega]
 
+theorem flatMap_range_one : ∀ n : ℕ, (List.range n).flatMap (fun _ => [1]) = List.replicate n 1
+  | 0 => rfl
+  | n + 1 => by
+    rw [List.range_succ, List.flatMap_append, flatMap_range_one n, List.replicate_succ']
+    simp
+
+theorem bitTypeWidths_go : ∀ t : Ty,
+    (Ty.bitType t).widths.toList = t.widths.toList.flatMap fun w => List.replicate w 1
+  | .value w => by
+    by_cases h : w = 1
+    · subst h; simp [Ty.bitType, Ty.widths]
+    · have hb : (w == 1) = false := by simpa using h
+      simp only [Ty.bitType, hb, Bool.false_eq_true, ↓reduceIte, Ty.widths]
+      rw [← Array.foldl_toList, foldl_append_toList]
+      simp [flatMap_range_one]
+  | .array n e => by
+    have ih := bitTypeWidths_go e
+    simp only [Ty.bitType, Ty.widths]
+    rw [← Array.foldl_toList, foldl_append_toList, ← Array.foldl_toList, foldl_append_toList]
+    simp only [Array.toList_empty, List.nil_append, ih, List.flatMap_assoc]
+  | .tuple fs => by
+    have ih : ∀ f ∈ fs.toList, (Ty.bitType f).widths.toList = f.widths.toList.flatMap fun w => List.replicate w 1 :=
+      fun f hf => bitTypeWidths_go f
+    simp only [Ty.bitType, Ty.widths, Array.attach_map_val]
+    rw [← Array.foldl_toList, foldl_append_toList, ← Array.foldl_toList, foldl_append_toList]
+    simp only [Array.toList_empty, List.nil_append, Array.toList_map, List.flatMap_map, List.flatMap_assoc]
+    exact List.flatMap_congr ih
+  | .record fs => by
+    have ih : ∀ f ∈ fs.toList,
+        (Ty.bitType f.2).widths.toList = f.2.widths.toList.flatMap fun w => List.replicate w 1 :=
+      fun f hf => bitTypeWidths_go f.2
+    simp only [Ty.bitType, Ty.widths]
+    rw [Array.attach_map_val fs fun p => (p.1, Ty.bitType p.2)]
+    rw [← Array.foldl_toList, foldl_append_toList, ← Array.foldl_toList, foldl_append_toList]
+    simp only [Array.toList_empty, List.nil_append, Array.toList_map, List.flatMap_map, List.flatMap_assoc]
+    exact List.flatMap_congr ih
+termination_by t => t
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (have := hb_lt_mem (by assumption); omega)
+    | (have := hb_lt_mem2 (by assumption); omega)
+
+theorem bitTypeWidths : BitTypeWidths := bitTypeWidths_go
+
+theorem sum_flatMap_replicate (l : List ℕ) : (l.flatMap fun w => List.replicate w 1).length = l.sum := by
+  induction l with
+  | nil => rfl
+  | cons w l ih => simp [List.flatMap_cons, ih]
+
+/-- `Ty.bitType t` has as many leaves as `t` has bits. -/
+theorem bitType_leaves (t : Ty) : (Ty.bitType t).leaves = t.widths.foldl (· + ·) 0 := by
+  rw [← hb_widths_size, ← Array.length_toList, bitTypeWidths, sum_flatMap_replicate, sum_foldl_add]
+
+theorem bitTypeAxis : BitTypeAxis := by
+  intro t ax
+  induction ax generalizing t with
+  | zero =>
+    intro n L h
+    cases t with
+    | array m e =>
+      simp only [Ty.axisDims, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨e, rfl, by simp [Ty.bitType, Ty.axisDims], bitType_leaves e⟩
+    | _ => simp [Ty.axisDims] at h
+  | succ ax ih =>
+    intro n L h
+    cases t with
+    | array m e =>
+      simp only [Ty.axisDims] at h
+      obtain ⟨e', h1, h2, h3⟩ := ih e n L h
+      exact ⟨e', h1, by simpa [Ty.bitType, Ty.axisDims] using h2, h3⟩
+    | _ => simp [Ty.axisDims] at h
+
+/-- A sequence's references (`Seq.toArray`), part by part. -/
+theorem seq_toArray_toList (s : Seq) :
+    s.toArray.toList = s.parts.toList.flatMap fun q => (List.range q.count).map q.get := by
+  unfold Seq.toArray
+  rw [← Array.foldl_toList]
+  suffices h : ∀ (ps : List Part) (acc : Array Ref),
+      (ps.foldl (fun acc q => (Array.range q.count).foldl (fun acc k => acc.push (q.get k)) acc) acc).toList =
+        acc.toList ++ ps.flatMap fun q => (List.range q.count).map q.get by
+    simpa using h s.parts.toList #[]
+  intro ps
+  induction ps with
+  | nil => simp
+  | cons q ps ih =>
+    intro acc
+    rw [List.foldl_cons, ih, List.flatMap_cons, ← List.append_assoc]
+    congr 1
+    rw [← Array.foldl_toList]
+    suffices h' : ∀ (ks : List ℕ) (a : Array Ref), (ks.foldl (fun acc k => acc.push (q.get k)) a).toList =
+        a.toList ++ ks.map q.get by simpa using h' _ acc
+    intro ks
+    induction ks with
+    | nil => simp
+    | cons k ks ihk => intro a; simp [ihk]
+
+theorem range_mul_map {β : Type} (g : ℕ → β) (w : ℕ) : ∀ c : ℕ,
+    (List.range (c * w)).map g = (List.range c).flatMap fun k => (List.range w).map fun t => g (k * w + t)
+  | 0 => by simp
+  | c + 1 => by
+    rw [Nat.succ_mul, List.range_add, List.map_append, range_mul_map g w c, List.range_succ, List.flatMap_append]
+    simp [Function.comp_def]
+
+theorem ofParts_parts (ps : Array Part) : (Seq.ofParts ps).parts = ps := rfl
+
+theorem explicit_refs (A : Array Ref) : (List.range (Part.explicit A).count).map (Part.explicit A).get = A.toList := by
+  apply List.ext_getElem
+  · simp [Part.count]
+  · intro n h1 h2
+    simp only [Part.count, List.length_map, List.length_range] at h1
+    simp [Part.get, getElem!_pos A n h1]
+
+theorem foldl_append_of {β : Type} {f : Array Ref → β → Array Ref} {g : β → Array Ref}
+    (h : ∀ a k, f a k = a ++ g k) (l : List β) (acc : Array Ref) :
+    (l.foldl f acc).toList = acc.toList ++ l.flatMap fun k => (g k).toList := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons k l ih => rw [List.foldl_cons, ih, h, List.flatMap_cons]; simp
+
+theorem liftSeqRefs : LiftSeqRefs := by
+  intro at_ homo s hh
+  let G : Ref → List Ref := fun r =>
+    (List.range (at_ r.p r.i r.j).2).map fun t => ({ p := r.p, i := r.i, j := (at_ r.p r.i r.j).1 + t } : Ref)
+  have hG : ∀ q : Part, ((Array.range q.count).foldl (fun a k => a ++
+      (Array.range (at_ (q.get k).p (q.get k).i (q.get k).j).2).map fun t =>
+        ({ p := (q.get k).p, i := (q.get k).i, j := (at_ (q.get k).p (q.get k).i (q.get k).j).1 + t } : Ref)) #[]).toList =
+      ((List.range q.count).map q.get).flatMap G := by
+    intro q
+    rw [← Array.foldl_toList, foldl_append_of (fun a k => rfl)]
+    simp [G, List.flatMap_map]
+  unfold Flock.Lift.liftSeq
+  rw [seq_toArray_toList, seq_toArray_toList, ofParts_parts, Array.toList_map, List.flatMap_map, List.flatMap_assoc]
+  apply List.flatMap_congr
+  intro q _
+  rcases q with ⟨p, i, b, c⟩ | ⟨p, i, b, inner, os, is, c⟩ | ⟨it⟩ | ⟨run, lanes⟩
+  · dsimp only
+    cases hw : homo p i with
+    | none =>
+      dsimp only
+      rw [explicit_refs]
+      exact hG _
+    | some w =>
+      dsimp only
+      simp only [Part.count, Part.get]
+      rw [range_mul_map, List.flatMap_map]
+      apply List.flatMap_congr
+      intro k _
+      simp only [G, hh p i w hw]
+      apply List.map_congr_left
+      intro t _
+      simp [Nat.add_mul, Nat.add_assoc]
+  all_goals
+    dsimp only
+    rw [explicit_refs]
+    exact hG _
+
 end Flock.Chain
 
