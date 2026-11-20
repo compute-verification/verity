@@ -5,13 +5,12 @@ wired port between them. The weight is a registered read (its root pinned before
 commits (``--weights committed``), each unit's row a run input,
 and every output the circuit's own evaluator's (`evaluate_batch`, ``reference``).
 
-    one_linear.py window --out DIR --rule RULE [--forge all|U] [--weights registered|committed] [--cache DIR]
+    one_linear.py window --out DIR --rule RULE [--weights registered|committed] [--cache DIR]
     one_linear.py levels
     one_linear.py c --out DIR
 
 ``window``: the window committed and written for ``records_audit.py audit`` (as `served_door.py window` writes the staged
-one), its sampling design the one ``RULE`` names over its proof blocks; ``--forge all`` changes one output word of every
-block's first unit before the commitment (so every drawn block holds a forged unit), ``--forge U`` of unit U alone;
+one), its sampling design the one ``RULE`` names over its proof blocks;
 ``--weights committed``: ``w`` a run input each unit commits, not the registered read.
 ``levels``: the door's refusal of this circuit's partition at two levels, before any coin (`one_circuit.block`).
 ``c``: the window's C (``--weights committed``'s) as ``DIR/C.json``, its descriptor bytes, and ``DIR/query.json``, its
@@ -143,9 +142,6 @@ def window(a: argparse.Namespace) -> int:
     t0, out = time.perf_counter(), Path(a.out)
     ck = checkpoint(Path(a.cache))
     xs, ws, ys = values(ck)
-    if a.forge is not None:
-        for u in (range(0, UNITS, CAP) if a.forge == "all" else (int(a.forge),)):
-            ys[u, 0] ^= 1
     reg = a.weights == "registered"
     c = circuit(reg)
     weights = RV.Registered.commit(program_id(), "weights", ck[WEIGHT].reshape(SLICES, N * K), schema=V2)
@@ -158,7 +154,7 @@ def window(a: argparse.Namespace) -> int:
     win.write(win.close(), out, {"one_linear": "window"}, registrar=DK)
     (out / "pins.json").write_text(json.dumps([{"program": program_id(), "values": {"weights": weights.entry()}}] if reg else []))
     print("STEP " + json.dumps({"step": "window", "scope": SCOPE, "wall_s": round(time.perf_counter() - t0, 1),
-                                "units": UNITS, "blocks": UNITS // CAP, "law": law, "forge": a.forge, "weights": a.weights,
+                                "units": UNITS, "blocks": UNITS // CAP, "law": law, "weights": a.weights,
                                 "checkpoint": {"model": MODEL, "revision": REVISION, "tensor": WEIGHT,
                                                "sha512": {n: hashlib.sha512(v.tobytes()).hexdigest() for n, v in ck.items()}},
                                 "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),
@@ -209,7 +205,6 @@ def main() -> int:
     w = sub.add_parser("window")
     w.add_argument("--out", required=True)
     w.add_argument("--rule", required=True)
-    w.add_argument("--forge")
     w.add_argument("--weights", choices=("registered", "committed"), default="registered")
     w.add_argument("--cache", default=str(Path.home() / ".cache/verity-one-linear"))
     sub.add_parser("levels")
