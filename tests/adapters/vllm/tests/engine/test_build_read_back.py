@@ -302,8 +302,8 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
     nothing goes to stdout.  The two modules are stood in (the rope's imports Triton as it is imported): each holds its
     switch's name and an `install`."""
     from verity_vllm import engine
-    from verity_vllm.engine import moe_align, sparse_mla, topp_pin
-    for switch in (moe_align, sparse_mla, topp_pin):
+    from verity_vllm.engine import sparse_mla, topp_pin
+    for switch in (sparse_mla, topp_pin):
         monkeypatch.setattr(switch, "arm", lambda: None)
     model = _Model(_Layer(3))
     given: list[tuple[str, Any]] = []

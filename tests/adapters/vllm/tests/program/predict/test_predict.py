@@ -35,7 +35,6 @@ from verity_vllm.program.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
-DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -213,30 +212,30 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
 def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
     names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
     bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
     with pytest.raises(TypeError, match="NoneType"):
-        S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
-    full, pinless = (S.phi_of({"row": DSV4, "workload": doc}, config=config).to_json() for doc in (w, bare))
+        S.phi_of({"row": GLM53, "workload": bare}, hf_home=str(tmp_path))
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
+    full, pinless = (S.phi_of({"row": GLM53, "workload": doc}, config=config).to_json() for doc in (w, bare))
     assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
 
 
 def test_phi_of_opens_the_config_by_the_name_given():
     """`score.phi_of` hands ``config`` to `open` as it is given: the file's name in bytes is read as the same name in a str is."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
     in_bytes: Any = os.fsencode(config)
-    assert S.phi_of({"row": DSV4, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": DSV4, "workload": w}, config=config).to_json()
+    assert S.phi_of({"row": GLM53, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": GLM53, "workload": w}, config=config).to_json()
 
 
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
-    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
-    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
-    full = S.phi_of({"row": DSV4, "workload": w}, config=config)
-    bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53}.json").read_text())
+    config = str(HF_CONFIG_DIR / "GLM53.config.json")
+    full = S.phi_of({"row": GLM53, "workload": w}, config=config)
+    bare = S.phi_of({"row": GLM53, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
     assert bare.workload == {"requests": []} and len(full.requests) == len(w["requests"]) > 0
     assert {**bare.to_json(), "workload": full.workload} == full.to_json()
 

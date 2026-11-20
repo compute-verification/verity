@@ -331,8 +331,9 @@ class Served:
     """One request's served values by node: its Program's rows as `ProgramIndex.describe` gives them, each with its
     row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), ``read(step, op_path, member, lo,
     hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it),
-    ``bound(step, op_path, member)``, the elements the record binds that member at, and ``reader`` the byte source those
-    reads verify through (`commit.opened.OpenedReader`), whose counts `Rows.counts` reports.
+    ``bound(step, op_path, member)``, the elements the record binds that member at, ``reader`` the byte source those
+    reads verify through (`commit.opened.OpenedReader`), whose counts `Rows.counts` reports, and ``locate``, ``read``'s
+    arguments to where the committer holds those elements (`opening.CommittedStore.locate`), which `window_plan.Plan` reads.
 
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
@@ -349,6 +350,7 @@ class Served:
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     bound: Callable[[int, str, str], int]
     reader: Any = None
+    locate: Callable[[int, str, str, int, int], tuple[Any, str]] | None = None
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
     decode: list[list[Mapping[str, Any]]] = field(init=False)
     LP: int = field(init=False)
@@ -413,11 +415,22 @@ class Served:
             return max((int(x) for x in ends if x is not None), default=0)
 
         return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound,
-                   getattr(store, "committed", None))
+                   getattr(store, "committed", None),
+                   lambda s, op, m, lo, hi: store.locate(rid, arrive + s, at.get((s, op), op), m, lo, hi))
 
     def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
         None where the engine didn't compute it."""
+        return self._members(p, k, node, self.read)
+
+    def where(self, p: int, k: int, node: Any) -> tuple[str, list[Any]] | None:
+        """`__call__`'s node as where the committer holds it, a ``locate`` answer a return field, and no value read."""
+        if self.locate is None:
+            raise ValueError("a served request's values located: give its `locate` (`of_record`'s)")
+        return self._members(p, k, node, self.locate)
+
+    def _members(self, p: int, k: int, node: Any, read: Callable[[int, str, str, int, int], tuple[Any, str]]
+                 ) -> tuple[str, list[Any]] | None:
         if k >= len(self.prefill):
             raise ValueError(f"node {k} of a position, past the served request's {len(self.prefill)} ops a position")
         pruned = False
@@ -446,7 +459,7 @@ class Served:
             row = p if n == {self.LP} else 0
         out = []
         for m, width, _dtype in members:
-            a, why = self.read(step, op, str(m), row * int(width), (row + 1) * int(width))
+            a, why = read(step, op, str(m), row * int(width), (row + 1) * int(width))
             if a is None:
                 raise ValueError(f"position {p}'s node {k}: {why}")
             out.append(a)

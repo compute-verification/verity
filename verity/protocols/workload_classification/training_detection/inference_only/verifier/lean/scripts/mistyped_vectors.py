@@ -12,8 +12,8 @@ reference only in a word Definition, since a Boolean body's leaves are all 1 bit
   batch reads as 8), at a small `n` and at one past anything walked (2^40 to 2^52), and `exit-xs` at `n = 2`;
 * `pairs()`: an `Array<N, (V8, V16)>` read by a strided part (leaf 0 or leaf 1 of every pair), by an affine one shifted by
   one leaf (`(V16, V8)` pairs, and `(V8, V16)` ones), as `(V8, V16, V8, V16)` quads (whole, and shifted by one leaf), a
-  parameter read at another width, an explicit item, a body's return, and a later node read at another width (refused
-  `not-topological`, which is not this check's), each with its well-typed neighbour, at `N = 4` and at `N = 2^20` (the
+  parameter read at another width, an explicit item, a body's return, and a later node read at another width (refused by
+  the decoder as a forward reference, `program`), each with its well-typed neighbour, at `N = 4` and at `N = 2^20` (the
   well-typed ones at `2^14`, `PAIR_SIZES`);
 * `tampered()`: `TAMPERED` of `desc_difftest_vectors`'s random declarations with one reference moved to another leaf
   source, of the same width or another, kept within its leaves.
@@ -276,7 +276,7 @@ def pairs(N: int, how: str) -> dict:
                       V(8))
         return finish(P, root, c)
     elif how == "later":
-        # node 0 reads node 1, a V16, as a V8: a later node, which `not-topological` refuses
+        # node 0 reads node 1, a V16, as a V8: a later node, which the decoder refuses as a forward reference
         cb.node("primitive", op8, [cb.arg(aff("n", 1, 0, 1), V(8))], V(8))
         cb.node("primitive", P.prim("Op16r16_v1", [V(16)], V(16)), [cb.arg(aff("p", 1, 0, 1), V(16))], V(16))
         last = cb.node("primitive", op8, [cb.arg(aff("n", 0, 0, 1), V(8))], V(8))

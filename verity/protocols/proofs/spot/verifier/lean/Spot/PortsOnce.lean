@@ -1,9 +1,8 @@
+/- Each member's slice names each port once (`Member.portsOnce`), wherever the per-member form's run returns or its
+check accepts. -/
 module
 
 public import Spot.OneStageZk
-
-/-! Each member's slice names each port once (`Member.portsOnce`), wherever the per-member form's run returns or its
-check accepts. -/
 
 @[expose] public section
 

@@ -1250,6 +1250,22 @@ def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
         n["SelectEntry_v1{V=512,C=16,KO=1,FIRST=false,IDB=17,NP=27}"]) == (2, 2 * (P - 2), 2)
 
 
+def test_a_served_windows_compile_and_lowering_is_one_call():
+    """`served_lowering` is the compile, the requests within the class and the lowering `window_circuit` makes, held to
+    `check_served` and not the older composer's floor: at `PROVABLE`'s two prompts of 27 ids of one output each (whose
+    collectors have no row Flock's composer takes) as at TINY's, the composer refuses the circuit and the served lowering
+    takes it, naming what `check_served` names on it."""
+    one = {**S.GREEDY, "max_tokens": 1}
+    for reg, cls, (sizes, sched), grain in [(S._registered(PROVABLE), PROVABLE_CLASS, ([(27, 1, one)] * 2, [[(0, 0, 27), (1, 0, 27)]]),
+                                             PROVABLE_GRAIN), (S._registered(), CLASS, WHOLE, GRAIN)]:
+        advice, ingress = S._session(sizes, sched)
+        circuit = window_circuit(reg, S.compile_steps(reg, advice, ingress), cls, grain)
+        with pytest.raises(Unexpressible, match="Flock's composer wouldn't prove"):
+            check_provable(circuit)
+        _compiled, low = WC.served_lowering(reg, cls, advice, ingress, grain)
+        assert low.circuit.templates == circuit.templates and low.unprovable == WC.check_served(circuit)
+
+
 def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
     """At 128 logits a unit, each of the class circuit's ten token selects is two `TokenSelectGroups_v1{C=128, G=16}` units, each
     reading 8 LM-head slices' rows as they are (its ``x`` cut 8) and writing its 8 groups' bests and indices a row each, and a

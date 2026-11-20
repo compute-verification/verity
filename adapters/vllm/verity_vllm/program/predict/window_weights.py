@@ -251,14 +251,18 @@ def weight_values(registered: Any, served: Any, registration: str | Path | None,
 
 
 def record_words(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
-                 kv_cache_dtype: str = "auto") -> dict[str, np.ndarray]:
+                 kv_cache_dtype: str = "auto", tables: Any = None) -> dict[str, np.ndarray]:
     """Each field of the class Program's weights record composed from ``checkpoint_dir``'s shards (`check.weights_of_record`),
     by field, its words as digested: the words a committer serving that checkpoint serves (`weight_values`), where it reads
-    them from the checkpoint rather than the engine's tensors."""
+    them from the checkpoint rather than the engine's tensors. A field held to an analytic table is ``tables``' served words
+    for it (`weights_registration`'s), refused outside its bound; one ``tables`` doesn't name is left out."""
     r, fields = _fields(registered)
     out: dict[str, np.ndarray] = {}
-    _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype,
-              lambda name, words: out.__setitem__(name, np.array(words)))
+    rec = _composed(registered, r, fields, checkpoint_dir, checkpoints_manifest, kv_cache_dtype,
+                    lambda name, words: out.__setitem__(name, np.array(words)))
+    for f in rec["fields"]:
+        if f.get("pinned") == "analytic" and (tables or {}).get(f["analytic"]["table"]) is not None:
+            out[f["field"]] = _table_words(f, tables[f["analytic"]["table"]])
     return out
 
 
