@@ -135,6 +135,7 @@ from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinitio
                                   bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.population import wired_population_program
+from verity.circuits.program import is_input, is_registered
 from verity.circuits.refs import recut
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT, registered_value as RV
@@ -1612,7 +1613,9 @@ class Circuit:
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`); ``order``, the order of its units'
     ranges its wires follow (`check_order`), or None for each template one range; ``boundary_reads``, its rows read from or
-    written to the fields of its replay Definition's signature (`Read`, each ``param`` a field: `check_inputs`)."""
+    written to the fields of its replay Definition's signature (`Read`, each ``param`` a field: `check_inputs`);
+    ``run_inputs``, each input port nothing else fills committed once, in its run input node's one tree
+    (`run_input_reads`), never a tree of a member's."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1626,6 +1629,7 @@ class Circuit:
     boundary_reads: tuple[Read, ...] = ()
     ranks: Ranks | None = None
     free: tuple[Free, ...] = ()
+    run_inputs: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
@@ -1757,16 +1761,70 @@ def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
     return {"value": value, "words": 16 * w // bits, "rows": leaves // w, "word_bits": bits, "row_schema": schema}
 
 
-def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> tuple[CS.Member, ...]:
+def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None,
+            runs: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
     """The period's members: each template's units in the partition's order, cut where a wire's reader units begin or end,
     in chunks ``<descriptor id>/c<j>`` of at most ``cap`` (one statement each), on the template's bit rows under its cuts,
     each row wired by the circuit's wire that covers it, and each port a registered read fills a table of the rows it reads
     (`committed_reads`), its row-seg rows ``hm96-sha512/row-seg/v1`` rows (`seg_ports`, `seg_rows`). ``built``: the
-    circuit's wired Program and query (`Circuit.program`), when the caller has them."""
+    circuit's wired Program and query (`Circuit.program`), when the caller has them; ``runs``, its `run_input_reads`."""
     program, query = built or circuit.program()
     return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts,
-                    committed_reads(circuit.registered), _seg(circuit.registered, circuit.wires, circuit.cuts),
+                    committed_reads(circuit.registered) + tuple(runs), _seg(circuit.registered, circuit.wires, circuit.cuts),
                     circuit.order)
+
+
+def run_input_reads(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any],
+                    filled: Collection[tuple[str, str]], cuts: Mapping[str, Mapping[str, int]] | None = None
+                    ) -> tuple[Read, ...]:
+    """Each template's input port no wire, registered read, ingress or boundary read fills (``filled``, by (template,
+    port)) as a read of the one value its rows are committed in, C's run input node ``w``'s tree ``input/n<w>``
+    (`Flock.Registered.freshValue`): the node's leaves in rows of the port's, unit i's row the node's row i. Refused
+    (ValueError) where such a port is cut, its template is more than one range, or its rows are not one run input node's
+    leaves whole, in unit order: `Flock.OneCircuit.pos` reads that position and no other."""
+    tp = PO.TemplatePartition(program, query)
+    body, total = program.root.body, program.root.gates
+    offs = list(body.offsets)
+    ranges: dict[str, list[tuple[int, int]]] = {}
+    for _k, tid, a, n in tp.ranges:
+        ranges.setdefault(tid, []).append((a, n))
+    out = []
+    for fn, n in templates:
+        tid = descriptor_id(fn)
+        ports = [(p, len(t.leaf_widths())) for p, t in fn.signature()[0]]
+        if all((tid, p) in filled for p, _ in ports):
+            continue
+        if len(ranges.get(tid, ())) != 1:
+            raise ValueError(f"run inputs: {tid} is {len(ranges.get(tid, ()))} ranges of C's root, not one")
+        a, got = ranges[tid][0]
+        gates, at, words = list(tp.inputs(a)), 0, dict(layout(fn).rows)
+        for p, leaves in ports:
+            g0, at = gates[at], at + leaves
+            if (tid, p) in filled:
+                continue
+            if int((cuts or {}).get(tid, {}).get(p, 1)) != 1:
+                raise ValueError(f"run inputs: {tid} {p} is cut; a run input's row is the port's whole")
+            w = bisect.bisect_right(offs, g0) - 1
+            node = (offs[w + 1] if w + 1 < len(offs) else total) - offs[w]
+            fw = body.nodes[w].fn
+            if (not is_input(fw) or is_registered(fw) or g0 != offs[w] or node != got * leaves
+                    or gates[at - leaves:at] != list(range(g0, g0 + leaves))):
+                raise ValueError(f"run inputs: {tid} {p}: its rows are not run input node {w}'s {node} leaves, in rows of "
+                                 f"its {leaves}, unit by unit")
+            out.append(Read(tid, p, f"input/n{w}", 0, (n,), 0, (words[p],)))
+    return tuple(out)
+
+
+def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
+    """A stated record's ``run_inputs`` (`Window.circuit_record`), each a `Read`."""
+    return tuple(Read.of(x) for x in doc.get("run_inputs", ()))
+
+
+def filled_ports(registered: Registered | None, wires: Sequence[Wire], ingress: Sequence[Ingress],
+                 boundary_reads: Sequence[Read]) -> frozenset[tuple[str, str]]:
+    """The (template, port) pairs a wire, registered read, ingress or boundary read fills, wholly or in part."""
+    return frozenset({(r.reader, r.port) for r in committed_reads(registered)} | {(w.reader, w.port) for w in wires}
+                     | {(g.reader, g.port) for g in ingress} | {(r.reader, r.port) for r in boundary_reads})
 
 
 def partition_blocks(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | None = None) -> list[list[int]]:
@@ -2518,16 +2576,20 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
 REGISTERED_FILE = REGISTERED_READS_V2
 
 
-def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]],
+                    roots: Sequence[Mapping[str, Any]] = ()) -> dict[str, dict[str, Any]]:
     """The door's ``--registered`` file (`REGISTERED_FILE`) of each member reading a registered parameter, by member key,
     from the record ``doc`` and its period ``w`` (`window_of_record`'s), but for each parameter's entry from ``pins``
     (``{param: entry}``, the value's ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned
-    them before the run): each read port names its parameter's value, root, rows and domain, and no position. Refused
-    (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's in that width."""
+    them before the run), and a run input's (``run_inputs``, `run_input_reads`) from the registration's ``roots``: each
+    read port names its parameter's value, root, rows and domain, and no position. Refused (ValueError) where a read's
+    parameter has no pin, or a pin's rows are not the port's in that width."""
     _wires, _cuts_, reg, _ingress = declarations(doc)
-    reads = committed_reads(reg)
+    runs = run_inputs_of(doc)
+    reads = committed_reads(reg) + runs
     if not reads:
         return {}
+    held = {r["port"]: r for r in roots if r.get("port") in {x.param for x in runs}}
     pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
     out: dict[str, dict[str, Any]] = {}
     index = _ReadIndex(reads)
@@ -2537,8 +2599,9 @@ def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Ma
             continue
         ports = {}
         for p, (param, _positions, _refs) in sorted(got.items()):
-            e = pins.get(param)
             words = dict(m.rows + m.outs)[p]
+            e = pins.get(param) if param not in held else {"value": param, "words": words,
+                                                           **{k: held[param][k] for k in ("root", "leaves", "domain")}}
             if e is None:
                 raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
             n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
@@ -2581,7 +2644,12 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
         program, query = program_of_record(doc, resolve)
-        ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
+        runs = run_inputs_of(doc)
+        if runs and runs != run_input_reads(defs, program, query, filled_ports(registered, wires, ingress,
+                                                                               boundary_reads_of(doc)), cuts):
+            raise ValueError("the circuit record's run_inputs are not the reads of C's run input nodes its templates make "
+                             "(`run_input_reads`)")
+        ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered) + runs,
                       _seg(registered, wires, cuts), order)
     else:
         program, query = program_of_record(doc, resolve)
@@ -2632,15 +2700,36 @@ def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resol
     record is the one its registration binds (the period's ``circuit``) and names the registration's program, partition
     and run; -> (the period, the record)."""
     d = Path(window_dir)
-    body, rec = (d / "circuit.json").read_bytes(), json.loads((d / "registration.json").read_text())
-    bound = (rec.get("window") or {}).get("circuit")
-    if hashlib.sha512(body).hexdigest() != bound:
-        raise ValueError(f"{d / 'circuit.json'} is not the circuit record the registration binds ({bound})")
-    doc = json.loads(body)
-    if (doc.get("program"), doc.get("partition"), doc.get("run")) != (rec.get("program"), rec.get("partition"),
-                                                                        (rec.get("window") or {}).get("run")):
-        raise ValueError("the circuit record names another program, partition or run than its registration")
+    doc = tied_record((d / "circuit.json").read_bytes(), json.loads((d / "registration.json").read_text()),
+                      d / "circuit.json")
     return window_of_record(doc, sampling_design, resolve), doc
+
+
+def tied_record(body: bytes, registration: Mapping[str, Any], name: str | Path = "circuit.json") -> dict[str, Any]:
+    """The circuit record whose file's bytes are ``body``, refused (ValueError) unless it is the one ``registration`` binds
+    (its period's ``circuit``, the SHA-512 of ``body``) and names the registration's program, partition and run, each of
+    which both sides name (a stated record, `descriptor_record`, has a run on neither); a field left out is refused by
+    name. This tie
+    holds the record's program to the registered one, and a reader's rebuild of the record's program from its template
+    ids (`window_of_record`, `block_counts.pinned`) holds the Definitions to the record's: only the two together make what
+    is counted or checked the registered circuit's, so neither is redundant."""
+    bound = (registration.get("window") or {}).get("circuit")
+    if hashlib.sha512(body).hexdigest() != bound:
+        raise ValueError(f"{name} is not the circuit record the registration binds ({bound})")
+    doc = json.loads(body)
+    mine = (doc.get("program"), doc.get("partition"), doc.get("run"))
+    theirs = (registration.get("program"), registration.get("partition"), (registration.get("window") or {}).get("run"))
+    for key, a, b in zip(("program", "partition", "run"), mine, theirs):
+        # a stated record (`descriptor_record`: its `cap`, no `RUN_FIELDS`) is emitted before any run, so neither side has one
+        if key == "run" and a is None and b is None and "cap" in doc:
+            continue
+        for side, v in (("circuit record", a), ("registration", b)):
+            if v is None:
+                raise ValueError(f"the {side} names no {key}, so nothing ties the circuit record's {key} to the "
+                                 "registered one")
+    if mine != theirs:
+        raise ValueError("the circuit record names another program, partition or run than its registration")
+    return doc
 
 
 @dataclass(frozen=True)
@@ -2692,7 +2781,9 @@ class Window:
     ``registered_value.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
     opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
     the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
-    `record`ed in order, then `close` commits them and `write` writes and registers the period."""
+    `record`ed in order, then `close` commits them and `write` writes and registers the period. A circuit's
+    ``run_inputs`` are read as its run input nodes' values (`run_input_reads`, ``runs``), each committed once by `close`
+    from its port's recorded rows (``inputs``) and its root registered by `write`."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
@@ -2702,6 +2793,8 @@ class Window:
     work_table: Mapping[str, Any] | None = None
     forms: tuple[str, ...] = ()
     window: CS.Binding = field(init=False)
+    runs: tuple[Read, ...] = field(init=False, default=())
+    inputs: dict[str, Any] = field(init=False, default_factory=dict)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
@@ -2732,7 +2825,12 @@ class Window:
                 raise ValueError(f"history {h.name!r}: committed as (program, table, words, capacity) {got}, not its "
                                  f"declaration's {(h.program, h.name, h.words, h.capacity)}")
         program, query = self.circuit.program()
-        self.window = CS.Binding(program, query, dict(self.law), self.run, members(self.circuit, self.cap, (program, query)),
+        c = self.circuit
+        if c.run_inputs:
+            self.runs = run_input_reads(c.templates, program, query,
+                                        filled_ports(c.registered, c.wires, c.ingress, c.boundary_reads), c.cuts)
+        self.window = CS.Binding(program, query, dict(self.law), self.run,
+                                 members(self.circuit, self.cap, (program, query), self.runs),
                                 work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
@@ -2892,8 +2990,9 @@ class Window:
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a period closes over all of them")
-        committed = _ReadIndex(committed_reads(self.circuit.registered))
-        own, cat, by, values = own_units(self.window.members, self.circuit.ranges), {}, self.circuit._by_id, self.registered or {}
+        committed = _ReadIndex(committed_reads(self.circuit.registered) + self.runs)
+        own, cat, by = own_units(self.window.members, self.circuit.ranges), {}, self.circuit._by_id
+        values = {**(self.registered or {}), **self._inputs()}
         read_by, wanted = [], {}
         for m, a in zip(self.window.members, own):
             words = dict(m.rows + m.outs)
@@ -2973,6 +3072,18 @@ class Window:
                 lr.members.append((m.port(p), lo, m.n))
                 lr.parts.append(np.asarray(x, dtype=np.uint16))
         return data, salts_of, strings_of, need, unplaced
+
+    def _inputs(self) -> dict[str, Any]:
+        """``inputs``: each of ``runs``' values committed once (core's ``registered_value.Registered``, fresh salts) under
+        the period's program digest, every unit's row of its port in unit order."""
+        if self.runs and not self.inputs:
+            prog = program_digest(self.window.program)
+            for r in self.runs:
+                rows = self._words(r.reader)[[p for p, _ in self.circuit._by_id[r.reader][1].rows].index(r.port)]
+                if rows is None:
+                    raise ValueError(f"{r.reader} {r.port}: a run input's rows are recorded in full")
+                self.inputs[r.param] = RV.Registered.commit(prog, r.param, np.asarray(rows).tolist(), schema=V2)
+        return self.inputs
 
     def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
         """Writer template ``w.writer``'s recorded ``w.out`` rows, its units in root order: the leaves of its tree."""
@@ -3100,7 +3211,8 @@ class Window:
         blocks = self.circuit.blocks
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
                               sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary,
-                              declared=self.circuit.declared(),
+                              declared={**self.circuit.declared(),
+                                        **({"run_inputs": [r.doc() for r in self.runs]} if self.runs else {})},
                               blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None)
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
@@ -3127,7 +3239,9 @@ class Window:
                  **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
                         index_salt=index_salt, previous=previous,
-                        entries=[held[v].entry() for v, _n, _w in program_values(self.circuit.registered)])
+                        entries=[held[v].entry() for v, _n, _w in program_values(self.circuit.registered)],
+                        outputs=[{"port": v.value, "root": v.root.hex(), "leaves": v.leaves,
+                                  "domain": v.domain.domain_id.hex()} for v in self._inputs().values()])
 
 
 class Integration(Protocol):

@@ -13,8 +13,7 @@ circuit opens the record's own leaves (`pipeline.deferred_rows`).
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --out DIR [--delta 0.5]
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
-(`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
-`c2_replay.serving_rows`), serving's own commitment, made before any sample. A5 takes it only over a
+(`commit --serving-rows`, `serving_rows.readers`, run before the bundle is sealed), serving's own commitment, made before any sample. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
 window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
 against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weights_tree`). The summary reports the form
@@ -893,6 +892,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
     decoded = OC.Decoded(c_bytes) if door else None
     unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
+
+    def unlowerable(k: int, m: Any, why: str) -> None:
+        """Member ``k`` the door refused: recorded by name, and its public body, the commit's bytes and no circuit's,
+        staged all the same, so the leaf layer R4 holds the registration to covers every member; a draw of it is a failed
+        proof (`failed_drawn`)."""
+        unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": why[:600]}
+        print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+        publics[m.key] = (served / f"m{k}-public.bin").read_bytes()
+
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -906,13 +914,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
+        tmpl: dict = {}
         if door:
             try:
                 circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
             except (OC.Refused, OC.NotDerived) as e:
-                unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
-                print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+                unlowerable(k, m, f"{type(e).__name__}: {e}")
                 continue
+            # the door lowers a block to a templated circuit, whose unit rows both sides read
+            tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl",
+                                getattr(a, "tmpl_unit_bin", None))
         elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
@@ -942,8 +953,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             if not door:
                 raise
             # the door's circuit lays the member's rows otherwise than the period committed them
-            unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"UNLAID: {e}"[:600]}
-            print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+            unlowerable(k, m, f"UNLAID: {e}")
             continue
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
@@ -974,7 +984,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "make": makes.get(m.template),
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json",
-                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0}
@@ -2110,7 +2120,8 @@ def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
     (`die_with`: an audit killed outright takes its workers with it, and each worker's Lean verifier process then
     stops at the end of its input): a Lean verifier process of its own (the audit's is never written to: the worker's
     handle to the verifier's server is a new one before any check, `WorkerLean`, under which a Lean process that gives
-    no answer ends the task rather than refuse its negative), the task, and its entries or its error sent to
+    no answer ends the task rather than refuse its negative), the task, its Lean verifier process's close, a check of
+    every answer it gave (`verifier._Server.close`), and its entries or its error sent to
     the audit with its seconds, its memory and, under the memo, the checks it asked and reused (it reuses what the
     audit kept before the fork, and what it keeps ends with it: the audit's own ``verifier_checks`` count none of a
     worker's)."""
@@ -2119,10 +2130,14 @@ def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
     V._server = WorkerLean()
     try:
         try:
-            out: tuple[str, Any] = ("ok", fn())
+            got = fn()
+            lean = lean_server_memory()
+            V._server.close()
+            out: tuple[str, Any] = ("ok", got)
         except BaseException as e:  # noqa: BLE001
+            lean = lean_server_memory()
             out = ("raised", "".join(traceback.format_exception(e))[-4000:])
-        send.send((*out, {"own_s": round(time.time() - t0, 1), "worker": process_memory(), "lean": lean_server_memory(),
+        send.send((*out, {"own_s": round(time.time() - t0, 1), "worker": process_memory(), "lean": lean,
                           "verifier_checks": _checks_since(checks)}))
     finally:
         send.close()

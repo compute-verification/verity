@@ -68,6 +68,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from verity.commitments import session_coins as SC
 from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
@@ -242,6 +243,7 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                                 "reasons_under_signer": list(t.reasons)},
                     "accepted": v.accepted, "accepted_under_signer": t.accepted,
                     "sign_ns": s["sign_ns"]})
+    lean_verdict().finish()
     return out
 
 
@@ -271,10 +273,11 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         bad = "the signature does not verify"
         out["sessions"] += 1
         out["unedited_accepted"] += reasons(signed) == ()
-        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, signed.rounds, signed.scheme,
+        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, signed.rounds, signed.scheme,
                                                                    signed.public_key, bytes(sig)))
-        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, tuple(rounds), signed.scheme,
+        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, tuple(rounds), signed.scheme,
                                                                   signed.public_key, signed.signature))
+    lean_verdict().finish()
     out["passed"] = bool(out["sessions"]) and out["flipped_rejected"] == out["edited_rejected"] == out["sessions"]
     return out
 
@@ -315,7 +318,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
-    base = {"memory_attester": "memory_attester.MemoryAttester", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
+    base = {"memory_attester": "memory_attester.MemoryAttester", "protocol": SC.PROTOCOL, "coin_tree": SC.COIN_TREE, "records": SC.RECORDS,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}

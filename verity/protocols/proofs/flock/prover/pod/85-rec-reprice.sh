@@ -112,6 +112,7 @@
 #              staged with a table of its own, the forgery's, its own)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 for o in LOOPBACK_DRAW:LOOPBACK_SAMPLE FC_FIREWALL:FC_ZK_SERVER; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "rec-reprice: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}

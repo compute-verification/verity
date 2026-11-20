@@ -34,8 +34,7 @@ registration (:func:`fresh_tensor_salts`) and kept in its salt file (`verity.com
 ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t), "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG,
 {geo, tensor: t, entry, row_bits})`` over its names entry ``[name, dtype, shape, bytes]``; the weights root is :func:`weights_root`
 over the tensor roots and the names' :func:`names_digest`.  The tree (:func:`weights_tree`) holds no salt: a replay of the
-registration reproduces its roots from the salt file, and a slim keep carries the salts of the tensors its replay opened alone
-(`pipeline.cpu_replay.slim_tree`).
+registration reproduces its roots from the salt file.
 """
 from __future__ import annotations
 

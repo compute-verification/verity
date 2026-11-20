@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib.util
 import json
 import random
 import re
@@ -55,10 +56,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from hypothesis import strategies as st
+from hypothesis import note, strategies as st
 
-import settings
-import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
@@ -77,6 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     hidden_sample as HD,
     link_points as LP,
     members as M,
+    one_circuit as OC,
     partition as P,
     produced as PD,
     proofs as PF,
@@ -99,8 +99,23 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+
+
+def _by_path(name: str, path: Path):
+    """The module at `path`, loaded once as `name`: this file is imported by path from other suites, where a bare
+    `import settings` finds their own registry and `stand_in` is on no path."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with_name("settings.py"))
+stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -627,7 +642,8 @@ def decode_params(j) -> dict:
             raise D.Reject(str(e)) from None
     try:
         G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
-                      j.get("commitments"), j.get("released"), len(j["log"]))
+                      j.get("commitments"), j.get("released"), len(j["log"]),
+                      [bytes.fromhex(k) for k in j.get("attester_keys", [])])
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "pinned" in j:
@@ -1319,9 +1335,22 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
+NO_BLOCKS = "restrict: the partition object has no blocks"
+
+
+@functools.cache
+def _blocked_lookups() -> list[str]:
+    """The lookups of the circuit file `Own.circuitFile` derives for `BLOCKED`'s block at unit 0, as the door lowers it."""
+    c, part, units = b"".join(codec.descriptor_chunks(BLOCKED.program)), BLOCKED.partition, [(0, 1)]
+    text = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=OC.cuts(c, part),
+                    formed=OC.formed_in(c, part, units))
+    return PF.lookups_of(json.loads(text.split(b"\n")[1].decode()[len("META "):]))
+
+
 def _tables_case(j):
-    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of a circuit whose META
-    is ``{"lookups": lookups}`` (`proofs.lookups_of`; ``{}`` without ``lookups``), or the ValueError they read with."""
+    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of the circuit file the
+    verifier derives from the case's C and partition (`BLOCKED`'s, `_blocked_lookups`), or the ValueError it refuses
+    with where the case names no partition; the case's own ``lookups`` reach no circuit the verifier reads."""
     j = _json(j)
     ds = j.get("digests") if isinstance(j, dict) else None
     if not isinstance(ds, list):
@@ -1330,10 +1359,11 @@ def _tables_case(j):
         raise D.Reject("digests is not a list of hex strings")
     if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
         raise D.Reject("not lowercase hex")
-    try:
-        return ds, PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
-    except ValueError as e:
-        return ds, e
+    if j.get("partition") is None:
+        return ds, ValueError(NO_BLOCKS)
+    if (j["partition"], j.get("program")) != (_json(BLOCKED.partition), BLOCKED.desc):
+        raise RuntimeError("the strategy drew a C and partition other than BLOCKED's")
+    return ds, _blocked_lookups()
 
 
 def tables_held(j):
@@ -3296,6 +3326,46 @@ def fanout(j):
         raise D.Reject(str(e)) from None
 
 
+def run_input_roots(j):
+    """Each member's `[port, tree]` at C's run input nodes' trees and the refusal of a reader of a held or tied
+    parameter's node whose roots hold no entry at its tree (`members._run_input_roots`, `members._held_roots`;
+    `OneStageZk.runInputRoots`, `OneStageZk.heldRootsHeld`), refused for another query or one that doesn't apply."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc = _obj(j.get("program"), "program")
+    held = [] if j.get("held") is None else j["held"]
+    if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
+                                             for h in held):
+        raise D.Reject("held is not a list of [first, count]")
+    query = _obj(j.get("query"), "query")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    if not P.is_template_query(query):
+        raise D.Reject("not a template query")
+    members = j.get("members")
+    if not isinstance(members, list) or not all(
+            isinstance(m, list) and len(m) == 2 and isinstance(m[0], str) and isinstance(m[1], list) and m[1]
+            and all(isinstance(u, list) and len(u) == 2 and all(_nat(x) for x in u) for u in m[1]) for m in members):
+        raise D.Reject("members is not a list of [name, [[first, end], ...]]")
+    ms = {n: {"units": us} for n, us in members}
+    if len(ms) != len(members):
+        raise RuntimeError("the strategy drew two members of one name")
+    program = PROGRAMS[sha]
+    try:
+        reads = P.held_reads(program, query, [range(f, f + n) for f, n in held])
+        roots = M._run_input_roots(program, query, ms, {"roots": j.get("roots")}, {})
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    try:
+        M._held_roots(ms, reads, roots)
+        why = None
+    except M._Refused as e:
+        why = str(e)
+    return {"roots": [[n, [[r["port"], r["tree"]] for r in roots.get(n, [])]] for n in ms], "held": why}
+
+
 @functools.cache
 def _readers(rows: int, plan: tuple, registered: bool) -> Program:
     """A root over `x`, `rows` pairs of bytes (registered with `registered`), of one instance of `PAIR` per step of
@@ -3356,6 +3426,27 @@ def fanout_cases(draw) -> dict:
     return case
 
 
+@st.composite
+def run_input_cases(draw) -> dict:
+    """`fanout_cases`' programs and queries, the units of a template query that applies split among one to four members
+    in runs, and the record's roots at a random set of `input/n<w>` trees."""
+    case = draw(fanout_cases())
+    program = PROGRAMS[PO.program_sha512(case["program"])]
+    try:
+        n = sum(c for *_, c in PO.TemplatePartition(program, case["query"]).ranges)
+    except PO.QueryInapplicable as e:
+        # `fanout_cases` draws a query that doesn't apply on purpose: the case gets one member of one unit
+        note(f"run_input_cases: the query doesn't apply: {e}")
+        n = 1
+    cuts = sorted(set(draw(st.lists(st.integers(1, n - 1), max_size=3)))) if n > 1 else []
+    bounds = [0, *cuts, max(n, 1)]
+    case["members"] = [[f"T/m{i}", [[lo, hi]]] for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
+    nodes = len(program.root.body.nodes)
+    case["roots"] = [{"port": f"input/n{w}", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 1}
+                     for w in sorted(set(draw(st.lists(st.integers(0, nodes - 1), max_size=nodes))))]
+    return case
+
+
 PIECES = "spot-difftest"
 
 
@@ -3388,6 +3479,8 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
 UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
     st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
 FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
+RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
+                         package=PACKAGE)
 _X0, _X00 = ((0, 0, 0), (0, 0, 1)), ((0, 0, 0),) * 4
 #: Programs R8 reads past a population's: two calls of `PAIR` on `x`'s first pair, a batch of three broadcasting it (a
 #: run Input two proof blocks read), and a call reading the first's result whose result a batch of two maps (F 4).
@@ -6477,7 +6570,7 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400), (RUN_INPUT_ROOTS, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
@@ -6931,6 +7024,27 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
                            (shared, PO.call_query(16)), (shared, PO.call_query(8))]:
         taken = {**case, "program": program, "query": _json(query)}
         assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken)))), query
+
+
+def test_glm53s_all_reduce_at_three_rows_is_refused_past_the_widest_class(pieces):
+    """GLM-5.3's TP8 MNNVL all-reduce at three rows, as `tp_allreduce.circuit-check.py`'s `_glm53_served` binds it
+    (`AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}`), returns 294,912 bits: Lean's slots and the Python's partition refuse
+    its instance by the widest class."""
+    from verity_vllm.definitions.registry.catalog import load
+    from verity.commitments.periods import interface as IF
+    load()
+    unit = IF.resolve("AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}")
+    query = P.template_instance_query(unit.id)
+    why = "commits 294912 bits, more than the widest class, 262144"
+    with pytest.raises(P.QueryRefused, match=why):
+        P.units(PN.population_program(unit, 1), query)
+    refused = {"closure": None, "rule": {"law": "rate:1/1000", "rule": "law"},
+               "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None,
+               "program": _template_population(unit, 1), "query": _json(query)}
+    kind, body = D.replay(SLOTS, refused, pieces)
+    assert kind == "reject" and why in str(body), (kind, body)
+    with pytest.raises(D.Reject, match=why):
+        slots(copy.deepcopy(refused))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",
@@ -7533,6 +7647,8 @@ def test_a_many_port_registration_agrees(pieces):
 
     assert codes(lambda rs: None) == []
     assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
+    assert codes(lambda rs: rs.insert(0, {**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
     assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]

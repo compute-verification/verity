@@ -464,6 +464,42 @@ def test_several_templates_are_one_population():
     assert I.layout(ACC).outs == (("o0", 2),)
 
 
+def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path):
+    """With ``run_inputs``, C is the same circuit and each input port is read from its run input node's one tree
+    ``input/n<w>`` (`run_input_reads`): no member holds a tree of it, the registration holds its root beside the
+    members', each member's header names its units' rows of it, the verifier's period from the record is the prover's,
+    and a record naming other reads is refused."""
+    got = {}
+
+    def record(*a, **_k):
+        got["roots"] = a[4]
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    win = I.Window(I.Circuit("test", ((COORD, 10),), run_inputs=True), RUN, SAMPLING_DESIGN, 4)
+    assert codec.program_digest(win.window.program) == codec.program_digest(I.Circuit("test", ((COORD, 10),)).program()[0])
+    names = [r.param for r in win.runs]
+    assert [r.port for r in win.runs] == ["x", "sx", "wrow", "sw"] and len(set(names)) == 4
+    assert all(re.fullmatch(r"input/n\d+", v) for v in names)
+    ins, outs = values(10)
+    win.record(COORD, ins, outs)
+    doc = win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)
+    roots = {r["port"]: r for r in got["roots"]}
+    x = win.inputs[names[0]]
+    assert roots[names[0]]["root"] == x.root.hex() and x.leaves == 10
+    assert not any(p.endswith("/x") for p in roots)
+    m1 = doc["members"][1]
+    assert m1["registered"]["x"] == {"value": names[0], "positions": [4, 5, 6, 7]}
+    rec = json.loads(I.circuit_bytes(win.circuit_record()))
+    mine = I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    files = I.registered_file(rec, mine, {}, got["roots"])
+    assert files[m1["name"]]["ports"]["x"]["value"] == names[0]
+    assert files[m1["name"]]["ports"]["x"]["root"] == x.root.hex()
+    with pytest.raises(ValueError, match="run_inputs"):
+        I.window_of_record({**rec, "run_inputs": rec["run_inputs"][:1]}, SAMPLING_DESIGN, BY_ID.__getitem__)
+
+
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
 def test_the_verifiers_period_is_the_circuit_records(templates):
     win = I.Window(I.Circuit("rec", templates), RUN, SAMPLING_DESIGN, 4)
@@ -3003,3 +3039,38 @@ def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
     for bad in [{**doc, "scheme": "x"}, {**doc, "advice": "zz"}, {**doc, "salts": doc["salts"][:2]}, None]:
         with pytest.raises(ValueError):
             I.opened_advice(c, bad)
+
+
+def _tie(doc: dict, **change) -> tuple[bytes, dict]:
+    body = json.dumps(doc).encode()
+    reg = {"program": doc.get("program"), "partition": doc.get("partition"),
+           "window": {"circuit": hashlib.sha512(body).hexdigest(), "run": doc.get("run")}}
+    return body, {**reg, **change}
+
+
+@pytest.mark.parametrize("field", ["program", "partition", "run"])
+def test_a_tie_refuses_a_field_neither_side_names(field):
+    """A program, partition or run that the record and its registration both leave out is refused by name, never taken as
+    equal; so is one only the registration leaves out."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "run": "r1"}
+    whole = dict(doc)
+    del doc[field]
+    with pytest.raises(ValueError, match=f"^the circuit record names no {field}, so nothing ties"):
+        I.tied_record(*_tie(doc))
+    body, reg = _tie(whole)
+    reg = {**reg, "window": {**reg["window"], "run": None}} if field == "run" else {**reg, field: None}
+    with pytest.raises(ValueError, match=f"^the registration names no {field}, so nothing ties"):
+        I.tied_record(body, reg)
+    assert I.tied_record(*_tie(whole)) == whole
+
+
+def test_a_stated_record_ties_with_no_run_on_either_side():
+    """A stated record (`descriptor_record`: its ``cap``, no run) is tied with no run on either side, and only it."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "cap": 1}
+    assert I.tied_record(*_tie(doc)) == doc
+    body, reg = _tie(doc)
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(body, {**reg, "window": {**reg["window"], "run": "r1"}})
+    del doc["cap"]
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(*_tie(doc))

@@ -33,15 +33,6 @@ tests = ["bench/test_bench_contract.py"]
 paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
-tests = [
-    "bench/test_cell.py",
-    "bench/test_placement.py",
-    "bench/test_subcircuit_catalog.py",
-    "bench/test_unit_costs.py",
-]
-paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
 tests = ["bench/test_lowerings.py"]
 paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 

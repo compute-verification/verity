@@ -72,6 +72,8 @@ from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
+from .settings import TMPL_SWITCH, door_tmpl, lean_env
+from . import lean_child as LC
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
@@ -85,8 +87,6 @@ STATEMENT = "verity/flock-circuit"
 #: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 TMPL_FORMAT = "flock-circuit/tmpl"
-#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
-TMPL_SWITCH = "VERITY_DOOR_TMPL"
 TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
 TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -143,8 +143,8 @@ class Finding:
 
 def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
     """The environment `verify` starts the Lean verifier in: ``environ`` (this process's when None) over `VERIFIER_ENV`, so
-    a variable the caller sets keeps the caller's value. `verifier_env.sh` is the same for a shell job."""
-    return {**VERIFIER_ENV, **(os.environ if environ is None else environ)}
+    a variable the caller sets keeps the caller's value, under `lean_env`. `verifier_env.sh` is the same for a shell job."""
+    return lean_env({**VERIFIER_ENV, **(os.environ if environ is None else environ)})
 
 
 @functools.cache
@@ -205,7 +205,7 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
 
 def statement() -> str:
     """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
-    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+    return TMPL_STATEMENT if door_tmpl() else STATEMENT
 
 
 def tmpl_why(circuit: Path) -> str | None:
@@ -218,7 +218,7 @@ def tmpl_why(circuit: Path) -> str | None:
     try:
         meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
     except ValueError:
-        meta = None
+        return TMPL_FLAT_WHY
     if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
             or meta.get("statement") != TMPL_STATEMENT:
         return TMPL_FLAT_WHY
@@ -274,11 +274,16 @@ def _refusal(why: str) -> str:
 def reads_registered(program: bytes) -> bool:
     """Whether the program descriptor `program` has an input bound at docket (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
+    return not _reads_none_registered(program)
+
+
+def _reads_none_registered(program: bytes) -> bool:
+    """Whether `program` is JSON whose `definitions` object names no `RegisteredInput<w>_v1`; False for any other text."""
     try:
         defs = json.loads(program)["definitions"]
     except (ValueError, KeyError, TypeError):
-        return True
-    return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
+        return False
+    return isinstance(defs, dict) and not any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
 #: `OneStageZk.WORD`: the bound on each length a session's statement holds, which writes every length in an 8-byte word
@@ -564,10 +569,10 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
-                            "--public", str(proof.public), "--partition", str(files["partition"]),
-                            "--program", str(files["program"]), *reads,
-                            "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
+        p = LC.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
+                    "--public", str(proof.public), "--partition", str(files["partition"]),
+                    "--program", str(files["program"]), *reads,
+                    "--session", *map(str, proof.sessions)], env=verifier_env(), ok_statuses=LC.VERIFY_EXITS)
         lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         accepted = any(v.get("accepted") is True for v in lines)
         form = ks_form_why(files["circuit"], proof.public) if accepted else None
@@ -704,7 +709,7 @@ def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tu
         paths = (Path(d, "params.json"), Path(d, "evidence.json"))
         for path, x in zip(paths, (params, evidence)):
             path.write_bytes(_canonical(x))
-        p = subprocess.run([str(v2_executable()), "members", *map(str, paths)], capture_output=True, text=True)
+        p = LC.run([str(v2_executable()), "members", *map(str, paths)], ok_statuses=LC.V2_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -730,8 +735,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
         paths[0].write_bytes(_canonical(own))
         paths[1].write_bytes(_canonical(pr))
-        p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
+        p = LC.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], ok_statuses=LC.V2_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -743,7 +747,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
 
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
+           "SIZE_CLASS_MAX", "TMPL_SWITCH", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
            "draw_fits_why", "drawn_block", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "not_zk_why", "order_why", "own_tables", "population_why", "printed", "printed_size",
            "proved_units", "reads_registered", "tables_match_why", "tables_why", "template_why", "units_exactly",

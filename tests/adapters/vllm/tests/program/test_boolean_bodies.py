@@ -28,9 +28,7 @@ ON_DEMAND = (
     "TopPNumkeep_v1", "GatherI32x154880_v1", "TableRead8x8_v1")
 
 #: the word primitives without a Boolean body, a family by its `ON_DEMAND` member: id -> why; only shrinks
-BODYLESS: dict[str, str] = {
-    "TableRead8x8_v1": "a registered table's read (`registry.tables`): no Boolean body written yet",
-}
+BODYLESS: dict[str, str] = {}
 
 
 def _families() -> dict[str, str]:

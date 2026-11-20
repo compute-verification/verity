@@ -30,6 +30,7 @@ namespace MemoryAttester.Session.Properties.SecurityProofs
 open ResourceAccounting.Assumptions
 open MemoryAttester.Properties (Observed Recorded)
 open MemoryAttester.Attest.Properties.SecurityProofs (meantRun meantRun_ok)
+open Flock.SessionCoins (COMPLETE)
 
 /-- **The tie**: soundness's record of a round is `roundSeen` on what it reads of the round (`seen`). -/
 theorem round_eq_roundSeen (c : CoinTree) (l b : Nat) (st : Recorded) (o : Observed) :
@@ -109,39 +110,46 @@ theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
 /-- The `CoinTree` of a one-round session over one block: its one challenge is block 0. -/
 def oneCoins : CoinTree := ⟨.empty, 1, #[0], .empty, #[.empty], #[], .empty⟩
 
+/-- A record salt of `RECORD_SALT_BYTES` zero bytes: it shows only that the length is satisfiable. -/
+def oneSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+theorem oneSalt_size : oneSalt.size = RECORD_SALT_BYTES := by simp [oneSalt, ByteArray.size]
+
 /-- A session of one round over one-byte answers, whose device signs every message with the empty signature. -/
-def oneRound : Params Unit := ⟨fun _ => oneCoins, 0, 1, .empty, "", fun _ => .empty, fun _ _ _ => .empty⟩
+def oneRound : Params Unit :=
+  ⟨fun _ => oneCoins, fun _ => oneSalt, 0, 1, .empty, "", fun _ => .empty, fun _ _ _ => .empty⟩
 
 /-- The round `oneRound`'s device records of an answer whose `blockDigest` is `d`: round 0, on block 0, both readings
 at 0. -/
 def oneRecord (d : ByteArray) : Round := ⟨0, 0, 0, 0, d⟩
 
 theorem round_one (b : ByteArray) (hb : b.size = 1) :
-    Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩ = ⟨#[oneRecord (blockDigest b)], some COMPLETE⟩ := by
+    Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩ = ⟨#[oneRecord (blockDigest b)], some Flock.SessionCoins.COMPLETE⟩ := by
   have h : (⟨0, 0, b⟩ : Observed).block.size = 1 := hb
   unfold Recorded.round
   rw [h]
   rfl
 
-theorem message_one (c : ChallengePhaseCommitment) (e : String) {d : ByteArray} (hd : d.size = 64) :
-    ∃ m, message c e #[oneRecord d] = .ok m := by
-  simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
-    Except.pure]
+theorem message_one (c : ChallengePhaseCommitment) {salt : ByteArray} (hs : salt.size = RECORD_SALT_BYTES) (e : String)
+    {d : ByteArray} (hd : d.size = 64) : ∃ m, message c salt e #[oneRecord d] = .ok m := by
+  simp [message, hs, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Flock.SessionCoins.beN, Bind.bind,
+    Except.bind, Pure.pure, Except.pure]
 
 /-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/
 def oneReport (d : ByteArray) : Msg :=
-  .report ⟨oneRound.commitment (), COMPLETE, #[oneRecord d], "", .empty, .empty⟩ (oneRound.commitment ())
+  .report ⟨oneRound.commitment (), oneSalt, COMPLETE, #[oneRecord d], "", .empty, .empty⟩ (oneRound.commitment ())
     (#[oneRecord d].map fun r => oneCoins.opening r.j)
 
 theorem messages_one (b : ByteArray) (hb : b.size = 1) :
     (code oneRound).messages () [.round ⟨0, 0, b⟩] =
       [(Ch.challenge, Msg.index 0), (Ch.challenge, Msg.done), (Ch.report, oneReport (blockDigest b))] := by
-  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) COMPLETE (d := blockDigest b)
+  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) oneSalt_size COMPLETE (d := blockDigest b)
     (MemoryAttester.Properties.SecurityProofs.Tree.hash_size _)
   show (Ch.challenge, Msg.index (oneCoins.indices[0]!)) ::
       oneRound.closing () (Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩) ++ [] = _
   rw [round_one b hb, List.append_nil]
-  simp only [Params.closing, hm]
+  have hm' : message (oneRound.commitment ()) (oneRound.salt ()) COMPLETE #[oneRecord (blockDigest b)] = .ok m := hm
+  simp only [Params.closing, hm']
   rfl
 
 /-- **The view is not less than the digest**: on the one-round session `oneRound`, run as it is meant to run, two

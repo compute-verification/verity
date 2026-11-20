@@ -159,11 +159,7 @@ PUBLIC = {
                                  "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
                                           "and b.egress rows by size class, a class's layout, record and files (Layout, "
-                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
-    "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
-                                          "computes where a response ends, and a stop class's stop record "
-                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
-                                          "registers under the verifier's own rule",
+                                          "record, reopen), which benchmarks/serve_tax reads",
     "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
                                              "scheduler that commits each window's finished requests by class "
                                              "(BoundaryWindows), which benchmarks/serve_tax's plugin installs",
@@ -174,16 +170,7 @@ PUBLIC = {
     "verity_vllm.pipeline.boundary_logits": "I1: a two-stage window's select inputs at serve: rank 0's hook on the sampler "
                                             "(SamplerHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node, which "
-                                            "benchmarks/serve_tax's plugin installs and benchmarks/one_stage/two_stage.py "
-                                            "opens (load)",
-    "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
-                                          "(interior, register), the block parameters it registers as values, the "
-                                          "verifier's (Supply) and the replay's own (Operand), and the challenger's "
-                                          "copies of them (span_values, link_words, link_schemas, sources, history), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
-    "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
-                                     "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
-                                     "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
+                                            "benchmarks/serve_tax's plugin installs",
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
@@ -236,7 +223,7 @@ PUBLIC = {
                                    "(Rewrites, build_roles, requant, absorbed), which benchmarks/one_stage and "
                                    "benchmarks/spot_proved stage from",
     "verity_vllm.check.replay.index": "I7: the Program rows sampled replay reads, indexed per request (ProgramIndex, "
-                                      "row_args, const_word), which benchmarks/one_stage and benchmarks/prove_path read",
+                                      "const_word), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.check.replay.opening": "I7: committed words by identity, the store sampled replay reads "
                                         "(CommittedStore), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
@@ -278,12 +265,10 @@ PUBLIC = {
     "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor device's challenger, one challenge phase a Commit "
                                          "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
                                          "Pearl-C arm take their coins from",
-    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
-                                          "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a sealed window leaves (MANIFEST, open_bundle), which "
+                                          "benchmarks/one_stage opens",
     "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
                                              "benchmarks/serve_tax states and refuses a public write by",
-    "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
-                                           "manifest_of_rank), which benchmarks/one_stage reads",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
                                  "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
                                  "build under",
@@ -317,13 +302,11 @@ KNOWN = frozenset({
     "verity_vllm.compiler.served_statics",
     "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which code outside the adapter imports
-    "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
     "verity_vllm.definitions.numerics.deepgemm_twins",
     "verity_vllm.definitions.numerics.derived_rows",
     "verity_vllm.definitions.numerics.fp8_moe_rows",
     "verity_vllm.definitions.numerics.glm53_rows",
-    "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",
@@ -394,7 +377,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
     "verity_vllm.program.frontend.derive_examples",

@@ -2,9 +2,11 @@ module
 
 public import Flock.Sigma
 public import Flock.TemplateQuery
+public import Flock.JsonParse
 public import Spot.Wires
 public import Spot.Edges
 meta import Spot.Wires
+meta import Flock.JsonParse
 
 /-!
 # What an execution phase's circuit record's text declares
@@ -462,7 +464,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let k := W.cutsOf reader port
     decls := decls.push { w := rect reader port start units k, bits := 16 * words / k, fill := .ingress }
-  if !Spot.Wires.pairwiseDisjoint (decls.toList.map (·.w)) then throw "inputs"
+  if !Spot.Wires.pairwiseDisjointFast (decls.toList.map (·.w)) then throw "inputs"
   return { params, tables, roots, openings, decls := decls.toList }
 
 /-! ## Blocks -/
@@ -621,7 +623,7 @@ def declared (P : Prog) (doc : Json) (r : Row) : Option Declared :=
 /-- The slots `gridsOf` gives units `0 … 3` of template `T`, under a class of `S` slots whose entries are `es`, or
 the refusal. -/
 def slotsOfEntries (S : Nat) (es : String) : Except String (List (Option Nat)) := do
-  let doc ← Json.parse s!"\{\"blocks\":\{\"inference\":\{\"slots\":{S},\"entries\":{es}}}}"
+  let doc ← Flock.JsonParse.parse s!"\{\"blocks\":\{\"inference\":\{\"slots\":{S},\"entries\":{es}}}}"
   let (S, grids) ← gridsOf [{ tid := "T", defn := 0, units := 4, rows := [], outs := [] }] doc
   return (List.range 4).map (slotIn S grids "T")
 

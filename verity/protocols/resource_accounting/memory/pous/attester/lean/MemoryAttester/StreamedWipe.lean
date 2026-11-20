@@ -26,7 +26,7 @@ namespace MemoryAttester.StreamedWipe
 open Flock
 
 def PROTOCOL : String := "verity-pous/streamed-wipe/v2"
-def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v2".toUTF8.push 0
+def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v3".toUTF8.push 0
 def START_TAG : ByteArray := "verity-pous/streamed-wipe/start/v1".toUTF8.push 0
 def END_TAG : ByteArray := "verity-pous/streamed-wipe/end/v1".toUTF8.push 0
 def RECORD_BINDING : ByteArray := "verity-pous/streamed-wipe/batch-records/v1".toUTF8.push 0
@@ -131,12 +131,20 @@ def header (c : Commitment) (ended : String) (startMark : ByteArray) (fillStartN
     ("start_mark", pyJsonStr (hexOf startMark))]).toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
-/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`. -/
-def message (c : Commitment) (ended : String) (startMark : ByteArray) (fillStartNs fillEndNs : Int)
+/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records root)`,
+the salt `RECORD_SALT_BYTES` bytes. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. -/
+def message (c : Commitment) (salt : ByteArray) (ended : String) (startMark : ByteArray) (fillStartNs fillEndNs : Int)
     (batches : Array Batch) : E ByteArray := do
+  if salt.size ≠ RECORD_SALT_BYTES then throw s!"a session record's salt is {RECORD_SALT_BYTES} bytes"
   let head := (header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
   let root ← recordsRoot c.session batches
-  pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root))
+  pure (Sha512.hash (SESSION_TAG ++ salt ++ be64 head.size.toUInt64 ++ head ++ root))
 
 /-- The commitment's header alone, as `json.dumps(sort_keys=True, separators=(",", ":"))`: what the start message
 hashes. -/
@@ -150,10 +158,11 @@ def startMessage (c : Commitment) : ByteArray :=
   let head := c.headerJson.toUTF8
   Sha512.hash (START_TAG ++ be64 head.size.toUInt64 ++ head)
 
-/-- `SignedWipe`: a closed session, its start mark (the SHA-512 of the start certificate the challenger held before the
-fill, empty when it had no mark source) and the one signature. It holds no egress count. -/
+/-- `SignedWipe`: a closed session, its record's salt, its start mark (the SHA-512 of the start certificate the challenger
+held before the fill, empty when it had no mark source) and the one signature. It holds no egress count. -/
 structure Signed where
   commitment : Commitment
+  salt : ByteArray
   ended : String
   startMark : ByteArray
   fillStartNs : Int
@@ -165,7 +174,7 @@ structure Signed where
   deriving BEq, Inhabited
 
 def Signed.message (s : Signed) : E ByteArray :=
-  StreamedWipe.message s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches
+  StreamedWipe.message s.commitment s.salt s.ended s.startMark s.fillStartNs s.fillEndNs s.batches
 
 /-- `end_message`: what the challenger hands the network attester after its last read,
 `SHA-512(END_TAG ‖ u64 len ‖ message ‖ u64 len ‖ signature)`, the session's signed message and its signature. Not

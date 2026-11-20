@@ -13,6 +13,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
 * `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query,
   and `link-points` after them where it is handed the per-member form's members;
 * `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
+* `run_input_roots`: each member's ports at C's run input nodes' trees, and a held or tied node's reader without one;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -118,6 +119,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
+* `wires_disjoint`: whether a list of wires is pairwise disjoint, by the pair by pair check and by the sorted sweep
+  (`Wires.pairwiseDisjoint`, `Wires.pairwiseDisjointFast`).
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
@@ -164,6 +167,9 @@ public import Spot.HistoryTable
 public import Spot.PublicUnits
 public import Spot.LinkPoints
 public import Spot.Edges
+public import Spot.Levels
+meta import Spot.Select
+meta import Spot.Levels
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -242,11 +248,9 @@ parameters a verifier expects registered, to `{"fanout", "shared", "reads"}`: it
 `held` its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]`
 for each range reading a run Input inside `held` (`Partition.heldReads`); refused for another query or one that doesn't
 apply. -/
-def fanout (j : Json) : V Json := do
-  let .obj _ := getD j "program" | throw "program is not an object"
-  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+private def heldOf (j : Json) : V (Array (Nat × Nat)) := do
   let bad : V (Nat × Nat) := throw "held is not a list of [first, count]"
-  let held ← match getD j "held" with
+  match getD j "held" with
     | .null => pure #[]
     | .arr xs => xs.mapM fun x => match x with
       | .arr #[a, b] => match nat? a, nat? b with
@@ -254,11 +258,48 @@ def fanout (j : Json) : V Json := do
         | _, _ => bad
       | _ => bad
     | _ => throw "held is not a list of [first, count]"
+
+def fanout (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let held ← heldOf j
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
     ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held)),
     ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
       Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
+
+/-- A member of the per-member form named `name` at the units `units`, with no files. -/
+private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZk.Member :=
+  let own : OneStageZk.Own :=
+    { programJ := .null, program := .empty, partition := .null, pub := "", registered := none }
+  { name := name, units := units, g := 1, own := own }
+
+/-- `{"program", "query", "members", "roots", "held"?}`, a program object, a template query, the members
+`[[name, [[first, end], ...]], ...]`, the record's roots and `fanout`'s `held`, to `{"roots", "held"}`: each member's
+`[port, tree]` at C's run input nodes' trees (`OneStageZk.runInputRoots`, the member holding no root of its own), and
+`OneStageZk.heldRootsHeld`'s refusal over them, or null; refused for another query or one that doesn't apply. -/
+def runInputRoots (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let held ← heldOf j
+  let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
+  let .arr xs := getD j "members" | throw "members is not a list"
+  let ms ← xs.mapM fun
+    | .arr #[.str name, .arr us] => do
+      let units ← us.mapM fun
+        | .arr #[a, b] => match nat? a, nat? b with
+          | some lo, some hi => pure (lo, hi)
+          | _, _ => throw "a member's units are [first, end]"
+        | _ => throw "a member's units are [first, end]"
+      pure (unitsMember name units)
+    | _ => throw "a member is [name, [[first, end], ...]]"
+  let roots ← OneStageZk.runInputRoots p.prog ms (Json.mkObj [("roots", getD j "roots")]) {}
+  let why := match OneStageZk.heldRootsHeld (Partition.heldReads p.prog rs held) ms roots with
+    | .ok () => Json.null
+    | .error e => .str e
+  return Json.mkObj [("roots", Json.arr (ms.map fun m => Json.arr #[.str m.name,
+    Json.arr ((roots.getD m.name #[]).map fun r => Json.arr #[getD r "port", getD r "tree"])])), ("held", why)]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
@@ -1130,7 +1171,7 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("fanout", fanout), ("registration", docket),
+   ("fanout", fanout), ("run_input_roots", runInputRoots), ("registration", docket),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
@@ -1170,17 +1211,44 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.runsPiece),
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
-   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
+   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef), ("wires_disjoint", Wires.disjointPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]
 
-/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
+/-- The verifier's `run`: `run`, with a two-stage rule refused by name (`Levels.TWO_LEVELS_REFUSED`) before anything
+else is read; the difftest's table keeps `run` itself, which its twin holds to the Python. -/
+def runOfRecord (j : Json) : V Json := do
+  if (← Select.Rule.ofJson (getD j "rule")) matches .twoStage .. then throw Levels.TWO_LEVELS_REFUSED
+  run j
+
+/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them, with `run` as
+`runOfRecord`. -/
 def verifier : List (String × (Json → V Json)) :=
-  table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
+  (table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
     "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
-    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
+    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1)
+  |>.map fun p => if p.1 == "run" then ("run", runOfRecord) else p
+
+/-- **The verifier's `run` refuses a two-stage rule by name**: on any input whose rule parses as two-stage, it is
+exactly `Levels.TWO_LEVELS_REFUSED`, never an output, so never `accept`; `Run.run` is not reached. -/
+theorem runOfRecord_refuses_two_stage {j : Json} {g : Json} {t : String} {k : Select.Counts}
+    (hr : Select.Rule.ofJson (getD j "rule") = .ok (.twoStage g t k)) :
+    runOfRecord j = .error Levels.TWO_LEVELS_REFUSED := by
+  unfold runOfRecord
+  simp only [hr, bind, Except.bind]
+  rfl
+
+private def twoStageRule : Json :=
+  Json.mkObj [("rule", "two-stage"), ("replay", "rate:1/2"), ("k", Lean.toJson (1 : Nat)),
+    ("grain", Json.mkObj [("name", "Q_template_instance"), ("version", Lean.toJson (0 : Nat)),
+      ("params", Json.mkObj [("template", "t")])])]
+
+#guard (verifier.filter (·.1 == "run")).length == 1
+#guard match (verifier.lookup "run").map (· (Json.mkObj [("rule", twoStageRule)])) with
+  | some (Except.error e) => e == Levels.TWO_LEVELS_REFUSED
+  | _ => false
 
 end Spot.Pieces

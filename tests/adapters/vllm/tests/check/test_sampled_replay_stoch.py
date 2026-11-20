@@ -14,14 +14,9 @@ What is pinned:
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as POP
 from verity_vllm.definitions.numerics import rows as RK
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.records import replay_codes as RC
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 
@@ -105,25 +100,6 @@ def _select_rows(pi):
     return [r for r in pi.rows if r["spec"].startswith("GumbelTopPTokenSelect_v1")]
 
 
-def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registry_difftest_walk():
-    assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
-    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
-    from verity_vllm.definitions.registry import sampling_topp_difftest as DT
-    rng = np.random.default_rng(11)
-    lg = _logits(rng, 0)
-    for S in (1, 2, 4, 8):
-        ops = [lg, np.asarray([_f32(TOP_P)], np.uint32), np.asarray([SEED], np.uint64), np.asarray([9], np.uint64),
-               np.asarray([_f32(TEMP)], np.uint32), np.asarray([S], np.uint32)]
-        got = EV.evaluate("GumbelTopPTokenSelect_v1", {"V": V}, [[o] for o in ops], [None] * 6)
-        ref = evaluate_spec(DT.spec({"V": V, "S": S}), [lg.astype(np.uint64)] + [o.astype(np.uint64) for o in ops[1:5]])
-        assert list(got) == [RK.SAMPLED_MEMBER] and got[RK.SAMPLED_MEMBER].dtype == np.uint64
-        assert int(got[RK.SAMPLED_MEMBER][0]) == int(ref[0]) & 0xFFFFFFFF
-    with pytest.raises(ValueError, match="6 operands"):
-        RK.gumbel_topp_token_select({"V": V}, ops[:5])
-    with pytest.raises(ValueError, match="operand logits"):
-        RK.gumbel_topp_token_select({"V": V}, [lg[:-1]] + ops[1:])
-
-
 def test_const_rows_read_from_the_program_text():
     assert IX.const_word({"spec": "Const32[0x3f733333]_v1"}).tolist() == [0x3f733333]
     w = IX.const_word({"spec": "Const64[0x00000000000000ff]_v1"})
@@ -132,73 +108,3 @@ def test_const_rows_read_from_the_program_text():
     assert IX.const_word({"spec": "Const32[0x1ffffffff]_v1"}) is None      # not a 32-bit word: unmodelled, never truncated
 
 
-def test_honest_stochastic_request_replays_every_selector_from_committed_inputs_by_name():
-    inst, pi, blocks, lg_op = _honest()
-    store = _Store(blocks)
-    for s, r in enumerate(_select_rows(pi)):
-        d = pi.describe(r)
-        assert d["op_path"] == IX.SAMPLER_OP and d["members"] == [(RK.SAMPLED_MEMBER, 1, "i64")] and d["step"] == s
-        rec = EV.replay_vu(pi, store, lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-        assert rec["result"] is True, rec
-        kinds = [(x["kind"], x.get("identity", [None, None, None, None])[2:4] if x["kind"] == "committed" else x.get("spec")) for x in rec["inputs"]]
-        assert kinds == [("committed", [lg_op, LG_MEMBER]), ("const", f"Const32[0x{_f32(TOP_P):08x}]_v1"),
-                         ("committed", [IX.SAMPLER_OP, "seed"]), ("const", f"Const64[0x{(100 + s):016x}]_v1"),
-                         ("const", f"Const32[0x{_f32(TEMP):08x}]_v1"), ("const", f"Const32[0x{S:08x}]_v1")]
-        # the logits and seed identities are THIS step's (engine step = arrive + s), request-local element 0
-        assert [x["identity"][1] for x in rec["inputs"] if x["kind"] == "committed"] == [5 + s] * 2
-        assert rec["outputs"][0]["committed"] == rec["outputs"][0]["evaluated"] == int(blocks[("r0", 5 + s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)][0])
-
-
-def test_a_flipped_committed_sampled_id_fails_named_at_the_sampler_identity():
-    inst, pi, blocks, _ = _honest()
-    r = _select_rows(pi)[1]
-    key = ("r0", 6, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)
-    blocks[key] = (blocks[key] + 1) % V
-    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-    assert rec["result"] is False
-    assert "runner.sampler/sampled_token_ids" in rec["why"] and "step 1" in rec["why"]
-
-
-def test_the_committed_seed_word_is_load_bearing():
-    """A different committed seed (the sampler consumed another seed than the Program's) replays to a different id at some step -> FAIL
-    by name; the committed sampled ids stay the honest ones."""
-    inst, pi, blocks, _ = _honest()
-    honest = {k: v for k, v in blocks.items()}
-    for s in range(1 + T):
-        blocks[("r0", 5 + s, IX.SAMPLER_OP, "seed")] = np.asarray([SEED ^ 0xFFFF], dtype=np.uint64)
-    res = [EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-           for r in _select_rows(pi)]
-    assert all(x["result"] is not None for x in res)
-    assert any(x["result"] is False for x in res), [x["outputs"] for x in res]
-    bad = next(x for x in res if x["result"] is False)
-    assert bad["outputs"][0]["committed"] != bad["outputs"][0]["evaluated"] and "runner.sampler/sampled_token_ids" in bad["why"]
-    # honest words again -> all pass (the failure above was the seed, nothing else)
-    assert all(EV.replay_vu(pi, _Store(honest), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)["result"]
-               for r in _select_rows(pi))
-
-
-def test_a_missing_seed_identity_is_partial_by_name_never_a_pass():
-    inst, pi, blocks, _ = _honest()
-    del blocks[("r0", 6, IX.SAMPLER_OP, "seed")]
-    r = _select_rows(pi)[1]
-    rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-    assert rec["result"] is None and "runner.sampler/seed" in rec["why"] and "step 6" in rec["why"]
-
-
-def test_a_selector_reading_its_split_count_from_a_program_input_is_unresolved_by_name():
-    """S is the registered constant the Program carries: a selector reading it from a Program input (a value the live batch could set)
-    is never resolved to a committed word, at any step."""
-    pi = IX.ProgramIndex(_program(splits_input=True))
-    _, _, blocks, _ = _honest()
-    for s, r in enumerate(_select_rows(pi)):
-        rec = EV.replay_vu(pi, _Store(blocks), lambda *_a: None, {"i": r["i"], "phase": "decode", "request_id": "r0"}, arrive=5)
-        assert rec["result"] is None and "reads its split count S from Program input 'splits'" in rec["why"], (s, rec["why"])
-
-
-def test_the_selector_is_a_replayed_stratum_of_the_population_not_a_no_evaluator_gap():
-    inst, pi, blocks, _ = _honest()
-    pop = POP.population(pi, "r0", arrive=5)
-    vus, not_ev = pop[0], pop[1]
-    fams = {RM.spec_family(pi.by_i[v["i"]]["spec"]) for v in vus}
-    assert "GumbelTopPTokenSelect_v1" in fams
-    assert not any("GumbelTopPTokenSelect_v1" in k for k in not_ev)

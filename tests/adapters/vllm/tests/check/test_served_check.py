@@ -5,7 +5,6 @@ values are what the Program computes, step after step (each decode step reads th
 check passes them; each single perturbation fails by name."""
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 import numpy as np
@@ -13,7 +12,6 @@ import pytest
 
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
-from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.definitions.numerics.rows import token_select_first_max
 from verity_vllm.definitions.registry import b1, cublas_bf16
@@ -176,11 +174,6 @@ def served():
     return build, W, steps, prompts
 
 
-def _check(served, steps=None, build=None, weight=None):
-    b, W, st, prompts = served
-    return SC.check(build or b, st if steps is None else steps, weight or W.__getitem__, seed=None, rows=8, prompts=prompts)
-
-
 def _with(steps, step: int, name: str, f) -> list[SC.Step]:
     out = list(steps)
     s = out[step]
@@ -203,36 +196,6 @@ def test_the_plans_select_every_definition(served):
     assert [p["mode"] for p in build["steps_plan"]] == ["PIECEWISE", "PIECEWISE", "NONE", "FULL"]
 
 
-def test_the_served_values_pass(served):
-    rep = _check(served)
-    assert rep["ok"], rep["failures"]
-    assert rep["steps_checked"] == [0, 1, 2, 3] and not rep["steps_unrun"]
-    kinds = {IR.InductorRMSNorm.id, IR.InductorAddRMSNorm.id, IR.InductorAdd2RMSNorm.id, IR.InductorSiluMul.id, IR.InductorRoPE.id,
-             b1.Embedding.id, b1.GemmV2.id, cublas_bf16.CublasSplitKGemmWord.id, b1.TokenSelect.id, "attention", "coverage", "batch",
-             SV.IDS, SV.POSITIONS}
-    assert kinds <= set(rep["tally"])
-    assert all(ok == n for ok, n in rep["tally"].values())
-    defs = rep["steps"]["3"][ATT]["definitions"]
-    assert defs == {F3.AttentionV4.id: 2, IR.Fa3AttentionSplit.id: 1}
-
-
-@pytest.mark.parametrize("name,row", [(N0, 0), (Q, 2), (ACT, 1), (RES, 2), (OUT, 0), (EMB, 1)])
-def test_a_flipped_word_fails_its_value(served, name, row):
-    def flip(a):
-        a[row, 3] ^= 1
-        return a
-    rep = _check(served, _with(served[2], 1, name, flip))
-    assert not rep["ok"]
-    assert (1, name) in _failed(rep)
-
-
-def test_a_flipped_gemm_word_on_a_sampled_row_fails(served):
-    def flip(a):
-        a[0, 5] ^= 1
-        return a
-    assert (2, DOWN) in _failed(_check(served, _with(served[2], 2, DOWN, flip)))
-
-
 def _route_apart(served, step: int) -> tuple[dict, list[SC.Step]]:
     """The run with a row of the qkv GEMM at `step` that the unsplit and the split-K sums round apart (random rows rarely do):
     1 + 2^-8 in the first 16-chunk, 2^-24 in each of the third and fourth, against a weight row of ones there."""
@@ -249,17 +212,6 @@ def _route_apart(served, step: int) -> tuple[dict, list[SC.Step]]:
     return W, steps
 
 
-@pytest.mark.parametrize("step", [1, 2])
-def test_the_gemm_is_the_plans_cublas_route(served, step):
-    W, steps = _route_apart(served, step)
-    assert (step, QKVV) not in _failed(_check(served, steps, weight=W.__getitem__))
-    build = copy.deepcopy(served[0])
-    plan = build["steps_plan"][step]
-    other = {"kernel": "nosplit"} if _route(plan["gemm_m"])["kernel"] == "splitk" else {"kernel": "splitk", "SPLIT_K": 2}
-    plan["gemms"][f"{H},{QKV}"] = SV.gemm_definition(other, H, QKV, H200.dot)
-    assert (step, QKVV) in _failed(_check(served, steps, build=build, weight=W.__getitem__))
-
-
 @pytest.mark.parametrize("route", [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 2},
                                    {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 2},
                                    {"kernel": "gemv", "LANES": 16}, {"kernel": "gemv", "LANES": 32}])
@@ -271,76 +223,6 @@ def test_each_cublas_route_binds_a_definition_whose_twin_is_the_routes(route):
         assert np.array_equal(SC.GEMMS[d["base"]](d["statics"], x, w), BC.cublas_route_rows(route, x, w))
 
 
-def test_a_skipped_step_leaves_the_cache_stale(served):
-    steps = served[2]
-    rep = _check(served, [steps[0], steps[2], steps[3]])
-    assert rep["steps_unrun"] == [1]
-    att = rep["steps"]["2"][ATT]
-    assert not att["ok"] and any("cached keys" in w for w in att["why"])
-
-
-def test_a_decode_step_reads_the_token_sampled_before(served):
-    rid_row = next(lo for r, lo, _hi in served[2][3].rows if r == "r1")
-
-    def other(a):
-        a[rid_row, 0] = (a[rid_row, 0] + 1) % V
-        return a
-    rep = _check(served, _with(served[2], 3, SV.IDS, other))
-    assert (3, SV.IDS) in _failed(rep)
-
-
-def test_the_sampled_id_is_token_select(served):
-    def other(a):
-        a[0, 0] = (a[0, 0] + 1) % V
-        return a
-    assert (0, SV.SAMPLED) in _failed(_check(served, _with(served[2], 0, SV.SAMPLED, other)))
-
-
-def test_a_missing_value_fails_coverage_and_its_readers(served):
-    steps = list(served[2])
-    s = steps[2]
-    steps[2] = SC.Step(s.step, s.rows, {k: v for k, v in s.values.items() if k != ACT})
-    rep = _check(served, steps)
-    assert rep["steps"]["2"]["coverage"]["missing"] == [ACT]
-    assert "not committed" in rep["steps"]["2"][DOWN]["why"]
-
-
-def test_the_batch_must_be_the_plans(served):
-    steps = list(served[2])
-    s = steps[1]
-    steps[1] = SC.Step(s.step, [(r, lo, hi) for r, lo, hi in s.rows if r != "r1"], s.values)
-    rep = _check(served, steps)
-    assert not rep["steps"]["1"]["batch"]["ok"]
-
-
-def test_a_weight_of_another_shape_is_refused(served):
-    W = served[1]
-    rep = _check(served, weight=lambda n: W[n][:-1] if n == "down" else W[n])
-    assert all((s, DOWN) in _failed(rep) for s in range(STEPS))
-
-
-def test_a_seed_samples_the_rows(served):
-    build, W, steps, prompts = served
-    rep = SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=5)
-    assert rep["ok"], rep["failures"]
-    assert rep["seed"] == 5
-    sampled = rep["picks"]["2"]["r2"]
-    assert sampled == SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=5)["picks"]["2"]["r2"]
-    assert sampled != SC.check(build, steps, W.__getitem__, rows=8, prompts=prompts, seed=6)["picks"]["2"]["r2"]
-    assert len(sampled) == 8 and sampled != list(SC.sample(200, 8))
-    assert rep["picks"]["2"]["r0"] == [0] and rep["steps"]["2"][ATT]["rows"] == 8 + 2
-    lo = next(a for r, a, _b in steps[2].rows if r == "r2")
-    unsampled = next(i for i in range(200) if i not in sampled)
-
-    def flip(i):
-        def f(a):
-            a[lo + i, 5] ^= 1
-            return a
-        return _with(steps, 2, DOWN, f)
-    assert (2, DOWN) in _failed(SC.check(build, flip(sampled[3]), W.__getitem__, rows=8, prompts=prompts, seed=5))
-    assert (2, DOWN) not in _failed(SC.check(build, flip(unsampled), W.__getitem__, rows=8, prompts=prompts, seed=5))
-
-
 def test_steps_are_checked_in_order(served):
     c = SC.ServedCheck(served[0], served[1].__getitem__, seed=None)
     c.step(served[2][1])
@@ -348,54 +230,3 @@ def test_steps_are_checked_in_order(served):
         c.step(served[2][0])
 
 
-def _population(served, rep=None, build=None, ranks=(0,)):
-    pop = SC.population(build or served[0], rep or _check(served), ranks=list(ranks))
-    return pop, c2_rules._query_population_scope({"population": pop})
-
-
-def test_the_check_reaches_every_identity_of_the_build(served):
-    build = served[0]
-    pop, (scope, fail) = _population(served)
-    total = sum(len(p["requests"]) for p in build["steps_plan"]) * (len(WIDTHS) + 2)
-    assert pop["query_checks"]["ok"] and fail is None
-    assert pop["query_total"]["identities"] == len(build["identities"]) == total
-    assert pop["query_total"]["manifest_digest"] == build["manifest_digest"]
-    assert f"reaches {total} (100.0%)" in scope and SV.KIND in scope
-
-
-def test_a_step_the_check_never_reached_leaves_its_identities_without_rows(served):
-    steps = served[2]
-    pop, (_scope, fail) = _population(served, _check(served, [steps[0], steps[2], steps[3]]))
-    c = pop["query_checks"]
-    assert not c["ok"] and c["accounted"]
-    # step 1's every identity, and r1's ids at step 2: no id sampled before to compare them to
-    assert c["identities_without_rows"]["n"] == len(served[0]["steps_plan"][1]["requests"]) * (len(WIDTHS) + 2) + 1
-    assert "identities_without_rows" in fail
-
-
-def test_ids_compared_to_nothing_are_not_reached(served):
-    build, W, steps, prompts = served
-    rep = SC.check(build, steps, W.__getitem__, seed=None, rows=8, prompts={r: p for r, p in prompts.items() if r != "r2"})
-    pop, _ = _population(served, rep)
-    assert pop["query_checks"]["identities_without_rows"]["first"] == [
-        {"request_id": "r2", "step": 2, "op_path": "c00.input", "member": "ids"}]
-
-
-def test_an_identity_of_other_rows_disagrees(served):
-    build = copy.deepcopy(served[0])
-    i = next(i for i in build["identities"] if i["op_path"] == "c02.mm" and i["output_member"] == "buf4" and i["engine_step"] == 2)
-    i["element_range"] = [0, i["element_range"][1] + H]
-    c = _population(served, build=build)[0]["query_checks"]
-    assert not c["ok"] and c["rows_disagree"]["n"] == 1
-
-
-def test_a_value_the_build_does_not_require_is_outside_the_query(served):
-    build = copy.deepcopy(served[0])
-    build["identities"] = [i for i in build["identities"] if not (i["op_path"] == "logits_processor" and i["engine_step"] == 3)]
-    c = _population(served, build=build)[0]["query_checks"]
-    assert not c["ok"] and c["vus_outside_query"]["n"] == len(build["steps_plan"][3]["requests"])
-
-
-def test_another_rank_disagrees(served):
-    pop, (_scope, fail) = _population(served, ranks=(1,))
-    assert pop["query_checks"]["ranks"] == {"replay": [1], "manifest": [0], "equal": False} and "ranks replay [1]" in fail

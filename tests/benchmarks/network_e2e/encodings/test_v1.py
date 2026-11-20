@@ -35,9 +35,10 @@ def _load(name: str):
     return sys.modules[key]
 
 
-V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
+V, R, CV = _load("v1"), _load("replay"), _load("code_v1")
 from verity_vllm.pipeline.advice_code import format as I1  # noqa: E402
 from verity_vllm.compiler import replay_chain as RC  # noqa: E402
+from verity_vllm.pipeline.advice_code.arith import BitReader  # noqa: E402
 from verity_vllm.pipeline.advice_code import kept as KP  # noqa: E402
 from verity_vllm.pipeline.advice_code import schedule_code as SC  # noqa: E402
 
@@ -67,7 +68,7 @@ def case(name: str, **kw):
 
 
 def exact_bits(data: bytes, rec, reg) -> bytearray:
-    return C.BitReader.from_bytes(data, sum(V.bits_by_window(data, rec, reg).values())).bits
+    return BitReader.from_bytes(data, sum(V.bits_by_window(data, rec, reg).values())).bits
 
 
 def _fit_cases():

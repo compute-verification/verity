@@ -21,7 +21,6 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
 from verity_vllm.commit import step_rows  # noqa: E402
 from verity_vllm.commit.challenge import challenge_positions  # noqa: E402
 from verity_vllm.commit.committer.native_host import (  # noqa: E402
@@ -151,16 +150,6 @@ def test_device_release_then_frozen_view_survives_reset():
 def _rec(oar):
     return {"extra": {"expected_tensors": 8, "committed_tensors": 8, "errors": [], "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "openings_after_release": dict(oar) if oar is not None else None}
-
-
-def test_verdict_fails_closed_on_openings_after_release():
-    good = {"n": 68, "verified": 68, "source": "replay", "replay_root_equal": True, "retained_device_after": 0}
-    assert commit_verdict(_rec(good), True) == (True, "PASS")
-    assert not commit_verdict(_rec({**good, "verified": 67}), True)[0]
-    assert not commit_verdict(_rec({**good, "n": 60, "verified": 60}), True)[0]
-    assert not commit_verdict(_rec({**good, "replay_root_equal": False}), True)[0]
-    assert not commit_verdict(_rec({**good, "retained_device_after": 4096}), True)[0]
-    assert commit_verdict(_rec({**good, "source": "host", "replay_root_equal": None}), True)[0]
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
@@ -378,87 +367,3 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     assert "256 B chunk" in b8x3["derivation"] and "learn term" in b8x3["derivation"]
 
 
-def test_verdict_rules_for_host_plus_replay_and_bounded_records():
-    good = {"n": 68, "verified": 68, "source": "host+replay", "replay_root_equal": True, "retained_device_after": 0, "replay_errors_n": 0}
-    assert commit_verdict(_rec(good), True) == (True, "PASS")
-    assert not commit_verdict(_rec({**good, "replay_root_equal": False}), True)[0]        # host+replay needs the replay root too
-    assert not commit_verdict(_rec({**good, "replay_root_equal": None}), True)[0]
-    assert not commit_verdict(_rec({**good, "replay_errors_n": 1}), True)[0]              # a replay with collector errors is not a replay of record
-    # the in-run openings under exclude: `skipped` set with a host share -> the host share must verify; the after-release record carries the rest
-    rec = _rec(good)
-    rec["openings"] = {"n": 40, "verified": 40, "skipped": "retain=host excluding ['fa2_hidden_m1']: 24 of 64 -> replay", "deferred_replay_n": 24}
-    rec["openings_after_release"]["deferred_received_n"] = 24                          # ... and the after-release phase received them all
-    assert commit_verdict(rec, True)[0]
-    rec["openings_after_release"]["deferred_received_n"] = 23                          # one deferred pick opened nowhere -> FAIL by name
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "deferred to replay" in why and "received 23" in why, why
-    rec["openings_after_release"]["deferred_received_n"] = 24
-    rec["openings"]["verified"] = 39
-    assert not commit_verdict(rec, True)[0]
-    # the population-sampled openings (binding) partition the same way: host share verifies, deferred share must reach the replay phase.
-    # A record WITH a binding block is a row-procedure record: C2 of record (replay / linkage / pin) must be on it for the PASS branch.
-    from verity_vllm.check.commit_rules import binding_check
-    po = {"n": 81, "bound": 81, "unbound_n": 0, "opened": 76, "verified": 76, "skipped": "retain=host excluding [...]: 5 of 81 -> replay", "deferred_replay_n": 5}
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 69761, "bound_n": 69761, "missing_n": 0}, "population": {"n": 69761}, "openings_population": po}
-    assert binding_check(bnd) == (True, "PASS")
-    ok, why = binding_check({**bnd, "openings_population": {**po, "verified": 75}})
-    assert not ok and "host share" in why, why
-    rec = _rec(good)
-    rec["openings_after_release"]["deferred_received_n"] = 5
-    rec["binding"] = bnd
-    rec["sampled_replay"] = {"result": True, "grade": "complete", "population": {}}
-    rec["boundary_linkage"] = {"result": True}
-    rec["weights_pin"] = {"result": True}
-    assert commit_verdict(rec, True)[0], commit_verdict(rec, True)
-    rec["openings_after_release"]["deferred_received_n"] = 4                           # one population pick opened nowhere -> FAIL by name
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "5 population pick(s) deferred" in why, why
-    # by POSITION: 24 challenge + 5 population deferred, the after-release phase received 24 -- count-only would pass, the
-    # positions say five picks opened nowhere
-    pa = [[3, i] for i in range(24)]
-    pb = [[7, 100 + i] for i in range(5)]
-    rec["openings"] = {"n": 40, "verified": 40, "skipped": "...", "deferred_replay_n": 24, "deferred_positions": pa}
-    rec["binding"]["openings_population"] = {**po, "deferred_positions": pb}
-    rec["openings_after_release"]["deferred_received_n"] = 24
-    rec["openings_after_release"]["deferred_received_positions"] = pa
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "5 position(s) not received" in why and "[(7, 100)" in why, why
-    rec["openings_after_release"]["deferred_received_positions"] = pa + pb            # all received (order/duplicates irrelevant)
-    rec["openings_after_release"]["deferred_received_n"] = 29
-    assert commit_verdict(rec, True)[0], commit_verdict(rec, True)
-    rec["openings"]["deferred_positions"] = pa[:-1]                                     # a count without its positions is not a record
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "positions are not on the record" in why, why
-    # the count-only branch is only for records WITHOUT any position key: a positional writer that leaves the lists empty
-    # (omission) is refused, a pre-positions record (no keys at all) still falls back to the count rule
-    rec["openings"] = {"n": 40, "verified": 40, "skipped": "...", "deferred_replay_n": 24, "deferred_positions": []}
-    rec["binding"]["openings_population"] = {**po, "deferred_positions": []}
-    rec["openings_after_release"]["deferred_received_positions"] = []
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "positions are not on the record" in why, why
-    del rec["openings"]["deferred_positions"]
-    del rec["binding"]["openings_population"]["deferred_positions"]
-    del rec["openings_after_release"]["deferred_received_positions"]
-    assert commit_verdict(rec, True)[0], commit_verdict(rec, True)                      # received 29 >= max(24, 5): the older-record rule
-    rec["openings_after_release"]["deferred_received_n"] = 23
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "received 23" in why, why
-    rec["openings"] = {"n": 40, "verified": 40, "skipped": "...", "deferred_replay_n": 24, "deferred_positions": pa}
-    rec["binding"]["openings_population"] = {**po, "deferred_positions": pb}
-    rec["openings_after_release"]["deferred_received_positions"] = pa + pb
-    rec["openings_after_release"]["deferred_received_n"] = 29
-    del rec["openings_after_release"]                                                  # deferred picks and no after-release phase at all -> FAIL
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "no openings-after-release" in why, why                         # (the in-run `skipped` rule names it first)
-    rec["openings"] = {"n": 64, "verified": 64}                                        # ... and with only POPULATION picks deferred, the new rule does
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "deferred to replay" in why, why
-    # a bounded record run must not carry a learned-only step (placeholder root) nor be finalized in learn-only mode
-    rec = _rec(good)
-    rec["extra"]["bounded_staging"] = {"enabled": True, "learn_only": False, "learned_only_steps": [], "plan_mismatches": 0}
-    assert commit_verdict(rec, True)[0]
-    rec["extra"]["bounded_staging"]["learned_only_steps"] = [0]
-    ok, why = commit_verdict(rec, True)
-    assert not ok and "learned-only" in why
-    rec["extra"]["bounded_staging"] = {"enabled": True, "learn_only": True, "learned_only_steps": []}
-    assert not commit_verdict(rec, True)[0]

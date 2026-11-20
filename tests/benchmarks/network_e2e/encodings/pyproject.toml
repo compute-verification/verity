@@ -1,7 +1,7 @@
 # The advice's encodings (network attestation for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per attester window; `cache_vectors.py`: the attester's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `arith_vectors.py`:
-# network attestation's arithmetic encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from
+# network attestation's arithmetic encoder against v1 and code_v1; `sched_trace.py`: step traces from
 # vLLM's own scheduler, which the tests read as fixtures (it needs vLLM).
 # Those fixtures (`tests/fixtures/`; `tests/fixtures_draft/`, `vllm_trace.py`'s with a draft) and the attester's
 # vectors these modules write are fetched fixtures (`artifacts.json`), which `suites.py` fetches before the
@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # cache_vectors.py runs network attestation's CacheStep_v1 (`cache_step`, through `head_check` and the circuits it
 # imports) and writes network attestation's difftest vectors, which a test reads back; test_arith_vectors holds
 # network attestation's arith_encode vectors to what this directory's coders code now.
-inputs = ["verity/__init__.py", "verity/errors.py", 
+inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py", "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/resource_accounting/network", 
           "verity/protocols/resource_accounting/network/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
@@ -64,12 +64,12 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # test_arith_vectors' coders charge a window through the interface's charge circuits
           "verity/protocols/interface/__init__.py", "verity/protocols/interface/charge",
           # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
-          # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
+          # replay.py, derived.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           # the compile slice and its pieces, the vLLM integration's compiler, which the cache and replay vectors and their tests import
           "adapters/vllm/verity_vllm/compiler",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py",
           # network attestation's `head_check` counts a Definition's ANDs with the census
           # (`census.BooleanWork`), and the advice code's codec imports it (`window_code`, network
           # attestation's `window_charge`, `arith_encode`):

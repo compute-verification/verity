@@ -1318,6 +1318,7 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "assumptions.no-owner": ({**pol, "assumptions": {"P.Hyp": without(pol["assumptions"]["P.Hyp"], "owner")}}, facts()),
         "open.no-owner": ({**opol, "open": {"P.Sound": without(sound, "owner")}}, now),
         "domain.no-owner": (covered, wfacts),
+        "scope.stale": ({**pol, "scope": {"P.gone": "Only the plain sessions."}}, facts()),
     }
 
 
@@ -1468,6 +1469,51 @@ def test_a_guarantee_is_deployed_only_with_an_honest_witness():
     assert A.deployed_witnesses(lock) == {"witnessed": 2, "unwitnessed": 2, "allowed_deployed": 3, "allowed": 1}
     assert A.deployed_witness_failures(lock | {"deployed": ["G", "H"]}) == []
     assert A.deployed_witness_failures({"guarantees": {"M": {}}}) == []
+
+
+SCOPED = {"deployed": ["G"], "guarantees": dict.fromkeys("GHK", {}), "scope": {"H": "Only the plain sessions of one table."}}
+
+
+def test_a_scope_of_a_listed_guarantee_not_deployed_passes_and_the_report_counts_it():
+    """A `scope` entry, one sentence, of a listed guarantee `deployed` doesn't list passes, a full stop inside a word
+    included, and the report counts the listed guarantees with and without one."""
+    assert A.scope_failures(SCOPED) == []
+    assert A.scope_failures(SCOPED | {"scope": {"H": "Sessions of format v1.2 only."}}) == []
+    assert A.scope_failures({"guarantees": {"G": {}}}) == []
+    assert A.scope_counts(SCOPED) == {"with": 1, "without": 2}
+    assert A.scope_counts({"guarantees": {"G": {}}}) == {"with": 0, "without": 1}
+
+
+def test_a_scope_entry_of_no_listed_guarantee_is_bookkeeping():
+    fails = A.scope_failures(SCOPED | {"scope": SCOPED["scope"] | {"Gone": "Only the plain sessions."}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.stale", "Gone")]
+    assert "drop the entry" in fails[0] and "scope.stale" in A.BOOKKEEPING
+
+
+@pytest.mark.parametrize("s", ["", "  ", "Only the plain sessions", "Plain sessions. And the one table.",
+                               "Plain sessions\nof one table.", 3, ["Plain sessions."]])
+def test_a_scope_entry_that_is_not_one_sentence_fails(s):
+    fails = A.scope_failures(SCOPED | {"scope": {"H": s}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.form", "H")]
+    assert "write one sentence" in fails[0] and "scope.form" not in A.BOOKKEEPING
+    assert [f.code for f in A.scope_failures(SCOPED | {"scope": ["H"]})] == ["scope.form"]
+
+
+def test_a_deployed_guarantee_with_a_scope_fails():
+    fails = A.scope_failures(SCOPED | {"scope": {"G": "Only the plain sessions."}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.deployed", "G")]
+    assert "drop it from `deployed`" in fails[0] and "scope.deployed" not in A.BOOKKEEPING
+
+
+def test_an_update_neither_adds_nor_drops_a_scope_entry():
+    """`--update` writes `scope` as the lock has it, a stale entry included, and adds none to a lock without one; a move
+    re-keys it."""
+    pol = recorded()
+    scope = {"P.t": "Only the plain sessions.", "P.gone": "Only the plain sessions."}
+    assert A.judge({**pol, "scope": scope}, facts(), FILES, update=True)[1]["scope"] == scope
+    assert "scope" not in A.judge(pol, facts(), FILES, update=True)[1]
+    assert A.renamed_witnesses({"scope": scope}, {"P.t": "P.t2"})["scope"] == {
+        "P.t2": "Only the plain sessions.", "P.gone": "Only the plain sessions."}
 
 
 def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_through_the_guarantees_it_cites():
@@ -9147,12 +9193,35 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
             "the seal reads this build's `.olean`, not the stale copy a reused pid left"
     finally:
         seals.close()
+
     gone = tmp_path / "noproc"
     gone.mkdir()
     (base / "999999-abcd").mkdir()                               # a dead run's directory, the new `<pid>-<suffix>` layout
     A.Seals(base).sweep(proc=gone)
     assert not stale.exists() and not (base / "999999-abcd").exists(), \
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
+
+
+def test_a_seal_seeds_every_root_an_exempt_prefix_covers(tmp_path, monkeypatch):
+    """`Facts.lean` imports every root by name, so a root under an `exempt` prefix (an exempt module `X` beside the root
+    `X.A`) is still sealed; without it the facts step finds no `.olean` for `X.A` in the seal's copies."""
+    pkg = tmp_path / "pkg"
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    (lib / "X").mkdir(parents=True)
+    (pkg / "X").mkdir()
+    for m in ("X", "X/A", "X/B"):
+        (pkg / f"{m}.lean").write_text("")
+        (lib / f"{m}.olean").write_bytes(b"")
+    seeded = []
+
+    def graph(pkg, modules, out, log):
+        seeded.extend(modules.read_text().split())
+        return {"graph": {}, "search": []}
+
+    monkeypatch.setattr(A, "graph", graph)
+    (tmp_path / "work").mkdir()
+    A.Sealed(pkg, "x", tmp_path / "seal").take(["X.A"], {"X": "a scratch module"}, tmp_path / "work", log=lambda s: None)
+    assert seeded == ["X.A"], f"the root `X.A` is sealed and the exempt `X` and the unrooted `X.B` are not: {seeded}"
 
 
 def test_two_packages_of_one_name_sealed_side_by_side_get_a_directory_each(tmp_path, monkeypatch):

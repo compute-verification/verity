@@ -22,6 +22,10 @@ import numpy as np
 import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import coll_concat
+from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
@@ -36,6 +40,25 @@ SCHEMAS = {"x": G.SCHEMA_V2, VALUE: G.SCHEMA_SEG}
 ROWS = "rope.rows"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
+
+
+def _one_value_program() -> tuple[Program, dict]:
+    """`_program`'s with one registered input, `ROWS`, of N + TABLE_ROWS rows: unit u reads row u at x and row
+    N + POSITIONS[u] at cs, the positions the verifier derives from C and the partition."""
+    from verity_flock import subcircuit_templates as TM
+
+    template = TM.rope_head(64).definition()
+    (_, xt), _ = template.signature()[0]
+    ret = template.signature()[1]
+
+    def sig(S):
+        return ((ROWS, Array(N + TABLE_ROWS, xt)),), Array(N, ret)
+
+    def body(B, S, rows):
+        return coll_concat(sig(S)[1], [B.call(template, rows[i], rows[N + p]) for i, p in enumerate(POSITIONS)])
+
+    return (Program(bind(CompositeDefinition("RegisteredRoPEOneValue", 0, (), sig, body, register=False)),
+                    registered=(ROWS,)), P.template_instance_query(template))
 
 
 @pytest.fixture(scope="module")
@@ -66,10 +89,10 @@ def staged(tmp_path_factory):
     regs = {v: RV.Registered.commit(prog, v, rng.integers(0, 1 << 16, (rows, WORDS)).tolist(), schema=SCHEMAS[v])
             for v, rows in ((VALUE, TABLE_ROWS), ("x", N))}
     roots = {v: r.root.hex() for v, r in regs.items()}
-    own = G.reads_file(program, query, values, roots, schemas=SCHEMAS)
+    own = G.reads_file(program, query, values, roots, schemas=SCHEMAS, positions=False)
     assert own["ports"]["x"]["row_schema"] == G.SCHEMA_V2 and own["ports"]["cs"]["row_schema"] == G.SCHEMA_SEG
     out = _out(prog, rng)
-    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
+    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2}
     (d / "own.json").write_text(json.dumps(own))
     st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, own=own, bound=["--partition", str(d / "partition.json"),
                                                                       "--program", str(d / "program.json")])
@@ -89,7 +112,7 @@ def one_value(tmp_path_factory):
 
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
-    program, query = _program()
+    program, query = _one_value_program()
     part = P.partition(program, query)
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20260928, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, partition=P.digest(part), program=P.program_digest(program),
@@ -103,12 +126,13 @@ def one_value(tmp_path_factory):
     regs = {name: RV.Registered.commit(prog, value, rng.integers(0, 1 << 16, (n, WORDS)).tolist(), schema=G.SCHEMA_V2)
             for name, value in (("rows", ROWS), ("again", ROWS), ("other", "other"))}
     reads = {"x": list(range(N)), "cs": [N + p for p in POSITIONS]}
+    assert G.reads(program, query, {ROWS: WORDS}) == {p: {"value": ROWS, "rows": r} for p, r in reads.items()}
     reg = regs["rows"]
-    port = {"value": ROWS, "root": reg.root.hex(), "leaves": n, "words": WORDS, "word_bits": 16,
-            "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
+    own = G.reads_file(program, query, {ROWS: WORDS}, {ROWS: reg.root.hex()}, schemas={ROWS: G.SCHEMA_V2},
+                       positions=False)
+    assert all(own["ports"][p]["domain"] == reg.domain.domain_id.hex() for p in reads)
     out = _out(prog, rng)
-    outs = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
-    own = {"format": G.READS, "ports": {**{p: {**port, "reads": r} for p, r in reads.items()}, "out": outs}}
+    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2}
     (d / "own.json").write_text(json.dumps(own))
     st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, reads=reads, own=own,
                          bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
@@ -273,7 +297,7 @@ def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
     assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
     own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
                        {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},
-                       domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS)
+                       domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS, positions=False)
     assert own["ports"]["cs"]["domain"] == cs.domain.domain_id.hex()
     own["ports"]["out"] = staged.own["ports"]["out"]
     (staged.dir / "own-pearl.json").write_text(json.dumps(own))
@@ -306,73 +330,70 @@ def test_two_rows_of_one_value_a_unit_are_accepted(one_value):
         **{p: {"value": ROWS, "root": root} for p in ("x", "cs")}, "out": {"value": OUT_VALUE, "root": one_value.out.root.hex()}}
 
 
-def test_a_row_at_the_wrong_index_is_refused(one_value):
-    """A row of the value at another index than the one the verifier's program reads for the unit at that port: the
-    verifier's reads shifted by one row, or the two ports' reads swapped (the honest statement, each of its rows still
-    opening the root at its stated position). The verifier checks its ports in name order, cs first."""
-    r = one_value.reads
-    for name, edit, want in (
-            ("own-shifted", lambda ps: ps["x"].update(reads=r["x"][1:] + r["x"][:1]),
-             "port x: unit 0 reads position 0, and the verifier's program reads 1"),
-            ("own-swapped", lambda ps: (ps["x"].update(reads=r["cs"]), ps["cs"].update(reads=r["x"])),
-             f"port cs: unit 0 reads position {N + POSITIONS[0]}, and the verifier's program reads 0")):
-        code, out = _statement(one_value, _own(one_value, name, edit))
-        assert code == 1 and want in out, (name, out)
-    swapped = _write(one_value, "swapped", {"x": (one_value.regs["rows"], r["cs"]), "cs": (one_value.regs["rows"], r["x"])})
-    code, out = _statement(one_value, one_value.dir / "own.json", swapped)
-    assert code == 1 and f"port cs: unit 0 reads position 0, and the verifier's program reads {N + POSITIONS[0]}" in out, out
+def test_a_row_at_the_wrong_index_is_refused(staged):
+    """C and the partition give every position: a reads file stating one is refused by its keys, and a statement whose x
+    rows are the registered rows shifted by one (each still opening x's tree at its stated position) is refused at the
+    position C gives."""
+    code, out = _statement(staged, _own(staged, "own-positions", lambda ps: ps["x"].update(reads=list(range(N)))))
+    assert code == 2 and "no position: C and the partition give them" in out, out
+    shifted = _write(staged, "shifted", {"x": (staged.regs["x"], list(range(1, N)) + [0]),
+                                         "cs": (staged.regs[VALUE], POSITIONS)})
+    code, out = _statement(staged, staged.dir / "own.json", shifted)
+    assert code == 1 and "port x: unit 0 reads position 1, and the verifier's program reads 0" in out, out
 
 
-def test_a_row_of_another_value_is_refused(one_value):
+def test_a_row_of_another_value_is_refused(staged):
     """cs's rows from another commitment: another tree under the value's own name and domain opens another root, and
     another value's rows are named as that value's."""
-    rows, again, other = (one_value.regs[k] for k in ("rows", "again", "other"))
-    for name, reg, want in (("again", again, f"port cs: table row 0 does not open {ROWS}'s registered root at position "
-                                                f"{N + POSITIONS[0]}"),
-                            ("other", other, f"port cs reads {ROWS}, not another value")):
-        public = _write(one_value, f"cs-{name}", {"x": (rows, one_value.reads["x"]), "cs": (reg, one_value.reads["cs"])})
-        code, out = _statement(one_value, one_value.dir / "own.json", public)
+    prog, rng = P.program_digest(_program()[0]), np.random.default_rng(20261022)
+    again, other = (RV.Registered.commit(prog, v, rng.integers(0, 1 << 16, (TABLE_ROWS, WORDS)).tolist(),
+                                         schema=SCHEMAS[VALUE]) for v in (VALUE, "other"))
+    for name, reg, want in (("again", again, f"port cs: table row 0 does not open {VALUE}'s registered root at position "
+                                             f"{POSITIONS[0]}"),
+                            ("other", other, f"port cs reads {VALUE}, not another value")):
+        public = _write(staged, f"cs-{name}", {"x": (staged.regs["x"], range(N)), "cs": (reg, POSITIONS)})
+        code, out = _statement(staged, staged.dir / "own.json", public)
         assert code == 1 and want in out, (name, out)
 
 
-def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
-    """A JSON parser keeps one of two equal keys: a file naming cs twice, the first under another root, would read as the
+def test_a_reads_file_naming_a_port_twice_is_refused(staged):
+    """A JSON parser keeps one of two equal keys: a file naming cs twice, the first under x's root, would read as the
     honest file. verity-verify-proof refuses the text, naming the key, as it does a port's key named twice: exit 2, a verifier
     input it can't read, as any malformed `--registered` file."""
-    good = {p: json.dumps(e) for p, e in one_value.own["ports"].items()}
-    bad = json.dumps({**one_value.own["ports"]["cs"], "root": one_value.regs["again"].root.hex()})
+    good = {p: json.dumps(e) for p, e in staged.own["ports"].items()}
+    bad = json.dumps({**staged.own["ports"]["cs"], "root": staged.regs["x"].root.hex()})
     rest = f'"x": {good["x"]}, "out": {good["out"]}'
     for name, ports, key in (("cs-twice", f'"cs": {bad}, "cs": {good["cs"]}, {rest}', '"cs"'),
                              ("root-twice", f'"cs": {good["cs"][:-1]}, "root": "{"00" * 64}"}}, {rest}', '"root"')):
-        own = one_value.dir / f"{name}.json"
-        own.write_text(f'{{"format": "{G.READS}", "ports": {{{ports}}}}}')
+        own = staged.dir / f"{name}.json"
+        own.write_text(f'{{"format": "{G.READS_V2}", "ports": {{{ports}}}}}')
         assert json.loads(own.read_text())["ports"].keys() == {"cs", "x", "out"}
-        code, out = _statement(one_value, own)
+        code, out = _statement(staged, own)
         assert code == 2 and f"registered reads: an object of the file names the key {key} twice" in out, (name, out)
-    code, out = _statement(one_value, one_value.dir / "own.json")
+    code, out = _statement(staged, staged.dir / "own.json")
     assert code == 0, out
 
 
-def test_a_circuit_naming_a_port_twice_is_refused(one_value, monkeypatch):
+def test_a_circuit_naming_a_port_twice_is_refused(staged, monkeypatch):
     """A registered read names its port by name, so under `--registered` a circuit naming a port twice is refused: x and cs
-    are both 64-word `row/v2` rows, and the circuit with cs renamed x (its META alone; the gates as they are) is refused by
+    are both 64-word rows, and the circuit with cs renamed x (its META alone; the gates as they are) is refused by
     the statement writer and, staged with the honest port list, by verity-verify-proof, whose hidden-output parse refuses a row
     named twice (`HmOut.checkRows`) before the registered check's own refusal (`Registered.namesOnce`)."""
-    head, line, rest = one_value.text.split("\n", 2)
+    head, line, rest = staged.text.split("\n", 2)
     ports = json.loads(line[5:])["ports"]
     old = next(t for t in (json.dumps(ports), json.dumps(ports, separators=(",", ":"))) if t in line)
     twice = json.dumps([["x" if p[0] == "cs" else p[0], *p[1:]] for p in ports], separators=(", ", ": ") if ", " in old else (",", ":"))
     text = "\n".join([head, line.replace(old, twice, 1), rest])
-    d = one_value.dir / "twice"
+    d = staged.dir / "twice"
     d.mkdir()
     (d / "circuit.txt").write_text(text)
-    st = SimpleNamespace(**{**vars(one_value), "dir": d, "text": text})
+    st = SimpleNamespace(**{**vars(staged), "dir": d, "text": text})
     want = "registered reads: the circuit names port x twice, and a registered read names one port"
     with pytest.raises(ValueError, match=want):
-        _write(st, "writer", {p: (one_value.regs["rows"], r) for p, r in one_value.reads.items()})
-    honest = json.loads(one_value.text.split("\n", 2)[1][5:])
+        _write(st, "writer", {"x": (staged.regs["x"], range(N)), "cs": (staged.regs[VALUE], POSITIONS)})
+    honest = json.loads(staged.text.split("\n", 2)[1][5:])
     real = FC.write
     monkeypatch.setattr(FC, "write", lambda *a, **k: real(*a, **{**k, "meta": honest}))
-    public = _write(st, "staged", {p: (one_value.regs["rows"], r) for p, r in one_value.reads.items()})
-    code, out = _statement(st, one_value.dir / "own.json", public)
+    public = _write(st, "staged", {"x": (staged.regs["x"], range(N)), "cs": (staged.regs[VALUE], POSITIONS)})
+    code, out = _statement(st, staged.dir / "own.json", public)
     assert code == 1 and out.startswith("setup: the rows are not the input rows") and out.endswith("each name once"), out

@@ -1,7 +1,7 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    verity-vllm research-outputs write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
-    verity-vllm research-outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
+    cli.run(research_outputs) write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    cli.run(research_outputs) digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
@@ -30,7 +30,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 No entry holds a private file (`private`), wherever it sits, and these stay on the node, prover-side:
-- a replay bundle or a slim keep (`cpu_replay.keep`), which hold clear values: committed values with their salts, the requests and
+- a replay bundle or a slim keep, which hold clear values: committed values with their salts, the requests and
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
