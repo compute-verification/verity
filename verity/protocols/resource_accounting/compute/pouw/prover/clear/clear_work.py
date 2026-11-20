@@ -49,8 +49,6 @@ package's as `verity.protocols.resource_accounting.compute.pouw.prover.clear.cle
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
     and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.protocols.resource_accounting.compute.pouw.verifier.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
-  - `audit_replay` keeps the unverified sample of a recorded run (`RecordedDraw`), for replays whose samples are Fiat–Shamir
-    on the commitment. It supports no claim about the sample.
   - `audit` checks the splits through `split_check`, the pinned rule that computes S (`split_channels`, with its
     tie-break and budget), which lives with the model integration.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and count of inert work (`pearl_c4`) brings
@@ -352,7 +350,7 @@ class _TileRuleView:
 
 @dataclass(frozen=True)
 class RecordedDraw:
-    """A recorded run's sample source: its round and value, for `audit_replay` alone."""
+    """A recorded run's sample source: its round and value, which `replay_key` reads."""
 
     round: int
     value: bytes
@@ -443,19 +441,6 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
         root = transcript.commitment.root
         coin, reason = draw_coin(epoch, challenger, draw_after(root, digest))
         return (None, reason) if reason is not None else (draw_key(coin, root, digest, epoch.salt), None)
-
-    return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
-
-
-def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-                 records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
-                 split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
-    """`audit` with a recorded run's unverified sample, for replays whose samples are Fiat–Shamir on the commitment
-    (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
-    def key_of(digest: bytes) -> tuple[Key | None, str | None]:
-        if recorded.round <= committed_round:
-            return None, "the draws' recorded round is not after the commitment"
-        return replay_key(recorded, transcript.commitment.root, digest, epoch.salt), None
 
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 

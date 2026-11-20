@@ -37,7 +37,6 @@ paths = ["tests/benchmarks/two_stage/pyproject.toml"]
 "tools/check/suites.py: benchmarks/two_stage" = { to = "benchmarks/one_stage", why = "the suite the two-stage tests join" }
 
 [rewrite]
-# as tests_root_map.toml's
 exclude = [
     "fixtures/**",
     "**/fixtures/**",
