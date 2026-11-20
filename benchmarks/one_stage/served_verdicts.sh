@@ -1919,10 +1919,10 @@ EOF
 }
 road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application lists them: each through its owner's
   # launcher as step 4 runs it, each taking its own gpu-lease; on a node with no card, each refused as needing one
-  local only=() c owner
-  [ "$POUW" != pearlplus ] || only+=(pouw)
-  [ -z "${POUS_CMD:-}" ] || only+=(pous)
-  [ -z "${BANDWIDTH_CMD:-}" ] || only+=(bandwidth)
+  local only=() args=() c owner
+  [ "$POUW" != pearlplus ] || { only+=(pouw); args+=(--only pouw); }
+  [ -z "${POUS_CMD:-}" ] || { only+=(pous); args+=(--only pous); }
+  [ -z "${BANDWIDTH_CMD:-}" ] || { only+=(bandwidth); args+=(--only bandwidth); }
   [ ${#only[@]} -gt 0 ] || return 0
   if ! command -v gpu-lease > /dev/null; then
     for c in "${only[@]}"; do
@@ -1931,7 +1931,7 @@ road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application l
     done
     return 0
   fi
-  if pieces "${only[@]/#/--only=}"; then RAN+=("${only[@]/#pouw/pearl-plus}"); else FAILED+=("${only[@]/#pouw/pearl-plus}"); fi
+  if pieces "${args[@]}"; then RAN+=("${only[@]/#pouw/pearl-plus}"); else FAILED+=("${only[@]/#pouw/pearl-plus}"); fi
 }
 road_wipe() {  # the wipe runs under the serve's lease before its engine loads, so the road only reads what it answered
   [ -n "${WIPE_CMD:-}" ] || return 0
