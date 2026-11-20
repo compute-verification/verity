@@ -6632,7 +6632,7 @@ ONSITE_POUW = {"POUW": "pearlplus"}
 REMOTE_V1_MAIN = "verity/protocols/compose/verifier/remote/RemoteV1Main.lean"
 #: composite.py and the files of the tree it loads, at their paths in the tree
 COMPOSITE_FILES = ("benchmarks/one_stage/composite.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py",
-                   "verity/protocols/proofs/spot/verifier/one_stage/settings.py")
+                   "verity/protocols/proofs/spot/verifier/one_stage/settings.py", "verity/lean_process.py")
 
 
 def _copy_composite(tree: Path) -> None:
