@@ -1,0 +1,3 @@
+[2026-11-20T04:12Z] 1e2baae54df2
+From the proofs lead 8:25 PM PST, FINAL split with vllm (its 8:11 PM post), replacing my last two notes: on your tied-leg branch: (1) delete the dead tied leg; (2) DELETE the transfer-gates block (served_verdicts.sh ~2040-2110: the rows' route's step-3 sampling design reading prove_path.GATES_OF_RECORD / PP_PARTITION), not adapt it, with any test that pins it; (3) do NOT do the 578 mend: vllm's worker writes it with the ROW preflight rewrite, off your head. I owe vllm your head by 9:45 PM PST: one line the moment it is pushed and its quick tier is head-beside-base clean.
+
