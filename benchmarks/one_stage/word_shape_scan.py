@@ -8,6 +8,7 @@ read. ``python word_shape_scan.py C.json ...`` prints one ``SCAN`` line per file
 the first scan and one ``UNALIGNED`` line per template of the second."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -152,10 +153,23 @@ def scan(desc: dict, name: str) -> dict:
             "wide_boolean_prims": wide_bool}
 
 
-def report(desc: dict, name: str) -> dict:
+COUNTS = ("templates: the distinct Definitions the root's nodes call, input primitives (Input*) among them; "
+          "templates_inputs: how many of those are input primitives; definitions: every Definition the descriptor "
+          "holds; reached: those reachable from the templates; shape: reached Definitions of the first scan's shape; "
+          "unaligned: templates of the second scan's")
+
+
+def report(desc: dict, name: str, raw: bytes | None = None) -> dict:
+    """`scan`'s line; ``raw`` the descriptor's bytes, whose sha256 and size it prints."""
     out = scan(desc, name)
+    if raw is not None:
+        print("DESCRIPTION " + json.dumps({"circuit": name, "sha256": hashlib.sha256(raw).hexdigest(),
+                                           "bytes": len(raw)}), flush=True)
+    print("COUNTS " + COUNTS, flush=True)
     print("SCAN " + json.dumps({k: v for k, v in out.items() if k not in ("hits", "unaligned")}
-                               | {"hit_ids": [h["id"] for h in out["hits"]], "unaligned": len(out["unaligned"]),
+                               | {"templates_count": len(out["templates"]),
+                                  "templates_inputs": sum(t.startswith("Input") for t in out["templates"]),
+                                  "hit_ids": [h["id"] for h in out["hits"]], "unaligned": len(out["unaligned"]),
                                   "unaligned_ids": [u["id"] for u in out["unaligned"]]}), flush=True)
     for h in out["hits"][:200]:
         print("HIT " + json.dumps({"circuit": name, **h}), flush=True)
@@ -167,7 +181,8 @@ def report(desc: dict, name: str) -> dict:
 def scan_program(program: Any, name: str) -> dict:
     """`report` of ``program``'s descriptor (`codec.descriptor_chunks`)."""
     from verity.circuits.codec import descriptor_chunks
-    return report(json.loads(b"".join(descriptor_chunks(program))), name)
+    raw = b"".join(descriptor_chunks(program))
+    return report(json.loads(raw), name, raw)
 
 
 def selftest() -> None:
@@ -202,4 +217,5 @@ if __name__ == "__main__":
     selftest()
     for path in sys.argv[1:]:
         with open(path, "rb") as f:
-            report(json.load(f), path)
+            raw = f.read()
+        report(json.loads(raw), path, raw)
