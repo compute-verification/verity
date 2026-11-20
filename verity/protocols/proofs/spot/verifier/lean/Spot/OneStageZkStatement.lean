@@ -1487,8 +1487,7 @@ whose header root or domain is not the registration's refuses by name (`SHARED_U
 root of that `reads` names at a registered value (`registeredValue`) is held by those reads too: `checkPort` opens
 every row of it under the root of the verifier's registered file at the position C gives, and `OneCircuit.pos` reads
 such a value only at an input port whose units read a registered or supplied input node (`regNode`), so it is not
-compared either. Every
-other port is `headerHeld`'s. -/
+compared either. Every other port is `headerHeld`'s. -/
 def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := do
   if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
   let fv := getD h "frame_v3"
