@@ -6,8 +6,7 @@ through the GPU run's gate.
 The gate is written without the judge's arithmetic, so a judge that computes a tile wrongly fails on it too: the key's
 blocks, the dither bits and U by the kernels' rules (sha_noise.cuh, lpgemm.cu), the limbs by the docstring's, the duo and
 XOR-in receipts a thread at a time by the receipt folds' reference, and the tb receipts by floored_gemm's reference, the
-kind by that reference's own table and the unchained ones a running sum at a time. test_d2sgemm_ref.py writes its gates
-with the same blocks, bits, running sums and duo."""
+kind by that reference's own table and the unchained ones a running sum at a time."""
 from __future__ import annotations
 
 import hashlib
