@@ -6577,17 +6577,24 @@ def test_the_sample_reads_the_expansion_only_under_the_counts_guard(pieces):
         python, lean = AGREED.python(j), AGREED.lean(pieces, j)
         out = json.loads(python[1]) if python[0] == "output" else {}
         law = j["params"]["law"]
-        if out == {"why": DR.COUNTS_AWAIT_THEIR_CLAIM}:
-            assert lean == python, (j, lean)
-            refused.append(j)
-        elif "law" in out and isinstance(law, dict) and law.get("law") == "rated":
+        if "law" in out and isinstance(law, dict) and law.get("law") == "rated":
             p = _params_of(j)
-            assert lean[0] == "output", (j, lean)
-            assert json.loads(lean[1])["law"] == DR.derive(p["program"], p["query"], p["law"], p["work_table"]), (j, lean)
-            agreed_rated.append(j)
+            mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
+            assert lean[0] == "output" and json.loads(lean[1])["law"] == mine, (j, lean)
+            agreed_rated.append((j, mine))
 
     guarded()
-    assert len(refused) >= 5 and len(agreed_rated) >= 5, (len(refused), len(agreed_rated))
+    for j, mine in agreed_rated:
+        for i, s in enumerate(mine["strata"]):
+            if s["k"] < sum(hi - lo for lo, hi in s["units"]):
+                own = copy.deepcopy(mine)
+                own["strata"][i]["k"] += 1
+                case = {**j, "registered": own}
+                python = AGREED.python(case)
+                assert json.loads(python[1]) == {"why": DR.COUNTS_AWAIT_THEIR_CLAIM}, (case, python)
+                assert AGREED.lean(pieces, case) == python, case
+                refused.append(case)
+    assert len(agreed_rated) >= 5 and len(refused) >= 3, (len(agreed_rated), len(refused))
 
 
 def test_the_callers_check_agrees(callers):
