@@ -184,13 +184,15 @@ def LowerEvalDoor : Prop :=
     v.length = bitsOf a.fields ∧
       ∀ k < bitsOf a.fields, z (Flock.Lower.outBit t (doorCol a.fields k)) = v.getD k false
 
-/-- **`RestrictBodyAgrees`**: the block's Program `restrict P units` keeps `P`'s word primitives evaluating as their
-Boolean Definitions (`BodyAgrees`). With `decode_body_agrees`, which gives `BodyAgrees P` of every Program `decode`
-accepts whose root has no recut, it is what the Door statements read for `BodyAgrees`. A root with a recut is refused
-where C is read through `Spot.Program.parse` (`recut-root`, the per-member run's `membersRootsOf`); the restrict path
-decodes C with `Flock.Program.decode`, which keeps it. -/
+/-- **`RestrictBodyAgrees`**: the block's Program `restrict P units` of a C `decode` accepts whose root has no recut
+keeps C's word primitives evaluating as their Boolean Definitions (`BodyAgrees`). It reads `decode` and not
+`BodyAgrees P`: `restrict` adds keys to the index (the root's, an input primitive's), so a Boolean-map entry of a Program
+whose target its index lacks would lead somewhere in the block's. A root with a recut is refused where C is read through
+`Spot.Program.parse` (`recut-root`, the per-member run's `membersRootsOf`); the restrict path decodes C with
+`Flock.Program.decode`, which keeps it. -/
 def RestrictBodyAgrees : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (S : Prog), BodyAgrees P → Spot.Restrict.restrict P units = .ok S → BodyAgrees S
+  ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog), decode bytes = .ok P →
+    (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S
 
 /-- **`BlockEvalDoor`**: in block `u`'s local evaluation `Y` of a trace of C, each unit `g` of the block, an instance of
 the template `Spot.OneStageZk.admitted` admits, lifted to bits (`Flock.Lift.lift`), evaluates on `Y` at its arguments to
