@@ -26,7 +26,7 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.log import LogWriter
-from verity_vllm.program import lifting
+from verity_vllm.check import replay as lifting
 from verity_vllm.records.workload import SCHEMA
 
 V, S, PROMPT_LEN, MAX_TOKENS = 64, 4, 5, 3

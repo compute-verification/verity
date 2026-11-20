@@ -1149,7 +1149,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
     -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
     -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree` upstream's
-    -- plain files, which `verify` refuses whatever else holds
+    -- plain files, which `verify` refuses whatever else holds, then a recursive session's (`RecSetup.notRecursive`)
     let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
@@ -1165,6 +1165,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
       ProvedScope.servedForm stmtTags coins
       if stmtTags.upstreamPlain then throw UPSTREAM_PLAIN
+      RecSetup.notRecursive (args.any (·.startsWith "--rec-"))
     if let some k := coinKey then coinKeys := coinKeys.push k
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
@@ -1925,9 +1926,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 /-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG...`: a recursive statement's verdict from
 its V* parts' `verify` logs and the challenger's interactive-run record (`RecCompose.check`). The verifier's own inner
 shape (`--rec-inner`) gives V*'s statements, `--rec-rows` is the one shared rows file the prover staged, and
-`--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It accepts
-exactly when `RecCompose.Accepts` holds of the logs' verdicts (`RecCompose.check_accepts`): one log per V* statement
-with one `VERDICT`, each accepted at its own part, under `--zk`, without an identifier and at that rows file's SHA-512;
+`--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It refuses
+every composition, after its checks, by name (`RecSetup.RECURSION_REFUSED`); its checks pass exactly when
+`RecCompose.Accepts` holds of the logs' verdicts (`RecCompose.check_accepts`): one log per V* statement with one
+`VERDICT`, each accepted at its own part, under `--zk`, without an identifier and at that rows file's SHA-512;
 every part naming one set of the other shared inputs, the first at this inner shape's SHA-512 and in the compiled
 verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
 staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
@@ -1969,7 +1971,7 @@ def recComposeCmd (args : List String) : IO UInt32 := do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   -- a record that can't be read is no record: not JSON, so refused
   let run ← try IO.FS.readFile ⟨runFile⟩ catch _ => pure ""
-  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts
+  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts *> RecSetup.notRecursive true
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
     ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest),
