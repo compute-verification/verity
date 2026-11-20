@@ -269,7 +269,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         if cls.boundaries != tuple(range(0, cls.buckets, cls.every)):
             raise Unexpressible(f"{cls}: boundaries {list(cls.boundaries)}, not every {cls.every}th bucket from 0")
         start, bucket, egress = cls.scan.start, cls.scan.bucket, cls.scan.egress
-        ttid, _ = b.allocation(start, [(0, 0)])
+        ttid, _ = b.allocation(start, [None])
         b.value(ttid, "sin", 0, SS.SCAN_STATE, 0, 1)
         itid, outs = descriptor_id(bucket), dict(IF.layout(bucket).outs)
 
@@ -345,12 +345,12 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                 progs[host[a]].place_empty(lanes[(a, cls.lane(s))], (ctid, cu + i), (etid, eu + slots.index(s)))
                 empty.append((s, host[a], (ctid, cu + i), (etid, eu + slots.index(s))))
             for t in range(a, a + cls.every):
-                b.allocation(bucket, [(0, 0)])
+                b.allocation(bucket, [None])
                 b.feed(itid, "sin", t, 1, (state(t),))
                 for j in range(len(slots)):
                     b.feed(itid, f"prog{j}", t, 1, (Row(etid, eu + j, "o0", words),))
         b.value(itid, "row", 0, SS.INGRESS_ROWS, 0, cls.buckets, cls.buckets)
-        gtid, _ = b.allocation(egress, [(0, 0)] * cls.buckets)
+        gtid, _ = b.allocation(egress, [None] * cls.buckets)
         b.feed(gtid, "state", 0, cls.buckets, (Row(itid, 0, "o2", outs["o2"]),), lead=((cls.buckets, 1),))
         b.value(gtid, "o1", 0, SS.RELEASED_ROWS, 0, cls.buckets, cls.buckets)
         for tid in (itid, gtid):

@@ -27,10 +27,6 @@ from verity_vllm.program.predict.window_circuit import WindowClass, class_circui
 INT8_H200 = {**H200, "int8_exact": "linears"}
 #: the Program digest the header names, as the record gives it (`inference_blocks.program_digest`, about a minute at TINY)
 PROGRAM = "ab" * 64
-UNSLOTTED_SCAN = pytest.mark.xfail(strict=True, raises=AssertionError,
-                                   reason="tie 2: the scan's units are in request 0's block and wired across blocks")
-
-
 def _registered(config: dict = S.TINY):
     phi = S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**config, "quantization_config": dict(INT8_EXACT_QUANT)}},
                 target=INT8_H200)
@@ -110,7 +106,6 @@ def full():
     return _circuit(FULL)
 
 
-@UNSLOTTED_SCAN
 def test_a_served_window_of_equal_requests_has_blocks_of_equal_gates_and_fresh_bits_and_no_wire_across_them(full):
     """FULL, two requests of one length, served: by its record's blocks (`Blocks.slots_steps`), unrolled unit by unit,
     no wire joins its two blocks and they have the same gates and fresh-input bits."""
