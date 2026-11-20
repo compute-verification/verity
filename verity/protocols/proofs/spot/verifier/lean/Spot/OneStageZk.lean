@@ -138,6 +138,7 @@ public import Spot.Slots
 public import Spot.FilePart
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
+public import Spot.MembersWires
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -147,6 +148,7 @@ meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
 meta import Spot.OneStageZkStatement
+meta import Spot.MembersWires
 meta import Flock
 meta import Flock.JsonParse
 meta import Std.Data.HashMap
@@ -632,7 +634,8 @@ private def heldRootCase (ms : Array (Member × Array String)) : Option String :
 end HeldRootExamples
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
-registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
+registration `c`, the evidence `e` and its statements `sts`: each member's name once (`namesOnce`), the statements'
+structure (`membersHeld`), their sessions
 v1's in order, the sessions' coins held to the trees the challenger logged in the order it must release them, each
 tree closed after its session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the
 registration's population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each reader of
@@ -641,6 +644,7 @@ a held or tied parameter with a registered file (`heldReadsFiled`), each registe
 its window's (`treePortsHeld`). -/
 def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : V Unit := do
+  namesOnce ms
   let held ← membersHeld ms sts
   if (sts.flatMap (·.sessions)).map (·.name) != e.base.sessions then
     throw "the statements' sessions are not the evidence's sessions, in order"
@@ -669,14 +673,9 @@ members' and the wires' numbers, each lookup among one template's fields. -/
 def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
     (ft : Std.HashMap String (Array (String × Json))) (roots : Std.HashMap String (Array Json)) :
     V (Std.HashMap String (Array Json)) :=
-  let lbase := (rs.foldl (fun (acc : Array Nat × Std.HashMap String Nat) (t, _, c) =>
-    (acc.1.push (acc.2.getD t 0), acc.2.insert t (acc.2.getD t 0 + c))) (#[], {})).1
+  let lbase := localBases rs
   ms.foldlM (fun acc m => do
-    let inRange := fun (w : Spot.Wires.Wire) => (List.range rs.size).any fun j =>
-      let (t, a, c) := rs[j]!
-      let lo := lbase[j]! + (m.first - a)
-      t == w.reader && decide (a ≤ m.first) && decide (m.first + m.count ≤ a + c) &&
-        decide (lo < w.start + w.units / max w.cuts 1) && decide (w.start < lo + m.count)
+    let inRange := wireReaches rs lbase m
     let own := roots.getD m.name #[]
     if let some w := W.wires.find? fun w => inRange w && own.any (getD · "port" == Json.str w.port) then
       throw (OWN_ROOT_WHY m.name w.port)
@@ -823,11 +822,6 @@ def slicePorts (s : Json) : Option (List String) :=
     | _ => none
   | _ => none
 
-/-- The first port of `ps` a later one names again, the two compared as strings; none where each is named once. -/
-def portTwice : List String → Option String
-  | [] => none
-  | p :: ps => if p ∈ ps then some p else portTwice ps
-
 /-- **A member's slice `s` names each port once**, its ports compared as strings (`slicePorts`): a root that names no
 port refuses (`SLICE_NO_PORT_WHY`), and so does a port named twice (`PORT_TWICE_WHY`), whatever the two roots are. -/
 def Member.portsOnce (m : Member) (s : Json) : V Unit :=
@@ -907,6 +901,7 @@ theorem membersRun_held {p : Params} {ms : Array Member} {c : OneStage.Commitmen
   unfold membersRun at h
   obtain ⟨⟨⟩, h, -⟩ := Flock.HmNets.bind_ok h
   unfold membersStructure at h
+  obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨held, -, h⟩ := Flock.HmNets.bind_ok h
   dsimp only at h
   split at h
@@ -1470,6 +1465,7 @@ private def whyT {α : Type} : V α → String
 #guard (whyT (membersHeld membersT #[statementT "m0" 2])).startsWith "member m0: its statement has 2 sessions"
 #guard whyT (membersHeld membersT #[statementT "m3"]) == "member m3: the parameters name no such member"
 #guard (whyT (membersHeld membersT #[{ member := none, sessions := #[] }])).startsWith "a statement of the proofs names"
+#guard whyT (namesOnce (membersT.push (memberT "m10" #[(12, 13)]))) == NAME_TWICE_WHY "m10"
 #guard (memberT "m0" #[(0, 1), (5, 6)]).sampled #[5]
 #guard !(memberT "m0" #[(0, 1), (5, 6)]).sampled #[1, 2, 6]
 #guard !(memberT "m0" #[(0, 1)]).sampled #[]
