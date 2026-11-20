@@ -611,7 +611,7 @@ def stage(a) -> int:
     t0 = time.perf_counter()
     try:
         cut = OC.cuts(c, part)
-        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut).decode()
+        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut, formed=OC.formed_in(c, part, blk)).decode()
     except (OC.NotDerived, OC.Refused) as e:
         rec["lower"] = {"refused": f"{type(e).__name__}: {e}", "query": part["query"]["name"]}
         print("LOWER-REFUSED " + json.dumps(rec["lower"]), flush=True)
