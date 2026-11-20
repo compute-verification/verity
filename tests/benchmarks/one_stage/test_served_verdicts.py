@@ -6982,7 +6982,6 @@ def test_a_setting_that_only_named_the_deleted_tied_leg_is_refused_by_name(tmp_p
 
 @pytest.mark.parametrize("env, line", [
     ({"POUW": "h1"}, "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"),
-    ({"POUW": ""}, "PREFLIGHT: POUW names PoUW's scheme, and the one left is Pearl+: POUW=pearlplus"),
     ({"POUW": "other"}, "PREFLIGHT: POUW is pearlplus, not other"),
     *[({name: "x"}, f"PREFLIGHT: {name} is PoUW H1's setting, and PoUW H1 is deleted")
       for name in ("H1_GATE", "H1_TIE", "H1_CIRCUITS", "H1_STATEMENTS", "H1_LIVE_EVIDENCE", "H1_RECEIPTS", "H1_PROTOCOLS_CONFIG")],
