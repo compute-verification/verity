@@ -21,7 +21,7 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))
-import a5 as A5  # noqa: E402
+import a5 as A5
 
 pytestmark = pytest.mark.slow
 
