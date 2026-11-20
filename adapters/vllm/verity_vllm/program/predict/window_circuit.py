@@ -147,7 +147,7 @@ No pin holds them, so `interface.input_count` counts them free.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
 from verity.circuits.codec import descriptor_id
@@ -159,7 +159,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
-from .steps import RequestUnit, advice_of, request_program
+from .steps import RequestUnit, advice_of, compile_steps, request_program
 from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, check_served, inference
 from .window_class import (
     CLASS_OF_RECORD,
@@ -198,8 +198,8 @@ class Lowered:
     function, each slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
     the window's requests (`window_class.takes`), none in a class circuit's; each empty slot of a served window,
-    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`); and
-    each `ScanSlots_v5` unit, ``(anchor, lane, unit)``."""
+    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`);
+    each `ScanSlots_v5` unit, ``(anchor, lane, unit)``; and in a served window's, the templates `check_served` names."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
@@ -207,6 +207,7 @@ class Lowered:
     requests: tuple[int, ...] | None = None
     empty: tuple[tuple[int, int, tuple[str, int], tuple[str, int]], ...] = ()
     scans: tuple[tuple[int, int, tuple[str, int]], ...] = ()
+    unprovable: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def cut(self) -> frozenset[int]:
@@ -404,6 +405,18 @@ class Scheduled(NamedTuple):
     place: int
 
 
+def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any, grain: Grain = _GRAIN,
+                    placed: Sequence[tuple[int, int | None]] | None = None, named: bool = False) -> tuple[Any, Lowered]:
+    """A served window compiled and its circuit lowered, the one call the serve's close and the window commit make: I2's
+    Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`, with each Program's names under
+    ``named``), their requests within ``cls`` (`takes`), the circuit (`lower`), refused (`Unexpressible`) where the door
+    wouldn't take a template, and with each template the door cannot prove named by reason in ``unprovable`` (`check_served`). ->
+    the compile (its requests' ids and arrivals, which place the slots) and the lowering."""
+    compiled = compile_steps(registered, advice, ingress, named=named)
+    low = lower(registered, cls, None, grain, requests=takes(compiled, cls, placed))
+    return compiled, replace(low, unprovable=check_served(low.circuit))
+
+
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
@@ -422,5 +435,6 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower",
+           "requests_of", "served_lowering", "stop_ids",
            "takes", "window_circuit"]

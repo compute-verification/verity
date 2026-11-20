@@ -193,11 +193,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
-from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
 from verity.circuits import partition_query as PQ  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -206,6 +204,8 @@ from verity_vllm.pipeline import edge as E  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
+from verity_vllm.program.predict import window_record as WREC  # noqa: E402
+from verity_vllm.program.predict.window_record import place_slots, window_design  # noqa: E402
 
 I2 = "verity/prove-path/i2-compile-steps/v0"
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
@@ -563,41 +563,18 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (`predict.phi.served_phi`, the one formula: `advice_compile`
-    compiles the row dir's Builds under it too, so they hold the Programs I2 compiles): the pinned model (``serve.json``'s
-    ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as
-    `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the
-    serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file
-    ``target``), the engine's execution label (``execution``, else ``engine.execution``), and from its engine record
-    (``engine``) its tensor-parallel world and the engine args class G states, ``max_model_len`` among them, which each
-    request Program's length rule reads; no workload. A ``serve.json`` with no engine record states none of those args."""
+    """`predict.phi.phi_of_serve`, the one formula of a served engine's φ, for a model no manifest pins with
+    unsloth/Llama-3.2-1B's config."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import served_phi
+    from verity_vllm.program.predict.phi import phi_of_serve as of_serve
 
-    prof = json.loads(Path(target).read_text()) if target else serve.get("target")
-    if not isinstance(prof, Mapping):
-        raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
-                         "--target F gives it")
-    execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
-    if not isinstance(execution, str) or not execution:
-        raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    engine = serve.get("engine")
-    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
-                       "engine_record": engine if isinstance(engine, Mapping) else None}, hf)
+    return of_serve(serve, hf_config or pinned_hf_config(serve["model"], serve["revision"]) or str(LLAMA32_1B_CONFIG), target)
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
-    """The default seed a served window's docket fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's registered compiler takes
-    it); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
-    seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict.phi import registered_seed as seed
 
-    seed = serve.get("default_seed")
-    if type(seed) is not int or seed != DEFAULT_SEED:
-        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
-                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
-    return DEFAULT_SEED
+    return seed(serve)
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
@@ -1562,57 +1539,6 @@ def scan_state_opening(value: Any, path: Path) -> Path:
     return path
 
 
-def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
-                scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
-                ) -> list[tuple[str | None, list[int], int]]:
-    """Each slot of a window of class ``cls`` serving the requests of I1 ids ``served``, whose bodies ``ingress`` holds:
-    its request (None for an empty slot), its row (occupancy, prompt length, ids) and its ``max_tokens``. Without a
-    scan, slot k holds the k-th served request, its row its prompt's. With one, ``scan`` is the scan's starts
-    (`kept_scan`'s) and each slot's row and head (`window_rows.scan_slots`'s): slot k holds the request the scan starts
-    there, its row and ``max_tokens`` the scan's. Refused where the scan starts one request in two slots, a served
-    request in none, or a request that wasn't served, and where a slot's prompt or ``max_tokens`` isn't its served
-    request's."""
-    if scan is None:
-        placed, heads = [served[k] if k < len(served) else None for k in range(cls.slots)], None
-    else:
-        placed, heads = list(scan[0]), scan[1]
-        named = [s for s in placed if s is not None]
-        if len(set(named)) != len(named):
-            raise ValueError("the scan starts one request in two slots of the window")
-        if unplaced := set(served) - set(named):
-            raise ValueError(f"{len(unplaced)} of the window's {len(set(served))} served requests start in none of its "
-                             "slots: the scan anchors them in another window")
-        if extra := sorted(set(named) - set(served)):
-            raise ValueError(f"the scan starts certified requests in the window that it didn't serve: {extra[:4]}")
-    out = []
-    for k, u in enumerate(placed):
-        row, max_tokens = [0] * (cls.prompt + 2), 0
-        if heads is not None:
-            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
-        if u is not None:
-            body = ingress[u]
-            ids = [int(x) for x in body["prompt"]]
-            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
-            if heads is None:
-                row, max_tokens = want, int(body["max_tokens"])
-            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
-                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
-        out.append((u, row, max_tokens))
-    return out
-
-
-def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
-    """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
-    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
-    window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
-    takes it, and the audit would hold the window to another design."""
-    from verity.protocols.proofs.spot.verifier import service as S
-
-    S.SamplingDesign(rule)
-    program, query = circuit.program()
-    return dict(S.params_sampling_design(rule, program, query, None)[0])
-
-
 def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
                             scan_state_file: str | None = None) -> dict[str, Any]:
     """A served window committed as its circuit (module docstring): its requests lowered (`window_circuit.lower`,
@@ -1732,20 +1658,10 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
-    filled = WRS.Rows(low, slots, values)
-    lap("rows")
-    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, advice=bound, registered=values,
-                    forms=WRS.FORMS)
-    win.supply()
-    filled.record(win)
-    lap("record")
-    key = RND.derive(os.urandom(64), "verity/window-commit/salts/v1", {"window": run})
-    c = win.close(workers=a.workers or min(16, os.cpu_count() or 1), strings=WRS.leaf_strings(win, key))
-    lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)}}
-    win.write(c, a.out, prov, registrar=DK)
+    filled, win = WREC.commit(low, cls, slots, values, run, window_design(a.sampling_design, low.circuit), a.cap, bound, a.out,
+                              int(a.window), strings=WRS.leaf_strings, workers=a.workers or min(16, os.cpu_count() or 1), lap=lap)
     scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
-    lap("write")
+    lap("scan_state")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,

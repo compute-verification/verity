@@ -371,12 +371,14 @@ def positions_off_of(positions: Mapping[int, list[int] | None], rows: Mapping[in
 
 def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: list[dict[str, Any]],
                 request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
-                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None, extras: Any = None) -> dict[str, Any]:
+                label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None, extras: Any = None,
+                binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Seal one closed window into the row dir ``d`` as a declared Commit with ``--replay-deferred`` seals its run: the binding map
     (`binding.build_binding_map` over the window's layouts and step roots, its request rows by name), the store and weights tree
     (`replay_bundle.write_store`, with ``extras`` the registered tensors' bytes `extras_of` read, else read here), then
     `replay_bundle.seal_all` over the window's one run, its sampled replay and linkage deferred to the bundle; ``commit/runs.jsonl``
-    and ``commit/verdict.json`` are the record it is opened against. Returns what the window's line in windows.jsonl records of it.
+    and ``commit/verdict.json`` are the record it is opened against; ``binding``, what the window's close wrote of its binding
+    map (`binding_of`), else it is built here. Returns what the window's line in windows.jsonl records of it.
     The values the committer committed and didn't retain (``--retain-exclude``, `store_dump.not_retained`, which refuses any other
     gap) are named in the context, the bundle's manifest and that line as `replay_bundle.NOT_RETAINED`."""
     from verity_vllm.pipeline import replay_bundle as RB
@@ -386,7 +388,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     out.mkdir(parents=True, exist_ok=True)
     return seal_view(view_of(com), rc, d, store=lambda hashed: RB.write_store(out, 0, com, rc, digests=hashed, extras=extras), rec=rec,
                      reqs=reqs, request_rows=request_rows, tokens=tokens, sampling=sampling, label=label, code=code,
-                     engine_of_record=engine_of_record, t0=t0)
+                     engine_of_record=engine_of_record, t0=t0, binding=binding)
 
 
 @dataclass
@@ -427,24 +429,19 @@ def view_of(com: Any) -> SealView:
                     positions=functools.partial(port_positions, com), unretained=functools.partial(SD.not_retained, com))
 
 
-def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]], Any], rec: Mapping[str, Any], reqs: list[dict[str, Any]],
-              request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
-              label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None,
-              t0: float | None = None) -> dict[str, Any]:
-    """`seal_window` over ``v``, its store written by ``store`` (given the dict that takes the sha256 of the files it hashed as it
-    wrote them) where `seal_window` writes it; ``t0`` is when the seal began."""
+def binding_of(v: SealView, rc: Any, d: Path, request_rows: dict[int, list[tuple[str, int, int]]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The closed window's binding map (`binding.build_binding_map` over its layouts and step roots, its request rows by name),
+    written to ``d/commit/binding_map_p0.json`` at the window's close, and what its seal reads of it (``digest``, ``entries_n``,
+    the step-input port's identities, ``binds``: whether a binder bound it); refused by name where the step-input port isn't
+    the window's one copy of what it binds, or its positions aren't the rows'."""
     from verity_vllm.commit import binding as B
-    from verity_vllm.pipeline import replay_bundle as RB
 
-    t0 = time.perf_counter() if t0 is None else t0
     out = Path(d) / "commit"
     out.mkdir(parents=True, exist_ok=True)
-    pd = v.program_digest.hex()
-    plan = v.plan
-    port = v.port
+    plan, port = v.plan, v.port
     with gc_paused():
         binder = served_binder_of(plan, sorted(v.layouts), v.ports, v.has_port, v.aliases) if plan is not None else None
-        bmap = B.build_binding_map(v.layouts, rc.steps, rc.run_root, pd, request_rows=request_rows, chunk=v.chunk,
+        bmap = B.build_binding_map(v.layouts, rc.steps, rc.run_root, v.program_digest.hex(), request_rows=request_rows, chunk=v.chunk,
                                    weight_registration=rc.weight_registration, binder=binder, padded=PORT_NAMES if port is not None else ())
         aliased = port_identities(plan) if binder is not None and port is not None else {}
         if twice := copies_beside_port(bmap, aliased):
@@ -456,7 +453,27 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
                              "they don't read")
         with open(out / "binding_map_p0.json", "w") as fh:
             fh.writelines(JC.dict_pieces(bmap, "entries", separators=(",", ":"), default=str))
+    return bmap, {"digest": bmap["digest"], "entries_n": bmap["entries_n"], "aliased": aliased, "binds": binder is not None}
+
+
+def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]], Any], rec: Mapping[str, Any], reqs: list[dict[str, Any]],
+              request_rows: dict[int, list[tuple[str, int, int]]], tokens: Mapping[str, list[int]], sampling: Mapping[str, Any],
+              label: str, code: str | None = None, engine_of_record: Mapping[str, Any] | None = None,
+              t0: float | None = None, binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """`seal_window` over ``v``, its store written by ``store`` (given the dict that takes the sha256 of the files it hashed as it
+    wrote them) where `seal_window` writes it; ``t0`` is when the seal began. ``binding`` is what the window's close wrote of its
+    binding map (`binding_of`), else it is built here."""
+    from verity_vllm.pipeline import replay_bundle as RB
+
+    t0 = time.perf_counter() if t0 is None else t0
+    out = Path(d) / "commit"
+    out.mkdir(parents=True, exist_ok=True)
+    pd = v.program_digest.hex()
+    port = v.port
+    if binding is None:
+        bmap, binding = binding_of(v, rc, d, request_rows)
         drop(bmap["entries"])
+    aliased = binding["aliased"]
     t_map = time.perf_counter()
     of_record = {} if v.compiler is None else {"compiler": dict(v.compiler)}
     hashed: dict[str, str] = {}
@@ -469,7 +486,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
            "tokens_equal_ref": None,
            "commit": {"run_root": rc.run_root.hex(), "commit_scheme": scheme, "weight_registration": rc.weight_registration,
                       "steps": rec.get("steps"), "committer": v.name, "passed": rec.get("passed"),
-                      "binding": {"map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "program_digest": pd},
+                      "binding": {"map_digest": binding["digest"], "map_entries_n": binding["entries_n"], "program_digest": pd},
                       "commit_pass": None, "commit_fail_reason": None, "sampled_replay": sr, "boundary_linkage": bl}}
     layout = port_layout_of(v.layouts, v.chunk, port) if port is not None else None
     args = {k: None for k in RB.ARGS} | {"label": label, "retain": v.retain}
@@ -479,7 +496,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
            "required_classes": [], "min_openings": 0, "vc_result": None, "engine_of_record": dict(engine_of_record or {}), "slim": None,
            "served_window": {"schema": SERVED_WINDOW, "window": rec.get("window"), "run_id": rec.get("run_id"), "commit_scheme": scheme,
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",
-                             "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or binder is None else
+                             "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or not binding["binds"] else
                              {**port, "binds_as": {k: list(b) for k, b in aliased.items()}}, **of_record},
            RB.HASHED: hashed, **unretained}
     verdict: dict[str, Any] = {"schema": SERVED_WINDOW, "run_id": rec.get("run_id"), "window": rec.get("window"), "commit_pass": None,
@@ -490,7 +507,7 @@ def seal_view(v: SealView, rc: Any, d: Path, *, store: Callable[[dict[str, str]]
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1, default=str) + "\n")
     b = (verdict.get("replay_deferred") or {}).get("bundles") or [{}]
     return {"row_dir": str(d), "bundle": b[0].get("path"), "bytes": b[0].get("bytes"),
-            "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
+            "commit_scheme": scheme, "binding_map_digest": binding["digest"], "binding_map_entries": binding["entries_n"],
             "requests": [q["request_id"] for q in reqs], "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3),
             "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),
                          "bundle": round(time.perf_counter() - t_store, 3)}, **unretained}
