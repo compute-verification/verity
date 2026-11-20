@@ -967,6 +967,59 @@ theorem pooled_counts_tol_once :
   · show _ ≤ _
     decide
 
+/-- The cut witness's limits: at most 2 inference blocks in the run, each of size claim at most 1 gate and fresh input
+claim at most 0 bits; no free block; each server-day block's committed free claim at most 1 gate, its size at most 2
+gates and its input from its own past and the outside world at most 0 bits; no hidden hardware. -/
+noncomputable def cutLimits : InferenceOnly.Limits :=
+  { n := 2, c := 1, k := 0, m := 0, freeSize := 1, cS := 2, kS := 0, hidden := 0, share := 0, allowance := 0 }
+
+/-- **Cutting a location's ticks multiplies the per-block limits**: the circuit `placed 2` (2 gates of work at one
+location, during ticks 1 and 2) with both its inference blocks in the tolerance set passes `check` at `cutLimits`
+(`freeSize` = 1 gate) when cut into two server-day blocks of one tick each (`demoCut 1`), realizing its claims outside
+the tolerance set with its committed free claims holding; uncut, as one server-day block (`demoRuns 2 fc`), no committed
+claim `fc` and no tolerance set `M` passes `check` at the same limits with `RealizesExcept` and `FreeClaimHolds`. -/
+theorem cut_multiplies :
+    InferenceOnly.check cutLimits (demoCut 1) () = true ∧ (demoCut 1).RealizesExcept () univ ∧
+      (demoCut 1).FreeClaimHolds () univ ∧
+      ∀ fc (M : Finset (Fin ((demoRuns 2 fc).nIn ()))),
+        ¬ (InferenceOnly.check cutLimits (demoRuns 2 fc) () = true ∧ (demoRuns 2 fc).RealizesExcept () M ∧
+          (demoRuns 2 fc).FreeClaimHolds () M) := by
+  refine ⟨by decide, ⟨?_, ?_, fun _ _ => le_rfl, ?_, ?_, ?_, ?_⟩, (pooled_counts_tol_once).2.2.2.2.2.1, ?_⟩
+  · intro a ha; exact absurd ha (Finset.notMem_empty a)
+  · simp [demoCut, Circuit.width]
+  · intro u _ hu; exact absurd (Finset.mem_univ u) hu
+  · intro u hu; exact absurd (by simp [demoCut] : (demoCut 1).cls () u = Class.inference) hu
+  · intro i p hp
+    simp only [demoCut, List.mem_cons, List.not_mem_nil, or_false] at hp
+    fin_cases i <;> rcases hp with rfl | rfl | rfl
+    all_goals first
+      | (show (placed 2).work _ _ ≤ 1
+         simp only [demoCut, Runs.outerBlock, Partition.gates, Placed.work]; decide)
+      | (show (placed 2).blockInput _ _ _ _ ≤ 0
+         simp only [demoCut, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
+         decide)
+  · intro u _; simp [demoCut]
+  · intro fc M ⟨hc, hreal, hfree⟩
+    by_cases hM : (⟨0, Nat.one_pos⟩ : Fin ((demoRuns 2 fc).nIn ())) ∈ M
+    · refine excluded_run cutLimits (demoRuns 2 fc) () M ⟨0, Nat.one_pos⟩ rfl ?_ ⟨hc, hfree⟩
+      have hmem : (⟨0, Nat.one_pos⟩ : Fin ((demoRuns 2 fc).nIn ())) ∈
+          ((demoRuns 2 fc).infChildren () ⟨0, Nat.one_pos⟩).filter (· ∈ M) := by
+        rw [Finset.mem_filter]
+        refine ⟨?_, hM⟩
+        simp only [Runs.infChildren, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨rfl, rfl⟩
+      calc (1 : ℕ) < (demoRuns 2 fc).sizeIn () ⟨0, Nat.one_pos⟩ := by
+            show (1 : ℕ) < (placed 2).work (fun _ => 1)
+              ((Partition.whole (placed 2).toCircuit).gates ⟨0, Nat.one_pos⟩)
+            decide
+        _ ≤ _ := Finset.single_le_sum (fun j _ => Nat.zero_le _) hmem
+    · obtain ⟨-, -, -, hcl_in, -⟩ := hreal
+      have h := hcl_in ⟨0, Nat.one_pos⟩ rfl hM (.sizeAtMost 1) (by simp [demoRuns])
+      simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, demoRuns, Partition.whole, Partition.gates,
+        Placed.work] at h
+      revert h
+      decide
+
 /-- **No top block is in no class**: `kind` is total, so the degenerate case of a top block in neither the server-day nor
 the hidden class cannot be stated. Nothing sits inside an inference block, the finest scale here, so neither can a block
 inside an inference block that is not a proof block. -/
