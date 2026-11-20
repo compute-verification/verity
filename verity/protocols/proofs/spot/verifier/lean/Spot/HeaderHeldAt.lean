@@ -10,7 +10,7 @@ A member's header held to its slice (`OneStageZk.headerHeldAt`), the difftest's 
 member's ports at C's run input nodes' trees (`OneStageZk.runInputRootsAt`) on `Flock.Test.WiredPorts`' programs: on
 `runP`, unit 0 reads its parameter `w` from run input node 0, so its slice holds `w` at the record's root of
 `input/n0`, with that tree; on `regP`, where node 0 is a registered input, it holds none; a root of the member's own at
-`w` is refused by name where the record holds `input/n0`, and kept where it does not. At that slice, a header whose root at `w` is not the registration's is held only by a read of
+`w` is refused by name, whether or not the record holds `input/n0`. At that slice, a header whose root at `w` is not the registration's is held only by a read of
 `w` at `input/n0`: no read, a read at another run input's tree and a read at the member's own committed tree each
 refuse by `SHARED_UNREAD`.
 -/
@@ -47,8 +47,7 @@ def wRun : Json :=
 #guard (runAt runP #[]).toOption == some #[wRun]
 #guard (runAt regP #[]).toOption == some #[]
 #guard (runAt runP #[] (Json.mkObj [("roots", Json.arr #[])])).toOption == some #[]
-#guard (runAt runP #[Json.mkObj [("port", "w"), ("root", "aa")]] (Json.mkObj [("roots", Json.arr #[])])).toOption ==
-  some #[Json.mkObj [("port", "w"), ("root", "aa")]]
+#guard (runAt runP #[Json.mkObj [("port", "w"), ("root", "aa")]] (Json.mkObj [("roots", Json.arr #[])])).toOption.isNone
 #guard match runAt runP #[Json.mkObj [("port", "w"), ("root", "aa")]] with
   | .error e => e == OneStageZk.RUN_OWN_ROOT_WHY "T/c0" "w" 0
   | .ok _ => false

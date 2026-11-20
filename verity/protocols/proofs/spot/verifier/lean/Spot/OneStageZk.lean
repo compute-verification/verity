@@ -705,8 +705,8 @@ the record's roots by port `byPort` (`rootsByPort`): for each parameter of the D
 (`HmLinks.unitAt`) that `u` reads at a run input node `w` (`OneCircuit.regRow`, `Registered.runNode`), the record's root
 of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which `headerHeldAt` holds as it holds a field
 tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a registered input, at another block's
-output or in a form `regRow` refuses gets none, and so does one whose tree the record holds no root of; where the record
-holds it, a root of the member's own at the port refuses by name (`RUN_OWN_ROOT_WHY`). -/
+output or in a form `regRow` refuses gets none, and so does one whose tree the record holds no root of; a root of the
+member's own at the port refuses by name (`RUN_OWN_ROOT_WHY`). -/
 def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Array Json)
     (byPort : Std.HashMap String Json) : V (Array Json) := do
   let some (k, j) := Flock.HmLinks.unitAt (Flock.HmLinks.nodes P) u | return own
@@ -716,8 +716,8 @@ def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Ar
     let .ok (w, _, _) := Flock.OneCircuit.regRow P k j p | return got
     if !Flock.Registered.runNode P w then return got
     let t := Flock.Registered.freshValue w
-    let some r := byPort.get? t | return got
     if own.any (getD · "port" == .str p) then throw (RUN_OWN_ROOT_WHY name p w)
+    let some r := byPort.get? t | return got
     return got.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str p),
       ("root", getD r "root"), ("tree", .str t)])) own
 
