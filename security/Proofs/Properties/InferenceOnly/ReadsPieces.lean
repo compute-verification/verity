@@ -109,6 +109,9 @@ def ppt (q : Piece) (t : Nat) : Int :=
 theorem rowOff_flat (q : Piece) (h : q.lv = []) (r : Nat) : q.rowOff r = (r : Int) * q.rowStride := by
   simp [Desc.Piece.rowOff, h]
 
+theorem rowOff_with (q : Piece) (t : Tgt) (b : Int) (r : Nat) : ({ q with tgt := t, base := b } : Piece).rowOff r = q.rowOff r := by
+  simp [Desc.Piece.rowOff]
+
 /-- What `Piece.rowsFrom` keeps: its rows are `q`'s from `lo`. -/
 theorem rowsFrom_spec (q : Piece) (lo n : Nat) :
     (q.rowsFrom lo n).tgt = q.tgt ∧ (q.rowsFrom lo n).stride = q.stride ∧ (q.rowsFrom lo n).len = q.len ∧
