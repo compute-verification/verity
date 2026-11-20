@@ -73,9 +73,11 @@ def test_a_value_returned_twice_is_refused_as_two_port_bits_of_one_gate():
 
 
 def test_an_input_node_after_a_computed_gate_is_refused_in_a_listing():
+    """The v2 decoder refuses it (`inputs` leads the root's body), before the listing's own E_FORMAT clause is reached."""
     with pytest.raises(R.Refused) as e:
         R.listing_of(_input_after_a_gate())
-    assert str(e.value) == "E_FORMAT: an input node after a computed gate"
+    assert str(e.value) == ("E_DESCRIPTOR: E_INPUTS_COUNT: `inputs` counts 3 input nodes, where the root's body leads with 2 "
+                            "and holds no input node after them")
 
 
 def test_a_query_other_than_a_template_query_is_refused_by_name():
