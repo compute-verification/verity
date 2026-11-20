@@ -800,7 +800,8 @@ def reusing_audit(m: dict) -> dict:
     """SPOT's one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
     challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin tree) is R's one proof block, its
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
-    file names R's tables, which no proof block of R's program reads."""
+    file names R's tables, which no proof block of R's program reads. It names the sample's units served and R's roots
+    its sessions' (`checkOneAt` refuses a null of either before `oneSession`)."""
     s, rec = m["setup"], m["record"]
     ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_SAMPLING_DESIGN, rec, trees=0)
     proved = OS.DR.proved(d)
@@ -814,8 +815,8 @@ def reusing_audit(m: dict) -> dict:
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
-                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}}
+                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": sorted(d["units"]),
+                "session_roots": {r["port"]: r["root"] for r in rec["roots"]}, "sessions": [], "statement": {}}
     return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
 
 
@@ -832,7 +833,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     on R with a session's proofs granted and the tie on a window on R or on W."""
     PPC, made = R.POUW_PERIOD_CASES, []
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
-        random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
+        random.Random("remote/reusing"), windows=1, commit=reusing(made), real=True, **PPC.COVERED)))
     reused = reusing_audit(made[0])
     audit = as_component(R.SPOT, reused)
     policy = policy_on(audit)
