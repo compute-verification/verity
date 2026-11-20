@@ -253,7 +253,9 @@ def _circuit_sha(program: dict, partition: dict, first: int) -> str:
 def _kept_params(j: dict) -> dict:
     """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
     program and its members' units as its blocks, each member naming its block rather than handing its units, and each
-    template's circuit the one Lean derives for its member's block."""
+    template's circuit the one Lean derives for its member's block. That digest is the verifier's own `restrict` output,
+    so the tests on these params do not check it independently: they check the refusal by name, and that it comes
+    before the evidence is read."""
     j = copy.deepcopy(j)
     for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
         at[k] = _v2(at[k])
