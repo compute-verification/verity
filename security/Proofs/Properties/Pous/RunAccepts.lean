@@ -24,6 +24,7 @@ namespace Pous.EndToEnd.SecurityProofs.Honest
 
 open MemoryAttester MemoryAttester.Properties.SecurityProofs
 open MemoryAttester.Attest.Properties.SecurityProofs (pub_spec signs)
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA COMPLETE)
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_honest : LawfulBEq ByteArray where

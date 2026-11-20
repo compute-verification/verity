@@ -25,6 +25,7 @@ a hex string through `hexOf_inj`, a number through its decimal digits.
 namespace MemoryAttester.Properties.SecurityProofs.Header
 
 open MemoryAttester Flock
+open Flock.SessionCoins (PROTOCOL COIN_TREE RECORDS COMPLETE LATE CLOCK)
 
 /-- A character `pyJsonStr` writes as it is, and not a comma. -/
 def plain (c : Char) : Bool := 0x20 ≤ c.toNat && c.toNat ≤ 0x7e && c != '"' && c != '\\' && c != ','

@@ -16,6 +16,7 @@ from verity.circuits.evaluation.reference import resolve
 from verity.circuits.ops.boolean import versions  # noqa: F401 - registers WordBits' Boolean bodies, which the round unit's row reads through
 from verity.commitments.crypto import lms as R
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.commitments import session_coins as SC
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import Round
 from verity.protocols.resource_accounting.memory.pous.prover import session_circuit as S
@@ -128,8 +129,8 @@ def _session(K: int, late: int | None = None):
     if late is not None:
         rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
     ident = _rand(16)
-    m = R.memory_attester_message(ident, c.session, mc.message(c, mc.COMPLETE, rounds))
-    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
+    m = R.memory_attester_message(ident, c.session, mc.message(c, SC.COMPLETE, rounds))
+    head = json.dumps({**c.header(), "ended": SC.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()
     flat = b"".join(r.value() for r in rounds) + bytes(S.RECORD_BYTES * (K % 2))
     rows = [flat[184 * t:184 * (t + 1)] for t in range(S.records_rows(K))]
     return c, len(head), head + bytes(S.head_bytes(len(head)) - len(head)), S.signed_context(ident, c.session), rows, m

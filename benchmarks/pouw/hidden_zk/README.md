@@ -7,13 +7,11 @@ witness bit.
 
 ## Try it
 
-Check that the summaries hold every Lean check to the verdict it must give:
+Check that the fast staging writes the bytes Flock's library writes:
 
 ~~~sh
-uv run pytest tests/benchmarks/pouw/test_hidden_zk_summarize.py -q
+uv run pytest tests/benchmarks/pouw/test_hidden_zk_stage.py -q
 ~~~
-
-It prints `4 passed`.
 
 ## Runner
 
