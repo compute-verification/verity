@@ -308,7 +308,7 @@ A spec-level reference for network attestation's timing channel:
   is the prover's word (an entry of read 1 and no outputs passes), so the period check refuses such an execution phase
   (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
-  public salts, a constant of T ≥ 2 (`scan_ok`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
+  public salts, a constant of T ≥ 2 (`NetworkCheck.ScanOk`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
   and domain (`stateTied`): the scan's state tree is the execution phase's state (`window_state`), each row but leaf 0's the one a
   proof block computes (its o1) and the next reads (its sin), both registered reads, so a Program reads the states the scan's
   steps computed;
