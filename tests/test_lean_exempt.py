@@ -46,15 +46,14 @@ def test_an_exempt_file_with_an_owner_is_owed(case):
                 f"allowance `{ALLOWANCE.format(case=case)}` of tools/check/policy.toml")
 
 
-def test_each_owed_exempt_entry_has_its_allowance_and_each_such_allowance_its_entry():
+def test_each_owed_exempt_entry_has_its_allowance():
+    """An allowance may precede its entry: the queue reads allowances at a candidate's base, so they land first, and one
+    whose entry is not there yet names a test that does not run."""
     entries = {ALLOWANCE.format(case=c): e for c, e in owed().items()}
     allow = {a["id"]: a for a in tomllib.loads((ROOT / "tools/check/policy.toml").read_text()).get("allow", [])}
-    prefix = ALLOWANCE.split("[")[0] + "["
     missing = sorted(set(entries) - set(allow))
     assert not missing, (f"`exempt` entries with an owner and no allowance: add to tools/check/policy.toml, for each, an "
                          f"allowance with this id, the entry's owner and `expires` the end of its due day: {missing}")
-    stale = sorted(i for i in allow if i.startswith(prefix) and i not in entries)
-    assert not stale, f"allowances of `exempt` entries no lock has: remove them from tools/check/policy.toml: {stale}"
     wrong = {i: (allow[i]["owner"], allow[i]["expires"]) for i, e in entries.items()
              if (allow[i]["owner"], allow[i]["expires"]) != (e["owner"].removeprefix("@"), expiry(e["due"]))}
     assert not wrong, (f"allowances whose owner or expiry is not their `exempt` entry's (its owner's handle without the `@`, "
