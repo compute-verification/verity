@@ -157,7 +157,7 @@ def OutsAgree {P : Prog} {n : ℕ} (Pt : Verity.Partition (ofProgram P) n) (a : 
       bs.getD (outOff P g l + b) false = z (Flock.Lower.outBit t (doorCol a.fields (outOff P g l + b)))
 
 /-- **`DoorLengths`**: at every unit of the block, the bits of a trace of C at its arguments are exactly the input
-rows' bits, and at its return leaves exactly the return fields', so `getD`'s default never stands for a bit. Lengths
+rows' bits, and at its return leaves exactly the return fields', the block's units admitted in C (`admittedBlock`), so `getD`'s default never stands for a bit. Lengths
 only: the order of the bits inside a word (`portBits`, low bit first) meets the lift's leaf order in `BlockEvalDoor`,
 which evaluates the lift on these bits. -/
 def DoorLengths : Prop :=
@@ -165,7 +165,7 @@ def DoorLengths : Prop :=
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr →
+    Spot.OneStageZk.admittedBlock P units a.key = .ok () → Spot.BlockFront.front P units = .ok fr →
     ∀ (X : (ofProgram P).Trace), ∀ g ∈ units, (argBits X g).length = bitsOf a.ins ∧ (outBits X g).length = bitsOf a.fields
 
 /-- **`LowerEvalDoor`, `LowerEval` at the door.** For the block's Program `restrict P units` of a decoded C with no root
