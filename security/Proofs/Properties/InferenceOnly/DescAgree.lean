@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Properties.InferenceOnly
+public import Proofs.Properties.InferenceOnly.Lemmas
+public import Proofs.Properties.InferenceOnly.Desc
+public import Proofs.Properties.InferenceOnly.DefinitionDigest
+public import Proofs.Properties.InferenceOnly.ClosureDigest
+public import Proofs.Properties.InferenceOnly.DigestEntries
+public import Proofs.Properties.InferenceOnly.DigestDecode
+public import Proofs.Properties.InferenceOnly.DigestRefs
+public import Proofs.Properties.InferenceOnly.DigestParts
+public import Proofs.Properties.InferenceOnly.DigestPins
+public import Proofs.Properties.InferenceOnly.DigestReads
+public import Proofs.Properties.InferenceOnly.DecodeEmpty
 public import Properties.InferenceOnly.Desc
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
