@@ -979,7 +979,7 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
     with pytest.raises(S.Refused) as e:
         ch.outcome("honest", [_unit(t, _roots(rec), session=99 if t == d.units[1] else None) for t in d.units])
     assert _codes(e) == {"sessions"}
-    for roots in (None, {**_roots(rec), "other": "00" * 64}):
+    for roots in (None, {**_roots(rec), "other": "00" * 64}, {p: "00" * 64 for p in _roots(rec)}):
         with pytest.raises(S.Refused) as e:
             ch.outcome("honest", [_unit(t, roots if t == d.units[1] else _roots(rec)) for t in d.units])
         assert _codes(e) == {SC.SESSION_ROOTS}

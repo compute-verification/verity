@@ -1265,16 +1265,19 @@ def live_roots(path_: Path | None) -> dict[str, str] | None:
 
 def session_roots(units: list[dict]) -> dict[str, str]:
     """``{port: root}`` the sampled proof blocks' sessions committed, which the stream holds port by port to the record's
-    roots. Refused by name (`SESSION_ROOTS`) when a block's session reports none, or two report different roots for one
-    port: the outcome is never decided with that check skipped."""
-    out: dict[str, str] = {}
+    roots. Refused by name (`SESSION_ROOTS`) when a block's session reports none, or two report different roots: the
+    outcome is never decided with that check skipped."""
+    first: dict[str, str] | None = None
     for u in units:
         if not u.get("roots"):
             raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports no roots"})
-        for port, root in u["roots"].items():
-            if out.setdefault(port, root) != root:
-                raise _refused(SESSION_ROOTS, {"unit": u["unit"], "port": port, "why": "two sessions report different roots"})
-    return out
+        if first is None:
+            first = dict(u["roots"])
+        elif dict(u["roots"]) != first:
+            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports roots other than another's",
+                                           "ports": sorted(set(first) ^ set(u["roots"]) | {
+                                               p for p in set(first) & set(u["roots"]) if first[p] != u["roots"][p]})})
+    return first or {}
 
 
 def _units(rows: list[dict]) -> list[dict]:
