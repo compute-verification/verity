@@ -17,7 +17,7 @@ the honest ones, so its ok bit alone refuses it), computes another S_t than the 
 opens refuses, from a digit changed, a Programs' entry off its outputs or a Program that reads its slot and outputs
 nothing, and ignores every entry outside a due, occupied slot (an entry off its anchor, one over KO off its anchor, an
 entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
-`SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
+`SlotEntry_v2`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
 refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the ingress circuit at the
 empty state is the reference from no state; the egress circuit is its reference on the views;
@@ -211,7 +211,7 @@ def test_the_state_is_the_layout_neg_sized():
     assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
     assert (w63.KI, w63.prompt_room) == (1024, 2082) and replace(w63, KI=2082).KI == 2082
     assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4544, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
-    # an entry is `SlotEntry_v1`'s row: ⌈(33 + KO·IDB) / 16⌉ = 71 u16 words, one port a slot
+    # an entry is `SlotEntry_v2`'s row: ⌈(33 + KO·IDB) / 16⌉ = 71 u16 words, one port a slot
     assert IS.entry_layout(w63) == (("read", 1), ("n", 32), ("out", 64 * 17)) and IS.entry_bits(w63) == 71 * 16
     params = bind(IS.IngressScanBucket, **{k: getattr(w63, k) for k in IS.STATICS}).signature()[0]
     assert [n for n, _ in params] == ["row", "sin", "prog0", "prog1", "prog2", "prog3"]
@@ -351,7 +351,7 @@ def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]], dict[
     empty1 = IS.encode(CLS, replace(states[4], slots=[states[4].slots[0], replace(states[4].slots[1], occ=0)]))
     ignored["prog-empty-slot"] = honest(4, sin=empty1), honest(4, sin=empty1, prog=IS.prog_encode(CLS, [
         entries[0], IS.NONE]))
-    # slot 1's Program gives KO + 1 outputs, a request its class can't hold (`SlotEntry_v1`'s n = KO + 1, no ids)
+    # slot 1's Program gives KO + 1 outputs, a request its class can't hold (`SlotEntry_v2`'s n = KO + 1, no ids)
     out["prog-over-KO"] = honest(4, prog=IS.prog_encode(CLS, [entries[0], IS.entry(CLS.KO + 1, ())]))
     # request 3's slot one prompt id further on before its last cell: the cell takes its prompt to KI + 1 ids
     t, j = next((t, j) for t, st in enumerate(states) for j, s in enumerate(st.slots)

@@ -237,7 +237,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
     assert rows <= IF.MAX_ROWS and k_log <= IF.K_MAX
     assert {lab.split("{")[0] for lab in n} >= {"SelectCollect_v1", "SelectEntry_v1"}
-    assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v1"}
+    assert not {lab.split("{")[0] for lab in n} & {"TokenSelectCombine_v2", "OutCollect_v1", "SlotEntry_v2"}
     assert set(heads) <= {"AttnBlockFirst_v2", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}
     tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
     assert tail and [n[f"RMSNormFusedCudaAdd_v2{{N=2048,C=256,AT={at},R=32}}"] for at in range(8)] == [tail] * 8

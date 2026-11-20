@@ -359,7 +359,7 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
 def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatever_the_programs_order():
     """A full window of two requests of 4 and 2 prompt ids, in either lane order, through the network attester's scan:
     TINY's window 1 starts the first in slot 0 and the second in slot 1. The served Programs are the longest first, and
-    entry j (unit j of the window's one `SlotEntry_v1`) is slot j's Program's: at slot j's certified prompt length it
+    entry j (unit j of the window's one `SlotEntry_v2`) is slot j's Program's: at slot j's certified prompt length it
     counts the request's 2 outputs, and read as the other slot's, whose length differs, it is KO + 1, which the scan
     refuses. Swapping the lanes swaps the Programs' order and the entries' prompt lengths, not the entries' slots."""
     scan, prompts = IS.Class(**CLASS.scan.shape), ((17, 3, 250, 9), (5, 77))
@@ -380,7 +380,7 @@ def test_a_full_windows_entry_j_is_the_request_the_scan_started_in_slot_j_whatev
 
 
 def test_a_window_of_lanes_1_and_3_of_four_has_an_entry_a_lane_and_the_scan_takes_them():
-    """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v1` has four units in lane order,
+    """Requests in lanes 1 and 3 of a class of four lanes: the window's one `SlotEntry_v2` has four units in lane order,
     lanes 0 and 2 each on its occupancy word and a collector of its own (`OutCollect_v1{FIRST}`), both in lane 1's
     Program's slot, so no wire crosses slots. Their entries read 0 and the occupied lanes' read 1 with their 2 outputs,
     and the network attester's scan step takes that Programs' row at the lanes' anchor, where it refuses the two
@@ -854,7 +854,7 @@ def _packed(bits: np.ndarray, width: int) -> np.ndarray:
 
 
 def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
-    """`_packed` against `SlotEntry_v1`'s entry, words of bit leaves, which pack to `entry_reference`'s words; and
+    """`_packed` against `SlotEntry_v2`'s entry, words of bit leaves, which pack to `entry_reference`'s words; and
     each lane's `ScanSlots_v5`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lane."""
     row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     for scan in SS.bridge(CLASS.scan, CLASS.prompt):

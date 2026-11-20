@@ -19,7 +19,7 @@ same units. Every later position's token is `io_shell.TokenFeed_v1{prompt, FIRST
 prompt limit (the prompt's id below its length, else the previous position's select), and past it the previous position's
 select. Each select is collected in the unit that makes it (`io_shell.SelectCollect_v1`: the select, then
 `io_shell.OutCollect_v1` over it). The last position's makes the slot's entry of the scan's Programs' row instead
-(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v1`), in the scan's layout: its read bit
+(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v2`), in the scan's layout: its read bit
 (the occupancy word's bit 0), its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
 `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the entry reads the occupancy
 word, so no select is masked on the way); a request the class can't hold (a prompt
@@ -28,7 +28,7 @@ the anchor and the egress never renders. A served request's Program is built at 
 position below L feeds its prompt's id (`io_shell.TokenFeed_v1{FIRST=True}`, no select), and a prompt position before the
 last builds nothing a later token doesn't read (its LM head, select and final norm, and its last layer's query and that
 layer from its attention on), its select's collector `io_shell.OutCollect_v1` alone. Its last select is collected like the
-others, then ``outputs`` - O pads shift its O outputs to the front, and its entry is `io_shell.SlotEntry_v1{NP=1}`, which
+others, then ``outputs`` - O pads shift its O outputs to the front, and its entry is `io_shell.SlotEntry_v2{NP=1}`, which
 fits only where the scan's prompt length is L: an advice of another prompt length gives ``outputs`` + 1. The entries are
 one allocation after the walk, in slot order, whatever the Programs' order: entry j is lane j's, the slot the scan's
 Programs' row reads it as. A Program past the

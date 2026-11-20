@@ -46,7 +46,7 @@ carry chain is the test. Each outputs its token and the next position's slot. A 
 from the scan state row (`boolean_io_shell.ScanSlots_v5`), so a window places only the later positions'.
 
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
-is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
+is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v2`, all zero for an empty slot).
 
 The network attester's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
@@ -58,7 +58,7 @@ its ``max_tokens`` and its ids; prompt position p's id the IDB bits at ``IDS + I
 `slots_reference` is the lane's fields and `scan_reference` the Definition's function. `OutCollect_v1{KO, FIRST}` carries a slot's
 outputs from position to position, (w, m, ids[0], …, ids[KO − 1]): w counts down from lp − 1, one a position, and while
 1 − KO ≤ w ≤ 0 (the KO positions from the prompt's last on) the position's output is shifted in at the end, so after the
-last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v1{KO, IDB,
+last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v2{KO, IDB,
 NP, STOP}` is the slot's entry of the Programs' row from the last position's state and the slot's occupancy word, in the
 scan's layout (`ingress_scan.entry_layout`): ``read``, the occupancy word's bit 0 (1 where the Program read an occupied
 slot), then n, the outputs served (up to ``max_tokens``, unsigned, and the first of the model's stop ids ``STOP``, that
@@ -72,7 +72,7 @@ NP ids (after a Program's NP + KO − 1 positions the state's w is lp − NP −
 A collector's rows and an entry's are a few i32s at a small KO, under the 112 bytes Flock's composer needs in some row
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
 `dead_free.TokenSelectCombine_v2{V, C}`'s select, then `OutCollect_v1{KO, FIRST}` over it, (the select, the state), and
-`SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v1` over
+`SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v2` over
 that state, the entry alone. Each is Calls of those Definitions, no gate of its own. `SelectCollect_v2{V, C, KO, FIRST,
 ROUND}` is v1 at a round no gate reads: where a window holds a position's select to a row of a round's input-ids table, each
 round's collectors are a template of their own, so a sample stratified by template has a reader of every round's table.
@@ -109,7 +109,7 @@ from verity.circuits.ops.scalar import (
     I32Le,
     SelectI32,
 )
-from verity.circuits.refs import Coll, broadcast, concat, tuple_of
+from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 from verity_vllm.definitions.registry import dsa as D
@@ -515,7 +515,7 @@ def entry_sig(S):
 
 
 def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP: tuple[int, ...]) -> list[int]:
-    """`SlotEntry_v1`'s function: the entry's u16 words from the occupancy word and the last position's state."""
+    """`SlotEntry_v2`'s function: the entry's u16 words from the occupancy word and the last position's state."""
     w, m, ids = state[0] - (1 << 32) if state[0] >> 31 else state[0], state[1], state[2:]
     fits = 1 - NP - KO <= w <= -KO
     alive, n, keep = bool(occ & 1) and fits, 0, []
@@ -530,7 +530,7 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
     return [bits >> 16 * k & 0xFFFF for k in range(entry_words(KO, IDB))]
 
 
-@composite("SlotEntry", 1, ["KO", "IDB", "NP", "STOP"], entry_sig, refuse=entry_refuse,
+@composite("SlotEntry", 2, ["KO", "IDB", "NP", "STOP"], entry_sig, refuse=entry_refuse,
            conformance="not-yet-established: a request's output count and ids as vLLM served them, up to max_tokens and its "
                        "first stop id, KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
@@ -563,8 +563,9 @@ def SlotEntry(B, S, occ, state):
     n, keep = o.isel(over, o.word(S.KO + 1), n), [o.band(k, o.bnot(over)) for k in keep]
     bits = [occupied, *[B.call(bit_at(32), n, o.word(b)) for b in range(32)]]
     bits += [o.band(k, B.call(bit_at(32), x, o.word(b))) for x, k in zip(ids, keep) for b in range(S.IDB)]
-    pad = 16 * entry_words(S.KO, S.IDB) - len(bits)
-    return Coll(ret, concat([b.refs for b in bits] + ([broadcast(*B.call(const(1, 0)).refs[0], pad)] if pad else [])))
+    # each pad bit is a gate of its own, so o0 is whole 16-bit words of distinct gates, which the door takes
+    bits += [B.call(const(1, 0)) for _ in range(16 * entry_words(S.KO, S.IDB) - len(bits))]
+    return Coll(ret, concat([b.refs for b in bits]))
 
 
 def _select(S) -> Any:
@@ -619,10 +620,10 @@ def SelectCollectV2(B, S, x0, best, idx, a):
 
 @composite("SelectEntry", 1, ["V", "C", "KO", "FIRST", "IDB", "NP", "STOP"], select_entry_sig, refuse=select_refuse,
            conformance="not-yet-established: vLLM's last sample, its request's outputs and their count, "
-                       "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v1")
+                       "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v2")
 def SelectEntry(B, S, x0, best, idx, a, occ):
     """The last position's select (`TokenSelectCombine_v2{V, C}`), collected (`OutCollect_v1{KO, FIRST}`), and the slot's
-    entry of that state and its occupancy word (`SlotEntry_v1{KO, IDB, NP, STOP}`): the entry."""
+    entry of that state and its occupancy word (`SlotEntry_v2{KO, IDB, NP, STOP}`): the entry."""
     tok = B.call(_select(S), x0, best, idx)
     state = B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok)
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)

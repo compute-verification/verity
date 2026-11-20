@@ -31,6 +31,6 @@ def test_a_served_window_at_the_class_of_record_plans():
     got = plan.describe()
     assert len(low.programs) == 4 and sum(got["units"].values()) == sum(k for _, k in low.circuit.templates) > 0
     floor = low.unprovable["row_floor"]
-    assert len(floor) == 3 and {t.split("{")[0] for t in floor} == {"OutCollect_v1", "SlotEntry_v1"}
+    assert len(floor) == 3 and {t.split("{")[0] for t in floor} == {"OutCollect_v1", "SlotEntry_v2"}
     planned = {t["id"]: t["units"] for t in got["templates"]}
     assert all(planned.get(t, 0) > 0 for t in floor) and set(floor) <= set(low.unprovable["prover_floor"])

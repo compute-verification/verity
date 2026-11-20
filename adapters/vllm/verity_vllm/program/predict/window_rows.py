@@ -582,7 +582,7 @@ class Rows:
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
         """The slot's scan units, its lane's row of the scan state row at its anchor the slot's (refused by name where it
         isn't): its collectors on from the lane's head, a prompt position's before the last (`OutCollect_v1`) on its token, a select's (`SelectCollect_v1`, its
-        ``o1``; its select ``o0`` is the node's) on its pick and KO - O pads on the last pick; and its `SlotEntry_v1` entry
+        ``o1``; its select ``o0`` is the node's) on its pick and KO - O pads on the last pick; and its `SlotEntry_v2` entry
         of the scan's Programs' row."""
         row, a = _lane(P.scan, self.state, P.anchor)
         if row != S.row:

@@ -324,11 +324,11 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
 reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
 and ignores it outside due and occupied slots, so an execution phase's entries are its NR·nb boundaries'. Unless each
-lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
+lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v2` or `SelectEntry_v1` template's entries
 (`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
 passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (`wired`). `wired` pins the template's
-whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
-`SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
+whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v2` at its circuit-check rows, and
+`SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v2` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
 requests from its own registered `SCAN_STATE`, and the check refuses, next, by name, an execution phase whose scan's
 state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVERY` proof blocks read each slot entry, which
@@ -392,5 +392,5 @@ K also rests on these conditions:
   the run's rate.
 - J at D_j = 2, which the jitter term assumes (above).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
-  audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
+  audit's (the `SlotEntry_v2` stand-in's) are the execution phase's free inputs above.
 

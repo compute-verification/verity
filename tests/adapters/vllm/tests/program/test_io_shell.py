@@ -1,7 +1,7 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network attester's scan
-state read a lane (`ScanSlots_v5`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
+state read a lane (`ScanSlots_v5`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v2`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
 round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
 the schema, and the statics it refuses."""
@@ -219,7 +219,7 @@ def test_the_output_collector_keeps_the_ko_samples_from_the_prompts_last_positio
 
 @pytest.mark.parametrize("KO, STOP", [(2, ()), (5, (103,)), (5, (102, 104))], ids=["no-stop", "one-stop", "two-stops"])
 def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO, STOP):
-    """`SlotEntry_v1` against `entry_reference` at each occupancy word, ``max_tokens`` (2^31 and 2^32 − 1 unsigned) and
+    """`SlotEntry_v2` against `entry_reference` at each occupancy word, ``max_tokens`` (2^31 and 2^32 − 1 unsigned) and
     prompt length lp (the last state's w = lp − NP − KO): an empty slot's every word is zero; an occupied slot's read bit
     is 1, its n min(max_tokens, the first stop's index + 1) and its ids output i's low 17 bits for i < n, zeros past it
     (ids carry a bit at 2^20 the cut drops), except that a request the class can't hold, its prompt not 1 to NP ids or
@@ -246,7 +246,7 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
 @pytest.mark.parametrize("KO, NP, STOP", [(2, 4, ()), (4, 32, (128001,)), (64, 1024, (128001,))],
                          ids=["small", "ko4", "record"])
 def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
-    """`SlotEntry_v1`'s row is the network attester's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
+    """`SlotEntry_v2`'s row is the network attester's entry at the scan's class of its KO (`ingress_scan.entry_encode`,
     in `entry_layout`'s order: read at bit 0, n from bit 1 and the ids from bit 33, 33 + KO·IDB bits a request, 1,121 at
     KO 64), so the scan reads an honest slot as its Program wrote it: an empty slot's entry is `NONE`, an occupied
     slot's read 1 with its n and ids, and a request the class can't hold read 1 and n = KO + 1, which the scan refuses.
@@ -262,7 +262,7 @@ def test_a_slots_entry_is_the_scans_entry_bit_for_bit(KO, NP, STOP):
 @pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
 def test_a_select_collected_and_the_last_ones_entry_are_the_combine_then_the_collector_and_the_entry(first):
     """`SelectCollect_v1` is `TokenSelectCombine_v2`'s select and `OutCollect_v1` over it, and `SelectEntry_v1` those and
-    `SlotEntry_v1` over the state, on groups' bests sampled from a few bf16 values (ties and -inf among them), their indices,
+    `SlotEntry_v2` over the state, on groups' bests sampled from a few bf16 values (ties and -inf among them), their indices,
     heads or states whose w is in and out of the collector's KO, and both occupancy words."""
     V, C, KO, NP, STOP = 200, 64, 3, 3, (107,)
     combine = bind(TokenSelectCombineV2, V=V, C=C)

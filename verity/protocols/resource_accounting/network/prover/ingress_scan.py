@@ -52,7 +52,7 @@ offset t0 − 1, with row −1, the first execution phase's, the empty state's, 
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, entry j its own port `prog<j>`, one row of
 `entry_bits`: `read` (1 bit), n (u32) and KO output ids of IDB bits (`entry_layout`), then zeros to a whole 16-bit word
-(71 words at w63's class), the row `SlotEntry_v1` writes. Entry j is the outputs of the
+(71 words at w63's class), the row `SlotEntry_v2` writes. Entry j is the outputs of the
 Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and
 occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a
 execution phase's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n
@@ -63,7 +63,7 @@ counting it. It is the form the Programs' outputs are tied to: a Program gives a
 slot holds them in `out` through its last egress bucket, past the execution phase's end where that is later (a group's
 scan carries its state across its execution phases). In an execution phase of nb = T / EVERY boundaries, bucket t's
 `prog<j>` reads row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of
-slot j at boundary ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1`
+slot j at boundary ⌊t / EVERY⌋ as `SlotEntry_v2` lays them out. Unless that input is a compute audit's `SlotEntry_v2`
 template's entries, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no
 Program reads passes these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So
 the refusal of an absent entry holds against an honest prover only, and the period check refuses such an execution phase
@@ -109,7 +109,7 @@ egress form is the id form, the egress record's (the cells `io_tie.parse_cell` r
 network attester frees a lane after its connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's hold
 ends, so NR = lanes slots suffice. A request the class can't hold is refused, never truncated: a prompt of more than KI
 ids (the network attester bounds a request's cells, not its ids) at the cell that takes its `fields` past KI, and a
-Program that gives more than KO outputs (`SlotEntry_v1`'s n = KO + 1 for a request that doesn't fit its window circuit's
+Program that gives more than KO outputs (`SlotEntry_v2`'s n = KO + 1 for a request that doesn't fit its window circuit's
 class) at its anchor, so the execution phase fails visibly at the scan's proof block.
 
 **Structural Fits.** A proof block reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path
@@ -135,7 +135,7 @@ another Definition for it: every bucket, the first included, is `IngressScanBuck
         prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
     IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: Array<NS>) -> (Array<NS>)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
-        NE = `entry_bits`: 33 + KO·IDB rounded up to a multiple of 16 (`SlotEntry_v1`'s row)
+        NE = `entry_bits`: 33 + KO·IDB rounded up to a multiple of 16 (`SlotEntry_v2`'s row)
         NV = `view_bits`: 32 + lanes·(112 + KO·IDB rounded up to a multiple of 16)
 """
 from __future__ import annotations
@@ -306,7 +306,7 @@ def entry_layout(cls: Class) -> tuple[tuple[str, int], ...]:
 
 
 def entry_bits(cls: Class) -> int:
-    """An entry's row, its port `prog<j>`: `entry_layout`, zero-padded to whole 16-bit words (`SlotEntry_v1`'s row)."""
+    """An entry's row, its port `prog<j>`: `entry_layout`, zero-padded to whole 16-bit words (`SlotEntry_v2`'s row)."""
     return -(-sum(w for _, w in entry_layout(cls)) // 16) * 16
 
 
@@ -411,7 +411,7 @@ def entry(n: int, ids: Sequence[int]) -> Entry:
 
 
 def entry_encode(cls: Class, e: Entry) -> list[int]:
-    """An entry's row (`entry_bits`), as `SlotEntry_v1` writes it: `read`, n, the ids, then zeros."""
+    """An entry's row (`entry_bits`), as `SlotEntry_v2` writes it: `read`, n, the ids, then zeros."""
     r, n, ids = e
     if len(ids) > cls.KO:
         raise ValueError(f"an entry has at most KO = {cls.KO} ids, not {len(ids)}")
@@ -907,7 +907,7 @@ IngressScanBucket = _part(
     "IngressScanBucket", STATICS, _sig, _build,
     "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network attester cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
-    "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
+    "`SlotEntry_v2`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
 IngressScanStart = CompositeDefinition(

@@ -298,13 +298,13 @@ A spec-level reference for network attestation's timing channel:
   interface's ``input_count`` under them and the scan's state's root has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one proof block a network attester bucket, reads the bucket's
   network attester's ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
-  each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
+  each `SlotEntry_v2`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
   slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
   slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless each
-  lane's entries are a compute audit's pinned `SlotEntry_v1` or `SelectEntry_v1` template's (`entryPins`), the read bit
+  lane's entries are a compute audit's pinned `SlotEntry_v2` or `SelectEntry_v1` template's (`entryPins`), the read bit
   is the prover's word (an entry of read 1 and no outputs passes), so the period check refuses such an execution phase
   (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
@@ -326,7 +326,7 @@ A spec-level reference for network attestation's timing channel:
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v3`), and
   `window_state` the rows an execution phase's circuit from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
-  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); an execution phase's
+  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v2` writes); an execution phase's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
   proof block, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at

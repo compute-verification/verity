@@ -59,7 +59,7 @@ class _Keys:
 class _Program:
     """Slot ``slot``'s class Program lowered into ``b``'s units, its request its lane's of the scan state row before its anchor
     (`WindowClass.anchor`, `WindowClass.lane`) through ``scan``, its lane's binding (`scan_state.bridge`), its outputs the scan's through
-    ``entry`` (`io_shell.SlotEntry_v1`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
+    ``entry`` (`io_shell.SlotEntry_v2`, its last position's `SelectEntry_v1`'s): each node's output as the rows that hold it,
     ``(lo, hi, row)`` its words [lo, hi) as ``row`` and the units after it, (hi - lo) / ``row.words`` rows of one output at
     consecutive units (none for the last position's select, which nothing reads). With ``tables`` it reads H1's tables
     (`Tables`), or Pearl+'s (`PearlTables`) cut at its linears, ``cut`` their layout (`window_cut.linears`). With ``at``,
@@ -634,7 +634,7 @@ class _Program:
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
         H1's tables, a select that is a later round's token (`_token`) is collected at that round (`io_shell.SelectCollect_v2`).
         A served Program's last select is collected on too, then KO - O more collectors shift its O outputs to the front of
-        the state, and its entry is `io_shell.SlotEntry_v1{NP=1}` (``entry``, `place_entry`), which fits only where the
+        the state, and its entry is `io_shell.SlotEntry_v2{NP=1}` (``entry``, `place_entry`), which fits only where the
         scan's prompt length is its own."""
         p, KO = self.position - 1, self.cls.outputs
         at = {"V": V, "C": GROUP, "KO": KO, "FIRST": p == 0}
@@ -664,7 +664,7 @@ class _Program:
         return ctid, cu
 
     def place_entry(self, tid: str, u: int) -> None:
-        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v1{NP=1}`), on its occupancy
+        """A served Program's entry, unit ``u`` of the window's entries (`io_shell.SlotEntry_v2{NP=1}`), on its occupancy
         word and its last collector's state."""
         if self.occ is None or self.collect is None or self.entry_label is None:
             raise Unexpressible(f"{self.name}: an entry before its last position's select")

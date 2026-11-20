@@ -86,7 +86,7 @@ THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 
 EMB, GROUPS = "EmbeddingRead_v2{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
 FEED, FEED1 = "TokenFeed_v1{NP=4,FIRST=false}", "TokenFeed_v1{NP=4,FIRST=true}"
 #: a served Program's collectors at a prompt position's dead select (the first position's and every later one's) and its entry
-OUT0, OUT, SLOT_ENTRY = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}", "SlotEntry_v1{KO=2,IDB=17,NP=1}"
+OUT0, OUT, SLOT_ENTRY = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}", "SlotEntry_v2{KO=2,IDB=17,NP=1}"
 #: each position's select with its collector (the first position's, every later one's) and the last's with the slot's entry
 ENTRY = "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4}"
 COLLECT0, COLLECT = "SelectCollect_v1{V=256,C=16,KO=2,FIRST=true}", "SelectCollect_v1{V=256,C=16,KO=2,FIRST=false}"
@@ -161,7 +161,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     first: WINDOW's requests of 5 and 4 positions hold exactly the units of each alone but its empty lane's scan unit,
     collector and entry, template by template, 9 embeddings against the class's 10, and its blocks are its 2 Programs over 5 steps. A
     prompt position before the last feeds its prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select
-    (`OutCollect_v1`); the entries (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its
+    (`OutCollect_v1`); the entries (`SlotEntry_v2{NP=1}`) are one allocation in slot order, each an inference entry at its
     slot's last step."""
     low = _lowered(WINDOW)
     circuit = low.circuit
@@ -207,7 +207,7 @@ def test_the_fixed_load_is_the_class_circuit_less_what_no_token_reads_before_the
     the select) are dead and lower to nothing but the select's collector (`OutCollect_v1`), the attention's keys still
     its layer's; and each feed takes its prompt's id with no select (FIRST=True).
     At the prompt's last position on, every node is the class's, but the last position's collector is `SelectCollect_v1`
-    and the entries are `SlotEntry_v1{NP=1}`, one allocation in slot order of each slot's last step."""
+    and the entries are `SlotEntry_v2{NP=1}`, one allocation in slot order of each slot's last step."""
     reg = S._registered()
     cls = WC.lower(reg, CLASS, None, GRAIN)
     for window in (FULL, FULL_LATER):
@@ -551,7 +551,7 @@ def entry_of(low, k: int, lp: int, m: int) -> IS.Entry:
 def test_a_served_programs_entry_fits_only_the_prompt_length_its_advice_gives():
     """A served request's Program is built at the prompt length L its advice gives, and the scan gives its slot the certified
     prompt's length lp. Its collectors are a collector a position (`OutCollect_v1` at a prompt position before the last,
-    `SelectCollect_v1` from the prompt's last on), then KO - O pads, so its entry (`SlotEntry_v1{NP=1}`) fits only where
+    `SelectCollect_v1` from the prompt's last on), then KO - O pads, so its entry (`SlotEntry_v2{NP=1}`) fits only where
     lp = L: there it counts the request's O outputs, and at any other lp (an advice with a wrong prompt length) it is
     ``outputs`` + 1 with no ids, which the scan refuses at the anchor."""
     for window in (WINDOW, OTHER):

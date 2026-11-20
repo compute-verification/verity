@@ -80,7 +80,7 @@ def test_a_served_window_at_the_class_of_record_passes_and_names_what_the_door_c
     named = WC.check_served(circuit)
     n = {IF.descriptor_id(fn): k for fn, k in circuit.templates}
     for reason, got in named.items():
-        assert {t.split("{")[0] for t in got} >= {"OutCollect_v1", "SlotEntry_v1"}, reason
+        assert {t.split("{")[0] for t in got} >= {"OutCollect_v1", "SlotEntry_v2"}, reason
         _in_population(circuit, got)
         print(f"UNPROVABLE {reason}: {len(got)} of {len(n)} templates, {sum(n[t] for t in got)} of {sum(n.values())} units: "
               + " ".join(sorted(got)))

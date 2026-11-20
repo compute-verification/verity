@@ -181,7 +181,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); its Programs' rows are a compute audit's output (`progTied`): a lane's
-  `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
+  `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v2`
   or `SelectEntry_v1` template's entries port's (`<descriptor id>/c<j>/o0`, `entriesPortName`) in the `roots` of an
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
   for that registration's digest, accepted with one level of the scan's 2T + 1 units sampled `subset:k` or stratified,
@@ -203,8 +203,8 @@ schedule it runs under, and the certificate the key signed for both once, before
 * execution phase `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
-  is a template node's of that audit's own Program calling `SlotEntry_v1`, or `SelectEntry_v1` (the slot's last
-  position, whose select and collector end in `SlotEntry_v1`, so its `o0` is the entry), a Definition the check pins by
+  is a template node's of that audit's own Program calling `SlotEntry_v2`, or `SelectEntry_v1` (the slot's last
+  position, whose select and collector end in `SlotEntry_v2`, so its `o0` is the entry), a Definition the check pins by
   closure digest (`entryPins`: `slotEntryPins` and `selectEntryPins`; a template under either name with another body is
   refused), with one member a slot of the window (T / `every` · `lanes`). One-stage cuts a template into members of
   consecutive units, in order (`<descriptor id>/c<j>`), and a `SelectEntry_v1` template a member a lane, as its units
@@ -287,7 +287,7 @@ inputs of each audit a scan's `prog` is an output of are in that scan's executio
 renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. An incorrect proof
 block of such an audit reaches the scan only as the slot entries the scan reads: the scan reads the audit only through
 its `prog`, one input node of `E_w` entry bits an execution phase (`wired`, `scanOf`), and its state is the scan's own
-(`stateTied`). So an incorrect proof block of any template, a `SlotEntry_v1` or `SelectEntry_v1` one setting its
+(`stateTied`). So an incorrect proof block of any template, a `SlotEntry_v2` or `SelectEntry_v1` one setting its
 slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Programs read, or any other its entries
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
@@ -526,13 +526,13 @@ def outputPort (port : String) : Bool :=
     | 'o' :: d :: ds => (d :: ds).all Char.isDigit && d != '0'
     | _ => false
 
-/-- A `SlotEntry_v1` or `SelectEntry_v1` template's entry rows of chunk `j`, the public word of its `j`-th member's
+/-- A `SlotEntry_v2` or `SelectEntry_v1` template's entry rows of chunk `j`, the public word of its `j`-th member's
 units: `<descriptor id>/c<j>/o0`. One-stage cuts a template into members of consecutive units, in order, named
 `<descriptor id>/c<j>`, at the ends of every wire its units read; `SelectEntry_v1`'s read their lane's occupancy from
 `ScanSlots_v2` a wire a lane, so its members are a lane each. -/
 def entriesPort (key : String) (j : Nat) : String := s!"{key}/c{j}/o0"
 
-/-- Whether a port is some `SlotEntry_v1` or `SelectEntry_v1` template's entries port of some chunk (`entriesPort`,
+/-- Whether a port is some `SlotEntry_v2` or `SelectEntry_v1` template's entries port of some chunk (`entriesPort`,
 `entryIds`), read over its characters: its `o0` is the entries the slots' Programs compute, so it ties its audit as an
 output port does. -/
 def entriesPortName (port : String) : Bool :=
@@ -563,9 +563,9 @@ def progTied (audits : Array Json) (reg : Json) : Bool := !(tiedAudits audits re
 
 /-- The scan's Programs' rows are a compute audit's slot entries, a lane a chunk: for each lane `j`, the root and domain
 of the scan's registration's `scan/prog<j>` entry (`progName`) are those of chunk `j`'s entries port
-(`entriesPort`), of `T / every` leaves, of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program
+(`entriesPort`), of `T / every` leaves, of a `SlotEntry_v2` or `SelectEntry_v1` template of that audit's own Program
 (`Audit.entries`) that is a pinned Definition (its closure digest one of `entryPins`, so its whole body, the
-`SlotEntry_v1` a `SelectEntry_v1` ends in included, is a pinned one), with one member a slot of the window
+`SlotEntry_v2` a `SelectEntry_v1` ends in included, is a pinned one), with one member a slot of the window
 (`Schedule.executionPhasePrograms`). Its members are cut in order, so chunk `j` is units `[j · T / every, (j + 1) · T / every)`
 and its leaf `b` is slot `j · T / every + b`'s entry: bucket `t`'s port `prog<j>`, which reads lane `j`'s row
 `⌊t / every⌋` (`scanOf`), reads the entry that slot's Program computed, read bit included. One-stage binds the rest: a
@@ -1294,7 +1294,7 @@ def protocol : Core.Protocol where
 #guard (rowsTerms #[] ⟨4, 0, 300, 512, 0, 149648⟩ #[({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0),
   ({ units := 9, drawn := 9, delta := ⟨1, 100⟩, wrong := 0 }, 0, 0)] #[] 1 2 #[] 149648).K == 149648
 -- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit sampled, and its tied audit (the
--- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
+-- slot entries' `SlotEntry_v2` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0, 0⟩
   #[({ units := 65, drawn := 65, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] #[] 1 1).K == 9088
@@ -1432,17 +1432,17 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
   outputPort "u/o1x" || outputPort "u/o٣" || outputPort "u/prog" || outputPort "")
--- a SlotEntry_v1 or SelectEntry_v1 template's entries port, a chunk's o0, the chunk's index in ASCII digits without a
+-- a SlotEntry_v2 or SelectEntry_v1 template's entries port, a chunk's o0, the chunk's index in ASCII digits without a
 -- leading zero; never another Definition's or port's
-#guard entriesPortName (entriesPort "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}" 0) &&
-  entriesPortName "SlotEntry_v1{}/c0/o0" && entriesPortName "SlotEntry_v1{KO=2}/c1/o0" &&
+#guard entriesPortName (entriesPort "SlotEntry_v2{IDB=8,KO=2,NP=4,STOP=1}" 0) &&
+  entriesPortName "SlotEntry_v2{}/c0/o0" && entriesPortName "SlotEntry_v2{KO=2}/c1/o0" &&
   entriesPortName (entriesPort "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}" 3) &&
   entriesPortName "SelectEntry_v1{}/c0/o0" && entriesPortName "SelectEntry_v1{KO=2}/c10/o0" &&
   entriesPort "SelectEntry_v1{}" 3 == "SelectEntry_v1{}/c3/o0"
-#guard !(entriesPortName "SlotEntry_v2{KO=2}/c0/o0" || entriesPortName "SlotEntry_v1{KO=2}/c01/o0" ||
-  entriesPortName "SlotEntry_v1{KO=2}/c0/o1" || entriesPortName "SlotEntry_v1/c0/o0" || entriesPortName "" ||
-  entriesPortName "SlotEntry_v1{KO=2}/c/o0" || entriesPortName "SlotEntry_v1{KO=2}c0/o0" ||
-  entriesPortName "SlotEntry_v1{KO=2}/cx/o0" || entriesPortName "SlotEntry_v1{KO=2}/c٣/o0" ||
+#guard !(entriesPortName "SlotEntry_v1{KO=2}/c0/o0" || entriesPortName "SlotEntry_v2{KO=2}/c01/o0" ||
+  entriesPortName "SlotEntry_v2{KO=2}/c0/o1" || entriesPortName "SlotEntry_v2/c0/o0" || entriesPortName "" ||
+  entriesPortName "SlotEntry_v2{KO=2}/c/o0" || entriesPortName "SlotEntry_v2{KO=2}c0/o0" ||
+  entriesPortName "SlotEntry_v2{KO=2}/cx/o0" || entriesPortName "SlotEntry_v2{KO=2}/c٣/o0" ||
   entriesPortName "SelectEntry_v2{KO=2}/c0/o0" || entriesPortName "SelectEntry_v1{KO=2}/c1/o1" ||
   entriesPortName "SelectEntry_v1/c0/o0" || entriesPortName "ScanSlots_v2{KO=2}/c0/o0")
 -- two lanes, T = 4, every 2: lane j's scan/prog<j> is chunk j's entries port, of 2 leaves, of one pinned template of 4
@@ -1450,19 +1450,19 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 -- and the scan's lane-1 tree alone ties the audit
 #guard
   let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none, none, none, false⟩
-  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)]⟩
+  let a : Audit := ⟨0, 0, "", 4, #[("SlotEntry_v2{KO=1}", 4, slotEntryPins[0]!)]⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let reg := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
   let chunks := fun (l0 l1 : Nat) (k1 : String) =>
-    reg #[port "SlotEntry_v1{KO=1}/c0/o0" "r0" l0, port (k1 ++ "/c1/o0") "r1" l1]
+    reg #[port "SlotEntry_v2{KO=1}/c0/o0" "r0" l0, port (k1 ++ "/c1/o0") "r1" l1]
   let scan := fun (r0 r1 : String) => reg #[port "scan/prog0" r0 2, port "scan/prog1" r1 2]
-  wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=1}"] (scan "r0" "r1") &&
-    !wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=1}"] (scan "r1" "r0") &&
-    !wired #[a] s #[chunks 3 1 "SlotEntry_v1{KO=1}"] (scan "r0" "r1") &&
-    !wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=1}"] (reg #[port "scan/prog0" "r0" 2]) &&
-    !wired #[a] s #[chunks 2 2 "SlotEntry_v1{KO=2}"] (scan "r0" "r1") &&
-    tiedAudits #[chunks 2 2 "SlotEntry_v1{KO=1}"] (reg #[port "scan/prog1" "r1" 2]) == #[0]
+  wired #[a] s #[chunks 2 2 "SlotEntry_v2{KO=1}"] (scan "r0" "r1") &&
+    !wired #[a] s #[chunks 2 2 "SlotEntry_v2{KO=1}"] (scan "r1" "r0") &&
+    !wired #[a] s #[chunks 3 1 "SlotEntry_v2{KO=1}"] (scan "r0" "r1") &&
+    !wired #[a] s #[chunks 2 2 "SlotEntry_v2{KO=1}"] (reg #[port "scan/prog0" "r0" 2]) &&
+    !wired #[a] s #[chunks 2 2 "SlotEntry_v2{KO=2}"] (scan "r0" "r1") &&
+    tiedAudits #[chunks 2 2 "SlotEntry_v2{KO=1}"] (reg #[port "scan/prog1" "r1" 2]) == #[0]
 -- a lane's Programs' rows, the lane's index in ASCII digits without a leading zero
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
@@ -1499,7 +1499,7 @@ private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
 #guard
   let o := fun (q root : String) => Json.mkObj [("port", .str q), ("root", .str root), ("domain", .str "d")]
   let audit := fun (prog root : String) =>
-    Json.mkObj [("program", .str prog), ("roots", Json.arr #[o "SlotEntry_v1{KO=1}/c0/o0" root])]
+    Json.mkObj [("program", .str prog), ("roots", Json.arr #[o "SlotEntry_v2{KO=1}/c0/o0" root])]
   let scan := Json.mkObj [("roots", Json.arr #[o "scan/prog0" "r0"])]
   held (some "c") #[audit "c" "r0"] scan && held (some "c") #[audit "c" "r0", audit "x" "r1"] scan &&
     !held (some "c") #[audit "d" "r0"] scan && !held none #[audit "c" "r0"] scan &&

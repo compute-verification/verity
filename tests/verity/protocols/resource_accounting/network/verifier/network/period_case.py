@@ -52,7 +52,7 @@ shows a start too few or too many, or none (`start-count`). The execution phases
 connection), and
 the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
 and domain of chunk j's entries port of that execution phase's slot entries' template (`slot_entry`,
-`io_shell.SlotEntry_v1` at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding
+`io_shell.SlotEntry_v2` at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding
 beside a stand-in scan slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's
 registration and Program (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), a state tree of T rows
@@ -221,15 +221,15 @@ BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 
 #: the checker form's, which took the rows its units compared as inputs
 CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 #: `slotEntryId`: the slot entry's Definition, whose committed `o0` is the entry the scan reads at a slot
-SLOT_ENTRY = "SlotEntry_v1"
-#: `slotEntryPins`: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v1` at its circuit-check rows,
-#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order
+SLOT_ENTRY = "SlotEntry_v2"
+#: `slotEntryPins`: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v2` at its circuit-check rows,
+#: `SlotEntry_v2{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v2{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order
 SLOT_ENTRY_PINS = ("8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3"
                    "7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
                    "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f"
                    "24b44567891a9ea2efb2f8a6830c9f9c957c14dc65041f8dd77bfd8d50c5b7ff")
 
-#: `selectEntryId`: the slot's last position, whose select and collector end in `SlotEntry_v1`, so its `o0` is the entry
+#: `selectEntryId`: the slot's last position, whose select and collector end in `SlotEntry_v2`, so its `o0` is the entry
 SELECT_ENTRY = "SelectEntry_v1"
 #: `entryIds`: the Definitions whose `o0` is a slot's entry
 ENTRY_IDS = (SLOT_ENTRY, SELECT_ENTRY)
@@ -240,7 +240,7 @@ SCAN_SLOTS = "ScanSlots_v2"
 #: `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
 #: `SelectEntry_v1{V=128256,C=16,KO=4,FIRST=false,IDB=17,NP=32,STOP=[128001]}` and
 #: `SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024,STOP=[128001]}`, in that order, each calling the
-#: `SlotEntry_v1` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows; the first is
+#: `SlotEntry_v2` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows; the first is
 #: `fixtures/select_entry.json`'s
 SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0ebc0c9dc"
                      "bd6513d2bf72aa243c499833d1173fb14236e85bb27b4d03de88df93344007d2",
@@ -256,7 +256,7 @@ SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0eb
 class Audit:
     """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
     SHA-512, its units (its root's template instances) and its slot entries'
-    templates (`entries`: each root template node calling `SlotEntry_v1` or `SelectEntry_v1`, by descriptor id, members
+    templates (`entries`: each root template node calling `SlotEntry_v2` or `SelectEntry_v1`, by descriptor id, members
     and closure digest, `slot_entry_digest`)."""
     free: int
     steps: int
@@ -1105,13 +1105,13 @@ def prog_port(name) -> bool:
 
 
 def entries_port(key: str, j: int = 0) -> str:
-    """`entriesPort`: a `SlotEntry_v1` or `SelectEntry_v1` template's entry rows of chunk `j`, its `j`-th member's
+    """`entriesPort`: a `SlotEntry_v2` or `SelectEntry_v1` template's entry rows of chunk `j`, its `j`-th member's
     public word, ``<descriptor id>/c<j>/o0``."""
     return f"{key}/c{j}/o0"
 
 
 def entries_port_name(port) -> bool:
-    """`entriesPortName`: some `SlotEntry_v1` or `SelectEntry_v1` template's entries port of some chunk
+    """`entriesPortName`: some `SlotEntry_v2` or `SelectEntry_v1` template's entries port of some chunk
     (`entries_port`)."""
     if not (isinstance(port, str) and any(port.startswith(i + "{") for i in ENTRY_IDS) and port.endswith("/o0")):
         return False
@@ -1152,7 +1152,7 @@ def _leaves(o: dict):
 
 def _wired(p: Params, audits: list[dict], reg: dict) -> bool:
     """`wired`: for each lane j, the scan's `scan/prog<j>` entry is at the root and domain of chunk j's entries port
-    (`entries_port`), of T / every leaves, of a `SlotEntry_v1` or `SelectEntry_v1` template of one audit's own Program
+    (`entries_port`), of T / every leaves, of a `SlotEntry_v2` or `SelectEntry_v1` template of one audit's own Program
     (`Audit.entries`), a pinned Definition (its closure digest one of `SLOT_ENTRY_PINS` and `SELECT_ENTRY_PINS`,
     `entryPins`), with one member a slot of the window."""
     s = p.schedule
@@ -1935,12 +1935,12 @@ AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_si
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
 #: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.
 UNIT_BYTES = (1, 2, 5, 40)
-#: The slot entries' template of the cases' audits: `io_shell.SlotEntry_v1` at its smallest circuit-check row, a pinned
+#: The slot entries' template of the cases' audits: `io_shell.SlotEntry_v2` at its smallest circuit-check row, a pinned
 #: Definition (`SLOT_ENTRY_PINS`' first), whose population of one member's descriptor is `fixtures/slot_entry.json`.
-SLOT_KEY = "SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}"
+SLOT_KEY = "SlotEntry_v2{KO=2,IDB=17,NP=4,STOP=[]}"
 SLOT_BINDING = {"KO": 2, "IDB": 17, "NP": 4, "STOP": ()}
 #: The select entries' template of the cases' audits that select a slot's token: `SelectEntry_v1` at its smallest
-#: binding, a pinned Definition (`SELECT_ENTRY_PINS`' first) ending in the `SlotEntry_v1` that writes the read bit,
+#: binding, a pinned Definition (`SELECT_ENTRY_PINS`' first) ending in the `SlotEntry_v2` that writes the read bit,
 #: whose population of one member's descriptor is `fixtures/select_entry.json`.
 SELECT_KEY = "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}"
 SELECT_BINDING = {"V": 256, "C": 16, "KO": 2, "FIRST": False, "IDB": 17, "NP": 4, "STOP": ()}
@@ -1954,7 +1954,7 @@ def _stand_in(name: str, version: int, statics: tuple[str, ...], out=lambda S: 2
 
 #: Templates under the slot entry's and the select entry's names and descriptor ids (`SLOT_KEY`, `SELECT_KEY`) with
 #: another body, the stand-in unit's.
-RENAMED_SLOT_ENTRY = _stand_in("SlotEntry", 1, tuple(SLOT_BINDING))
+RENAMED_SLOT_ENTRY = _stand_in("SlotEntry", 2, tuple(SLOT_BINDING))
 RENAMED_SELECT_ENTRY = _stand_in("SelectEntry", 1, tuple(SELECT_BINDING))
 #: A stand-in of the scan slots' template under `ScanSlots_v2`'s Definition id, committing `NS` bytes.
 SCAN_SLOTS_UNIT = _stand_in("ScanSlots", 2, ("NS",), lambda S: S.NS)
@@ -2013,7 +2013,7 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
 #: chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
 #: How `rows-prog-unwired` breaks its execution phase's wiring at one lane j while its tie holds: the audit's chunk j
-#: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
+#: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v2` or `SelectEntry_v1`
 #: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
 #: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,

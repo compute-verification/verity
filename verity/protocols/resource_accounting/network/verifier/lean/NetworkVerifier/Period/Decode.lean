@@ -68,7 +68,7 @@ def maxTokensEnd : Nat := 130
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances) and its slot entries'
-templates (`entries`: each root template node calling a `SlotEntry_v1` or `SelectEntry_v1` Definition, `entryIds`, by
+templates (`entries`: each root template node calling a `SlotEntry_v2` or `SelectEntry_v1` Definition, `entryIds`, by
 its descriptor id, members and closure digest, `closureDigest`). -/
 structure Audit where
   free : Nat
@@ -511,23 +511,23 @@ def beforeEgress : List (Flock.Program.Node × Flock.Program.Defn) →
   | _ => throw "scan: not the generator form's templates: the start unit's, the ingress buckets' and the egress \
     bucket's"
 
-/-- The slot entry's Definition (`io_shell.SlotEntry_v1`): one unit a due, occupied slot's Program, committing the
+/-- The slot entry's Definition (`io_shell.SlotEntry_v2`): one unit a due, occupied slot's Program, committing the
 entry the scan's ingress reads at that slot (its `o0`). -/
-def slotEntryId : String := "SlotEntry_v1"
+def slotEntryId : String := "SlotEntry_v2"
 
 /-- The slot's last position (`SelectEntry_v1`, pinned by `selectEntryPins`): one unit a due, occupied slot's Program,
-whose select and collector end in `SlotEntry_v1`, so its `o0` is the slot's entry. -/
+whose select and collector end in `SlotEntry_v2`, so its `o0` is the slot's entry. -/
 def selectEntryId : String := "SelectEntry_v1"
 
-/-- The Definitions whose `o0` is a slot's entry: `SlotEntry_v1` and `SelectEntry_v1`. -/
+/-- The Definitions whose `o0` is a slot's entry: `SlotEntry_v2` and `SelectEntry_v1`. -/
 def entryIds : List String := [slotEntryId, selectEntryId]
 
-/-- The slot entry's Definitions the check takes, by closure digest (`closureDigest`): `io_shell.SlotEntry_v1` at
-its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
-(a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
+/-- The slot entry's Definitions the check takes, by closure digest (`closureDigest`): `io_shell.SlotEntry_v2` at
+its circuit-check rows, `SlotEntry_v2{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v2{KO=64,IDB=17,NP=1024,STOP=[128001]}`
+(a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v2`'s name with
 another body has neither digest, so its entries are no slot entries (`wired`). These are the rows a window circuit's
-slot entries take as a template of their own; its `SlotEntry_v1:4` row (KO 4, 32 prompt ids) is no pin, since at KO 4
-a slot's entry is a `SelectEntry_v1` unit's (`selectEntryPins`). A new body of `SlotEntry_v1`, or a binding a window
+slot entries take as a template of their own; its `SlotEntry_v2:4` row (KO 4, 32 prompt ids) is no pin, since at KO 4
+a slot's entry is a `SelectEntry_v1` unit's (`selectEntryPins`). A new body of `SlotEntry_v2`, or a binding a window
 circuit takes as its slot entries' template, is pinned here. -/
 def slotEntryPins : List String :=
   ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
@@ -538,10 +538,10 @@ def slotEntryPins : List String :=
 #guard slotEntryPins.all (·.length == 128)
 
 /-- The slot's last position's Definitions the check takes, by closure digest (`closureDigest`, which covers the
-`SlotEntry_v1` it calls): `SelectEntry_v1` at `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
+`SlotEntry_v2` it calls): `SelectEntry_v1` at `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
 `SelectEntry_v1{V=128256,C=16,KO=4,FIRST=false,IDB=17,NP=32,STOP=[128001]}` and
 `SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024,STOP=[128001]}`, in that order, each calling the
-`SlotEntry_v1` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows. A new binding or
+`SlotEntry_v2` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows. A new binding or
 body is pinned here. -/
 def selectEntryPins : List String :=
   ["f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0ebc0c9dc\
@@ -558,7 +558,7 @@ def entryPins : List String := slotEntryPins ++ selectEntryPins
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1` or
+template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v2` or
 `SelectEntry_v1` (`entryIds`), each with its closure digest (`closureDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
@@ -627,7 +627,7 @@ is the ingress rows' input node, so no egress gate depends on an ingress gate; a
 The ingress template's entry ports `prog<j>` all have one type, a slot entry's, and lane `j`'s read one input node of
 its own, distinct from every other lane's and from the rows, lane `j`'s slot entries (`T / every` rows each, `lanes ·
 T / every` counted once among the input gates): bucket `t`'s `prog<j>` is its row `⌊t / every⌋` (`readsEntries`), the
-leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v1` or `SelectEntry_v1` entries port;
+leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v2` or `SelectEntry_v1` entries port;
 their bits are the scan's `entries`.
 
 The scan's ties equate rows of one length: a bucket's `sin` with the state the bucket before returned, bucket 0's

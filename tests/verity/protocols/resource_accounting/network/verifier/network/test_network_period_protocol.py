@@ -145,7 +145,7 @@ def test_the_rows_form_refuses_what_it_must(server):
     for another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another
     response cap or none), scans at two δ, a scan answered over
     other than its 2T + 1 units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output
-    but no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
+    but no `SlotEntry_v2` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
     `SCAN_STATE`, a scan whose answer names a tied Input that is no lane's `prog<j>`, one whose start is not opened to
     the empty state, a period of more than one execution phase, a tied audit registered under another Program than the
     class circuit, a scan whose ok bits are not
@@ -958,10 +958,10 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
-    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
+    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v2` unit of that slot's Program, lane
     j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied execution phase's
     wiring can fail at one lane (`PC.UNWIRES`): the audit's chunk entry at an output port (another unit's `o<j>`, or
-    the chunk's own `o1`), at the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, at
+    the chunk's own `o1`), at the entries port of a `SlotEntry_v2` template the audit's Program doesn't have, at
     another chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that
     template one member off a slot each, or that template under the slot entry's name and descriptor id with another
     body; and a mirror that skips the wiring, which the state tie reads too, accepts what Lean refuses at the
@@ -982,7 +982,7 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
 
 def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkeypatch):
     """`wired` pins the slot entry's and the select entry's Definitions by closure digest (`PC.SLOT_ENTRY_PINS` and
-    `PC.SELECT_ENTRY_PINS`, Lean's `entryPins`): the cases' templates (`PC.slot_entry`, `io_shell.SlotEntry_v1` at its
+    `PC.SELECT_ENTRY_PINS`, Lean's `entryPins`): the cases' templates (`PC.slot_entry`, `io_shell.SlotEntry_v2` at its
     smallest circuit-check row, and `PC.select_entry`, `SelectEntry_v1` at its smallest binding) have each list's
     first, and a template under either's name and
     descriptor id (`PC.SLOT_KEY`, `PC.SELECT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`,
@@ -1004,7 +1004,7 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
         selects.add(any(PC.SELECT_KEY in a["program"]["definitions"] for a in case["params"]["audits"]))
         assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
-        assert verdict == REJECT and "whose template is a pinned SlotEntry_v1 or SelectEntry_v1" in json.loads(
+        assert verdict == REJECT and "whose template is a pinned SlotEntry_v2 or SelectEntry_v1" in json.loads(
             out)["reason"], (n, out)
         with monkeypatch.context() as mp:
             for pins, other in others.items():
@@ -1089,7 +1089,7 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_phases_entries(server):
     scans' δ. `b` is the count the check reads there, never below the count it reads at the answer's δ nor the
     sample's own bound, so each way of sampling in part is charged, an answer that states a `bound` of 0 among them,
     the demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1` beside
-    `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
+    `ScanSlots_v2`) or don't (`SlotEntry_v2`)."""
     seen = Counter()
     for m in SAMPLED_IN_PART:
         for n in range(8):
@@ -1168,18 +1168,18 @@ def test_an_output_port_is_a_units_past_o0():
 
 
 def test_an_entries_port_is_a_slot_entry_templates_chunks_o0():
-    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v1` or `SelectEntry_v1`
+    """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v2` or `SelectEntry_v1`
     template's `<id>/c<j>/o0`, the chunk's index in ASCII digits without a leading zero."""
-    assert PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
+    assert PC.entries_port("SlotEntry_v2{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v2{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
     assert PC.entries_port("SelectEntry_v1{}", 3) == "SelectEntry_v1{}/c3/o0"
-    assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
-                                          "SlotEntry_v1{}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
+    assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v2{IDB=8,KO=2,NP=4,STOP=1}"),
+                                          "SlotEntry_v2{}/c0/o0", "SlotEntry_v2{KO=2}/c1/o0",
                                           PC.entries_port(PC.SELECT_KEY, 3), "SelectEntry_v1{}/c0/o0",
                                           "SelectEntry_v1{KO=2}/c10/o0"]))
-    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c01/o0",
-                                              "SlotEntry_v1{KO=2}/c0/o1", "SlotEntry_v1/c0/o0", "", 1, None,
-                                              "SlotEntry_v1{KO=2}/c/o0", "SlotEntry_v1{KO=2}c0/o0",
-                                              "SlotEntry_v1{KO=2}/cx/o0", "SlotEntry_v1{KO=2}/c\u0663/o0",
+    assert not any(map(PC.entries_port_name, ["SlotEntry_v1{KO=2}/c0/o0", "SlotEntry_v2{KO=2}/c01/o0",
+                                              "SlotEntry_v2{KO=2}/c0/o1", "SlotEntry_v2/c0/o0", "", 1, None,
+                                              "SlotEntry_v2{KO=2}/c/o0", "SlotEntry_v2{KO=2}c0/o0",
+                                              "SlotEntry_v2{KO=2}/cx/o0", "SlotEntry_v2{KO=2}/c\u0663/o0",
                                               "SelectEntry_v2{KO=2}/c0/o0", "SelectEntry_v1{KO=2}/c1/o1",
                                               "SelectEntry_v1/c0/o0", "ScanSlots_v2{KO=2}/c0/o0"]))
 
@@ -1198,23 +1198,23 @@ def test_each_lanes_prog_is_its_own_chunk():
     entries port, of 2 leaves, of one pinned template of 4 members; not with the lanes swapped, a chunk of other
     leaves, lane 1's tree missing, or another template's chunk 1; and the scan's lane-1 tree alone ties the audit."""
     s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
-                              audits=[PC.Audit(0, 0, "", 4, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
+                              audits=[PC.Audit(0, 0, "", 4, (("SlotEntry_v2{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
 
     def reg(*ports) -> dict:
         return {"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"} for q, root, n in ports]}
 
     def chunks(l0: int, l1: int, k1: str) -> dict:
-        return reg(("SlotEntry_v1{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1))
+        return reg(("SlotEntry_v2{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1))
 
     def scan(r0: str, r1: str) -> dict:
         return reg(("scan/prog0", r0, 2), ("scan/prog1", r1, 2))
 
-    assert PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r1", "r0"))
-    assert not PC._wired(s, [chunks(3, 1, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog0", "r0", 2)))
-    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=2}")], scan("r0", "r1"))
-    assert PC._tied_audits([chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
+    assert PC._wired(s, [chunks(2, 2, "SlotEntry_v2{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v2{KO=1}")], scan("r1", "r0"))
+    assert not PC._wired(s, [chunks(3, 1, "SlotEntry_v2{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v2{KO=1}")], reg(("scan/prog0", "r0", 2)))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v2{KO=2}")], scan("r0", "r1"))
+    assert PC._tied_audits([chunks(2, 2, "SlotEntry_v2{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
 
 
 def test_the_scan_is_read_off_its_program(server):
