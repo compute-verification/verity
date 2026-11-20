@@ -23,7 +23,7 @@ launch, so the context is the BATCH form: per request step s, every sequence eng
 the position of its first query row (C_q for its prefill, L_q + e - a_q - 1 on a decode step), in admission order (a decode's index
 among the launch's decodes, which FlashMLA's planner reads); `frontend.targets.parse_launch_context` reads it as {"batch": [...]}.
 
-    verity-vllm launch-context <workload.json> [<LP> <T> [<C>]]      -> the shape's JSON (or 'conflict'); no shape: all shapes
+    cli.run(launch_context) <workload.json> [<LP> <T> [<C>]]      -> the shape's JSON (or 'conflict'); no shape: all shapes
 """
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def missing_batch(launch: dict | None, LP: int, T: int) -> dict | None:
     return {"reason": "launch_context", "phase": "applicability", "node": None, "module_path": None,
             "hint": (f"the row is not batch invariant and co-schedules several requests, so every token-count-dependent kernel choice "
                      f"reads the whole launch; this request Program was given {launch!r}, not its launch batch. Pass --launch-context "
-                     f"'{{\"batch\": ...}}' (`verity-vllm launch-context <workload> {LP} {T}`); a 'conflict' shape (requests of one "
+                     f"'{{\"batch\": ...}}' (`cli.run(launch_context) <workload> {LP} {T}`); a 'conflict' shape (requests of one "
                      f"(LP, T) co-scheduled differently) has no one Program.")}
 
 

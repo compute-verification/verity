@@ -440,7 +440,8 @@ class Door:
         r.row_bits, r.gates = sizes(r.c_s, cut or {})
         t = time.perf_counter()
         try:
-            r.circuit = OC.lower(r.c_s, self.partition, self.exe, cut=cut)
+            r.circuit = OC.lower(r.c_s, self.partition, self.exe, cut=cut,
+                                 formed=OC.formed_in(self.decoded, self.partition, units))
         except Exception as e:  # noqa: BLE001
             return stop("lower", _err(e))
         r.seconds["lower"] = round(time.perf_counter() - t, 3)

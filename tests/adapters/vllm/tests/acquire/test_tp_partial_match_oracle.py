@@ -365,4 +365,3 @@ def test_a_witness_on_one_side_only_fails_named(tmp_path):
     (list(OW.MEMBERS), OW.ROUTING), (["align.rank"], OW.ROUTING_OR_SCHEDULE), (["align.rank", "align.start", "align.blk"], OW.ROUTING_OR_SCHEDULE)])
 def test_what_a_differing_witness_implies(members, implies):
     assert OW.implied(members) == implies
-
