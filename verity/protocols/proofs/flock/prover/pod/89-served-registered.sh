@@ -23,6 +23,7 @@
 #      prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 for o in DRAW_COINS:SAMPLE_COINS; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-registered: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 if [ -z "${SR_PINNED:-}" ]; then
