@@ -38,10 +38,9 @@ from verity.circuits.ops import (
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
 from verity_vllm.definitions.registry import (  # noqa: F401
+    boolean_gate_ops,
     dsa,
-    dsv4_qnorm_insert,
     flashmla,
-    marlin_moe,
     topp_word_gates,
 )
 from verity_vllm.definitions.registry.ref_prims import gather_f32

@@ -42,7 +42,7 @@ VERSION = 2
 OPERATIONS: frozenset[str] = frozenset({
     # the floating-point formats' Boolean lowerings (`verity.circuits.ops.boolean`), MUFU.EX2's table among them
     "Bf16ToF32_v2", "F32Fabs_v2", "MufuEx2Ftz_v2",
-    # MUFU.LG2's table on bits, the library's `lg2` (the vLLM integration's `registry.boolean_dsv4_moe`)
+    # MUFU.LG2's table on bits, the library's `lg2` (the vLLM integration's `registry.boolean_gate_ops`)
     "MufuLg2Mantissa_v2",
     # the tensor-core dot products and GEMM coordinates (`verity.circuits.ops.gemm`, `verity.circuits.ops.boolean.gemm`): the accumulator's +0
     "DotBf16_v2", "DotBf16_v3", "GemmCoordinate_v3", "GemmCoordinateE4m3_v1", "GemmCoordinateE4m3_v2",

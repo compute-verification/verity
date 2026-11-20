@@ -7,8 +7,7 @@ Each reader below takes a document whose writer may leave a field out: a require
 Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
 recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
 (`verity_vllm.acquire.sources.partial_source`), and a capture map's taps, whose `commit` block names the source that commits them
-(`verity_vllm.acquire.sources.attention_source`, `verity_vllm.acquire.sources.dsv4_attention_source`,
-`verity_vllm.acquire.sources.mhc_source`).  CPU only."""
+(`verity_vllm.acquire.sources.attention_source`).  CPU only."""
 from __future__ import annotations
 
 import json
