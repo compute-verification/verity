@@ -205,7 +205,6 @@
     {"file": "benchmarks/network_traces/capture_flows.py", "count": 4},
     {"file": "benchmarks/network_traces/attester_piece.py", "count": 13},
     {"file": "benchmarks/network_traces/chain_record.py", "count": 109},
-    {"file": "benchmarks/network_traces/chain_record.sh", "count": 31},
     {"file": "benchmarks/network_traces/compile_slice_zk.py", "count": 26},
     {"file": "benchmarks/network_traces/compile_slice_zk.sh", "count": 3},
     {"file": "benchmarks/network_traces/demo_stub.py", "count": 2},

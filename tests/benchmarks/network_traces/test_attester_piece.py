@@ -12,18 +12,15 @@ from __future__ import annotations
 
 import argparse
 import http.server
-import importlib.util
 import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 import tarfile
 import tomllib
 import threading
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -36,17 +33,12 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 import attester_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 from verity.protocols.resource_accounting.network import scheme as NS  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
-from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.prover.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_network_attester_chain import WC, gate_run  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester as W  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction  # noqa: E402
 
-PERIOD_CASE = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "period_case.py"
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network attester's
 #: D·τ
@@ -58,15 +50,6 @@ GATE_HOST = "gate-host"
 REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED = 7919, 7927, 7933, 104723, 104729, 104743
 PROMPT_LENS = [7937, 7949]
 PRIVATE = {REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED, *PROMPT_LENS}
-
-
-@pytest.fixture(scope="module")
-def period():
-    spec = importlib.util.spec_from_file_location("period_case", PERIOD_CASE)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["period_case"] = mod
-    spec.loader.exec_module(mod)
-    return mod
 
 
 @pytest.fixture(scope="module")
@@ -119,46 +102,6 @@ def _serve_dir(d: Path, network_attester: dict, records: list[dict] | None = Non
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(network_attester[fetch].read_bytes())
         (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": f"research@{GATE_HOST}"}))
     return d
-
-
-def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), witness: Path | None = None,
-               steps: dict | None = None) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the endpoint's; and on its private side
-    (``witness``, D/witness by default, which `_copied` copies to the chain's quarantine), the scan's answers: its one
-    execution phase, with the row registrations ``registrations``. ``steps`` (step -> its verdict and why) is the
-    report's steps, its why each step's not accepted as `chain_record.report` writes it."""
-    out, witness = d / "out", witness or d / "witness"
-    (witness / "scan").mkdir(parents=True)
-    (out / "report").mkdir(parents=True)
-    (out / "endpoint").mkdir(parents=True)
-    (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
-        {"window": K, "requests": 3, "carried": 0, "outputs": 12, "t0_s": 0.5}]}}}))
-    (out / "scan" / "joint").mkdir(parents=True)
-    report = {"verdict": verdict, "why": None if verdict == "accepted" else {"n2": "a window refused"}}
-    if steps is not None:
-        report = {"verdict": verdict, "steps": steps,
-                  "why": {k: f"{s['verdict']}: {s['why']}" for k, s in steps.items() if s["verdict"] != "accepted"} or None}
-    (out / "report" / "report.json").write_text(json.dumps(report))
-    (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
-        {"window": w, "registration": {"program": "ab" * 64}, "answer": {"verdict": "accept"},
-         "registrations": list(registrations)}]}))
-    (out / "scan" / "joint" / "program.json").write_text("{}")
-    return d
-
-
-def _copied(chain: Path) -> str:
-    """A stand-in chain's command: `_chain_out`'s out/ copied to the run dir, and its witness/ to the quarantine."""
-    return (f'mkdir -p "$RESEARCH_RUN_DIR" "$CR_QUARANTINE" && cp -r {shlex.quote(str(chain / "out"))} '
-            f'"$RESEARCH_RUN_DIR/" && cp -r {shlex.quote(str(chain / "witness"))} "$CR_QUARANTINE/"')
-
-
-def _stub_rows(tmp_path: Path, answer: dict | None = None) -> Path:
-    """A stand-in `network-rows` that answers ``answer``, by default its accept."""
-    rows, said = tmp_path / "network-rows", tmp_path / "rows-answer.json"
-    said.write_text(json.dumps(answer or {"protocol": CP.ROWS, "verdict": "accept", "reason": None}))
-    rows.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))}\n")
-    rows.chmod(0o755)
-    return rows
 
 
 def _integrity() -> dict:
@@ -222,187 +165,36 @@ def test_each_configuration_listing_the_network_attester_gets_not_run_from_the_p
     assert line["composed"] not in ("accept", "reject")
 
 
-def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tmp_path, network_attester):
-    """`rows_check` on the kept run, its case read off the run's records under the record of its deployment:
-    ``network-rows``' accept passes and its reject is `Rejected`, as through `own_rows`; an answer of another protocol,
-    a check that exits past 2, a run re-signed under another key than the record's and a run whose case can't be read
-    are `NotRun`; and the case's scratch directory beside the run is gone however it ends."""
-    fetch = tmp_path / "fetch.tar.gz"
-    fetch.write_bytes(network_attester["fetch"].read_bytes())
-    unpacked, run = CP.unpack(fetch)
-    record = WC.own_record(run)
-    assert CP.rows_check(str(_stub_rows(tmp_path)), run, record) is None
-    assert CP.own_rows(str(_stub_rows(tmp_path)))(run) is None
-    reject = {"protocol": CP.ROWS, "verdict": "reject", "reason": "egress bucket 2: not r cells a connection in "
-              "ordinal order"}
-    for check in (lambda exe: CP.rows_check(exe, run, record), lambda exe: CP.own_rows(exe)(run)):
-        with pytest.raises(CP.Rejected, match=r"^the network certifier's records, audited as rows: egress bucket N: "
-                                              r"not r cells a connection in ordinal order$"):
-            check(str(_stub_rows(tmp_path, reject)))
-    with pytest.raises(CP.NotRun, match="network-rows answered no verity/network-rows/v1 accept or reject"):
-        CP.rows_check(str(_stub_rows(tmp_path, {"protocol": CP.PROTOCOL, "verdict": "accept"})), run, record)
-    failing = tmp_path / "failing" / "network-rows"
-    failing.parent.mkdir()
-    failing.write_text("#!/bin/sh\necho oops >&2\nexit 3\n")
-    failing.chmod(0o755)
-    with pytest.raises(CP.NotRun, match="network-rows check: SystemExit: network-rows check exited 3: oops"):
-        CP.rows_check(str(failing), run, record)
-    other = gate_run(tmp_path / "other", seed=b"another network certifier")
-    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*witness/deployment.json "
-                                        "names another key than the auditor's record's"):
-        CP.rows_check(str(_stub_rows(tmp_path)), other, record)
-    (WC.witness(run) / "certified.jsonl").unlink()
-    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*no certified.jsonl"):
-        CP.rows_check(str(_stub_rows(tmp_path)), run, record)
-    assert not list(unpacked.glob("rows-*"))
-
-
-@pytest.fixture(scope="module")
-def rows_exe() -> str:
-    """``network-rows``, built where the piece builds it."""
-    if shutil.which("lake") is None:
-        pytest.skip("no Lean toolchain")
-    return CP.lean_exe("network-rows")
-
-
-#: the synthetic run's cells a connection a bucket, and a cell's bytes
-R, B = sz.W63.params.slots, sz.W63.params.cell_bytes
-
-
-def _responses(edit):
-    """`published`'s ``change``: window 0's responses record with its grid (a list of rows of slots) edited in place
-    by ``edit``, every other record as served."""
-    def change(rec):
-        if (rec.link, rec.window) != (WS.EGRESS, 0):
-            return rec
-        grid = [list(row) for row in rec.grid]
-        edit(grid)
-        return replace(rec, grid=tuple(map(tuple, grid)))
-    return change
-
-
-def _recut(grid) -> None:
-    """Connection 1's second `DATA` cell made an `END` with its bytes."""
-    _, o, payload = W.read_cell(grid[27][1], B)
-    grid[27][1] = W.cell(W.END, o, payload, B)
-
-
-def _reclock(grid) -> None:
-    """Connection 1's lane, its one bucket past its delay (admitted at 0, D = 27), sent a bucket early, in its delay."""
-    grid[26][:R], grid[27][:R] = grid[27][:R], grid[26][:R]
-
-
-def _reorder(grid) -> None:
-    """Bucket 2's first two connections swapped."""
-    grid[2][:R], grid[2][R:2 * R] = grid[2][R:2 * R], grid[2][:R]
-
-
-@pytest.mark.slow
-def test_network_rows_accepts_the_network_attesters_records_and_refuses_cells_cut_clocked_or_ordered_otherwise(
-        tmp_path, rows_exe):
-    """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkAttester.Rows.audit`) on the
-    records the network attester's own publisher writes and signs, under the record of its deployment: the synthetic
-    run's accepted; the same run with a cell of window 0's egress re-cut, connection 1's cells re-clocked or a
-    bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;
-    the run re-signed under another key refused at the record, and, its deployment.json rewritten to the record's, by
-    the audit at its first attestation, which isn't the record's key's; a record changed after its attestation signed
-    it refused at its head; and the honest run's case under a schedule with a `max_tokens_cap` refused by name, the audit
-    reading none. The one test that runs the case's encoding, the binding to the signed heads and the audit together
-    on real records, which the stand-ins above don't."""
-    honest = published(tmp_path / "honest")
-    record = WC.own_record(honest)
-    (rec,) = [r for r in RC.read_records(honest, sz.W63.params)[RC.EGRESS] if r.window == 0]
-    assert [W.read_cell(c, B)[:2] for c in rec.grid[27][:R]] == [(W.DATA, 1)] * (R - 1) + [(W.END, 1)]
-    assert [W.read_cell(c, B)[:2] for c in rec.grid[26][:R]] == [(W.PAD, 1)] * R
-    assert [W.read_cell(c, B)[1] for c in rec.grid[2] if c is not None] == [1] * R + [2] * R + [3] * R
-    case = WC.rows_audit_case(honest, record)
-    got = SP.lean_check(rows_exe, case, tmp_path / "case-honest")
-    assert (got["protocol"], got["verdict"], got["reason"]) == (CP.ROWS, "accept", None), got
-    assert got["profile"] == {"link": WS.LINK, "windows": sz.W63.windows} and got["public"] == {}
-    assert CP.rows_check(rows_exe, honest, record) is None
-    limited = {**case, "params": {**case["params"], "schedule": {**case["params"]["schedule"], "max_tokens_cap": 4}}}
-    got = SP.lean_check(rows_exe, limited, tmp_path / "case-limited")
-    assert (got["verdict"], got["reason"]) == ("reject", "params: schedule: the rows audit reads no max_tokens_cap, so "
-                                               "a run under one isn't audited as rows"), got
-    for name, edit, why in (("re-cut", _recut, "egress bucket 27 isn't the schedule's"),
-                            ("re-clocked", _reclock, "egress bucket 26 isn't the schedule's"),
-                            ("reordered", _reorder, "egress bucket 2: not r cells a connection in ordinal order")):
-        run = published(tmp_path / name, change=_responses(edit))
-        got = SP.lean_check(rows_exe, WC.rows_audit_case(run, record), tmp_path / f"case-{name}")
-        assert (got["verdict"], got["reason"]) == ("reject", why), (name, got)
-        with pytest.raises(CP.Rejected, match=re.escape(re.sub(r"[0-9]+", "N", why))):
-            CP.rows_check(rows_exe, run, record)
-    resigned = published(tmp_path / "resigned", seed=b"another network certifier")
-    with pytest.raises(SystemExit, match="deployment.json names another key than the auditor's record's$"):
-        WC.rows_audit_case(resigned, record)
-    shutil.copyfile(honest / "deployment.json", resigned / "deployment.json")
-    got = SP.lean_check(rows_exe, WC.rows_audit_case(resigned, record), tmp_path / "case-resigned")
-    why = "requests window 0: the certificate isn't the key's in the session"
-    assert (got["verdict"], got["reason"]) == ("reject", why), got
-    with pytest.raises(CP.Rejected, match=re.escape(re.sub(r"[0-9]+", "N", why))):
-        CP.rows_check(rows_exe, resigned, record)
-    shutil.copyfile(tmp_path / "re-cut" / "responses.records", honest / "responses.records")
-    got = SP.lean_check(rows_exe, WC.rows_audit_case(honest, record), tmp_path / "case-changed")
-    assert (got["verdict"], got["reason"]) == ("reject", "responses window 0: the certified head isn't the record's")
-    assert not list(tmp_path.glob("rows-*"))
-
-
 def _numbers(p: Path) -> set[int]:
     return {int(x) for x in re.findall(rb"(?<![0-9A-Za-z])[0-9]+(?![0-9A-Za-z])", p.read_bytes())}
 
 
-def _private_chain_out(out: Path, v0: int = V0, derived: int = DERIVED) -> Path:
-    """What the chain's relay path leaves in out/ on a served window, the endpoint's report the served node's: each
-    step's file carrying the window's private values where the chain writes them, and the report and report.md that
-    ``chain_record.py report`` makes of them."""
-    docs = {
-        "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
-        "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
-                       "warden_check": {"accepted": True, "requests": REQUESTS}},
-        "endpoint/report.json": {
-            "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
-            "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
-            "chain": {"bits": {"T": 1, "bound": True, "rebuilt": True, "v0_total": v0, "commit_windows": [
-                {"window": K, "requests": REQUESTS, "carried": 0, "steps": STEPS, "outputs": OUTPUTS,
-                 "committed_bits": COMMITTED, "v0_bits": v0, "derived_bits": derived, "bound": True, "rebuilt": True}],
-                "windows": [{"window": 0, "v0_bits": v0, "derived_bits": derived, "in_run": True}]}}},
-        "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
-            "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
-        "tie/summary.json": {"warden_run": RUN, "class": "warden", "ok": True, "prompt_lens": PROMPT_LENS,
-                             "releases": [[0, 1]], "link": {"unit": "tie", "T": 30},
-                             "tie": {"honest": [True], "forged": [False]}},
-        "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
-            "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
-            "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
-        "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
-                              "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
-        "job.json": {"path": CR.NETWORK_ATTESTER, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
-    }
-    for rel, doc in docs.items():
-        (out / rel).parent.mkdir(parents=True, exist_ok=True)
-        (out / rel).write_text(json.dumps(doc, indent=1))
-    CR.main(["report", *(x for f, rel in (("custody", "custody.json"), ("certs", "certs.json"), ("endpoint",
-             "endpoint/report.json"), ("n2", "n2/summary.json"), ("scan", "scan/summary.json"), ("job", "job.json"),
-             ("tie", "tie/summary.json")) for x in (f"--{f}", str(out / rel))), "--warden-run", RUN,
-             "--out", str(out / "report")])
+def _endpoint_report(out: Path, v0: int = V0, derived: int = DERIVED) -> Path:
+    """The served node's endpoint report on a served window, its advice's lengths v0 and derived among its values."""
+    (out / "endpoint").mkdir(parents=True)
+    (out / "endpoint" / "report.json").write_text(json.dumps({
+        "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
+        "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
+        "chain": {"bits": {"T": 1, "bound": True, "rebuilt": True, "v0_total": v0, "commit_windows": [
+            {"window": K, "requests": REQUESTS, "carried": 0, "steps": STEPS, "outputs": OUTPUTS,
+             "committed_bits": COMMITTED, "v0_bits": v0, "derived_bits": derived, "bound": True, "rebuilt": True}],
+            "windows": [{"window": 0, "v0_bits": v0, "derived_bits": derived, "in_run": True}]}}}, indent=1))
     return out
 
 
-def test_no_advice_length_reaches_the_endpoints_public_document_or_the_report(tmp_path):
-    """The advice's lengths (v0's and the residual's) are private: the endpoint step's public document and the chain's
-    report, report.md included, carry neither, and a run whose advice is longer leaves the same bytes."""
+def test_no_advice_length_reaches_the_endpoints_public_document(tmp_path):
+    """The advice's lengths (v0's and the residual's) are private: the endpoint step's public document carries neither,
+    and a run whose advice is longer leaves the same bytes."""
     longer = (V0 * 7 + 3, DERIVED * 5 + 1)
-    made = {n: _private_chain_out(tmp_path / str(n), *n) for n in ((V0, DERIVED), longer)}
     public = {}
-    for (v0, derived), out in made.items():
+    for v0, derived in ((V0, DERIVED), longer):
+        out = _endpoint_report(tmp_path / str(v0), v0, derived)
         assert {v0, derived} <= _numbers(out / "endpoint" / "report.json")
         doc = CR.endpoint_public(CR.network_attester_endpoint_step(json.loads((out / "endpoint/report.json").read_text())))
         (out / "public.json").write_text(json.dumps(doc, sort_keys=True))
-        public[v0, derived] = [(out / rel).read_bytes() for rel in ("public.json", "report/report.json", "report/report.md")]
-        assert not [rel for rel in ("public.json", "report/report.json", "report/report.md")
-                    if {v0, derived} & _numbers(out / rel)]
+        assert not {v0, derived} & _numbers(out / "public.json")
+        public[v0, derived] = (out / "public.json").read_bytes()
     assert public[V0, DERIVED] == public[longer]
-    assert '"open": "not established' in public[longer][1].decode()
 
 
 #: a made-up name of a served node, a session's peer
@@ -672,6 +464,7 @@ WRITTEN = DEPLOYMENT | {"listen": ["127.0.0.1", 40001], "upstream": ["127.0.0.1"
 WAITING = {"run": RUN, "request": {"device": "warden", "peer": PEER, "client_port": 8012, "windows": 20}, "end": None,
            "active": True, "relay": None}
 LISTENING = WAITING | {"relay": {"client": "127.0.0.1:8012", "deployment": DEPLOYMENT}}
+ENDED = LISTENING | {"active": False, "end": PASSED}
 
 SESSION_GATE = r'''#!PYTHON
 import io, json, os, sys, tarfile
@@ -858,6 +651,36 @@ def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):
     assert len(_asked(tmp_path)) == 1
 
 
+def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_rehearsals_front_does(tmp_path,
+                                                                                                     monkeypatch):
+    """`close` as served_verdicts.sh's CERTIFIER_CLOSE runs it, on the serve dir and the front's directory."""
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, out = tmp_path / "serve", tmp_path / "out-close"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING, None, LISTENING, ENDED])
+    slept = []
+    assert CP.close(CP.parser().parse_args(["close", str(serve), str(out)]), sleep=slept.append) == 0
+    assert slept == [CP.SS.POLL_S] * 3
+    assert _asked(tmp_path)[2:] == [f"status {RUN}"] * 4 + [f"fetch {RUN}"]
+    kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
+    assert kept.stat().st_mode & 0o777 == 0o600 and CP.kept_run(serve) == RUN
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json"]
+    assert json.loads((out / "status.json").read_text()) == {k: v for k, v in ENDED.items() if k != "relay"}
+    with tarfile.open(kept) as full, tarfile.open(out / "bundle.tgz") as shown:
+        assert f"{RUN}/witness/certified.jsonl" in full.getnames()
+        assert sorted(shown.getnames()) == [f"{RUN}/end.json", f"{RUN}/out/certificates.jsonl",
+                                            f"{RUN}/out/deployment.json", f"{RUN}/request.json"]
+    doc = json.loads((out / "session.json").read_text())
+    assert (doc["run"], doc["rc"], doc["ended"], doc["verdict"]["accepted"], doc["windows"], doc["gate"]) == (
+        RUN, 0, "ended", True, 20, f"research@{GATE_HOST}")
+    assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
+    assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
+    assert CP.open_sessions(serve / CP.PRIVATE) == []
+    asked = len(_asked(tmp_path))
+    assert CP.main(["close", str(serve), str(tmp_path / "out-again")]) == 2
+    assert len(_asked(tmp_path)) == asked
+
+
 def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_way(tmp_path, monkeypatch):
     """``--gate local``: this tree's gate takes the front's request on the scratch host under the serve dir's private,
     answers its status and gives its fetch, and the unit the front starts runs `auditor.certifier_run` with a `relay`
@@ -939,32 +762,6 @@ def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
     assert order == [(1, 2, True), (3, 4, False), (5, 6, True)]
     with pytest.raises(SystemExit, match="one --to for each --listen"):
         CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])
-
-
-@pytest.mark.parametrize("step", ["piece", "chain", "period"])
-def test_no_flag_names_an_executable_and_the_piece_builds_only_its_declared_ones(step, tmp_path, monkeypatch, capsys):
-    """``--lean`` and ``--rows`` are refused by name, and `lean_exe` builds only network-period and network-rows of
-    the network attester's declaration (`Launch.executables`), in its own package."""
-    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
-
-    args = [str(tmp_path), str(K), str(tmp_path), *([] if step == "piece" else [str(tmp_path)])]
-    for flag in ("--lean", "--rows"):
-        with pytest.raises(SystemExit) as e:
-            CP.parser().parse_args([step, *args, f"{flag}=/tmp/other"])
-        assert e.value.code == 2 and f"unrecognized arguments: {flag}=/tmp/other" in capsys.readouterr().err
-    built = []
-
-    def executable(name: str, package: Path) -> Path:
-        built.append((name, package))
-        raise V.LeanError(f"not built: {name}")
-    monkeypatch.setattr(V, "executable", executable)
-    declared = CP.schemes.get("network-attester").pieces["workers"].executables
-    for e in declared:
-        with pytest.raises(CP.NotRun, match=f"not built: {e.target}"):
-            CP.lean_exe(e.target)
-    with pytest.raises(CP.NotRun, match="other is no executable the network attester declares"):
-        CP.lean_exe("other")
-    assert built == [(e.target, ROOT / e.package) for e in declared]
 
 
 def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
