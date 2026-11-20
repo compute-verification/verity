@@ -9,16 +9,19 @@
 # statements (registered, fresh, afresh), then the vectors: honest, fresh-salts and afresh (their own pub.bin), and the
 # honest session with the verifier's reads moved one row (wrong-position) and with none (no-registered). The fixture goes
 # into the evidence store (`research data put --kind fixture/v1 --preserve`), its id in out/fixture.txt (else out/fixture).
-# Run from the verity tree (research run --cwd source --send src.tar.gz); CPU only. It exits nonzero unless upstream's
-# server accepted each session.
-# env: UP=art:fd8516a0… (flock-upstream-build/v1)  THREADS=16
+# Run from the verity tree (research run --cwd source --send src.tar.gz [--send upstream.tar.gz]); CPU only. It exits
+# nonzero unless upstream's server accepted each session.
+# env: UP=art:fd8516a0… (flock-upstream-build/v1: inputs/upstream.tar.gz, else fetched from the store)  THREADS=16
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=${RESEARCH_RUN_DIR:-/tmp/registered-reads}/inputs; O=${RESEARCH_RUN_DIR:-/tmp/registered-reads}/out; mkdir -p $O
 UP=${UP:-art:fd8516a05f93b00ffd242475754ef5895193b5badbbe4f2fa5fea8e74f870ee5}
 UP_SHA=3e385058edbd2d04abe0fe95a85ac4c501a68206add690e833ca2cd7177789fe
 T=$(mktemp -d); trap 'rm -rf $T' EXIT
-research data fetch $UP --to $T/up > $O/fetch.log 2>&1 || { tail -5 $O/fetch.log; exit 1; }
+mkdir -p $T/up
+if [ -f $I/upstream.tar.gz ]; then cp $I/upstream.tar.gz $T/up/
+else research data fetch $UP --to $T/up > $O/fetch.log 2>&1 || { tail -5 $O/fetch.log; exit 1; }
+fi
 for z in $(find $T/up -name '*.tar.gz'); do tar -xzf $z -C $(dirname $z) || exit 1; done
 B=$(find $T/up -name upstream-967b8d06 -type f | head -1); chmod +x $B
 sha256sum $B | tee $O/binary.sha256; [ "$(sha256sum $B | cut -d' ' -f1)" = $UP_SHA ] || { echo "upstream-967b8d06 is not the pinned build"; exit 1; }

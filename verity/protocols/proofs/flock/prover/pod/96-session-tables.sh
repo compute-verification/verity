@@ -3,9 +3,9 @@
 # synthetic set (seed 20260928) staged by verity_flock.circuit (circuit.txt, the verifier's pub-8.bin), proved by a
 # selftest build (seed-injection, on seed coins) in loopback sessions of several tables: sessions/j2 (J = 2, no draw),
 # sessions/j2-draw (J = 2, `--draw subset:4`, two sessions) and sessions/j4 (J = 4, no draw), each with its live verdicts
-# (index.jsonl). The staged verifier's files and the sessions go into the evidence store as a fixture (`research data put
+# (index.jsonl: each refused for its form, several tables without --zk, once every check has passed). The staged verifier's files and the sessions go into the evidence store as a fixture (`research data put
 # --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names (else they are out/fixture). Run from the verity tree
-# (research run --cwd source); CPU only. It exits nonzero unless every session was accepted by its server.
+# (research run --cwd source); CPU only. It exits nonzero unless every session passed every check of its server.
 # env: FLOCK_WORK=/workspace, or where /workspace isn't writable /workspace/cache/session-tables (the prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -61,8 +61,12 @@ run() {  # name J sessions [serve args...]
   $B prove --verifier 127.0.0.1:$port --instances $D/inst-$N.bin --circuit $D/circuit.txt --session-tables $j --runs $n \
     > $O/$name.prove.txt 2> $O/$name.prove.err
   wait $sp
-  local got=$(grep -c '"accepted":true' $S/sessions/$name/index.jsonl 2>/dev/null)
-  echo "$name: $got of $n accepted"
+  # the server refuses the form (several tables without --zk) once every check has passed, as Lean does: its verdict without
+  # the refusal is the sessions' own
+  local got=$(python3 -c 'import json, sys
+print(sum(bool(d.get("accepted") or (d.get("without_refusal") or {}).get("accepted"))
+          for d in map(json.loads, open(sys.argv[1])) if d.get("session")))' $S/sessions/$name/index.jsonl 2>/dev/null)
+  echo "$name: $got of $n pass every check of the server"
   [ "$got" = "$n" ] || OK=0
 }
 run j2 2 1
