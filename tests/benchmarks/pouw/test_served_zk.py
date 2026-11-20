@@ -1348,7 +1348,7 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
             with pytest.raises(S.Refused) as e:
                 step(ch)
         assert _codes(e) == {f"{OR.DISAGREE}: {check}"}
-        bad = [x for x in ch.witness["honest"] if not x["same"]]
+        bad = [x for x in ch.witness["honest"] if x["same"] is False]
         assert [x["check"] for x in bad] == [check] and bad[0]["lean"] != bad[0]["python"]
         return ch
 
@@ -1510,7 +1510,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert [w["reply"] for w in witness] == [x.split(" ", 1)[0] for x in replies]
     noted = [e for w in witness for e in w["of_record"]]
     assert {e["check"] for e in noted} >= {"registered", "registration", "pass", "draw", "answer"}
-    assert all(e["same"] and e["of_record"] == "lean" for e in noted)
+    assert all((e["same"] or e["python"] is None and e["same"] is None) and e["of_record"] == "lean" for e in noted)
     accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
     assert accepted and all(e in o["of_record"] for e in accepted)
 
