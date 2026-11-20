@@ -91,12 +91,8 @@ finish inside one served window. The parts, in the order they run:
   `PYTHONHASHSEED=0` and request ids not randomized, because the scheduler iterates sets of request ids. A model whose
   sparse attention selects positions by a top-k over more keys than it keeps is served and replayed with the
   canonical top-k plugin (`benchmarks/dsa_topk/`), since the stock kernels' selection can vary from run to run.
-- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
-  commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
-  challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
-  stage. The verifier accepts a two-stage run whose every check passes (`FORM` in
-  `verity/protocols/proofs/spot/verifier/second_stage.py`), ahead of the soundness proof of that form, and the accept's
-  record says its form is not yet proved.
+- **The stages around it.** The verifier's stream refuses a size class's boundary commitment, a two-stage docket, by
+  name at its registration, before any coin (`levels.TWO_LEVELS_REFUSED`).
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
