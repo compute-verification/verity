@@ -89,7 +89,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1570, "inputs": 10692640, "wired": 1385248, "registered": 9307392, "ingress": 0, "free": 0}
+        "units": 1571, "inputs": 10765408, "wired": 1676320, "registered": 9089088, "ingress": 0, "free": 0}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -111,7 +111,7 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert set(pins) == set(_lowered(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1570, "inputs": 10692640, "wired": 1385248, "registered": 9307392 - rope, "ingress": 0,
+    assert held_ == {"units": 1571, "inputs": 10765408, "wired": 1676320, "registered": 9089088 - rope, "ingress": 0,
                      "free": rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}

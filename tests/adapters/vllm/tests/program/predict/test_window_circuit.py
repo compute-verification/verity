@@ -164,7 +164,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     collector and entry, template by template, 9 embeddings against the class's 10, and its blocks are its 2 Programs over 5 steps. A
     prompt position before the last feeds its prompt's id (`TokenFeed_v1{FIRST=True}`) and collects it with no select
     (`OutCollect_v1`); the entries (`SlotEntry_v1{NP=1}`) are one allocation in slot order, each an inference entry at its
-    slot's last step."""
+    slot's last step. Its one unit of no slot is the scan state's owner."""
     low = _lowered(WINDOW)
     circuit = low.circuit
     alone = [_circuit(ONE), _circuit(SHORT)]
@@ -176,7 +176,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     assert _counts(class_circuit(S._registered(), CLASS, None, GRAIN))[EMB] == 10
     assert (circuit.blocks.slots, circuit.blocks.steps) == (2, 5)
     units, none = circuit.blocks.per_slot(dict.fromkeys(circuit.units, 1))
-    assert units[0] > units[1] and none == 0
+    assert units[0] > units[1] and none == 1
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}[SLOT_ENTRY]
     assert [(e.slot, e.radix, e.step) for e in circuit.blocks.inference if e.template == entry] == [(0, (1,), 4), (1, (1,), 3)]
     IF.Blocks.of(json.loads(json.dumps(circuit.blocks.doc(sum(circuit.units.values()), ""))), circuit.units, "")
@@ -783,8 +783,8 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     with its collector are step p, its feed (p = 1..3) step p, its scan units step 0 and its entry step 4, a head's Calls
     over T keys step T - 1 (their digits layer, slot, head; the ends one template over every step), and the entries tile
     every template.
-    Every wire's writer is of its reader's slot at its step or before: a slot reads only its own units, a position only its
-    own and earlier positions'."""
+    Every wire's writer is of its reader's slot, or a unit of no request, at its step or before: a slot reads only its own
+    units and the scan state's owner, a position only its own and earlier positions'."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 71)
@@ -801,11 +801,12 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     assert [{s for *_, s in by[att.format(t)]} for t in range(1, 6)] == [{t} for t in range(5)]
     assert by["RoPEHead_v1{D=16}"][:2] == [(0, (2, 4), ("slot", "-"), 0), (8, (2, 2), ("slot", "-"), 0)]
     labels = _labels(circuit)
+    shared = {e.template for e in circuit.blocks.inference if not e.request}
     assert all((lab >= 0).all() for lab in labels.values())
     for w in circuit.wires:
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
-        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+        assert (w.writer in shared or (reader[:, 0] == writer[:, 0]).all()) and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
 
 
 def test_inference_entries_are_the_slots_runs_side_by_side():
