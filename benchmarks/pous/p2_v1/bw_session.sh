@@ -82,7 +82,7 @@ EOF
 step registration $?
 "$PY" "$D/bandwidth_toy.py" "$S/toy" > "$O/toy.log" 2>&1 \
   && "$PY" verity/protocols/resource_accounting/memory/poub/prover/p2_stage/bandwidth.py session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
-    --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
+    --registration "$S/toy/registration.json" --device cpu --ref-decode --windows 2 --passes 2 --samples 16 --window-s 0.001 --deadline-s 0.001 \
     --verifier "$PY -m verity.protocols.resource_accounting.memory.poub.verifier.p2_parties --registration $S/toy/registration.json --stdio \
       --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1

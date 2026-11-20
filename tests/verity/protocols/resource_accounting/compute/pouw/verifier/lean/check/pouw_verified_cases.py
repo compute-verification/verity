@@ -27,7 +27,7 @@ reach, no lanes evidence, a leaf's statement dropped, a leaf Program other than 
 phase's own, a statement twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the
 leaf reads unregistered, the sample malformed, and the evidence's or the circuit files' lanes form broken.
 
-`tests/test_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier (`replay`).
+`test_live_verified_difftest.py` replays `runs` as the verifier through `replay`.
 """
 from __future__ import annotations
 

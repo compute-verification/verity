@@ -63,7 +63,8 @@ def _forward_refused(inst) -> bool:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,093 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,093 instances, their expansions and the reference's results, byte for byte as the record pins them: the only
+    test of the bytes the Lean audit compares, which no test of a sample of the instances can stand for."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",

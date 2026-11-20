@@ -306,7 +306,7 @@ def retained(tmp_path_factory):
             "salts_t": PPDR._write(d / "salts_t", salts(prover._tree))}
     PPDR.write_manifest(d, head, weights, matmuls)
     (base / "coins.json").write_text(json.dumps(coins[0].to_json()) + "\n")
-    for name in GP.FULL:
+    for name in GP.PASSES:
         shutil.copytree(d, base / name)
     shutil.rmtree(d)
     return SimpleNamespace(base=base, count=count, y_words=y_words, GP=GP)
@@ -328,7 +328,7 @@ def test_full_checks_every_tile_and_every_served_y_word(retained, tmp_path):
     out, pub = _copy(retained, tmp_path)
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "2", "--cross-check", "2"]) == 0
     res = json.loads((pub / "full.json").read_text())
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         r = res[name]
         assert r["ok"] and r["tiles"] == retained.count and r["failed"] == 0, r["line"]
         assert r["shapes"] == {"16x128": 2, "32x128": 2} and r["words"] == 32 * 16 + 16 * 32
@@ -366,12 +366,12 @@ def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcri
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import CoinCommitment
 
     out, pub = _copy(retained, tmp_path)
-    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
+    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.PASSES}
     assert retained.GP.main(["volunteer", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 0
     import verify_run as VR
 
     res, coins = json.loads((pub / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((pub / "coins.json").read_text()))
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         r, man = res[name], json.loads((out / name / "manifest.json").read_text())
         assert r["ok"] and r["left"] == [] and r["tiles"] == retained.count, r["line"]
         assert man["commitment"] == before[name]["commitment"] and man["records_root"] == r["records_root"]["after"]
@@ -386,11 +386,11 @@ def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_
     import shutil
 
     out, pub = _copy(retained, tmp_path)
-    for name in retained.GP.FULL:
+    for name in retained.GP.PASSES:
         shutil.rmtree(out / name / "y")
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1"]) == 1
     res = json.loads((pub / "full.json").read_text())
-    assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.FULL) and not res["ok"]
+    assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.PASSES) and not res["ok"]
     assert retained.GP.main(["full", "--retain", str(out), "--out", str(pub), "--jobs", "1", "--without-y"]) == 0
     res = json.loads((pub / "full.json").read_text())
-    assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.FULL)
+    assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.PASSES)

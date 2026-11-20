@@ -35,6 +35,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import hm96
 from verity.commitments import registered_value as RV
 
+import verity_difftest as D
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
@@ -395,7 +396,7 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     reads every link, are gone from the templated form). The class statement's per-instance rows (``own``) have no
     templated form: every port is a registered read, x one row per instance already."""
     d, flat = templated
-    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    D.build(LEAN, "verity-verify-proof")
 
     def at(where: Path, name: str, reads: str | None, program: bool = True):
         return _lean("--statement", FC.TMPL_STATEMENT, "--circuit", str(where / name / "circuit.txt"),
@@ -431,7 +432,7 @@ def test_the_sampled_proofs_own_setup_refuses_each_cheat(templated):
     """The same statements set up by the sampled proofs' own check (`OneStageZk.sessionAt`, through `spot-difftest`'s
     `session_setup`), each with its verifier's registered reads."""
     d, _flat = templated
-    subprocess.run(["lake", "build", "spot-difftest"], cwd=SPOT, check=True, capture_output=True)
+    D.build(SPOT, "spot-difftest")
     program = (d / "program.desc").read_bytes().hex()
     partition = json.loads((d / "partition.json").read_text())
     cases = (("writers", "writers", None), ("honest", "readers", None), ("made_up", "readers", f"port x: table row 0 {NOT_OPEN}"),

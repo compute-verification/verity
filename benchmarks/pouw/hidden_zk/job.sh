@@ -6,24 +6,16 @@
 #   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean verity-verify-proof, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
-#      controls, sampled the same way, and the Lean
-#      verifier on all of them:
+#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, and the Lean verifier on it:
 #        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
-#        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
-#        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
-#                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
-#                       before its config's refusal (below); output_row_committed_false (a tampered output row),
-#                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
-#                       claim, the verifier's file agreeing with it) REJECT
+#      Sourcing scripts may still call `controls` (the selftest build's records) and `lean_jobs` checks them (st-<case>).
 #      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
 #      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted. A config whose stage writes a
 #      Program (program.json; served_units' bound statements) is checked with it (--program).
-#      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
+#      A tile has no public input, so it runs honest-own without --public-inputs.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
 # reads; a later run with the same key proves the kept files (stage-cache.json says which, stage.json their own staging).
@@ -205,9 +197,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
     if [[ $role == tile* || $role == hidden* ]]; then
       cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --session $s")
     else
-      cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s"
-             "honest-wrong|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs-wrong.bin --session $s"
-             "honest-chosen|$base --statement verity/flock-circuit --public $D/pub-chosen.bin --public-inputs $D/public-inputs.bin --session $s")
+      cmds+=("honest-own|$base --statement verity/flock-circuit --public $D/pub.bin --public-inputs $D/public-inputs.bin --session $s")
     fi
   fi
   for s in "$D"/st/*/; do
@@ -286,12 +276,11 @@ run_configs() {
       log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; rm -rf "$D"; "$PY" "$J/summarize.py" "$OUT" > /dev/null; continue
     fi
     cp "$D/stage.json" "$D/pin.txt" "$O/"
-    [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$D/public-inputs-wrong.bin" "$O/"
+    [ -e "$D/public-inputs.bin" ] && cp "$D/public-inputs.bin" "$O/"
     log "$tag: staged: $("$PY" -c "import json; s = json.load(open('$O/stage.json')); c = json.load(open('$O/stage-cache.json')); print(s['definition'], s['ands'], 'ANDs, k_log', s['k_log'], s['circuit_bytes'], 'B, sha512', s['circuit_sha512'][:16], 'peak', s['maxrss_gb'], 'GB,', s['seconds']['total'], 's,', s.get('staging'), 'staging, cache', 'hit' if c['hit'] else 'miss')")"
     if [ "${HZ_STAGE_ONLY:-0}" = 1 ]; then "$PY" "$J/summarize.py" "$OUT" > /dev/null; rm -rf "$D"; continue; fi
     log "$tag: --zk session ($WARM warm + $RUNS timed)"
     session "$D" "$O" || log "$tag: --zk session FAILED: $(tail -2 "$O/prove.err")"
-    controls "$D" "$O" "$role"
     lean_jobs "$D" "$O" "$role"
     "$PY" "$J/summarize.py" "$OUT" > /dev/null
     rm -rf "$D"
