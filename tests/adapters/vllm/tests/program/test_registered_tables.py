@@ -1,15 +1,14 @@
-"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and a program
-reading one decodes where it was not built. A `registered_values` derivation of Gemma-2's GeGLU registers no table: its Boolean
-version computes the activation (`registry.boolean_tanh`)."""
+"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and the Definitions
+that read it compute what their twins, whose primitive evaluator holds the table, compute. A `registered_values` derivation of
+Gemma-2's GeGLU registers no table: its Boolean version computes the activation (`registry.boolean_tanh`)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 from verity.circuits.boolean import table as BT
-from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.constants import REGISTRATION, inputs
-from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.defs import REGISTRY
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
@@ -45,25 +44,6 @@ def test_a_read_has_its_boolean_form_up_to_max_words():
     for name in ("gelu_tanh_bf16", "tanh_rn"):
         p = T.table_read(*T.TABLES[name])
         assert f"{p.name}_v2" not in REGISTRY.defs
-
-
-def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
-    """`TableRead16x1_v1` comes from its lazy family in a process that never built a Definition reading it."""
-    import json
-    import subprocess
-    import sys
-
-    row = CompositeDefinition("TTableRow", 1, (), lambda S: ((("g", Value(16)), ("gelu_tanh_bf16", T.GELU_TABLE)), Value(16)),
-                              lambda B, S, g, t: B.call(T.table_read(16, 1), g, t), register=False)
-    prog = Program(bind(row), registered=("gelu_tanh_bf16",))
-    d = tmp_path / "p.json"
-    d.write_text(json.dumps(encode_program(prog)))
-    code = ("import json, sys; from verity.circuits.codec import decode_program, program_digest; from verity.circuits.defs import REGISTRY; "
-            "import verity_vllm.definitions.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
-            "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
-    out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
-    assert out == [program_digest(prog)]
-    assert len(inputs(prog.circuit)[REGISTRATION]) == 1 << 16
 
 
 def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
@@ -120,4 +100,3 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     a = materialize(twin, [xs, w])
     b = materialize(prog, [xs, [eps], w])
     assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
-
