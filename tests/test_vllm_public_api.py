@@ -242,6 +242,8 @@ PUBLIC = {
                                "no name",
     "verity_vllm.definitions.registry.catalog": "I7: the registry with every module loaded (load) and the packages it "
                                                 "loads by scope (SCOPES), which SPOT's audit and the benchmarks read",
+    "verity_vllm.definitions.registry.boolean_gate_ops": "I7: general word primitives on bits, which a lane outside the adapter "
+                                                         "builds cases from (benchmarks/property_redteam)",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "

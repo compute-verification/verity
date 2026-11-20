@@ -434,3 +434,6 @@ def mufu_lg2_mantissa(C, x):
 MufuLg2MantissaV2 = definition("MufuLg2Mantissa", 2, mufu_lg2_mantissa, (("x", F32_BITS),), F32_BITS, word=MufuLg2Mantissa,
                                doc="MUFU.LG2 of 1.m on bits: MufuLg2Mantissa_v1's interpolator as one carry-save sum, the word "
                                    "rounded toward zero by a leading-zero count and a shift")
+
+__all__ = ["F32ToU32RzByte", "F32ToU32RzByteV2", "I32Div", "I32DivV2", "I32Mul", "I32MulV2", "I32Rem", "I32RemV2",
+           "MufuLg2Mantissa", "MufuLg2MantissaV2", "Ue8m0CeilByte", "Ue8m0CeilByteV2"]
