@@ -34,10 +34,10 @@ fits only where the scan's prompt length is L: an advice of another prompt lengt
 positions a key block holds at the model and grain is refused at the first position past them, naming that bound. A
 collector's rows and an entry's are a few words at a small class, too narrow for a proof block of their own, so none is a
 unit of its own. In the class circuit the entries are one allocation after the walk, in slot order, and the state rows
-each lane's unit reads and the entries are the circuit's external ports.
+`ScanState_v2` reads and the entries are the circuit's external ports.
 
-A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): its first start unit
-(`IngressScanStart`) reads ``SCAN_STATE``'s one row, the state before the window; its ingress unit t
+A served window's circuit holds the scan too (the network scheme's ports, `scan_state.Scan`): `ScanState_v2` reads
+``SCAN_STATE``'s one row, the state before the window; its ingress unit t
 (`IngressScanBucket`) reads the network attester's ingress row t (``INGRESS_ROWS``), S_{t−1} by wire (`ScanState_v2`'s
 o1 at t = 0) and, as ``prog<j>``, the entry of lane j at t's boundary; its egress unit t (`EgressBucket`) reads
 ingress unit t's view and its row is held to the attester's released row t (``RELEASED_ROWS``). Each lane's
@@ -387,8 +387,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
         raise Unexpressible(f"the Programs' entries are units of {sorted(entry_units)}, not each one of one template")
     circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(*(f"{descriptor_id(s)}/state" for s in scans if descriptor_id(s) in b.units),
-                                   f"{entry_units.pop()}/o0") if order is None else (f"{ttid}/sin", f"{itid}/row", f"{gtid}/o1"),
+                         external=(f"{otid}/state", f"{entry_units.pop()}/o0") if order is None
+                         else (f"{otid}/state", f"{itid}/row", f"{gtid}/o1"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty),
