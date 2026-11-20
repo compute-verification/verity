@@ -369,7 +369,7 @@ def Prog.bodyOf? (P : Prog) (w : String) : Option Nat := P.boolean[w]? >>= (P.in
 
 /-- The `k=<canonical json>` pairs' keys of a specialization id `Name_vN{k1=..,k2=..}`, in id order (`codec._split_record`). -/
 def recordPairs (fid : String) : Array (String × String) := Id.run do
-  if !(fid.contains '{' && fid.endsWith "}") then return #[]
+  if !(fid.toList.contains '{' && fid.endsWith "}") then return #[]
   let cs := fid.toList
   let some open_ := cs.findIdx? (· == '{') | return #[]
   let rec_ := (cs.drop (open_ + 1)).dropLast ++ [',']
@@ -412,10 +412,23 @@ decreasing_by
   · exact sizeOf_lt_of_mem_obj x.2
   · exact sizeOf_lt_of_mem_arr ‹_›
 
+/-- `fnRefs` unfolded `f` times, `fnRefs` itself past that, its sort `qsortFueled`: the kernel unfolds it. -/
+private def fnRefsFueled : Nat → Array String → Json → Array String
+  | 0, acc, j => fnRefs acc j
+  | f + 1, acc, .obj kvs =>
+    let items := kvs.toArray
+    if items.size == 1 && items[0]!.1 == "fn" then
+      match items[0]!.2 with
+      | .str s => acc.push s
+      | _ => acc
+    else (qsortFueled items.attach (fun a b => a.1.1 < b.1.1)).foldl (fun acc x => fnRefsFueled f acc x.1.2) acc
+  | f + 1, acc, .arr a => a.foldl (fun acc x => fnRefsFueled f acc x) acc
+  | _ + 1, acc, _ => acc
+
 /-- Every `{"fn": id}` in a specialization id's binding record, in encoding order (`codec._record_function_ids`). -/
 def recordFunctionIds (fid : String) : Array String :=
   (recordPairs fid).foldl (fun acc (_, v) => match JsonParse.parse v with
-    | .ok j => fnRefs acc j
+    | .ok j => fnRefsFueled Steps.FUEL acc j
     | .error _ => acc) #[]
 
 /-! ### §4.4 A leaf read at the width it was committed with
@@ -1542,7 +1555,7 @@ def entryRefs (callees : Array Json) (e : Json) : Array String :=
         | some (.str s) => some s
         | _ => none
       | .error _ => none
-  fnRefs fns (e.getObjValD "bindings")
+  fnRefsFueled Steps.FUEL fns (e.getObjValD "bindings")
 
 /-- `E_UNREACHED` (§4.1): a definition of `defs` that none of `roots` (the root, the functions `program_fn`'s record names
 among `definitions`, the Boolean map's bodies) reaches through node callees and binding records (`codec._walk`). -/
@@ -1631,6 +1644,19 @@ decreasing_by
   · exact sizeOf_lt_of_mem_obj x.2
   · exact sizeOf_lt_of_mem_arr x.2
 
+/-- `subFns` unfolded `f` times, `subFns` itself past that: the kernel unfolds it. -/
+def subFnsFueled (d : String → Option String) : Nat → Json → V Json
+  | 0, j => subFns d j
+  | f + 1, .obj kvs =>
+    let items := kvs.toArray
+    match (if items.size == 1 && items[0]!.1 == "fn" then items[0]!.2 else .null) with
+    | .str s => match d s with
+      | some x => pure (Json.mkObj [("fn", .str x)])
+      | none => throw s!"KeyError: no digest of {s}"
+    | _ => do pure (Json.mkObj (← items.attach.mapM fun x => do pure (x.1.1, ← subFnsFueled d f x.1.2)).toList)
+  | f + 1, .arr a => do pure (.arr (← a.attach.mapM fun x => subFnsFueled d f x.1))
+  | _ + 1, x => pure x
+
 /-- Canonical entry `e` composed (§4.8, `codec._composed`): each reference replaced by its digest in `d`, and `body`'s digest
 under `boolean` for a word primitive. -/
 def composeEntry (d : String → Option String) (e : Json) (body : Option String) : V Json := do
@@ -1638,7 +1664,7 @@ def composeEntry (d : String → Option String) (e : Json) (body : Option String
     | some x => pure (Json.str x)
     | none => (throw s!"KeyError: no digest of {s}" : V Json)
   let mut out := e
-  if let .ok b := e.getObjVal? "bindings" then out := setKey out "bindings" (← subFns d b)
+  if let .ok b := e.getObjVal? "bindings" then out := setKey out "bindings" (← subFnsFueled d Steps.FUEL b)
   if isCompositeEntry e then
     let body := e.getObjValD "body"
     let .arr nodes := body.getObjValD "nodes" | throw "program: a composite without body nodes"
@@ -1664,7 +1690,7 @@ def digestGo {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT 
       discard (digestGo h ddefs callees types bm n r)
     let memo ← get
     let c ← (composeEntry (memo[·]?) e bm[fid]? : V Json)
-    let x := hexOf (← h (← (canon c : V String)).toUTF8)
+    let x := hexOf (← h (← (canonFueled Steps.FUEL c : V String)).toUTF8)
     modify (·.insert fid x)
     return x
 
@@ -1710,7 +1736,7 @@ def programDigestWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mo
     | _ => pure #[]
   let obj := Json.mkObj [("schema", j.getObjValD "schema"), ("program_fn", pfn), ("inputs", j.getObjValD "inputs"),
     ("root", root), ("functions", Json.mkObj functions.toList), ("boolean", Json.mkObj boolean.toList)]
-  h (← (canon obj : V String)).toUTF8
+  h (← (canonFueled Steps.FUEL obj : V String)).toUTF8
 
 /-- The primitive entries of `definitions`, in key order. -/
 private def primEntries (dkv : Array (String × Json)) : Array String :=

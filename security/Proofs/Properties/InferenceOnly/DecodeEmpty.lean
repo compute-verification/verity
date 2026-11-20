@@ -71,7 +71,7 @@ The kernel runs most of `decode` on a closed text, and the walk's rules are the 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
-open private DecState fnRefs from Circuits.Descriptor
+open private DecState fnRefs fnRefsFueled from Circuits.Descriptor
 
 /-- The characters of `programEmpty`. -/
 @[expose] public def emptyChars : List Char :=
@@ -104,8 +104,7 @@ theorem parse_empty : JsonParse.parse programEmpty = .ok jE := by
 theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   simp only [String.fromUTF8?, String.toUTF8_eq_toByteArray, s.isValidUTF8, ↓reduceDIte]; rfl
 
-theorem contains_root : "Root_v1".contains '{' = false := by
-  rw [String.contains_char_eq]; decide +kernel
+theorem contains_root : "Root_v1".toList.contains '{' = false := by decide +kernel
 
 theorem toNat_one : "1".toNat! = 1 := by
   have r : Nat.repr 1 = "1" := by apply String.toList_inj.1; rw [Nat.toList_repr]; decide +kernel
@@ -207,10 +206,14 @@ theorem fnRefs_leaf (acc : Array String) : fnRefs acc (.obj ∅) = acc := by
   simp only [hq]
   rfl
 
+theorem fnRefsFueled_leaf (acc : Array String) : ∀ f, fnRefsFueled f acc (.obj ∅) = acc
+  | 0 => fnRefs_leaf acc
+  | _ + 1 => by first | rfl | (unfold fnRefsFueled; simp only [toArray_nil]; rfl)
+
 theorem refs_rule (c : Array Json) (e : Json) (hb : e.getObjValD "bindings" = .obj ∅)
     (hn : (e.getObjValD "body").getObjValD "nodes" = .arr #[]) : entryRefs c e = #[] := by
   simp only [entryRefs]
-  rw [hb, hn, fnRefs_leaf]
+  rw [hb, hn, fnRefsFueled_leaf]
   split <;> rfl
 
 theorem refs_root : entryRefs #[] rootE = #[] := refs_rule #[] rootE (by kernel_rfl') (by kernel_rfl')
