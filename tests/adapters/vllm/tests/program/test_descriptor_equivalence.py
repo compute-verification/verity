@@ -19,7 +19,6 @@ from verity.circuits import (
     decode_program,
     encode_program,
 )
-from verity.circuits.codec import SCHEMA_V0
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, concat
 
 from tests.program.descriptor_equivalence import (
@@ -67,8 +66,8 @@ def test_canonical_runs_equal_the_leaf_by_leaf_reference_and_ignore_representati
     assert canonical_runs(Affine("n", 0, 0, 3)) != canonical_runs(Strided("n", 0, 0, 1, 0, 0, 3))
 
 
-def _round_trip(P, schema):
-    return decode_program(json.loads(json.dumps(encode_program(P, schema=schema))), REGISTRY)
+def _round_trip(P):
+    return decode_program(json.loads(json.dumps(encode_program(P))), REGISTRY)
 
 
 @composite("EqPair", 1, [], lambda S: ((("x", Array(2, V16)),), V16))
@@ -96,4 +95,4 @@ def test_programs_that_differ_are_rejected():
     with pytest.raises(Mismatch, match="reference"):
         compare(P, decode_program(dq, REGISTRY))
     # a program that is the same everywhere is accepted, whatever its encoding
-    assert compare(P, _round_trip(P, SCHEMA_V0))["verdict"] == "equivalent"
+    assert compare(P, _round_trip(P))["verdict"] == "equivalent"
