@@ -259,14 +259,14 @@ def expected_executed_slots(served: list, max_tokens: int, A: int | None, eos_id
     """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
     its SERVED tokens (sample k serves slot k + 1), its max_tokens C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
-    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.program.lifting.continuation.recurrence` /
+    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.check.replay.continuation.recurrence` /
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than max_tokens, or an EOS before max_tokens
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
     # continuation loads the core `verity`, which importing this module does not
-    from verity_vllm.program.lifting import continuation
+    from verity_vllm.check.replay import continuation
 
-    info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
+    info: dict = {"rule": "verity_vllm.check.replay.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
     if eos_ids is None:
         if len(served) < max_tokens:
@@ -369,7 +369,7 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
         # continuation loads the core `verity` and registers its Definitions: only for a request the rule is read for
-        from verity_vllm.program.lifting import continuation
+        from verity_vllm.check.replay import continuation
         if any(y is None for y in served[:T]):
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
@@ -391,7 +391,7 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
         ent["expected_not_drawn"] = missing
         ent["repeated"] = cmp["repeated"]
         ent["ordered_set_equal"] = cmp["ok"]
-        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_sample_positions"
+        ent["compare"] = "verity_vllm.check.replay.continuation.compare_sample_positions"
         if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"sample ledger {rid}: {p}" for p in cmp["problems"])
         n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early

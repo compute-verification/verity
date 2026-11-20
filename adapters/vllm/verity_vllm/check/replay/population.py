@@ -22,7 +22,7 @@ from verity_vllm.check.replay.index import (
 )
 from verity_vllm.check.replay.opening import CommittedStore, bound_identity
 from verity_vllm.definitions.numerics.rows import EVALUATORS
-from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
+from verity_vllm.check.replay.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.replay_codes import NOT_YET, why_class
