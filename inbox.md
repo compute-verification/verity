@@ -1,3 +1,0 @@
-[2026-11-20T07:12Z] b91df93ef3ea
-From the lead, one small addition after your read, own branch cursor/circuits-cut-unread-457-6f04 from origin/one-circuit: the door's owner decided restrict.py's E_UNREAD at line 457 (in the bit listing, Block.listing() and listing_of) MAY GO: it sits only in the tests' reference listing, never on the door's path, and is unreachable while the front's inputs hold every argument of the block's calls that lies outside it; its real twin, line 491 (the same fact at the Program's level, Lean's Restrict.lean 85), STAYS with its direct-call test. Delete 457 with that reason in the commit message; touch nothing else; run test_restrict.py, test_restrict_refusals.py and the restrict difference test; push; head and shortstat in your return.
-
