@@ -8,18 +8,18 @@ testpaths = ["."]
 # the word codecs' references, which the layouts must equal, and (the KV-append capture's CPU references) the KV codec
 # with its key derivation, PoUB's codec it takes (on the commitments) and the circuits' E4M3
 # append Definition; the kernels open through cuda_lib.py
-inputs = ["verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py",
+inputs = ["verity/protocols/accounting/memory/poub/prover/word_codec/paged.py",
           "benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/codec_tensor/wide.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py", "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py", "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py",
+          "verity/protocols/accounting/memory/poub/prover/word_codec/kv.py", "verity/protocols/accounting/memory/poub/prover/word_codec/kv_bench.py", "verity/protocols/accounting/memory/poub/prover/word_codec/cuda_lib.py",
           "verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
+          "verity/protocols/accounting/memory/poub/verifier/__init__.py", "verity/protocols/accounting/memory/poub/verifier/codec.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
           "calibration/hardware/cards", "verity/device.py", "verity/channel.py",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/vllm_encoded",  # kv_bench.py reads the RTX PRO 6000's card
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/memory/__init__.py", "verity/protocols/accounting/memory/poub/__init__.py", "benchmarks/vllm_encoded",  # kv_bench.py reads the RTX PRO 6000's card
           # test_stack_write_gate.py: the stack write gate's profile reader and the PoUW harness's ptxas reader
           "benchmarks/codec_tensor/write_gate.py", "benchmarks/codec_tensor/bench.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketch_receipt.py",
-          "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/sketching.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/receipts.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"]
+          "verity/protocols/accounting/memory/poub/prover/codec_tensor/sketch_receipt.py",
+          "verity/protocols/accounting/memory/poub/prover/codec_tensor/sketching.py",
+          "verity/protocols/accounting/memory/poub/verifier/receipts.py",
+          "verity/protocols/accounting/compute/pouw/prover/sass_gate.py"]

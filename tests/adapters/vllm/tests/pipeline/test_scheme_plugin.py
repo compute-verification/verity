@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from verity import hooks as H
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.accounting import scheme as S
 from verity_vllm import messages
 from verity_vllm.engine import admission, kv_blocks
 from verity_vllm.pipeline import scheme_plugin as SP
@@ -155,8 +155,8 @@ def test_pearl_plus_by_name_opens_at_load_ends_a_pass_each_computed_step_and_clo
     """`pearl-plus` named in the settings attaches in the engine with its ``challenger`` and the configuration's gate; the
     linear weights registered at ``load_model`` open its run, each `StepComputed` ends a pass, and the engine's shutdown
     closes the challenger session. The device run is a stand-in: Pearl's kernels need a card."""
-    from verity.protocols.resource_accounting.compute.pouw import scheme as PP
-    from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+    from verity.protocols.accounting.compute.pouw import scheme as PP
+    from verity.protocols.accounting.compute.pouw.prover import serving as SV
 
     own = {"challenger": "auditor:7000", "session": {"session": "s1"}, "kernel": "/k.so"}
     env = {"VERITY_PROTOCOLS": "pearl-plus",
@@ -433,7 +433,7 @@ def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answe
     after goes nowhere and the client gets 400 and the network attester's sentence. Where a stream's 200 head had gone,
     the client gets the stream's end, with no later chunk. Where a whole answer's head had gone with its length, which
     takes an open gate, its body goes on, and the front adds nothing."""
-    from verity.protocols.resource_accounting.network.prover import admission as NA
+    from verity.protocols.accounting.network.prover import admission as NA
     from verity import release as REL
 
     name = NA.scheme_name()

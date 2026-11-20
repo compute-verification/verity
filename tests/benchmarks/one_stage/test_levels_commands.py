@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "benchmarks" / "one_stage"))
 A5 = importlib.import_module("a5")
 SC = importlib.import_module("served_cases")
-LV = importlib.import_module("verity.protocols.proofs.spot.verifier.levels")
+LV = importlib.import_module("verity.protocols.proof.spot.verifier.levels")
 
 A5_ARGS = ["a5.py", "--partition", "p", "--template-sets", "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l",
            "--out", "o", "--bundle", "x"]

@@ -40,7 +40,7 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 #: the tree's kernel directories, one per kernel scheme family and build target (`kernel_directory`)
-KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels"
+KERNELS = HERE.parents[2] / "verity" / "protocols" / "accounting" / "compute" / "pouw" / "prover" / "kernels"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
@@ -59,7 +59,7 @@ def _e2e() -> Any:
 def kernel_directory(scheme: str, card: str) -> Path:
     """The tree's kernel directory of the PoUW kernel scheme ``scheme`` on the card ``card`` (its short name): its
     family's, built for the card's target (``pearl_c_sm90`` for ``pearl-c-h100-v1-h3`` on an H200)."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named
+    from verity.protocols.accounting.compute.pouw.verifier.kernel_schemes import named
     from verity_bench.schemes import arch
 
     return KERNELS / f"{named(scheme).family.replace('-', '_')}_{arch(card).removesuffix('a').replace('_', '')}"
@@ -69,14 +69,14 @@ class _Coins:
     """`e2e.Coins`, trimmed: one epoch's challenger, each coin opened once."""
 
     def __init__(self, epoch: int) -> None:
-        from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
-        from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.compute.pouw.verifier import verifier
+        from verity.protocols.accounting.compute.pouw.verifier.coins import Challenger
 
         self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
+        from verity.protocols.accounting.compute.pouw.verifier.protocol import DomainError
 
         if label in self.opened:
             if self.opened[label].after != after:
@@ -102,7 +102,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -110,7 +110,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -143,9 +143,9 @@ class LiveDraw:
         self.gate, self.peer, self.lane, self.at, self.period = ChallengerGate(gate, run), peer, lane, at, period
 
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
-        from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-        from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
+        from verity.protocols.accounting.compute.pouw.verifier import window as Wd
+        from verity.protocols.proof.spot.verifier.challenger.challenger import CoinError
+        from verity.protocols.accounting.compute.pouw.prover.serving.coins import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -219,7 +219,7 @@ class PearlCArm:
         where None, the leased card's, `kit.card_short` of the run's stamp), for the served model's weights, which
         registration pins, and its directory ``PEARLC_KERNEL`` or the tree's (`kernel_directory`)."""
         if self._kernel is None:
-            from verity.protocols.resource_accounting.scheme import declared
+            from verity.protocols.accounting.scheme import declared
             from verity_bench import kit
             from verity_bench.schemes import arch, served, useful_work
 
@@ -268,16 +268,16 @@ class PearlCArm:
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
     def ready(self, target: Any) -> None:
-        from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
-        from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.scheme import declared
+        from verity.protocols.accounting.compute.pouw.verifier.audit import weights_root
+        from verity.protocols.run import schemes
+        from verity.protocols.accounting.scheme import declared
         from verity.hooks import ComputeBlockWith
         from verity_vllm import messages
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
-        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.compute.pouw.prover import schemes as pouw_schemes
+        from verity.protocols.accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
 
         scheme = self.scheme

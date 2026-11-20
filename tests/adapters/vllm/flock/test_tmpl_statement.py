@@ -34,7 +34,7 @@ from verity_flock import class_statement as CS
 from verity_flock import struct_lower as S
 from verity_flock import tmpl as T
 
-LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proof" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 MODE = "iv/hybrid/4"
 
@@ -354,7 +354,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     units derived from the verifier's own copy of the Program): the templated statement is the templated tags', its class
     `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
     partition and partition check the flat statement's."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity.protocols.proof.spot.verifier.one_stage import partition as P
     from verity.circuits.codec import canonical_json, encode_program
 
     args, rows, _kw = _toy(0)

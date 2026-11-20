@@ -14,7 +14,7 @@ import pytest
 import release_front as RF
 import serve_tax as S
 from verity import ports
-from verity.protocols.resource_accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH
+from verity.protocols.accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH
 
 
 class Upstream:

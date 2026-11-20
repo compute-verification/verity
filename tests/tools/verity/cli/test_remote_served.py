@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from verity import config as K
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
@@ -285,7 +285,7 @@ def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its
     """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
     has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
     any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
-    from verity.protocols.resource_accounting import scheme as S
+    from verity.protocols.accounting import scheme as S
     nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
     standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
     monkeypatch.setattr(T.schemes, "DECLARATIONS", {**T.schemes.DECLARATIONS, "inference-only": "stand-in"})

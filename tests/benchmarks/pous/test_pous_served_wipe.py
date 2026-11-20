@@ -24,14 +24,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import wipe_served as WS
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.pous.verifier import wipe_party as WP
+from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
 
 WRAPPER = Path(__file__).resolve().parents[3] / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh"
-SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"
+SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier" / "wipe_side.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in judge, on this host
@@ -50,7 +50,7 @@ UNTRUSTED = "the session is signed by a key that is not a trusted memory challen
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
-JUDGE = "verity/protocols/resource_accounting/memory/pous/attester/lean"
+JUDGE = "verity/protocols/accounting/memory/pous/attester/lean"
 LAKE = """#!/usr/bin/env bash
 echo "$PWD $*" >> "$FAKE_LAKE_LOG"
 python3 - << 'EOF' || exit 1
@@ -89,7 +89,7 @@ if sys.argv[1] != "-":
 sys.argv = sys.argv[1:]
 code = sys.stdin.read()
 from verity.runtime.stream import Side
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_served as WS
+from verity.protocols.accounting.memory.pous.prover import wipe_run, wipe_served as WS
 of = Side.of
 
 

@@ -52,12 +52,12 @@ from types import ModuleType
 from typing import Any
 
 from verity import lean_process as LC
-from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import run as R
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period
-from verity.protocols.compose import schemes as registry
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.accounting.memory.pous.prover import weight_store as ws
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import run as R
+from verity.protocols.accounting.memory.pous.verifier import wipe_period
+from verity.protocols.run import schemes as registry
+from verity.protocols.accounting import scheme as S
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -285,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
     ap.add_argument("--lean-root", type=Path, help="the tree the component's declared Lean executable is built in "
                                                     "(`declared.py`: pous-run-protocol, wipe-protocol), whose answer "

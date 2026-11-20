@@ -16,8 +16,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/reader.py").parent))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/codec_tensor/reader.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/word_codec/cuda_lib.py").parent))
 CARD_FILES = HERE.parents[1] / "calibration/hardware/cards"
 sys.path.append(str(HERE.parents[1]))
 

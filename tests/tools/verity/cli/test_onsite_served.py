@@ -24,14 +24,14 @@ from verity import config as K
 from verity.commitments.crypto import lms
 from verity.protocol import Channel, Start
 from verity.channel import Refused
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.memory.pous.attester import onsite
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
-from verity.protocols.resource_accounting.memory.pous import scheme as PL
-from verity.protocols.resource_accounting.network import scheme as NS
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
-from verity.protocols.proofs.spot.verifier.service import SamplingDesign
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.accounting.memory.pous.attester import onsite
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.accounting.memory.pous import scheme as PL
+from verity.protocols.accounting.network import scheme as NS
+from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.proof.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
@@ -1252,7 +1252,7 @@ def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made
     party = flag["--bw-party"].split(" ")
     assert party[:2] == ["bash", str(ROOT / "benchmarks/pous/lean_ready.sh")] and party[3] == "poub-verifier"
     assert " ".join(party[4:-1]) == f"{attester}bw_party {tmp_path / 'tpy'} {keys}"
-    lean = "verity/protocols/resource_accounting/memory/poub/verifier/lean/.lake/build/bin/poub-verifier"
+    lean = "verity/protocols/accounting/memory/poub/verifier/lean/.lake/build/bin/poub-verifier"
     assert party[-1] == f"{Path(party[2]).parent}/{lean}"
     assert "--run-keys" not in argv
     assert (tmp_path / "keys.txt").read_text().split() == [str(keys / "pous"), "700"] and not keys.exists()
@@ -1277,7 +1277,7 @@ def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
                               env=env, capture_output=True, text=True, check=False)
 
     assert attester("challenger_party").returncode == 0
-    assert args0(py) == ["-m", "verity.protocols.resource_accounting.memory.pous.attester.challenger_party",
+    assert args0(py) == ["-m", "verity.protocols.accounting.memory.pous.attester.challenger_party",
                          "--device", str(keys / "pous"), "--listen", "127.0.0.1:47610"]
     sid, session = "1" * 64, "2" * 64
     assert attester("bw_party", "/lean/poub-verifier", "--minutes", "1", "--pous-session", sid, "--session", session,
@@ -1380,7 +1380,7 @@ def test_the_runs_streamer_is_built_and_run_outside_the_serve_dir(tmp_path):
     attach (`wipe_stream`), so nothing under the serve dir, which may be mounted noexec (/dev/shm), is run: the key stays
     under it (TMPDIR), the streamer runs from outside it and derives `streamed_wipe.label`'s labels, and both are gone
     when the wipe ends."""
-    from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+    from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
     p, log = served_wipe(tmp_path, {})
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed, serve = json.loads(log.read_text()), tmp_path / "serve"

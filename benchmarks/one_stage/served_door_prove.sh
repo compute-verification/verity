@@ -32,7 +32,7 @@ from verity.lean_process import panic_line
 sys.exit(panic_line(open(sys.argv[1], errors="replace").read()) is not None)' "$1"
 }
 
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
+LSHA=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py key verity/protocols/proof/flock/verifier $REPO/tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server; LOW_BIN=$L/lean-$LSHA/flock-lower-check
 RT_BIN=$L/lean-$LSHA/flock-read-tmpl; CC_BIN=$L/lean-$LSHA/flock-compose-check
 (
@@ -40,8 +40,8 @@ RT_BIN=$L/lean-$LSHA/flock-read-tmpl; CC_BIN=$L/lean-$LSHA/flock-compose-check
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $UNIT_BIN ] || [ ! -x $FW_BIN ] || [ ! -x $LOW_BIN ] || [ ! -x $RT_BIN ] || [ ! -x $CC_BIN ]; then
-    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && cp tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
+    rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py copy verity/protocols/proof/flock/verifier $L/lean-src) \
+      && cp tests/verity/protocols/proof/flock/prover/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
       && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server flock-lower-check flock-read-tmpl flock-compose-check) && mkdir -p $L/lean-$LSHA \
       && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
@@ -51,18 +51,18 @@ RT_BIN=$L/lean-$LSHA/flock-read-tmpl; CC_BIN=$L/lean-$LSHA/flock-compose-check
 ) > $O/build-lean.log 2>&1 &
 LP=$!
 CHALLENGER_REPO=$REPO CHALLENGER_WORK=$S/challenger-work
-. verity/protocols/proofs/flock/prover/pod/challenger.sh
+. verity/protocols/proof/flock/prover/pod/challenger.sh
 challenger_build
 
-KEY=$(cat verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh verity/protocols/proofs/flock/prover/pod/60-circuit.sh verity/protocols/proofs/flock/prover/*.patch verity/protocols/proofs/flock/prover/cuda_*_patch.py \
-  $(find verity/protocols/proofs/flock/prover/cuda verity/protocols/proofs/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
+KEY=$(cat verity/protocols/proof/flock/prover/pod/20-gpu-link.sh verity/protocols/proof/flock/prover/pod/60-circuit.sh verity/protocols/proof/flock/prover/*.patch verity/protocols/proof/flock/prover/cuda_*_patch.py \
+  $(find verity/protocols/proof/flock/prover/cuda verity/protocols/proof/flock/prover/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g0; F=$FW/flock-gpu-link/flock
 exec 8>$W/build.lock; flock 8
 if [ -x $BIN/flock-circuit ] && [[ $(ldd $BIN/flock-circuit 2>&1) == *"not found"* ]]; then
   rm -rf $BIN || { echo "$BIN: built against another glibc, and this job can't remove it" >&2; exit 1; }
 fi
 if [ ! -x $BIN/flock-circuit ]; then
-  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
+  RESEARCH_RUN_DIR=$O/build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proof/flock/prover/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
   mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
 fi
 exec 8>&-
@@ -70,7 +70,7 @@ B=$BIN/flock-circuit; sha256sum $B | tee $O/binary.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
-export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
+export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 CHALLENGER_PY=python3
 challenger_built || exit 1
 
@@ -84,7 +84,7 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   r=$?; cat $O/time-window.txt; grep -h '^STEP' $O/window.txt | cut -c1-3000; [ $r = 0 ] || { tail -c 4000 $O/window.txt; exit 5; }
   cp $S/window/registration.json $S/window/circuit.json $O/
   git -C $REPO rev-list --first-parent HEAD > $S/main.txt 2>/dev/null || git -C $REPO rev-parse HEAD > $S/main.txt || echo 00 > $S/main.txt
-  M0=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
+  M0=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm
   ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
       --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
       --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json --main $S/main.txt --m0-pythonpath $M0 \

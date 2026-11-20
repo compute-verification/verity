@@ -127,9 +127,9 @@ def _patch_engine(llm) -> None:
 
 def undeclared(entries) -> str | None:
     """Why a protocol arm of ``entries`` can't run: the first entry that is no declared scheme's name
-    (`compose.schemes`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
+    (`run.schemes`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
     there is none."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
@@ -144,7 +144,7 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.presets import load_spec, resolve_spec, served
     from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
@@ -202,7 +202,7 @@ def run(a) -> int:
     run = held.run if held is not None else None
     engine.close()
     if run is not None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import coins_of
+        from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.window import coins_of
 
         coins = coins_of(SimpleNamespace(commitment=lambda: run.commits, info=lambda: run.details), None)
         (out / "coins.json").write_text(json.dumps(coins, indent=1))

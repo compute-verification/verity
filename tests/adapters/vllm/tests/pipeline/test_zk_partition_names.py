@@ -24,7 +24,7 @@ from verity.circuits import evaluation as E
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import versions as BB
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 
 from tests.pipeline import test_serving_rows_splits as SPL

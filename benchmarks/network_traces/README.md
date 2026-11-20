@@ -1,6 +1,6 @@
 # network_traces
 
-The network attester (`verity/protocols/resource_accounting/network/`) on real served traffic: per-token timing traces for its
+The network attester (`verity/protocols/accounting/network/`) on real served traffic: per-token timing traces for its
 calibration, the network attester in front of a served endpoint as a relay of the egress record's one form (`network_attester`), the
 zero-knowledge proofs of their proof blocks, and the served session's runbook. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
 
@@ -22,7 +22,7 @@ zero-knowledge proofs of their proof blocks, and the served session's runbook. E
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the gate's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The network attester as a relay.** Its `attester/network_attester_serve.py` runs
-  `verity.protocols.resource_accounting.network.verifier.network_attester` in front of any
+  `verity.protocols.accounting.network.verifier.network_attester` in front of any
   TCP server and checks what it published offline: `serve` releases only the egress record's id form by default, and
   `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes); `connection_rows_run.py`, beside it, is a
   run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags, the publisher's keep of each
@@ -49,7 +49,7 @@ zero-knowledge proofs of their proof blocks, and the served session's runbook. E
 ## The gate's load
 
 The gate's `--shape h200` serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`verity.protocols.resource_accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`verity.protocols.accounting.memory.pous.prover.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk

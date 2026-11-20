@@ -82,11 +82,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proof/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proof.spot.verifier.one_stage import lean_child as LC
+from verity.protocols.proof.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 

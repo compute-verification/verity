@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def _chain() -> dict:
     spec = importlib.util.spec_from_file_location(
-        "one_circuit_chain", ROOT / "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py")
+        "one_circuit_chain", ROOT / "tests/verity/protocols/proof/spot/verifier/test_one_circuit_chain.py")
     M = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(M)
     return M.registered()

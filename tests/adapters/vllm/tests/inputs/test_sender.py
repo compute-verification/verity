@@ -14,7 +14,7 @@ from typing import Any
 
 import input_datasets
 
-from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder
+from verity.protocols.accounting.network.prover.admission import ReleaseOrder
 from verity_vllm.inputs import serves
 from verity_vllm.inputs import sender
 from verity_vllm.pipeline import serve_openai as so

@@ -7,7 +7,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 export PATH=$CUDA_HOME/bin:$PATH
-D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
+D=benchmarks/pouw/filler K=verity/protocols/accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/pfprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
 export PF_ALONE=${PF_ALONE:-"8:4 8:1 8:5 8:3 8:6 8:7 8:8"} PF_NCU=${PF_NCU:-"8:5 8:3"} PF_S=${PF_S:-256}
 git rev-parse HEAD > "$O/commit.txt" 2>&1

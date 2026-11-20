@@ -30,7 +30,7 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the auditor's verifier host (`verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`), the lane starts the run there with its
+# Against the auditor's verifier host (`verity/protocols/accounting/memory/poub/attester/live_verifier/host.py`), the lane starts the run there with its
 # gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
@@ -48,7 +48,7 @@
 # words, split and never evaluated (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs; --lean-exe refused),
 # under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
-# `verity/protocols/compose/verifier/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+# `verity/protocols/run/verifier/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
 # --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
 # from the auditor device's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
@@ -208,7 +208,7 @@ export B RS GIB=${GIB:-16}
 # the codec's module and written nowhere in this script (CPU= and SERVE=tiny default to p512/k2 below). kv.cu's build fixes the width and masking, the registration's key the
 # rounds. p1024 squares by FOLD 6 as the paged build does (benchmarks/vllm_encoded/stack.sh's KVDEFS); p512 is kv.cu's
 # plain build. Each build of the session's kv.so reads KV_DEFS, node.sh's too.
-DEPLOYED=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier import codec; print(codec.DEFAULT.name)') ||
+DEPLOYED=$("$PY" -c 'from verity.protocols.accounting.memory.poub.verifier import codec; print(codec.DEFAULT.name)') ||
   refuse "$PY cannot read the deployed codec (verifier/codec.py's DEFAULT)"
 export CARD_CODEC=${CODEC:-$DEPLOYED}
 case $CARD_CODEC in
@@ -224,7 +224,7 @@ fi
   "lean_verifier.build builds in its package, and nothing else; unset it"
 lean_exe() { # the Lean verifier built in its package
   [ -n "${LEAN:-}" ] && return 0
-  LEAN=$("$PY" -c 'from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
+  LEAN=$("$PY" -c 'from verity.protocols.accounting.memory.poub.verifier.session import lean_verifier as lv; print(lv.build())' \
     2> "$O/lean-build.log") ||
     { tail -20 "$O/lean-build.log"; echo "run.sh: the Lean verifier's build failed"; exit 4; }
 }
@@ -242,7 +242,7 @@ if [ -n "${VERIFIER_ARGS:-}" ]; then
 fi
 if [ -n "${SERVE:-}" ]; then
   export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HOME=${HF_HOME:-$WS/hf} PATH=$(dirname "$VPY"):$PATH
-  export PYTHONPATH=$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/config:$PWD/verity/protocols/proofs/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
+  export PYTHONPATH=$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/config:$PWD/verity/protocols/proof/flock/prover/python:$PWD${PYTHONPATH:+:$PYTHONPATH}
 fi
 if [ -n "$SERVED" ]; then
   PLAN=${PLAN:-serve}
@@ -343,7 +343,7 @@ if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
+    "$PY" verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
@@ -359,7 +359,7 @@ if [ "$ROLE" = verifier ]; then
   ssh -tt -o ObscureKeystrokeTiming=no -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   # shellcheck disable=SC2086
-  "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
+  "$PY" verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -440,7 +440,7 @@ if [ -n "$SERVED" ]; then
   if [ "$ROLE" = both ]; then
     lean_exe
     set -m # a process group of its own: stopping it stops its Lean verifier and its check workers with it
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 \
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py --host 127.0.0.1 \
       "${VERIFY[@]}" --lean-exe "$LEAN" "${VA[@]}" < /dev/null > "$O/verifier.log" 2>&1 &
     SV=$!
     set +m
@@ -506,8 +506,8 @@ fi
       -i "${GPU_LEASE_UUID%%,*}" | head -1)" 2>&1) && GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$ARCH" 2>&1) ||
       { echo "run.sh: no build target for the leased card: ${GENCODE:-$ARCH}"; exit 4; }
     FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" $KV_DEFS -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" $KV_DEFS -o "$B/kv.so" verity/protocols/accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -516,7 +516,7 @@ fi
   V=
   if [ "$ROLE" = both ]; then
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/memory/poub/verifier/poub_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then
@@ -526,7 +526,7 @@ fi
       --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
-  "${PIN[@]}" "$PY" verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  "${PIN[@]}" "$PY" verity/protocols/accounting/memory/poub/prover/poub_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     "${DEV[@]}" --node "${SESSION_NODE:-$SNODE}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0

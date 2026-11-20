@@ -30,7 +30,7 @@ def test_pfill_arms_meet_the_contract_and_place_on_fill_v1_splits(monkeypatch):
         assert P.products_per_slot(arm.lineage) == per_slot
         assert arm.filler == A.Filler(W=8, NC=nc, S=256, chunk_log2=19, noise="pm1")
         assert arm.filler.S % 32 == 0  # pfill's dfill_make refuses any other S
-        assert "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/pfill.cuh" in arm.sources
+        assert "verity/protocols/accounting/compute/pouw/prover/kernels/filler/pfill.cuh" in arm.sources
         for ph, b, l in S.points():
             v1 = A.NONE if ph == "prefill" else A.Colocation("split", A.point_lookup(A.FILL_V1_SPLIT, b, l))
             assert A.placed(arm, ph, b, l) == v1
@@ -98,7 +98,7 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     assert A.check_arm(arm) == [] and A.record_problems(arm) == []
     assert __import__("os").environ["NVCC_APPEND_FLAGS"] == "-DPFILL_BITS"
     assert arm.filler == k.filler and arm.filler.noise == "bits01" and P.theorem_k_setting(arm.lineage)
-    assert {"verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/flin.cuh", "benchmarks/pouw/filler/fscore.cu"} <= set(arm.sources)
+    assert {"verity/protocols/accounting/compute/pouw/prover/kernels/filler/flin.cuh", "benchmarks/pouw/filler/fscore.cu"} <= set(arm.sources)
     fused = 0
     for ph, b, l in S.points(robust=True):
         q = arm.fused(ph, b, l)

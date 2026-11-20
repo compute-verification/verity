@@ -1,4 +1,4 @@
-"""serve-openai under order ``release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
+"""serve-openai under order ``release-order`` (`verity.protocols.accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the network attester dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
@@ -23,7 +23,7 @@ from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, 
 from verity_vllm import messages
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
-from verity.protocols.resource_accounting.network.prover import admission as na
+from verity.protocols.accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so

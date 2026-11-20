@@ -43,17 +43,17 @@ The protocols, by layer, with registration beside them:
 
 | Layer | Directory | Protocols |
 | --- | --- | --- |
-| Proofs | `protocols/proofs/` | [`flock/`](protocols/proofs/flock/verifier/README.md) (the proof system: its Lean verifier and the ZK server in `verifier/`, its prover in `prover/`, the agreement with upstream's verifier in `prover/agreement/`), [`spot/`](protocols/proofs/spot/verifier/README.md) (sampling, with the integrity profile and the challenger in `verifier/challenger/`), `recursion/` (the recursion layer), `spot_flock/` (SPOT[Flock]), `spot_flock_recursion/` (SPOT[Flock] with the recursion) |
+| Proofs | `protocols/proof/` | [`flock/`](protocols/proof/flock/verifier/README.md) (the proof system: its Lean verifier and the ZK server in `verifier/`, its prover in `prover/`, the agreement with upstream's verifier in `prover/agreement/`), [`spot/`](protocols/proof/spot/verifier/README.md) (sampling, with the integrity profile and the challenger in `verifier/challenger/`), `recursion/` (the recursion layer), `spot_flock/` (SPOT[Flock]), `spot_flock_recursion/` (SPOT[Flock] with the recursion) |
 | Registration | `protocols/registration/` | [The registration log and its check](protocols/registration/README.md), run once, before any challenge |
-| Resource accounting | `protocols/resource_accounting/` | [`compute/pouw/`](protocols/resource_accounting/compute/pouw/verifier/README.md), [`memory/pous/`](protocols/resource_accounting/memory/pous/verifier/README.md) and [`memory/poub/`](protocols/resource_accounting/memory/poub/verifier/README.md), [`network/`](protocols/resource_accounting/network/verifier/README.md) (the network attester) |
-| Workload classification | `protocols/workload_classification/` | [`training_detection/inference_only/`](protocols/workload_classification/training_detection/inference_only/verifier/README.md), whose check is Lean only (`verifier/lean/`) |
-| Compose | `protocols/compose/` | [`remote`](protocols/compose/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration, with their Lean in `verifier/lean/`; `verifier/live_challenger/` is the auditor host's challenger service |
+| Resource accounting | `protocols/accounting/` | [`compute/pouw/`](protocols/accounting/compute/pouw/verifier/README.md), [`memory/pous/`](protocols/accounting/memory/pous/verifier/README.md) and [`memory/poub/`](protocols/accounting/memory/poub/verifier/README.md), [`network/`](protocols/accounting/network/verifier/README.md) (the network attester) |
+| Workload classification | `protocols/policy/` | [`training_detection/inference_only/`](protocols/policy/training_detection/inference_only/verifier/README.md), whose check is Lean only (`verifier/lean/`) |
+| Compose | `protocols/run/` | [`remote`](protocols/run/verifier/remote/README.md) and `onsite`, each a list of protocols on one registration, with their Lean in `verifier/lean/`; `verifier/live_challenger/` is the auditor host's challenger service |
 | Being tried | `protocols/experimental/` | `dither/`, [`pearl_c4/`](protocols/experimental/pearl_c4/README.md) |
 | Shared | [`protocols/interface/`](protocols/interface/README.md) | The Lean interface each protocol's check implements |
 
 Nine directories here are distributions of their own, each with its own import root (`tests/import_order.toml`'s
-`[[distribution]]`), all under `protocols/`: `proofs/flock/`, `compose/verifier/live_challenger/`, and under
-`resource_accounting/`, `memory/pous/verifier/check/`, `memory/pous/prover/p2/`, `memory/poub/prover/`,
+`[[distribution]]`), all under `protocols/`: `proof/flock/`, `run/verifier/live_challenger/`, and under
+`accounting/`, `memory/pous/verifier/check/`, `memory/pous/prover/p2/`, `memory/poub/prover/`,
 `memory/poub/attester/live_verifier/`, `compute/pouw/prover/clear/`, `compute/pouw/prover/lowering/` and
 `compute/pouw/verifier/receipts/`.
 

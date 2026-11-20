@@ -107,7 +107,7 @@ class Record:
         directory), closed under its key with its strings (`window_strings.handed_strings`), else with strings made here
         (`window_strings.strings_of`). -> what it wrote, its strings' cost and the seconds each part took."""
         from verity.circuits.codec import program_digest
-        from verity.protocols.compose import schemes
+        from verity.protocols.run import schemes
 
         from verity_vllm.pipeline import advice_windows as AW
         from verity_vllm.pipeline import window_advice as WA

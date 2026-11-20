@@ -91,12 +91,12 @@ fi
 PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/run/verifier/remote/RemoteV1Main.lean ] \
       && products=(remote-v1 onsite) ;;
   remote) products=(remote)
     if [ "${POUW:-}" = pearlplus ]; then
-      [ -f verity/protocols/compose/verifier/remote/RemoteV1Main.lean ] \
-        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/compose/verifier/remote/RemoteV1Main.lean"; exit 1; }
+      [ -f verity/protocols/run/verifier/remote/RemoteV1Main.lean ] \
+        || { say "COMPOSITE: not run, POUW=pearlplus composes remote/v1, and this tree has no verity/protocols/run/verifier/remote/RemoteV1Main.lean"; exit 1; }
       products=(remote-v1)
     fi ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
@@ -112,8 +112,8 @@ fi
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
 package() {  # the Lake package directory of product $1
   case $1 in
-    remote | remote-v1) echo verity/protocols/compose/verifier/remote ;;
-    onsite) echo verity/protocols/compose/verifier/onsite ;;
+    remote | remote-v1) echo verity/protocols/run/verifier/remote ;;
+    onsite) echo verity/protocols/run/verifier/onsite ;;
   esac
 }
 exe() {  # Lean executable $1 of package dir $2, built, its path printed

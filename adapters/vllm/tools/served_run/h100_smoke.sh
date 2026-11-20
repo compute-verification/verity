@@ -37,7 +37,7 @@ DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_LAW=rate:4/3654200
 [ "$DEVELOPMENT_DESIGN" = 1 ] && LAW=${LAW:-$DEV_LAW}
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
-export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 [ -z "${WIPE_CMD:-}" ] || [ -n "${APPLICATION:-}" ] || { echo "SMOKE REFUSED application: WIPE_CMD is set where an application" \
   "lists the wipe, so name it: APPLICATION=applications/NAME.toml"; exit 3; }
 APPLICATION=${APPLICATION:-applications/remote.toml}
@@ -103,10 +103,10 @@ REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no reco
 # reads under the name of the scheme that provides admission
 ADMIT=$("$PY" - <<'EOF'
 import json
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 print(json.dumps({schemes.named("provides", "admission"): {"order": "release-order"}}))
 EOF
-) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.compose.schemes, above)"; exit 3; }
+) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.run.schemes, above)"; exit 3; }
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision "$PRECISION"
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"
