@@ -190,6 +190,87 @@ theorem removeAxis_widths : ∀ (ax : ℕ) {t E : Ty} {n L : ℕ}, t.removeAxis 
         exact ih he hde m hm r hr
     | _ => simp [Ty.removeAxis] at h
 
+theorem flatten_replicate_replicate {α : Type} (X : List α) (a b : ℕ) :
+    (List.replicate a (List.replicate b X).flatten).flatten = (List.replicate (a * b) X).flatten := by
+  induction a with
+  | zero => simp
+  | succ a ih =>
+    rw [List.replicate_succ, List.flatten_cons, ih, show (a + 1) * b = b + a * b by ring, List.replicate_add,
+      List.flatten_append]
+
+/-- The bits before word leaf `j · |V| + c` of `k` copies of the widths `V`. -/
+theorem sum_take_replicate (V : List ℕ) : ∀ (j k c : ℕ), j < k → c ≤ V.length →
+    ((List.replicate k V).flatten.take (j * V.length + c)).sum = j * V.sum + (V.take c).sum := by
+  intro j
+  induction j with
+  | zero =>
+    intro k c hk hc
+    obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    rw [List.replicate_succ, List.flatten_cons, Nat.zero_mul, Nat.zero_add, List.take_append_of_le_length hc]
+    simp
+  | succ j ih =>
+    intro k c hk hc
+    obtain ⟨k, rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    rw [List.replicate_succ, List.flatten_cons, show (j + 1) * V.length + c = V.length + (j * V.length + c) by ring,
+      List.take_length_add_append, List.sum_append, ih k c (by omega) hc]
+    ring
+
+/-- **Removing a batch axis, as blocks**: the widths of `t` are `o` blocks of `n` copies of `F`'s, the widths with the axis
+removed `o` copies of `F`'s, and the axis' dimensions are `(n, F`'s leaves`)`. -/
+theorem removeAxis_blocks : ∀ (ax : ℕ) {t E : Ty} {n : ℕ}, t.removeAxis ax = some (n, E) →
+    ∃ (o : ℕ) (F : Ty), t.widths.toList = (List.replicate o (List.replicate n F.widths.toList).flatten).flatten ∧
+      E.widths.toList = (List.replicate o F.widths.toList).flatten ∧ t.axisDims ax = some (n, F.leaves) := by
+  intro ax
+  induction ax with
+  | zero =>
+    intro t E n h
+    match t, h with
+    | .array n' e, h =>
+      simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨1, e, by rw [widths_array_flat]; simp, by simp, rfl⟩
+    | .value _, h => simp [Ty.removeAxis] at h
+    | .tuple _, h => simp [Ty.removeAxis] at h
+    | .record _, h => simp [Ty.removeAxis] at h
+  | succ ax ih =>
+    intro t E n h
+    match t, h with
+    | .array n0 e, h =>
+      simp only [Ty.removeAxis, Option.map_eq_some_iff, Prod.exists, Prod.mk.injEq] at h
+      obtain ⟨m, inner, he, rfl, rfl⟩ := h
+      obtain ⟨o, F, hw, hE, hd⟩ := ih he
+      refine ⟨n0 * o, F, ?_, ?_, by simpa [Ty.axisDims] using hd⟩
+      · rw [widths_array_flat, hw, flatten_replicate_replicate]
+      · rw [widths_array_flat, hE, flatten_replicate_replicate]
+    | .value _, h => simp [Ty.removeAxis] at h
+    | .tuple _, h => simp [Ty.removeAxis] at h
+    | .record _, h => simp [Ty.removeAxis] at h
+
+/-- **A batch member's bits**: with `o` blocks of `n` copies of the widths `V` (`L` leaves, `S` bits), bit `t` of member
+`m`'s word leaf `a · L + c` sits, among the whole's bits, at member `m`'s place for its bit `b` of the member's
+`o` copies of `V`: `(b / S · n + m) · S + b % S`. -/
+theorem member_bit (V : List ℕ) (o n a m c t : ℕ) (ha : a < o) (hm : m < n) (hc : c < V.length)
+    (ht : t < V[c]) :
+    ((List.replicate o (List.replicate n V).flatten).flatten.take ((a * n + m) * V.length + c)).sum + t =
+      ((((List.replicate o V).flatten.take (a * V.length + c)).sum + t) / V.sum * n + m) * V.sum +
+        (((List.replicate o V).flatten.take (a * V.length + c)).sum + t) % V.sum := by
+  rw [flatten_replicate_replicate, sum_take_replicate V _ _ _ (BodiesOk.lt_mul_of a o n m ha hm) hc.le,
+    sum_take_replicate V _ _ _ ha hc.le]
+  have hlt : (V.take c).sum + t < V.sum := by
+    have h1 : (V.take (c + 1)).sum = (V.take c).sum + V[c] := by
+      rw [List.take_add_one, List.sum_append, List.getElem?_eq_getElem hc]; simp
+    have h2 : (V.take (c + 1)).sum ≤ V.sum := by
+      conv_rhs => rw [← List.take_append_drop (c + 1) V]
+      rw [List.sum_append]; omega
+    omega
+  have hS : 0 < V.sum := by omega
+  have hd : (a * V.sum + (V.take c).sum + t) / V.sum = a := by
+    rw [Nat.add_assoc, Nat.add_comm, Nat.add_mul_div_right _ _ hS, Nat.div_eq_of_lt hlt, Nat.zero_add]
+  have hmd : (a * V.sum + (V.take c).sum + t) % V.sum = (V.take c).sum + t := by
+    rw [Nat.add_assoc, Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hlt]
+  rw [hd, hmd]
+  ring
+
 end BatchAxes
 
 end Flock.Chain
