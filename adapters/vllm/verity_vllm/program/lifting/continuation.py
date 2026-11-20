@@ -22,9 +22,7 @@ from where the rows stop; `n_executed = n (A = 0) / min(n + 1, C) (A = 1)` with 
 that shortens the Program.  This module is the SEMANTIC core: the reference evaluator (`next_flags`), an
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
 (`recurrence`), the named invariants (`invariants`), the slot <-> engine-iteration map
-(`slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
-(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `adapters/vllm/verity_vllm/definitions/registry/lifted.py` (`continuation_chain`); the
-lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
+(`slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
 Everything here is labelled `lifted-padded` and carries `CONTINUATION_VERSION` beside `LIFTED_RULES_VERSION`.
@@ -36,8 +34,23 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from verity_vllm.definitions.registry import lifted as L
 from verity_vllm.program.lifting import lifted_records
+
+
+def _is_active(w: int, x: int) -> bool:
+    """`x` is a `w+1`-bit word whose tag bit `w` is 0."""
+    return 0 <= x < (1 << (w + 1)) and (x >> w) & 1 == 0
+
+
+def _payload(w: int, x: int) -> int:
+    return x & ((1 << w) - 1)
+
+
+def _enc_active(w: int, v: int) -> int:
+    if not (0 <= v < (1 << w)):
+        raise ValueError(f"payload {v:#x} is not a {w}-bit word")
+    return v
+
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)
 PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-step-ahead async (run trails emit by exactly one slot after early EOS)"}
@@ -68,7 +81,7 @@ def rng_accounting(slots: Sequence[Slot], *, prompt_len: int | None = None) -> d
 
 def check_profile(A: int) -> int:
     """`A in {0, 1}` and nothing else: the same refusal as the lag rule's `check_lag` (one rule).  `A` is the resolved profile, never a fit."""
-    return L.check_lag(A)
+    return lifted_records.check_lag(A)
 
 
 def resolve_profile(header: dict) -> tuple[int, str]:
@@ -135,7 +148,7 @@ def three_state_run(is_eos: Sequence[bool], *, cap: int, A: int) -> list[tuple[b
 def is_eos_total(w: int, x: int, eos_set: Iterable[int]) -> bool:
     """`IsEOS` as a TOTAL Definition over the lifted `w+1`-bit word: `[tag(x) = 0] AND [payload(x) in EOS_pinned]` -- the tag test is a gate,
     so `IsEOS(bot) = 0` is not a convention; a noncanonical `1||nonzero` word is not EOS either (never normalized, never matched)."""
-    return L.is_active(w, x) and L.payload(w, x) in {int(e) for e in eos_set}
+    return _is_active(w, x) and _payload(w, x) in {int(e) for e in eos_set}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -179,10 +192,10 @@ def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int
     for t in range(1, cap + 1):
         y = raw[t - 1] if t - 1 < len(raw) else None
         if y is not None:
-            y = L.enc_active(w, int(y))
+            y = _enc_active(w, int(y))
         b = (y is not None) and r and is_eos_total(w, int(y), eos_set)  # an inactive token is not EOS (IsEOS total)
         ne, nr = next_flags(emit=e, token_is_eos=b, has_next_slot=t < cap, async_one_step=A == 1)
-        yv = (L.payload(w, int(y)) if L.is_active(w, int(y)) else None) if y is not None else None
+        yv = (_payload(w, int(y)) if _is_active(w, int(y)) else None) if y is not None else None
         out.append(Slot(t=t, emit=e, run=r, raw=yv, is_eos=bool(b), stop=bool(e and b), out=(yv if e else None),
                         next_emit=ne, next_run=nr, next_in=((yv if nr else None) if t < cap else None)))
         e, r = ne, nr
@@ -361,39 +374,3 @@ def compare_sample_positions(expected: Sequence[int], sampled: Sequence[int]) ->
     if not extra and not missing and not dup and got != exp:
         problems.append(f"samples out of order: ledger {got[:8]} vs the rule's {exp[:8]}")
     return {"ok": not problems, "expected": exp, "sampled": got, "extra": extra, "missing": missing, "repeated": dup, "problems": problems}
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the lag unit computes exactly r / u of this rule
-# ---------------------------------------------------------------------------------------------------------
-
-
-def chain_bits(raw_words: Sequence[int], *, cap: int, lag: int, eos: Sequence[int], w: int = 32) -> dict[str, list]:
-    """The lag guard chain of `LServe_v1` / `lift_request_component` SIMULATED with the registered evaluators (`LStepLive<E>_v1`,
-    `LSelect<w>_v1`, `LBot<w>_v1`): steps `1..LAG` unguarded; `live_s = LStepLive(g_s, eos_set)` with `g_s = out[s-1]` (LAG = 0) or
-    `tok_in_{s-1}` (LAG = 1); `tok_in_s = LSelect(live_s, out[s-1], bot)`; `out[s]` bot by strictness when `tok_in_s` is bot.  `raw_words[s]`
-    is the word the sampler WOULD produce at event `s` if it runs (the transcript the record would commit).  Returns `run[t]` for slots
-    `t = 1..cap` (`run_1 = 1`, `run_{s+1} = live_s`) and `in[t]` (`in_1 = prompt`, `in_{s+1} = tok_in_s`) -- to be compared with `recurrence`."""
-    E = len(eos)
-    step_live, sel, bot = L.l_step_live(E), L.l_select(w), L.enc_bot(w)
-    eos_words = [L.enc_active(w, int(e)) for e in eos]
-    L.check_lag(lag)
-    out = [raw_words[0]]
-    run: list[bool] = [True]
-    ins: list[int | None] = [None]
-    gate: int | None = out[0]
-    for s in range(1, cap):
-        prev = out[s - 1]
-        if s <= lag:
-            live, tok_in = 1, prev
-        else:
-            live = step_live.evaluate(gate, *eos_words)
-            tok_in = sel.evaluate(live, prev, bot)
-        gate = tok_in if lag else None  # LAG = 1 gates on the fed token; LAG = 0 on out[s] (set below)
-        y = raw_words[s] if (tok_in != bot and s < len(raw_words)) else bot  # strictness: a bot input yields a bot sample
-        out.append(y)
-        if not lag:
-            gate = y
-        run.append(bool(live == 1))
-        ins.append(None if tok_in == bot else tok_in)
-    return {"run": run, "in": ins, "out": out}
