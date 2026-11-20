@@ -3,6 +3,7 @@ module
 public import Properties.Spot.PortsHeld
 public import Proofs.Properties.Spot
 public import Proofs.Flock.Soundness.Refine.Rep
+import Spot.PortsOnce
 import Mathlib.Data.List.Nodup
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
