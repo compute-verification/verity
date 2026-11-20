@@ -20,8 +20,7 @@ tensor-core wide-word codec on one GPU), `compile_cost`, `compute`, `dsa_topk`, 
 `table`), `pouw NAME` (`pouw/NAME/`'s runner; given no NAME, the names), `ppl` (`eval`, `submit`, `report`,
 `baseline`), `prod_repro`, `proof_throughput` (`record`: one prover and two at once on one node's H200s), `prove`
 (`--system flock|spot`; `lean-verify`, the Lean verifier timed on one kept proof; `layers`, the proof benchmark by
-layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `recursion_e2e` (`plan`, `run`,
-`result`, `table`, `store`), `replay_ladder`, `route_capture`, `serve_tax`, `serving_cost` (`minify RUN`,
+layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `recursion_e2e` (refuses: the old recursion's benchmark is gone), `replay_ladder`, `route_capture`, `serve_tax`, `serving_cost` (`minify RUN`,
 `exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"; `profile RUN`, a serving
 profile's stored result), `served_commit`, `served_errors`,
 `served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_walk`, `verifier_cost` and `word_codec`.
@@ -376,8 +375,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary on all of a scope's compute can exfiltrate, infiltrate or skip against total cost and against proof overhead, and the serve-time commitment's cost (a model, not a measurement) | maintained |
 | `exfiltration/` | `verity bench exfiltration`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total compute, the compute audit's part beside the network attester's (`certifier_term/`'s rows), every input labelled with its mark | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
-| `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
-| `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
+| `recursion_e2e/` | refuses by name: the old recursion's benchmark is gone, since the first version has no outer proof, and its five metrics keep their readings | maintained |
 | `remote_error/` | SPOT's cryptographic error in the remote application: the remote guarantee's cryptographic terms of SPOT, evaluated at the application's parameters against a prover's SHA-512 calls, per window and pooled over the census's fleets and the monitoring periods (bound's formula proved in Lean under the open premises its lock lists; value evaluated in Python; PoUW's and the policy's parts open) | maintained |
 
 ### Checks

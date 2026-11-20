@@ -652,20 +652,6 @@ short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, s
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
   echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
 }
-kept_windows() {  # the tied windows the serve root's other serve dirs keep, the largest first, until they hold $1 entries:
-  # KEPT names each (its serve dir's v3c-w*/window, with its entries) and KEPT_N is their entries; empty and 0 for none
-  local need=$1 n r
-  KEPT='' KEPT_N=0
-  while read -r n r; do
-    KEPT+=${KEPT:+, }"$r/v3c-w*/window ($n entries)" KEPT_N=$((KEPT_N + n))
-    [ "$KEPT_N" -lt "$need" ] || break
-  done < <(for r in "$ROOT"/*/; do
-    r=${r%/}
-    [ "$r" != "$D" ] || continue
-    n=$(find "$r"/v3c-w*/window -mindepth 1 2> /dev/null | wc -l)
-    [ "$n" = 0 ] || echo "$n $r"
-  done | sort -rn)
-}
 # V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default SPOT's PP_CHALLENGER,
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
 # in a follow-on not the served node) under PP_CHALLENGER_KEY and PP_GATE_KEY. A local or loopback session's coins are a

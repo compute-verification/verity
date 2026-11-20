@@ -20,7 +20,6 @@ SPOT, and the one record of every verdict (the block record).
     served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
     served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE] [--challenger C --summary FILE]
     served_verdicts.py coin-trees --challenger C --summary FILE
     served_verdicts.py coins --challenger C --summary FILE
     served_verdicts.py front-line SESSION
@@ -38,10 +37,7 @@ is done, in full under DIR where it names or counts a window or holds a load's o
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 docket (`public_registration`: its compiler's cap in place of the advice's length, which the advice tree's row count
-states all the same), ``sampled-line`` the
-SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
-its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
+states all the same), ``coin-trees`` why an
 audit on the gate's coins took its sessions' coin trees from elsewhere (`coin_trees_refusal`, exit 1), ``coins`` the
 V3C-AUDIT line's account of whose coins its audit's were and its coin trees (`coins_said`), and
 ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`), ``failed`` a tool's
@@ -778,31 +774,6 @@ def coin_trees_refusal(challenger: str, summary: Mapping[str, Any] | None) -> st
             "trees from somewhere other than the gate's session that sampled them, which the auditor's Lean verifier "
             "refuses (OneStageZk.treesHeld); serve from a tree whose a5.window_trees takes them from that session, "
             "with FLOCK_CHALLENGER unset")
-
-
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None, challenger: str | None = None,
-                 summary: Mapping[str, Any] | None = None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
-    templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and with how many proof blocks were sampled (``sampled``). Its ``population``, the scope's
-    unpadded member count, counts the execution phase's tokens: the private copy keeps it and the published one cuts it
-    (`public_line`). The scope's ``steps``, the window's engine steps, stay on the node too. With the audit's
-    ``challenger``, whose coins they were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader
-    takes a development session's run for the auditor's."""
-    row = dict(records)
-    if isinstance(row.get("draw"), list):
-        row["sampled"] = len(row["draw"])
-    if isinstance(row.get("leak"), Mapping):
-        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
-    if summary is not None:
-        row["coin_trees"] = summary.get("coin_trees")
-    part = partition or {}
-    scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
-            f"(law {part.get('law', '?')})")
-    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    coins = f", coins {challenger_coins(challenger)}" if challenger is not None else ""
-    return f"{over}, {drawn}{coins}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 #: The network attester front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -2633,11 +2604,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     wr = sub.add_parser("window-record", help="the window road's verdict of record from the records audit's summary.json: "
                         "exit 0 accept, 1 reject or undecided, 2 a summary that is missing or lacks a field (ERROR)")
     wr.add_argument("summary", type=Path)
-    sl = sub.add_parser("sampled-line")
-    sl.add_argument("log", type=Path)
-    sl.add_argument("--partition", type=Path)
-    sl.add_argument("--challenger")
-    sl.add_argument("--summary", type=Path)
     for name in ("coin-trees", "coins"):
         ct = sub.add_parser(name)
         ct.add_argument("--challenger", required=True)
@@ -2737,14 +2703,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         print(line, flush=True)
         return 0 if verdict == "accept" else 1
-    if a.cmd == "sampled-line":
-        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
-        if not rows:
-            print("no RECORDS line")
-            return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None,
-                           a.challenger, _summary(a.summary) if a.summary else None))
-        return 0
     if a.cmd == "coins":
         print(coins_said(a.challenger, _summary(a.summary)))
         return 0

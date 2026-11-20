@@ -21,6 +21,7 @@ verity_vllm/ops/served_build.sh  # a served Build's acquire job (`verity-vllm se
 
 # --- Python entry points
 verity_vllm.pipeline.research_tools
+verity_vllm/inputs/      # the adapter's statement, its door and the one sender: a library entry point, read by tools/verity/cli's served_table.py and tools/served_run/inputs.py
 verity_vllm.pipeline.cli
 verity_vllm.definitions.numerics.torch_kernels      # the training step's torch kernels: a library entry point, read by adapters/torch (verity_torch.frontend.rules)
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package

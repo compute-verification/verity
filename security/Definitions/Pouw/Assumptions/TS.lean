@@ -183,7 +183,8 @@ every round, whatever the past, the values of the round's deficient words have p
 the cheater's skip and its values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's `SkipRound.PointMass`
 at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`ResourceAccounting.Guarantees.HMu.LemmaB`) turns it into the
 operand luck at `μ`. Where it holds:
-* the coins give it for a fresh-bit skipped value (`ResourceAccounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
+* the coins give it for a fresh-bit skipped value (`ResourceAccounting.Guarantees.HMu.CoinPointMass`: `½` at one bit),
+  for a Program whose flow graph the Build admits, which no statement yet gives of a decoded Program;
 * for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs
   only;
 * where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't

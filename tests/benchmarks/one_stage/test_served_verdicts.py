@@ -437,57 +437,7 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_spot_line_names_the_partition_and_how_many_proof_blocks_were_sampled_and_publishes_no_population(tmp_path,
-                                                                                                               capsys):
-    """The line says how many proof blocks were sampled; the population's size, which counts the execution phase's
-    tokens, is in the private copy and cut from the published one; the advice's length and the steps are in neither."""
-    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
-           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
-    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "rate:2/4",
-            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
-    line = S.sampled_line(row, part)
-    head, _, rec = line.partition(": RECORDS ")
-    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law rate:2/4), drawn members [0, 2]"
-    assert "steps" not in line and "11" not in line
-    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
-    assert (json.loads(rec)["population"], json.loads(rec)["sampled"]) == (37, 2)
-    published = S.public_line(line)
-    assert "population" not in published and "37" not in published
-    assert json.loads(published.partition(": RECORDS ")[2])["sampled"] == 2
-    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
-    (tmp_path / "p.json").write_text(json.dumps(part))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
-    assert capsys.readouterr().out == line + "\n"
-    (tmp_path / "log").write_text("refused\n")
-    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
-
-
 GATE_COINS = "gate:research@challenger.invalid"
-
-
-@pytest.mark.parametrize("challenger, coins", [
-    (GATE_COINS, "coins the gate's, the auditor's challenger"),
-    ("local", "coins a development challenger's (local), not the auditor's"),
-    ("loopback:127.0.0.1:7811", "coins a development challenger's (loopback), not the auditor's"),
-])
-def test_the_spot_line_says_whose_coins_they_were_and_where_the_sessions_coin_trees_came_from(tmp_path, capsys,
-                                                                                               challenger, coins):
-    """A reader of the record tells a development session's run from the auditor's, and sees the audit's coin_trees,
-    which the RECORDS row of the audit itself leaves out; the gate's address is not in the line."""
-    row = {"ok": True, "accepted": True, "draw": [1, 2]}
-    line = S.sampled_line(row, None, challenger, {"coin_trees": "window"})
-    head, _, rec = line.partition(": RECORDS ")
-    assert head.endswith(f"drawn members [1, 2], {coins}") and "invalid" not in line and "127.0.0.1" not in line
-    assert json.loads(rec)["coin_trees"] == "window"
-    (tmp_path / "log").write_text("RECORDS " + json.dumps(row) + "\n")
-    (tmp_path / "summary.json").write_text(json.dumps({"coin_trees": "window", "ok": True}))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
-                   "--summary", str(tmp_path / "summary.json")]) == 0
-    assert capsys.readouterr().out == line + "\n"
-    (tmp_path / "summary.json").write_text("{")
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--challenger", challenger,
-                   "--summary", str(tmp_path / "summary.json")]) == 0
-    assert "unread: summary.json is not JSON" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("challenger, summary, refused", [

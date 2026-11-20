@@ -245,6 +245,30 @@ theorem StreamedWipeMeets96GiB_nontrivial :
           (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) :=
   ⟨Pous.Claims.noKey 1610612736, Pous.Claims.keepAll 1610612736 2152 512 43401774781 (1610612736 * 512) 0
     (by norm_num), Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _⟩
+theorem StreamedWipeResidual : Pous.Guarantees.StreamedWipeResidual := PousStreamedWipe.streamed_wipe_residual
+
+/-- **`StreamedWipeResidual`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`), is accepted
+by the wipe's own acceptance with probability 1, at the served H200's fill (`2,319,974,400` labels of 512 bits), 2152
+challenges, no egress and prior content of the wipe residual at `2^-128`, `52,439,071,629` bits, where the guarantee's
+premises hold (`wipeResidual` below the fill, `Residual.lean`'s examples). -/
+theorem StreamedWipeResidual_honest :
+    ∃ (prf : Pous.Bits 512 → Fin 2319974400 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2319974400 2152 512 52439071629 (2319974400 * 512) 0),
+      Pous.pr (fun x : (Pous.Bits 52439071629 × (Fin 2152 → Fin 2319974400)) × Pous.Bits 512 =>
+        Pous.StreamedWipe.Accepts P x.1.1 (prf x.2) x.1.2) = 1 :=
+  ⟨fun K _ => K, PousStreamedWipe.honest 2319974400 2152 512 52439071629,
+    Pous.Claims.pr_of_forall fun _ => PousStreamedWipe.honest_accepts _ _ _⟩
+
+/-- **`StreamedWipeResidual`'s nontrivial lemma**: its bound at `2^-128` is false at `StreamedWipe.acceptAll`, on the
+honest lemma's instance, for some key-free PRF and a prover (`keepAll`) keeping its `52,439,071,629` bits. -/
+theorem StreamedWipeResidual_nontrivial :
+    ∃ (prf : Pous.Bits 0 → Fin 2319974400 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2319974400 2152 512 52439071629 (2319974400 * 512) 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) :=
+  ⟨Pous.Claims.noKey 2319974400, Pous.Claims.keepAll 2319974400 2152 512 52439071629 (2319974400 * 512) 0
+    (by norm_num), Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _⟩
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
 theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
 
