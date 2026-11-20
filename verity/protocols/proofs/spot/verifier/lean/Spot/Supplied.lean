@@ -436,4 +436,109 @@ def piece (j : Json) : Except String Json := do
     pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun (x : Nat) => Json.num (Int.ofNat x))))
   return Json.mkObj out.toList
 
+/-- A held return row of the root (`supplied.check_held`): its return's leaves `[lo, hi)`, leaf `lo + i` held to leaf
+`start + i mod n` of the supplied input `name`, whose value the verifier computes as `leaves`. -/
+structure Held where
+  lo : Nat
+  hi : Nat
+  name : String
+  start : Nat
+  n : Nat
+  leaves : Array Nat
+deriving Inhabited
+
+/-- The one leaf width of input `name`'s root nodes, each `SuppliedInput<w>_v1`; none where they are not of one. -/
+private def suppliedWidth (desc : Json) (name : String) : Option Nat := do
+  let .arr xs := getD desc "inputs" | none
+  let .str root := getD desc "root" | none
+  let .arr nodes := getD (getD (getD (getD desc "definitions") root) "body") "nodes" | none
+  let .arr callees := getD desc "callees" | none
+  let mut k := 0
+  for x in xs do
+    let .arr e := x | none
+    let some n := e[1]?.bind nat? | none
+    if e[0]? == some (Json.str name) then
+      let ws := (nodes.extract k (k + n)).map fun nd =>
+        (String.ofList (((callee callees nd).toList.drop SUPPLIED_PREFIX.length).takeWhile Char.isDigit)).toNat?
+      let some (some w) := ws[0]? | none
+      return (← if ws.all (· == some w) then some w else none)
+    k := k + n
+  none
+
+/-- `registered.held`: the root's held return rows, its `ports.ret` rows `[lo, hi, {"equals": [name, at, n]}]` in order,
+each with the value it is held to: `name` a supplied input of the program (`marks`) whose body is bytes the verifier
+holds (a constant, or a coin it holds: `body`, `ofMark`), read by its layout as leaves of its nodes' one width, `[start,
+start + n)` a run of them with `n` dividing `hi - lo`. Refused otherwise; none where the root holds none. -/
+def held (coins : Array (String × ByteArray)) (desc : Json) : V (Array Held) := do
+  let ms ← marks desc
+  let .str root := getD desc "root" | throw "the program names no root"
+  let rows ← match getD (getD (getD (getD desc "definitions") root) "ports") "ret" with
+    | .null => pure #[]
+    | .arr rs => pure rs
+    | _ => throw "held output: the root's return rows are no list"
+  let mut out := #[]
+  for r in rows do
+    let .arr #[lo, hi, port] := r | continue
+    let eqj := getD port "equals"
+    if eqj == .null then continue
+    let .arr eq := eqj | throw "held output: a held row is [lo, hi, {equals: [input, at, n]}]"
+    let (some lo, some hi, some (Json.str name), some start, some n) :=
+        (nat? lo, nat? hi, eq[0]?, eq[1]?.bind nat?, eq[2]?.bind nat?)
+      | throw "held output: a held row is [lo, hi, {equals: [input, at, n]}]"
+    if eq.size != 3 || lo ≥ hi then throw "held output: a held row is [lo, hi, {equals: [input, at, n]}]"
+    let some (_, m) := ms.find? (·.1 == name) | throw s!"held output: {name} is no supplied input of the program"
+    let some w := suppliedWidth desc name
+      | throw s!"held output: supplied input {name}'s nodes are no SuppliedInput<w>_v1 of one width"
+    let rs ← ofMark coins name m
+    let some r := rs[0]? | throw s!"held output: {name} has no value"
+    let le := r[0]?.map (·.1) == some LE
+    let ss := if le then r.extract 1 r.size else r
+    let data ← ss.foldlM (fun acc (k, x) => do
+      if k != "bytes" then
+        throw s!"held output: {name} is {m.fn}, whose value is no bytes the verifier holds: an output is held to a constant or a coin"
+      return acc ++ (← Flock.unhex x)) ByteArray.empty
+    let ls ← if le then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
+    if n == 0 || (hi - lo) % n != 0 || start + n > ls.size then
+      throw s!"held output: [{lo}, {hi}) held to leaves [{start}, {start + n}) of {name}'s {ls.size}, no run of them whose length divides the row's"
+    out := out.push { lo, hi, name, start, n, leaves := ls }
+  return out
+
+/-- `registered.held_why`: why the root's return leaves `outs` break a held row (`held`), leaf `lo + i` not leaf
+`start + i mod n` of its supplied input; none where every held row holds. -/
+def heldWhy (hs : Array Held) (outs : Array Nat) : Option String := Id.run do
+  for h in hs do
+    if outs.size < h.hi then return some s!"held output: the return has {outs.size} leaves, and a held row ends at {h.hi}"
+    for i in [0:h.hi - h.lo] do
+      let x := outs[h.lo + i]!
+      let y := h.leaves[h.start + i % h.n]!
+      if x != y then
+        return some s!"held output: return leaf {h.lo + i} is {x}, held to leaf {h.start + i % h.n} of {h.name}, which is {y}"
+  return none
+
+private def heldOne : Array Held := #[{ lo := 0, hi := 16, name := "one", start := 0, n := 16,
+  leaves := #[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }]
+#guard heldWhy heldOne (#[1] ++ Array.replicate 15 0) == none
+#guard heldWhy heldOne (Array.replicate 16 0) == some "held output: return leaf 0 is 0, held to leaf 0 of one, which is 1"
+#guard heldWhy heldOne (Array.replicate 15 0) == some "held output: the return has 15 leaves, and a held row ends at 16"
+
+/-- The difftest's `supplied_held`: on `{program, coins, outputs}` (`coins`: `{function: hex}`; `outputs`: the root's
+return leaves, or null), the root's held rows as `[lo, hi, name, at, n, leaves]` (`held`) and why `outputs` break them
+(`heldWhy`, "" where they hold, null without outputs), or the refusal. -/
+def heldPiece (j : Json) : Except String Json := do
+  let coins ← match getD j "coins" with
+    | .obj kvs => kvs.toArray.mapM fun (f, h) => match h with
+      | .str s => do pure (f, ← Flock.unhex s)
+      | _ => throw "coins: a coin is not hex"
+    | _ => throw "coins is not an object"
+  let hs ← held coins (getD j "program")
+  let why ← match getD j "outputs" with
+    | .null => pure Json.null
+    | .arr xs => do
+      let outs ← xs.mapM fun x => match nat? x with | some v => pure v | none => throw "outputs: a leaf is no natural"
+      pure (Json.str ((heldWhy hs outs).getD ""))
+    | _ => throw "outputs is not a list"
+  let nat (x : Nat) := Json.num (Int.ofNat x)
+  return Json.mkObj [("held", Json.arr (hs.map fun h => Json.arr #[nat h.lo, nat h.hi, .str h.name, nat h.start, nat h.n,
+    Json.arr (h.leaves.map nat)])), ("why", why)]
+
 end Spot.Supplied

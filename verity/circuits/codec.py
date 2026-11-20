@@ -1117,6 +1117,7 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
     P.check(root)
     prog = DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
     _check_inputs(desc.get("inputs"), root)
+    _check_held(desc["inputs"], root)
     if extra := sorted(set(desc["definitions"]) - set(_walk(prog, lambda fid, fn: None, prog.boolean.values()))):
         raise ValueError(f"E_UNREACHED: {extra[:4]} are reached from neither the root, `program_fn`'s record nor the Boolean map")
     return prog
@@ -1149,6 +1150,27 @@ def _check_inputs(xs: Any, root: SpecializedDefinition) -> None:
             raise ValueError(f"E_INPUTS_MIXED: parameter {x[0]!r}'s input nodes {k}..{k + n - 1} mix {mixed} inputs")
         check_entry(x, bound)
         k += n
+
+
+def _check_held(xs: list, root: SpecializedDefinition) -> None:
+    """Each held row of the root's return (`ports.PortTypes.held`) held to leaves of a supplied input of ``xs``, the
+    descriptor's `inputs`, of the row's one leaf width (`supplied.check_held`: `E_HELD`)."""
+    from .parts import n_members
+    from .supplied import check_held, mark_of
+    pt = P.port_types(root)
+    if pt is None or not pt.held:
+        return
+    nodes, k, inputs = root.body.nodes, 0, {}
+    for x in xs:
+        bound = [(*input_id(nd.fn.id), n_members(nd)) for nd in nodes[k:k + x[1]]]
+        k += x[1]
+        widths = {w for _b, w, _n in bound}
+        if (m := mark_of(x)) is not None and len(widths) == 1:
+            inputs[x[0]] = (m, widths.pop(), sum(n for _b, _w, n in bound))
+    rw = root.signature()[1].leaf_widths()
+    for lo, hi, name, at, n in pt.held:
+        ws = set(rw[lo:hi])
+        check_held([lo, hi, {"equals": [name, at, n]}], ws.pop() if len(ws) == 1 else 0, inputs)
 
 
 def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, FunctionDefinition]:

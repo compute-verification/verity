@@ -67,6 +67,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
@@ -601,6 +602,107 @@ def of_mark(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list
     if 8 * n != m["bits"]:
         raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * n} bits, and the mark says {m['bits']}")
     return [([(LE, "")] if m["layout"] == "le" else []) + sources]
+
+
+@dataclass(frozen=True)
+class Held:
+    """A held return row of the root (`Supplied.Held`): return leaves ``[lo, hi)``, leaf ``lo + i`` held to leaf
+    ``start + i mod n`` of supplied input ``name``, whose value the verifier computes as ``leaves``."""
+    lo: int
+    hi: int
+    name: str
+    start: int
+    n: int
+    leaves: list[int]
+
+
+def _supplied_width(desc: Mapping[str, Any], name: str) -> int | None:
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
+    nodes = get(get(get(get(desc, "definitions"), desc.get("root")), "body"), "nodes")
+    callees = desc.get("callees")
+    if not (isinstance(desc.get("inputs"), list) and isinstance(desc.get("root"), str) and isinstance(nodes, list)
+            and isinstance(callees, list)):
+        return None
+    k = 0
+    for e in desc["inputs"]:
+        n = _nat(e[1]) if isinstance(e, list) and len(e) > 1 else None
+        if not isinstance(e, list) or n is None:
+            return None
+        if e and e[0] == name:
+            ws = []
+            for nd in nodes[k:k + n]:
+                i = _nat(get(nd, "fn"))
+                c = callees[i] if i is not None and i < len(callees) and isinstance(callees[i], str) else ""
+                d = re.match(r"[0-9]*", c[len("SuppliedInput"):]).group()
+                ws.append(int(d) if d else None)
+            return ws[0] if ws and ws[0] is not None and all(w == ws[0] for w in ws) else None
+        k += n
+    return None
+
+
+def held(coins: Mapping[str, bytes], desc: Any) -> list[Held]:
+    """The root's held return rows (`Supplied.held`), its ``ports.ret`` rows ``[lo, hi, {"equals": [name, at, n]}]`` in
+    order, each with the value it is held to: ``name`` a supplied input (`marks`) whose body is bytes the verifier holds
+    (a constant, or a coin it holds), read by its layout as leaves of its nodes' one width, ``[at, at + n)`` a run of
+    them with ``n`` dividing ``hi - lo``; ValueError otherwise."""
+    ms = marks(desc)
+    root = desc.get("root") if isinstance(desc, Mapping) else None
+    if not isinstance(root, str):
+        raise ValueError("the program names no root")
+
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
+    rows = get(get(get(desc.get("definitions"), root), "ports"), "ret")
+    if rows is None:
+        return []
+    if not isinstance(rows, list):
+        raise ValueError("held output: the root's return rows are no list")
+    form = "held output: a held row is [lo, hi, {equals: [input, at, n]}]"
+    out = []
+    for r in rows:
+        if not (isinstance(r, list) and len(r) == 3):
+            continue
+        eq = get(r[2], "equals")
+        if eq is None:
+            continue
+        if not (isinstance(eq, list) and len(eq) == 3 and isinstance(eq[0], str)):
+            raise ValueError(form)
+        lo, hi, name, at, n = _nat(r[0]), _nat(r[1]), eq[0], _nat(eq[1]), _nat(eq[2])
+        if lo is None or hi is None or at is None or n is None or lo >= hi:
+            raise ValueError(form)
+        if name not in ms:
+            raise ValueError(f"held output: {name} is no supplied input of the program")
+        m = ms[name]
+        w = _supplied_width(desc, name)
+        if w is None:
+            raise ValueError(f"held output: supplied input {name}'s nodes are no SuppliedInput<w>_v1 of one width")
+        row = of_mark(coins, name, m)[0]
+        le = bool(row) and row[0][0] == LE
+        data = b""
+        for k, x in row[1:] if le else row:
+            if k != "bytes":
+                raise ValueError(f"held output: {name} is {m['supplied']}, whose value is no bytes the verifier holds: "
+                                 "an output is held to a constant or a coin")
+            data += bytes.fromhex(x)
+        ls = le_leaves(data, w) if le else digest_leaves(data) if m["layout"] == "digest" else leaves_of(data, w)
+        if n == 0 or (hi - lo) % n or at + n > len(ls):
+            raise ValueError(f"held output: [{lo}, {hi}) held to leaves [{at}, {at + n}) of {name}'s {len(ls)}, no run "
+                             "of them whose length divides the row's")
+        out.append(Held(lo, hi, name, at, n, ls))
+    return out
+
+
+def held_why(hs: Sequence[Held], outs: Sequence[int]) -> str | None:
+    """Why the root's return leaves ``outs`` break a held row (`Supplied.heldWhy`); None where every one holds."""
+    for h in hs:
+        if len(outs) < h.hi:
+            return f"held output: the return has {len(outs)} leaves, and a held row ends at {h.hi}"
+        for i in range(h.hi - h.lo):
+            x, y = outs[h.lo + i], h.leaves[h.start + i % h.n]
+            if x != y:
+                return f"held output: return leaf {h.lo + i} is {x}, held to leaf {h.start + i % h.n} of {h.name}, which is {y}"
+    return None
 
 
 def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],

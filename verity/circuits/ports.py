@@ -222,6 +222,19 @@ def _port_from_json(cls: type, j: Any, where: str) -> In | Out:
     return p
 
 
+def _held_from_json(owner: str, lo: int, hi: int, j: dict, ret: Type, root: bool) -> tuple[int, int, str, int, int]:
+    """A held return row ``[lo, hi, {"equals": [name, at, n]}]``: the root's alone, inside its return, its port that one
+    key; whether ``name`` is a supplied input whose leaves ``[at, at + n)`` hold it is the decoder's (`supplied.check_held`)."""
+    if not root:
+        raise _decl(f"{owner} return: only the root holds an output to a supplied input, not {j!r}")
+    eq = j.get("equals")
+    if not (set(j) == {"equals"} and isinstance(eq, list) and len(eq) == 3 and isinstance(eq[0], str) and eq[0]
+            and all(type(x) is int and x >= 0 for x in eq[1:]) and lo < hi <= ret.leaves):
+        raise _decl(f"{owner} return: a held row is [lo, hi, {{\"equals\": [input, at, n]}}] inside the return, not "
+                    f"{[lo, hi, j]!r}")
+    return lo, hi, eq[0], eq[1], eq[2]
+
+
 @dataclass(frozen=True)
 class Leaves:
     """Ports by leaf range: `runs` are `(lo, hi, port)`, each typing leaves [lo, hi) of the tree's type."""
@@ -248,12 +261,14 @@ Run = tuple
 class PortTypes:
     """A declaration bound to a signature: per parameter and for the return, its typed runs of leaves, ascending, maximal and
     without defaults. A root's `inputs` are its input nodes' runs, `(node, lo, hi, port, w)`. `transfer`: a primitive's
-    (`Ports.transfer`)."""
+    (`Ports.transfer`). `held`: a root's held return rows, `(lo, hi, name, at, n)`, its `ret` rows
+    ``[lo, hi, {"equals": [name, at, n]}]`` (PROTOCOL.md §5.4, `supplied.check_held`)."""
 
     params: tuple[tuple[Run, ...], ...]
     ret: tuple[Run, ...]
     inputs: tuple[tuple, ...] = ()
     transfer: Callable[..., tuple[int, int] | None] | None = None
+    held: tuple[tuple[int, int, str, int, int], ...] = ()
 
     def to_json(self) -> dict:
         """The descriptor's `ports` (PROTOCOL.md §12): only what is declared, in leaf order."""
@@ -261,8 +276,10 @@ class PortTypes:
         ps = [[i, lo, hi, p.to_json()] for i, rs in enumerate(self.params) for lo, hi, p, _w in rs]
         if ps:
             j["params"] = ps
-        if self.ret:
-            j["ret"] = [[lo, hi, o.to_json()] for lo, hi, o, _w in self.ret]
+        rets = [[lo, hi, o.to_json()] for lo, hi, o, _w in self.ret] + [[lo, hi, {"equals": [name, at, n]}]
+                                                                          for lo, hi, name, at, n in self.held]
+        if rets:
+            j["ret"] = sorted(rets, key=lambda r: r[0])
         if self.inputs:
             j["inputs"] = [[k, lo, hi, p.to_json()] for k, lo, hi, p, _w in self.inputs]
         if self.transfer is not None:
@@ -294,7 +311,10 @@ class PortTypes:
                 raise _decl(f"{owner}: ports name parameter {i}, of {len(params)}")
             per[i].append((lo, hi, _port_from_json(In, pj, f"{owner} parameter {i}")))
         ps = tuple(_merged(owner, f"parameter {name!r}", t, per[i]) for i, (name, t) in enumerate(params))
-        rs = _merged(owner, "its return", ret, [(lo, hi, _port_from_json(Out, oj, f"{owner} return")) for lo, hi, oj in rows("ret", 2)])
+        held = tuple(_held_from_json(owner, lo, hi, oj, ret, nodes is not None) for lo, hi, oj in rows("ret", 2)
+                     if isinstance(oj, dict) and "equals" in oj)
+        rs = _merged(owner, "its return", ret, [(lo, hi, _port_from_json(Out, oj, f"{owner} return")) for lo, hi, oj in rows("ret", 2)
+                                                if not (isinstance(oj, dict) and "equals" in oj)])
         by_node: dict[int, list] = {}
         for k, lo, hi, pj in rows("inputs", 3):
             if nodes is None or k >= len(nodes):
@@ -304,6 +324,10 @@ class PortTypes:
         if nodes is not None and (_marked(rs) or _marked(ins)):
             raise _unmarkable(owner, "the root")
         pt = _bound(owner, ps, rs, ret, ins)
+        if held:
+            if any(a[1] > b[0] for a, b in zip(held, held[1:])):
+                raise _decl(f"{owner}: its held return rows overlap")
+            pt = replace(pt, held=held) if pt is not None else PortTypes(ps, rs, ins, held=held)
         if pt is None or pt.to_json() != j:
             raise _decl(f"{owner}: ports are not canonical (ascending, maximal runs; what the writer gives is "
                         f"{None if pt is None else pt.to_json()})")
