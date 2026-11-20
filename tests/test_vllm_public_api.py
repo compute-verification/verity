@@ -252,8 +252,6 @@ PUBLIC = {
     "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
                                             "(step_roots, host_step, plan), which benchmarks/commitments times and "
                                             "benchmarks/serve_tax's plugin installs",
-    "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
-                                 "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
                                     "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "

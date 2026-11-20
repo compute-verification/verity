@@ -4,7 +4,7 @@ Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 ro
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks are the Commit's
 committer and taps, which the Commit installs exactly as before; this option adds none, and the Commit refuses an entry
-whose scheme is not its committer's (`protocols.commit_context`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
+whose scheme is not its committer's (`protocols.commit_context`).  ``vllm-v1`` (SHA-256,
 32-byte roots) is registered only so a recorded run's target still parses and digests as it did; a Commit refuses it by
 name.  A row whose target declares no protocols never reaches this module: `protocol_options.commit_context` returns None
 first.
@@ -14,14 +14,13 @@ the required-value manifest's digest.  It takes no settings.
 """
 from __future__ import annotations
 
-from verity_vllm.commit import scheme as recorded_scheme
 from verity_vllm.commit import step_rows
 from verity import hooks as H
 from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 
 NAME = "sampled-proofs"
 DEFAULT_SCHEME = step_rows.NAME
-RECORDED = recorded_scheme.NAME
+RECORDED = "vllm-v1"
 DESIGN = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
 
