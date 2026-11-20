@@ -381,3 +381,34 @@ def test_a_checkout_that_doesnt_hold_the_base_is_refused_since_the_bases_own_cha
         W.changed(repo, base)
     _git(repo, "merge", "-q", "--no-edit", "main")
     assert W.changed(repo, base) == ["b.lean"]
+
+
+def test_unclaimed_outputs_go(tmp_path):
+    """A kept build's outputs of a module no library claims go, its source stays: Lake loads such a kept `.olean` as a
+    dependency's where a cold build has none."""
+    pkg = tmp_path / "p"
+    (pkg / "P").mkdir(parents=True)
+    (pkg / "lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = ["P.A"]\n')
+    for m in ("A", "B"):
+        (pkg / "P" / f"{m}.lean").write_text("module\n")
+    lib, ir = pkg / ".lake" / "build" / "lib" / "lean" / "P", pkg / ".lake" / "build" / "ir" / "P"
+    lib.mkdir(parents=True)
+    ir.mkdir(parents=True)
+    kept = [lib / "A.olean", lib / "A.trace", lib / "A" / "Sub.olean", ir / "A.c"]
+    gone = [lib / "B.olean", lib / "B.ilean", lib / "B.trace", ir / "B.c"]
+    for f in kept + gone:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("x")
+    assert LA.unclaimed(pkg) == len(gone)
+    assert all(f.is_file() for f in kept) and not any(f.exists() for f in gone)
+    assert (pkg / "P" / "B.lean").is_file()
+
+
+def test_unclaimed_keeps_all_where_the_lakefile_is_not_read(tmp_path):
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    (pkg / "lakefile.toml").write_text('name = "p"\n\n[[lean_lib]]\nname = "P"\nglobs = ["P.+"]\n')
+    f = pkg / ".lake" / "build" / "lib" / "lean" / "Q" / "B.olean"
+    f.parent.mkdir(parents=True)
+    f.write_text("x")
+    assert LA.unclaimed(pkg) == 0 and f.is_file()
