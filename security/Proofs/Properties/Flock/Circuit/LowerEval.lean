@@ -121,6 +121,35 @@ theorem none_of_forall2 {α β : Type} {o : Option (α × β)} (h : ∀ a b, o =
   | none => rfl
   | some p => exact absurd rfl (h p.1 p.2)
 
+theorem forIn_unit_all {α : Type} {l : List α} {f : α → PUnit.{1} → V (ForInStep PUnit.{1})} {Q : α → Prop}
+    (h : forIn l PUnit.unit f = .ok PUnit.unit)
+    (hf : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit ∧ Q a) : ∀ a ∈ l, Q a := by
+  induction l with
+  | nil => intro a ha; cases ha
+  | cons b bs ih =>
+    rw [List.forIn_cons] at h
+    obtain ⟨s, hs, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨rfl, hb⟩ := hf b s hs
+    intro a ha
+    rcases List.mem_cons.1 ha with rfl | ha
+    · exact hb
+    · exact ih h a ha
+
+/-- `leavesOff`'s totals: the parameters' bits are the lift's parameter leaves, the return's its output leaves. -/
+theorem leavesOff_none {fn l : Defn} (h : Spot.OneStageZk.leavesOff fn l = none) :
+    fn.params.foldl (fun a x => a + x.2.widths.foldl (· + ·) 0) 0 = l.paramLeaves ∧
+      fn.ret.widths.foldl (· + ·) 0 = l.outLeaves := by
+  unfold Spot.OneStageZk.leavesOff at h
+  dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · rename_i hne
+        simpa [Bool.or_eq_true, bne_iff_ne] using hne
+
 theorem ite_ok {α ε : Type} {c : Prop} [Decidable c] {x y : Except ε α} {a : α}
     (h : (if c then x else y) = .ok a) : (c ∧ x = .ok a) ∨ (¬ c ∧ y = .ok a) := by
   by_cases hc : c
@@ -149,7 +178,11 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
         (fn.params.map fun x => (x.1, x.2.widths.foldl (· + ·) 0)) ∧
       a.fields = (fieldsOf fn.ret).toArray.mapIdx (fun j f => (s!"o{j}", f.widths.foldl (· + ·) 0)) ∧
       (∀ r ∈ a.ins, (r.2 == 0 || r.2 % 16 != 0) = false) ∧
-      (∀ r ∈ a.fields, (r.2 == 0 || r.2 % 16 != 0) = false) := by
+      (∀ r ∈ a.fields, (r.2 == 0 || r.2 % 16 != 0) = false) ∧
+      (∀ x ∈ (cuts.lookup a.key).getD [], ∃ n t, fn.params.find? (·.1 == x.1) = some (n, t) ∧
+        ¬ (decide (x.2 < 2) || (Widths.homo t).isNone || t.leaves % x.2 != 0) = true) ∧
+      (∀ n ∈ a.ins.map (·.1) ++ a.fields.map (·.1),
+        ¬ decide (((a.ins.map (·.1) ++ a.fields.map (·.1)).filter (· == n)).size > 1) = true) := by
   unfold Spot.OneStageZk.admitted at h
   split at h
   na_close
@@ -188,7 +221,7 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   split at h
   na_close
   try dsimp only at h
-  obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hc, h⟩ := Flock.HmNets.bind_ok h
   try dsimp only at h
   split at h
   na_close
@@ -207,19 +240,28 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   obtain ⟨s2, h, -⟩ := Flock.HmNets.bind_ok hw
   split at h
   na_close
-  refine ⟨_, _, _, _, by assumption, by assumption, by assumption, none_of_forall (by assumption), rfl, rfl, ?_, ?_⟩
+  refine ⟨_, _, _, _, by assumption, by assumption, by assumption, none_of_forall (by assumption), rfl, rfl, ?_, ?_,
+    forIn_unit_all hc fun x s hs => ?_, ?_⟩
   · intro r hr
     have := Array.find?_eq_none.1 (none_of_forall2 (by assumption)) r hr
     simpa using this
   · intro r hr
     have := Array.find?_eq_none.1 (none_of_forall2 (by assumption)) r hr
     simpa using this
-
+  · split at hs
+    · rcases ite_ok hs with ⟨-, hs⟩ | ⟨hc', hs⟩
+      · exact absurd hs notAdmitted_bind_ne
+      · cases hs
+        exact ⟨rfl, _, _, by assumption, hc'⟩
+    · exact absurd hs notAdmitted_bind_ne
+  · intro n hn
+    have := Array.find?_eq_none.1 (none_of_forall (by assumption)) n hn
+    simpa using this
 
 /-- **`AdmitWhole`**, from `admitted_walk`'s `whole-words`. -/
 theorem admitWhole : AdmitWhole := by
   intro partition cuts S a ha
-  obtain ⟨_, _, _, _, -, -, -, -, -, -, hi, hf⟩ := admitted_walk ha
+  obtain ⟨_, _, _, _, -, -, -, -, -, -, hi, hf, -, -⟩ := admitted_walk ha
   refine ⟨fun r hr => ?_, fun r hr => ?_⟩
   · have := hi r (Array.mem_def.2 hr)
     simp at this
