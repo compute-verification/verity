@@ -23,6 +23,14 @@ import door_walls as W  # noqa: E402
 COMPOSE_WHY = "no row has a compression before its last block"
 
 
+@pytest.fixture(autouse=True)
+def _suites_lookup(monkeypatch):
+    """`door_walls._catalog` registers the catalog's Boolean lookup, which knows no test primitive: the suite's own
+    (`conftest._stand_in`) is back for the tests that run after one of these in the same process."""
+    from verity.circuits import program as PG
+    monkeypatch.setattr(PG, "_BODY_LOOKUP", list(PG._BODY_LOOKUP))
+
+
 #: the fuzzer's findings the door now refuses, minimised: (what it is, the spec, its case seed, the class it showed when
 #: found, and each block's refusal as its step and the clause or code it names)
 SEEDS = [

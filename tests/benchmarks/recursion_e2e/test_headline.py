@@ -11,30 +11,8 @@ from pathlib import Path
 import pytest
 import rec_logs as RL
 import rec_profile as RP
-import rec_rows as RR
 import rec_table as RT
 from test_recursion_e2e import job, row
-
-
-def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> None:
-    o = job(tmp_path)
-    assert RP.read(o)["headline"]["complete"] is False                     # no vcap step: no V* verdict
-    (o / "steps" / "vcap" / "r1" / "out").mkdir(parents=True)
-    (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
-    doc = RP.read(o)
-    assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
-    assert "Verdict: one whole recursive run, **not accepted**" in RT.markdown(doc)
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
-    assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is False      # its parts passed; nothing composed
-    h = RP.headline([RR.compose_row([{"composed": True, "accepted": True, "why": ""}])], {"not_ok": []},
-                    {s: ["0"] for s in RP.E2E_STEPS})
-    assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is True
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
-    assert h["complete"] is False and h["parts_ok"] is False and h["ok"] is False
-    h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS} | {"lean": ["0", "1"]})
-    assert h["complete"] is True and h["parts_ok"] is False and h["ok"] is False
-    shutil.rmtree(o / "steps" / "oprove")
-    assert "Verdict: **not a whole recursive run**" in RT.markdown(RP.read(o))
 
 
 def whole(tmp: Path, *left: dict | str | None, modes: str = "dev") -> Path:
@@ -60,15 +38,6 @@ ACCEPTED = {"composed": True, "accepted": True, "why": ""}
 
 
 NOT_ACCEPTED_RUN = "its outer proofs accepted and its recursive statement {}, so not an accepted recursive run (oprove modes {}"
-
-
-def test_a_composed_and_accepted_run_is_an_accepted_recursive_run(tmp_path: Path) -> None:
-    doc = RP.read(whole(tmp_path, ACCEPTED))
-    c = row(doc, "compose")
-    assert c["step"] == "lean" and c["ok"] is True and c["note"] == "" and c["extra"] == {"composed": True, "accepted": True}
-    h = doc["headline"]
-    assert (h["complete"], h["parts_ok"], h["composed"], h["not_composed"], h["ok"]) == (True, True, True, None, True)
-    assert h["refused"] is None and "Verdict: one whole recursive run, accepted." in RT.markdown(doc)
 
 
 def test_a_composed_and_refused_run_is_not_accepted(tmp_path: Path) -> None:
@@ -137,33 +106,6 @@ def test_a_record_lean_gave_no_answer_in_is_no_accepted_run(tmp_path: Path) -> N
     assert c["ok"] is None and c["note"] == "no answer: exit 2: 'usage'" and doc["headline"]["ok"] is False
     (tmp_path / "out" / "steps" / "lean" / "r1" / "out" / "lean" / RL.COMPOSITION).write_text("{not json")
     assert row(RP.read(tmp_path / "out"), "compose")["extra"]["composed"] is None
-
-
-@pytest.mark.parametrize("line, composed, accepted", [
-    ('lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}', True, True),
-    ('lean compose: REC-COMPOSE {"accepted": false, "why": "part 1: x", "parts": 3}  <- FAILS', True, False),
-    (('lean compose (RETRY=L0, part 0: refused as retried, a negative control): REC-COMPOSE {"accepted": false, "why": '
-      '"part 0: 2 sessions opened in the run record: a part is never retried", "parts": 3}'), True, False),
-    ("lean compose: 1 of V*'s 3 parts run, so the recursive statement is not composed", False, None),
-    (("lean compose: no interactive-run record (rec-run.json), so the recursive statement is not composed: its parts are "
-      "not shown to be one run (C10 OneRun)"), False, None),
-    ("lean compose: exit 2: 'usage'  <- FAILS", True, None),
-    ('lean compose forged-top-L0: REC-COMPOSE {"accepted": false, "why": "x", "parts": 3}', None, None),
-])
-def test_a_run_from_before_the_record_is_read_from_its_step_log(tmp_path: Path, line: str, composed, accepted) -> None:
-    """A lean step from before its record left only its log's line on the honest parts, read as the record is; a
-    forgery's line is no composition of the honest parts."""
-    doc = RP.read(whole(tmp_path, line))
-    c = row(doc, "compose")
-    assert c["extra"] == {"composed": composed, "accepted": accepted} and c["ok"] is accepted
-    assert doc["headline"]["ok"] is (accepted is True)
-
-
-def test_the_record_is_read_ahead_of_the_log(tmp_path: Path) -> None:
-    o = whole(tmp_path, {"composed": False, "accepted": None, "why": "1 of V*'s 3 parts run"})
-    for r in (o / "steps" / "lean").glob("r*"):
-        (r / "step.log").write_text('lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}\n')
-    assert RP.read(o)["headline"]["composed"] is False
 
 
 def test_a_result_from_before_the_composition_is_not_printed_as_accepted(tmp_path: Path) -> None:

@@ -55,7 +55,8 @@ def test_the_coin_digest_and_the_header_are_the_formats_bytes():
     c, tree = session()
     assert SC.coin_digest(c.session, 2, 70000) == hashlib.sha512(
         b"verity-pous/memory-challenger/coin/v1\0" + c.session + (2).to_bytes(4, "big") + (70000).to_bytes(8, "big")).digest()
-    head = SC.header(c.session, c.coin_root, c.coin_key, c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, "complete", 3)
+    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns,
+                    c.block_bytes, "complete", 3)
     assert head == json.dumps({**c.header(), "ended": "complete", "rounds": 3}, sort_keys=True, separators=(",", ":")).encode()
     assert len(head) == 753 and b'"ended":"complete"' in head and b'"rounds":3' in head
     rec = fixed("record", 64)

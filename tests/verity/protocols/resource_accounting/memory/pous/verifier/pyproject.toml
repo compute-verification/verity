@@ -43,4 +43,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/challenger",
+          "verity/protocols/proofs/spot/verifier/levels.py", "verity/protocols/proofs/spot/verifier/schedule.py",
+          "verity/protocols/proofs/spot/verifier/second_stage.py", "verity/protocols/proofs/spot/verifier/service.py",
+          "verity/protocols/proofs/spot/verifier/window_place.py",
           "verity/protocols/resource_accounting/memory/pous/verifier"]
