@@ -1,6 +1,7 @@
-"""The wires a Program's root states (`Spot.Edges.edgesOf`, the `edges` piece) against its twin,
-`verity.circuits.edges`, on descriptors the builder writes and on their root arguments' references rewritten:
-both give the same wires or the same refusal, and the named cases give the wires or refusal the rule says."""
+"""The wires a Program's root states (the `edges` piece: the program decoded, then `Spot.Edges.edgesOf`) against its
+twin (`verity.circuits.restrict.program`, then `verity.circuits.edges`), on descriptors the builder writes and on their
+root arguments' references rewritten: both give the same wires, the same refusal or the decoder's same rejection, and
+the named cases give the wires, refusal or rejection the rule says."""
 
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.circuits import codec
+from verity.circuits import codec, restrict
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
@@ -81,6 +82,7 @@ def _wire(r, w, o, at, base, cut0=0) -> dict:
 
 _, TA, TB = ARR
 _, UA, UB = TUP
+LATER = _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]})
 
 CASES = [
     ("A, B, A", _of(ARR), {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
@@ -96,7 +98,8 @@ CASES = [
      {"refusal": "edge-parts"}),
     ("an explicit read of a node that is no input node",
      _of(ARR, b_refs=lambda a, a2: {"explicit": [["n", a, i] for i in range(4)]}), {"refusal": "edge-rows"}),
-    ("a read of a later node", _of(ARR, b_refs=lambda a, a2: {"affine": ["n", a2, 0, 4]}), {"refusal": "not-topological"}),
+    ("a read of a later node", LATER, f"definition {ARR[0]['root']!r} node {LATER['ranges'][1][0]}: "
+     + codec.forward_refusal(LATER["ranges"][1][0], LATER["ranges"][2][0])),
     ("a cut port's rows", _of(TUP, cuts={UA: {"x": 2}, UB: {"x": 2}}),
      {"wires": [_wire(UB, UA, "o0", 0, 0, 0), _wire(UB, UA, "o1", 0, 0, 1),
                 _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
@@ -193,18 +196,36 @@ def _variants():
     return out
 
 
-def reference(j) -> dict:
+def twin(j) -> dict:
     return edges(j["program"], j["ranges"], j["wiring"])
 
 
+def reference(j) -> dict:
+    """The piece's Python side: the program decoded from its bytes alone, as the piece's `Program.parse` decodes it, its
+    decoder's refusal the rejection; then the twin."""
+    try:
+        restrict.program(json.dumps(j["program"]).encode())
+    except restrict.Refused as e:
+        raise D.Reject(str(e.__cause__)) from e
+    return twin(j)
+
+
 EDGES = D.Port("spot-difftest", "edges", reference, st.sampled_from([c[1] for c in CASES] + _variants()),
-               package=PACKAGE, need_rejects=False, of_record="lean")
+               package=PACKAGE, of_record="lean")
 pieces = D.server_fixture(EDGES)
 
 
 @pytest.mark.parametrize("name, j, want", CASES, ids=[c[0] for c in CASES])
 def test_the_named_cases(pieces, name, j, want):
-    """Each named case gives the rule's wires or refusal, in Lean and in the twin."""
+    """Each named case gives the rule's wires or refusal, in Lean and in the twin; a read of a later node is rejected by
+    both decoders with one text, before the twin's own `not-topological`."""
+    if isinstance(want, str):
+        with pytest.raises(D.Reject) as e:
+            reference(j)
+        assert str(e.value) == want
+        assert pieces.call("edges", j) == ("reject", want)
+        assert twin(j) == {"refusal": "not-topological"}
+        return
     assert reference(j) == want
     assert pieces.call("edges", j) == ("output", D.canonical(want))
 
@@ -220,7 +241,7 @@ def test_one_field_a_part(pieces, name, j, want):
 @pytest.mark.parametrize("name, j, want", GRID_CASES, ids=[c[0] for c in GRID_CASES])
 def test_the_grid_cases(name, j, want):
     """Each grid case gives the rule's wires or refusal in the twin."""
-    assert reference(j) == want
+    assert twin(j) == want
 
 
 def test_a_part_form_it_does_not_know_is_refused_by_name():
@@ -237,6 +258,7 @@ def test_two_levels_are_the_wires_radix():
 
 
 def test_the_twin_agrees_on_rewritten_arguments(pieces):
-    """Lean and the twin agree on every split, offset and cut of `b`'s argument."""
+    """Lean and the twin agree on every split, offset and cut of `b`'s argument, and both reject the named cases the
+    decoder refuses."""
     stats = D.run(EDGES, examples=200, server=pieces)
     assert stats.outputs > 0, stats
