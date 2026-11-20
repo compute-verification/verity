@@ -1,5 +1,5 @@
-"""The runner's window road (`served_verdicts.sh`, a plain run's) through `verity run`'s own call (`served_table.served_window`)
-on a window's record made on the processor."""
+"""The runner's window steps (`served_verdicts.sh steps`, a plain run's) through `verity run`'s own calls
+(`served_table.served_window`) on a window's record made on the processor."""
 from __future__ import annotations
 
 import hashlib
@@ -72,7 +72,7 @@ def _road(tmp_path, monkeypatch, application, d, **env):
                  "VENV": sys.prefix, "CUDA_HOME": str(tmp_path / "no-cuda"), "HF_HOME": str(tmp_path / "hf"), **env}.items():
         monkeypatch.setenv(k, v)
     state = tmp_path / f"state-{application}"
-    rc = ST.served_window(cfg, state, {})
+    rc = ST.served_window(cfg, state, {}, ST.ACCOUNTING, "served-window")
     if rc in ST.ENDED:
         ST.served_window(cfg, state, {}, ST.POLICY, "policy")
     logs = [state / "logs" / f"{x}.log" for x in ("served-window", "policy")]
@@ -125,7 +125,7 @@ UNSAID = ("compiled by the registered compiler", "charged", "bounded by", "cappe
 
 
 @pytest.mark.slow
-def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
+def test_the_window_steps_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
     compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
     record and the composite after them; the block counts count the record's circuit beside the registration that binds
@@ -170,7 +170,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
 
 
 @pytest.mark.slow
-def test_the_window_road_runs_an_onsite_application_without_compute_accounting(tmp_path, monkeypatch):
+def test_the_window_steps_runs_an_onsite_application_without_compute_accounting(tmp_path, monkeypatch):
     """onsite_network lists no compute accounting, so POUW is empty and the preflight passes it; the network attester's
     own piece refuses in its own words (`attester_piece.NOT_RUN`), and the wipe, whose answer the card launcher did not
     write, refuses as that launcher's. Slow (minutes) for the close."""
@@ -183,12 +183,13 @@ def test_the_window_road_runs_an_onsite_application_without_compute_accounting(t
     assert rc == 20 and "network-attester" in _end(log), log
 
 
-def _preflight(tmp_path, **env):
+def _preflight(tmp_path, steps=("steps", "preflight"), **env):
     (tmp_path / "serve").mkdir(exist_ok=True)
     env = {**os.environ, "D": str(tmp_path / "serve"), "PRED": str(tmp_path / "predicted"), "OUT": str(tmp_path / "out"),
            "SERVE_ROOT": str(tmp_path), "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path),
            "PEARLC_CHALLENGER_GATE": "", **env}
-    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh"], cwd=ROOT, env=env, capture_output=True, text=True)
+    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", *steps], cwd=ROOT, env=env, capture_output=True,
+                       text=True)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -205,7 +206,7 @@ def test_compute_accounting_is_held_to_the_application_list_both_ways(tmp_path):
         assert "compute accounting" not in out and "the window's record lacks" in out, out
 
 
-def test_the_window_road_refuses_by_name_each_thing_its_record_lacks(tmp_path):
+def test_the_window_steps_refuses_by_name_each_thing_its_record_lacks(tmp_path):
     """An empty serve dir: the preflight names every file it wanted, and nothing named ROW."""
     rc, out = _preflight(tmp_path, POUW="pearlplus", APPLICATION_PROTOCOLS="sampled-proofs pearl-plus")
     assert rc == 3, out
@@ -220,10 +221,19 @@ def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
     the run is refused before the window's preflight, compute accounting's scheme set or not."""
     for pouw in ("", "pearlplus"):
         env = {k: v for k, v in os.environ.items() if k != "APPLICATION_PROTOCOLS"}
-        rc, out = _preflight(tmp_path, **env, POUW=pouw)
+        rc, out = _preflight(tmp_path, (), **env, POUW=pouw)
         assert rc == 3 and out.strip().splitlines()[-1] == (
             "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists "
             "cannot be checked"), out
+
+
+def test_a_run_naming_no_step_is_refused_by_name(tmp_path):
+    """The steps and their order are `verity run`'s stages': a run naming none is refused before the window's preflight."""
+    for steps in ((), ("steps",)):
+        rc, out = _preflight(tmp_path, steps, APPLICATION_PROTOCOLS="sampled-proofs", POUW="")
+        assert rc == 3 and out.strip().splitlines()[-1] == (
+            "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh "
+            "steps STEP...)"), out
 
 
 def _sealed(tmp_path, window, drop=()):

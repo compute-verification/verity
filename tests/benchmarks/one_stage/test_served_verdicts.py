@@ -7073,7 +7073,7 @@ def test_the_split_attester_needs_v3c_and_no_whole_piece_beside_it(tmp_path, arg
 
 
 def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_anything_runs(tmp_path):
-    """COMPOSE_OFF_NODE is read before any mode, the window road's included."""
+    """COMPOSE_OFF_NODE is read before any mode, the window steps included."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
     assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])

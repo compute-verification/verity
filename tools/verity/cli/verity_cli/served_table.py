@@ -832,10 +832,9 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 
-def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], steps: Sequence[str] = (),
-                  log: str = "served-window") -> int:
-    """The served window's runner on ``steps`` in their order (its window road where none is named, its log
-    ``state/logs/<log>.log``) with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
+def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], steps: Sequence[str],
+                  log: str) -> int:
+    """The served window's runner on ``steps`` in their order, its lines in ``state/logs/<log>.log``, with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
     and no composite unless the caller asks for one (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
@@ -845,7 +844,7 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
     env |= {**composite(env), "OUT": str(state / "out"), "APPLICATION_PROTOCOLS": " ".join(cfg["protocols"])}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / f"{log}.log", "w") as f:
-        return subprocess.run(["bash", str(ROOT / RUNNER), *(("steps", *steps) if steps else ())], cwd=ROOT, env=env,
+        return subprocess.run(["bash", str(ROOT / RUNNER), "steps", *steps], cwd=ROOT, env=env,
                               stdout=f, stderr=subprocess.STDOUT, check=False).returncode
 
 
@@ -1100,10 +1099,16 @@ def _windows(public: period.PublicParameters, w: ServedWorkload, state: period.P
     return (PICKED,)
 
 
+#: the window's accounting steps in their order: compilation's record and the accounting protocols' pieces, then what
+#: reads the sampled proofs, which do not run
+ACCOUNTING = ("preflight", "seal", "window", "advice", "circuits", "sampled-proofs", "pieces", "wipe", "network-attester",
+              "record", "composite")
+
+
 def _accounting(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState,
                 window: str) -> dict[str, dict[str, Any]]:
-    """Each party's outcome here: the served window's runner (`served_window`) when the workload's party is here, with
-    each prepared runtime party's run beside it."""
+    """Each party's outcome here: the served window's runner (`served_window`) on the accounting steps (`ACCOUNTING`)
+    when the workload's party is here, with each prepared runtime party's run beside it."""
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
@@ -1117,7 +1122,7 @@ def _accounting(public: period.PublicParameters, w: ServedWorkload, state: perio
     with ThreadPoolExecutor(max_workers=max(1, len(ready))) as pool:
         beside = [(x, pool.submit(start)) for x, start in ready]
         if WORKERS in w.here:
-            rc = served_window(w.cfg, w.state, w.bindings)
+            rc = served_window(w.cfg, w.state, w.bindings, ACCOUNTING, "served-window")
             wait = pending(w.cfg, w.state, rc)
             for p in w.here:
                 if any(x.runs == SERVED_WINDOW for x in pieces(w.cfg, p)):
@@ -1138,7 +1143,7 @@ ENDED = (0, 20)
 def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState, window: str,
             outcomes: Mapping[str, Any]) -> int | None:
     """The runner on the policy's steps (`POLICY`), its exit, where the workload's party is here and the accounting
-    stage's runner reached its end (`ENDED`); else None, as the window road ran none of them."""
+    stage's runner reached its end (`ENDED`); else None."""
     if WORKERS not in w.here or not any(o["outcome"].get("served-window") in ENDED for o in outcomes.values()):
         return None
     return served_window(w.cfg, w.state, w.bindings, POLICY, "policy")

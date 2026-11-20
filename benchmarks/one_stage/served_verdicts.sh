@@ -1850,8 +1850,8 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" "$@" \
   --product "$PRODUCT" 2>&1 | publish_lines
 }
-# The window's road, a plain run's: the steps on what a window's serve left in D, after the lease, serving nothing and
-# reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
+# The window's steps, a plain run's, in the order verity run's stages name them: each on what a window's serve left in
+# D, after the lease, serving nothing and reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
 # seal and the advice. Each step is in one class: ran (its command ended 0 and decided), refused or undecided (by its own
 # first line), or not run (by why: a step the record holds nothing for names what it lacks and whose it is).
 RAN=() REFUSED=() NOT_RUN=()
@@ -2070,7 +2070,6 @@ road_steps() {  # in TREE: the steps named, in the caller's order, then the road
   for step in "$@"; do road_step_named "$step"; done
   road_end 20
 }
-window_road() { road_steps preflight seal window advice circuits sampled-proofs pieces wipe network-attester record composite; }
 
 if [ "${1:-}" = serve ]; then host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
@@ -2156,10 +2155,13 @@ else
   tie_refused || exit 3
   [ -n "${APPLICATION_PROTOCOLS+x}" ] \
     || { say "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists cannot be checked"; exit 3; }
+  [ "${1:-}" = steps ] && [ $# -gt 1 ] \
+    || { say "PREFLIGHT: the runner's steps and their order are verity run's stages': none was named (served_verdicts.sh steps STEP...)"; exit 3; }
   window_preflight || exit 3
   KN=$K CLASSES=$WINDOW_CLASS
   logs_dir
-  if [ "${1:-}" = steps ]; then shift; road_steps "$@"; else window_road; fi
+  shift
+  road_steps "$@"
 fi
 front_ok || exit 3
 [ -n "$FOLLOW$COMPOSE" ] || [ "${1:-}" = v3c ] || pous_pins_ok || exit 3  # the serve's run, which starts PoUS's piece
