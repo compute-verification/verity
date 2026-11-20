@@ -9,12 +9,10 @@ one source of truth.
 
 Evidence sources: the pure-Python contract module `verity_vllm.program.frontend.target_profile`, the builder source
 `verity_vllm/pipeline/build.py`, and (opt-in, `HARDEN_LIVE=1`, pod venv with vLLM) two live constructions differing only in a
-structural input. The checks of (a), (b), (c) and G4a/G4b read recorded constructions on a GPU host, which no tracked file holds:
-they are `test_harden_guards_of_record`.
+structural input.
 
-Verdict convention: assertions state the CONTRACT. Where the contract is known not to hold today the test is marked
-`xfail(strict=True)` with the finding as the reason — fixing the gap turns the xfail into an XPASS failure that forces the marker
-to be removed, so the finding stays load-bearing. None of these gaps is a semantic failure of a generated Program (the Program
+Verdict convention: assertions state the CONTRACT. Where the contract is known not to hold today, the case's verdict in the
+results file reads `GAP`. None of these gaps is a semantic failure of a generated Program (the Program
 digest DOES carry shapes/dtypes — G6); they are applicability-contract gaps (open item A4: "guards not preserved as
 artefacts").
 

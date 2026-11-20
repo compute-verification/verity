@@ -17,6 +17,7 @@ from verity.circuits.ops import mufu as MU
 from tests.properties import dsv4_moe_capture_gpu as S
 from verity_vllm.definitions.numerics import dsv4_moe_twin as T
 from verity_vllm.definitions.registry import dsv4_moe as D
+from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
 
 U32 = np.uint32
@@ -65,7 +66,7 @@ def test_lg2_words_are_the_measured_unit_and_the_library_table():
 
 @pytest.mark.parametrize("name", ["ex2", "hash_weight", "score", "lg2"])
 def test_the_element_twins_are_the_word_definitions(name):
-    fn, d = {"ex2": (S.MC.ex2_approx, bind(D.Ex2Approx)), "hash_weight": (T.hash_weight_words, bind(D.Dsv4HashWeight)),
+    fn, d = {"ex2": (S.MC.ex2_approx, bind(M.Ex2Approx)), "hash_weight": (T.hash_weight_words, bind(D.Dsv4HashWeight)),
              "score": (T.score_words, bind(D.Dsv4SqrtSoftplus)), "lg2": (T.lg2_words, D.MufuLg2Mantissa)}[name]
     words = _words(np.random.default_rng(3))
     assert fn(words).tolist() == [_one(d, int(x)) for x in words]
@@ -205,9 +206,9 @@ def test_the_mufu_probes_expectations_are_the_models():
     assert np.array_equal(MU.mufu_sqrt_words(S.SQRT_IN, MU.table("sqrt")), want["sqrt"])
     assert [_one(P.MufuSqrtFtz, int(v)) for v in want["sqrt_sweep_in"][:300]] == want["sqrt_sweep"][:300].tolist()
     x = S.ex2_inputs()
-    assert x[0] == S.EX2_LO and U32(D.MINUS_126) in x and U32(D.MINUS_126 + 1) in x and U32(D.MINUS_126 - 1) in x
-    pick = np.concatenate([np.flatnonzero(np.abs(x.astype(np.int64) - D.MINUS_126) < 3), np.arange(0, len(x), 9973)])
-    ex2 = bind(D.Ex2Approx)
+    assert x[0] == S.EX2_LO and U32(M.MINUS_126) in x and U32(M.MINUS_126 + 1) in x and U32(M.MINUS_126 - 1) in x
+    pick = np.concatenate([np.flatnonzero(np.abs(x.astype(np.int64) - M.MINUS_126) < 3), np.arange(0, len(x), 9973)])
+    ex2 = bind(M.Ex2Approx)
     assert [_one(ex2, int(x[i])) for i in pick] == want["ex2"][pick].tolist()
     dv = S.div_divisors()
     assert {S.ONE, S.PINF, 0x39800000, 0x007FFFFF, 0x00800000} <= set(dv.tolist()) and (dv > 0).all() and (dv <= U32(S.PINF)).all()

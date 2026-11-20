@@ -1,5 +1,5 @@
 """H1's sampling coin from a sample session of its own (`window.DRAW_FAMILIES`): the session the auditor's ledger opens on the
-window's `pouw_h1_requests.draw_root`, withheld (`challenger.withheld_on`), so its challenger released its coin root only
+window's `requests.draw_root`, withheld (`challenger.withheld_on`), so its challenger released its coin root only
 after that root, the prover's commitment. `pouw_h1_challenger` reads a window's sample through `draw_session_reason`.
 """
 from __future__ import annotations
@@ -62,7 +62,7 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
-    """Why the window's sampling coin isn't its one draw coin 0, opened after its `pouw_h1_requests.draw_root` (over the
+    """Why the window's sampling coin isn't its one draw coin 0, opened after its `requests.draw_root` (over the
     manifest's ``calls_root``, the last round's receipts and every round's root and coin), given its sample session's
     signed commitment `trusted` and the sample roots its log shows it received; None when it is."""
     if not received:

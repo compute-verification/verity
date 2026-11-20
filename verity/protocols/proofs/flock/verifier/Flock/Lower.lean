@@ -148,6 +148,15 @@ def starts (params : Array (String × Ty)) : Array Nat :=
 /-- The prefix of a refusal of a reference past the leaves of what it names, which `Program.decode` refuses too. -/
 def PAST : String := "a reference past its source's leaves"
 
+/-- The refusal of a Definition not on bits: a leaf of a word type would be read as one column, its other bits free. -/
+def WIDE : String := "a parameter or return leaf wider than one bit, not lifted to bits"
+
+/-- Every parameter and return leaf of `d` one bit wide. -/
+def onBits (d : Defn) : Bool := d.ret.bits && d.params.all (·.2.bits)
+
+/-- `d` refused under `WIDE` unless `onBits d`; a bind, not an `if`, in `lowerDef`, where each `if` doubles what follows. -/
+def bitsOk (d : Defn) : V Unit := if onBits d then pure () else throw s!"{d.id}: {WIDE}"
+
 /-- Reference `r`'s form, the same for every copy. -/
 def Work.formOf (w : Work) (st : Array Nat) (r : Ref) : V Form :=
   if r.p then match st[r.i]? with
@@ -404,7 +413,9 @@ one copy; an `xs` argument steps its element's leaves an iteration, a shared one
 def Work.scan (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : Nat) (rets : Array Nat) : V Work := do
   let n := x.n
   if n == 0 then throw s!"{callee.id}: a scan of no iterations"
+  if x.args.size == 0 then throw s!"{callee.id}: a scan without its carry's init"
   let c := (callee.params[0]!.2).leaves
+  if rets.size < c then throw s!"{callee.id}: a scan whose callee returns fewer leaves than its carry"
   let mut w := w
   let mut first := #[]
   let mut rest := #[]
@@ -481,6 +492,7 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
     if let some r := (← get).done[d]? then return r
     let defn := P.defs[d]!
     if defn.prim then throw s!"{defn.id}: a primitive is not lowered as a Definition"
+    StateT.lift (bitsOk defn)
     let body := defn.body
     let st := starts defn.params
     if (defn.params.foldl (fun a p => a + p.2.leaves) 0) != defn.paramLeaves then

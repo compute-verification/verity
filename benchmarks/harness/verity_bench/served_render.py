@@ -52,13 +52,13 @@ def _sources(row: Mapping[str, Any]) -> list[str]:
 def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
     lines = [
         "",
-        "## Where the bandwidth audit's time goes, by span (`verity-bench breakdown`)",
+        "## Where the bandwidth audit's time goes, by span",
         "",
         ("Each cell is ms an output token, a difference and not a ratio: the mean over the point's paired reps ± its "
          f"95% half-width (Student t). `{AUDIT_SPANS}` − `{PLAIN_SPANS}` is split into rows that sum to it: the "
          "top-up's contention from the arms with the top-up off, every other row a part of the spans arms with the "
          f"top-up off. `{AUDIT}` − `{PLAIN}` (spans off) is the audit's cost; the spans' marks add their own time to "
-         "the spans arms. Each spans arm's step by part: `verity-bench breakdown`."),
+         "the spans arms."),
     ]
     for protocol in dict.fromkeys(point["protocol"] for point in points):
         group = [point for point in points if point["protocol"] == protocol]

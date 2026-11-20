@@ -364,7 +364,7 @@ end Parsed
 variable {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pf : ByteArray}
 
 /-- Files the verifier reads parse to their descriptor, its built unit and the public file's population. -/
-theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse tags cf tables = .ok D)
+theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parseStmt tags cf tables = .ok D)
     (hpub : HmOut.loadPublic tags D.unroll pf = .ok pub) (hU : FlockSoundness.Built D.unroll.unit) :
     parsedOf tags cf tables pf = some ⟨D, hU, pub.n⟩ := by
   simp [parsedOf, hD, hpub, hU]
@@ -372,7 +372,7 @@ theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse
 /-- Files that parse are files the verifier reads: the circuit file to the parse's descriptor, and the public file
 to its population. -/
 theorem parse_of_parsedOf {r : Parsed} (h : parsedOf tags cf tables pf = some r) :
-    Flock.Desc.parse tags cf tables = .ok r.D ∧
+    Flock.Desc.parseStmt tags cf tables = .ok r.D ∧
       ∃ pub : Flock.Public, HmOut.loadPublic tags r.D.unroll pf = .ok pub ∧ pub.n = r.n := by
   unfold parsedOf at h
   split at h

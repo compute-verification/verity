@@ -78,8 +78,18 @@ def test_every_party_of_both_protocols_has_a_start():
 def test_a_start_that_reads_the_served_store_or_the_card_raises_its_goal(start, key, keyed, tmp_path):
     if key is not None:
         key_state(tmp_path, key)
-    with pytest.raises(NotImplementedError, match=CS.ONSITE_GOAL):
+    with pytest.raises(NotImplementedError) as e:
         start(CONFIG, {}, tmp_path)
+    assert str(e.value) == CS.ONSITE_GOAL
+
+
+@pytest.mark.parametrize("deployed", [CS.deployed_request, WPS.deployed_request], ids=["rounds", "wipe"])
+def test_a_request_no_configuration_states_raises_exactly_its_goal(deployed):
+    """The rounds' and the wipe's request as a deployment starts it needs setup's outputs and the card's calibration, which
+    nothing gives a party yet: each refuses with the goal's id alone, not a request built from a guess."""
+    with pytest.raises(NotImplementedError) as e:
+        deployed(CONFIG, {"node": "the prover's node"})
+    assert str(e.value) == CS.ONSITE_GOAL == "memory-accounting/onsite-memory-verdicts"
 
 
 @pytest.mark.parametrize("start, other", [(CP.start, WIPE_KEY), (WC.start, POUS_KEY)])

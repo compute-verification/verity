@@ -515,4 +515,18 @@ def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
     | some f => f.prim && f.binding == some Flock.Program.RUN
     | none => false
 
+/-- The ranges of `rs` whose instance node reads a run Input node inside the gates `held`, each with the first such
+node (`partition.held_reads`): its arguments' runs, never its members or its gates. -/
+def heldReads (P : Flock.Program.Prog) (rs : Array TRange) (held : Array (Nat × Nat)) : Array (TRange × Nat) :=
+  let nodes := Flock.Registered.rootNodes P
+  let inHeld := fun (i : Nat) => held.any (fun (first, count) => within P first count i) &&
+    match nodes[i]? >>= fun x => P.defs[x.fn]? with
+    | some f => f.prim && f.binding == some Flock.Program.RUN
+    | none => false
+  rs.foldl (init := #[]) fun out r =>
+    match (nodes.getD r.node default).args.findSome? fun a => (runs a.seq).findSome? fun (i, _) =>
+        if inHeld i then some i else none with
+    | some i => out.push (r, i)
+    | none => out
+
 end Spot.Partition

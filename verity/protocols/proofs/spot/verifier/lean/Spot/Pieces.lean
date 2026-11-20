@@ -248,9 +248,10 @@ def unitGates (j : Json) : V Json := do
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
 /-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
-parameters a verifier expects registered, to `{"fanout", "shared"}`: its fan-out and the run Input nodes outside `held`
-its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another query or one
-that doesn't apply. -/
+parameters a verifier expects registered, to `{"fanout", "shared", "reads"}`: its fan-out, the run Input nodes outside
+`held` its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]`
+for each range reading a run Input inside `held` (`Partition.heldReads`); refused for another query or one that doesn't
+apply. -/
 def fanout (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
@@ -265,7 +266,9 @@ def fanout (j : Json) : V Json := do
     | _ => throw "held is not a list of [first, count]"
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
-    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
+    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held)),
+    ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
+      Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
@@ -999,7 +1002,7 @@ def replayWires (j : Json) : V Json := do
     | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
 
-/-- `periods.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
+/-- `circuits.edges`' input to the wires a Program's root states (`Edges.edgesOf`): a program object, its ranges
 (`[node, template, first, count]` each) and a wiring (`Wires.Wiring.ofJson`'s); `{"wires": [...]}` or
 `{"refusal": code}`. -/
 def edges (j : Json) : V Json := do
@@ -1098,7 +1101,7 @@ own set-up of one statement (`OneStageZk.sessionAt` under the statement `OneStag
 reads the verifier's files), null when it sets the session up, else its refusal. The files are hex, the tables
 `[name, hex]` pairs, the program hex, and the registered reads and the sample null for none. -/
 def sessionSetup (j : Json) : V Json := do
-  let some tags := Flock.Tags.find? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
+  let some tags := Flock.Tags.byName? OneStageZk.STATEMENT | throw s!"the statement {OneStageZk.STATEMENT} is not known"
   let circuitFile ← Flock.unhex (← Flock.J.str j "circuit" "the session's setup")
   let publicFile ← Flock.unhex (← Flock.J.str j "public" "the session's setup")
   let .arr ts := getD j "tables" | throw "tables is not a list"

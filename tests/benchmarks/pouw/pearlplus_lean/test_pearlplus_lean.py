@@ -408,7 +408,7 @@ def test_the_tiles_the_lean_draws_are_pearl_plus_credited_blocks_drawn(exe, tmp_
     """Over two passes of one epoch, the tiles the Lean opens for its sample, (pass, tile id) in its order, are the
     credited blocks `scheme.drawn_blocks` draws on the run's key, each pass's before its exclusion tiles, and each a block
     of `scheme.credited_blocks` with a ticket."""
-    a, c = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("c", (2, 3))))
+    a, c = (T.proved_pass(tmp_path / n, H100, s)[0] for n, s in (("a", 0), ("c", 1)))
     draws = 16
     got = same(exe, [a, c], draws)
     passes = [VR.load(x, T.published(x)) for x in (a, c)]

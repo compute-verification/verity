@@ -327,10 +327,12 @@ theorem readFact : ReadFact := by
 /-- **The header's position for an instance is the registered read's at its label** (`PositionFact`): `rows_open` at
 the session's first table, read at the instance's label (`Registered.Port.readAt_eq`). -/
 theorem positionFact : PositionFact := by
-  intro xS ins spec sts own w σ hset hown hsc hck h0 hlab reg hreg q tb positions paths hq htb hent n hn
+  intro xS ins spec sts own w σ hset hown hsc hck h0 hlab reg hreg q tb positions paths hq htb hent own' hw
   have e0 : sts[0]! = sts[0] := getElem!_pos sts 0 h0
-  obtain ⟨tb', idx, ht', hidx, hall⟩ := rows_open hset hown hsc hck 0 h0
-  obtain ⟨q', positions', paths', hq', hent', hrows⟩ := hall reg hreg
+  rw [e0] at hw
+  obtain ⟨tb', idx, ht', hidx, hall⟩ := rows_open hset hown hsc hck 0 h0 own' hw
+  obtain ⟨reg', hreg', hsame, q', positions', paths', hq', hent', hrows⟩ := hall reg hreg
+  refine ⟨reg', hreg', hsame, fun n hn => ?_⟩
   have hl := hlab idx (by rw [e0]; exact hidx) n hn
   rw [e0] at hq htb hent hn
   have hqq : q = q' := Option.some.inj (hq.symm.trans hq')

@@ -12,7 +12,7 @@ import pytest
 
 from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
 from verity_vllm.check.replay.stoch_recompute import record_lag_rows, sample_accounting
-from verity_vllm.program.lifting import continuation as CT
+from verity_vllm.check.replay import continuation as CT
 from verity_vllm.records.workload import SCHEMA
 
 
@@ -166,13 +166,13 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
 
 
 def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records_first_sample_at_prompt_len_minus_1():
-    """The executed set comes from `verity_vllm.program.lifting.continuation.recurrence` (ONE mechanism, no twin here), the
+    """The executed set comes from `verity_vllm.check.replay.continuation.recurrence` (ONE mechanism, no twin here), the
     comparison from `compare_sample_positions`.  The slot -> position map is the RECORD's: slot 1 samples at pos prompt_len - 1 (the query
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
     An earlier `expected_sample_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
     the ledger's positions ARE `expected_sample_positions(...)["positions"]` (one mechanism, no map of its own)."""
     exp, info = E([7, 7, 99], 8, 1, {99})
-    assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.program.lifting.continuation.recurrence")
+    assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.check.replay.continuation.recurrence")
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)
     pad = CT.expected_sample_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
     assert pad["slots"] == exp and pad["n"] == 4 and pad["lag_positions"] == [pad["positions"][-1]]

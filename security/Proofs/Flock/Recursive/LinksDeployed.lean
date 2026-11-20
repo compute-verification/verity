@@ -37,9 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Recursive.LinksOuter
 import Proofs.Flock.Recursive.LinksRows
 import Proofs.Flock.VBridge.RecLink

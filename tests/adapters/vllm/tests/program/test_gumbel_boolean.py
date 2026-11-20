@@ -423,7 +423,7 @@ BULK = [(1, 4096), (2, 4096), (5, 2048), (63, 512), (64, 512), (65, 512), (129, 
 @pytest.mark.slow
 def test_gumbel_select_agrees_with_its_word_definition() -> None:
     """Every size in one test, so one process traces the lane. At V = 1 against the restatement (`GumbelSelectF32_v1{V=1}`'s
-    scan has no iterations, which `verity.circuits.layout.resolve_gate` misreads: `test_sampling_boolean`'s word-view xfail). The
+    scan has no iterations, which `verity.circuits.layout.resolve_gate` misreads, so the word view is not taken there). The
     body is `gumbel_select_calls`: the stages in order (and the lane products' two constant bits), as a served Program calls
     them at its root."""
     for V, n in BULK:

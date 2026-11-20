@@ -9,12 +9,14 @@ from verity.circuits import boolean as BL
 from verity.circuits import laying as LY
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.codec import descriptor_chunks
+from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate_region
+from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
-from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.refs import Affine, Strided, array_of, tuple_of
 from verity.circuits.types import Array, Tuple
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 
 A4 = Array(4, BL.BIT)
 PAIR = Tuple(A4, A4)
@@ -68,6 +70,16 @@ def with_s(binding: str) -> Program:
                    supplied={"s": MARK} if binding == "supplied" else {})
 
 
+@functools.cache
+def recut(n: int) -> Program:
+    tid = descriptor_id(U)
+    rec = {"templates": [[tid, n]],
+           "registered": {"params": {"w": 2}, "formats": {"w": {"word_bits": 4}}, "tables": [], "roots": [], "openings": [],
+                          "reads": [{"reader": tid, "port": "k", "param": "w", "at": 0, "radix": [n], "base": 1, "step": [0]}]}}
+    w = wired_population_program([(U, n)], rec)[0]
+    return Program(w.fn, registered=("w",), annotations=w.annotations)
+
+
 def ands(limit):
     return lambda ins, outs, n: n <= limit
 
@@ -107,6 +119,16 @@ def test_laying_keeps_a_supplied_input_supplied_with_its_mark():
     assert [g.prim.id for g in P0.circuit.gates()] == [g.prim.id for g in P1.circuit.gates()]
 
 
+@pytest.mark.parametrize("n", [1, 4])
+def test_a_unit_reading_a_registered_input_in_narrower_leaves_is_laid_and_measured_in_the_inputs_leaves(n):
+    P0, P1 = recut(n), LY.lay(recut(n), ands(4))
+    assert len(P1.root.body.nodes) > len(P0.root.body.nodes)
+    parts = [x.refs for nd in P1.root.body.nodes for x in nd.args]
+    assert {r.base for r in parts if isinstance(r, (Affine, Strided)) and (r.space, r.idx) == ("n", 0)} == {16}
+    m = LY.Measure(P1, LY.query(P1))
+    assert {r for rs in m.reads for r in rs if r[3] == "registration"} == {(4, 5, 4, "registration")}
+
+
 def test_the_measure_reads_a_supplied_input_as_a_port_of_its_own_binding_as_it_reads_a_registered_one():
     ms = [LY.Measure(P, LY.query(P)) for P in (LY.lay(with_s(b), ands(3)) for b in ("supplied", "registration"))]
     n = len(ms[0].units)
@@ -141,7 +163,7 @@ def test_packing_closes_a_block_where_the_next_unit_would_not_fit_and_the_object
     m = LY.Measure(P, LY.query(P))
     assert blocks[0][0] == 0 and blocks[-1][1] == len(m.units) and all(a[1] == b[0] for a, b in zip(blocks, blocks[1:]))
     assert all(fits(*m.block(a, b)) for a, b in blocks)
-    assert all(not fits(*m.block(a, b + 1)) for a, b in blocks[:-1])
+    assert all(not fits(*m.block(a, b + 1)) or (m.reads_unit[b] and m.reads_unit[b][-1] >= a) for a, b in blocks[:-1])
     obj = PO.build(P, LY.query(P), [blocks])
     assert PO.validate(obj).ok and PO.verify(obj, P).ok
 
@@ -173,3 +195,141 @@ def test_a_body_with_a_scan_is_refused():
     with pytest.raises(LY.Unlaid) as e:
         LY.lay(_program(body, A4), lambda *_a: False)
     assert e.value.code == "lay-scan"
+
+
+class _Line:
+    def __init__(self, ands):
+        self.w, self.units = list(ands), list(range(len(ands)))
+        self.reads_unit = [[] for _ in ands]
+
+    def block(self, a, b):
+        return (), (), sum(self.w[a:b])
+
+    def grow(self, a):
+        for b in range(a + 1, len(self.w) + 1):
+            yield b, self.block(a, b)
+
+    def inside_read(self, lo, hi):
+        return None
+
+
+def _packed(ands_, ends=()):
+    return LY.pack(None, ands(12), m=_Line(ands_), enough=lambda _i, _o, n, _u: n >= 4, ends=ends)
+
+
+@pytest.mark.parametrize("units, blocks", [
+    ([5, 5, 1, 12], [(0, 3), (3, 4)]),
+    ([5, 6, 6, 5, 1], [(0, 2), (2, 5)]),
+    ([2, 1, 3, 12, 4], [(0, 3), (3, 4), (4, 5)]),
+])
+def test_a_block_under_the_floor_takes_the_units_after_it_or_joins_the_block_before(units, blocks):
+    assert _packed(units) == blocks
+
+
+@pytest.mark.parametrize("units, ends", [([12, 1, 12], ()), ([1, 1], ()), ([5, 5, 1, 12], (2,))])
+def test_a_block_under_the_floor_that_nothing_takes_is_refused(units, ends):
+    with pytest.raises(LY.Unlaid) as e:
+        _packed(units, ends)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_floor_every_block_meets_leaves_the_packing_and_a_trailing_block_under_it_is_refused():
+    P = _wide(7)
+    assert LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 4) == LY.pack(P, ands(10))
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(10), enough=lambda _i, _o, n, _u: n >= 5)
+    assert e.value.code == "pack-floor"
+
+
+def test_a_level_packed_within_a_coarser_levels_ends_refines_it():
+    P = _wide(12)
+    coarse = LY.pack(P, ands(12))
+    fine = LY.pack(P, ands(5), ends=[b for _a, b in coarse])
+    assert {b for _a, b in coarse} <= {b for _a, b in fine} and len(fine) > len(coarse)
+    assert PO.validate(PO.build(P, LY.query(P), [coarse, fine])).ok
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, ands(5), ends=[0])
+    assert e.value.code == "pack-ends"
+
+
+def test_the_provers_floor_is_a_floor_pack_takes():
+    floor = lambda _i, _o, _n, u: u >= LY.zk_min_units(21, 1)
+    assert LY.zk_min_units(21, 1) == 9 and LY.zk_min_units(21, 2) == 17 and LY.zk_min_units(22, 64) == 1
+    assert LY.pack(None, ands(12), m=_Line([1] * 21), enough=floor) == [(0, 12), (12, 21)]
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(None, ands(12), m=_Line([1] * 20), enough=floor)
+    assert e.value.code == "pack-floor"
+
+
+def _chain(length: int = 3) -> Program:
+    """`length` root units of `T`, each reading the one before; the first reads the root's input."""
+    def body(B, S, x, k):
+        y = x
+        for _ in range(length):
+            y = B.call(T, y, k)
+        return y
+    params = (("x", A4), ("k", A4))
+    return Program(CompositeDefinition("LayingChain", 1, (), lambda S: (params, A4), body, register=False), registered=["k"])
+
+
+def _wide(n: int) -> Program:
+    """`n` units of `T`, a batch whose members read only the root's input."""
+    params = (("x", Array(n, A4)), ("k", A4))
+    return Program(CompositeDefinition("LayingWide", 1, (), lambda S: (params, Array(n, A4)),
+                                       lambda B, S, x, k: B.batch(T, x, k, axes=(0, None)), register=False), registered=["k"])
+
+
+def _independent() -> Program:
+    def body(B, S, x, k):
+        return array_of([B.call(T, x, k)[0], B.call(T, k, k)[0], B.call(T, x, x)[0], B.call(T, k, x)[0]])
+    params = (("x", A4), ("k", A4))
+    return Program(CompositeDefinition("LayingIndependent", 1, (), lambda S: (params, Array(4, BL.BIT)), body, register=False),
+                   registered=["k"])
+
+
+def test_a_unit_reading_a_unit_ends_the_block_before_it_and_the_door_admits_what_pack_returns():
+    P = _chain()
+    m = LY.Measure(P, LY.query(P))
+    assert m.reads_unit == [[], [0], [1]]
+    assert LY.pack(P, lambda *_a: True) == [(0, 1), (1, 2), (2, 3)]
+    c = b"".join(descriptor_chunks(P))
+    part, key = {"query": LY.query(P)}, descriptor_id(T)
+    for a, b in LY.pack(P, lambda *_a: True):
+        OC.admitted_block(R.program(c), part, [(a, b)], key)
+    with pytest.raises(OC.Refused, match="operands-outside"):
+        OC.admitted_block(R.program(c), part, [(0, 3)], key)
+
+
+def test_a_floor_that_would_join_a_unit_to_the_unit_it_reads_is_refused_by_name():
+    P = _chain()
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, lambda *_a: True, enough=lambda _i, _o, _n, units: units >= 2)
+    assert e.value.code == "pack-inside-read"
+    assert str(e.value) == ("pack-inside-read: units [0, 2) would be one proof block to meet the floor, and unit 1 reads unit 0 of "
+                            "it: a proof block holds no unit that reads a unit of its own")
+
+
+def test_a_floor_joining_a_block_to_the_block_before_it_is_refused_where_a_unit_reads_one_of_it():
+    P = _chain(4)
+    m = LY.Measure(P, LY.query(P))
+    with pytest.raises(LY.Unlaid) as e:
+        LY.pack(P, lambda *_a: True, enough=lambda _i, _o, _n, units: units >= 2, m=m)
+    assert e.value.code == "pack-inside-read"
+
+
+def test_units_that_read_no_unit_of_their_block_still_join():
+    P = _independent()
+    m = LY.Measure(P, LY.query(P))
+    assert m.reads_unit == [[], [], [], []]
+    assert LY.pack(P, lambda *_a: True) == [(0, 4)]
+    assert LY.pack(P, lambda *_a: True, enough=lambda _i, _o, _n, units: units >= 2) == [(0, 4)]
+
+
+@pytest.mark.parametrize("limit", [3, 8, 12])
+def test_every_block_pack_returns_on_a_mixed_program_holds_no_unit_that_reads_a_unit_of_it(limit):
+    P = laid(3)
+    tp = PO.TemplatePartition(P, LY.query(P))
+    for a, b in LY.pack(P, lambda ins, outs, n: n <= limit and len(ins) + len(outs) <= 64):
+        gates = [tp.gates(u) for u in range(a, b)]
+        for u in range(a, b):
+            assert not [g for g in tp.inputs(u) if any(lo <= g < hi for lo, hi in gates)], (a, b, u)

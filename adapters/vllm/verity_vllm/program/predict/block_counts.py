@@ -23,6 +23,12 @@ records) over its m slots, since no wire crosses slots. The wires are the record
 Definition doesn't carry, so this is the record's count and not `InferenceOnlyCheck.Count`'s ``fresh`` on the session Definition,
 which would count every wired read.
 
+**The declared circuit** (`pinned`). A record names its templates by id, and each is counted as the Definition `resolve`
+binds under that id, so a record is counted only where the Program those Definitions rebuild (`interface.program_of_record`)
+has the record's program digest (`codec.program_digest`), as `interface.window_of_record` holds a period's: a body under
+an id that is not the declared circuit's, or a record that names no program digest, is refused by name and counted at
+no gate and no unregistered input bit.
+
 **The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
 declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
 named by its SHA-512. Its rules, in `InferenceOnlyCheck.Count`'s order: every class's block at most c gates (undecided where a block
@@ -66,8 +72,8 @@ from verity_vllm.records.weights_registration import WeightsRegistration
 
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     """A window circuit record's session Program, whose function is the session Definition (module docstring), its slots m and
-    steps T. Refused (ValueError) where the record states no inference blocks or its entries don't tile its templates
-    (`interface.Blocks.of`)."""
+    steps T. Refused (ValueError) where the record states no inference blocks, its entries don't tile its templates
+    (`interface.Blocks.of`) or its templates are not the declared circuit's (`pinned`)."""
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
@@ -81,7 +87,21 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         per[e.template] += e.units // m
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
     program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
+    pinned(doc)
     return program, m, blocks.steps
+
+
+def pinned(doc: Mapping[str, Any]) -> None:
+    """Refuse (ValueError) a record that names no program digest, or whose templates, each the Definition `resolve` binds
+    under its id, rebuild a Program (`interface.program_of_record`) of another digest than the record's ``program``."""
+    want = doc.get("program")
+    if not isinstance(want, str) or not want:
+        raise ValueError(f"{doc.get('name')}: the circuit record names no program digest, so the Definitions its template ids "
+                         "name can't be held to the declared circuit, and it is not counted")
+    got = codec.program_digest(IF.program_of_record(doc, resolve)[0])
+    if got != want:
+        raise ValueError(f"{doc.get('name')}: its template ids rebuild the program {got}, not the record's {want}: a "
+                         "template's body under its id is not the declared circuit's, and the record is not counted")
 
 
 def resolve(tid: str) -> Any:
@@ -124,8 +144,9 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
 
 def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> int:
     """A block's fresh-input bits (module docstring): the record's free and ingress bits at the verifier's ``pins`` and the
-    window's ``roots`` (`interface.input_count`), over its m slots."""
-    count = IF.input_count(doc, pins=pins, roots=roots)
+    window's ``roots`` (`interface.input_count`), over its m slots, of the Definitions `pinned` holds to the declared circuit."""
+    pinned(doc)
+    count = IF.input_count(doc, resolve, pins=pins, roots=roots)
     bits = count["free"] + count["ingress"]
     if bits % m:
         raise ValueError(f"{doc.get('name')}: {bits} fresh input bits over {m} slots, not a slot's share each")

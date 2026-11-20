@@ -300,3 +300,10 @@ def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total
     assert status == "failed" and detail.startswith("no steady-state row passed `accepted`, ")
     with pytest.raises(ValueError, match="no total of the table is named blocks_per_token"):
         R.measurements(doc, {"benchmarks/x": "blocks_per_token"})
+
+
+def test_prove_layers_refuses_by_name(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["run.py", "layers", "--flock", "DIR"])
+    with pytest.raises(SystemExit) as done:
+        runpy.run_path(str(RUNNER), run_name="__main__")
+    assert done.value.code == "prove layers: the audit run under it used the rows' route, which is gone; the command is rebuilt on the one proof path"

@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly
 public import Properties.InferenceOnly.Theta
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 public import Spot.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
@@ -65,7 +65,7 @@ it complies (`InferenceOnly.CompliesRate`). It follows from four statements abou
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
 the root the run commits it under, or a port of an opening whose reader is pinned (`Good`). A pin is a Definition's
-closure digest (`InferenceOnlyCheck.DefinitionDigest.closureDigest`) that the instance lists (`Carries`). A pinned reader's
+closure digest (`Flock.DefinitionDigest.closureDigest`) that the instance lists (`Carries`). A pinned reader's
 roles, which of its ports are the key, the root, the domain id, the opened rows and the verdict, are the check's
 layout of its Definition (`Form.layout`), never the record's word, so that an opening's key is never a row it
 registers.
@@ -99,7 +99,7 @@ open Flock.TemplateQuery (TRange)
 open InferenceOnlyVerifier.Theta (getD strAt digest lastWith)
 open Spot.RecordText (Row Held outerOf)
 open Spot.Bits (bitsOf)
-open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
+open Flock.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-! ## The interface -/
 

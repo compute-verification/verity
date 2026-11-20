@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping
@@ -21,10 +20,6 @@ UNITS = {
     "inter_token_latency_p50_s": "s",
     "inter_token_latency_p99_s": "s",
 }
-
-
-class IdentityMismatch(ValueError):
-    """Two results do not describe the same benchmark identity."""
 
 
 def validate(doc: Mapping[str, Any]) -> None:
@@ -113,85 +108,3 @@ def record(doc: Mapping[str, Any], writer: kit.Writer, evidence: str) -> None:
         writer.measurement(**m, mark="measured")
 
 
-def _leaves(value: Any, prefix: str = "") -> dict[str, Any]:
-    if isinstance(value, Mapping):
-        out: dict[str, Any] = {}
-        for key, child in value.items():
-            path = f"{prefix}.{key}" if prefix else str(key)
-            out.update(_leaves(child, path))
-        return out
-    if isinstance(value, list):
-        out = {}
-        for i, child in enumerate(value):
-            out.update(_leaves(child, f"{prefix}[{i}]"))
-        return out
-    return {prefix: value}
-
-
-def identity_mismatches(a: Mapping[str, Any], b: Mapping[str, Any], allow: tuple[str, ...] = ()) -> dict[str, tuple[Any, Any]]:
-    """Identity leaves that differ, except those under an allowed path: `git_commit`, `preset.revision`, a subtree
-    such as `config`, or every arm's field with `arms[*].kernel_digest`. A bare leaf name matches only at the top."""
-
-    left, right = _leaves(a.get("identity", {})), _leaves(b.get("identity", {}))
-    patterns = [re.compile(re.escape(x).replace(r"\[\*\]", r"\[\d+\]") + r"(?:[.\[].*)?") for x in allow]
-    return {
-        path: (left.get(path), right.get(path))
-        for path in sorted(set(left) | set(right))
-        if left.get(path) != right.get(path) and not any(p.fullmatch(path) for p in patterns)
-    }
-
-
-def judge(a: Mapping[str, Any], b: Mapping[str, Any], allow: tuple[str, ...] = ()) -> dict[str, Any]:
-    """Accept a comparison only when every unallowed identity field agrees, and say which differences were allowed."""
-
-    validate(a)
-    validate(b)
-    bad = identity_mismatches(a, b, allow)
-    if bad:
-        fields = ", ".join(bad)
-        raise IdentityMismatch(f"benchmark identities differ at {fields}; name intentional fields with --allow")
-    return {"accepted": True, "allowed": list(allow),
-            "differences": {k: list(v) for k, v in identity_mismatches(a, b).items()}}
-
-
-def merge(docs: list[Mapping[str, Any]]) -> dict[str, Any]:
-    """One result from one spec's per-point results (a dispatched sweep runs each point as its own run), refused unless
-    their identities agree everywhere but `config.point_identity` and no point appears twice."""
-
-    first, *rest = docs
-    for doc in docs:
-        validate(doc)
-    for doc in rest:
-        if bad := identity_mismatches(first, doc, ("config.point_identity",)):
-            raise IdentityMismatch(f"benchmark identities differ at {', '.join(bad)}; these results are not one table")
-    ids = [p["id"] for d in docs for p in d["sweep"]]
-    if len(set(ids)) != len(ids):
-        raise ValueError(f"a point appears in two results: {sorted({i for i in ids if ids.count(i) > 1})}")
-    identity = dict(first["identity"])
-    if "config" in identity:
-        identity["config"] = {**identity["config"], "point_identity": [d["identity"]["config"].get("point_identity")
-                                                                      for d in docs]}
-    doc = {
-        "schema": SCHEMA, "identity": identity, "baseline": first["baseline"],
-        "sweep": [p for d in docs for p in d["sweep"]],
-        "gates": [g for d in docs for g in d["gates"]],
-        "execution": {**first["execution"], "schedule": [s for d in docs for s in d["execution"]["schedule"]],
-                      "resident_failure": [d["execution"]["resident_failure"] for d in docs]},
-        "points": [p for d in docs for p in d["points"]] if all(d["points"] for d in docs) else [],
-    }
-    validate(doc)
-    return doc
-
-
-def add_judge_arguments(parser: Any) -> None:
-    parser.add_argument("left", type=Path)
-    parser.add_argument("right", type=Path)
-    parser.add_argument("--allow", action="append", default=[],
-                        help="identity field or path allowed to differ; repeatable")
-
-
-def run_judge(args: Any) -> int:
-    left = json.loads(args.left.read_text())
-    right = json.loads(args.right.read_text())
-    print(json.dumps(judge(left, right, tuple(args.allow))))
-    return 0

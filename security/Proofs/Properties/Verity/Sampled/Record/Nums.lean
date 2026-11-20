@@ -33,7 +33,7 @@ namespace Verity.Sampled.Record
 open Lean (Json)
 open Claims (Msg)
 open FlockDeploy (Ins)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok getD_of_arr)
 
 /-! ## Reading sizes -/
 
@@ -94,21 +94,6 @@ theorem get_ok {j : Json} {k ctx : String} {v : Json} (h : Flock.J.get j k ctx =
   cases hg : j.getObjVal? k with
   | error e => rw [hg] at h; cases h
   | ok w => rw [hg] at h; cases h; rfl
-
-/-- A field `Flock.J.arr` reads as an array is that array, as `Spot.getD` reads it. -/
-theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.arr j k ctx = .ok a) :
-    _root_.Spot.getD j k = .arr a := by
-  unfold Flock.J.arr at h
-  obtain ⟨v, hv, h⟩ := bind_ok h
-  have hg := get_ok hv
-  have hva : v = .arr a := by
-    try dsimp only at h
-    unfold Flock.J.asArr at h
-    cases v <;> first
-      | (cases h; rfl)
-      | cases h
-  rw [← hva]
-  simp only [_root_.Spot.getD, _root_.Spot.field?, hg, Except.toOption, Option.getD_some]
 
 /-- **A sample file's units, as v2 credits them, are as many as its sample's**: `unitsAt` reads one unit per entry of the
 sample's `units` field, which `UnitSample.ofJson` reads as its units. -/

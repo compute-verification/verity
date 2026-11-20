@@ -46,7 +46,7 @@ namespace Verity.SampledTwo.MemberChecks
 
 open Lean (Json)
 open Flock (V)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 open Verity.Sampled.Record (SessionMatch)
 open Flock.PartCong (PartSame)
 
@@ -59,7 +59,7 @@ private theorem mapError_ok {ε α : Type} {x : Except ε α} {f : ε → ε} {a
   | ok a' => cases h; rfl
 
 private theorem statement_circuit :
-    Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+    Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
 
 /-! ## The member's statement -/
 
@@ -69,7 +69,7 @@ on the blobs, the member's own lookup tables (`ownTables`), the member's registe
 theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
     ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
-      bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
+      m.own.circuitFile = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
       _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
       a = _root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB tables rd
@@ -287,7 +287,7 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
     {m : _root_.Spot.OneStageZk.Member} (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) :
     ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
-      bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
+      m.own.circuitFile = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
       _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
       ∀ s ∈ sf.sessions.toList, SessionAccepted
@@ -388,7 +388,7 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
   have hreg := registered_of_reads hR hRs hrd
   have hfind : Flock.Tags.byName? w.statement = some Flock.Tags.circuit := by
     rw [hf.statement]
-    exact Flock.Tags.byName?_of_find? statement_circuit
+    exact statement_circuit
   apply Exists.intro
   refine ⟨?hi, ?_, ?_⟩
   case hi =>
@@ -429,7 +429,7 @@ for it), whose JSON files read back (`ReadsBack`) and whose bytes decode as `w` 
 theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (hc : m.own.circuitFile = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
     {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)
@@ -522,7 +522,7 @@ theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r')
     (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (hc : m.own.circuitFile = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
     {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)

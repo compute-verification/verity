@@ -49,7 +49,6 @@ verity_vllm.pipeline.scheme_plugin    # schemes by name inside vLLM's own server
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
-verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 verity_vllm.engine.profiles.stand_in      # GLM-5.3's one-card stand-in: a library entry point (`stand_in`), read by benchmarks/serve_tax's standin
 verity_vllm.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
@@ -60,8 +59,5 @@ verity_vllm.engine.stock      # a stock engine at the pin with no protocol on
 # (protocol_options.adapter)
 verity_vllm.protocols
 verity_vllm.protocols.interface
-verity_vllm.protocols.pouw
-verity_vllm.protocols.pouw.h1_hooks
-verity_vllm.protocols.pouw.h1_settings
 verity_vllm.protocols.spot
 tests/regression/
