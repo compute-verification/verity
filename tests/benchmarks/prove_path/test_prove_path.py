@@ -2276,6 +2276,26 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
 
 @pytest.mark.slow
 @OPT_IN
+def test_a_served_windows_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(fused, tmp_path):
+    """The served window committed by `commit1` with member 0's unit 0 forged (`forging`) holds, as the honest window does,
+    to the verifier's own window (`window1`, `source1`) and its own public bodies: its rows, commit strings and roots agree
+    with the flipped word, so only the proof can refuse it. Its rows differ from the honest window's in exactly one bit."""
+    a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
+    bound = AW.binding(compiler, "ad" * 64, 8)
+    window, held = PP.window1(a, compiler, [], bound)
+    PP.commit1(a, compiler, [], bound, tmp_path / "honest")
+    with PP.forging(0, 0):
+        PP.commit1(a, compiler, [], bound, tmp_path / "forged")
+    for d in (tmp_path / "honest", tmp_path / "forged"):
+        rec = _registered(d)
+        assert PP.source1(rec["window"], window, held)["codes"] == []
+        assert _check(rec, window, _publics(d, window)).ok
+    honest, forged = _rows(tmp_path / "honest"), _rows(tmp_path / "forged")
+    assert len(honest) == len(forged) and sum(bin(x ^ y).count("1") for x, y in zip(honest, forged, strict=True)) == 1
+
+
+@pytest.mark.slow
+@OPT_IN
 def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
     """Each refusal by name and before any docket is written (seconds once the templates are built, over a minute
     alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
