@@ -11,7 +11,7 @@ import pytest
 
 import input_datasets as D
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 REMOTE = "llama32_1b_fixed_4_27_2"
 
 
