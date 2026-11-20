@@ -142,6 +142,9 @@ PUBLIC = {
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values",
+    "verity_vllm.program.predict.window_record": "I7: a served window's record, which the serve's close and prove_path's "
+                                                 "window commit both make: its sampling design, its slots and its units "
+                                                 "committed under the window's key",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
