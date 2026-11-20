@@ -162,7 +162,7 @@ class LinearRefRule(OpRule):
 
 
 class ElementwiseRefRule(OpRule):
-    """Element-wise reference kinds over whole tensors in DT ∈ {f32, bf16}: relu, silu, gelu (erf / tanh), and
+    """Element-wise reference kinds over whole tensors in DT ∈ {f32, bf16}: relu, silu, gelu (tanh), and
     add / mul of two same-shape tensors.
 
     v3 (G-RH-17, Gemma `embeds * embed_scale`): ONE binary operand may be a **0-d parameter/buffer of the module** (a declared
@@ -177,11 +177,11 @@ class ElementwiseRefRule(OpRule):
     _BINARY = {aten.add.Tensor: "add", aten.mul.Tensor: "mul"}
 
     modes = frozenset({"reference"})
-    info = RuleInfo("Elementwise[reference]", 3, "op-binding", applies_to="aten.relu / silu / gelu(approximate none|tanh) / add.Tensor / mul.Tensor on f32 or bf16 values",
+    info = RuleInfo("Elementwise[reference]", 3, "op-binding", applies_to="aten.relu / silu / gelu(approximate tanh) / add.Tensor / mul.Tensor on f32 or bf16 values",
                     preconditions=("operands are value collections of one dtype in {f32, bf16}",
                                    ("binary operands have identical shapes, OR exactly one of them is a 0-d parameter/buffer of the module (G-RH-17: "
                                     "its one Input leaf is read N times; name / kind / dtype / value recorded); no other broadcast, no Python scalar"),
-                                   "add.Tensor alpha == 1", "gelu approximate in {'none', 'tanh'}"),
+                                   "add.Tensor alpha == 1", "gelu approximate == 'tanh'"),
                     evidence_domain="numerics are the ReluRef/SiluRef/GeluRef/AddRef/MulRef kinds' — reference-defined")
 
     def targets(self):
@@ -218,8 +218,8 @@ class ElementwiseRefRule(OpRule):
             return f"operands differ in shape {shape(ctx, ops[0])} vs {shape(ctx, ops[1])} (broadcast is not a bound rule)"
         if node.target is aten.add.Tensor and node.kwargs.get("alpha", 1) != 1:
             return "alpha != 1"
-        if node.target is aten.gelu.default and node.kwargs.get("approximate", "none") not in ("none", "tanh"):
-            return f"numerics_unregistered: gelu approximate={node.kwargs.get('approximate')!r}"
+        if node.target is aten.gelu.default and node.kwargs.get("approximate", "none") != "tanh":
+            return f"numerics_unregistered: gelu approximate={node.kwargs.get('approximate', 'none')!r}"
         return True
 
     def _scalar_weight_value(self, ctx, wl):
@@ -259,7 +259,7 @@ class ElementwiseRefRule(OpRule):
                 flat.append(c.reshape(Array(n, Value(w))))
         statics = {"N": n, "DT": DT}
         if role == "gelu":
-            statics["APPROX"] = node.kwargs.get("approximate", "none")
+            statics["APPROX"] = node.kwargs["approximate"]
         fn = ctx.kind(role, node, **statics)
         out = ctx.call(fn, *flat, node=node, rule=self)
         ctx.define(node, out.reshape(_tensor_type(shp, w)))

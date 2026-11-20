@@ -147,7 +147,7 @@ def test_an_exact_int8_program_passes():
 def test_the_verdict_json_is_canonical_and_names_its_table():
     program, ends = int8_program()
     j = judge(program, ends).to_json()
-    assert j["schema"] == "verity/stacking-property/v2" and j["classes"] == P.digest()
+    assert j["schema"] == "verity/stacking-property/v3" and j["classes"] == P.digest()
     assert json.loads(canonical_json(j)) == j
     assert P.analyze(program, census(program, ends)).to_json()["classes"] == P.digest()
 
@@ -854,5 +854,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("aaa394abf91e7785dc139e88d12eadb76dc4ee5d726cede255baf7874e385483"
-          "b6f2907db0d4e30d975ea9770d10eeecb2c6aebd188813b6f387473458cf1716")
+PINNED = ("a7082b13c81d53a79119f7e6fcf69add89d0a55bab4528029883c4fb26001292"
+          "ee7aed382a562ccb5df24c19a9040371d496906683b5dedc040a2b67a78412c2")

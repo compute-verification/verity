@@ -257,7 +257,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     all_goals first | (simp at hsz; done) | exact ⟨s, rfl⟩
   unfold OneStageZk.run at hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
-  cases ht : Flock.Tags.find? OneStageZk.STATEMENT with
+  cases ht : Flock.Tags.byName? OneStageZk.STATEMENT with
   | none => (simp only [ht] at hR; cases hR)
   | some tags0 =>
   simp only [ht] at hR

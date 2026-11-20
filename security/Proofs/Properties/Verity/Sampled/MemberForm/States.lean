@@ -43,7 +43,7 @@ theorem statementOf_reads {p : _root_.Spot.OneStageZk.Own} {population : ByteArr
     {tables : List (String × ByteArray)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
     (h : _root_.Spot.OneStageZk.statementOf p population tables bs = .ok a) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray),
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.lookupsOf circuitB = .ok (tables.map (·.1)) ∧
       a.I = _root_.Spot.OneStageZk.inputsAt tags0 p circuitB pubB tables := by
@@ -78,7 +78,7 @@ tables among those names (`Spot.OneStageZk.tablesAmong`) and no other. -/
 theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : vm.statement slice bs = .ok a) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (names : List String),
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get vm.own.circuit "circuit" = .ok circuitB ∧ bs.get vm.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names ∧
       (_root_.Spot.OneStageZk.tablesAmong names bs).map (·.1) = names ∧

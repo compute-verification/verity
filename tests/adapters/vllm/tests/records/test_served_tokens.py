@@ -27,7 +27,7 @@ REAL = DATA / "served_tokens.json"
 #: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory
 #: replaced): every case's verdicts and G6's problem texts, the sampler geometry's relation text among them, so a reworded
 #: message renews it
-OUTCOMES_SHA256 = "eed2b3c607bcbc4cbca4efe0228f1e92e7589ce118ce4b5e54f02df30db960a7"
+OUTCOMES_SHA256 = "86c13c8935785426b366689fdee94e672530f78abd90cae13d32edcdb1818ce6"
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")
 #: the TP capture's request fields (`pipeline.tp.capture`), and the TP Match arms' (`pipeline.tp.match`)

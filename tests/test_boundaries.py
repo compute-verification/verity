@@ -1060,18 +1060,12 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
-    "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
-    "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
-    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
-    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
-    # the shell files', by owning lane
-    "adapters/vllm/tools/served_run/h100_smoke.sh",  # compute: Pearl+'s tie class
 )
 
 

@@ -45,8 +45,6 @@ UNITS = {
         "the window tests' stand-in tile, a position beside its receipt sink",
     "tests/adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
-    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInJ10R":
-        "vllm's drawn-statements tests' stand-in J10-R tile, a position beside its receipt sink",
     "verity/circuits/population.py::_instance_ports":
         "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
     "tests/verity/circuits/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
@@ -83,9 +81,6 @@ TESTS = {
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
     "tests/verity/circuits/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
-    "tests/adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
-        "the sampled J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
-        "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 

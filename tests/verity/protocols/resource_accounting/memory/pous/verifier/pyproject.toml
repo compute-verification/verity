@@ -37,9 +37,10 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/memory/pous/attester/onsite.py",
           "verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.py",
           "verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c",
-          # SPOT's registered reads, which PoUS's served weights (`pous.prover.served_weights`) name
+          # SPOT's registered reads, which PoUS's served weights (`pous.prover.served_weights`) name, and its one-stage
+          # door, whose verdict on each sampled block the setup's check reads (`pous.verifier.setup_proof.check`), with
+          # the integrity profile the door's audit loads
           "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
-          "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/registered.py", "verity/protocols/resource_accounting/memory/pous/verifier"]
+          "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/challenger",
+          "verity/protocols/resource_accounting/memory/pous/verifier"]

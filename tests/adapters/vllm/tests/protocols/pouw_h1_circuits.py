@@ -108,9 +108,11 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     part = PO.build(desc, PO.template_instances_query([ids[k] for k in sorted(ids)]))
     if part["program"] != program:
         raise ValueError(f"the descriptor's program_digest {part['program'][:16]}... is not its SHA-512 {program[:16]}...")
-    if hasattr(CR, "partition_of") and CR.partition_of(program, CR.shape_of(descriptor)) != part:
+    want = CR.partition_of(program, CR.shape_of(descriptor), layout)
+    if {x: v for x, v in want.items() if x != PO.BLOCKS} != part:
         raise ValueError("the partition the circuit files are bound to is not the one core's credit verifies under "
                          "(credit.partition_of)")
+    part = want
     return {"partition": PO.digest(part), "program": program}, ids, j10r
 
 

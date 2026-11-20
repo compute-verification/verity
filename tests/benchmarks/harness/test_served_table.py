@@ -11,8 +11,7 @@ from bench_standins import CPUS, QUIET
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
-from verity_bench.vllm import presets
-from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, resolve_spec
+from verity_bench.vllm.presets import expand_sweep, resolve_spec
 from verity_bench.vllm.runner import run_benchmark
 
 COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
@@ -32,11 +31,11 @@ SCALE = {"stock-fp8": 2.0, "commit": 2.4, "stock-fp8@compiled": 1.0, "commit@com
 R6, BIG, SMALL = ("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000", "llama31-8b-fp8-1gpu-bandwidth-served-reps6@h200",
                   "llama32-1b-fp8-1gpu-bandwidth-served")
 WIDTH_H200 = "llama31-8b-fp8-1gpu-commit-served-width@h200"
-#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name
-#: (`presets.former_arm`), which the stand-in run of record keeps
+#: POUW_ARM is the arm id the PoUW spec's runs were recorded under before the arm took the declared scheme's name, which
+#: the stand-in run of record keeps beside its `arms` label
 POUW, POUW_H100, POUW_ARM = ("benchmarks/served-overhead-pouw", "llama32-1b-1gpu-pouw-protocol-served@h100",
                              "pouw:pearl-c-h100-v1-h3")
-#: the id the PoUW spec's H100 runs were recorded under before its spec named no card (`presets.FORMER_IDS`)
+#: the id the PoUW spec's H100 runs were recorded under before its spec named no card
 FORMER_H100 = "llama32-1b-1gpu-pouw-protocol-served-h100"
 
 
@@ -277,23 +276,25 @@ def test_a_row_says_who_ran_its_results_gates_and_not_recorded_for_a_result_that
     assert " verified" not in markdown
 
 
-def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
-    """A run of record keeps the path its spec had when it ran. With the specs in another directory than the one the
-    older runs name, a point's newest passing run is still found under either path, and each path names the same spec."""
+def test_a_run_whose_record_names_its_spec_by_a_former_path_counts_by_its_spec_label(tmp_path, monkeypatch):
+    """A run keeps the path its spec had when it ran. One recorded under a path the spec no longer has is found by its
+    `spec` label beside one under today's path, and an unlabelled one under another path is never its spec's."""
 
     monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
-    today, former = served_table.spec_paths(COMMIT_SPEC)
-    assert (today, former) == (f"elsewhere/specs/{COMMIT_SPEC}.toml", f"{FORMER_SPECS}/{COMMIT_SPEC}.toml")
-    assert served_table.spec_name(today) == served_table.spec_name(former) == COMMIT_SPEC
-    assert served_table.spec_name("another/place/a-spec.toml") == "another/place/a-spec"
+    former = f"benchmarks/specs/{COMMIT_SPEC}.toml"
+    assert served_table.spec_paths(COMMIT_SPEC) == (f"elsewhere/specs/{COMMIT_SPEC}.toml",)
+    assert served_table.spec_name(f"elsewhere/specs/{COMMIT_SPEC}.toml") == COMMIT_SPEC
+    assert served_table.spec_name(former) == former.removesuffix(".toml")
 
     producer = Producer(tmp_path)
     producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0), recorded=former)
+    producer.label("r20261024-020000-0001", "spec", f"{COMMIT_SPEC}@rtx-pro-6000", "2026-10-24T05:00:00Z")
     newer = producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.25))
     only_former = producer.ran("r20261024-020000-0004", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.1),
                                recorded=former)
+    producer.label("r20261024-020000-0004", "spec", f"{COMMIT_SPEC}@rtx-pro-6000", "2026-10-24T05:00:00Z")
     producer.ran("r20261024-040000-0006", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 9.0),
-                 recorded=f"neither/{COMMIT_SPEC}.toml")
+                 recorded=former)
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
                                log=lambda line: None, **BY_SPEC)
@@ -692,7 +693,7 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     metrics = _served_overhead_metrics()
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
+        "b3d4e37d69023d016bd3fec504106c4470df49bccc397f8dffc97e7c3fe83dc0")
     table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before
@@ -732,9 +733,12 @@ def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_nev
     assert got["validation"]["status"] == "passed" and got["validation"]["detail"].startswith("2 of 2 metrics")
 
     [pearl] = [p for p in served_table.PROTOCOLS if p.record == "pouw-served-sm90"]
-    assert pearl.arm == "pearl-plus" == presets.former_arm(POUW_ARM) != POUW_ARM
+    assert pearl.arm == "pearl-plus" != POUW_ARM
     producer.ran("r20261117-221551-8a0b", FORMER_H100, "b32-p512-mixed", _pouw("b32-p512-mixed", H100))
     producer.label("r20261117-221551-8a0b", "run_of_record", "pouw-served-sm90", "2026-11-17T23:00:00Z")
+    assert table("unlabelled")["by"][POUW, "llama-3.2-1b-h100"]["value"] is None
+    producer.label("r20261117-221551-8a0b", "spec", POUW_H100, "2026-11-19T18:00:00Z")
+    producer.label("r20261117-221551-8a0b", "arms", {POUW_ARM: "pearl-plus"}, "2026-11-19T18:00:00Z")
     member = table("after")["by"][POUW, "llama-3.2-1b-h100"]
     assert (member["value"], member["unit"], member["mark"], member["device"]) == (
         pytest.approx(1140.0), served_render.OVERHEAD_UNIT, "measured", H100)

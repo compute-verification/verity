@@ -2,33 +2,32 @@
 `Poub.P2Protocol` (`poub-p2-protocol`, in `lean/`) replays, and the store it names, which onsite holds
 to PoUS's.
 
-A case (`case_of`) is ``{"params", "commitment", "evidence", "store_root"}``, the commitment and evidence canonical JSON
-in hex:
+A case (`case_of`) is ``{"params", "commitment", "evidence"}``, the commitment and evidence canonical JSON in hex:
 
-* ``params``: ``{"not_before_ns": n, "request": R, "session": hex, "trusted": [hex, …]}``, the verifier's clock floor,
-  the prover's request R, which the replay refuses unless it restates `p2_parties.SESSION` (`P2Session.SESSION`, pinned
-  there, since no digest binds R), naming each value that doesn't, so a toy party's case is refused; the session id
-  the auditor gave the memory attester that ran the party; and the memory attesters' keys the check trusts;
+* ``params``: ``{"not_before_ns": n, "request": R, "session": hex, "store_root": hex, "trusted": [hex, …]}``, the
+  verifier's clock floor, the prover's request R, which the replay refuses unless it restates `p2_parties.SESSION`
+  (`P2Session.SESSION`, pinned there, since no digest binds R), naming each value that doesn't, so a toy party's case
+  is refused; the session id the auditor gave the memory attester that ran the party; the store the session must
+  audit, the root of `C*` PoUS's setup published (`pous.run.Setup.root`), which the verifier puts there from PoUS's
+  run case (`storing`) and the replay refuses unless the registration names it (`P2Protocol.NOT_POUS_STORE`); and the
+  memory attesters' keys the check trusts;
 * ``commitment``: the auditor's registration file, its fields and its plan (`p2_parties.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
 * ``evidence``: ``{"close": {"chain", "lines", "public_key", "signature"}, "log": [...]}``. The log is every request the
-  verifier's Lean process answered of the session after it opened, in order (`p2_parties.Twin` records them), each
+  verifier's Lean process answered of the session after it opened, in order (`p2_parties.LeanSession` records them), each
   line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
   `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
   attester's signature over the whole case: its key, the log's length, the chain (`chain`) of the case's head
   (`head`: the commitment's digest and the params' clock floor) and then its log, and the signature on the role's
   message (`lms.memory_attester_message`) of the session and `close_record`, `Poub.P2Close`'s bytes. That
-  chain is the one SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`);
-* ``store_root``: the store the session audits, its registration's root, 128 lowercase hex characters. That root is the
-  root of `C*` PoUS's setup published (`pous.run.Setup.root`), so `same_store` holds it to PoUS's run case. No digest
-  binds the field itself: it counts only as the root the commitment registers (`store_root`).
+  chain is the one SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`).
 
 The evidence holds `C*`'s opened blocks and the verifier's coins and clock: it is witness, and `write` puts a case only
 in a private directory (0700, its files 0600). The case's answer (`answer`) is the core form of the session's own
 answer (`P2Session.answer`), which the Lean's replay of the case is held to; `judged` is the Lean's, given its
-executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory attester to
-sign its close (`p2_parties.Closer`), has no case.
+executable. A session refused before its first coin, or one with no memory attester to sign its close
+(`p2_parties.Closer`), has no case.
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import subprocess
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
@@ -52,7 +50,6 @@ from . import p2_parties
 PROTOCOL = p2_parties.PROTOCOL
 EXE = "poub-p2-protocol"
 DIGEST_DOMAIN = b"verity/remote-bandwidth/p2/commitment/v0\0"
-STORE_ROOT = re.compile(r"[0-9a-f]{128}")
 CASE, ANSWER = "case.json", "answer.json"
 #: what an accepted case's `eps` sums, as `Poub.P2Protocol.certify` does
 EPS_TERMS = p2_parties.EPS_TERMS
@@ -107,13 +104,13 @@ def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_bef
             close: Mapping[str, Any]) -> dict[str, Any]:
     """The case of a session over the store `registration` (`p2_parties.registration_json`, with its plan): the
     prover's `request`, the verifier's clock floor, the memory attester's `session` id, the keys the check
-    `trusted`, its process's `log` and the memory attester's `close` of it (`close_of`; module docstring)."""
+    `trusted`, its process's `log` and the memory attester's `close` of it (`close_of`; module docstring). The store
+    it names is the registration's own until the verifier puts PoUS's there (`storing`)."""
     commitment = canonical_json_bytes(dict(registration))
     evidence = canonical_json_bytes({"close": dict(close), "log": [dict(x) for x in log]})
     params = {"not_before_ns": not_before_ns, "request": dict(request), "session": bytes(session).hex(),
-              "trusted": [bytes(k).hex() for k in trusted]}
-    return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params,
-            "store_root": registration["root"]}
+              "store_root": registration["root"], "trusted": [bytes(k).hex() for k in trusted]}
+    return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
 def close_key(case: Mapping[str, Any]) -> bytes | None:
@@ -135,44 +132,21 @@ def digest(case: Mapping[str, Any]) -> bytes:
     return hashlib.sha512(DIGEST_DOMAIN + bytes.fromhex(case["commitment"])).digest()
 
 
-def store_root(case: Mapping[str, Any]) -> bytes:
-    """The store PoUB-P2's case names (`store_root`): its registration's root, 128 lowercase hex characters, refused
-    (ValueError) when the case names none, or one its commitment doesn't register. A generic PoUB case is refused: its
-    commitment is no P2 registration, and its payload root is its own salted tree's, never PoUS's `C*`."""
-    s = case.get("store_root")
-    if type(s) is not str or not STORE_ROOT.fullmatch(s):
-        raise ValueError("the case names no store: store_root is not 128 lowercase hex characters")
+def storing(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> dict[str, Any]:
+    """`case` held to PoUS's store: its params' `store_root` the root of `C*` PoUS's run case `pous_case` is committed
+    to (`pous.run.Setup.root`, in the run case's commitment), which the replay refuses unless the registration names it
+    (`P2Protocol.NOT_POUS_STORE`). Raises `ValueError` when `pous_case` names no setup."""
     try:
-        registered = p2_parties.registration_of(json.loads(bytes.fromhex(case["commitment"]))).root
+        root = Setup.from_json(json.loads(bytes.fromhex(pous_case["commitment"]))).root
     except (KeyError, TypeError, ValueError) as e:
-        raise ValueError(f"the case's commitment is no PoUB-P2 registration: {type(e).__name__}: {e}") from None
-    if registered.hex() != s:
-        raise ValueError("the case's store_root is not the root its commitment registers")
-    return registered
-
-
-def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | None:
-    """Onsite's one store: None when PoUB-P2's case `case` names (`store_root`) the store PoUS's run case `pous_case` is
-    committed to, the root of `C*` its setup published (`pous.run.Setup.root`, in the run case's commitment), else why
-    not."""
-    try:
-        ours = store_root(case)
-    except ValueError as e:
-        return str(e)
-    try:
-        theirs = Setup.from_json(json.loads(bytes.fromhex(pous_case["commitment"]))).root
-    except (KeyError, TypeError, ValueError) as e:
-        return f"PoUS's case names no setup: {type(e).__name__}: {e}"
-    if ours != theirs:
-        return f"bandwidth's store {ours.hex()[:16]}… is not PoUS's {theirs.hex()[:16]}…"
-    return None
+        raise ValueError(f"PoUS's case names no setup: {type(e).__name__}: {e}") from None
+    return dict(case) | {"params": dict(case["params"]) | {"store_root": root.hex()}}
 
 
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
-    """The case's answer in the core interface's form from the session's own answer `session` (`p2_parties.answer`'s,
-    `P2Session.answer`), as `Poub.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
-    `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
-    its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    """The case's answer in the core interface's form from the session's own answer `session` (`P2Session.answer`), as
+    `Poub.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted, `{"eps", "q_bytes", "span_ns"}` and
+    the rest of the answer as its profile; rejected with the failure, its window and its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}
@@ -214,18 +188,14 @@ def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.Pa
     return serve(exe, [case])[0]
 
 
-#: why a case no `poub-p2-protocol` answered is undecided where its session accepted (`unjudged`)
-NO_JUDGE = ("no poub-p2-protocol answered the case: the Lean decides it, and the session's own accept decides "
-            "nothing alone")
+#: why a case no `poub-p2-protocol` answered is undecided, whatever its session said (`unjudged`)
+NO_JUDGE = ("no poub-p2-protocol answered the case: the Lean decides it, and no Python verdict stands")
 
 
-def unjudged(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
-    """The case's answer with no Lean to ask: `answer`'s reject or undecided, which the Python may give alone, and
-    undecided for its accept (`NO_JUDGE`)."""
-    a = answer(case, session)
-    if a["verdict"] != "accept":
-        return a
-    return a | {"profile": None, "public": None, "reason": NO_JUDGE, "verdict": "undecided"}
+def unjudged(case: Mapping[str, Any]) -> dict[str, Any]:
+    """The case's answer with no Lean to ask: undecided (`NO_JUDGE`), whatever its session said."""
+    return {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None, "reason": NO_JUDGE,
+            "verdict": "undecided"}
 
 
 def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) -> Path:
@@ -242,5 +212,5 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
 
 
 __all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "NO_EXE", "NO_JUDGE",
-           "PROTOCOL", "STORE_ROOT", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest",
-           "head", "head_of", "judged", "same_store", "serve", "store_root", "trusting", "unjudged", "write"]
+           "PROTOCOL", "answer", "case_of", "chain", "close_key", "close_of", "close_record", "digest", "head",
+           "head_of", "judged", "serve", "storing", "trusting", "unjudged", "write"]

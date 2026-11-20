@@ -268,6 +268,22 @@ NO_READ = "the verifier's program reads no row of"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_row_reads_one_output_field_of_its_writer_whole_at_the_positions_c_gives():
+    from verity.circuits.types import Tuple, Value
+
+    pair, wide = Tuple(Value(32), Value(32)), Tuple(Array(2, Value(16)), Value(16))
+    assert [CS.field_span(wide, o) for o in range(4)] == [(0, 2), None, (1, 1), None]
+    assert CS.field_span(Value(16), 0) == (0, 1)
+    ret = {0: pair, 1: wide}.__getitem__
+    assert CS.field_row([(0, 0)], ret) == (0, 0) and CS.field_row([(0, 1)], ret) == (0, 1)
+    assert CS.field_row([(1, 0), (1, 1)], ret) == (1, 0) and CS.field_row([(1, 2)], ret) == (1, 1)
+    assert CS.field_row([None, None], ret) is None
+    for bad in ([(0, 0), (0, 1)], [(0, 1), (0, 0)], [(1, 0)], [(1, 1)], [(1, 1), (1, 2)], [(1, 1), (1, 0)],
+                [(0, 0), None], [None, (0, 1)], [(1, 0), (0, 1)]):
+        with pytest.raises(ValueError, match="not one output field"):
+            CS.field_row(bad, ret)
+
+
 def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_program(staged):
     d, _st, flat, (_f2, _p2, _q2, tp2, _st2) = staged
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)

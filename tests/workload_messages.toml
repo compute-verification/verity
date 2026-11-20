@@ -302,7 +302,6 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "served_verdicts\\.py\\\" period open" },
 ]
 readers = [
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py", find = "PERIOD = \"period\\.json\"|serve_dir / PERIOD" },
     { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "serve_dir / \"period\\.json\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "-f \"\\$D/period\\.json\"" },
 ]
@@ -331,7 +330,6 @@ writers = [
 readers = [
     { lane = "proofs", file = "benchmarks/one_stage/pouw_piece.py", find = "pouw-h1-calls\\.json\\\"$|calls = serve_dir / f\\\"h1/w\\{k\\}/pouw-h1-calls\\.json\\\"" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "H1_CALLS = \"h1/w\\{k\\}/pouw-h1-calls\\.json\"|serve_dir / H1_CALLS" },
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py", find = "RECORD = \"h1/w\\{w\\}/pouw-h1-calls\\.json\"" },
 ]
 
 [[message]]

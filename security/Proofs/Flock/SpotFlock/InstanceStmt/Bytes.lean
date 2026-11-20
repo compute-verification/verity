@@ -86,7 +86,7 @@ def progJ : Json := Json.mkObj [("annotations", Json.mkObj []), ("boolean", Json
         ("ret_type", ja [js "Array", jn 16, ja [js "Value", jn 1]])]),
       ("form", js "composite"), ("id", js "StandIn[T]_v1")]),
     ("T_v1", Json.mkObj [("form", js "primitive"), ("id", js "T_v1"), ("params", ja []),
-      ("ret", ja [js "Value", jn 16])])]),
+      ("ret", ja [js "Value", jn 16])])]), ("inputs", ja []),
   ("program_fn", js "Two_v1"), ("root", js "Root[Two_v1]_v1"), ("schema", js "verity-ir/descriptor/v2"),
   ("types", ja [ja [js "Value", jn 16], ja [js "Array", jn 2, ja [js "Value", jn 16]],
     ja [js "Array", jn 16, ja [js "Value", jn 1]]])]
@@ -96,7 +96,7 @@ def progBytes : ByteArray := progText.toUTF8
 /-- The program's SHA-512 in hex, as `TemplateQuery.Desc.parse` computes it (`progHex_eq`). A literal: the digest is of
 the program's canonical text, which `canon` writes by well-founded recursion that the kernel does not unfold. -/
 def progHex : String :=
-  "2cc6b665ee6d848f77f66d8572ffc7907377f2d6085e4e019d605a0a913eab90d1347b9bdc575ae280590f46c68c28d8e0d32cd28febbb6c40c7827a1faca1c8"
+  "2250b6919eda13112af4315518db4eaf20461bf099c1459ea3a33f04cff346bbde7448f963f8b0fe52b68973483cb470047ce3dd8e2b04fa1b8348e806b14d6b"
 
 /-- The partition: `Q_template_instance` v0 at `T_v1`, over the program. -/
 def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program", js progHex),
@@ -105,7 +105,7 @@ def partObj : Json := Json.mkObj [("format", js HmRow.PARTITION_V1), ("program",
 
 /-- The partition's digest in hex, as `HmRow.checkPartition` computes it (`partHex_eq`); a literal, as `progHex` is. -/
 def partHex : String :=
-  "431509a8a173e2c98eb5a8fc938365ccc826af926f325c686614fe5e2cdee3367fdcf633706d0a1a4891ab054b129d7aa1d9dadfe6b0af825a30ed4e48b2e410"
+  "5e785244a214bae78e5b9225b0cce826dc935ba651f4a4838b620bab351eaa00c087dfc8641d63f08497eb57e90b795a7bf8c23261a568d6ee7fb10526004def"
 
 def rng (net : String) (sl p0 n : Nat) : Json := Json.mkObj [("count", jn n), ("net", js net), ("pos0", jn p0),
   ("slot_log", jn sl), ("type", js "unit")]

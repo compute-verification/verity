@@ -297,13 +297,14 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     assert rv.BLOCKS % 16 == 5 and rv.PLANS[1].length % 16 == 10 and list(rv.PLANS[1])[:2] == [16, 17]
     passes = pinned["passes"]["passes"]
     coin_0 = pinned["coins"]["coin_0"]
-    assert pinned["passes"]["challenge"] == coin_0["coin"][:2 * coins.COIN_BYTES] != pinned["openings"]["coin"]
-    assert coin_0["after"] == pinned["coins"]["window"] and pinned["openings"]["after"] == passes[-1]["root"]
+    assert pinned["passes"]["challenge"] == coin_0["coin"][:2 * coins.COIN_BYTES]
+    assert coin_0["after"] == pinned["coins"]["window"] and pinned["sample"]["after"] == passes[-1]["root"]
+    assert pinned["sample"]["coins"] == coins.sample_coins(rv.PARAMS.samples) and pinned["sample"]["label"] == coins.SAMPLE
     assert passes[0]["previous"] == pinned["registration"]["digest"]
     assert all(b["previous"] == a["root"] for a, b in itertools.pairwise(passes))
     assert len({p["seed"] for p in passes}) == 3
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
-    assert pinned["openings"]["position"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
+    assert pinned["sample"]["position"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
     chains = {rv.DEFAULT: pinned["passes"]} | {v: pinned["variants"][rv.name(*v)]["passes"] for v in rv.VARIANTS}
     digests = {pinned["registration"]["digest"]} | {v["registration"]["digest"] for v in pinned["variants"].values()}
     windows = {pinned["coins"]["window"]} | {v["window"] for v in pinned["variants"].values()}
@@ -314,7 +315,7 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     c = coins.LiveCommitment(pc["scheme"], pc["epoch"], tuple(map(tuple, pc["families"])), bytes.fromhex(pc["root"]))
     o = coins.LiveOpening(0, coin_0["label"], coin_0["index"], *(bytes.fromhex(coin_0[k]) for k in ("after", "coin", "salt")),
                           tuple(map(bytes.fromhex, coin_0["path"])))
-    assert coins.layout_reason(c, 0, rv.PARAMS.windows) is None and coins.coin_reason(c, o, coins.CHALLENGE, 0) is None
+    assert coins.layout_reason(c, 0, rv.PARAMS.windows, samples=rv.PARAMS.samples) is None and coins.coin_reason(c, o, coins.CHALLENGE, 0) is None
     for (kind, bind, rows), c in chains.items():
         assert c["passes"][0]["previous"] in digests and all(b["previous"] == a["root"]
                                                              for a, b in itertools.pairwise(c["passes"]))
@@ -335,7 +336,7 @@ def test_the_provers_passes_and_the_sessions_samples_reproduce_the_pinned_ones(k
     store as `test_vectors_are_reproduced`, which encodes it once for all of them."""
     store = rv.store() if (kind, bind, rows) == rv.DEFAULT else rv.registered(kind, bind, rows)
     reg = store.registration
-    challenger = coins.local(reg.digest, 0, rv.PARAMS.windows, rv.Entropy(rv.COIN_LABEL))
+    challenger = coins.local(reg.digest, 0, rv.PARAMS.windows, rv.Entropy(rv.COIN_LABEL), samples=rv.PARAMS.samples)
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
     s = audit.AuditRun(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
@@ -354,7 +355,7 @@ def test_the_provers_passes_and_the_sessions_samples_reproduce_the_pinned_ones(k
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1
     draws = s.close(0)
-    assert list(draws) == [unit(u) for u in pinned["openings"]["draws"]]
+    assert list(draws) == [unit(u) for u in pinned["sample"]["draws"]]
     assert s.verify(0, [prover.open(passes[i], p) for i, p in draws]) == audit.Verdict(0, True)
     assert s.record().public()["receipt"] == kind and s.record().public()["bind"] is bind
     assert s.record().public()["rows"] == rows

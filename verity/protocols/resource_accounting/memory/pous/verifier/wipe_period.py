@@ -35,7 +35,7 @@ wipe's bound doesn't cover is `uncertified`, from its placement (`wipe_party.pla
 not signed under a key the committed configuration's `[[pin]]` entries give the memory attester for the wipe
 (`period.deployment`), an uncounted egress, the node's memory outside the declared tiers, what the prover's store leaves
 out (`store_gaps`) and each link leaving the node that no network attester counts (`wipe_party.link`). Without
-`wipe-protocol` among the period's tools the Python's accept decides nothing (`NO_JUDGE`). `foreign_labels` is the
+`wipe-protocol` among the period's tools the wipe is undecided (`NO_JUDGE`). `foreign_labels` is the
 labels a cheat of a given size keeps prior content in place of.
 """
 
@@ -77,8 +77,7 @@ EXPERIMENTAL = (
 OTHER = "the wipe's commitment is not of the period's server and session"
 EGRESS_RANGE = "the evidence's egress is {} MiB, outside 0 to {}"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
-NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wipe, and the Python's accept decides "
-            "nothing alone")
+NO_JUDGE = "no wipe-protocol among the period's tools: the Lean decides the wipe, and no Python verdict stands"
 #: The id of the wipe's component whose count a composition holds (`MemoryChallenger.WipeProtocol.COUNTED_ID`).
 COUNTED = "verity/wipe/counted/v0"
 NO_COUNT = "the evidence gives no egress count: a counted wipe is held to the network certifier's count over its span"

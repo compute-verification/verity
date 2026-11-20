@@ -267,6 +267,28 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
+def field_span(ret, o: int) -> tuple[int, int] | None:
+    """The return field of ``ret`` that starts at leaf ``o``: its index and leaves (Lean's `Program.fieldSpan`)."""
+    at = 0
+    for j, f in enumerate([f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else (ret,)):
+        if at == o:
+            return j, f.leaves
+        at += f.leaves
+    return None
+
+
+def field_row(reads: Sequence[tuple[int, int] | None], ret_of) -> tuple[int, int] | None:
+    """The writer and its return field (``ret_of(v)``: writer ``v``'s return type) that ``reads`` is, whole and in order, at
+    the positions C gives; None when every read is an Input gate; else a ValueError (Lean's `HmLinks.fieldRead`)."""
+    if all(x is None for x in reads):
+        return None
+    v, o = reads[0] if reads[0] is not None else (None, None)
+    span = None if v is None else field_span(ret_of(v), o)
+    if span is None or len(reads) != span[1] or any(x != (v, o + i) for i, x in enumerate(reads)):
+        raise ValueError(f"reads {list(reads)[:4]}...: not one output field of one unit, whole and in order, nor all circuit inputs")
+    return v, span[0]
+
+
 def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,

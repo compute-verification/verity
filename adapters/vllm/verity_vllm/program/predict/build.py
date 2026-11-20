@@ -446,17 +446,15 @@ class _Model:
 
 def decoder(phi: Phi, M: int = 1, history: int = 0) -> Any:
     """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
-    DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
-    Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
-    collective order, `model(B, W, peers)` the forward and the sampler."""
+    DeepSeek sparse-attention MoE (`dsa.Net`) or the dense / fused-MoE Llama-family one (`_Decoder`).  Its `leaves()` are the
+    weights record, `peer_shapes(rows)` one forward pass's peer Inputs in collective order, `model(B, W, peers)` the forward and the
+    sampler."""
     family = str(phi.hf_config.get("model_type", "")).lower()
     entry = FAMILY_FACTS.get(family)
     arch = entry.get("arch") if entry else None    # a family the table lacks, or one with no constructor, is `model_shape`'s to refuse
     Net: type[Any]
     if arch == "dsa-moe":
         from .dsa import Net
-    elif arch == "mhc-moe":
-        from .dsv4 import Net
     else:
         Net = _Decoder
     check_phi(phi, Net.DOMAIN)

@@ -327,7 +327,7 @@ def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str
     ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and session log in
     ``pous-challenger`` beside the periods when it is this node), fresh coins handed to ``audit`` (the holder's
     `audit`), and the Lean's answer where the period's tools name ``pous-run-protocol`` (and, at the first period,
-    ``fresh``, ``pous-setup``), which must agree with the Python's; where they name none, the Python's accept is
+    ``fresh``, ``pous-setup``), which is the verdict alone; where they name none, the Python's accept is
     undecided (`period.unjudged`).  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period,
     ``out/pous-setup.case.json``; returns the answer, its profile carrying where each party ran, whether
     `trusted-device` holds, which only the key the session was signed under and the period's `deployment` decide, and
@@ -351,10 +351,7 @@ def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str
     where = CS.placement(node, party.host, got.key_sha512, **period.deployment(doc))
     answer, lean = got.answer, {}
     if "pous-run-protocol" in tools:
-        lean["run"] = period.serve(tools["pous-run-protocol"], [got.case])[0]
-        if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
-            raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
-        answer = lean["run"]
+        answer = lean["run"] = period.serve(tools["pous-run-protocol"], [got.case])[0]
     else:
         answer = period.unjudged(answer)
     if fresh and "pous-setup" in tools:

@@ -75,8 +75,8 @@ def ReceiptsBindingOfCR : Prop :=
     (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ)
     (L : Fin n → Finset ℕ) (q : Fin n → ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
-    (∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder D prf rest t (q t))) →
-    (R.binding D prf rest).toReal ≤
-      ∑ t, √((L t).card * s t * ((q t : ℝ) ^ 2 / 2 ^ (513 : ℝ) + (R.split D prf rest t).toReal))
+    (∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder (D.opened prf rest) t (q t))) →
+    (R.binding (D.opened prf rest)).toReal ≤
+      ∑ t, √((L t).card * s t * ((q t : ℝ) ^ 2 / 2 ^ (513 : ℝ) + (R.split (D.opened prf rest) t).toReal))
 
 end ResourceAccounting.Guarantees.Remote

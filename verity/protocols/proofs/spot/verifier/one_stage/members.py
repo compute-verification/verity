@@ -68,7 +68,7 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
-from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF
+from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF, registered as G
 from verity.commitments import registered_value as RV
 from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
@@ -150,6 +150,8 @@ Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
 #: the value a registered port reads a committed tree of the registration as, ``committed/<port>`` (`rows.own_value`)
 COMMITTED = "committed/"
+#: `OneStageZk.INPUT_MEMBER`
+INPUT_MEMBER = "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
 
 
 def wired_tree_why(name: str, port: str) -> str:
@@ -237,14 +239,15 @@ def _count(m: Mapping[str, Any]) -> int:
     return sum(hi - lo for lo, hi in m["units"])
 
 
-def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
+def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any],
+           decoded: OC.Decoded | None = None) -> list[tuple[int, int]]:
     """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`). Lean's parse
     refuses the parameters of a member handed units of its own or naming a block the object lacks
     (`OneStageZk.membersOf`), so those raise `Outside` with Lean's ``params:`` reason."""
     if "units" in m:
         raise Outside(f"params: proofs: member {name}: {UNITS_HANDED}")
     try:
-        return OC.block(descriptor, partition, m["block"])
+        return OC.block(descriptor, partition, m["block"], decoded)
     except OC.Refused as e:
         raise Outside(f"params: proofs: member {name}: partition: {e}") from None
 
@@ -466,7 +469,8 @@ def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name:
 
 def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
-    ``committed/<port>``, is the record's root of it, its root, domain and leaf count (`OneStageZk.portTreeHeld`); a
+    ``committed/<port>`` or a run input node's ``input/n<w>``, is the record's root of it, its root, domain and leaf
+    count (`OneStageZk.portTreeHeld`); a
     port whose value is a field tree's name refuses first (`wired_tree_why`)."""
     roots = record.get("roots")
     by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
@@ -478,7 +482,7 @@ def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
             value = e["value"]
             if not value.startswith(COMMITTED) and _field_tree_name(value):
                 raise _Refused(wired_tree_why(name, port))
-            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else None
+            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) else None
             if t is None:
                 continue
             r = by_port.get(t)
@@ -505,6 +509,8 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
     ts = _templates(ms)
     if (n := next((n for n in ms if n in ts), None)) is not None:
         raise _Refused(DK.name_template(n))
+    if "input" in ms:
+        raise _Refused(INPUT_MEMBER)
     out: dict[str, list[dict[str, Any]]] = {name: [] for name in ms}
     for r in roots:
         port = r.get("port") if isinstance(r, dict) else None
@@ -512,6 +518,8 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
             raise _Refused("roots: a root of the registration names no port")
         if port == TABLE_PORT:
             raise _Refused(ROW_TABLES)
+        if G.is_fresh_value(port):
+            continue
         mine = [(port[:i], port[i + 1:]) for i, c in enumerate(port) if c == "/" and port[:i] in out]
         if not mine:
             if port not in out and (t := _template_of(port)) is not None and t[0] in ts:
@@ -644,7 +652,7 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
-        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(circuit),
+        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
                             "--public", str(public), "--tables", d], capture_output=True, text=True,
                            env=PF.verifier_env())
     out = p.stdout.removesuffix("\n")
@@ -679,17 +687,23 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
 
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
-           strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S (`one_circuit.restrict`), and public files and its own lookup tables, the blobs'
-    pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
-    them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
-    blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
+           strata: Any, slice_: Mapping[str, Any], form: Form,
+           derived: Path, decoded: OC.Decoded | None = None) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S as `OneStageZk.restrict` derives it
+    (`one_circuit.restrict`, then `one_circuit.lower`), written under `derived`, and public files and its own lookup
+    tables, the blobs' pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as
+    `Member.statement` reads them and held with no session (`files_why`); a refusal names the member. A table its
+    circuit looks up that the blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit
+    looks up is none of its."""
     try:
         try:
-            c = OC.lower(OC.restrict(descriptor, partition, m["units"]), partition, PF.lower_executable)
+            decoded = decoded or OC.Decoded(descriptor)
+            c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
+                         cut=OC.cuts(descriptor, partition, decoded))
         except (OC.NotDerived, OC.Refused) as e:
-            raise _Refused(f"circuit: {e}") from None
-        circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")
+            raise _Refused(f"restrict: {e}") from None
+        circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
+        circuit.write_bytes(c)
         meta = _meta(circuit)
         try:
             lookups = PF.lookups_of(meta)
@@ -735,7 +749,7 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         if st.registered is not None:
             (at / "registered.json").write_text(json.dumps(st.registered))
             reads = ["--registered", str(at / "registered.json")]
-        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.STATEMENT, "--circuit", str(st.circuit),
+        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
                             "--public", str(st.public), "--tables", str(at / "tables"),
                             "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
                             "--session", str(at / "s")], capture_output=True, text=True, env=PF.verifier_env())
@@ -784,8 +798,18 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
-    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
+    decoded = OC.Decoded(descriptor)
+    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"], decoded)} for name, m in ms.items()}
     _apart(ms)
+    with tempfile.TemporaryDirectory(prefix="verity-members-cs-") as derived:
+        return _members_run(params, record, evidence, blobs, ms, sts, descriptor, program, verify, verdict, form,
+                            Path(derived), decoded)
+
+
+def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
+                 blobs: Mapping[str, Path], ms: dict[str, Any], sts: list[Any], descriptor: bytes, program: Program,
+                 verify: Ch.Verify, verdict: Callable[[Statement], Mapping[str, Any]], form: Form,
+                 derived: Path, decoded: OC.Decoded | None = None) -> tuple[Run | None, str | None]:
     try:
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
@@ -809,7 +833,8 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         except (P.QueryRefused, ValueError) as e:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
-                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
+                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
+                              derived, decoded)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):

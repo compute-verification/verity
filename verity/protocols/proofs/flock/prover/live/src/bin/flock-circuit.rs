@@ -11,6 +11,7 @@
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
+//!   flock-circuit zk-min-units K_LOG G   (the fewest units a --zk statement holds, `zk_min_units`)
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
@@ -188,7 +189,7 @@ fn zk_layout(st: &Stmt) -> Layout {
 /// agreed (m = 25, 26, 27: 277, 242, 229, a little above the least counts, 268, 239, 227), elsewhere the least count
 /// (`zk_veil::level0_queries`); either way at least 100 bits per run. `--zk` refuses m <= 24: no count works at rate 1/2.
 fn zk_queries0(m: usize) -> Result<usize, String> {
-    if m <= 24 {
+    if m < ZK_M_MIN {
         return Err(format!("m = {m}: --zk needs m >= 25 (Ligerito level 0's padding outgrows its lanes at rate 1/2)"));
     }
     let lc = params(m, fast100()).ligerito_prover_config()?;
@@ -203,6 +204,19 @@ fn zk_queries0(m: usize) -> Result<usize, String> {
         return Err(format!("m = {m}: {q} level-0 queries give {:.1} bits per run", zkv::level0_bits(l, q)));
     }
     Ok(q)
+}
+
+/// The least m `--zk` proves ([`zk_queries0`]).
+const ZK_M_MIN: usize = 25;
+
+/// The fewest units of a unit with `2^k_log` rows, `g` units a VU, that a `--zk` statement holds: the least n with
+/// `k_log + nbl(n, g) >= ZK_M_MIN` (`circuit::nbl`); `verity.circuits.laying.zk_min_units` is its twin.
+fn zk_min_units(k_log: usize, g: usize) -> usize {
+    let g = g.max(1);
+    let n = if k_log + 3 >= ZK_M_MIN { 1 } else { (g << (ZK_M_MIN - 1 - k_log)) + 1 };
+    debug_assert!(k_log + flock_live::circuit::nbl(n, g) >= ZK_M_MIN);
+    debug_assert!(n == 1 || k_log + flock_live::circuit::nbl(n - 1, g) < ZK_M_MIN);
+    n
 }
 
 /// Ligerito level 0's padding per lane (`zk_veil::level0_t_pad`).
@@ -7877,6 +7891,11 @@ fn main() {
     }
     if cmd == "stacked" {
         return stacked();
+    }
+    if cmd == "zk-min-units" {
+        let at = |i: usize| std::env::args().nth(i).and_then(|s| s.parse::<usize>().ok()).unwrap_or_else(|| refuse("zk-min-units K_LOG G".into()));
+        println!("{}", zk_min_units(at(2), at(3)));
+        return;
     }
     if cmd == "prove" && !arg("--stream", "").is_empty() {
         return prove_stream(&arg("--stream", ""));

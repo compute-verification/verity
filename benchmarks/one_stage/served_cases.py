@@ -66,8 +66,8 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
-  `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
-  ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
+  `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, ``D/private/pouw/period``
+  when it holds a case), taken once every window of the period names R as its Commit record
   (`credit.commit_of`, as `Core.Remote.executionPhaseRecords` reads it): the case commits to the auditor's ledger, so the tie
   is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
   and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
@@ -174,7 +174,7 @@ PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 #: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
-#: "file", "digest"}``, its file under the log's directory), the period case `served_pouw.sh` has `pouw_piece.py` write,
+#: "file", "digest"}``, its file under the log's directory), the period case `pouw_piece.py` writes,
 #: and the parts of Pearl+'s case `served_pearlplus.sh` has `served_passes.py case` write.
 H1_LOG = Path("h1/log.jsonl")
 PERIOD_PIECE = Path("private/pouw/period")

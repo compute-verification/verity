@@ -35,7 +35,7 @@ With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit
 passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is sampled at its k-th
-root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
+root, its roots final then, so its sample's coins are asked for after that root first: the challenger's signed log
 fixes each group's end there, and `benchmarks/poub_session/auditor_line.py` reads the line on the challenger's clock
 from it. A boundary due by then leaves right behind the close, so its coin, after the same root, is asked for in the
 same round trip, second
@@ -55,16 +55,16 @@ developer's choice, and a hello's layout is the regions it declares (`regions_of
 The verdicts are the Lean verifier's, the process `poub-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
-reads that record. `audit.AuditRun` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
-is the reference: an event, a window's verdict or a record field on which the two differ refuses the session at that
-window as `disagreement`. It checks no openings: it takes the Lean's window verdicts (`Checks.settle`), and the
-Python check of a window's openings beside the Lean's is the transcript's replay (`--transcript`). `--close` closes
-a registration in both registries alike. While a session runs the driver doesn't wait on
-the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
-openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
-verdict, never a coin, a root's intake, a boundary or a sample. A session is accepted only once every one of its
-Lean answers has come and agreed, and only where the Lean's `outcome` is `accepted`: every window accepted is a veto
-beside it, and where the two differ the session is refused as `disagreement` (its `event` `outcome`).
+reads that record. `audit.AuditRun` keeps the driver's books (its coins, its plans, when the next boundary leaves),
+which decide when a coin leaves and nothing of the verdict: where the Lean answers an event, a window or the session
+otherwise than the books, the driver can't follow the Lean's session, and the session ends undecided (`DIVERGED`) at
+that window, never rejected or accepted on the books' word. It checks no openings: it takes the Lean's window verdicts
+(`Checks.settle`), and the Python check of a window's openings beside the Lean's is the transcript's replay
+(`--transcript`). `--close` closes a registration in both registries alike. While a session runs the driver doesn't
+wait on the Lean: an event both take goes out on the books' result and the Lean's answer is compared with it as it
+comes, and openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the
+session's verdict, never a coin, a root's intake, a boundary or a sample. A session is accepted only where the Lean's
+`outcome` is `accepted`; its record is the Lean's.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -82,12 +82,12 @@ Lean takes it with the event that released it, and once the session ends what th
 coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
 the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows sampled together at its last window's close,
+samples' coins (`--groups-per-coin` G, 1 by default: each sample's G windows sampled together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
 `coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
 (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
-its end is complete. An append past them refuses the session as `disagreement`: the books refuse it as `coin`, and
-the Lean's session, which holds only the append coins released, otherwise.
+its end is complete. An append past them ends the session undecided (`DIVERGED`) where the books refuse it as `coin`
+and the Lean's session, which holds only the append coins released, answers otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness.
 
@@ -678,14 +678,26 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     return lean
 
 
-def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | None) -> tuple[bool, bool]:
-    """A session's acceptance at its end, as `(the Lean's, the windows')`: the Lean's `outcome` (its answer to the
-    `outcome` request) is `accepted`, and every one of its `windows` window verdicts accepted; each only where no
-    `failure` stands. The first decides; the second is its veto, and the two differing is `disagreement`."""
-    if failure is not None:
-        return False, False
-    return ((outcome or {}).get("outcome") == "accepted",
-            len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
+def unset(event: dict, out, coin: bytes | None) -> str | None:
+    """`Verifier.unset`: why `event`'s result `out` read a coin the challenger never released (`coin` None or empty);
+    None when it read none or the coin is there."""
+    if coin or out is None or isinstance(out, audit.Verdict):
+        return None
+    if event["kind"] in ("start", "boundary") and out.index is not None:
+        return f"window {out.index}'s challenge left without the challenger's coin"
+    if event["kind"] == "close":
+        return f"window {event['t']}'s openings were drawn without the challenger's coins"
+    return None
+
+
+def accepts(failure: dict | None, outcome: dict | None) -> bool:
+    """A session's acceptance at its end: the Lean's `outcome` (its answer to the `outcome` request) is `accepted`, where
+    no `failure` stands."""
+    return failure is None and (outcome or {}).get("outcome") == "accepted"
+
+
+#: the failure of a session whose books the Lean's answers left: no verdict, the driver's or the Lean's
+DIVERGED = "undecided"
 
 
 GAMMA_HELD_LOG2 = 40
@@ -768,15 +780,16 @@ def gamma_held(got: object, python: dict) -> dict:
 class Pair:
     """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
-    they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
-    verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.AuditRun` returns no verdict.
+    they agree on; where they differ, the driver can't follow the Lean's session, which ends undecided at the event's
+    window (`DIVERGED`, in both), returned as that failure, or raised as `audit.SessionError` where `audit.AuditRun`
+    returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
-    releases goes with the event that released it, chal_t with its start or boundary, window t's openings coin with its
+    releases goes with the event that released it, chal_t with its start or boundary, window t's sample's coins with its
     close and an append's coin with the append.
 
     The driver never waits on the Lean for an event the books take: it acts on the books' result and the Lean's
-    answer is held to it as it comes (`_answered`), a different one refusing the session at that event's window
-    (`caught_up`) before any later verdict, rejection or record is taken. The Lean's session is a function of the
+    answer is compared with it as it comes (`_answered`), a different one ending the session undecided at that event's
+    window (`caught_up`) before any later verdict, rejection or record is taken. The Lean's session is a function of the
     events in order with their clock readings, so its answers are the ones it would give were each waited on. An
     event the books reject or refuse is waited on, behind every one before it."""
 
@@ -801,10 +814,10 @@ class Pair:
 
     def _disagree(self, t: int, event: str, lean: dict, python: dict) -> audit.Verdict:
         self.disagreement = {"t": t, "event": event, "lean": lean, "python": python}
-        v = self.s._fail(t, "disagreement")
-        self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": "disagreement"})
-        self.v.log(f"verifier: session {self.k} refused at window {t}: the verifiers disagree on {event}: "
-                   f"Lean {lean}, Python {python}")
+        v = self.s._fail(t, DIVERGED)
+        self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": DIVERGED})
+        self.v.log(f"verifier: session {self.k} undecided at window {t}: the driver's books left the Lean's session "
+                   f"at {event}: Lean {lean}, books {python}")
         return v
 
     def _answered(self, t: int, event: str, lean: dict, python: dict) -> None:
@@ -815,8 +828,8 @@ class Pair:
             self.v.inbox.put(({"type": "lean-disagree", "k": self.k}, b"", self.v.clock.now()))
 
     def caught_up(self) -> audit.Verdict | None:
-        """The first event the Lean answered otherwise than the books, applied as `disagreement` (`_disagree`): its
-        rejection, or None. The Lean answers in order and each answer is held to the books' before the next is read,
+        """The first event the Lean answered otherwise than the books, applied as `DIVERGED` (`_disagree`): its
+        failure, or None. The Lean answers in order and each answer is held to the books' before the next is read,
         so once the driver holds any answer, every event before it that disagreed is here."""
         if self.late is None or self.disagreement is not None:
             return None
@@ -827,7 +840,7 @@ class Pair:
         rejection (None as the second value)."""
         self.caught_up()
         if self.disagreement is not None:
-            raise audit.SessionError("the session ended: the verifiers disagree")
+            raise audit.SessionError("the session ended undecided: the driver's books left the Lean's session")
         ev = event()
         held = self.v._stamp
         now = self.v._stamp = self.v._now()
@@ -844,6 +857,10 @@ class Pair:
         finally:
             self.v._stamp = held
         c = coin(out) if coin is not None else None
+        if coin is not None and got != lv.REFUSED and (why := unset(ev, out, c)) is not None:
+            out, got = None, lv.REFUSED
+        else:
+            why = None
         request = {"op": "event", "node": self.node, "session": self.k, "event": ev,
                    "coin": None if c is None else c.hex()}
         where = t if type(t) is int and t >= 0 else self.s.filling
@@ -856,7 +873,7 @@ class Pair:
         if lean != got:
             return self._disagree(where, ev["kind"], lean, got), False
         if got == lv.REFUSED:
-            raise audit.SessionError("refused by both verifiers")
+            raise audit.SessionError(why or "refused by both verifiers")
         return out, True
 
     def _released(self, label: str, index: int) -> bytes | None:
@@ -868,7 +885,7 @@ class Pair:
         out, agreed = self._step(0, lambda: {"kind": "start"}, self.s.start, lv.released_json, clocked=True,
                                  coin=lambda out: self._released(coins.CHALLENGE, 0))
         if not agreed:
-            raise audit.SessionError("the verifiers disagree on the session's start")
+            raise audit.SessionError("the driver's books left the Lean's session at its start")
         return out
 
     def boundary(self):
@@ -876,7 +893,7 @@ class Pair:
         out, agreed = self._step(t, lambda: {"kind": "boundary"}, self.s.boundary, lv.released_json, clocked=True,
                                  coin=lambda out: None if out is None else self._released(coins.CHALLENGE, out.index))
         if not agreed:
-            raise audit.SessionError(f"the verifiers disagree on window {t}'s boundary")
+            raise audit.SessionError(f"the driver's books left the Lean's session at window {t}'s boundary")
         return out
 
     def append(self, root: bytes, count: int, origin: audit.Origin | None = None, slot: int | None = None):
@@ -897,9 +914,9 @@ class Pair:
                           lambda: self.s.receive(t, i, root, change=change, step=step), lv.done_json, clocked=True)[0]
 
     def close(self, t: int):
-        """Window t's close: at `groups_per_coin` g, its sample's (t // g), whose openings coin goes with it."""
+        """Window t's close: at `groups_per_coin` g, its sample's (t // g), whose coins go with it."""
         return self._step(t, lambda: {"kind": "close", "t": t}, lambda: self.s.close(t), lv.drew_json, clocked=True,
-                          coin=lambda out: self._released(coins.OPENINGS, t // self.s.params.groups_per_coin))[0]
+                          coin=lambda out: self.s.coins.sample_bytes(t // self.s.params.groups_per_coin))[0]
 
     def openings(self, t: int, body: bytes) -> None:
         """One frame of window t's openings to the Lean, kept there until the window is verified."""
@@ -941,7 +958,7 @@ class Pair:
 
     def judge(self, t: int, lean: dict) -> dict:
         """Window t's verdict, `{"accepted", "failure", "at"}`: the Lean's settled result, set on the books
-        (`Checks.settle`); where the books refuse it, `disagreement`."""
+        (`Checks.settle`); where the books can't take it, the session ends undecided (`DIVERGED`)."""
         mine = {k: x for k, x in lean.items() if k not in ("openings", "ns")}
         try:
             n = len(self.s.windows[t].draws)
@@ -953,14 +970,13 @@ class Pair:
         if self.disagreement is None and mine != theirs:
             self._disagree(t, "verify", mine, theirs)
         if self.disagreement is not None:
-            return {"accepted": False, "failure": "disagreement", "at": None}
+            return {"accepted": False, "failure": DIVERGED, "at": None}
         return {"accepted": "accepted" in mine, "failure": mine.get("failure", "refused" if mine == lv.REFUSED else None),
                 "at": mine.get("at")}
 
     def end(self, failure: dict | None) -> None:
-        """The session ended with the driver's `failure` where neither verifier gives it one (a message it couldn't
-        read): set on both. And an accepted session's record, the Lean's (`record`), held to the books': one that
-        differs in any field is `disagreement`."""
+        """The Lean's outcome for the session, kept for `record`; with the driver's `failure` where the Lean gives it
+        none (a message the driver couldn't read), set on both."""
         got = self.outcome_json = self._lean({"op": "outcome", "node": self.node, "session": self.k})
         self.caught_up()
         if self.disagreement is not None:
@@ -970,16 +986,6 @@ class Pair:
                 self._fail_books(failure)
             if got.get("outcome") is None:
                 self._lean({"op": "abort", "node": self.node, "session": self.k, "outcome": str(failure["failure"])})
-            return
-        mine = {"outcome": self.s.outcome, "record": lv.summary_json(self.s.record()) if self.s.outcome == "accepted"
-                else None}
-        if got != mine:
-            self._disagree(len(self.s.windows) - 1, "record", got, mine)
-        elif (getattr(self.s.params, "refresh", False) and got.get("outcome") == "accepted"
-              and (got.get("record") or {}).get("refresh") is not True):
-            # a Lean verifier that doesn't read the setting ran the session under the other rule
-            self._disagree(len(self.s.windows) - 1, "refresh", {"refresh": (got.get("record") or {}).get("refresh")},
-                           {"refresh": True})
 
     def record(self) -> audit.Record:
         """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
@@ -1012,7 +1018,7 @@ class Verifier:
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
                  appends: int | None = None, groups_per_coin: int = 1, refresh: Sequence[bool] = ()) -> None:
-        coins.openings_coins(1, groups_per_coin)
+        coins.draws(1, groups_per_coin)
         self.refresh = tuple(refresh)
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
@@ -1044,7 +1050,7 @@ class Verifier:
 
     def registry_json(self) -> dict:
         """The verifier's registry, `registry/v0`: the Lean's, but once its process has ended (when every session it
-        was in is refused as `disagreement`) audit.Registry's."""
+        was in ends undecided) audit.Registry's."""
         try:
             return self.lean.call({"op": "registry"})
         except lv.LeanError as e:
@@ -1206,11 +1212,13 @@ class Verifier:
         shared, per = ({}, {}) if g == 1 else ({"groups_per_coin": g}, {"per_coin": g})
         appends = self.appends_of(params)
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
-                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
+                                      challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per,
+                                                                                samples=samples))
         case = None if self.transcript is None else lv.DifftestCase(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared
+        self.conn.send({"type": "session", "k": k, "windows": W, "samples": samples, "lifetime": params.lifetime,
+                        "pace": K} | one | shared
                        | refresh)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
@@ -1425,13 +1433,12 @@ class Verifier:
             if type(check_id) is int:
                 session.settle(check_id)
         if failure is None and session.disagreement is not None:
-            failure = {"t": session.disagreement["t"], "failure": "disagreement", "at": None}
-        lean_accepted, windows_accepted = accepts(failure, verdicts, W, session.outcome_json)
-        if windows_accepted != lean_accepted:
-            session._disagree(max(0, len(session.windows) - 1), "outcome", session.outcome_json,
-                              {"windows_accepted": windows_accepted})
-            failure = {"t": session.disagreement["t"], "failure": "disagreement", "at": None}
-        accepted = failure is None and lean_accepted
+            failure = {"t": session.disagreement["t"], "failure": DIVERGED, "at": None}
+        accepted = accepts(failure, session.outcome_json)
+        if failure is None and not accepted:
+            said = (session.outcome_json or {}).get("outcome")
+            failure = {"t": max(0, len(session.windows) - 1), "failure": said if type(said) is str else DIVERGED,
+                       "at": None}
         self.conn.send({"type": "end", "k": k, "accepted": accepted, "failure": failure})
         while True:
             head, _, _ = self.expect("ended")
@@ -1714,8 +1721,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
                     help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
                          f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
-                    help="each session's windows sampled on one openings coin (`audit.Params.groups_per_coin`): its "
-                         "sample's last window's close samples them together, ⌈W/G⌉ openings coins in all, and the line "
+                    help="each session's windows sampled on one sample's coins (`audit.Params.groups_per_coin`): its "
+                         "sample's last window's close samples them together, ⌈W/G⌉ samples' coins in all, and the line "
                          "of record's pooled bound reads its samples (`line.samples_of`); none is at one window in "
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
@@ -1880,7 +1887,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     return 0
 
 
-__all__ = ["AVERAGE", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
+__all__ = ["AVERAGE", "DIVERGED", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier", "unset",
            "WORST_PASS", "accepts", "gamma_answer", "ingress_bursts", "lean_record", "load_registry", "main", "memory",
            "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",

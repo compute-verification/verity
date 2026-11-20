@@ -23,7 +23,7 @@
 
 `finish` reads back what the challenger signed and holds the session's coins to it (`audit.AuditRun.released_reason`):
 the same commitment, each coin opened after the root the session recorded and in order, chal_0 after the session's
-window root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
+window root R, each window's sample's coins after its last root. Its `reason` is None when they hold. A served or gate
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
 that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
@@ -68,8 +68,10 @@ class Local:
 
     kind = "local"
 
-    def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1) -> Ch.LiveChallenger:
-        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin), secrets.token_bytes)
+    def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1, *,
+             samples: int) -> Ch.LiveChallenger:
+        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin, samples=samples),
+                                 secrets.token_bytes)
 
     def finish(self, s: audit.AuditRun) -> dict:
         c = s.coins
@@ -91,10 +93,10 @@ class Serve:
         self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.RemoteChallenger]] = {}
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1, *, samples: int) -> remote.RemoteChallenger:
         sid = session_id(registration, k, self.run)
         out = self.out / sid
-        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin, samples=samples)])
         with open(self.out / f"{sid}.log", "w") as log:
             proc = subprocess.Popen(
                 [*self.command, "--out", str(out), "--port", "0", "--scheme", coins.SCHEME,
@@ -195,9 +197,9 @@ class ChallengerGate:
         return self._key
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1, *, samples: int) -> remote.RemoteChallenger:
         self.key()
-        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin, samples=samples)])
         r = json.loads(self._ask(["reserve", "--peer", self.peer, "--scheme", coins.SCHEME, "--families", families,
                                   "--epoch", str(k), "--minutes", str(self.minutes)]))
         if r.get("period") != self.period:

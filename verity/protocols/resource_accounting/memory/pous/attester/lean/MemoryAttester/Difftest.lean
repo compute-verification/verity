@@ -3,6 +3,7 @@ module
 public import Difftest
 public import Lms.Sign
 public import Attest.Period
+public import MemoryAttester.InProofs
 public import MemoryAttester.WipeJudge
 public import MemoryAttester.WipeCount
 public import MemoryAttester.SetupRecord
@@ -57,6 +58,14 @@ def coinTreeFn (j : Json) : V Json := do
 def verifyCoinFn (j : Json) : V Json := do
   pure (.bool (verifyCoin (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input"))
     (← CoinOpening.ofJson (← J.get j "opening" "input"))))
+
+/-- `session_proofs.clear_reasons(commitment, openings, scheme, public_key, store={"root", "leaves"}, trusted=…)` at the
+deployed schemes, its reasons in order. -/
+def clearReasonsFn (j : Json) : V Json := do
+  let c ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")
+  let openings ← (← J.arr j "openings" "input").mapM CoinOpening.ofJson
+  pure (.arr ((InProofs.clearReasons SCHEMES (← hexes j "trusted").toList c openings (← J.str j "scheme" "input")
+    (← hex j "public_key") (← hex j "store_root") (← J.nat j "store_blocks" "input")).map .str))
 
 def recordsDigestFn (j : Json) : V Json := do pure (hexJ (← recordsDigest (← rounds j)))
 
@@ -205,7 +214,7 @@ def attestLivenessFn (j : Json) : V Json := do
     (← J.nat j "block" "input") (← hex j "signature")))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
+  ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn), ("clear_reasons", clearReasonsFn),
   ("records_digest", recordsDigestFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
   ("setup_record", setupRecordFn), ("setup_record_message", setupRecordMessageFn), ("setup_record_ok", setupRecordOkFn),

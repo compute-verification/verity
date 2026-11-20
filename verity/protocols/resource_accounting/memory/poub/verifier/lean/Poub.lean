@@ -26,7 +26,7 @@ to (`audit.py` and what it calls, by `tests/`):
 * `Basic`, the byte encodings, SHA-512 and frame-v3-sha512 openings; `Codec`, the store's codec, decoding; `Plan`, a
   pass's plan; `Receipts`, the seeds, the receipts and their tree; `Wire`, the frame a prover sends openings in;
 * `Window`, the check of the sampled receipts' openings (`verifyWindow`); `Session`, a session's bookkeeping, a state
-  machine over the events the verifier sees; `Shared`, that session with one openings coin over several windows, and
+  machine over the events the verifier sees; `Shared`, that session with one sample's coins over several windows, and
   `Flight`, with every coin sent after the root before it; `Registry`, the verifier's registrations;
 * `Pooled`, the openings' pooled bound; `Line`, the memory line held over time; `Gamma`, γ's terms; `Schedule`, the
   schedule check;

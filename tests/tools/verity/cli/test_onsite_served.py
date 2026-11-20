@@ -69,7 +69,7 @@ VARIABLES = {
     "PRECISION": "bfloat16", "REPO": "unsloth/Llama-3.2-1B",
     "REV": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "SERVE_ARGS": "--protocol ids --id-payload 503", "SLOTS": "4",
     "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "2", "WIPE_ADDRESS": "192.0.2.1:7001",
-    "WIPE_CMD": f'WIPE_KEY_SHA512={WIPE_PIN} bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"',
+    "WIPE_CMD": 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"', "WIPE_KEY_SHA512": WIPE_PIN,
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
     "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
@@ -375,7 +375,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     assert T.variables(cfg, BINDINGS) == VARIABLES | deployed | spot
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(set(KEYS) - WRITTEN) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
+    assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "WIPE_KEY_SHA512", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"} | set(spot)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-attester.network-attester.gate>' "
                                                "--peer '<network-attester.network-attester.peer>' --tokens 2")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
@@ -544,16 +544,30 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
     assert "PP_CHALLENGER_KEY" not in hooks and "DEVELOPMENT" not in hooks
 
 
-def test_a_runtime_party_raises_before_anything_starts_while_its_machine_hands_it_nothing(tmp_path, capsys,
-                                                                                         monkeypatch, runtime):
+def test_a_runtime_party_is_refused_by_name_before_anything_starts_while_its_machine_hands_it_nothing(
+        tmp_path, capsys, monkeypatch, runtime):
     """The prover node's runtime parties need what their protocol's start reads (the served store, the card, setup's
-    request), which doesn't reach the table yet: the run raises by the row's name before the served window starts."""
+    request), which doesn't reach the table yet: `live` turns the unwritten start into a refusal naming the party, its
+    piece and the goal, which `verity run` prints as a refusal and exits 2 on, before the served window starts."""
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / T.PROVER_NODE
-    with pytest.raises(NotImplementedError) as e:
-        R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
-                    str(state)], REG)
-    assert e.value.args == (T.NOT_YET,) and not (state / "out.started").exists()
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, RUNTIME_BINDINGS), "--state",
+                     str(state)], REG)
+    err = capsys.readouterr().err
+    assert rc == 2 and not (state / "out.started").exists()
+    assert err.splitlines()[-1] == f"verity run: refused unwritten: prover's pous party start is not written ({T.NOT_YET})"
+
+
+def test_the_runs_registration_is_refused_by_name_where_every_party_prepared(tmp_path, monkeypatch, runtime):
+    """Once every runtime party is prepared, the registration the run needs before any coin raises its goal, which
+    `live` refuses as ``unwritten``, naming the goal."""
+    monkeypatch.setattr(T, "prepare", lambda cfg, state, bindings, x: lambda: {})
+    cfg = R.load(CONFIG, REG)
+    (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(T.Refused) as e:
+        T.live(cfg, tmp_path, [T.MEMORY_ATTESTER, T.VERIFIER])
+    assert (e.value.name, e.value.detail) == ("unwritten", "the run's registration is not written (proofs/architecture-on-branch)")
 
 
 def test_the_memory_attesters_key_is_refused_unless_this_configuration_pins_it_before_anything_else(tmp_path,
@@ -1015,20 +1029,51 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
     got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
     assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"'
+    assert (hooks["WIPE_CMD"], hooks["WIPE_KEY_SHA512"]) == (f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"', NETWORK_PIN)
     assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
         "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
+
+
+#: served_verdicts.sh's own lines that read ONSITE_PIECES and check the pieces' commands, then the commands it keeps
+ONSITE_CHECK = """. "$TREE/$ONSITE_PIECES"
+[ "$PRODUCT" != onsite ] || onsite_piece_commands
+printf '%s\\n' "$WIPE_CMD" "$POUS_CMD" "$BANDWIDTH_CMD"
+"""
+
+
+@pytest.mark.parametrize("bound", [True, False])
+def test_onsite_fulls_own_piece_commands_pass_the_runners_check(tmp_path, bound):
+    """`verity run onsite_full`'s environment for the runner, attesters bound (the pins) or not (`--run-keys`), holds
+    piece commands that served_verdicts.sh's check of them (`onsite_piece_commands`) keeps: the launch's own commands
+    are the tree's. A key file stands in so the PoUS default applies as on a paired node."""
+    (tmp_path / ".ssh").mkdir()
+    (tmp_path / ".ssh" / "vy-auditor2-pous").write_text("")
+    hooks = T.variables(R.load(CONFIG, REG), BINDINGS if bound else {})
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "TREE": str(ROOT), **hooks}
+    p = subprocess.run(["bash", "-c", ONSITE_CHECK], cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.splitlines() == [hooks["WIPE_CMD"], hooks["POUS_CMD"], hooks["BANDWIDTH_CMD"]]
+    assert hooks["PRODUCT"] == "onsite" and hooks["WIPE_CMD"].endswith("--run-keys") != bound
+
+
+@pytest.mark.parametrize("name", ["WIPE_CMD", "POUS_CMD", "BANDWIDTH_CMD"])
+def test_a_foreign_piece_command_beside_onsite_fulls_hooks_is_refused_by_name(tmp_path, name):
+    hooks = T.variables(R.load(CONFIG, REG), BINDINGS)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "TREE": str(ROOT), **hooks, name: f"{hooks[name]}; bash evil.sh"}
+    p = subprocess.run(["bash", "-c", ONSITE_CHECK], cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+    assert p.returncode == 3 and p.stderr.startswith(f"PREFLIGHT: {name} names a command of its own"), p.stderr
 
 
 @pytest.mark.parametrize("pinned", [True, False])
 def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     cfg = R.load(NETWORK, REG)
-    cmd = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
+    hooks = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)
+    cmd = hooks.pop("WIPE_CMD")
     executable(tmp_path, "ip", IP)
     executable(tmp_path, "lake", LAKE)
     env = {"PATH": os.pathsep.join([str(tmp_path), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path),
            "WIPE_KEY_SHA512": "f" * 128, "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true",
-           "GPU_LEASE_UUID": "no-such-card", "PY": sys.executable}
+           "GPU_LEASE_UUID": "no-such-card", "PY": sys.executable, **hooks}
     p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
                        env=env, capture_output=True, text=True, check=False)
     refused = (tmp_path / "wipe" / "refused.txt").read_text()
@@ -1251,7 +1296,7 @@ def test_the_onsite_line_names_the_machine_each_attesters_and_pearl_pluss_coins_
 
 #: nvidia-smi's stand-in: an idle card
 IDLE = """#!/usr/bin/env bash
-case "$*" in *memory.used*) echo 0 ;; esac
+case "$*" in *memory.used*) echo 0 ;; *name*) echo "NVIDIA H200" ;; esac
 """
 #: ip's stand-in: the default route's NIC
 IP = "#!/bin/sh\necho '1.1.1.1 via 10.0.0.1 dev eth9 src 10.0.0.2 uid 0'\n"
@@ -1298,7 +1343,7 @@ def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.Comp
     python = executable(tmp, "python", PYTHON.format(python=sys.executable, log=str(log)))
     run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
            "VERITY_PINS": json.dumps(cfg["pin"]), "GPU_LEASE_UUID": "card-0",
-           "WIPE_CARD": "any", "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
+           "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
     p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
                        env=run, capture_output=True, text=True, check=False)
     return p, log
@@ -1315,7 +1360,7 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
     assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
     handed = json.loads(log.read_text())
     if bound:
-        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
+        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {} and handed["facts"] == {
             "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
             "links": handed["facts"]["links"]}
         assert handed["wipe_stream"] is None

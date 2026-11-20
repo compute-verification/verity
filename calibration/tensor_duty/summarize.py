@@ -1,13 +1,14 @@
-"""The tensor-duty sweep's verdict on its card's tensor clock (`clock.tensor`), and its reading as Markdown, over
+"""The tensor-duty sweep's verdict on its card's tensor ceiling, and its reading as Markdown, over
 one or more runs' out/ directories of one card. The card is the data sheet whose `driver` holds the GPU name the run's
 found.json gives (`sheet`). The sweep is that clock's falsification test: a point whose MACs over the host's wall clock
-exceed the card's tensor rate (`verity.device.rate`, sm.count x rate.tensor x clock.tensor) refutes the card.
+exceed the card's tensor rate at its ceiling (`verity.device.rate`, sm.count x rate.tensor x the clock of `ceiling_reading`: `clock.tensor`
+where the card marks it a ceiling, else `clock.sm`) refutes the card.
 
 duty.cu prints its host stamps to the millisecond (`STAMP_S`), so a point's rate is known only between its MACs over
 its interval lengthened and shortened by a stamp: the verdict is REFUTED when some point exceeds the card's rate even
 over the longer interval, UNDECIDED when some point does only over the shorter, and PASS when none does over the
 shorter. Only PASS exits 0. Throughput rests on the host's wall clock alone; the GPU's own timers (cudaEvent,
-%globaltimer and clock64) are diagnostics. Each rate is also given against the tensor at clock.sm, the card's second
+%globaltimer and clock64) are diagnostics. Each rate is also given against the tensor at clock.sm, the card's higher
 reading. The tables give the maximum by clock, arm and operand class, each clock's and arm's duty x class table, and
 the fills and bursts compared; each point is joined to the nvidia-smi samples taken inside its host interval.
 
@@ -61,9 +62,15 @@ def sheet(out: Path) -> dict:
     return kit.card_record(found_name(out))
 
 
+def ceiling_reading(card: dict) -> str:
+    """The clock reading whose tensor rate bounds the card: `tensor` where its `clock.tensor` is marked a ceiling, else `sm`."""
+    return "tensor" if card["clock"].get("tensor", {}).get("mark") == "ceiling" else "sm"
+
+
 def readings(card: dict) -> tuple[float, float, float]:
-    """The card's tensor rate at clock.tensor (the bound), at clock.sm (the second reading), and a MHz of clock's."""
-    return float(rate(card)), float(rate(card, mhz=card["clock"]["sm"]["value"])), float(rate(card, mhz=1))
+    """The card's tensor rate at its ceiling reading (the bound), at clock.sm (the higher reading), and a MHz of clock's."""
+    clock = card["clock"][ceiling_reading(card)]["value"]
+    return float(rate(card, mhz=clock)), float(rate(card, mhz=card["clock"]["sm"]["value"])), float(rate(card, mhz=1))
 
 
 def host_rate(r: dict, pad: float = 0.0) -> float:
@@ -151,7 +158,7 @@ def report(pts: list[dict], card: dict) -> tuple[str, list[str], dict]:
     top = max(pts, key=host_rate)
     hi = max(pts, key=lambda r: host_rate(r, -STAMP_S))
     L = [(f"**{v}**: of {len(pts)} points, {len(refuting)} exceed the card's tensor rate, {number(card['sm']['count'])} x "
-          f"{number(card['rate']['tensor'])} x clock.tensor = "
+          f"{number(card['rate']['tensor'])} x clock.{ceiling_reading(card)} = "
           f"{bound:.4e} MACs a second, over the host's wall clock at its longest reading, and {len(undecided)} more "
           f"only at its shortest (the host stamps' {STAMP_S * 1e3:g} ms either way). The highest is "
           f"{tm(top):.2f} T MAC/s "
@@ -217,7 +224,7 @@ def report(pts: list[dict], card: dict) -> tuple[str, list[str], dict]:
                     if c:
                         L.append(f"| {f} | {b} | {max(tm(r) for r in c):.2f} | {mean(c, 'clock64_mhz'):.1f} | "
                                  f"{mean(c, 'tensor_mhz'):.1f} | {mean(c, 'fill_mhz'):.1f} |")
-    doc = {"verdict": v, "sku": card["sku"], "bound": bound, "clock_sm_rate": second, "stamp_s": STAMP_S,
+    doc = {"verdict": v, "sku": card["sku"], "bound": bound, "bound_reading": ceiling_reading(card), "clock_sm_rate": second, "stamp_s": STAMP_S,
            "points": len(pts), "refuting": len(refuting), "undecided": len(undecided),
            "top": {**{k: top[k] for k in ("clock", "arm", "class", "fill", "burst", "duty", "clock64_mhz",
                                           "tensor_mhz")},
