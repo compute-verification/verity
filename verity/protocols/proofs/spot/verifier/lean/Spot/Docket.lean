@@ -197,7 +197,7 @@ structure Verifier where
   samplingDesign : Json
   workTable : Option Json
   scheme : String
-  /-- each port its layout derives, with its `{"leaves", "domain"}` -/
+  /-- each port the caller gives as the verifier's, with its `{"leaves", "domain"}` -/
   ports : Array (String × Json)
   leafLayer : Option String
   anchors : Array Json

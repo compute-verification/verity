@@ -17,7 +17,8 @@ the function as it runs, for every state and op its decoders produce, and takes 
 * `NoAcceptAfterHalt`: over any run of ops (`runs`), every decision after an accepted halt is the `halted` refusal.
 * `FleetHaltIsFinal`: an operator the fleet has halted stays halted with its cause, and every op that names it (an
   `attach` of it, or a `register` or `failures` of one of its streams) is refused `halted` and changes nothing.
-* `HaltCoversOperator`: a stream's failures at its budget leave its operator halted, with the fleet's streams unchanged;
+* `HaltCoversOperator`: a `failures` op whose count, as the op states it, is at its stream's budget leaves the stream's
+  operator halted, with the fleet's streams unchanged;
   when the operator was not yet halted, the cause is that stream at the fleet's position, and the decision names every
   stream of the operator (`Fleet.streamsOf`), each of which the service then halts.
 -/
@@ -72,7 +73,8 @@ def FleetHaltIsFinal : Prop :=
     Fleet.run s op = .ok (d, s') → ∀ o c, Fleet.haltOf s o = some c →
       Fleet.haltOf s' o = some c ∧ (opOperator s op = some o → d = .refused #["halted"] ∧ s' = s)
 
-/-- A stream's failures at its budget leave its operator halted and the streams unchanged; a new halt's cause is that
+/-- A `failures` op whose count, as the op states it, is at its stream's budget leaves the stream's operator halted and
+the streams unchanged; a new halt's cause is that
 stream at the fleet's position, and its decision names every stream of the operator. -/
 def HaltCoversOperator : Prop :=
   ∀ (s : Fleet.State) (op : Json) (d : Stream.Decision) (s' : Fleet.State),
