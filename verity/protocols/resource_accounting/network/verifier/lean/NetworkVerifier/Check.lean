@@ -8,8 +8,8 @@ public import CoreProtocol.Cli
 /-!
 # The network certificate check, a core protocol: `verity/network-certificate/v4`
 
-The auditor's check of one spatial unit's certified execution phases (record v2, `certificate.py`), as `audit.py`'s
-`Audit` runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each
+The auditor's check of one spatial unit's certified execution phases (record v2, `certificate.py`), as
+`lean_audit.Audit` runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each
 against the network attester's public key (`LmsKey`) in the certifier session the parameters name. The id is the
 check's; the message a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2`
 (`messageTag`).

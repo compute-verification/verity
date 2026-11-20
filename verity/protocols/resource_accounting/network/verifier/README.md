@@ -69,7 +69,7 @@ Open premises (`open`):
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
-    is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
+    is withheld. The tests run each on generated cases (`network/tests`), with the mirror in
     `network/tests/period_case.py` for the third;
   - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
     an active network attester's run, each record held to its attested head and its attestation to the key in the
@@ -308,7 +308,7 @@ A spec-level reference for network attestation's timing channel:
   is the prover's word (an entry of read 1 and no outputs passes), so the period check refuses such an execution phase
   (`NetworkCheck.Period`'s `wired`), one whose scan's answer names a tied Input that is no lane's `prog<j>`
   (`tiedInputWired`), one whose scan names a member's ok bits (`<member>/o0`) at another root than its ok rows' under
-  public salts, a constant of T ≥ 2 (`scan_ok`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
+  public salts, a constant of T ≥ 2 (`NetworkCheck.ScanOk`), and one whose scan's state isn't that audit's `SCAN_STATE`, by root
   and domain (`stateTied`): the scan's state tree is the execution phase's state (`window_state`), each row but leaf 0's the one a
   proof block computes (its o1) and the next reads (its sin), both registered reads, so a Program reads the states the scan's
   steps computed;
@@ -351,7 +351,7 @@ grids, exempts only the verified, expected, once-only coin openings, and counts 
 (`protocol/coin-link.md`).
 
 ~~~python
-from verity.protocols.resource_accounting.network.verifier.audit import Audit
+from verity.protocols.resource_accounting.network.verifier.lean_audit import Audit
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Certifier
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
