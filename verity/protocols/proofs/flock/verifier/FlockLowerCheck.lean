@@ -37,7 +37,7 @@ def composeMain : List String → IO UInt32
   | [desc, key, name, ins, outs, layout, prog, part, digests, file] => do
     let ins := named ins
     let outs := named outs
-    let some (.obj ds) := (Lean.Json.parse digests).toOption | do IO.eprintln "flock-lower-check compose: DIGESTS is not a JSON object"; return 2
+    let some (.obj ds) := (JsonParse.parse digests).toOption | do IO.eprintln "flock-lower-check compose: DIGESTS is not a JSON object"; return 2
     let programDigests := ds.toList.filterMap fun (k, v) => match v with | .str s => some (k, s) | _ => none
     let P ← match Program.decode (← IO.FS.readBinFile desc) with
       | .ok p => pure p

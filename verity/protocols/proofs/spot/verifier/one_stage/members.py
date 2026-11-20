@@ -404,8 +404,8 @@ def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Progra
     tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
     try:
         reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
-    except P.QueryRefused:
-        return
+    except P.QueryRefused as e:
+        raise _Refused(f"held reads: {e}") from e
     for name, m in ms.items():
         if m.get("registered") is None:
             for units, i in reads:
@@ -924,7 +924,11 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
                          cut=OC.cuts(descriptor, partition, decoded),
                          formed=OC.formed_in(decoded, partition, m["units"]))
-        except (OC.NotDerived, OC.Refused) as e:
+        except OC.Refused as e:
+            if str(e).startswith(f"{e.code}: {OC.NOT_ADMITTED}"):
+                raise _Refused(str(e).removeprefix(f"{e.code}: ")) from None
+            raise _Refused(f"restrict: {e}") from None
+        except OC.NotDerived as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
         circuit.write_bytes(c)

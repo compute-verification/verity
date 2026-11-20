@@ -71,19 +71,20 @@ def verify(session: bytes, coin_root: bytes, coin_key: bytes, blocks: int, k: in
         return False
 
 
-def header_fields(session: bytes, coin_root: bytes, coin_key: bytes, binding: bytes, blocks: int, k: int, limit_ns: int,
+def header_fields(session: bytes, coin_root: bytes, coin_key_sha512: bytes, binding: bytes, blocks: int, k: int, limit_ns: int,
                   block_bytes: int) -> dict[str, Any]:
-    """The session commitment's header: every field the signature covers but how the session ended and its rounds."""
+    """The session commitment's header: every field the signature covers but how the session ended and its rounds, the coin
+    key by its hash, which the header holds from before the session (the key itself is released after it)."""
     return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records": RECORDS, "session": session.hex(),
-            "coin_root": coin_root.hex(), "coin_key_sha512": hashlib.sha512(coin_key).hexdigest(), "blocks": blocks, "k": k,
+            "coin_root": coin_root.hex(), "coin_key_sha512": coin_key_sha512.hex(), "blocks": blocks, "k": k,
             "limit_ns": limit_ns, "block_bytes": block_bytes, "binding": binding.hex(), "clock": CLOCK}
 
 
-def header(session: bytes, coin_root: bytes, coin_key: bytes, binding: bytes, blocks: int, k: int, limit_ns: int,
+def header(session: bytes, coin_root: bytes, coin_key_sha512: bytes, binding: bytes, blocks: int, k: int, limit_ns: int,
            block_bytes: int, ended: str, rounds: int) -> bytes:
     """The signed header: the commitment's header with how the session ended and its number of rounds, as
     ``json.dumps(sort_keys=True, separators=(",", ":"))`` writes it."""
-    doc = {**header_fields(session, coin_root, coin_key, binding, blocks, k, limit_ns, block_bytes), "ended": ended,
+    doc = {**header_fields(session, coin_root, coin_key_sha512, binding, blocks, k, limit_ns, block_bytes), "ended": ended,
            "rounds": rounds}
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
 

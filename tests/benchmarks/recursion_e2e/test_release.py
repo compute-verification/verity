@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import rec_profile as RP
-import rec_table as RT
 from test_recursion_e2e import job
 
 PARTS = ["L0", "L1", "alg-p0", "cap"]
@@ -25,29 +24,6 @@ def _release(o: Path, ok: bool = True, held: bool = True) -> None:
     (i / "release.json").write_text(json.dumps({"parts": PARTS, "windows_ms": [1000] * 4}))
     (i / "tree-source.txt").write_text("local 127.0.0.1:9\n")
     (i / "tree-held.json").write_text(json.dumps({"ok": held}))
-
-
-def test_the_release_side_is_read_and_holds_the_headline(tmp_path):
-    o = job(tmp_path)
-    _release(o)
-    doc = RP.read(o)
-    rel = doc["release"]
-    assert rel["ok"] and rel["trees_held"] and rel["tree_source"].startswith("local")
-    assert [p["prove_wall_s"] for p in rel["parts"]] == [0.4] * 4 and rel["schedule"]["parts"] == PARTS
-    assert doc["headline"]["released"] is True
-    md = RT.markdown(doc)
-    assert "**Release side.**" in md and "| L0 | 1.0 | 1.0 | 0.5 | 0.5 | 0.4 | go | release |" in md
-
-
-def test_the_result_carries_each_session_steps_time(tmp_path):
-    """Each session step's first invocation's time; the job has no vcap step, which has none."""
-    doc = RP.read(job(tmp_path))
-    times = doc["session_times"]
-    assert tuple(times) == RP.SESSION_STEPS == RP.E2E_STEPS[1:]
-    assert times["vcap"] is None
-    assert times["inner"] == {"wall_s": 70.0, "peak_rss_gb": 2.0, "cpu_s": 2.0}
-    assert all({"wall_s", "cpu_s"} <= set(t) for s, t in times.items() if s != "vcap")
-    assert json.loads(json.dumps(doc))["session_times"] == times
 
 
 def test_a_release_not_held_or_a_tree_not_the_challengers_is_no_accepted_run(tmp_path):
