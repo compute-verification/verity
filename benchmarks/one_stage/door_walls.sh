@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The door's walls (`door_walls.py`) on a CPU node: Lean's flock-lower-check built once per source of Flock's verifier
 # (cached under its `lake_closure.py` key), then the census on each CIRCUITS item (NAME:BLOCKS[:UNITS[:FORM]]), each CASES
-# name (`door_walls.py case`), and the fuzzer for FUZZ_MINUTES from FUZZ_SEED under FUZZ_FORM. Each census's table, each
+# name (`door_walls.py case`), and the fuzzer for FUZZ_MINUTES from FUZZ_SEED under FUZZ_FORM; NO_ROWS=1 skips rows. Each census's table, each
 # case and the fuzzer's summary go to $OUT.
 # research run --on auto --cwd clone --mem-gb 32 --cpus 8 --timeout 2h -- bash benchmarks/one_stage/door_walls.sh
 set -uo pipefail
@@ -47,7 +47,7 @@ PY=.venv/bin/python
 rc=0
 for item in $CIRCUITS; do
   IFS=: read -r name blocks units form <<< "$item"; units=${units:-one}; form=${form:-unit}; f=$O/census-$name-$units-$form
-  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form $([ $form = whole ] && echo $PIECE_ARG) ${ONLY:+--only "$ONLY"} --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
+  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form $([ $form = whole ] && echo $PIECE_ARG) ${ONLY:+--only "$ONLY"} ${NO_ROWS:+--no-rows} --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
     > $f.log 2>&1
   r=$?; echo "CENSUS $name $blocks $units $form rc $r"; grep -h '^BUILT\|^PLAN\|^CENSUS\|^|' $f.log | cut -c1-600
   [ $r -gt 1 ] && { tail -20 $f.log; rc=1; }
