@@ -189,7 +189,7 @@ A machine that isn't a RunPod pod is `provider = "ssh"`: `host`, and optionally 
 `rate_usd_per_hour`, reached with the same research key. `research pods register NAME --host ADDR
 --user U --rate R --project P` writes it, refusing a host where `hostname` doesn't answer over ssh; `research pods ssh NAME`
 reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `launch.sh` brings one up (`--dry-run`
-needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
+needs no credentials), `teardown.sh` stops or deletes it, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 `--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
@@ -226,7 +226,7 @@ script goes into the repository and the manifest before it runs; a backup of a r
 a path inside a `whole` tree, where the tree's next install drops what main lacks.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
-Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
+Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 2's `vy-monitors.timer`
 writes an alert note per incident and per clear, and the relay posts them in `#agent-alerts`.
 
 An unlisted or foreign machine is refused before anything is contacted. The

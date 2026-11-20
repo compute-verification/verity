@@ -91,10 +91,10 @@ def test_an_incident_opens_once_with_a_note_and_clears_once(tmp_path):
     assert state["open"] == {} and state["last_pass"] == T0 + 240
 
 
-def test_the_note_has_alert_sinks_front_matter_and_names_its_monitor(tmp_path):
+def test_the_note_has_the_lane_contracts_front_matter_and_names_its_monitor(tmp_path):
     passes(M.new_state(), mon(found()), [["a"]], tmp_path)
     text = next((tmp_path / "outbox").iterdir()).read_text()
-    fm = M.front_matter(text)
+    fm = dict(ln.split(": ", 1) for ln in re.match(r"---\n(.*?)\n---\n", text, re.S)[1].splitlines() if ": " in ln)
     assert {k: fm[k] for k in ("campaign", "lane", "kind", "status", "repo")} == {
         "campaign": "nebius-monitoring", "lane": "infra", "kind": "finding", "status": "open", "repo": "compute-verification/verity"}
     assert fm["monitor"] == "m" and fm["key"] == '"m|a"' and fm["owners"] == "[infra]" and fm["id"] + ".md" == events(tmp_path)[0]["note"]
@@ -114,9 +114,9 @@ def test_an_incident_clears_only_once_gone_for_its_clear_s(tmp_path):
 
 
 def test_a_timers_unit_that_fails_every_run_is_one_incident(tmp_path):
-    """vy-custody.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
+    """vy-node-sweep.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
     [m] = [m for m in M.MONITORS if m.id == "units-n2"]
-    out = passes(M.new_state(), m, [["system:vy-custody.service"], []] * 6, tmp_path, every=300)
+    out = passes(M.new_state(), m, [["system:vy-node-sweep.service"], []] * 6, tmp_path, every=300)
     assert [e["event"] for evs in out for e in evs] == ["open"]
 
 
@@ -829,18 +829,12 @@ def test_node_2s_heartbeat_is_stale_after_10_minutes_without_a_pass():
 # ---- the relay -----------------------------------------------------------------------------------------------------------------
 
 class FakeSource(M.Source):
-    def __init__(self, name, lines=(), notes=None):
+    def __init__(self, name, lines=()):
         super().__init__(name, "/x")
-        self.all, self.files = list(lines), dict(notes or {})
+        self.all = list(lines)
 
     def lines(self, after):
         return len(self.all), self.all[after:]
-
-    def notes(self):
-        return sorted(self.files)
-
-    def head(self, name):
-        return self.files[name]
 
 
 def ev(kind, key, **kw):
@@ -1042,28 +1036,6 @@ def test_a_clear_is_posted_quiet_so_it_rings_no_one(monkeypatch):
         cleared = [t for line, t in tags if line == "*Cleared:* x"]
         assert cleared and all(S.QUIET in t for t in cleared), (gone, tags)
         assert [p[1] for p in posts][-1] == "*Cleared:* x"
-
-
-def test_the_relay_posts_grafanas_new_notes_but_not_the_monitors_own():
-    old = "---\nid: x\nlane: infra\n---\n\n# old\n"
-    src = FakeSource("node1", notes={"20261003T1000Z-alert-x-1.md": old})
-    posts = []
-    M.relay_pass({}, [src], lambda e, t: posts.append(e) or {}, T0)
-    rstate: dict = {}
-    M.relay_pass(rstate, [src], lambda e, t: posts.append(e) or {}, T0)
-    src.files["20261003T2000Z-alert-gpustall-2.md"] = "---\nid: y\nlane: infra\norigin: grafana on vy-nebius-1\n---\n\n# GpuStall: 1 firing\n- GPU 3\n"
-    src.files["20261003T2000Z-alert-m-3.md"] = "---\nid: z\nmonitor: m\n---\n\n# mine\n"
-    M.relay_pass(rstate, [src], lambda e, t: posts.append(e) or {}, T0)
-    assert [(p["monitor"], p["owners"], p["text"].splitlines()[0]) for p in posts] == [("grafana", ["infra"], "# GpuStall: 1 firing")]
-
-
-def test_a_notes_name_reaches_the_shell_quoted(tmp_path):
-    name = "x;touch pwned;.md"
-    (tmp_path / "a b" / "outbox").mkdir(parents=True)
-    (tmp_path / "a b" / "outbox" / name).write_text("---\nid: x\n---\n")
-    src = M.Source("relay", str(tmp_path / "a b"), run=lambda argv, **kw: subprocess.run(argv, cwd=tmp_path, **kw))
-    assert src.head(name) == "---\nid: x\n---\n" and src.lines(0) is None
-    assert not (tmp_path / "pwned").exists()
 
 
 def test_a_relay_post_tags_its_owners_and_says_what_to_do():
@@ -1606,7 +1578,7 @@ def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_o
     assert M.expected_units("vy-nebius-cpu-1", MANIFEST, NOTHING) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
     real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text(), NOTHING))
     assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
-    assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+    assert all(M.EXPECTED_OFF.values())
 
 
 def test_a_step_that_isnt_applied_on_a_machine_holds_its_units_as_drift_holds_its_files():
