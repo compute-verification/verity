@@ -261,6 +261,15 @@ def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tm
         so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
 
 
+@pytest.mark.parametrize("protocols", ["pouw:eps1-sm120-h1fx1", "pouw"])
+def test_the_first_stage_is_refused_by_name_before_the_model_loads(tmp_path, protocols):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path / "serve"), "--no-commit",
+                                      "--protocols", protocols], environ={})
+    with pytest.raises(cli.UsageError, match=f"--protocols {protocols}: {protocols}: the first stage is deleted; useful work "
+                                             "is Pearl\\+'s, attached by its declared name"):
+        so.preflight(opts, which=lambda _: None)
+
+
 def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
                                       "--protocols", "pouw:pearl-c-h100-v1-h3"])
@@ -506,13 +515,12 @@ class Serving:
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, runner: Runner | None = None,
+                 runner: Runner | None = None,
                  no_slice: str | None = None) -> None:
         self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,
-                                       arm=arm(self.runner) if arm is not None else None) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),

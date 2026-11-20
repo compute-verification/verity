@@ -2,7 +2,7 @@
 # The proof system by layer on stand-in values and one H200: one Llama 3.2 1B decoder layer's W8A8 linears for one token
 # (a6.py's default members, 23,552 ScaledMmS8Coordinate_v1 units at K=2048 and K=8192, seeded s8 values, never served),
 # each row a6.py on a CUDA build of Flock's flock-circuit, its sessions proved with `prove --gpu`. The served rows are
-# benchmarks/prove_path/run.sh's and a5_llama1b_h200.sh's, which `verity bench prove layers` prints:
+# benchmarks/prove_path/run.sh's, which `verity bench prove layers` prints:
 #   flock     every unit, Flock's plain protocol: each statement a window of its own (Lean's plain scope)
 #   zk        every unit, Flock with zero knowledge (--zk), one docket over the layer
 #   sampled   SPOT's one-stage audit: LAYERS_K units under the stratified draw, --zk, the audit's ε at δ

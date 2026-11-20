@@ -34,7 +34,7 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
      verifier's bytes, exactly uniform).
    - Folds into: `RecordCustodyZKJPLaw` (the record is live) into Core's challenger premises.
-2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
+2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Flock/Recursive/Generic.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
    its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`):
@@ -46,7 +46,7 @@ incorrect set of the trace the extractor recovers.
      deployed ones meet it).
    - Real: SHA-512 collision resistance bounds Pr[B], and `Claims.Hm96Hiding` bounds δ₁.
    - Open: none.
-3. **Zero knowledge of the deployed system.** `Flock.Guarantees.SessionLoopZKDeployed`
+3. **Zero knowledge of the ZK server's session loop.** `Flock.Guarantees.SessionLoopZKDeployed`
    (`Proofs/Flock/SessionLoop/Statement.lean`): at the ZK server's session loop on the deployed tables, for every t > 0,
    every V* with one more round than the verifier and every event E, Pr[E(real)] ≤ 2·(Pr[E(sim)] + 8(t+1)·n_L(x)·δ₁ +
    2·3^(−t) + 4t·3^t·Pr[fork collision]), with δ₁ hm96's hiding gap at the pinned key. For the recursive audit,
@@ -495,6 +495,8 @@ can't import. The check also fails when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
+- a guarantee `deployed` lists has no honest witness: a guarantee is called deployed only while a theorem shows an
+  honest run accepted;
 - a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
 A changed record means a guarantee now says something else. When one lands, the statement before and after is shown

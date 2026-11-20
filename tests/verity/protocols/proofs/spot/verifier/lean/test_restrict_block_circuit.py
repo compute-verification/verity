@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -67,7 +68,8 @@ def test_lean_c_s_is_the_doors(k):
     if k >= len(blocks):
         pytest.skip(f"the chain's partition has {len(blocks)} blocks")
     units = OC.block(c, part, k)
-    door = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=OC.cuts(c, part))
+    door = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=OC.cuts(c, part),
+                    formed=OC.formed_in(c, part, units))
     got = lean(c, part, units[0][0])
     assert got.returncode == 0, got.stdout
     assert got.stdout == door
@@ -81,6 +83,38 @@ def test_a_unit_that_starts_no_block_is_refused():
         pytest.skip("the chain's first block is one unit")
     got = lean(c, part, lo + 1)
     assert got.returncode == 1 and f"no block of the partition starts at unit {lo + 1}" in got.stdout
+
+
+@cache
+def door_form():
+    path = HERE.parents[1] / "test_door_form.py"
+    spec = importlib.util.spec_from_file_location("door_form_for_block_circuit", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _through_c():
+    """`Spot/Admitted.lean`'s refusals of `admitted` on a C whose root calls the query's one template, at no
+    cut: the cases C alone gives, through Lean's executable and the door alike."""
+    df = door_form()
+    return [g for g in df.guards() if not g[3] and g[2] in json.loads(g[1])["definitions"]]
+
+
+@pytest.mark.parametrize("case", _through_c(), ids=lambda g: f"{g[4]}:{g[5][:48]}")
+def test_a_block_not_admitted_is_refused_by_both_with_one_text(case):
+    """Lean's two faults among them: a row not whole u16 words (`E3`, `E2047`), whose leaves after it the lowering would
+    read from its padding, and a word parameter the lift leaves as it is (`C32`)."""
+    _how, d, t, _cs, clause, detail = case
+    c, desc = d.encode(), json.loads(d)
+    part = PO.build(desc, PO.template_instance_query(t), [[(0, 1)]])
+    why = f"{OC.NOT_ADMITTED}, {clause}: {detail}"
+    with pytest.raises(OC.Refused, match=re.escape(why)):
+        OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut=OC.cuts(c, part),
+                 formed=OC.formed_in(c, part, OC.block(c, part, 0)))
+    got = lean(c, part, 0)
+    assert got.returncode == 1 and why in got.stdout, got.stdout
 
 
 def _ports(text: bytes) -> list[list]:
@@ -99,7 +133,7 @@ def test_a_cut_blocks_rows_are_the_periods_rows(k):
     units = OC.block(c, part, k)
     member = next(m for m in members if m.base == units[0][0])
     cut = OC.cuts(c, part)
-    door = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=cut)
+    door = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=cut, formed=OC.formed_in(c, part, units))
     got = lean(c, part, units[0][0])
     assert got.returncode == 0, got.stdout
     assert got.stdout == door
@@ -111,7 +145,8 @@ def test_a_cut_blocks_rows_are_the_periods_rows(k):
     if member.template != gemm:
         return
     assert [p for p, _ in member.rows][:2] == ["x#0", "x#1"]
-    whole, whole_meta = _ports(OC.lower(OC.restrict(c, part, units), part, PF.lower_executable))
+    whole, whole_meta = _ports(OC.lower(OC.restrict(c, part, units), part, PF.lower_executable,
+                                        formed=OC.formed_in(c, part, units)))
     assert whole[0][0] == "x" and FI.ports_form(whole_meta, mem).startswith(FI.ROWS_CUT)
     padded = {**mem, "ports": mem["ports"][:mem["input_ports"]] + [[p, -(-w // 64) * 64] for p, w in member.out_rows]}
     assert FI.ports_form(meta, padded).startswith(FI.ROWS_PADDED)

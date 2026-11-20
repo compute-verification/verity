@@ -12,9 +12,9 @@ runner hid the GPUs, or a shell). If i's lock is free, this probe takes it with 
 runner's `--id`) and `who=adopted:<lane>`, so gpu-lease hands i to nobody else, and drops it when the process exits. If a lease
 holds i already, two jobs share the GPU (`collision`). Each finding is a line in $GPU_ADOPT_LOG (default
 /workspace/research/gpu-adopt.jsonl), which the duty loop reads; adopting is announced once per process and GPU.
-Only a process listed both before and after the leases are read is judged, as gpu_stray.py does on node 1. No process's environment
-is read. On a cluster node ($GPU_ADOPT_SPLIT_FILE, default /etc/vy/direct-gpus, present) Kueue's pods hold GPUs without gpu-lease and
-gpu_stray.py judges them, so this probe judges nothing there.
+Only a process listed both before and after the leases are read is judged. No process's environment
+is read. On a cluster node ($GPU_ADOPT_SPLIT_FILE, default /etc/vy/direct-gpus, present) Kueue's pods hold GPUs without gpu-lease,
+so this probe judges nothing there.
 """
 from __future__ import annotations
 

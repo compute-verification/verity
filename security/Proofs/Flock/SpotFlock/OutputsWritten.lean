@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.NeededBitsHeld
 public import Proofs.Flock.SpotFlock.WiringRows
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.DeployReads
 
 /-! # Every output word's bit of a member's unit is a written bit
 
