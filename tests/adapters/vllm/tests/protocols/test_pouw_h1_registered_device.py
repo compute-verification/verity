@@ -33,6 +33,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM9
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
+from verity.commitments.periods import rows as CS
 from verity_torch.pouw.h1 import registered_device as D
 from verity_torch.pouw.h1 import tables_device as TD
 
@@ -54,7 +55,7 @@ def _ys(n: int) -> bytes:
 
 def _numpy(words, ys, **binding):
     dom = RV.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], RV.WORD_BITS, **binding)
-    return NR._numpy(words, ys, dom.domain_id), dom.domain_id
+    return CS.registered_strings(words, ys, dom), dom.domain_id
 
 
 def _core(words, ys, **binding):
