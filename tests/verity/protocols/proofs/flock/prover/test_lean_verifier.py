@@ -397,7 +397,6 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
     """`draw --program --partition --stratified K`: the strata derived from the program (one per template, ranges merged,
     in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
     and U2 on stratified samples, held to the verifier's own sampling design."""
-    import hashlib
     lake_build(LEAN)
     ref = _stratified_agree()
     desc = {"schema": "verity-ir/descriptor/v2", "callees": ["Input8_v1", "T0_v0", "T1_v0"], "root": "Root_v0",
@@ -405,9 +404,10 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
                 {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
                 {"form": "batch", "fn": 1, "n": 1}]}},
                 "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"}}}
+    desc, program = _partition_program(desc)
     text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
     (tmp_path / "p.desc").write_text(text)
-    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+    obj = {"format": "verity/partition/v1", "program": program,
            "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0"]}}}
     (tmp_path / "q.json").write_text(json.dumps(obj))
     flags = ["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "q.json")]
@@ -439,19 +439,33 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
     assert _lean_sample_obj(["--program", str(tmp_path / "p.desc"), "--partition", str(tmp_path / "w.json"), "--stratified", "4"]) is None
 
 
+def _partition_program(desc):
+    """``desc`` with what the program digest reads (`program_fn`, `types`, each root node's `args` and `out`, the root's
+    `ret`), and that digest, the `program` a partition object names."""
+    from verity.circuits.codec import program_digest
+    body = desc["definitions"][desc["root"]]["body"]
+    body.setdefault("ret", [])
+    for nd in body["nodes"]:
+        nd.setdefault("args", [])
+        nd.setdefault("out", 0)
+    desc.setdefault("program_fn", "P_v0")
+    desc.setdefault("types", [["Value", 8]])
+    return desc, program_digest(desc)
+
+
 def _work_program(tmp_path):
     """Three templates' units under `Q_template_instances` (T0 at [0, 2) and [5, 6), T1 at [2, 5), T2 at [6, 10)), and a
     writer of work tables that returns the verifier's flags for it."""
-    import hashlib
     desc = {"schema": "verity-ir/descriptor/v2", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
             "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
                 {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
                 {"form": "batch", "fn": 1, "n": 1}, {"form": "batch", "fn": 3, "n": 4}]}},
                 "Input8_v1": {"form": "primitive"}, "T0_v0": {"form": "primitive"}, "T1_v0": {"form": "primitive"},
                 "T2_v0": {"form": "primitive"}}}
+    desc, program = _partition_program(desc)
     text = json.dumps(desc, sort_keys=True, separators=(",", ":"))
     (tmp_path / "p.desc").write_text(text)
-    obj = {"format": "verity/partition/v1", "program": hashlib.sha512(text.encode()).hexdigest(),
+    obj = {"format": "verity/partition/v1", "program": program,
            "query": {"name": "Q_template_instances", "version": 0, "params": {"templates": ["T1_v0", "T0_v0", "T2_v0"]}}}
     (tmp_path / "q.json").write_text(json.dumps(obj))
 
