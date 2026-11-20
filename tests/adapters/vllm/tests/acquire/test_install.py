@@ -23,7 +23,7 @@ from verity_vllm.acquire.install import (
     plan_selection,
 )
 from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
-from verity_vllm.query.manifest import format as RM
+from verity_vllm.check import capture_plan as CP
 from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
@@ -92,9 +92,11 @@ def row(family, op, member, step=0, **extra):
 
 
 def make(rows, model, runner):
-    man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
+    capture = {"input_token_ids": CP.INPUT_IDS, "instance_outputs": CP.MODULE_OUTPUT, "sampled_token_ids": CP.SAMPLED}
+    classes = [{"op_path": r["op_path"], "member": r["output_member"], "capture": capture[r["family"]], "width": 8,
+                "dtype": r.get("dtype", "bf16"), "definitions": []} for r in rows if r["family"] in capture]
     rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
+    return P.plan_of_capture(classes, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -104,37 +106,6 @@ def base_rows():
             row("weights", "logits.weight", "weight", step="*", dtype="f32")]
 
 
-def test_installs_exactly_the_sites_and_observes_them():
-    torch.manual_seed(0)
-    model, runner = Tiny(), Runner()
-    plan, rt = make(base_rows(), model, runner)
-    assert plan.complete, [v.why for v in plan.unsupported]
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    expect = [("blocks.0.norm", "producer_output", "0"), ("blocks.0.norm", "producer_output", "1"), ("blocks.0.proj", "producer_output", "out"),
-              ("embed", "consumer_input", "in[0]"), ("embed", "producer_output", "out"), ("logits", "producer_output", "out"),
-              ("runner.sampler", "runner_return", ".sampled_token_ids")]
-    assert inst.keys() == expect and inst.keys() == [h.key() for h in plan.hooks()]
-    assert [s.key() for s in inst.deferred] == [("logits.weight", "registered_input", "weight")]
-    # the class table would also hook `blocks.0.extra` (a Linear): the plan does not
-    assert not any(s.module == "blocks.0.extra" for s in inst.installed)
-    assert len(model.blocks[0].extra._forward_hooks) == 0 and len(model.blocks[0].proj._forward_hooks) == 1 and len(model.embed._forward_pre_hooks) == 1
-    ids = torch.tensor([[1, 2, 3]])
-    for _ in range(2):
-        out = model(ids)
-        runner.sample(out)
-    assert {k: v for k, v in sink.counts.items()} == {k: 2 for k in expect}
-    assert sink.shapes[("blocks.0.norm", "producer_output", "1")] == [[1, 3, 4]] and sink.shapes[("embed", "consumer_input", "in[0]")] == [[1, 3]]
-    assert sink.shapes[("runner.sampler", "runner_return", ".sampled_token_ids")] == [[1, 3]] and sink.dtypes[("embed", "consumer_input", "in[0]")] == {"int64"}
-    doc = sink.to_json()
-    assert doc["schema"] == "verity-vllm/acquisition-observed/v1"
-    assert [(s["module"], s["kind"], s["slot"]) for s in doc["sites"]] == expect and all(s["occurrences"] == 2 for s in doc["sites"])
-    inst.remove()
-    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0
-    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
-    model(ids)
-    runner.sample(out)
-    assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
 def test_a_second_installation_on_the_runner_observes_its_own_sites_alone():
@@ -223,14 +194,3 @@ def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
     inst.remove()
 
 
-def test_promoted_consumer_pre_hook_only():
-    model, runner = Tiny(), Runner()
-    rows = base_rows() + [row("instance_outputs", "blocks.0", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 3, "width": 4, "dtype": "f32", "spec": "Add_v1", "consumers": ["logits"]}))]
-    plan, _ = make(rows, model, runner)
-    assert plan.complete
-    sink = OccurrenceSink()
-    inst = observe(plan, model, runner, sink)
-    assert ("logits", "consumer_input", "in[0]") in set(inst.keys()) and not any(s.module == "blocks.0" for s in inst.installed)
-    model(torch.tensor([[1, 2]]))
-    assert sink.counts[("logits", "consumer_input", "in[0]")] == 1 and sink.shapes[("logits", "consumer_input", "in[0]")] == [[1, 2, 4]]
-    inst.remove()

@@ -18,11 +18,13 @@ import json
 import queue
 import shutil
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity import lean_process as LC
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
 
 ROOT = Path(__file__).resolve().parents[7]
@@ -63,7 +65,9 @@ class Lean:
     not yet answered is answered with the error."""
 
     def __init__(self, exe: Path, done: Callable[[dict], None]) -> None:
-        self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.stderr = tempfile.TemporaryFile("a+b")
+        self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
+                                     env=LC.lean_env())
         self.done, self.requests, self.lock = done, queue.SimpleQueue(), threading.Lock()
         self.pending: collections.deque[Callable[[dict], None] | None] = collections.deque()
         self.ended: str | None = None
@@ -99,6 +103,12 @@ class Lean:
 
     def _read(self) -> None:
         for line in self.proc.stdout:
+            self.stderr.seek(0)
+            err = self.stderr.read().decode("utf-8", "replace")
+            if (panic := LC.panic_line(err)) is not None:
+                self.proc.kill()
+                self._end(f"{LC.LEAN_PANIC}: {panic}")
+                break
             msg = json.loads(line)
             if "done" in msg:
                 self.done(msg)
@@ -107,7 +117,10 @@ class Lean:
                 answered = self.pending.popleft() if self.pending else None
             if answered is not None:
                 answered(msg)
-        self._end(f"the process ended ({self.proc.wait()})")
+        code = self.proc.wait()
+        self.stderr.seek(0)
+        panic = LC.panic_line(self.stderr.read())
+        self._end(f"{LC.LEAN_PANIC}: {panic}" if panic else f"the process ended ({code})")
         self.done({"done": None, "accepted": False})
 
     def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:

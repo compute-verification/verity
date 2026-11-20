@@ -135,7 +135,7 @@ def test_the_collector_commits_rows_sha512_on_the_windowed_worker_only(monkeypat
     another scheme, or a collector off the windowed path, is refused before the extension is built, and the Commit names its
     committers when it is asked for a retired one."""
     from verity_vllm.commit.committer import native_collect as NC
-    from verity_vllm.pipeline import commit as CD
+    from verity_vllm.pipeline import serve_seal as CD
 
     monkeypatch.delenv("VERITY_WINDOW_MB", raising=False)
     with pytest.raises(ValueError, match="unknown commit scheme 'vllm-v1'"):

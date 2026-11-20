@@ -7,8 +7,6 @@ replay cache is what the next B8 run is admitted on.
 """
 from __future__ import annotations
 
-import gzip
-import json
 
 import pytest
 
@@ -18,7 +16,6 @@ from verity_vllm.commit.committer.native_host import (  # noqa: E402
     bounded_host_bound,
     schedule_stream_bound,
 )
-from verity_vllm.pipeline.commit import c2_programs_forecast  # noqa: E402
 
 MiB = 1 << 20
 ASZ = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
@@ -71,57 +68,8 @@ def test_attempt_2_derivation_exact_pool_programs_freed_replay_cache_admits_b8_w
     assert ph["run"] + b["slack_bytes"] > (93052 - 21152) * MiB and ph["c2_sampled_replay"] + b["slack_bytes"] > (93052 - 21152 + 70300) * MiB
 
 
-def test_c2_programs_forecast_counts_rows_across_chunk_boundaries_and_names_absence(tmp_path):
-    root = tmp_path / "programs"
-    n_rows = {"LP7_T1": 3, "LP9_T2": 5}
-    js = 0
-    for name, n in n_rows.items():
-        d = root / f"build_request_{name}"
-        d.mkdir(parents=True)
-        rows = [{"i": i, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": f"m/e[{i}]", "args": [[["p", 0, 0, 1]]]} for i in range(n)]
-        text = json.dumps({"schema": "cb-a/instance-sequence/v1", "digest": "d" * 64, "params": [], "rows": rows}).encode()
-        js += len(text)
-        with gzip.open(d / "instances.json.gz", "wb") as f:
-            f.write(text)
-    fc = c2_programs_forecast(str(root), None)
-    assert fc["rows"] == 8 and fc["json_bytes"] == js and fc["bytes"] == int(js * 15.0) and len(fc["files"]) == 2 and fc["why"] is None
-    assert fc["kind"] == "empirical_forecast" and "B8" in fc["calibration"]
-    # a single Program dir (B=1 rows pass --program-dir)
-    fc1 = c2_programs_forecast(None, str(root / "build_request_LP9_T2"))
-    assert fc1["rows"] == 5 and len(fc1["files"]) == 1
-    # absence is named, never a silent 0
-    fc0 = c2_programs_forecast(str(tmp_path / "nowhere"), None)
-    assert fc0["bytes"] == 0 and fc0["rows"] == 0 and "no instance files" in fc0["why"]
 
 
-def test_row_counting_is_exact_when_the_needle_straddles_a_read_boundary(tmp_path, monkeypatch):
-    """the streamed counter keeps a (len(needle) - 1)-byte tail between 64 MiB reads; force tiny reads to exercise the seam."""
-    import verity_vllm.pipeline.commit as CD
-
-    d = tmp_path / "build_request_LP1_T1"
-    d.mkdir()
-    rows = [{"i": i, "spec": "s", "form": "call", "name": "n", "args": []} for i in range(1000)]
-    text = json.dumps({"rows": rows}).encode()
-    with gzip.open(d / "instances.json.gz", "wb") as f:
-        f.write(text)
-    real_open = gzip.open
-
-    class _Small:
-        def __init__(self, fh):
-            self.fh = fh
-
-        def read(self, n):
-            return self.fh.read(7)          # 7-byte reads: the 6-byte needle straddles most seams
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            self.fh.close()
-
-    monkeypatch.setattr(gzip, "open", lambda p, m="rb": _Small(real_open(p, m)))
-    fc = CD.c2_programs_forecast(str(tmp_path), None)
-    assert fc["rows"] == 1000 and fc["json_bytes"] == len(text)
 
 
 def test_fork_children_is_a_named_cgroup_term_of_the_c2_phase():

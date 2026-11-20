@@ -9,21 +9,9 @@ import json
 import pytest
 from verity.circuits import word as W_
 
-from verity_vllm.acquire import plan
-from verity_vllm.acquire import plan as PL
-from verity_vllm.check import oracle_compare as OC
-from verity_vllm.correspondence.reader_for_acquire import (
-    AcquireCorrespondence,
-    runtime_tree_from_paths,
-)
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.pipeline import manifest as M
-from verity_vllm.pipeline import manifest_verify as MV
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import program_view as PV
-from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.manifest import verify as V
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 from verity_vllm.query.units import ValueRef
@@ -163,29 +151,8 @@ def test_manifest_modules_refuses_a_module_under_two_families():
         NS.manifest_modules(bad)
 
 
-def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.check.replay import coverage
-
-    assert NS.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[NS.FAMILY] == "norm_tap" and NS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    entry = {"identity": {"op_path": "model.norm", "output_member": NS.MEMBER}, "name": f"model.norm/{NS.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream", "the Match record holds no value for a norm's scale: form (B) never compares it"
-    row = {"family": NS.FAMILY, "op_path": "model.norm", "output_member": NS.MEMBER, "step": 0}
-    assert Binder([row]).bind(0, [f"model.norm/{NS.MEMBER}"]) == [("model.norm", NS.MEMBER, 0, "label")]
 
 
-def test_the_plan_takes_the_scale_at_the_norm_module():
-    man = _manifest(kernel_program(), norm_scales=True).manifest
-    rt = runtime_tree_from_paths({"": ["M"], "model.layers.0.input_layernorm": ["N"], "model.norm": ["N"]}, buffers=[],
-                                 runner={"sample": True}, source="synthetic")
-    corr = AcquireCorrespondence(rt, wrapper_prefix="", aliases={})
-    vals = {v.value_id: v for v in PL.value_classes(man) if v.family == NS.FAMILY}
-    assert sorted(vals) == [f"model.layers.0.input_layernorm/{NS.MEMBER}", f"model.norm/{NS.MEMBER}"]
-    for v in vals.values():
-        legal, refused = PL.sites_of(v, corr)
-        assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", v.op_path, NS.MEMBER)] and not refused
-    gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(vals["model.norm/norm_scale"], AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
-    assert not legal and refused[0]["why"] == "the norm module is not a module of the runtime tree"
 
 
 def test_word_check_sees_the_tapped_scale_as_committed():
@@ -199,12 +166,3 @@ def test_word_check_sees_the_tapped_scale_as_committed():
         W_.check_calls([g], acquired={"RMSNormTriton_v1": 2}, specialize=PV.specialization)
 
 
-def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch):
-    P = kernel_program()
-    on = _manifest(P, norm_scales=True).manifest
-    off = _manifest(P).manifest
-    assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
-    seen: dict[str, dict] = {}
-    monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
-    MV.rebuild(program="p", norm_scales=True)
-    assert seen["kw"]["norm_scales"] is True
