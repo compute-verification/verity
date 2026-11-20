@@ -13,6 +13,7 @@ public import PouwPearlPlus.Check
 public import PouwPearlPlus.Grid
 public import PouwPearlPlus.Open
 public import PouwPearlPlus.Protocol
+public import PouwPearlPlus.Refusals
 
 /-!
 # Pearl+'s run verdict, as executable Lean

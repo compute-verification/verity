@@ -5,6 +5,7 @@ public import PouwVerifier.Check
 public import PouwVerifier.Chunks
 public import PouwVerifier.Opening
 public import PouwVerifier.Rounds
+public import Spot.Produced
 
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
@@ -38,6 +39,10 @@ harness (`verity/core/difftest`):
 * `ratio` (`s` and `ctx`, strings): `Core.Ratio.ofString s ctx` (`core_check.ratio`) as `{"ratio": [num, den]}`, each in
   lowercase hex, which no limit on decimal digits touches, with `text`, the ratio written back by `Core.Ratio.toString`
   (`window.ratio_str`), and `back`, that text read again; or `{"refused": why}`.
+* `produced` (`record` the lanes evidence's produced record, `registration` and `draw` the sample root and the sampling
+  coin's value, strings, and `mine` the verifier's own entries, `{value: {"leaves", "words", "word_bits", "domain"}}`
+  as `produced.entry` writes them): `{"codes": Spot.Produced.check's}`, empty when the record holds, which
+  `credit._lanes_record` asks as `PouwVerifier.Lanes.lanesRecord` does.
 -/
 
 @[expose] public section
@@ -137,8 +142,21 @@ def ratioOf (j : Json) : Except String Json := do
     | .ok r => Json.mkObj [("ratio", read s), ("text", Json.str r.toString), ("back", read r.toString)]
     | .error why => Json.mkObj [("refused", Json.str why)]
 
+def producedOf (j : Json) : Except String Json := do
+  let .str registration ← get j "registration" | throw "the input's registration is not a string"
+  let .str draw ← get j "draw" | throw "the input's draw is not a string"
+  let .obj _ ← get j "mine" | throw "the input's mine is not an object"
+  let mine ← (Spot.entries (Spot.getD j "mine")).mapM fun (value, e) =>
+    match Spot.nat? (Spot.getD e "leaves"), Spot.nat? (Spot.getD e "words"), Spot.nat? (Spot.getD e "word_bits"),
+        Spot.getD e "domain" with
+    | some leaves, some words, some wordBits, .str domain =>
+      pure ({ value, leaves, words, wordBits, domain } : Spot.Produced.Mine)
+    | _, _, _, _ => throw s!"the input's mine: {value} is not leaves, words and word_bits and a string domain"
+  let codes := Spot.Produced.check (← get j "record") registration draw (mine.qsort (·.value < ·.value))
+  pure (Json.mkObj [("codes", toJson codes)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
-  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf)]
+  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf), ("produced", producedOf)]
 
 end PouwVerifier.Difftest

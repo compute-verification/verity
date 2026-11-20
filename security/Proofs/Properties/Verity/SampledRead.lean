@@ -1065,7 +1065,8 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
   swap
   · obtain ⟨r, hr, -, -⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
     exact (_root_.Spot.OneStageZk.membersRun_held hr).2
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   try simp only [] at h
   split at h
   · cases h
@@ -1392,7 +1393,8 @@ theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
   replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   try simp only [] at h
   split at h
   · cases h
