@@ -159,6 +159,9 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     slot, step = {}, {}
     for t, n in units.items():
         slot[t], step[t] = blocks.slots_steps(t, 0, n)
+    if any((slot[t] < 0).any() for t in units):
+        raise ValueError(f"{doc.get('name')}: units of no request are in no session or position block, which these "
+                         "divisions don't take")
     first = dict(zip(units, itertools.accumulate(units.values(), initial=0)))
     total = sum(units.values())
 
