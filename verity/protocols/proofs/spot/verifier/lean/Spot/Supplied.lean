@@ -2,6 +2,7 @@ module
 
 public import Flock.ZkServer
 public import Commitments.SessionCoins
+public import Lms.Verify
 public import Spot.Registered
 
 /-!
@@ -246,7 +247,8 @@ verifier evaluates. C names the function in its input's mark, under its digest, 
 
 /-- Every function a mark may name, the format's closed list (`verity.circuits.supplied.FUNCTIONS` names the same). -/
 def FUNCTIONS : List String :=
-  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.setup.salt/v1",
+  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.session.message/v1",
+   "pous.setup.salt/v1",
    "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
    "record.root/v1", "log.base/v1", "const.u16/v1"]
 def LAYOUTS : List String := ["le", "halves", "digest"]
@@ -447,31 +449,71 @@ private def header (coins commitments : Array (String × ByteArray)) (v : String
   return (#[("bytes", Flock.hexOf row)], row.size)
 
 /-- The storage session's signed context: the held commitment's session id and the first 16 bytes of the held key. -/
-private def context (commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+def UNPINNED : String := "key is not one the configuration pins for the memory attester"
+def BAD_SIGNATURE : String := "signature does not verify over the message under the pinned key"
+
+/-- The held commitment's LMS public key, refused unless its SHA-512 is one of `pinned`, the configuration's pins of the
+memory attester's keys: the session's own object never names the key it is checked under. -/
+private def pinnedKey (rel : Json) (v f : String) (pinned : Array ByteArray) : V ByteArray := do
+  let some key := hexOpt (getD rel "key") | throw (noStatement v f "commitment's key is no lowercase hex")
+  if !pinned.contains (Flock.Sha512.hash key) then throw (noStatement v f UNPINNED)
+  return key
+
+private def context (commitments : Array (String × ByteArray)) (v : String) (m : Mark) (pinned : Array ByteArray) :
     V (Array (String × String) × Nat) := do
   let f := m.fn
   if !m.args.isEmpty then throw s!"supplied input {v}: {f} takes no args"
   let rel ← heldObject commitments "commitment" v f
-  let some key := hexOpt (getD rel "key") | throw (noStatement v f "commitment's key is no lowercase hex")
   let (hs, _) ← sessionFields v f rel ["session"] []
   let session := hexIn hs "session"
-  let ident := key.extract 0 16
+  let ident := (← pinnedKey rel v f pinned).extract 0 16
   if ident.size != 16 then throw (noStatement v f s!"key is {ident.size} bytes, not an LMS identifier's 16")
   let ctx := Flock.SessionCoins.signedContext ident session
   return (#[("bytes", Flock.hexOf ctx)], ctx.size)
+
+/-- The storage session's signed message: the `message` the session releases (the coin held under the function,
+`{message, signature}`), the 64-byte salted commitment the memory attester signed, released in the clear with its
+`signature`, which verifies over it under the pinned key the commitment holds, at the deployed parameters (`Lms.deployed`). -/
+private def message (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) (pinned : Array ByteArray) :
+    V (Array (String × String) × Nat) := do
+  let f := m.fn
+  if !m.args.isEmpty then throw s!"supplied input {v}: {f} takes no args"
+  let rel ← heldObject commitments "commitment" v f
+  let (hs, _) ← sessionFields v f rel ["session"] []
+  let session := hexIn hs "session"
+  let key ← pinnedKey rel v f pinned
+  let released ← heldObject coins "coin" v f
+  let some msg := hexOpt (getD released "message") | throw (noStatement v f "coin's message is no lowercase hex")
+  if msg.size != 64 then throw (noStatement v f s!"message is {msg.size} bytes, not 64")
+  let some sig := hexOpt (getD released "signature") | throw (noStatement v f "coin's signature is no lowercase hex")
+  let signed := Flock.Sha512.hash (Flock.SessionCoins.signedContext (key.extract 0 16) session ++
+    Flock.be64 msg.size.toUInt64 ++ msg)
+  let ok : Bool := key.size == 16 + Lms.deployed.N && match Lms.Signature.decode Lms.deployed sig with
+    | .ok s => (Lms.verify Lms.deployed key signed s).toOption == some true
+    | .error _ => false
+  if !ok then throw (noStatement v f BAD_SIGNATURE)
+  return (#[("bytes", Flock.hexOf msg)], 64)
 
 /-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.u16/v1`'s `value` as a u16
 little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
 drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
 `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
 `registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
-`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's three functions read what the
-memory attester released after the session, the JSON `{commitment, openings, key}` held under the function's name:
+`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's four functions read the
+session in two entries by when each part exists: the commitment, held before the first coin, `{commitment, key, place}`
+(the header's fields with the coin key by its hash, the LMS public key and the place it was registered at), and the coin,
+released after the session, `{openings, coin_key}` for the round coin, `{ended, rounds}` for the header and
+`{message, signature}` for the message:
 `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` (12 bytes) of the round's last opening, which opens its
 committed coin below the commitment's blocks; `pous.session.header/v1` the header of a session that ended complete with
 all its rounds, in `head` bytes (whole u16 words: a zero byte after an odd one); `pous.session.context/v1` the 106 bytes
-the signature's message hashes before the record. "no statement" for any other function, whose body isn't written. -/
-def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
+the signature's message hashes before the record; `pous.session.message/v1` the 64-byte message m the signature signs.
+The context and the message read the commitment's key only once its SHA-512 is one of `pinned`, the configuration's pins of
+the memory attester's keys (`UNPINNED`): no body takes the key the session's own object names. The message is read only
+once the coin's `signature` verifies over it under that key (`BAD_SIGNATURE`): m and the signature are public, and the signature's leaf q shows how many signatures the attester has
+made. "no statement" for any other function, whose body isn't written. -/
+def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) (pinned : Array ByteArray := #[]) :
+    V (Array (String × String) × Nat) := do
   match m.fn with
   | "const.u16/v1" =>
     let x ← argNat v m "value"
@@ -496,13 +538,24 @@ def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mar
     return (#[("position", "0")], 8)
   | "pous.session.round_coin/v1" => roundCoin coins commitments v m
   | "pous.session.header/v1" => header coins commitments v m
-  | "pous.session.context/v1" => context commitments v m
+  | "pous.session.context/v1" => context commitments v m pinned
+  | "pous.session.message/v1" => message coins commitments v m pinned
   | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
+
+/-- The verifier's `attester_keys`, the SHA-512s (hex) of the memory attester's keys its configuration pins; none when
+absent. -/
+def attesterKeys (j : Json) : V (Array ByteArray) := match getD j "attester_keys" with
+  | .null => pure #[]
+  | .arr ks => ks.mapM fun
+    | .str s => Flock.unhex s
+    | _ => throw "attester_keys: a key's hash is not hex"
+  | _ => throw "attester_keys is a list of hex"
 
 /-- A supplied input's one row of sources (`Rows`): its body's, led by `(LE, "")` where its layout is `le`, its value's
 length the mark's bits. -/
-def ofMark (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) : V Rows := do
-  let (ss, n) ← body coins commitments v m
+def ofMark (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) (pinned : Array ByteArray := #[]) :
+    V Rows := do
+  let (ss, n) ← body coins commitments v m pinned
   if 8 * n != m.bits then
     throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
   return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
@@ -567,7 +620,7 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
     unless late.isEmpty do
       throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
 
-/-- The difftest's `supplied_marks`: on `{program, coins, commitments, widths, record, log, binding}` (`coins` and
+/-- The difftest's `supplied_marks`: on `{program, coins, commitments, attester_keys, widths, record, log, binding}` (`coins` and
 `commitments`: `{function: hex}`, what the verifier holds of each function as a coin and as a released commitment, which
 the order rule counts the first of alone;
 `widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
@@ -595,11 +648,12 @@ def piece (j : Json) : Except String Json := do
       | .str s, .str p => pure (some (s, p))
       | _, _ => throw "binding is not {stream, prover}"
   let rec_ := getD j "record"
-  let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins commitments v m)
+  let pinned ← attesterKeys j
+  let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins commitments v m pinned)
   order ms rows coins commitments (getD j "released") log.size
   let out ← ms.mapM fun (v, m) => do
     let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
-    let rs ← ofMark coins commitments v m
+    let rs ← ofMark coins commitments v m pinned
     let ls ← rs.mapM fun r => do
       let le := r[0]?.map (·.1) == some LE
       let data ← (if le then r.extract 1 r.size else r).foldlM

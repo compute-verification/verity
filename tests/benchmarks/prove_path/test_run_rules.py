@@ -5,6 +5,7 @@ script:
   the tie's own design, work over every one of its units;
 * that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
   arm of the script audits a window as forging a read;
+* that arm takes a tie's pins as given or refused only on `weights-tie pins`' own answer, never on a traceback;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
   (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from verity.commitments.periods.population import population_program
@@ -121,6 +123,39 @@ def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
     assert script.count("--forged-read") == arm.count("--forged-read") == 1, (
         f"{RUN_SH.name} audits a window as forging a registered read (`--forged-read`) outside its weights tie's "
         "`--served`: say in its header which arm passes on that refusal, and hold it here")
+
+
+#: `weights-tie pins`' outcomes: its status, its line and its stderr, whether it wrote the pins, and whether the honest
+#: tie and a forged one take each as their answer
+PINS = {
+    "pinned": (0, '{"pinned": true, "weights": 3}', "", True, (True, False)),
+    "refused": (1, '{"pinned": false, "why": "the tie window holds no root of it"}', "", False, (False, True)),
+    "traceback": (1, "", "Traceback (most recent call last):\nRuntimeError: died\n", False, (False, False)),
+    "refused, then a traceback": (1, '{"pinned": false, "why": "x"}', "Traceback (most recent call last):\n", False,
+                                  (False, False)),
+    "killed": (137, "", "", False, (False, False)),
+}
+
+
+def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_refusal(tmp_path):
+    """A forged tie passes only on `weights-tie pins`' own refusal: status 1, its ``{"pinned": false, ...}`` line and no
+    pins written, with no traceback; the honest tie only on status 0, its ``{"pinned": true, ...}`` line and the pins.
+    A traceback (status 1, a refusal's status) or a kill is neither, and the arm says PINS ERROR."""
+    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    fn = re.search(r"^  pins_answered\(\) \{.*?^  \}$", arm, re.M | re.S)
+    assert fn and "pins_answered $pinned " in arm and "PINS ERROR" in arm, (
+        f"{RUN_SH.name}'s weights tie arm no longer judges `weights-tie pins` by `pins_answered`")
+    for case, (status, line, err, wrote, want) in PINS.items():
+        d = tmp_path / case.replace(" ", "-").replace(",", "")
+        d.mkdir()
+        (d / "verdict").write_text(f"{line}\n" if line else "")
+        (d / "err").write_text(err)
+        if wrote:
+            (d / "pins").write_text("{}")
+        got = tuple(subprocess.run(["bash", "-c", f'{fn.group(0)}\npins_answered {status} "$1/verdict" "$1/err" "$1/pins" '
+                                    f'{forged}', "-", str(d)], check=False).returncode == 0
+                    for forged in ("", "--forged"))
+        assert got == want, (case, got)
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():
