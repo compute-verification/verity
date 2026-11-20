@@ -9,7 +9,8 @@ import Mathlib.Tactic
 
 `freeBlockAtMost` proves `FreeBlockAtMost`. `sizeAdds` proves that the blocks directly inside a server-day block have
 sizes adding to at most it, and `sizeExclusive` that a server-day block's free and inference children's work do not
-double-count. `chain` proves `Chain`.
+double-count. `conversion_le` is the conversion for size as one inequality, `freeClaimHolds_of_conversion` gives
+`FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `chain` proves `Chain`.
 
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
 smaller of its own capacity and its inference and free blocks' claimed sizes, plus the assumed hidden hardware size.
@@ -149,26 +150,107 @@ theorem sizeAdds (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (S : Finset (Fin 
   simp only [Runs.children, mem_filter, mem_univ, true_and]
   exact hS u hu
 
-/-- **Declared work does not double as other work, for size**: a server-day block's free and inference children's work
-add up to at most its own size. -/
-theorem sizeExclusive (P : Runs L) :
-    P.DeclaredWorkExclusive (fun r i => ∑ u ∈ P.freeChildren r i, P.sizeIn r u)
-      (fun r i => ∑ u ∈ P.infChildren r i, P.sizeIn r u) P.sizeOut := by
-  intro r _ i hki
-  simp only
-  rw [sizeOut_eq_children_sum, children_split P r i hki, Finset.sum_union (infFree_disjoint P r i)]
+/-- In one run, inside a server-day block `i`: the free blocks' work, `M`'s inference blocks' work and the work of the
+inference blocks after the salt and outside `M` add up to at most `i`'s size. -/
+theorem sizeExclusive_run (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) +
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u
+      ≤ P.sizeOut r i := by
+  rw [sizeOut_eq_children_sum, children_split P r i hki, Finset.sum_union (infFree_disjoint P r i),
+    ← Finset.sum_filter_add_sum_filter_not (P.infChildren r i) (· ∈ M) (P.sizeIn r)]
+  have hsub : ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u
+      ≤ ∑ u ∈ (P.infChildren r i).filter (fun u => ¬ u ∈ M), P.sizeIn r u :=
+    Finset.sum_le_sum_of_subset fun u hu => by
+      simp only [Finset.mem_filter] at hu ⊢
+      exact ⟨hu.1, hu.2.2⟩
   omega
+
+/-- **Declared work does not double as other work, for size**: inside a server-day block, for every set `M`, the free
+blocks' and `M`'s inference blocks' work and the work of the inference blocks after the salt and outside `M` add up to
+at most its own size. -/
+theorem sizeExclusive (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) :
+    P.DeclaredWorkExclusive
+      (fun r M i => (∑ u ∈ P.freeChildren r i, P.sizeIn r u) +
+        ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
+      (fun r M i => ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M),
+        P.sizeIn r u)
+      P.sizeOut :=
+  fun r _ M i hki => sizeExclusive_run P salt r M i hki
 
 /-! ## The conversion -/
 
+/-- The conversion's arithmetic for one block: use at least `b`, capacity at least the enclosing quantity, and the free
+quantity and the use within it give the free quantity at most `cap − b`. -/
+theorem freeBlockAtMost_run {free use enclosing cap b : ℕ} (huse : b ≤ use) (hcap : enclosing ≤ cap)
+    (hex : free + use ≤ enclosing) : free ≤ cap - b := by
+  omega
+
 theorem freeBlockAtMost (P : Runs L) : P.FreeBlockAtMost := by
-  intro _what free use enclosing cap b ε huse hcap hex
+  intro _what free use b enclosing cap ε huse hcap hex
   refine le_trans (P.mono _ _ ?_) huse
   rintro r ⟨ha, hn⟩
-  refine ⟨ha, fun hb => hn fun i hi => ?_⟩
-  have h1 := hb i hi
-  have h2 := hcap r i hi
-  have h3 := hex r ha i hi
+  exact ⟨ha, fun hb => hn fun M i hi => freeBlockAtMost_run (hb M i hi) (hcap r i hi) (hex r ha M i hi)⟩
+
+/-- `M`'s inference blocks inside one server-day block have committed size claims summing to at most `M`'s. -/
+theorem tolChildren_le (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))) (i : Fin (P.nOut r)) :
+    ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤ ∑ u ∈ M, claimedSize (P.claimsIn r u) :=
+  Finset.sum_le_sum_of_subset fun _ hu => (Finset.mem_filter.mp hu).2
+
+/-- **The conversion, as one inequality.** In one run, inside a server-day block `i`, for a set `M` of `inner`'s units:
+from PoUW's conclusion for `M` (`huse`: `b` less the committed size claims of `M`'s inference blocks in `i` is at most
+the work of `i`'s inference blocks after the salt and outside `M`), `i`'s size at most `cap` (`hcap`) and `M`'s committed
+size claims at most `tol` (`htol`), the free blocks' work, `M`'s inference blocks' work in `i` and `b` together are at
+most `cap + tol`. All in gates at the run's pricing; no subtraction enters the conclusion, so no case is truncated. The
+partitions give the rest (`sizeExclusive_run`). -/
+theorem conversion_le (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (i : Fin (P.nOut r)) (hki : P.kind r i = true) (b cap tol : ℕ)
+    (huse : b - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : P.sizeOut r i ≤ cap) (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) :
+    (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) + b ≤
+      cap + tol := by
+  have hex := sizeExclusive_run P salt r M i hki
+  have hfree := freeBlockAtMost_run huse hcap hex
+  have hM := tolChildren_le P r M i
+  omega
+
+/-- **The conversion in the form the check's claim reads**: the free blocks' and `M`'s inference blocks' work in `i` is
+at most `cap − b + tol` (from `conversion_le`; `cap + tol − b ≤ cap − b + tol` over the naturals). -/
+theorem conversion_le_sub (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (i : Fin (P.nOut r)) (hki : P.kind r i = true) (b cap tol : ℕ)
+    (huse : b - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : P.sizeOut r i ≤ cap) (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) :
+    (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) ≤
+      cap - b + tol := by
+  have := conversion_le P salt r M i hki b cap tol huse hcap htol
+  omega
+
+/-- **The committed free claim holds from the conversion**: in one run, PoUW's conclusion for `M` in every server-day
+block, every server-day block's size at most `cap`, `M`'s committed size claims at most `tol`, and every server-day
+block's committed free claim at least `cap − b + tol` give `FreeClaimHolds r M`. -/
+theorem freeClaimHolds_of_conversion (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (b cap : Fin (P.nOut r) → ℕ) (tol : ℕ)
+    (huse : ∀ i, P.kind r i = true → b i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : ∀ i, P.kind r i = true → P.sizeOut r i ≤ cap i)
+    (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol)
+    (hclaim : ∀ i, P.kind r i = true → cap i - b i + tol ≤ P.claimedFree r i) : P.FreeClaimHolds r M :=
+  fun i hki => (conversion_le_sub P salt r M i hki (b i) (cap i) tol (huse i hki) (hcap i hki) htol).trans
+    (hclaim i hki)
+
+/-- **The conversion excludes**: in one run, where the free blocks' work, `M`'s inference blocks' work in `i` and `b`
+exceed `cap + tol`, one of PoUW's conclusion for `M`, the capacity and the tolerance fails. -/
+theorem conversion_excludes (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (i : Fin (P.nOut r)) (hki : P.kind r i = true) (b cap tol : ℕ)
+    (hbig : cap + tol < (∑ u ∈ P.freeChildren r i, P.sizeIn r u) +
+      (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) + b) :
+    ¬ ((b - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+        ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u) ∧
+      P.sizeOut r i ≤ cap ∧ ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) := by
+  rintro ⟨huse, hcap, htol⟩
+  have := conversion_le P salt r M i hki b cap tol huse hcap htol
   omega
 
 /-! ## The chain -/
@@ -207,23 +289,34 @@ theorem realizes_realizesExcept (P : Runs L) (r : P.Run) (h : P.Realizes r) : P.
 
 /-! ## The check bites -/
 
-/-- A size claim at most `c`, held, bounds the block's size. -/
-theorem sizeIn_le_of_claim (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) (c : ℕ)
-    (hcl : ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p)
-    (hany : (P.claimsIn r u).any (InferenceOnly.sizeAtMost c) = true) : P.sizeIn r u ≤ c := by
-  obtain ⟨p, hp, hpc⟩ := List.any_eq_true.mp hany
-  cases p with
-  | sizeAtMost sz =>
-    simp only [InferenceOnly.sizeAtMost, decide_eq_true_eq] at hpc
-    have := hcl _ hp
-    simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, Runs.sizeIn] at this ⊢
-    omega
-  | _ => simp [InferenceOnly.sizeAtMost] at hpc
+/-- A claims list with a size claim holds its committed size claim. -/
+theorem claimedSize_mem : ∀ (l : List Property),
+    l.any InferenceOnly.isSize = true → Property.sizeAtMost (claimedSize l) ∈ l
+  | [], h => by simp at h
+  | p :: t, h => by
+    cases p with
+    | sizeAtMost k => simp [claimedSize]
+    | _ =>
+      simp only [claimedSize, List.any_cons, InferenceOnly.isSize, Bool.false_or] at h ⊢
+      exact List.mem_cons_of_mem _ (claimedSize_mem t h)
+
+/-- A block whose claims all hold, among them a size claim, has work at most its committed size claim. -/
+theorem work_le_claimedSize {A : Placed L} (π : Fin A.N → ℕ) (θ : Finset (Fin A.N)) (X : Finset L)
+    (b : Verity.Block A.toCircuit) (l : List Property) (hcl : ∀ p ∈ l, A.Holds π θ X b p)
+    (hany : l.any InferenceOnly.isSize = true) : A.work π b.gates ≤ claimedSize l :=
+  hcl _ (claimedSize_mem l hany)
+
+/-- An inference, free or hidden block whose claims all hold has size at most its committed size claim. -/
+theorem sizeIn_le_claimedSize (P : Runs L) (r : P.Run) (u : Fin (P.nIn r))
+    (hcl : ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) (hany : (P.claimsIn r u).any InferenceOnly.isSize = true) :
+    P.sizeIn r u ≤ claimedSize (P.claimsIn r u) :=
+  work_le_claimedSize _ _ _ (P.innerBlock r u) _ hcl hany
 
 /-- **The check bites, on the path the chain reads**: under a run that passes the inference-only check and realizes its
 claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with each server-day block's own capacity
 `serverCap i` and the assumed hidden hardware size `lim.hidden`, the whole circuit's work is at most, for each server-day
-block, the smaller of its capacity and the count of its inference blocks **outside** `M` at the size cap `lim.c` plus the
+block, the smaller of its capacity and the count of its inference blocks **outside** `M` at the size cap `lim.c` (each
+block's committed size claim, which the check caps at `lim.c`) plus the
 free-block limit `lim.freeSize`. The bound is in the limits alone: the free blocks and `M`'s inference blocks sit inside
 the committed claim `P.claimedFree r i` (the hypothesis `FreeClaimHolds`), which the check caps at `lim.freeSize` (its
 fourth conjunct). The tolerance `M` is a bounded term here, not an unbounded quantifier: `M`'s blocks are counted inside
@@ -257,7 +350,7 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     calc ∑ u ∈ (P.infChildren r i).filter (fun u => ¬ u ∈ M), P.sizeIn r u
         ≤ ∑ _u ∈ (P.infChildren r i).filter (fun u => ¬ u ∈ M), lim.c := Finset.sum_le_sum fun u hu => by
           simp only [Runs.infChildren, mem_filter, mem_univ, true_and] at hu
-          exact sizeIn_le_of_claim P r u lim.c (hcl_out u hu.1.2 hu.2) (hinf u hu.1.2).1
+          exact (sizeIn_le_claimedSize P r u (hcl_out u hu.1.2 hu.2) (hinf u hu.1.2).1).trans (hinf u hu.1.2).2.1
       _ = ((P.infChildren r i).filter (fun u => u ∉ M)).card * lim.c := by rw [Finset.sum_const, smul_eq_mul]
   have hfc := hfree i hki
   have hfs := hfcCheck i hki
@@ -489,6 +582,43 @@ theorem claim_binds :
     fin_cases i
     decide
 
+/-- **The conversion bites, at one gate**: the two-gate run `demoRuns 2 fc` with its one inference block (work 2 gates,
+committed size claim 1 gate) as the tolerance set `M = univ`, salt at tick 0 and capacity 2 gates. At PoUW's bound
+`b = 1` and tolerance `tol = 1` PoUW's conclusion, the capacity and the tolerance hold, and the conversion's bound
+`cap − b + tol` is 2 gates, exactly `M`'s work; the committed claim `fc = 2` then holds (`FreeClaimHolds`) and `fc = 1`
+does not. One more gate of PoUW's bound (`b = 2`) or one less of tolerance (`tol = 0`) and its premise fails. -/
+theorem conversion_bites :
+    let P2 := demoRuns 2 2
+    let i : Fin (P2.nOut ()) := ⟨0, Nat.one_pos⟩
+    let Md := ∑ u ∈ (P2.infChildren () i).filter (· ∈ Finset.univ), claimedSize (P2.claimsIn () u)
+    let outside := ∑ u ∈ (P2.infChildren () i).filter (fun u => 0 ≤ (P2.winIn () u).start ∧ u ∉ Finset.univ),
+      P2.sizeIn () u
+    (1 - Md ≤ outside ∧ P2.sizeOut () i ≤ 2 ∧ ∑ u ∈ Finset.univ, claimedSize (P2.claimsIn () u) ≤ 1 ∧
+      (∑ u ∈ P2.freeChildren () i, P2.sizeIn () u) +
+        (∑ u ∈ (P2.infChildren () i).filter (· ∈ Finset.univ), P2.sizeIn () u) = 2 - 1 + 1) ∧
+    P2.FreeClaimHolds () Finset.univ ∧ ¬ (demoRuns 2 1).FreeClaimHolds () Finset.univ ∧
+    ¬ (2 - Md ≤ outside) ∧ ¬ (∑ u ∈ Finset.univ, claimedSize (P2.claimsIn () u) ≤ 0) := by
+  intro P2 i Md outside
+  have hs : ∀ fc, ∑ u ∈ (demoRuns 2 fc).infChildren () ⟨0, Nat.one_pos⟩, (demoRuns 2 fc).sizeIn () u = 2 :=
+    fun _ => (by decide : ∑ u ∈ (demoRuns 2 0).infChildren () ⟨0, Nat.one_pos⟩, (demoRuns 2 0).sizeIn () u = 2)
+  have hfree : ∀ fc, (demoRuns 2 fc).FreeClaimHolds () Finset.univ ↔ 2 ≤ fc := by
+    intro fc
+    constructor
+    · intro h
+      have := h ⟨0, Nat.one_pos⟩ rfl
+      rw [demo_freeChildren_empty, Finset.sum_empty, zero_add,
+        Finset.filter_true_of_mem (fun u _ => Finset.mem_univ u), hs] at this
+      exact this
+    · intro h j _
+      fin_cases j
+      rw [demo_freeChildren_empty, Finset.sum_empty, zero_add,
+        Finset.filter_true_of_mem (fun u _ => Finset.mem_univ u)]
+      exact (hs fc).le.trans h
+  refine ⟨⟨by decide, by decide, by decide, ?_⟩, (hfree 2).mpr le_rfl, fun h => absurd ((hfree 1).mp h) (by decide),
+    by decide, by decide⟩
+  rw [demo_freeChildren_empty, Finset.sum_empty, zero_add]
+  decide
+
 /-- **No top block is in no class**: `kind` is total, so the degenerate case of a top block in neither the server-day nor
 the hidden class cannot be stated. Nothing sits inside an inference block, the finest scale here, so neither can a block
 inside an inference block that is not a proof block. -/
@@ -498,51 +628,52 @@ theorem top_blocks_classified (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
 /-! ## The chain, with the protocols' rows named as types
 
 `rows_chain` is the chain with each protocol's row fed to `chain` as a typed hypothesis, not named in a docstring. Its
-hypotheses are the rows (`DeclaredBlocksRun`; `PouwUseAtLeast` with its premises and the conversion `freeBlockAtMost` for
-the free blocks' summed size; `PousUseAtLeast` and `PoubUseAtLeast` with their conversions, their exclusivity premise
-open for memory and the link; `WipeInputAtMost`, `NetworkInputAtMost`, `NetworkOutputAtMost` with their premises;
-`RegistrationBinds` with `RegistrationSound` and `RegisteredReadsOpenLog`; and the hardware description's capacities
-`CapacityAtMost`). Its conclusion is the policy's: an accepted run's actual circuit is compliant except with the seven
-rows' soundness errors summed. It is proved from `chain`.
+hypotheses are the rows (`PouwUseAtLeast` with its premises and the compute capacity `CapacityAtMost
+Capacity.computeRate P.sizeOut`; `DeclaredBlocksRun`; `ClaimCoversConversion`; `PousUseAtLeast` and `PoubUseAtLeast`
+with their conversions, their exclusivity premise open for memory and the link; `WipeInputAtMost`,
+`NetworkInputAtMost`, `NetworkOutputAtMost` with their premises; `RegistrationBinds` with `RegistrationSound` and
+`RegisteredReadsOpenLog`). Its conclusion is the policy's: an accepted run's actual circuit is compliant except with the
+seven rows' soundness errors summed. It is proved from `chain`.
 
-One hypothesis is not a row: `assemble`, the bridge from the rows' per-run conclusions to the feasible set. Its conclusion
-is split by name: `FreeClaimHolds r M` (the committed free-capacity claim bounds the free and tolerance work, the part the
-conversion gives — capacity minus the use credited outside `M`) and `RealizesExcept r M` (the rest). That bridge is the
-open content the summary records as unproved ("nothing from an accept to policy-compliant is proved"); until the
-architecture page names the auditor's source for the wipe's input and that bridge is argued, it is the one open premise. The deterministic rows carry no error of their own: `AttesterOnEveryLink` and the
-capacities feed the error rows, and `RegistrationBinds` feeds `assemble`; they are hypotheses but add no term to the sum.
-`NetworkInputAtMost`'s error is `0` (its bound is the covert channels' assumed figure, with no sampled proof). -/
+`FreeClaimHolds r M` is proved, for the set `M` the declared row gives: PoUW's conclusion for that `M`, the compute
+capacity, `M`'s committed size claims at most `tol` and `ClaimCoversConversion` give it (`freeClaimHolds_of_conversion`).
+One hypothesis is not a row: `assemble`, which takes that `M` and the other rows' per-run conclusions to `RealizesExcept r
+M`. It is open because the rows do not give its clauses: that `θ`'s gates are input gates of at most the registered width
+and that the pricing charges every computed gate; that the declared row's three claims are each inference block's whole
+claims list, and that the inference blocks before their salt (in no row) hold theirs; that the free blocks' claims hold;
+and that the server-day and hidden blocks' claims are exactly what the wipe's and network attestation's rows give. The
+deterministic rows carry no error of their own: `AttesterOnEveryLink`, the capacities and `ClaimCoversConversion` feed
+the error rows or the free claim, and `RegistrationBinds` feeds `assemble`; they are hypotheses but add no term to the
+sum. `NetworkInputAtMost`'s error is `0` (its bound is the covert channels' assumed figure, with no sampled proof). -/
 theorem rows_chain (P : Runs L)
     (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
     (hthm : InferenceOnly.PolicyTheorem check pol) (hcheck : ∀ r, P.accepts r → check P r = true)
-    -- PoUW: use at least, in size, with the conversion to the free blocks' summed size.
+    -- PoUW: use at least, in size, for every tolerance set, and the compute capacity.
     {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (Pr : Pouw.PearlC.Protocol Q R S) (TR : Pouw.PearlC.TileRules Q R S)
     (D : Pouw.PearlC.Layout → Prop) (Wd : Pouw.PearlC.Layout → ℕ → Pouw.PearlC.Decl → ℚ) (g : ℝ) (δ : ℕ → ℕ → ℝ)
     (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shownPouw : P.Run → Prop)
-    (bPouw freePouw capPouw enclosingPouw : (r : P.Run) → Fin (P.nOut r) → ℕ) (εpouw : ℝ≥0∞)
+    (bPouw capPouw : (r : P.Run) → Fin (P.nOut r) → ℕ) (εpouw : ℝ≥0∞)
     (pouw : P.PouwUseAtLeast CM Pr TR D Wd g δ salt shownPouw bPouw εpouw)
     (hggap : Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ)
     (hpouwRead : P.RunReads (Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ) shownPouw εpouw)
     (hspend : P.SpendIsWork salt shownPouw bPouw)
-    (hcapPouw : P.CapacityAtMost Capacity.computeRate enclosingPouw capPouw)
-    (hexclPouw : P.DeclaredWorkExclusive freePouw
-      (fun r i => ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start), P.sizeIn r u)
-      enclosingPouw)
-    -- The declared blocks run.
+    (hcapPouw : P.CapacityAtMost Capacity.computeRate P.sizeOut capPouw)
+    -- The declared blocks run, and the committed free claim against the conversion's bound.
     (f : (r : P.Run) → Fin (P.nIn r) → Circuit) (cDecl kDecl : (r : P.Run) → Fin (P.nIn r) → ℕ)
-    (dsize : (r : P.Run) → Fin (P.nIn r) → ℕ) (tol : ℕ) (εdecl : ℝ≥0∞)
-    (declared : P.DeclaredBlocksRun salt f cDecl kDecl dsize tol εdecl)
+    (tol : ℕ) (εdecl : ℝ≥0∞)
+    (declared : P.DeclaredBlocksRun salt f cDecl kDecl tol εdecl)
+    (hclaim : P.ClaimCoversConversion capPouw bPouw tol)
     -- PoUS: use at least, over memory size, with its conversion (its exclusivity premise open for memory).
     (heldS bPous freePous capPous enclosingPous : (r : P.Run) → Fin (P.nOut r) → ℕ) (εpous : ℝ≥0∞)
     (pous : P.PousUseAtLeast heldS bPous εpous)
     (hcapPous : P.CapacityAtMost Capacity.memorySize enclosingPous capPous)
-    (hexclPous : P.DeclaredWorkExclusive freePous heldS enclosingPous)
+    (hexclPous : P.DeclaredWorkExclusive (fun r _ i => freePous r i) (fun r _ i => heldS r i) enclosingPous)
     -- PoUB: use at least, over the link, with its conversion (its exclusivity premise open for the link).
     (readsB bPoub freePoub capPoub enclosingPoub : (r : P.Run) → Fin (P.nOut r) → ℕ) (εpoub : ℝ≥0∞)
     (poub : P.PoubUseAtLeast readsB bPoub εpoub)
     (hcapPoub : P.CapacityAtMost Capacity.linkCapacity enclosingPoub capPoub)
-    (hexclPoub : P.DeclaredWorkExclusive freePoub readsB enclosingPoub)
+    (hexclPoub : P.DeclaredWorkExclusive (fun r _ i => freePoub r i) (fun r _ i => readsB r i) enclosingPoub)
     -- The memory wipe (with its memory-size capacity hypothesis).
     (Gwipe : Prop) (survives : P.Run → Prop) (Ewipe memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ)
     (adv : ℝ≥0∞)
@@ -565,32 +696,33 @@ theorem rows_chain (P : Runs L)
     {Root : Type} (log : Finset Root) (opensAt : (r : P.Run) → Fin (P.actual r).N → Root → Prop)
     (reg : P.RegistrationBinds log opensAt) (hregsound : Verity.Guarantees.RegistrationSound)
     (hregreads : P.RegisteredReadsOpenLog log opensAt)
-    -- The one open premise: the rows' per-run conclusions assemble to a tolerance set the run realizes outside.
+    -- The one open premise: the declared row's set and the other rows' per-run conclusions give `RealizesExcept`.
     (assemble : ∀ r, P.accepts r →
-      (∀ i, P.kind r i = true → freePouw r i ≤ capPouw r i - bPouw r i) →
-      (∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
-        (∑ u ∈ M, dsize r u) ≤ tol ∧
-          ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
-            P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (cDecl r u)) ∧
-              P.HoldsIn r u (.inputAtMost [.past, .block, .world] (kDecl r u))) →
-      (∀ i, P.kind r i = true → freePous r i ≤ capPous r i - bPous r i) →
-      (∀ i, P.kind r i = true → freePoub r i ≤ capPoub r i - bPoub r i) →
-      (∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (Ewipe r i + 8600000000))) →
-      (∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))) →
-      (∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) →
-      (∀ g ∈ P.θ r, ∃ root ∈ log, opensAt r g root) →
-      ∃ M, P.FreeClaimHolds r M ∧ P.RealizesExcept r M) :
+      ∀ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
+        (∑ u ∈ M, claimedSize (P.claimsIn r u)) ≤ tol →
+        (∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
+          P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (cDecl r u)) ∧
+            P.HoldsIn r u (.inputAtMost [.past, .block, .world] (kDecl r u))) →
+        (∀ i, P.kind r i = true → freePous r i ≤ capPous r i - bPous r i) →
+        (∀ i, P.kind r i = true → freePoub r i ≤ capPoub r i - bPoub r i) →
+        (∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (Ewipe r i + 8600000000))) →
+        (∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))) →
+        (∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) →
+        (∀ g ∈ P.θ r, ∃ root ∈ log, opensAt r g root) →
+        P.RealizesExcept r M) :
     ExceptWith P.pr P.accepts (fun r => InferenceOnly.Compliant pol (P.actual r) (P.θ r))
       (∑ x : Fin 7, (![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ 40 + adv, 0, εnet] : Fin 7 → ℝ≥0∞) x) := by
   set shownV : Fin 7 → P.Run → Prop :=
-    ![ (fun r => ∀ i, P.kind r i = true → freePouw r i ≤ capPouw r i - bPouw r i),
+    ![ (fun r => ∀ (M : Finset (Fin (P.nIn r))) i, P.kind r i = true →
+         bPouw r i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+           ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u),
        (fun r => ∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
-         (∑ u ∈ M, dsize r u) ≤ tol ∧
+         (∑ u ∈ M, claimedSize (P.claimsIn r u)) ≤ tol ∧
            ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
              P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (cDecl r u)) ∧
                P.HoldsIn r u (.inputAtMost [.past, .block, .world] (kDecl r u))),
-       (fun r => ∀ i, P.kind r i = true → freePous r i ≤ capPous r i - bPous r i),
-       (fun r => ∀ i, P.kind r i = true → freePoub r i ≤ capPoub r i - bPoub r i),
+       (fun r => ∀ (_M : Finset (Fin (P.nIn r))) i, P.kind r i = true → freePous r i ≤ capPous r i - bPous r i),
+       (fun r => ∀ (_M : Finset (Fin (P.nIn r))) i, P.kind r i = true → freePoub r i ≤ capPoub r i - bPoub r i),
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (Ewipe r i + 8600000000))),
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))),
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ] with hshownV
@@ -598,21 +730,26 @@ theorem rows_chain (P : Runs L)
   have hcover : ∀ r, P.accepts r → (∀ x ∈ Finset.univ, shownV x r) →
       ∃ M, P.FreeClaimHolds r M ∧ P.RealizesExcept r M := by
     intro r ha hall
-    exact assemble r ha
-      (hall 0 (Finset.mem_univ _)) (hall 1 (Finset.mem_univ _)) (hall 2 (Finset.mem_univ _))
-      (hall 3 (Finset.mem_univ _)) (hall 4 (Finset.mem_univ _)) (hall 5 (Finset.mem_univ _))
-      (hall 6 (Finset.mem_univ _)) (reg hregsound hregreads r ha)
+    have h0 := hall 0 (Finset.mem_univ _)
+    have h1 := hall 1 (Finset.mem_univ _)
+    have h2 := hall 2 (Finset.mem_univ _)
+    have h3 := hall 3 (Finset.mem_univ _)
+    simp only [hshownV, Matrix.cons_val_zero, Matrix.cons_val_one, Matrix.cons_val] at h0 h1 h2 h3
+    obtain ⟨M, hMsub, htol, hdecl⟩ := h1
+    refine ⟨M, freeClaimHolds_of_conversion P salt r M (bPouw r) (capPouw r) tol (h0 M)
+      (fun i hki => hcapPouw r i hki) htol (hclaim r ha), ?_⟩
+    exact assemble r ha M hMsub htol hdecl (h2 ∅) (h3 ∅)
+      (hall 4 (Finset.mem_univ _)) (hall 5 (Finset.mem_univ _)) (hall 6 (Finset.mem_univ _))
+      (reg hregsound hregreads r ha)
   have hest : ∀ x ∈ Finset.univ, ExceptWith P.pr P.accepts (shownV x) (εV x) := by
     intro x _
     fin_cases x
-    · exact (freeBlockAtMost P) Capacity.computeRate freePouw
-        (fun r i => ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start), P.sizeIn r u)
-        enclosingPouw capPouw bPouw εpouw (pouw hggap hpouwRead hspend) hcapPouw hexclPouw
+    · exact pouw hggap hpouwRead hspend
     · exact declared
-    · exact (freeBlockAtMost P) Capacity.memorySize freePous heldS enclosingPous capPous bPous εpous
-        pous hcapPous hexclPous
-    · exact (freeBlockAtMost P) Capacity.linkCapacity freePoub readsB enclosingPoub capPoub bPoub εpoub
-        poub hcapPoub hexclPoub
+    · exact (freeBlockAtMost P) Capacity.memorySize (fun r _ i => freePous r i) (fun r _ i => heldS r i)
+        (fun r _ i => bPous r i) enclosingPous capPous εpous pous hcapPous hexclPous
+    · exact (freeBlockAtMost P) Capacity.linkCapacity (fun r _ i => freePoub r i) (fun r _ i => readsB r i)
+        (fun r _ i => bPoub r i) enclosingPoub capPoub εpoub poub hcapPoub hexclPoub
     · exact wipe hGwipe hwipeRead hwipeCap hwipeInfo
     · exact netIn hatt hingress
     · exact netOut hphase hnetRead hrecord hatt'

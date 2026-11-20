@@ -12,10 +12,14 @@ public import Definitions.InferenceOnly
 Each protocol's instance of the form in `Definitions/ResourceAccounting/BlockProperties.lean` takes its guarantee as a
 hypothesis, named where this layer may import it, and the open premises that tie it to the actual circuit.
 
-* **PoUW** (`PouwUseAtLeast`): use at least, in size, from `Pouw.PearlC.GGapSampledDraw`, through `SpendIsWork`.
-* **The declared blocks run** (`DeclaredBlocksRun`): every inference block outside a set within the tolerance implements
-  its declared block, at a size and input at most stated. It is owed an argument from PoUW's coverage of the declared
-  work, with the uncovered share and the incorrect proof blocks the sample missed counted in the free block.
+* **PoUW** (`PouwUseAtLeast`): use at least, in size, for every tolerance set, from `Pouw.PearlC.GGapSampledDraw`,
+  through `SpendIsWork`.
+* **The declared blocks run** (`DeclaredBlocksRun`): every inference block outside a set whose committed size claims sum
+  to at most the tolerance implements its declared block, at a size and input at most stated. It is owed an argument
+  from PoUW's coverage of the declared work, with the uncovered share and the incorrect proof blocks the sample missed
+  counted in the free block.
+* **The free claim** (`ClaimCoversConversion`): the committed free-capacity claim is at least capacity minus PoUW's use
+  bound plus the tolerance, which with the two rows above gives `FreeClaimHolds`.
 * **PoUB** (`PoubUseAtLeast`) and **PoUS** (`PousUseAtLeast`): open and not placed; no term of the inference-only bound
   reads memory reads or memory held.
 * **The memory wipe** (`WipeInputAtMost`): input at most from its own past, for every server-day block; its guarantee's
@@ -43,19 +47,24 @@ variable {L : Type*} (P : Runs L)
 
 /-! ## PoUW -/
 
-/-- **The spend is the inference blocks' work after the salt** (open, compute-accounting): in an accepted run whose spend
-clears the claim, inside every server-day block `i` the inference blocks directly inside it whose windows start at or
-after their epoch's challenge tick `salt u` have work at least `b r i` at `π`. Those blocks are siblings, which the
-partition keeps disjoint, so the sum counts no gate twice. `b` is work at `π` and the spend is in multiply-accumulates:
-the conversion between them is this premise's content. -/
+/-- **The spend is work outside `M` plus `M`'s declared size** (open, compute-accounting): in an accepted run whose spend
+clears the claim, for every set `M` of `inner`'s units and inside every server-day block `i`, `b r i` gates at `π` are at
+most the work of the inference blocks directly inside `i` whose windows start at or after their epoch's challenge tick
+`salt u` and that are outside `M`, plus the committed size claims (`claimedSize`) of the inference blocks directly inside
+`i` in `M`. Its content is two open steps: the conversion from multiply-accumulates, the spend's unit, to work at `π`;
+and that a block's credit is at most its committed size claim, which is what lets it hold for every `M`. Stated with `+`
+on the right rather than `−` on the left, so no truncated subtraction enters it. -/
 def SpendIsWork (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop)
     (b : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true →
-    b r i ≤ ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start), P.sizeIn r u
+  ∀ r, P.accepts r → shown r → ∀ (M : Finset (Fin (P.nIn r))) i, P.kind r i = true →
+    b r i ≤ (∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u) +
+      ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)
 
 /-- **PoUW (Pearl+): use at least, in size.** From `Pouw.PearlC.GGapSampledDraw`: the accepted adversary's spend is at
-least a share of the claimed work. Open: `RunReads` and `SpendIsWork`. Its use is the inference children's work after the
-salt, which `sizeExclusive` bounds, so it feeds the conversion. A shape: its content is its premises. -/
+least a share of the claimed work. Open: `RunReads` and `SpendIsWork`. For every set `M`, its use is the work of the
+inference children after the salt and outside `M`, and its bound is `b r i` less the committed size claims of `M`'s
+inference children; the partitions keep that use apart from the free blocks and `M`'s blocks (`sizeExclusive`), so it
+feeds the conversion. A shape: its content is its premises. -/
 def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (Pr : Pouw.PearlC.Protocol Q R S) (TR : Pouw.PearlC.TileRules Q R S)
     (D : Pouw.PearlC.Layout → Prop) (Wd : Pouw.PearlC.Layout → ℕ → Pouw.PearlC.Decl → ℚ) (g : ℝ) (δ : ℕ → ℕ → ℝ)
@@ -64,17 +73,18 @@ def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
   Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ →
     P.RunReads (Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ) shown ε → P.SpendIsWork salt shown b →
       P.UseAtLeast Capacity.computeRate
-        (fun r i => ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start), P.sizeIn r u) b ε
+        (fun r M i =>
+          ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+        (fun r M i => b r i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)) ε
 
 /-! ## The declared blocks run -/
 
 /-- **The declared blocks run** (open, compute-accounting with soundness): every inference block `u` whose window starts
-at or after its epoch's challenge tick `salt u`, outside a set `M` whose declared size summed over its blocks
-(`∑ u ∈ M, dsize u`) is at most the tolerance `tol`, implements its declared block `f u`, at size at most `c u` gates (the
-declared size times a stated overhead) and input at most `k u` bits from its own past, another block and the outside
-world, except with probability at most `ε`. `dsize u` is the declared size the run carries for block `u` (the same
-quantity the free block is charged), per block, not a free function of the set: compute-accounting asked for the sum in
-the statement, so a set's tolerance is `∑ u ∈ M, dsize u` and no `decl ≡ 0` makes every `M` within any tolerance. Nothing
+at or after its epoch's challenge tick `salt u`, outside a set `M` of such blocks whose committed size claims summed
+(`∑ u ∈ M, claimedSize (claimsIn u)`, gates) are at most the tolerance `tol` (gates), implements its declared block
+`f u`, at size at most `c u` gates and input at most `k u` bits from its own past, another block and the outside world,
+except with probability at most `ε`. The declared size of a block is its committed size claim, read from its claims
+list, which the check caps at `lim.c`; it is no parameter of the row. Nothing
 in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it. An
 inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is the
 tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M` pass
@@ -82,15 +92,26 @@ into correct ones (the injected information) is the `.block` source of the infer
 binds the actual work through the committed free-capacity claim (`claimedFree`, the clause `FreeClaimHolds`): `M`'s
 inference blocks sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives `.function`,
 `.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is owed where the
-rows become the chain's hypotheses by name (`rows_chain`). -/
+rows become the chain's hypotheses by name (`rows_chain`'s `assemble`). -/
 def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
-    (c k dsize : (r : P.Run) → Fin (P.nIn r) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
+    (c k : (r : P.Run) → Fin (P.nIn r) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
   ExceptWith P.pr P.accepts
     (fun r => ∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
-      (∑ u ∈ M, dsize r u) ≤ tol ∧
+      (∑ u ∈ M, claimedSize (P.claimsIn r u)) ≤ tol ∧
       ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
         P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (c r u)) ∧
           P.HoldsIn r u (.inputAtMost [.past, .block, .world] (k r u))) ε
+
+/-- **The committed free claim covers the conversion's bound** (open, compute-accounting with lean): in an accepted run,
+every server-day block's committed free-capacity claim is at least its compute capacity `cap r i` (gates at `π`) less
+PoUW's use bound `b r i` (gates at `π`) plus the tolerance `tol` (gates). It is not a conjunct of
+`InferenceOnly.check`: the check is a function of the limits and the run's committed data, and neither `b` nor `cap` is
+among them. `b` is the bound PoUW's verification establishes on the period's sample, after the coins, while
+`claimedFree` is committed before any coin; `cap` is the hardware description's figure (`CapacityAtMost`), which `Runs`
+does not carry. Whoever holds PoUW's `b` beside the committed claims makes this comparison; no verifier in the tree
+makes it today. -/
+def ClaimCoversConversion (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ) : Prop :=
+  ∀ r, P.accepts r → ∀ i, P.kind r i = true → cap r i - b r i + tol ≤ P.claimedFree r i
 
 /-! ## PoUS and PoUB
 
@@ -114,7 +135,7 @@ may not import, so this instance is **untied** here (`held` and `b` are free fun
 state is `2^30` bits in the honest device (data sheet: at least `992,061,184`), a floor on every bound at the chip's
 scale; PoUS counts information from below, which bounds wires from below. Open on `DeviceMemoryIsLocation`. -/
 def PousUseAtLeast (held b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
-  P.UseAtLeast Capacity.memorySize held b ε
+  P.UseAtLeast Capacity.memorySize (fun r _ i => held r i) (fun r _ i => b r i) ε
 
 /-- **PoUB: use at least, over the link capacity on the memory-to-chip link.** In each server-day block `i`, at least `b
 r i` of what the processors read from memory was registered information, in the quantity `reads r i` (wires crossing the
@@ -127,7 +148,7 @@ not one: bits read (`RemoteRunConservationDeployed`, the link capacity, this row
 and listed, not shown to say anything at the served node, its clock unread. Open on `DeviceMemoryIsLocation` and
 `PoubOnActualCircuit` (today PoUB is proved in a separate model). -/
 def PoubUseAtLeast (reads b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
-  P.UseAtLeast Capacity.linkCapacity reads b ε
+  P.UseAtLeast Capacity.linkCapacity (fun r _ i => reads r i) (fun r _ i => b r i) ε
 
 /-! ## What the model still owes (named open premises) -/
 
@@ -252,8 +273,9 @@ claims outside a tolerance set `M` of inference blocks (`RealizesExcept`) and wh
 for that `M` (`FreeClaimHolds`) has a compliant actual circuit. `FreeClaimHolds` is a hypothesis of the statement, beside
 `RealizesExcept`: without it `M` could be every inference block and the run would be bound by nothing. With it `M`'s
 actual work sits inside each server-day block's committed claim (`claimedFree`), which `check` caps at `lim.freeSize`,
-so a run whose tolerance set's work exceeds the limit satisfies no instance of the hypotheses (`excluded_run`). Who
-establishes `FreeClaimHolds` is the conversion (capacity minus the use credited outside `M`), open in `rows_chain`.
+so a run whose tolerance set's work exceeds the limit satisfies no instance of the hypotheses (`excluded_run`).
+`rows_chain` derives `FreeClaimHolds` from PoUW's row, the compute capacity, the declared row's tolerance and
+`ClaimCoversConversion` (`freeClaimHolds_of_conversion`).
 `M`'s declared use is counted in the free block and the injected information it passes into correct blocks is a term of
 their input.
 The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an

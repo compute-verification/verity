@@ -35,10 +35,10 @@ The four properties, each built on the actual circuit's definitions:
 A monitoring period's runs (`Runs`) carry, per run, the actual circuit, its pricing and registered input gates, and the
 two partitions the prover committed before any coin. `Realizes` is the feasible-set membership: the run's blocks have
 every property claimed of them. Every accounting statement is `ExceptWith pr accepts shown ε`: the predicate `shown`
-fails on an accepted run with probability at most `ε`. `UseAtLeast` states a lower bound on a used capacity, and the one
-conversion `FreeBlockAtMost` turns capacity minus use into a bound on the sum of the free blocks directly inside each
-server-day block; it alone carries the capacity figure (`CapacityAtMost`, the hardware description, assumed) and the
-premise that declared work does not double as other work (`DeclaredWorkExclusive`).
+fails on an accepted run with probability at most `ε`. `UseAtLeast` states a lower bound on a used capacity, for every
+tolerance set `M`, and the one conversion `FreeBlockAtMost` turns capacity minus use into a bound on the sum of the free
+blocks directly inside each server-day block (for size, with `M`'s inference blocks); it alone carries the capacity
+figure (`CapacityAtMost`) and the premise that declared work does not double as other work (`DeclaredWorkExclusive`).
 -/
 
 @[expose] public section
@@ -65,6 +65,13 @@ inductive Property where
   | function (f : Circuit)
   | inputAtMost (sources : List Source) (k : ℕ)
   | outputAtMost (k : ℕ)
+
+/-- **A block's committed size claim**, in gates: the bound of the first `sizeAtMost` in its claims list, `0` when the
+list has none (the check refuses an inference or server-day block with none). -/
+def claimedSize : List Property → ℕ
+  | [] => 0
+  | .sizeAtMost k :: _ => k
+  | _ :: t => claimedSize t
 
 /-- **The class of a unit of `inner`**: an inference block or a free block (inside a server-day block), or hidden (a unit
 inside hidden hardware's work, which has no established property). -/
@@ -154,8 +161,9 @@ structure Runs (L : Type*) where
   check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a hidden field of the model. It is a claim, like
   the size and input claims in `claimsOut`: it does not carry M or the block's children, which a per-block `Placed.Holds`
   `Property` cannot see, so it is a committed claim field rather than a `Property` (a verifier sees only what is committed).
-  What establishes it (that it is at most `cap − b`, the compute rate over the window minus the use credited outside the
-  tolerance) is the open conversion step (`FreeClaimHolds`, `rows_chain`'s named hypothesis), not given here. -/
+  What makes `FreeClaimHolds` true of it is that it is at least `cap − b + tol` (`ClaimCoversConversion`): the server-day
+  block's compute capacity less PoUW's use bound plus the tolerance, in gates (`conversion_le_sub`); nothing here
+  requires that. -/
   claimedFree : (r : Run) → Fin (nOut r) → ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
@@ -225,8 +233,8 @@ inference block outside `M` holds its claims, and `M` holds only inference block
 tolerance is a term, not an unbounded quantifier**: what caps `M`'s actual work is not here but in `FreeClaimHolds` (the
 free blocks' sizes and `M`'s inference blocks' sizes at most the committed claim `claimedFree`) which the check caps at
 `lim.freeSize`; taking `M = all inference blocks` then forces their total work under `lim.freeSize`, not nothing (the
-witness `excluded_run`). `FreeClaimHolds` is deliberately not folded in here: who establishes it (the conversion gives the
-claim) is an open step named on its own, not given by membership in the feasible set. `Realizes` implies `RealizesExcept
+witness `excluded_run`). `FreeClaimHolds` is deliberately not folded in here: it comes from PoUW's row through the
+conversion (`freeClaimHolds_of_conversion`), not from membership in the feasible set. `Realizes` implies `RealizesExcept
 ∅` (`realizes_realizesExcept`). -/
 noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
@@ -239,8 +247,9 @@ noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop
 /-- **The committed free-capacity claim holds** (the clause the free field used to carry, now its own named def): inside
 every server-day block `i`, the free blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most
 the claimed value `claimedFree r i` the prover committed. This is what `check` relies on through its claim conjunct
-(`claimedFree ≤ lim.freeSize`); establishing it is the open conversion step (capacity minus the use credited outside `M`,
-`FreeBlockAtMost` over `computeRate`), named as `rows_chain`'s own hypothesis, never given by `RealizesExcept`. -/
+(`claimedFree ≤ lim.freeSize`). It follows, for the `M` the declared row gives, from PoUW's row, the compute capacity,
+`M`'s declared size at most the tolerance and the claim at least `cap − b + tol` (`freeClaimHolds_of_conversion`), never
+from `RealizesExcept`. -/
 def FreeClaimHolds (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   ∀ i, P.kind r i = true →
     (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
@@ -253,13 +262,16 @@ def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
 deployment, bounds by `ε` the probability that an accepted run's own conclusion `shown` fails. -/
 def RunReads (G : Prop) (shown : P.Run → Prop) (ε : ℝ≥0∞) : Prop := G → ExceptWith P.pr P.accepts shown ε
 
-/-- **Use at least a capacity** (`what`, one of the three): inside every server-day block `i`, at least `b r i` of
-`what`'s capacity at `i`'s location or link was used, in the quantity `use r i`, except with probability at most `ε`.
-PoUW, PoUS and PoUB are its three instances, over `computeRate`, `memorySize` and `linkCapacity`; the one conversion
-`FreeBlockAtMost` turns each into a bound on a free-block quantity (its size, its input from its own past, its input from
-memory). -/
-def UseAtLeast (what : Capacity) (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
-  ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → b r i ≤ use r i) ε
+/-- **Use at least a capacity** (`what`, one of the three): for every set `M` of `inner`'s units and inside every
+server-day block `i`, at least `b r M i` of `what`'s capacity at `i`'s location or link was used, in the quantity
+`use r M i`, except with probability at most `ε`. `M` is the tolerance set: PoUW's use is the work outside `M` and its
+bound is lowered by `M`'s declared size (`PouwUseAtLeast`); PoUS's and PoUB's use and bound do not read `M`. PoUW, PoUS
+and PoUB are its three instances, over `computeRate`, `memorySize` and `linkCapacity`; the one conversion
+`FreeBlockAtMost` turns each into a bound on a free-block quantity (its size with `M`'s inference blocks, its input from
+its own past, its input from memory). -/
+def UseAtLeast (what : Capacity) (use b : (r : P.Run) → Finset (Fin (P.nIn r)) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) :
+    Prop :=
+  ExceptWith P.pr P.accepts (fun r => ∀ M i, P.kind r i = true → b r M i ≤ use r M i) ε
 
 /-- **The hardware description** for `what`: the number the hardware graph gives for a server-day block's capacity of
 `what` at its location or link (`ComputeRate`'s `Φ`, `Memory`'s `M`, `Links`' `β` in `Registration/Physical.lean`),
@@ -269,23 +281,26 @@ graph gives, an assumption nothing in Verity tests (owner none: the hardware des
 def CapacityAtMost (what : Capacity) (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, ∀ i, P.kind r i = true → enclosing r i ≤ cap r i
 
-/-- **Declared work does not double as other work**: in an accepted run, inside every server-day block `i`, the free
-blocks' quantity `free r i` and the use `use r i` add up to at most `i`'s own quantity `enclosing r i`. For size it
-follows from the partitions (`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other quantities it
-is open. -/
-def DeclaredWorkExclusive (free use enclosing : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ i, P.kind r i = true → free r i + use r i ≤ enclosing r i
+/-- **Declared work does not double as other work**: in an accepted run, for every set `M` of `inner`'s units and inside
+every server-day block `i`, the free quantity `free r M i` and the use `use r M i` add up to at most `i`'s own quantity
+`enclosing r i`. For size, with the free quantity the free blocks' and `M`'s inference blocks' work and the use the work
+of the inference blocks outside `M`, it follows from the partitions
+(`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other quantities it is open. -/
+def DeclaredWorkExclusive (free use : (r : P.Run) → Finset (Fin (P.nIn r)) → Fin (P.nOut r) → ℕ)
+    (enclosing : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+  ∀ r, P.accepts r → ∀ M i, P.kind r i = true → free r M i + use r M i ≤ enclosing r i
 
 /-- **The one conversion: capacity minus use bounds the free blocks.** For any capacity `what` (compute rate, memory
-size or link), inside every server-day block `i`: a use lower bound, the capacity figure and exclusivity give the free
-blocks' quantity `free r i` at most `cap r i − b r i`, except with the use's probability. Its three instances give the
-free block's size (from PoUW over `computeRate`), its unregistered input from its own past (from PoUS over `memorySize`)
-and its unregistered input from memory (from PoUB over `linkCapacity`). Proved by
-`ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
+size or link), for every set `M` and inside every server-day block `i`: a use lower bound, the capacity figure and
+exclusivity give the free quantity `free r M i` at most `cap r i − b r M i`, except with the use's probability. Its three
+instances give the free blocks' size with `M`'s inference blocks' (from PoUW over `computeRate`), the free block's
+unregistered input from its own past (from PoUS over `memorySize`) and from memory (from PoUB over `linkCapacity`).
+Proved by `ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
 def FreeBlockAtMost : Prop :=
-  ∀ (what : Capacity) (free use enclosing cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞),
+  ∀ (what : Capacity) (free use b : (r : P.Run) → Finset (Fin (P.nIn r)) → Fin (P.nOut r) → ℕ)
+    (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞),
     P.UseAtLeast what use b ε → P.CapacityAtMost what enclosing cap → P.DeclaredWorkExclusive free use enclosing →
-      ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → free r i ≤ cap r i - b r i) ε
+      ExceptWith P.pr P.accepts (fun r => ∀ M i, P.kind r i = true → free r M i ≤ cap r i - b r M i) ε
 
 end Runs
 

@@ -16,11 +16,6 @@ namespace InferenceOnly
 
 open ResourceAccounting Verity Finset
 
-/-- The claim is of size at most `c` gates. -/
-def sizeAtMost (c : ℕ) : Property → Bool
-  | .sizeAtMost s => decide (s ≤ c)
-  | _ => false
-
 /-- The claim is of input at most `k` bits from the block's own past, another block and the outside world. -/
 def freshAtMost (k : ℕ) : Property → Bool
   | .inputAtMost [.past, .block, .world] s => decide (s ≤ k)
@@ -52,8 +47,9 @@ structure Limits where
   share : ℝ
   allowance : ℝ
 
-/-- **The inference-only check on a run's committed blocks**: at most `n` inference blocks, each claimed of size at most
-`c` gates and input at most `k` bits; at most `m` free blocks; every server-day block's **committed free-capacity claim**
+/-- **The inference-only check on a run's committed blocks**: at most `n` inference blocks, each with a size claim, its
+committed size claim (`claimedSize`, the declared size the declared row sums over the tolerance set) at most `c` gates,
+and claimed of input at most `k` bits; at most `m` free blocks; every server-day block's **committed free-capacity claim**
 at most `freeSize` gates (`P.claimedFree r i ≤ lim.freeSize`, the limit on the committed number the check reads — the free
 blocks' and the tolerance's work together are at most that claim, `FreeClaimHolds`); every server-day block claimed of some size (the second cap on the
 same gates, read in the theorem as `min`); and every server-day block claimed of some input, the bound the wipe's and
@@ -62,7 +58,8 @@ nesting are the partitions' own, so the check states none of them. -/
 def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
   decide ((univ.filter fun u => P.cls r u = Class.inference).card ≤ lim.n) &&
     decide (∀ u, P.cls r u = Class.inference →
-      (P.claimsIn r u).any (sizeAtMost lim.c) = true ∧ (P.claimsIn r u).any (freshAtMost lim.k) = true) &&
+      (P.claimsIn r u).any isSize = true ∧ claimedSize (P.claimsIn r u) ≤ lim.c ∧
+        (P.claimsIn r u).any (freshAtMost lim.k) = true) &&
     decide ((univ.filter fun u => P.cls r u = Class.free).card ≤ lim.m) &&
     decide (∀ i, P.kind r i = true → P.claimedFree r i ≤ lim.freeSize) &&
     decide (∀ i, P.kind r i = true → (P.claimsOut r i).any isSize = true) &&
