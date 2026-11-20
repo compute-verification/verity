@@ -19,6 +19,7 @@ holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 
@@ -26,7 +27,8 @@ import pouw_check_cases as cases
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.commitments.merkle import tree_levels
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import row_leaf
 
 #: (context, program, partition, entries): the execution phases the generator opens
@@ -47,9 +49,16 @@ def _side(dom, schema: str, bcs: list[bytes]) -> tuple[bytes, list]:
     return levels[-1][0], levels
 
 
-def _header(schemas: dict, circuit: str) -> dict:
-    return {"circuit_sha512": circuit, "format": "flock-circuit-inputs", "instances": 1,
-            "frame_v3": {"frame": "frame-v3-sha512", "owner": -1, "schemas": schemas}}
+def _header(schemas: dict, circuit: str, rows: dict[str, bytes]) -> dict:
+    """A tile proof's header: one instance, and each opened row's (`rows`, its b ‖ c by port) one-row tree as Flock
+    writes it, under a binding of its own."""
+    fv = {"frame": "frame-v3-sha512", "owner": -1, "schemas": schemas, "bindings": {}, "domain_ids": {}, "roots": {}}
+    for p, bc in rows.items():
+        binding = hashlib.sha512(f"opening-case/{p}".encode()).digest()
+        dom = CommitmentDomain(binding, -1, RangeIndexedDomain(0, 1), hash="sha512")
+        fv["bindings"][p], fv["domain_ids"][p] = binding.hex(), dom.domain_id.hex()
+        fv["roots"][p] = _leaf(dom, 0, bc, schemas[p]).hex()
+    return {"circuit_sha512": circuit, "format": "flock-circuit-inputs", "instances": 1, "frame_v3": fv}
 
 
 def honest(rng: random.Random, salted: bool = False, context: str | None = None, salt: bytes | None = None) -> dict:
@@ -111,7 +120,9 @@ def honest(rng: random.Random, salted: bool = False, context: str | None = None,
         schemas = {x: CC.ROW_V2 for x in [*(f"a{k}" for k in range(lay.r)), *(f"b{k}" for k in range(lay.c)), "pub", "o0", "o1"]}
         body = (b"".join(bcs["a"][x] for x in rows["a"]) + b"".join(bcs["b"][x] for x in rows["b"])
                 + CC.public_bc(context, salt, unit, (entry.root_a, entry.root_b)) + rng.randbytes(2 * CC.BC_BYTES))
-    head = _header(schemas, CC.TILES[params["check"]["template"]].circuit)
+    opened = CC._ports(lay) + ([] if lay is None else ["pub"])
+    head = _header(schemas, CC.TILES[params["check"]["template"]].circuit,
+                   {p: body[k * CC.BC_BYTES:(k + 1) * CC.BC_BYTES] for k, p in enumerate(opened)})
     pub = json.dumps(head, sort_keys=True).encode() + b"\n" + body
     units = None if rng.random() < 0.3 else sorted({unit, *rng.sample(range(1 << 21), rng.randrange(4))})
     return {"params": params, "record": rec, "units": units, "unit": unit, "pub": pub, "opening": op, "header": head,
@@ -140,12 +151,14 @@ MUTATIONS = [
     "body-short", "a-index", "b-index",
     "a-row", "b-row", "b-path", "a-path-short", "rows-swapped", "past-side", "params-bad", "commitment-bad",
     "certified-unsalted", "uncertified-salt",
+    "header-root", "header-root-missing", "header-domain", "header-binding", "header-owner",
 ]
 #: a salted case (`honest(…, salted=True)`), honest (``salted``) or with one mutation
 SALTED = [
     "salted", "salted-no-salt", "salted-salt-short", "salted-other-salt", "salted-uncertified", "salted-position",
     "salted-roots", "salted-row-salt", "salted-schemas", "salted-schemas-missing", "salted-header-order", "salted-body-short",
     "salted-sides-short", "salted-side-dict", "salted-a-index", "salted-b-row", "salted-pub-swapped", "salted-circuit",
+    "salted-root", "salted-pub-root",
 ]
 NAMES = MUTATIONS + SALTED
 
@@ -269,6 +282,8 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
         case["params"]["context"] = rng.choice(CERTIFIED)[0]
     elif name == "uncertified-salt":
         case["salt"] = rng.randbytes(PS.SALT_BYTES)
+    elif name.startswith("header-"):
+        _reroot(case, rng, name, rng.choice(CC.PC8_PORTS))
     elif name not in ("honest", "params-bad", "commitment-bad"):
         raise AssertionError(name)
     params = case["params"]
@@ -331,8 +346,35 @@ def _salted(case: dict, rng: random.Random, name: str) -> None:
     elif name == "salted-circuit":
         other = rng.choice([t.circuit for t in CC.TILES.values() if t.salted is None])
         _repub(case, {**head, "circuit_sha512": other})
+    elif name in ("salted-root", "salted-pub-root"):
+        _reroot(case, rng, "header-root", "pub" if name == "salted-pub-root" else rng.choice(CC._ports(lay)))
     elif name != "salted":
         raise AssertionError(name)
+
+
+def _reroot(case: dict, rng: random.Random, name: str, port: str) -> None:
+    """The header's ``frame_v3`` entry of opened row `port` no longer its one-row tree: another root (`header-root`),
+    its root or binding gone (`header-root-missing`), another domain id (`header-domain`), another binding
+    (`header-binding`), or an owner of another domain or none (`header-owner`)."""
+    head = case["header"]
+    fv = {k: dict(v) if isinstance(v, dict) else v for k, v in head["frame_v3"].items()}
+    if name == "header-root":
+        fv["roots"][port] = rng.choice([cases._hex(rng), fv["domain_ids"][port], fv["bindings"][port]])
+    elif name == "header-root-missing":
+        k = rng.choice(["roots", "bindings", "domain_ids"])
+        if rng.random() < 0.5:
+            del fv[k][port]
+        else:
+            fv[k] = rng.choice([None, [], fv[k][port]])
+    elif name == "header-domain":
+        fv["domain_ids"][port] = rng.choice([cases._hex(rng), fv["domain_ids"][port][:-2], fv["roots"][port]])
+    elif name == "header-binding":
+        fv["bindings"][port] = rng.choice([cases._hex(rng), fv["bindings"][port][:-2]])
+    elif name == "header-owner":
+        fv["owner"] = rng.choice([0, -2, -3, True, "-1", None, -1.0])
+    else:
+        raise AssertionError(name)
+    _repub(case, {**head, "frame_v3": fv})
 
 
 def _reopen(case: dict, rng: random.Random, name: str) -> None:

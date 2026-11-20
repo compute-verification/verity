@@ -841,6 +841,26 @@ def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
     return None if any(not _int(i) or s is None for i, s in out) else out
 
 
+def header_root_why(port: str) -> str:
+    """The opening's refusal of an opened row whose header root is not its committed row's tree: the proof the verifier
+    accepts is about the header's roots, so a row it opens and the header does not commit proves nothing of it."""
+    return f"port {port}: the proof's frame_v3 root is not the one-row tree of its committed row"
+
+
+def _header_root_held(f: dict, port: str, bc: bytes, schema: str) -> bool:
+    """The header's ``frame_v3`` root of `port` is the one-row tree over its committed `bc` (`Flock.PortRoots.pubRoot`
+    at one instance): the leaf at rank 0, under the domain the port's binding and the header's owner give over one
+    position, which is the domain its ``domain_ids`` entry names."""
+    def get(k: str) -> Any:
+        return f[k].get(port) if isinstance(f.get(k), dict) else None
+    n = DIGEST_BYTES["sha512"]
+    binding, root, owner = _fromhex(get("bindings"), n), _fromhex(get("roots"), n), f.get("owner")
+    if binding is None or root is None or not _int(owner) or owner < -2:
+        return False
+    dom = CommitmentDomain(binding, owner, RangeIndexedDomain(0, 1), hash="sha512")
+    return _fromhex(get("domain_ids"), n) == dom.domain_id and row_leaf(dom, 0, Wd._HM.tree_leaf(Wd._HM.default_key, bc), schema) == root
+
+
 def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
             salt: bytes | None = None) -> str | None:
     """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else why
@@ -850,6 +870,8 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
     A row and B row are its circuit's first two ports, ``a0`` and ``b0`` (`PC8_PORTS`), whose schemas the header names,
     and its body starts with their b ‖ c.  The header's keys, in its key order (serde's), list the opened side rows
     first and in port order (`_ports`): a header that orders them otherwise is refused, never read in its own order.
+    Each opened row's ``frame_v3`` root in the header is the one-row tree of its b ‖ c (`_header_root_held`,
+    `header_root_why`), so the roots the proof is verified under are the rows that open under the registration.
 
     `salt` is a certified execution phase's salt (`certified_salt`), and a certified execution phase opens only a salted template's units
     (`Tile.salted`, `_salt_reason`).  A salted unit's opening lists each side's rows, ``"a": [{"index", "path"}, …]`` (R
@@ -940,11 +962,16 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
                                                       row_leaf(sdom, want, Wd._HM.tree_leaf(Wd._HM.default_key, bc),
                                                                schema if lay is None else ROW_V2), path)):
                 return f"side {side}: the proof's committed row is not entry {e}'s row {want}"
+            if not _header_root_held(f, ports[k], bc, schema if lay is None else ROW_V2):
+                return header_root_why(ports[k])
             k += 1
-    if lay is not None and body[k * BC_BYTES:(k + 1) * BC_BYTES] != public_bc(p["context"], salt, unit,
-                                                                             (entry.root_a, entry.root_b)):
-        return (f"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s "
-                "side roots")
+    if lay is not None:
+        bc = body[k * BC_BYTES:(k + 1) * BC_BYTES]
+        if bc != public_bc(p["context"], salt, unit, (entry.root_a, entry.root_b)):
+            return (f"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s "
+                    "side roots")
+        if not _header_root_held(f, "pub", bc, ROW_V2):
+            return header_root_why("pub")
     return None
 
 
