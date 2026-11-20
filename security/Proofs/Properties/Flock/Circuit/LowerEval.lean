@@ -175,6 +175,41 @@ theorem axes_comp {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P)
       | none => exact (hnone hx).1
       | some ax => exact absurd hx (hn ax)
 
+/-- **A composite's batch axes are typed, on any axis**: an argument mapped on axis `ax` has its callee's parameter type
+once `ax` is removed, its dimensions are its type's on `ax`, and its references name its type's widths, in order. -/
+theorem axes_comp_ax {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) (hp : (P.defs[d]!).prim = false) :
+    ∀ k (hk : k < (P.defs[d]!).body.nodes.size), ((P.defs[d]!).body.nodes[k]).form = .batch →
+      ∀ i < ((P.defs[d]!).body.nodes[k]).args.size, ∀ ax,
+        ((P.defs[d]!).body.nodes[k]).axes[i]? = some (some ax) →
+          (((P.defs[d]!).body.nodes[k]).args.getD i default).ty.removeAxis ax =
+            some (((P.defs[d]!).body.nodes[k]).n, ((P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.getD i default).2) ∧
+          (((P.defs[d]!).body.nodes[k]).args.getD i default).dims =
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).ty.axisDims ax ∧
+          i < (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).params.size ∧
+          (((P.defs[d]!).body.nodes[k]).args.getD i default).seq.toArray.toList.map
+            (fun r => (tyAt (P.defs[d]!) r).widths[r.j]!) =
+            (((P.defs[d]!).body.nodes[k]).args.getD i default).ty.widths.toList := by
+  intro k hk hbat i hi ax hax
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hcal, hnodes, -⟩ := hok d hd
+  have hpar := (hcal.2 hp).1
+  have hR := (refs_comp hdec hr hd hp).1 k hk
+  have hW := ((LeafWidths.decoded_wide bytes P hdec hr d hd hp).2).1 k hk
+  obtain ⟨-, hno, hargs⟩ := hnodes k hk
+  have hk' : (P.defs[d]!).body.nodes[k] = (P.defs[d]!).body.nodes[k]! := (getElem!_pos _ k hk).symm
+  rw [hk'] at hbat hi hR hax ⊢
+  generalize (P.defs[d]!).body.nodes[k]! = x at hno hargs hbat hi hR hW hax ⊢
+  obtain ⟨hsz, hcnt, -, -, -, -, haxs⟩ := hno
+  obtain ⟨-, hall⟩ := haxs hbat
+  obtain ⟨-, hsome⟩ := hall i hi
+  obtain ⟨⟨ps, hps, -⟩, -⟩ := hargs i hi
+  simp only [← Array.getElem!_eq_getD]
+  obtain ⟨hrm, hdm⟩ := hsome ax hax
+  exact ⟨hrm, hdm, hsz ▸ hi, arg_widths hpar hps (hcnt i hi)
+    (hR _ (by rw [getElem!_pos x.args i hi]; exact Array.getElem_mem_toList hi)).2 (hW i hi)⟩
+
 /-- **`Batch0Axes`**: `axes_comp`. -/
 theorem batch0Axes : Batch0Axes := fun _ _ hdec hr _ hd hB => axes_comp hdec hr hd hB.1
 
