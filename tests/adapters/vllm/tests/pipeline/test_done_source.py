@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -50,7 +51,8 @@ def _from_its_id(tmp_path: Path, row: str) -> dict:
 
 
 def test_the_generator_writes_a_row_of_record_at_its_public_cap_and_a_research_row_as_before(tmp_path):
-    row = sorted(C.rows_of_record())[0]
+    listed = tomllib.loads(W.GENERATION.read_text())["row"]
+    row = sorted(r for r in C.rows_of_record() if r in listed)[0]
     rec = _from_its_id(tmp_path, row)
     assert rec["sampling"]["ignore_eos"] is True and "done only at its public cap" in rec["note"]
     assert C.done_source(C.RowConfig.of(rec).workload) == "public-cap"
