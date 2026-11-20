@@ -489,6 +489,14 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
+The storage session's three functions read what the memory attester released after the session, which the verifier holds
+under each function's name as JSON `{commitment, openings, key}` (the session commitment, the round coins' openings, the
+registered LMS public key's hex). `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last
+opening, which opens its committed coin at an index below the commitment's blocks; `pous.session.header/v1` is the header
+of a session that ended complete with all `k` rounds, so a late or short session has no statement, and
+`pous.session.context/v1` is the 106 bytes the signature's message hashes before the record. Each refuses, by the name "no
+statement", what the release lacks or the arguments don't fit.
+
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
 value and computes its own row, from the value and its index, a constant of the unit in C; or one unit of the block reads
