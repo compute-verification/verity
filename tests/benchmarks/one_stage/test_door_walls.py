@@ -337,8 +337,8 @@ def test_a_template_of_no_gate_anywhere_in_c_is_refused_by_both_doors_alike(tmp_
     for k, (lo, hi) in enumerate(s.blocks):
         py = door.run(k, lo, hi).text
         run = LC.run([str(PF.v2_executable()), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
-                      str(lo), str(tmp_path / "c_s.txt")])
-        assert run.returncode != 0 and run.stderr.strip() == f"restrict: {why}", (k, run.stderr[-600:])
+                      str(lo), str(tmp_path / "c_s.txt")], ok_statuses={0, 1, 2})
+        assert run.returncode == 1 and run.stderr.strip() == f"restrict: {why}", (k, run.stderr[-600:])
         assert py is not None and py.endswith(why), (k, py)
 
 
