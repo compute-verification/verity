@@ -7,7 +7,7 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Protocol
+from typing import Any, NamedTuple, Protocol
 
 import numpy as np
 
@@ -17,7 +17,7 @@ from verity_vllm.check.oracle_compare import (
 )
 from verity_vllm.records.required_manifest import RequiredManifest
 
-__all__ = ["CommittedStore"]
+__all__ = ["CommittedStore", "Located"]
 
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
 _ITEMSIZE = {"u8": 1, "bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
@@ -54,6 +54,16 @@ def bound_identity(e: dict) -> dict:
 
 def _invocation(e: dict) -> int:
     return int(bound_identity(e).get("invocation", 0) or 0)
+
+
+class Located(NamedTuple):
+    """A committed member's bytes [lo, hi) at an engine step of its window, by the name its step's layouts give it (a shared
+    member's invocation ``name#ord<k>``), and their dtype: what the committer holds them under, on the device or the host."""
+    step: int
+    name: str
+    lo: int
+    hi: int
+    dtype: str
 
 
 class WordStore(Protocol):
@@ -123,7 +133,9 @@ class CommittedStore:
         """Each op_path the binding map binds request ``rid`` under at ENGINE ``step``, as it spells it -> its members' names."""
         return {op: set(ms) for op, ms in self._ops.get((rid, int(step)), {}).items()}
 
-    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
+    def locate(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[Located | None, str]:
+        """Where `words` reads (request, ENGINE step, op_path, member, request-local element slice): the committed member at that
+        step by the name the collector's layouts give it, its bytes and dtype; or None and why, by name. No byte is read."""
         es, canon, inv_min, bound = self.entries(rid, step, op_path, member)
         if not es:
             via = f" [alias -> {canon} invocation {inv_min}]" if canon != op_path else (f" [invocation {inv_min}]" if bound else "")
@@ -150,10 +162,17 @@ class CommittedStore:
         if isz is None:
             return None, f"unknown dtype {dtype!r} of ({rid}, step {step}, {op_path}/{member})"
         eo = int(e.get("element_offset") or 0)
-        b = self.committed(int(step), _entry_read_name(e, self.name_inv.get((int(step), str(e.get("name"))), 1)), (eo + elo) * isz, (eo + ehi) * isz)
-        if b is None or len(b) != (ehi - elo) * isz:
+        name = _entry_read_name(e, self.name_inv.get((int(step), str(e.get("name"))), 1))
+        return Located(int(step), name, (eo + elo) * isz, (eo + ehi) * isz, dtype), ""
+
+    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
+        at, why = self.locate(rid, step, op_path, member, elo, ehi)
+        if at is None:
+            return None, why
+        b = self.committed(at.step, at.name, at.lo, at.hi)
+        if b is None or len(b) != at.hi - at.lo:
             return None, f"committed bytes not retained for ({rid}, step {step}, {op_path}/{member}) [{elo}, {ehi})"
-        return np.frombuffer(bytes(b), dtype=_NPDTYPE[isz]).copy(), dtype
+        return np.frombuffer(bytes(b), dtype=_NPDTYPE[_ITEMSIZE[at.dtype]]).copy(), at.dtype
 
 
 def model_weights_provider(model, prefix: str) -> Callable[[str, int, int], np.ndarray | None]:

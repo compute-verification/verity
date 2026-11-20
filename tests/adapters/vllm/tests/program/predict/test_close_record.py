@@ -1,0 +1,128 @@
+"""A served window's record made at the serve's close (`close_record.Record.make`), on the processor."""
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+import torch
+from verity.commitments import docket_digest as DD
+
+from tests.program.predict.test_window_rows import (
+    CLASS,
+    GRAIN,
+    LANES,
+    RUN,
+    _located,
+    _read,
+    _registered,
+    _served,
+    _window,
+)
+from verity_vllm.pipeline import advice as ADV
+from verity_vllm.pipeline import advice_windows as AW
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict import window_plan as WP
+from verity_vllm.program.predict import window_rows as WR
+from verity_vllm.program.predict import window_strings as WS
+from verity_vllm.program.predict import window_weights as WW
+from verity_vllm.program.predict.close_record import Record
+
+
+def _committer(held):
+    """A committer as the close reads it: each step's members in one uint8 block, each at its offset (``dev_off``)."""
+    layouts, blocks = {}, {}
+    for (step, name), a in sorted(held.items()):
+        b = np.ascontiguousarray(a).view(np.uint8).reshape(-1)
+        at = sum(x.size for x in blocks.get(step, []))
+        layouts.setdefault(step, []).append(SimpleNamespace(name=name, ordinal=0, dev_off=at, stream_off=-1))
+        blocks.setdefault(step, []).append(b)
+    return SimpleNamespace(_layouts=layouts, _gpu_blocks={s: (torch.from_numpy(np.concatenate(bs)),) for s, bs in blocks.items()})
+
+
+def _close(tmp_path, monkeypatch):
+    """TINY's window at class 2,4,2 as the serve's close holds it: its plan, served values, a committer holding each member
+    at its offset in its step's block, and the close's plan and binding; the checkpoint's words, the weights registration
+    and the advice opening stood in."""
+    low, fields, _values, _weights, slots = _window()
+    served, held = [], {}
+    for k, s in enumerate(slots):
+        rows, store = _served(low, s, T=max(WR.positions(low.programs[k].fn)) + 1 - s.row[1])
+        held.update({(step, f"s{k}:{op}/{m}"): a for (step, op, m), a in store.items()})
+        served.append(WR.Served(rows, *_read(store), locate=_located(store, f"s{k}:")))
+    units = WP.Plan(low, served)
+    ids = [f"q{k}" for k in range(len(LANES))]
+    bodies = {i: {"prompt": p[:lp], "max_tokens": m} for i, (_o, lp, m, p) in zip(ids, LANES)}
+    bound = {"compiler": {"name": "c", "digest": "cd" * 64}, "advice": {"root": "ef" * 64, "bits": 0}}
+    weight_values = WW.weight_values
+    monkeypatch.setattr(ADV, "bodies", lambda out, window: bodies)
+    monkeypatch.setattr(AW, "opened", lambda compiler, doc, codec=None: (None, bound))
+    monkeypatch.setattr(WW, "record_words", lambda *a, **k: fields)
+    monkeypatch.setattr(WW, "weight_values", lambda r, s, _reg, keep_rows=False: weight_values(r, s, None, GRAIN, keep_rows=keep_rows))
+    (tmp_path / "advice" / "w0" / "private").mkdir(parents=True)
+    (tmp_path / "advice" / "w0" / "private" / "opening.json").write_text("{}")
+    plan = SimpleNamespace(cls=CLASS, out=tmp_path, compiler=None, _registered=_registered)
+    binding = SimpleNamespace(rc=SimpleNamespace(run_root=bytes.fromhex(RUN)), com=_committer(held))
+    compiled = SimpleNamespace(requests=[SimpleNamespace(id=i) for i in ids])
+    return low, units, served, plan, binding, compiled
+
+
+@pytest.mark.slow
+def test_the_serves_close_records_its_window_with_strings_from_where_its_rows_are_committed(tmp_path, monkeypatch):
+    """`Record.make` over TINY's window at class 2,4,2 (`_close`): the window recorded, closed and written under
+    ``windows/w0/record/``, its strings' cost and the twin's comparison on the sampled ports returned. What no cheaper test
+    reaches: the serve's own path from its close's plan to a written record. Slow (minutes) for the close."""
+    low, units, served, plan, binding, compiled = _close(tmp_path, monkeypatch)
+    got = Record("rate:1/4", "unread", tmp_path / "salt_stream", sample=2, workers=2).make(
+        plan, 0, compiled, low, units, served, binding)
+    to = tmp_path / "windows" / "w0" / "record"
+    assert got["out"] == str(to) and got["run"] == RUN and got["population"] > 0
+    s = got["strings"]
+    assert s["where"] == "HostTwin" and s["acquired"] > 0 and s["acquired"] + s["host"] > s["acquired"]
+    assert s["twin"]["equal"] and s["twin"]["ports"] == min(2, s["twin"]["of"]) > 0
+    reg = json.loads((to / "registration.json").read_text())
+    assert SS.SCAN_STATE in [e["value"] for e in reg["registered"]] and DD.digest(reg)
+    assert {"rows", "record", "close", "write"} <= set(got["seconds"])
+
+
+@pytest.mark.slow
+def test_the_cards_part_runs_first_and_the_record_is_made_from_its_handoff_alone(tmp_path, monkeypatch):
+    """The card's part of the close (`Record.handoff`) leaves `window_strings.HANDOFF`; `Record.make` from it, with no
+    committer, closes the window with the card's strings, the rest from the host, every handed port equal to the host
+    reference's; a card string altered fails by its port's name, and a handoff without its key by the file's. What no
+    cheaper test reaches: the record after the lease on a real window's leaf rows. Slow (minutes) for the close."""
+    low, units, served, plan, binding, compiled = _close(tmp_path, monkeypatch)
+    rec = Record("rate:1/4", "unread", tmp_path / "salt_stream", sample=64, workers=2)
+    h = rec.handoff(plan, 0, low, units, binding)
+    to = tmp_path / "windows" / "w0" / "handoff"
+    assert h["out"] == str(to) and h["files"] == list(WS.HANDOFF) and h["units"] > 0
+    assert all((to / f).is_file() for f in WS.HANDOFF)
+    after = SimpleNamespace(rc=binding.rc, com=None)
+    got = rec.make(plan, 0, compiled, low, units, served, after, handoff=to)
+    s = got["strings"]
+    assert s["where"] == "card, handed" and s["acquired"] > 0 and s["twin"]["equal"] and s["twin"]["ports"] == s["twin"]["of"] > 0
+    key, card, meta = WS.load_card(to)
+    k = sorted(card)[0]
+    WS.save_card(to, {**card, k: (*card[k][:3], card[k][3] ^ np.uint8(1))}, key, meta)
+    with pytest.raises(ValueError, match=re.escape(f"port {k}")):
+        rec.make(plan, 0, compiled, low, units, served, after, handoff=to)
+    (to / "key.bin").unlink()
+    with pytest.raises(ValueError, match="no key.bin"):
+        rec.make(plan, 0, compiled, low, units, served, after, handoff=to)
+
+
+def test_the_launcher_runs_the_cards_parts_under_the_lease_and_the_record_after_it():
+    """``h100_smoke.sh``: under the lease (its ``card`` phase) the serve alone, whose close leaves the handoff; after the
+    lease, the record from it (close_record's finish), before the advice is written again and window-commit runs; the
+    record runs at the close only under ``RECORD_IN_LEASE=1``."""
+    text = (Path(__file__).parents[6] / "adapters/vllm/tools/served_run/h100_smoke.sh").read_text()
+    card = text[text.index('if [ "${1:-}" = card ]'):]
+    card = card[:card.index("\nfi\n")]
+    assert '"${SERVE[@]}"' in card and "FIN" not in card and "WC[@]" not in card
+    at = [text.index(x) for x in ('"${LEASE[@]}" ||', '"${FIN[@]}" --serve-run "$D" --window "$K"', 'cli advice "$D"',
+                                  'timeout -k 1m "$WC_TIMEOUT"')]
+    assert at == sorted(at)
+    assert '[ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)' in text and "no proof is made" in text
