@@ -89,6 +89,7 @@ def run(case: Mapping[str, Any], exe: Path, command: str, d: Path) -> dict[str, 
         p.returncode = os.waitstatus_to_exitcode(status)
     seconds = round(time.monotonic() - t, 1)
     LC.refuse_panic((d / "stderr").read_text(errors="replace"))
+    LC.refuse_exit(p.returncode, LC.CHECK_EXITS)
     lines = (d / "stdout").read_text().strip().splitlines()
     names = args[5:]
     return {"rc": p.returncode, "line": lines[-1] if lines else None, "seconds": seconds, "peak_rss_kb": use.ru_maxrss,
