@@ -35,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
@@ -43,6 +42,7 @@ from typing import Any
 
 from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes
+from verity import lean_process as LC
 from verity.protocols.resource_accounting.memory.pous.verifier.run import Setup
 
 from . import p2_parties
@@ -172,7 +172,7 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]]) -> list[di
     """`EXE serve` on `cases`, one canonical JSON line each, the served keys only: the Lean's answers."""
     lines = "".join(canonical_json_bytes({k: c[k] for k in ("commitment", "evidence", "params") if k in c}).decode()
                     + "\n" for c in cases)
-    p = subprocess.run([str(exe), "serve"], input=lines, capture_output=True, text=True, check=True)
+    p = LC.run([str(exe), "serve"], input=lines)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

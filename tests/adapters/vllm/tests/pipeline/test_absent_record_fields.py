@@ -1,7 +1,5 @@
 """What these readers make of a record that leaves an optional field out: the field absent, null and empty read alike.
 
-* `verity_vllm.pipeline.vu_store`: a unit that states no evaluations names no value; a replay record that states no evaluator kept
-  no block on the device, and one that states no weights has no root for the export's provenance.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
   the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
 * `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no
@@ -17,7 +15,6 @@
 from __future__ import annotations
 
 import gc
-import hashlib
 import json
 from types import SimpleNamespace
 
@@ -29,7 +26,6 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import match as RC
 from verity_vllm.pipeline import match_fold as MF
-from verity_vllm.pipeline import vu_store as VS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sampling_seeds": [7, 8]}
@@ -50,62 +46,8 @@ def _the_collector_as_pytest_has_it(monkeypatch):
     assert after == held, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
-
-
-def test_a_unit_that_states_no_evaluations_names_no_value_of_the_store(tmp_path):
-    values, program = tmp_path / "values", tmp_path / "programs" / "p0"
-    values.mkdir()
-    program.mkdir(parents=True)
-    blob = b"\x00\x01"
-    held = {"value": hashlib.sha256(blob).hexdigest(), "dtype": "u8"}
-    (values / f"{held['value']}.u8").write_bytes(blob)
-    units = [{}, {"evaluations": None}, {"evaluations": []}, {"evaluations": [{"args": [held], "outs": {"y": {"sample": held}}}]}]
-    (program / "units.jsonl").write_text("".join(json.dumps(u) + "\n" for u in units))
-    assert VS.verify_store(tmp_path) == {"ok": True, "bad_values": [], "missing_values": 0, "values": 1}
-    units.append({"evaluations": [{"args": [{"value": "0" * 64, "dtype": "u8"}], "outs": {}}]})
-    (program / "units.jsonl").write_text("".join(json.dumps(u) + "\n" for u in units))
-    assert VS.verify_store(tmp_path) == {"ok": False, "bad_values": [], "missing_values": 1, "values": 1}
-
-
 class _Engine:
     cp = {"repo": "tiny/model", "revision": "abc"}
-
-
-def _exported(tmp_path, monkeypatch, sr: dict) -> dict:
-    """What `after_replay` hands the export for the replay record `sr`: its keyword arguments."""
-    seen: list[dict] = []
-
-    def export(*_a, **kw):
-        seen.append(kw)
-        return {"sets": [], "wall_s": 0}
-
-    monkeypatch.setattr(VS, "export_vus", export)
-    monkeypatch.setattr(VS, "memory_headroom", lambda: 1.0)
-    (tmp_path / "limits.json").write_text(json.dumps({"workers": 4}))
-    assert VS.after_replay(str(tmp_path), {"result": True, **sr}, 0, b"\x00" * 32, {}, {}, None, None, {}, None, {}, {}, {}, {}, _Engine()) == {
-        "sets": [], "wall_s": 0}
-    (kw,) = seen
-    return kw
-
-
-@pytest.mark.parametrize("sr", [{}, {"evaluator": None, "weights": None}, {"evaluator": {}, "weights": {}},
-                                {"evaluator": {"retention": "host"}, "weights": {"root": "another field"}}])
-def test_a_replay_that_states_no_device_retention_and_no_weights_root_exports_forked_with_no_root(tmp_path, monkeypatch, sr):
-    kw = _exported(tmp_path, monkeypatch, sr)
-    assert kw["limits"].workers == 4
-    assert kw["provenance"]["weights"] == {"checkpoint": {"repo": "tiny/model", "revision": "abc", "weights_of_record_root": None}}
-
-
-def test_a_replay_that_kept_its_blocks_on_the_device_exports_in_one_process_and_its_weights_root_is_recorded(tmp_path, monkeypatch):
-    kw = _exported(tmp_path, monkeypatch, {"evaluator": {"retention": "device"}, "weights": {"committed_root": "ab" * 64}})
-    assert kw["limits"].workers == 1
-    assert kw["provenance"]["weights"]["checkpoint"]["weights_of_record_root"] == "ab" * 64
-
-
-
-
-
-
 
 
 def _plan(tmp_path, monkeypatch) -> RC.Plan:
@@ -382,10 +324,6 @@ def test_a_launch_context_that_states_no_length_by_step_conditions_on_none(launc
     assert cond["launch_context"] == {"max_seqlen_q_by_step": {}, "conflict": True}
     stated = B.applicability_conditions(TargetProfile.default(), {}, {}, {}, launch={**launch, "max_seqlen_q_by_step": {3: 9, 1: 4}})
     assert stated["launch_context"]["max_seqlen_q_by_step"] == {"1": 4, "3": 9}
-
-
-
-
 
 
 @pytest.mark.parametrize("unstated", [{}, {"tp": None, "declared_derived": None}, {"tp": {}, "declared_derived": {}}])

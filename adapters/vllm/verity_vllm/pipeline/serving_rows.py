@@ -5,7 +5,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
   a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
-  sealed and before sampling (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
+  sealed and before sampling. The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
   hold the values under the Commit's roots.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
@@ -633,8 +633,8 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
             bits: int | None = None) -> list[np.ndarray]:
-    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
-    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
+    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`): a
+    GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
     element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
     vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []

@@ -27,6 +27,10 @@
   "verity_vllm.pipeline.compiled_merge": "only its tests run it since its command went; the next cut deletes it with them",
   "verity_vllm.pipeline.release_json": "only its tests run it since its command went; the next cut deletes it with them",
   "verity_vllm.pipeline.research_result": "only its tests run it since its command went; the next cut deletes it with them",
-  "verity_vllm.pipeline.verdict_record": "only its tests run it since its command went; the next cut deletes it with them"
+  "verity_vllm.check.commit_rules": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_commit_rules, test_absent_commit_fields, test_mla_attention_hidden)",
+  "verity_vllm.check.cublas_route_pin": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_redteam_pinned_cublas_route, test_absent_fields, test_verdict)",
+  "verity_vllm.query.compose": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (merge_ranks, compose_global: eight query, correspondence and commit tests)",
+  "verity_vllm.records.commit_run": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (test_commit_run, test_serve_seal)",
+  "verity_vllm.definitions.numerics.serve3_reference": "read by tests only once the sampled replay's CPU road is deleted; cut with its tests in the next deletion (adapters/torch's frontend tests import materialize)"
  }
 }

@@ -462,7 +462,7 @@ def batch_launch_shortfall(geometry: Any, active_rows: list[int], members: Itera
 
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    that expands what it reads (`check.replay.index.ProgramIndex`).  Equal argument items are one list
     (`instances_file.read_instances`): read them, never modify them in place."""
     # Inside the function: importing this module loads nothing of `program`, which a suite that lists its inputs by file
     # and reads this module relies on (its read guard fails on a file its list lacks).
