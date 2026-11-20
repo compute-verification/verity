@@ -218,7 +218,7 @@ def wideFrom (P : Flock.Program.Prog) (d : Nat) : Array String := Id.run do
   return wide.qsort (· < ·)
 
 /-- A port name the block circuit's file and `flock-lower-check compose`'s `name:bits,…` carry as written. -/
-def plainName (n : String) : Bool := !n.isEmpty && n.all fun c => !",:# \t\r\n".contains c
+def plainName (n : String) : Bool := !n.isEmpty && n.all fun c => ![',', ':', '#', ' ', '\t', '\r', '\n'].contains c
 
 /-- **The one form the door lowers**: C_S's block, its root calling one template, admitted only where every clause holds,
 else refused under `NOT_ADMITTED` by the first that fails. Each clause makes the block circuit's rows, laid in whole u16
