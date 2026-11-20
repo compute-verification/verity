@@ -110,9 +110,6 @@ theorem notAdmitted_bind_ne {α β : Type} {c d : String} {f : α → V β} {b :
     ¬ ((Spot.OneStageZk.notAdmitted c d : V α) >>= f) = .ok b := by
   intro h; cases h
 
-set_option hygiene false in
-local macro "na_close" : tactic => `(tactic| any_goals (first
-  | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done)))
 
 
 theorem none_of_forall {α : Type} {o : Option α} (h : ∀ a, o = some a → False) : o = none := by
@@ -179,9 +176,9 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
       S.index[a.key]? = some a.d := by
   unfold Spot.OneStageZk.admitted at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   obtain ⟨called, -, h⟩ := Flock.HmNets.bind_ok h
   try dsimp only at h
   generalize Array.qsort called (fun x1 x2 => decide (x1 < x2)) = keys at h
@@ -195,44 +192,44 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
   · exact absurd h notAdmitted_bind_ne
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   try dsimp only at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   try dsimp only at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   try dsimp only at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   rename_i r _
   obtain ⟨L, dl⟩ := r
   rw [pure_bind] at h
   try dsimp only at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   try dsimp only at h
   obtain ⟨⟨⟩, hc, h⟩ := Flock.HmNets.bind_ok h
   try dsimp only at h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   try dsimp only at h
   obtain ⟨⟨⟩, hw, h⟩ := Flock.HmNets.bind_ok h
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   cases h
   simp only [List.forIn_cons, List.forIn_nil] at hw
   obtain ⟨s1, h, hw⟩ := Flock.HmNets.bind_ok hw
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   cases h
   obtain ⟨s2, h, -⟩ := Flock.HmNets.bind_ok hw
   split at h
-  na_close
+  any_goals (first | exact absurd h notAdmitted_ne | exact absurd h notAdmitted_bind_ne | (exfalso; cases h; done))
   refine ⟨_, _, _, _, by assumption, by assumption, by assumption, none_of_forall (by assumption), rfl, rfl, ?_, ?_,
     forIn_unit_all hc fun x s hs => ?_, ?_, by assumption⟩
   · intro r hr
