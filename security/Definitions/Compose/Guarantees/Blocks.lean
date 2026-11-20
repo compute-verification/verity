@@ -5,7 +5,6 @@ public import Definitions.Pouw.PearlC.TileSample
 public import Definitions.ResourceAccounting.Network.AttesterScheme
 public import Definitions.Registration.Guarantees
 public import Definitions.InferenceOnly
-public import Definitions.Pous.Guarantees.StreamedWipeResidual
 
 /-!
 # The protocols' block statements, the inference-only policy, and the chain
@@ -203,8 +202,8 @@ registered label count `N` and label width `b` (bits), the wipe's challenge coun
 plus the location's storage the wipe does not cover. Until the wipe's check refuses a fill below the registered memory,
 the guarantee is at the `N` the wipe ran at, and nothing ties that `N` to the hardware description; the comparison an
 instance needs is `memCap ≤ wipeLabels * labelBits + uncovered` with all three read from the registration. From
-`Pous.Guarantees.StreamedWipeResidual`, read on the runs once
-for each wipe (`RunReads`), each wipe a location of `Ls` (a finite family holding every listed location) and a day of
+the wipe's guarantee `G` (`Pous.Guarantees.StreamedWipeResidual`, which this layer may not import; `rows_chain`
+supplies it), read on the runs once for each wipe (`RunReads`), each wipe a location of `Ls` (a finite family holding every listed location) and a day of
 the period, at error `2^-s` plus the PRF distinguisher's advantage `adv` a wipe; the row's error is that times the
 wipes, `|Ls| · nDays`, which bounds the run's server-day blocks (`serverDay_count_le`). `survives X d r` is that the
 prior content surviving the wipe at `X` on day `d` of run `r` is under its bound. That guarantee is for a fill that is
@@ -224,10 +223,10 @@ boundary: the row's `wipeEgress` is then no bound on what left the SERVER, and t
 `wipeInputAtMost` proves the summing over the period's wipes from `RunReads` and `WipeInformationGivesWidth` alone;
 `StreamedWipeResidual`, the memory cover and `WipeApplies` are not used by that proof: they are what an instance must
 hold to discharge `RunReads`, which is open. That the wipe bounds a block's input is not proved here. -/
-def WipeInputAtMost (Ls : Finset (Finset L)) (survives : Finset L → Fin P.nDays → P.Run → Prop)
+def WipeInputAtMost (G : Prop) (Ls : Finset (Finset L)) (survives : Finset L → Fin P.nDays → P.Run → Prop)
     (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
-  Pous.Guarantees.StreamedWipeResidual →
-    (∀ X ∈ Ls, ∀ d, P.RunReads Pous.Guarantees.StreamedWipeResidual (survives X d) (2⁻¹ ^ P.wipeError + adv)) →
+  G →
+    (∀ X ∈ Ls, ∀ d, P.RunReads G (survives X d) (2⁻¹ ^ P.wipeError + adv)) →
     P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
     (∀ r i, P.kind r i = true →
       memCap r i ≤ P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i) + P.uncovered (P.locOut r i)) →
