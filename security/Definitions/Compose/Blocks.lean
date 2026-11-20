@@ -67,17 +67,19 @@ and claimed of input at most `k` bits; at most `m` free blocks; every server-day
 capacity (gates; the subtraction that follows is of naturals, so a credited use above the capacity would read as `0`);
 every server-day block's **capacity less PoUW's credited use plus the tolerance** at most `freeSize` gates
 (`P.capacity r i − P.credited r i + P.tol ≤ lim.freeSize`; the free blocks' and the tolerance set's work together are at
-most that number, `FreeWorkAtMost`); every server-day block with a
-size claim, its committed size claim at most `cS` gates; and every server-day block with an input claim from its own
-past (`[.past]`, the wipe's row) and one from the outside world (`[.world]`, network attestation's row), their committed
-bounds summed at most `kS` bits. The limit is on the sum because the policy reads one number for a server-day block's
+most that number, `FreeWorkAtMost`); every server-day block has a size claim, its committed size claim at most `cS`
+gates; and every server-day block has an input claim from its own past (`[.past]`, the wipe's row) and one from the
+outside world (`[.world]`, network attestation's row), their committed bounds summed at most `kS` bits. The classes are
+`cls`'s, so a unit labelled inference whose window starts before its epoch's challenge tick counts among the free
+blocks. The limit is on the sum because the policy reads one number for a server-day block's
 unregistered input and the block's input from both sources is at most the sum (`serverInput_le`); a limit on each would
 let `2 · kS` bits in. A server-day block's input from another block at its location during its window (`.block`) is in
 no row and under no limit here. The policy has no term for a server-day block's output, so the check compares none.
 Three comparisons fix the shape of the committed claims lists: a free block or a hidden unit carries no claim; a hidden
 top block carries no claim; and every claim of a server-day block is a size claim of at least its capacity (gates) or an
 input claim from exactly its own past or exactly the outside world (`serverClaim`). It runs at the period's end on the
-audit's outputs (`credited`) and the registered data (`rate`, `tol`). Coverage, disjointness and the nesting are the
+audit's outputs (`credited`), the registered information (`rate`), the sampling design's tolerance (`tol`) and the
+epochs' challenge ticks (`salt`). Coverage, disjointness and the nesting are the
 partitions' own, so the check states none of them. -/
 def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
   decide ((univ.filter fun u => P.cls r u = Class.inference).card ≤ lim.n) &&
