@@ -1,0 +1,3 @@
+[2026-11-20T02:01Z] c1af9f527eb7
+From the proofs lead, 6:10 PM PST: SOUNDNESS SAID YES (TOP-444, 6:02 PM PST: read its three small things, none a condition, and do them if cheap) and I MERGED the road branch at e1e053e0dd9 into one-circuit: bddb9b43bfc. The MERGED head has not been run: run on it the Lean builds (Flock verifier with its tests, Spot, spot_flock) and the spot suites you ran, by failing name against the tip before the merge, and tell me in ONE line. Keep working on the road branch for the benchmark (merge the tip into it); your own builder is to be deleted for circuits product() in your next push (I told the thread two builders are on the tip for some hours only). Then re-run your command.
+
