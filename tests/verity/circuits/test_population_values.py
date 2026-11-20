@@ -1,7 +1,6 @@
 """`mixed_population_program`'s values: values a window registers, which the population's root takes as parameters ahead of
 the members' and no node reads, named in order in its binding record. The members' parameters, ports, proof blocks and
-results are what they are without values, and a population without values keeps its id and digest (every population's
-recorded id and digest is `test_population_recorded.py`'s)."""
+results are what they are without values, and a population without values keeps its id and digest."""
 from __future__ import annotations
 
 import json
