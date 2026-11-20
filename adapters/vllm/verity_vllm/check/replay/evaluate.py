@@ -14,7 +14,6 @@ from verity_vllm.check.replay.compare import (
     lifted_compare,
     padded_slot_enable,
 )
-from verity_vllm.check.replay.delegate import DELEGATES, Place
 from verity_vllm.check.replay.index import (
     IDS_MEMBER,
     SAMPLER_OP,
@@ -33,7 +32,7 @@ from verity_vllm.definitions.numerics.rows import EVALUATORS, ROWS
 from verity_vllm.program.compact import is_file_prog
 from verity_vllm.query.manifest import format as RM
 
-__all__ = ["DELEGATES", "EVALUATION_TAPS", "ROW_EVALUATORS", "evaluate", "plane_ports", "replay_vu"]
+__all__ = ["EVALUATION_TAPS", "ROW_EVALUATORS", "evaluate", "plane_ports", "replay_vu"]
 
 TOPP_SPLITS_OPERAND = 5     # a sampler select's 6th operand: the top-p select's split count S, the one select with six
 
@@ -294,7 +293,7 @@ def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, in
                 if m is None:
                     pr = pi.by_i.get(a)
                     pd = pi.describe(pr) if pr is not None else None
-                    if pr is not None and pd is not None and pd["members"] == [] and (pd["family"] in EVALUATORS or pd["family"] in DELEGATES):  # an interior producer
+                    if pr is not None and pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:  # an interior producer
                         if depth >= INTERIOR_DEPTH:
                             raise _Unresolved(f"interior chain deeper than {INTERIOR_DEPTH} at row {a} ({pd['family']})")
                         sub_rec: list = []
@@ -337,11 +336,6 @@ def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, in
         return {}
     if ROW_EVALUATORS:
         return ROW_EVALUATORS[-1](pi, r, d, _Operands(inputs, wslices))
-    fn = DELEGATES.get(fam)
-    if fn is not None:                                                   # a protocol's replay answers for the row (`delegate`)
-        member = d["members"][0][0] if d["members"] else "out"
-        at = d["row"] if d["members"] or row is None else row                   # an interior producer is at its consumer's row
-        return fn(st, inputs, wslices, Place(rid, arrive + d["step"], d["op_path"], at, member, store))
     return evaluate(fam, st, inputs, wslices, refs=wrefs)
 
 

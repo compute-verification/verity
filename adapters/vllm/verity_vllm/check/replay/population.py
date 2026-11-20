@@ -9,7 +9,6 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 from verity_vllm.check.replay.index import (
     _MOE_LAYER_RE,
@@ -170,7 +169,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
             if pr is None or pd is None or pd["members"]:
                 continue                                                         # unmodelled / a member-straddling slice: a replay-time fault, not a name
             pf = pd["family"]
-            if pf not in EVALUATORS and pf not in DELEGATES:
+            if pf not in EVALUATORS:
                 out.add(f"{pf} ({NOT_YET.get(pf, 'no registered evaluator')})")
             elif depth + 1 >= INTERIOR_DEPTH:
                 out.add(f"{pf} (interior chain deeper than {INTERIOR_DEPTH})")
@@ -253,7 +252,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
             not_ev_fam[f"{fam} (plane mapping failed)"] += 1
             continue
-        if fam not in EVALUATORS and fam not in DELEGATES:
+        if fam not in EVALUATORS:
             if d is None:
                 _not_ev(f"unmodelled family {fam} (manifest incomplete -- coverage fails closed)", "mapping", fam)
                 not_ev_fam[fam] += 1
