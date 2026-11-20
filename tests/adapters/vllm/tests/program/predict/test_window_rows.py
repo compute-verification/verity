@@ -47,6 +47,7 @@ from tests.program.predict.test_window_circuit_fa3 import H200, _wired_in_slot_a
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import inference_blocks as IB
@@ -366,7 +367,7 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     TINY's 16-bucket windows, are anchored at bucket 16, window 1's one boundary, in lanes 0 and 1, so class Programs 0
     and 1 start them; the state before the window, committed (`state_value`), gives each slot its row and head as the
     stand-in's `STATE` does (`scan_slots`). With the network attester's ingress rows of window 1, `Rows` fills the
-    circuit's scan units with the scan's own outputs: the start's is that state, ingress unit t's are
+    circuit's scan units with the scan's own outputs: the scan state owner's bits are that state, ingress unit t's are
     `ingress_scan.reference` on ingress row 16 + t, the state before it and the entries the window's Programs computed,
     ok every one, and egress unit t's are `egress.outputs` on its view."""
     low, _f, values, _w, slots = window
@@ -378,12 +379,13 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     T, scan = CLASS.buckets, IS.Class(**CLASS.scan.shape)
     own = ingress[T:2 * T]
     filled = WR.Rows(low, slots, {**values, **scan_values(v.rows[0], ingress=[np.frombuffer(r, "<u2") for r in own])})
-    start, bucket, egress = (descriptor_id(f) for f in (CLASS.scan.start, CLASS.scan.bucket, CLASS.scan.egress))
+    bucket, egress = (descriptor_id(f) for f in (CLASS.scan.bucket, CLASS.scan.egress))
+    owner = next(t for t, f in filled.fns.items() if f.defn is BIO.ScanStateV2)
 
     def bits(words) -> list[int]:
         return [int(w) >> j & 1 for w in words for j in range(16)]
 
-    assert bits(filled.outs[start][0][0]) == list(rows[0])
+    assert list(filled.outs[owner][1][0]) == list(rows[0])
     prog = [b for P in sorted(low.programs, key=lambda P: P.lane) for b in bits(filled.outs[P.entry_unit[0]][0][P.entry_unit[1]])]
     sin = list(rows[0])
     for t in range(T):

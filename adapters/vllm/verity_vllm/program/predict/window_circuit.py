@@ -303,7 +303,10 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     otid, ou = b.allocation(bind(BIO.ScanStateV2, NS=ns), [None] * len(owned))
     owner = {a: ou + i for i, a in enumerate(owned)}
     for a, u in owner.items():
-        b.read(otid, "state", u, (1,), a * ns, (0,), SS.SCAN_STATE)
+        if order is None:
+            b.read(otid, "state", u, (1,), a * ns, (0,), SS.SCAN_STATE)
+        else:
+            b.value(otid, "state", u, SS.SCAN_STATE, 0, 1)
     for j in range(cls.lanes):
         groups = ([[(cls.anchor(k), k) for k in range(programs)]] if order is None
                   else [[(a, by.get((a, j), host[a]))] for a in cls.boundaries])

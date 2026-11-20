@@ -27,7 +27,7 @@ from verity.circuits import census as CE
 from verity.circuits import count as K
 from verity.circuits import supplied as SU
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.population import wired_population_program
@@ -44,6 +44,7 @@ from verity.protocols.resource_accounting.network.prover import ingress_scan as 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program import model as M
@@ -287,27 +288,27 @@ def test_a_served_window_at_the_class_of_records_slots_reads_boundary_0_and_a_re
 
 def test_a_served_windows_circuit_holds_the_scan_its_entries_wired_into_it():
     """A served window's circuit holds the network attester's scan (the network scheme's ports, `scan_state.Scan`):
-    WINDOW at TINY's class is its start unit and an ingress and an egress unit a bucket, 16 each, beside its Programs. Its
-    registered values are the weights', the start's one state row, the network attester's ingress rows and its released
-    rows, and no later bucket's state: ingress unit t reads S_{t−1} by wire (the start's at t = 0) and, as ``prog<j>``,
-    lane j's entry; each lane's `ScanSlots_v4` reads the start's as u16 words; egress unit t reads ingress unit t's view, its row
-    held to released row t. Its external ports are the three the scheme names, and the order puts every read after its
-    writer."""
+    WINDOW at TINY's class is the scan state's owner and an ingress and an egress unit a bucket, 16 each, beside its
+    Programs. Its registered values are the weights', the owner's one state row, the network attester's ingress rows and
+    its released rows, and no later bucket's state: ingress unit t reads S_{t−1} by wire (the owner's bits at t = 0) and,
+    as ``prog<j>``, lane j's entry; each lane's `ScanSlots_v5` reads the owner's u16 words; egress unit t reads ingress
+    unit t's view, its row held to released row t. Its external ports are the owner's state and the scheme's ingress and
+    released rows, and the order puts every read after its writer."""
     low = _lowered(WINDOW)
     c, s = low.circuit, CLASS.scan
-    start, bucket, egress = (IF.descriptor_id(f) for f in (s.start, s.bucket, s.egress))
-    assert all(_counts(c)[k] == n for k, n in _scan_units(CLASS).items())
+    owner, bucket, egress = (IF.descriptor_id(f) for f in (bind(BIO.ScanStateV2, NS=4548), s.bucket, s.egress))
+    assert all(_counts(c)[k] == n for k, n in _scan_units(CLASS).items()) and _counts(c)[OWNER] == 1
     assert c.registered.values == (SS.SCAN_STATE, SS.INGRESS_ROWS, SS.RELEASED_ROWS)
     scan = (SS.SCAN_STATE, SS.INGRESS_ROWS, SS.RELEASED_ROWS)
     assert {(r.param, r.reader, r.port, r.at, r.radix) for r in c.registered.reads if r.param in scan} == {
-        (SS.SCAN_STATE, start, "sin", 0, (1,)), (SS.INGRESS_ROWS, bucket, "row", 0, (16,)),
+        (SS.SCAN_STATE, owner, "state", 0, (1,)), (SS.INGRESS_ROWS, bucket, "row", 0, (16,)),
         (SS.RELEASED_ROWS, egress, "o1", 0, (16,))}
-    assert [_source(c, bucket, "sin", t) for t in range(16)] == [(start, 0, "o0")] + [(bucket, t, "o1") for t in range(15)]
+    assert [_source(c, bucket, "sin", t) for t in range(16)] == [(owner, 0, "o1")] + [(bucket, t, "o1") for t in range(15)]
     entries = {p.lane: p.entry_unit for p in low.programs}
     assert all(_source(c, bucket, f"prog{j}", t) == (*entries[j], "o0") for t in range(16) for j in range(2))
-    assert {_source(c, t, "state", u) for _, _, (t, u) in low.scans} == {(start, 0, "o1")}
+    assert {_source(c, t, "state", u) for _, _, (t, u) in low.scans} == {(owner, 0, "o0")}
     assert [_source(c, egress, "state", t) for t in range(16)] == [(bucket, t, "o2") for t in range(16)]
-    assert c.external == (f"{start}/sin", f"{bucket}/row", f"{egress}/o1") and c.order is not None
+    assert c.external == (f"{owner}/state", f"{bucket}/row", f"{egress}/o1") and c.order is not None
     assert IF.input_count(c.description(), **held(c))["free"] == 0
 
 
@@ -327,7 +328,7 @@ def test_every_scan_buckets_verdict_reads_the_one_supplied_ok_and_the_class_circ
     assert {(r.reader, r.port, r.at, r.radix, r.base, r.step) for r in c.registered.reads if r.param == SS.OK} == {
         (bucket, "o0", 0, (16,), 0, (0,)), (egress, "o0", 0, (16,), 0, (0,))}
     assert not any(r.reader == start for r in c.registered.reads if r.param == SS.OK)
-    sources, n = G.body({}, SS.OK, SS.OK_MARK)
+    sources, n = G.body({}, {}, SS.OK, SS.OK_MARK)
     assert (sources, n) == ([("bytes", "0100")], 2)
     assert SU.leaves("le", bytes.fromhex(sources[0][1]), IF.value_format(c.registered, SS.OK)[1]) == [1]
     cls = class_circuit(S._registered(), CLASS, None, GRAIN).registered
@@ -854,8 +855,8 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     with its collector are step p, its feed (p = 1..3) step p, its scan units step 0 and its entry step 4, a head's Calls
     over T keys step T - 1 (their digits layer, slot, head; the ends one template over every step), and the entries tile
     every template.
-    Every wire's writer is of its reader's slot at its step or before: a slot reads only its own units, a position only its
-    own and earlier positions'."""
+    Every wire's writer is of its reader's slot, or a unit of no request, at its step or before: a slot reads only its own
+    units and the scan state's owner, a position only its own and earlier positions'."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 71)
@@ -872,11 +873,12 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     assert [{s for *_, s in by[att.format(t)]} for t in range(1, 6)] == [{t} for t in range(5)]
     assert by["RoPEHead_v1{D=16}"][:2] == [(0, (2, 4), ("slot", "-"), 0), (8, (2, 2), ("slot", "-"), 0)]
     labels = _labels(circuit)
+    shared = {e.template for e in circuit.blocks.inference if not e.request}
     assert all((lab >= 0).all() for lab in labels.values())
     for w in circuit.wires:
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
-        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+        assert (w.writer in shared or (reader[:, 0] == writer[:, 0]).all()) and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
 
 
 def test_inference_entries_are_the_slots_runs_side_by_side():
@@ -1224,8 +1226,8 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 def test_a_window_its_slots_dont_place_is_refused_by_name():
     """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network attester's
     scan placed it, at boundary 0, is its request's Program there, a last output past the window's end included (the scan
-    carries it across windows), and its lane's scan unit at each boundary reading its state row by wire from a start unit
-    there, the first start's row the one registered, the second's S_15; refused by name are two requests at one boundary,
+    carries it across windows), and its lane's scan unit at each boundary reading its state row by wire: at 0 the scan
+    state's owner's, the row registered, at 16 a start unit's S_15; refused by name are two requests at one boundary,
     a request at bucket 16 (C's shape holds
     no request's bucket) and an anchor that is no boundary. A placement that isn't one a request is a caller's error."""
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
@@ -1234,10 +1236,10 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
     low = _lowered(ONE, cls, [(0, 15)])
     assert ([(p.anchor, p.lane) for p in low.programs], [(a, j) for a, j, _ in low.scans]) == ([(0, 0)], [(0, 0), (16, 0)])
     assert _bytes(_circuit(ONE, cls=cls, placed=[(0, 47)])) == _bytes(ok)
-    start = IF.descriptor_id(cls.scan.start)
-    assert [(r.reader, r.at, r.radix, r.base) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [(start, 0, (1,), 0)]
-    assert [_source(ok, t, "state", u) for _, _, (t, u) in low.scans] == [(start, 0, "o1"), (start, 1, "o1")]
-    assert _source(ok, start, "sin", 1) == (IF.descriptor_id(cls.scan.bucket), 15, "o1")
+    start, owner = IF.descriptor_id(cls.scan.start), IF.descriptor_id(bind(BIO.ScanStateV2, NS=2277))
+    assert [(r.reader, r.at, r.radix, r.base) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [(owner, 0, (1,), 0)]
+    assert [_source(ok, t, "state", u) for _, _, (t, u) in low.scans] == [(owner, 0, "o0"), (start, 0, "o1")]
+    assert _source(ok, start, "sin", 0) == (IF.descriptor_id(cls.scan.bucket), 15, "o1")
     for placed, match in (
             (None, "2 requests anchored at bucket 0, past the 1 slots a boundary has"),
             ([(0, None), (16, None)], "request 1: anchored at bucket 16, and a served Program reads boundary 0's scan state"),

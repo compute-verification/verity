@@ -128,7 +128,8 @@ def test_a_served_window_of_equal_requests_has_a_table(full):
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
     """A served window's blocks are a request each of its own positions (WINDOW's 5 and 4), not blocks of one gate count,
-    so the budgets and the block counts' session refuse them by name rather than give a slot an equal share."""
+    so the budgets and the block counts' session refuse them by name rather than give a slot an equal share: each lane's
+    slots are its own `ScanSlots_v5` template."""
     from verity_vllm.program.predict import block_counts as BC
 
     circuit = _circuit(WINDOW)
@@ -136,7 +137,7 @@ def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
         IB.budgets(circuit)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    with pytest.raises(ValueError, match="units of no request .* are in no inference block"):
+    with pytest.raises(ValueError, match="request blocks of other templates or units have no one session Definition"):
         BC.session(doc)
 
 
