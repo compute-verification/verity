@@ -795,15 +795,16 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
 def floors(c: bytes, query: dict, tp: Any, chosen: Sequence[tuple[int, int, str]], exe: Callable[[], Path],
            rows_of, form: str = "unit", piece: Any = None) -> list[Result]:
     """For each chosen unit ``u``, the block [u, u + k) at the fewest ``k`` (1, 2, 4, ..., then the units of u's range
-    from u, short of the next chosen unit) that passes every step, else at the largest tried; its ``tried`` lists each
-    ``k`` with its class (``through``) and widest row. Round ``i`` puts every unpassed unit's ``i``-th size through
-    one partition."""
+    from u, short of the next chosen unit; under ``whole``, whose block may hold several templates, then `CAP` units
+    from u, the population's end short of that) that passes every step, else at the largest tried; its ``tried`` lists
+    each ``k`` with its class (``through``) and widest row. Round ``i`` puts every unpassed unit's ``i``-th size through
+    as few partitions as hold its blocks apart."""
     starts = sorted(lo for lo, _hi, _s in chosen)
     ks = []
     for lo, _hi, _s in chosen:
         _k, _t, a, n = next(x for x in tp.ranges if x[2] <= lo < x[2] + x[3])
         nxt = starts[bisect.bisect_right(starts, lo)] if bisect.bisect_right(starts, lo) < len(starts) else tp.population
-        most, k, mine = min(a + n, nxt) - lo, 1, []
+        most, k, mine = (min(tp.population, lo + CAP) if form == "whole" else min(a + n, nxt)) - lo, 1, []
         while k < most:
             mine.append(k)
             k *= 2
@@ -815,14 +816,22 @@ def floors(c: bytes, query: dict, tp: Any, chosen: Sequence[tuple[int, int, str]
         if not live:
             break
         trial = sorted((chosen[j][0], chosen[j][0] + ks[j][i], chosen[j][2], j) for j in live)
-        blocks, at = tiling([(lo, hi, s) for lo, hi, s, _j in trial], tp.population)
-        door = Door(c, query, blocks, exe, form, piece)
-        for (lo, hi, s, j), k in zip(trial, at):
-            r = door.run(k, lo, hi, s)
-            r.circuit = None
-            tried[j].append([hi - lo, r.klass or "through", r.row_bits])
-            last[j] = r
-        del door
+        groups: list[list] = []
+        for x in trial:
+            g = next((g for g in groups if g[-1][1] <= x[0]), None)
+            if g is None:
+                groups.append([x])
+            else:
+                g.append(x)
+        for g in groups:
+            blocks, at = tiling([(lo, hi, s) for lo, hi, s, _j in g], tp.population)
+            door = Door(c, query, blocks, exe, form, piece)
+            for (lo, hi, s, j), k in zip(g, at):
+                r = door.run(k, lo, hi, s)
+                r.circuit = None
+                tried[j].append([hi - lo, r.klass or "through", r.row_bits])
+                last[j] = r
+            del door
     for j, r in enumerate(last):
         r.tried = tried[j]
         rows_of(r)
