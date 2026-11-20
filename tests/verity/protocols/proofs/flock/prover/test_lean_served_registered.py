@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -31,7 +32,10 @@ import pytest
 
 from verity.circuits.codec import canonical_json, encode_program
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.commitments import registered_value as RV
+from verity.commitments import hm96, registered_value as RV
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import row_leaf
 from verity.protocols.proofs.spot.prover.served import register_served
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
@@ -41,9 +45,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    RV.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
-    G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
-    G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
+    RV.SCHEMA: "art:b284035a495875f36492cfd26413a2053cf73dde9e94d3f758f59eec8fbfafd6",
+    G.SCHEMA_V2: "art:afb642fa3d905336f0458a713b093dbdb51481a2dfa92418302a39a3c0f25cc9",
+    G.SCHEMA_SEG: "art:f3712137e8e44952c937e7c42f9071475a70f3bb3c2e0afcf64003596cef8acd",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
@@ -140,6 +144,56 @@ def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_again
     moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
     bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and bad["registered_sha512"] == digest(moved) != ok["registered_sha512"], bad
+
+
+def test_a_members_reads_of_the_served_tree_at_another_root_value_or_word_are_refused_on_the_verifiers_file(fx, tmp_path):
+    """The member's side changed and the verifier's registered file as `register_served` writes it: the member's paths
+    climbing to another root than the file's (each path's last sibling changed), its header naming another value at
+    the port, and one word of a table row's `b || c` changed with the header's own root of the port recomputed over
+    the changed rows: each refused by the registered reads' check, by name, before any proof is read."""
+    import served_registered as SR
+
+    _, fx = fx
+    program, query = SR.program()
+    tree, x_tree, out_port = SR.load(fx / "stage")
+    reads = SR.write_registered(SR.registered_file(program, query, tree, x_tree, out_port), tmp_path / "registered.json")
+    pub = (fx / "stage" / "pub-32.bin").read_bytes()
+    nl = pub.index(b"\n")
+    header = json.loads(pub[:nl])
+    cs = header["registered"]["cs"]
+
+    def why(h: dict, body: bytes = pub[nl:], name: str = "pub.bin") -> str:
+        (tmp_path / name).write_bytes(json.dumps(h).encode() + body)
+        bad = _verify(fx, reads, public=tmp_path / name)
+        assert bad["accepted"] is False, bad
+        return bad["why"]
+
+    climbs = [p[:-2] + ("00" if p[-2:] != "00" else "11") for p in cs["paths"]]
+    other_root = why({**header, "registered": {**header["registered"], "cs": {**cs, "paths": climbs}}}, name="root.bin")
+    assert re.search(rf"registered reads: port cs: table row \d+ does not open {SR.VALUE}'s registered root at position "
+                     r"\d+", other_root), other_root
+    other_value = why({**header, "registered": {**header["registered"], "cs": {**cs, "value": "cs_other"}}},
+                      name="value.bin")
+    assert f"registered reads: port cs reads {SR.VALUE}, not another value" in other_value, other_value
+    fv, k = header["frame_v3"], header["shared_rows"]["cs"]
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"]["cs"]), fv["owner"], RangeIndexedDomain(0, k), hash="sha512")
+    assert dom.domain_id.hex() == fv["domain_ids"]["cs"] and set(header["shared_rows"].values()) == {k}
+
+    def root(rows: list[bytes]) -> str:
+        leaves = [row_leaf(dom, i, hm96.SHA512.tree_leaf(hm96.SHA512.default_key, bc), fv["schemas"]["cs"])
+                  for i, bc in enumerate(rows)]
+        return tree_levels(dom, leaves)[-1][0].hex()
+
+    body = pub[nl + 1:]
+    s = next(128 * k * b for b in range(len(header["shared_rows"]))
+             if root([body[128 * k * b + 128 * i:128 * k * b + 128 * i + 128] for i in range(k)]) == fv["roots"]["cs"])
+    word = bytes([body[s] ^ 1]) + body[s + 1:s + 128]
+    rows = [word] + [body[s + 128 * i:s + 128 * i + 128] for i in range(1, k)]
+    changed = why({**header, "frame_v3": {**fv, "roots": {**fv["roots"], "cs": root(rows)}}},
+                  b"\n" + body[:s] + word + body[s + 128:], name="word.bin")
+    assert (f"registered reads: port cs: table row 0 does not open {SR.VALUE}'s registered root at position "
+            f"{cs['positions'][0]}") in changed, changed
+    print("NEGATIVES", json.dumps({"other_root": other_root, "other_value": other_value, "changed_word": changed}))
 
 
 def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):

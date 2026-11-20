@@ -1,6 +1,6 @@
 """A served window's check (`window_builder.check_served`): the older composer's floor is not asked, a template past what
-Flock takes is refused by name, and the templates a block of one unit of which is under the prover's floor are named and
-stay in the circuit's population."""
+Flock takes is refused by name, and the templates a block of all of whose units is under the prover's floor are named
+and stay in the circuit's population."""
 from __future__ import annotations
 
 import json
