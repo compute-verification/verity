@@ -163,9 +163,8 @@ def test_two_bodies_for_one_fully_qualified_specialization_are_rejected():
     top = CompositeDefinition("TopConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                               lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(
                                   [B.call(da, x, w), B.call(db, x, w)]), register=False)
-    P = Program(bind(top))
     with pytest.raises(IdentityConflict, match="DotConflict_v1"):
-        encode_program(P)
+        encode_program(Program(bind(top)))
     # ... whichever order the two are met in
     top2 = CompositeDefinition("TopConflict2", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(2, V16)),
                                lambda B, S, x, w: __import__("verity.circuits.refs", fromlist=["array_of"]).array_of(
