@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Flock.Circuit.LowerAsm
 public import Proofs.Properties.Flock.Circuit.Chain
 public import Proofs.Properties.Flock.DecodeBoolean
+public import Proofs.Properties.Poub.Remote.Sort
 
 /-!
 # `LowerEval`, proved
@@ -159,12 +160,12 @@ theorem ite_ok {α ε : Type} {c : Prop} [Decidable c] {x y : Except ε α} {a :
 
 /-- `admitted`'s `let #[key] := keys` at a one-key array, by `delta`: Lean generates no equations for an array-literal
 pattern. -/
-theorem match11_one {β : Sort _} (key : String) (h1 : String → β) (h2 : Array String → β) :
+theorem matchKey_one {β : Sort _} (key : String) (h1 : String → β) (h2 : Array String → β) :
     Spot.OneStageZk.admitted.match_17 (fun _ => β) ⟨[key]⟩ h1 h2 = h1 key := by
   delta Spot.OneStageZk.admitted.match_17; rfl
 
 /-- `admitted`'s `let #[key] := keys` at any other array. -/
-theorem match11_ne {β : Sort _} (x : Array String) (h1 : String → β) (h2 : Array String → β) (hx : x.size ≠ 1) :
+theorem matchKey_ne {β : Sort _} (x : Array String) (h1 : String → β) (h2 : Array String → β) (hx : x.size ≠ 1) :
     Spot.OneStageZk.admitted.match_17 (fun _ => β) x h1 h2 = h2 x := by
   delta Spot.OneStageZk.admitted.match_17; rw [dif_neg hx]
 
@@ -194,12 +195,12 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   try dsimp only at h
   generalize Array.qsort called (fun x1 x2 => decide (x1 < x2)) = keys at h
   rcases keys with ⟨_ | ⟨key, _ | ⟨k2, rest⟩⟩⟩
-  · rw [match11_ne _ _ _ (by decide)] at h
+  · rw [matchKey_ne _ _ _ (by decide)] at h
     exact absurd h notAdmitted_ne
   swap
-  · rw [match11_ne _ _ _ (by simp)] at h
+  · rw [matchKey_ne _ _ _ (by simp)] at h
     exact absurd h notAdmitted_ne
-  rw [match11_one] at h
+  rw [matchKey_one] at h
   try dsimp only at h
   rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
   · exact absurd h notAdmitted_bind_ne
@@ -1077,6 +1078,96 @@ theorem admitted_index {partition : Lean.Json} {cuts : List (String × List (Str
   exact hi
 
 end AdmitTriples
+
+section FrontTriples
+open Std.Do
+set_option mvcgen.warning false
+
+theorem exc_self_spec {ε α : Type} (x : Except ε α) : ⦃⌜True⌝⦄ x ⦃⇓? r => ⌜x = .ok r⌝⦄ := by
+  cases x with
+  | error e => exact fun _ => True.intro
+  | ok a => exact fun _ => rfl
+
+theorem unitAt_self_spec (P : Prog) u :
+    ⦃⌜True⌝⦄ Spot.BlockFront.unitAt P u ⦃⇓? r => ⌜Spot.BlockFront.unitAt P u = .ok r⌝⦄ := exc_self_spec _
+theorem portsOf_spec xs : ⦃⌜True⌝⦄ Spot.BlockFront.portsOf xs ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+theorem frontLift_spec (P : Prog) st : ⦃⌜True⌝⦄ Spot.BlockFront.lift P st ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+
+/-- Unit `u` is located, at root node `k`'s member `m`, and its gates' range is in `S`. -/
+def MemOk (P : Prog) (S : Array (ℕ × ℕ)) (u : ℕ) : Prop :=
+  ∃ k m, Spot.BlockFront.unitAt P u = .ok (k, m) ∧
+    ((P.child P.rootScope k m).off, (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates) ∈ S
+
+theorem memOk_push {P : Prog} {S : Array (ℕ × ℕ)} {u : ℕ} (r : ℕ × ℕ) (h : MemOk P S u) : MemOk P (S.push r) u := by
+  obtain ⟨k, m, hk, hm⟩ := h
+  exact ⟨k, m, hk, Array.mem_push.2 (.inl hm)⟩
+
+theorem mem_step {P : Prog} {S : Array (ℕ × ℕ)} {pref : List ℕ} {cur k m : ℕ}
+    (hk : Spot.BlockFront.unitAt P cur = .ok (k, m)) (hinv : ∀ u ∈ pref, MemOk P S u) :
+    ∀ u, u ∈ pref ∨ u = cur → MemOk P (S.push ((P.child P.rootScope k m).off,
+      (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates)) u := by
+  intro u hu
+  rcases hu with hu | rfl
+  · exact memOk_push _ (hinv u hu)
+  · exact ⟨k, m, hk, Array.mem_push.2 (.inr rfl)⟩
+
+theorem mem_final {P : Prog} {S : Array (ℕ × ℕ)} {units : Array ℕ} (h : ∀ u ∈ units.toList, MemOk P S u) :
+    ∀ u ∈ units, MemOk P S u := fun u hu => h u (Array.mem_toList_iff.2 hu)
+
+/-- `members` locates every unit and puts its range in its table. -/
+theorem members_triple (P : Prog) (units : Array ℕ) :
+    ⦃⌜True⌝⦄ Spot.BlockFront.members P units ⦃⇓? r => ⌜∀ u ∈ units, MemOk P r.2 u⌝⦄ := by
+  unfold Spot.BlockFront.members
+  mvcgen [unitAt_self_spec, exc_throw_spec, -Spec.throw_Except] invariants
+  · ⇓? ⟨xs, S, _⟩ => ⌜∀ u ∈ xs.prefix, MemOk P S u⌝
+  all_goals first
+    | trivial
+    | (intro u hu; simp at hu; done)
+    | ((try simp only [List.mem_append, List.mem_singleton]); exact mem_step (by assumption) (by assumption))
+    | exact mem_final (by assumption)
+    | exact exc_wp_true _ _ (fun r => by cases r <;> exact True.intro)
+
+theorem memOk_qsort {P : Prog} {S : Array (ℕ × ℕ)} {u : ℕ} (lt : ℕ × ℕ → ℕ × ℕ → Bool) (h : MemOk P S u) :
+    MemOk P (S.qsort lt) u := by
+  obtain ⟨k, m, hk, hm⟩ := h
+  exact ⟨k, m, hk, Array.mem_toList_iff.1
+    ((Properties.Poub.qsort_toList_perm S lt).mem_iff.2 (Array.mem_toList_iff.2 hm))⟩
+
+/-- `front`'s ranges hold every unit's, each unit located. -/
+theorem front_triple (P : Prog) (units : Array ℕ) :
+    ⦃⌜True⌝⦄ Spot.BlockFront.front P units ⦃⇓? fr => ⌜∀ u ∈ units, MemOk P fr.ranges u⌝⦄ := by
+  unfold Spot.BlockFront.front
+  mvcgen [members_triple, operandsW_spec, resolve_spec, portsOf_spec, frontLift_spec, exc_throw_spec,
+    -Spec.throw_Except] invariants
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  all_goals first
+    | trivial
+    | exact fun u hu => memOk_qsort _ ((by assumption : ∀ u ∈ units, MemOk P _ u) u hu)
+    | exact exc_wp_true _ _ (fun r => by cases r <;> exact True.intro)
+
+end FrontTriples
+
+/-- **`FrontUnitRanges`** holds. -/
+theorem frontUnitRanges : FrontUnitRanges := by
+  intro P units fr hf g hg
+  obtain ⟨k, m, hk, hm⟩ := exc_of_triple (front_triple P units) hf g hg
+  refine ⟨k, m, hk, fun h ⟨h1, h2⟩ => ?_⟩
+  have h2' : h < (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).gates := by
+    cases hd : P.defs[(P.child P.rootScope k m).d]? with
+    | none => rw [hd] at h2; simp at h2; omega
+    | some D =>
+      rw [hd] at h2
+      have : P.defs[(P.child P.rootScope k m).d]! = D := by simp [getElem!_def, hd]
+      rw [this]; simpa using h2
+  unfold Spot.BlockFront.inside
+  rw [Array.any_eq_true']
+  exact ⟨_, hm, by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact ⟨h1, h2'⟩⟩
 
 theorem child_d (P : Prog) (k m : ℕ) :
     (P.child P.rootScope k m).d = ((P.defs[P.root]!).body.nodes[k]!).fn := rfl
