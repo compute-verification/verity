@@ -111,7 +111,7 @@ def _label(fn) -> str:
 def _scan(ns: int, lane: int) -> str:
     """Lane ``lane``'s scan state read at TINY's bounds on a state row of ``ns`` words, its lanes 36,333 bits apart."""
     o = 36333 * lane
-    return f"ScanSlots_v4{{NS={ns},NP=4,IDB=17,K0=12,K=45,OCC={376 + o},LP={168 + o},MAX={200 + o},IDS={474 + o}}}"
+    return f"ScanSlots_v5{{NS={ns},NP=4,IDB=17,K0=12,K=45,OCC={376 + o},LP={168 + o},MAX={200 + o},IDS={474 + o}}}"
 
 
 #: the scan state read at TINY's 2 lanes (4,548 words a row), lane j's at j
@@ -529,7 +529,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     down_proj's 8 at K 128, its RoPE a unit a head, its attention a unit a head a Call of `AttentionHead_v19`'s body
     (position p's first key block of p + 1 keys, `AttnBlockFirst_v1{NVIS=p + 1}`, and its end), its token select four
     units of four groups each and a combine, its first position's token, slot, occupancy word and head its lane's of the scan state row
-    (its unit of its lane's `ScanSlots_v4`, a slot a unit of each lane's), positions 1..3's tokens `TokenFeed_v1` units, each position's combine its select collected
+    (its unit of its lane's `ScanSlots_v5`, a slot a unit of each lane's), positions 1..3's tokens `TokenFeed_v1` units, each position's combine its select collected
     (`SelectCollect_v1`), and its last position's its entry too (`SelectEntry_v1`). A port read as m writer rows is cut m ways, each
     row its writer's as it is (a key block's keys and values a row a position, the fused norm's ``x`` a row a slice), and
     the wiring is a pattern per run, the two slots' one, not a wire per unit, but for the scan's, a template a lane. The external rows are the scan state rows the slots read and their entries."""
@@ -549,28 +549,28 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
         ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
         ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
-        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v2", "tok", "ScanSlots_v4", "o0"): 2,
+        ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v2", "tok", "ScanSlots_v5", "o0"): 2,
         ("EmbeddingRead_v2", "tok", "TokenFeed_v1", "o0"): 1,
         ("EmbeddingRead_v2", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 21, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 10,
         ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v2", "o0"): 5,
         ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
         ("RMSNormTriton_v5", "x", "EmbeddingRead_v2", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
-        ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v4", "o3"): 2,
+        ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v5", "o3"): 2,
         ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
         ("SelectCollect_v1", "state", "SelectCollect_v1", "o1"): 2, ("SelectCollect_v1", "x0", "Gemm_v2", "o0"): 2,
         ("SelectEntry_v1", "best", "TokenSelectGroups_v1", "o0"): 1, ("SelectEntry_v1", "idx", "TokenSelectGroups_v1", "o1"): 1,
-        ("SelectEntry_v1", "occ", "ScanSlots_v4", "o2"): 2,
+        ("SelectEntry_v1", "occ", "ScanSlots_v5", "o2"): 2,
         ("SelectEntry_v1", "state", "SelectCollect_v1", "o1"): 1, ("SelectEntry_v1", "x0", "Gemm_v2", "o0"): 1,
         ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 1, ("TokenFeed_v1", "sel", "SelectCollect_v1", "o0"): 2,
-        ("TokenFeed_v1", "slot", "ScanSlots_v4", "o1"): 2,
+        ("TokenFeed_v1", "slot", "ScanSlots_v5", "o1"): 2,
         ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 1}
     assert circuit.external == (*(f"{ids[s]}/state" for s in SCANS), f"{ids[ENTRY]}/o0")
 
 
 def test_a_positions_token_is_its_feed_below_the_prompt_bound_and_the_previous_select_past_it(window):
     """Each slot's request is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0
-    of the registered scan state), read by its unit of its lane's `ScanSlots_v4` (unit k of each lane's template is slot
+    of the registered scan state), read by its unit of its lane's `ScanSlots_v5` (unit k of each lane's template is slot
     k's), whose outputs ``o0`` to ``o3`` are the first
     position's token and slot (its `TokenFeed_v1`'s), the occupancy word and the head. Position 0's embedding reads
     its lane's token and position 1's feed its lane's slot; each later feed reads its predecessor's slot and the previous
@@ -683,7 +683,7 @@ def state_row(scan, fields) -> list[int]:
 def test_the_scan_state_row_is_ingress_scans_and_its_wide_read_is_one_row_a_slot():
     """The scan state row a slot reads is `ingress_scan.layout`'s, its head then each lane's fields, ``occ`` (the slot's
     occupancy word, 1 when its Program starts at the row's boundary) among them: at the class of record (4 lanes, KO 64,
-    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. A lane's `ScanSlots_v4` takes it whole, one
+    the scan's cells of record) 9,353 u16 words, lane j's fields 37,387 bits apart. A lane's `ScanSlots_v5` takes it whole, one
     registered row a unit, and gives the lane's first token (2 words), slot (2,050 at 1,024 prompt ids), occupancy word
     (2) and head (4): its unit is 1 + 4 rows. A row packed by the layout (`state_row`) reads back each lane's fields, ids at `io_shell.position`, and its first position's token and
     slot (`io_shell.scan_reference`): an empty lane's token 0 and prompt length -1 past it."""

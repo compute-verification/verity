@@ -267,7 +267,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
 
 
 def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
-    """Each slot's row and head are its lane's of the scan state row its lane's `ScanSlots_v4` reads, the one at its anchor
+    """Each slot's row and head are its lane's of the scan state row its lane's `ScanSlots_v5` reads, the one at its anchor
     (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): a slot of another row than its lane's, a class
     circuit, slots of other Programs than the circuit's, or no scan state's value, are refused by name."""
     low, _f, values, weights, slots = window
@@ -855,7 +855,7 @@ def _packed(bits: np.ndarray, width: int) -> np.ndarray:
 
 def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     """`_packed` against `SlotEntry_v1`'s entry, words of bit leaves, which pack to `entry_reference`'s words; and
-    each lane's `ScanSlots_v4`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lane."""
+    each lane's `ScanSlots_v5`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lane."""
     row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     for scan in SS.bridge(CLASS.scan, CLASS.prompt):
         (_, t), = scan.signature()[0]

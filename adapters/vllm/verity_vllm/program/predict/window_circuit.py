@@ -110,7 +110,7 @@ Given H1's tables of the window (`Tables`, `window_class`), the circuit reads ea
 output row (`interface.Read`) that holds the proof block's output row to the registered row: each quantizer at the
 tables' K is `Int8RowQuant_v5{K, R, ROUND}`, its ``o2`` a row of its round's A table, and each position's token row a row of
 its round's input-ids table, at a fixed load's rows (`Tables.at`). Each reader reads one table, and each table's readers are
-templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v4` and `TokenFeed_v1`
+templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v5` and `TokenFeed_v1`
 units' and a later round's the select before it, `io_shell.SelectCollect_v2{..., ROUND}`. So a sample stratified by
 template (one stratum a template) has a reader of every table.
 
@@ -128,7 +128,7 @@ it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
-and token select with its collector after it are that position's (the last's with the entry), and a lane's `ScanSlots_v4`
+and token select with its collector after it are that position's (the last's with the entry), and a lane's `ScanSlots_v5`
 unit its Program's first position's (an empty lane's, the slot's that holds its collector). An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps
 (`window_builder.inference`).
@@ -208,7 +208,7 @@ class Lowered:
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
     the window's requests (`window_class.takes`), none in a class circuit's; each empty slot of a served window,
     ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`); and
-    each `ScanSlots_v4` unit, ``(anchor, lane, unit)``."""
+    each `ScanSlots_v5` unit, ``(anchor, lane, unit)``."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
