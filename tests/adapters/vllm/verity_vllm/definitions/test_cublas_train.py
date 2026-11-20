@@ -166,15 +166,15 @@ def test_the_tf32_gemm_is_sm120s_on_the_capture_words() -> None:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import evaluate
 
-    from verity_vllm.definitions.numerics import mhc_twin as MT
+    from verity_vllm.definitions.numerics import tf32_twin as TT
     from verity_vllm.definitions.numerics import torch_kernels as TK
     from verity_vllm.definitions.registry import boolean_sigma as SG
-    from verity_vllm.definitions.registry import mhc as MHC
+    from verity_vllm.definitions.registry import tf32_wgmma as TW
 
     d = np.load(FIXTURES / "cublas_tf32_sm120.npz")
     cases = sorted({k.rsplit("/", 1)[0] for k in d.files})
     assert cases == sorted(f"{M}x{K}x{N}/{la}{lb}" for M, K, N in CB.TRAIN_TF32 for la in "nt" for lb in "nt"), cases
-    base = MHC.HOPPER_TF32_WGMMA_K8_CANDIDATE
+    base = TW.HOPPER_TF32_WGMMA_K8_CANDIDATE
     alts = {(g, w, r): dataclasses.replace(base, groups=g, width=w) for g in ((8,), (4, 4), (2, 2, 2, 2)) for w in range(24, 29)
             for r in ("rne", "rna", "trunc") if (g, w, r) != (tuple(base.groups), base.width, "rne")}
     missed = dict.fromkeys([*alts, "ffma"], False)
@@ -189,7 +189,7 @@ def test_the_tf32_gemm_is_sm120s_on_the_capture_words() -> None:
         for (g, width, r), model in alts.items():
             acc = np.zeros(len(y), np.uint32)
             for k in range(0, K, 8):
-                acc = MT.tf32_dot8(acc, x[:, k:k + 8], w[:, k:k + 8], model, r, r)
+                acc = TT.tf32_dot8(acc, x[:, k:k + 8], w[:, k:k + 8], model, r, r)
             missed[(g, width, r)] |= not np.array_equal(acc, y)
         acc = np.zeros(len(y), np.uint32)
         for k in range(K):

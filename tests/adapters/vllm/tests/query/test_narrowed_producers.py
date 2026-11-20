@@ -151,3 +151,40 @@ def _metas(acquired: list) -> list:
     return metas
 
 
+
+
+def _plan(build, tmp_path) -> list[dict]:
+    """The seal's capture plan of the fixture's one request Program (`capture_plan.rows_of_build`)."""
+    from verity_vllm.check.capture_plan import rows_of_build
+
+    d, _man, _inst = build
+    (tmp_path / "build_request_r0").symlink_to(d)
+    return rows_of_build(tmp_path)
+
+
+def test_the_seals_binder_binds_a_narrowed_linears_return_to_its_whole_rows_at_every_step(build, tmp_path):
+    """The seal binds each step's events with the capture plan's members (`serve_seal.served_binder_of`), which name the last
+    layer's qkv `out` and `out@64` at one op path: its returned tensor binds `out`, never the empty member of an unbound slot,
+    and every module's return binds a member the plan names."""
+    from verity_vllm.pipeline.serve_seal import served_binder_of
+
+    _d, man, _inst = build
+    plan = _plan(build, tmp_path)
+    members = {str(r["op_path"]): [str(m[0]) for m in r["members"]] for r in plan}
+    assert members[LAST_QKV] == ["out@64", "out"] or members[LAST_QKV] == ["out", "out@64"]
+    binder = served_binder_of(plan, [0, 1], {}, False, man["op_path_aliases"])
+    returns = [op for op, ms in members.items() if "/" not in op and len([m for m in ms if "@" not in m]) == 1]
+    for step in (0, 1):
+        got = binder.bind(step, returns)
+        assert not [g for g in got if g[3] == "unbound"], [g for g in got if g[3] == "unbound"]
+        assert got[returns.index(LAST_QKV)] == (LAST_QKV, "out", 0, "slot")
+
+
+def test_a_narrowed_linears_slot_that_binds_nothing_is_refused_by_name():
+    """A capture plan that names a narrowed linear's narrowed rows and not its whole rows leaves its returned tensor nothing to
+    bind: the binder refuses it by module, invocation and slot, where it would otherwise bind the empty member."""
+    from verity_vllm.pipeline.serve_seal import served_binder_of
+
+    plan = [{"op_path": LAST_QKV, "members": [("out@64", 64, "bf16")]}]
+    with pytest.raises(ValueError, match=rf"step 0: {LAST_QKV} at invocation 0, slot 0: a narrowed linear's slot binds none"):
+        served_binder_of(plan, [0], {}, False).bind(0, [LAST_QKV])

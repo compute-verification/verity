@@ -61,7 +61,8 @@ def test_the_generator_covers_what_it_says():
     assert {f"fixture:{name}" for name, _ in vectors.desc.fixtures()} <= shapes
     assert {m["theta_kind"] for m in made} == {"none", "registered", "random"}
     assert {m["blocks_kind"] for m in made} == {"primitives", "composites", "all"}
-    assert {r.get("error") for r in results} == set(vectors.MALFORMED) | {None}
+    # the decoder refuses a node's read of itself or a later node first, as `program`
+    assert {r.get("error") for r in results} == set(vectors.MALFORMED) - {"not-topological"} | {None}
     good = [(m, r) for m, r in zip(made, results, strict=True) if "error" not in r]
     assert {r["failure"][1] for _, r in good if r["failure"]} == {"gates", "fresh", "count"}
     assert any(r["complies"] for _, r in good)

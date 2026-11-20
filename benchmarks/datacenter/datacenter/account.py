@@ -155,9 +155,7 @@ class Account:
     @property
     def sound(self) -> bool:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
-        (`claims.check_records`), with no ε or share credit. The network verdict of record is the attester's
-        `TransferBlocks.network_verdict` (`verity/protocols/resource_accounting/network/verifier/service.py`), the same AND over a link's outcomes
-        of record; this model builds no proof-system streams, so it doesn't read it."""
+        (`claims.check_records`), with no ε or share credit."""
         return not self.refused and not self.overcredited
 
     @property

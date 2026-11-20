@@ -6,7 +6,7 @@ import random
 
 from verity.circuits import stacking as P
 
-from verity_vllm.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
+from verity_vllm.definitions.registry.boolean_gate_ops import f32_to_u32_rz_byte
 
 
 def test_the_quantizers_range_rule_holds_on_its_evaluator():

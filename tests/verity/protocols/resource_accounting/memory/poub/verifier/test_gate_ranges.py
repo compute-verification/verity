@@ -6,7 +6,7 @@ evaluators the theorems are over, and `fmaxfRule`, `fminfRule` and `rzByteRule` 
 (`stacking.RANGES`). security/Proofs/ResourceAccounting/Gates.lean carries rows of each that the kernel evaluates the Lean
 functions on (`f32MaxMin_f32Rows`, `f32RzByte_rzRows`, `rules_ruleRows`, `rzByteRule_rzRuleRows`), and the tests here
 recompute each row from the Python: `scalar.F32Fmaxf` and `F32Fminf`, `cvt.rzi.u32.f32`'s low byte by the float's
-truncation (the evaluator of record, `dsv4_qnorm_insert.f32_to_u32_rz_byte`, is in `verity_vllm`, which `verity` doesn't
+truncation (the evaluator of record, `boolean_gate_ops.f32_to_u32_rz_byte`, is in `verity_vllm`, which `verity` doesn't
 import), and property/v1's rules where `verity.circuits.stacking` exists. An f32 is its encoding read as s32.
 
 `ResourceAccounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
