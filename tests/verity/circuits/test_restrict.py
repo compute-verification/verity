@@ -164,9 +164,9 @@ T = bind(CompositeDefinition("RestrictToyT", 1, (), lambda S: ((("a", A4), ("k",
 TOY_PARTITION = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(T)]}}}
 
 
-def _toy(name: str, params, ret, body, supplied=()) -> Program:
-    return Program(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False), registered=["k"],
-                   supplied=supplied)
+def _toy(name: str, params, ret, body, supplied=(), registered=("k",)) -> Program:
+    return Program(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False),
+                   registered=list(registered), supplied=supplied)
 
 
 def fanout() -> Program:
@@ -244,8 +244,17 @@ def gapped() -> Program:
                 supplied={"s": S_MARK})
 
 
-#: the toys whose blocks read supplied inputs Python cuts by parameter and by gap, where Lean cuts by width and binding
-SPLIT_TOYS = {"two_supplied": (two_supplied, [[(0, 1)], [(0, 2)]]), "gapped": (gapped, [[(0, 1)], [(0, 2)]])}
+def two_registered() -> Program:
+    """u0 = T(k, r), k and r two registered parameters of one width, adjacent in C's inputs, then u1 = T(u0, x)."""
+    def body(B, S, x, k, r):
+        return B.call(T, B.call(T, k, r), x)
+    return _toy("RestrictToyTwoRegistered", (("x", A4), ("k", A4), ("r", A4)), A4, body, registered=("k", "r"))
+
+
+#: the toys whose blocks read registered or supplied inputs that a cut by width and binding alone would join: two
+#: adjacent parameters of one width, and a supplied read with a gap; `restrict` cuts them by parameter and by gap
+SPLIT_TOYS = {"two_supplied": (two_supplied, [[(0, 1)], [(0, 2)]]), "gapped": (gapped, [[(0, 1)], [(0, 2)]]),
+              "two_registered": (two_registered, [[(0, 1)], [(0, 2)]])}
 
 
 @functools.cache
