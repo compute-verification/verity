@@ -4901,7 +4901,7 @@ theorem copies_seg_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
     Agree c.P sc (segPos (Desc.Seg.mk
         (Desc.shiftGates ((c.body.offsets[k]! : Int) + (m0 : Int) * ((c.P.defs[node.fn]!).gates : Int))
           ((c.memo[node.fn]!).ret.segs.flatMap (·.ps)))
-        (c.P.defs[node.fn]!).outLeaves (m1 - m0) ((c.P.defs[node.fn]!).gates : Int)))
+        (c.P.defs[node.fn]!).outLeaves (m1 - m0) ((c.P.defs[node.fn]!).gates : Int) false))
       ((List.range' (m0 * (c.P.defs[node.fn]!).outLeaves) ((m1 - m0) * (c.P.defs[node.fn]!).outLeaves)).map fun j =>
         Flock.Program.resolve c.P (c.P.child sc k (j / (c.P.defs[node.fn]!).outLeaves))
           ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % (c.P.defs[node.fn]!).outLeaves))) := by
@@ -4945,9 +4945,28 @@ theorem segsPos_push_append (X Y : Array Seg) (C : Seg) :
 
 /-! ## A batch of a composite's piece in its one-run case -/
 
+theorem go_scale (F : Int) : ∀ (L : List (Nat × Int)) (n : Nat),
+    Flock.Program.Lane.leafAt.go (L.map fun (r, d) => (r, d * F)) n = Flock.Program.Lane.leafAt.go L n * F
+  | [], _ => by simp [Flock.Program.Lane.leafAt.go]
+  | [(r, d)], n => by simp only [List.map_cons, List.map_nil, Flock.Program.Lane.leafAt.go]; ring
+  | (r, d) :: x :: xs, n => by
+    have ih := go_scale F (x :: xs) (n / r)
+    show ((n % r : Nat) : Int) * (d * F) + Flock.Program.Lane.leafAt.go ((x :: xs).map fun (r, d) => (r, d * F)) (n / r) =
+      (((n % r : Nat) : Int) * d + Flock.Program.Lane.leafAt.go (x :: xs) (n / r)) * F
+    rw [ih]; ring
+
+theorem rowOff_affine (q : Piece) (w : Nat) (A F : Int) (r : Nat) : (q.affine w A F).rowOff r = q.rowOff r * F := by
+  unfold Desc.Piece.rowOff Desc.Piece.affine
+  simp only [List.isEmpty_map]
+  split
+  · ring
+  · exact go_scale F q.lv _
+
 theorem ppt_affine (q : Piece) (w : Nat) (A F : Int) (t : Nat) :
     ppt (q.affine w A F) t = A + ppt q t * F := by
-  unfold ppt Desc.Piece.affine
+  unfold ppt
+  rw [rowOff_affine]
+  unfold Desc.Piece.affine
   simp only
   ring
 
@@ -5065,7 +5084,7 @@ theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
     (ht : q.tgt = .ref false k) {node : Flock.Program.Node} (hn : c.node k = .ok node) (hform : node.form = .batch)
     (hp : (c.P.defs[node.fn]!).prim = false) (hL : (c.P.defs[node.fn]!).outLeaves ≠ 0)
     (hR : RetOk c.P c.memo node.fn) (hOL : (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
-    (h1 : q.rows = 1) (hdv : q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0) (hb : q.base ≥ 0)
+    (h1 : q.rows = 1) (hlv : q.lv = []) (hdv : q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0) (hb : q.base ≥ 0)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2)
     (hrep : (((c.memo[node.fn]!).ret.slice (q.base.toNat % (c.P.defs[node.fn]!).outLeaves)
       (q.base.toNat % (c.P.defs[node.fn]!).outLeaves + 1)).all (·.reps ≤ 1)) = true)
@@ -5077,7 +5096,7 @@ theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
         ((q.base.toNat / (c.P.defs[node.fn]!).outLeaves : Nat) : Int) * ((c.P.defs[node.fn]!).gates : Int))
         (((c.memo[node.fn]!).ret.slice (q.base.toNat % (c.P.defs[node.fn]!).outLeaves)
           (q.base.toNat % (c.P.defs[node.fn]!).outLeaves + 1)).flatMap (·.ps)))
-      1 q.len (q.stride / ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.P.defs[node.fn]!).gates : Int))])
+      1 q.len (q.stride / ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.P.defs[node.fn]!).gates : Int)) false])
       ((pos q).map (den c.P sc)) := by
   obtain ⟨hok, hnn, hgo, hag, -⟩ := hR
   rw [segsPos_singleton]
@@ -5155,7 +5174,7 @@ leaves of arguments the members share, one step up: what `fromCallee` keeps of m
 position, every member's leaf `j` resolving as member `m0`'s (`batchShared`). -/
 def BatchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
   ∀ q one k node, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 → q.len > 1 →
+    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 → q.lv = [] → q.len > 1 →
     q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 → q.base ≥ 0 →
     (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (((c.memo[node.fn]!).ret.slice (q.base.toNat % (c.P.defs[node.fn]!).outLeaves)
@@ -5166,7 +5185,7 @@ def BatchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop :=
       (q.base.toNat % (c.P.defs[node.fn]!).outLeaves) (q.base.toNat % (c.P.defs[node.fn]!).outLeaves + 1) =
       .ok one →
     one.all (·.reps ≤ 1) = true →
-    Agree c.P sc (segPos (Desc.Seg.mk (one.flatMap (·.ps)) 1 q.len 0)) ((pos q).map (den c.P sc))
+    Agree c.P sc (segPos (Desc.Seg.mk (one.flatMap (·.ps)) 1 q.len 0 false)) ((pos q).map (den c.P sc))
 
 theorem memberSpans_of_none {a : Flock.Program.Arg} (h : a.dims = none) (m lo hi : Nat) :
     Desc.memberSpans a m lo hi = #[(lo, hi)] := by
@@ -5287,7 +5306,7 @@ theorem batchShared (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) 
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count)
     (fuel : Nat) (hC : CalleeSpec c sc fuel) : BatchShared c sc fuel := by
-  intro q one k node ht hn hform hp hL h1 hlen hdv hb hq hf hsh hone hone1
+  intro q one k node ht hn hform hp hL h1 hlv hlen hdv hb hq hf hsh hone hone1
   apply batch_den_at c sc hd q ht hn hform hp h1 hq
   have hol := hOL k node hn hp
   have hdo := downOk_of hB hn
@@ -5362,7 +5381,7 @@ theorem batchStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d =
     · rename_i hall
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact gateStride_agree c sc hd q ht hn hform hp hL hR hOL h1 hcp.2.1 hcp.2.2 hq hrep hall
+      exact gateStride_agree c sc hd q ht hn hform hp hL hR hOL h1 hlv hcp.2.1 hcp.2.2 hq hrep hall
     · split at h
       · rename_i hsh
         obtain ⟨one, hone, h⟩ := Walk.except_bind_ok h
@@ -5371,7 +5390,7 @@ theorem batchStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d =
           simp only [pure, Except.pure, Except.ok.injEq] at h
           subst h
           rw [segsPos_singleton]
-          exact hSh q one k node ht hn hform hp hL h1 hcp.1 hcp.2.1 hcp.2.2 hq hf hsh hone hone1
+          exact hSh q one k node ht hn hform hp hL h1 hlv hcp.1 hcp.2.1 hcp.2.2 hq hf hsh hone hone1
         · exact batchPts_agree c sc fuel hD q h1 hq hf h
       · exact batchPts_agree c sc fuel hD q h1 hq hf h
   · exact batchPts_agree c sc fuel hD q h1 hq hf h
@@ -5520,7 +5539,7 @@ def BatchSharedMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Prop
       | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
       | _ => false) = true →
     Desc.fromCallee c fuel k m0 0 L = .ok one → one.all (·.reps ≤ 1) = true →
-    Agree c.P sc (segPos (Desc.Seg.mk (one.flatMap (·.ps)) L (m1 - m0) 0))
+    Agree c.P sc (segPos (Desc.Seg.mk (one.flatMap (·.ps)) L (m1 - m0) 0 false))
       ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
         Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
 
@@ -7703,7 +7722,7 @@ theorem batchPts_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q 
 `ShapeOk`. -/
 def BatchOneShape (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
+    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 → q.lv = [] →
     q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
     ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
@@ -7731,7 +7750,7 @@ theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
         (fun x hx i hi => by rw [mem_pos_tgt hx, ht] at hi; cases hi) h
     by_cases hs : q.stride = 1
     · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
-      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) (flat_lv hff (by omega)) hs hq hf h
     by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
     · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
       exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) (flat_lv hff (by omega)) hcp hq hf h
@@ -8210,7 +8229,7 @@ theorem batchThrough_shape (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : 
 theorem copiesSeg_shape (P : Prog) (d : Nat) (memo : Array Desc.Summary) (f : Nat) (hR : RetOk P memo f)
     (hgo : ∀ x ∈ (memo[f]!).ret.segs.toList, x.reps ≤ 1 ∧ ∀ g ∈ x.ps.toList, ∃ w, g.tgt = .gate w)
     {o G : Int} (ho : 0 ≤ o) (hG : 0 ≤ G) {len n : Nat} (hl : len = (P.defs[f]!).body.ret.count) (hn : 1 ≤ n) :
-    ShapeOk P d (Desc.Seg.mk (Desc.shiftGates o ((memo[f]!).ret.segs.flatMap (·.ps))) len n G) := by
+    ShapeOk P d (Desc.Seg.mk (Desc.shiftGates o ((memo[f]!).ret.segs.flatMap (·.ps))) len n G false) := by
   obtain ⟨hok, hnn, -, hag, hpp⟩ := hR
   have hflat := psPos_flat _ hok (fun x hx => (hgo x hx).1)
   have hlenr := (hag (.top f 0 none) rfl).length_eq
@@ -8251,7 +8270,7 @@ theorem sharedSeg_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (
     (hb : a < b → b ≤ (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
     (hone : Desc.fromCallee c fuel k m a b = .ok one) (hone1 : one.all (·.reps ≤ 1) = true)
     (hl : len = b - a) (hn : 1 ≤ n) :
-    ShapeOk c.P c.d (Desc.Seg.mk (one.flatMap (·.ps)) len n 0) := by
+    ShapeOk c.P c.d (Desc.Seg.mk (one.flatMap (·.ps)) len n 0 false) := by
   have hrep1 : ∀ x ∈ one.toList, x.reps = 1 := by
     intro x hx
     have h0 := ((reps_fuel c fuel).2.1 k _ _ _ one hone x hx).1
@@ -8287,7 +8306,7 @@ theorem batchOne_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolve.B
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) : BatchOneShape c fuel := by
-  intro q k node segs ht hn hform hp hL h0 h1 hs hq hf h
+  intro q k node segs ht hn hform hp hL h0 h1 hlv hs hq hf h
   have hlen : 0 < q.len := by rw [← count_one h1]; omega
   have hdo := downOk_of hB hn
   have hnode := node_get hn
@@ -10988,7 +11007,7 @@ theorem batchPts_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) (q : Piece)
 body's gates with their widths. -/
 def BatchOneW (c : Desc.Ctx) (fuel : Nat) : Prop :=
   ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
-    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
+    (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 → q.lv = [] →
     q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
     ∀ s ∈ segs.toList, GateW c.P c.d s
 
@@ -11017,7 +11036,7 @@ theorem batchW_of (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel)
         (fun w p hx => by have e := mem_pos_tgt hx; rw [ht] at e; cases e) h
     by_cases hs : q.stride = 1
     · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
-      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) (flat_lv hff (by omega)) hs hq hf h
     by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
     · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
       exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) (flat_lv hff (by omega)) hcp hq hf h
@@ -11370,7 +11389,7 @@ theorem batchOne_w (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hLd : Laid c.P 
     (hLF : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false → Laid c.P node.fn ∧
       (c.P.defs[node.fn]!).body.offsets[(c.P.defs[node.fn]!).body.nodes.size]! = (c.P.defs[node.fn]!).gates) :
     BatchOneW c fuel := by
-  intro q k node segs ht hn hform hp hL h0 h1 hs hq hf h
+  intro q k node segs ht hn hform hp hL h0 h1 hlv hs hq hf h
   have hlen : 0 < q.len := by rw [← count_one h1]; omega
   have hdo := downOk_of hB hn
   have hnode := node_get hn
