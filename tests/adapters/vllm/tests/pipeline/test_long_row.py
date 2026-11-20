@@ -7,15 +7,7 @@
   return, each read's ok, the boundary's third value, a row a read, and each unit reads the window's operands and the units
   before it as round 2 links and wires them (`second_stage`'s node links and node wires);
 * where its index rows are `index_values` it returns `DsaTopKReadRows_v1`'s ok and its read units return that Definition's
-  kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow);
-* its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
-  from the replay block (`interior_links.links`), under either naming of round 1's record, and its interior window
-  (`window`) with them is the stream's interior program, a function of the replay sample's size (slow);
-* a sampled span's units (`spans`) are one span a template, every unit of the mask's cut and of the index on rows its
-  Definition returns its outputs on and every read an opening of the span's table at its slot's position; the reads' ok
-  bits are what the check returns on the same operands and their rows `DsaTopKReadRows_v1`'s kv, and
-  `interior_rows.interior` commits the spans under the block's wires and links, refusing a row that is not its writer's,
-  its value's or its table's (slow).
+  kv, so the check and the rows its reads commit are together `DsaTopKReadRows_v1`'s function (slow).
 """
 from __future__ import annotations
 
