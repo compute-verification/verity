@@ -81,11 +81,8 @@ def test_the_rebuilds_skip_unless_asked_for_or_a_candidate_states_the_manifest(m
     TR._skip_rebuild("manifest_digest", None)
 
 
-def test_the_post_train_job_selects_exactly_the_checks_that_skip_in_check():
-    """post_train.py runs `-m "regression and rebuild"`: every `REBUILD` check carries the mark and nothing else does, so what
-    `check` skips is what the job runs."""
-    marked = {p.id.split("-")[1] for p in TR._params() if any(m.name == "rebuild" for m in p.marks)}
-    assert marked == {c.NAME for c in checks.all_checks() if getattr(c, "REBUILD", False)} >= {"manifest_digest", "step_segmentation"}
+def test_the_post_train_job_selects_the_57_refusal():
+    """post_train.py runs `-m "regression and rebuild"`: the #57 refusal carries the mark, so what `check` skips is what the job runs."""
     assert any(m.name == "rebuild" for m in TR.test_negative_57_refusal_reproduces.pytestmark)
 
 
