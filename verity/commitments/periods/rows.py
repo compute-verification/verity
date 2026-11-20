@@ -81,7 +81,7 @@ from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tr
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
-from verity.circuits.codec import canonical_json
+from verity.circuits.codec import canonical_json, program_digest
 from verity.commitments.periods.population import population_program, template_partition
 
 from . import wiring as WI
@@ -412,6 +412,12 @@ class Binding:
     @cached_property
     def partition_digest(self) -> str:
         return PO.digest(self.partition)
+
+    @cached_property
+    def program_digest(self) -> str:
+        """The program's SHA-512 (`codec.program_digest`), the string a supplied row's public salts and domain are made
+        under (`interface.supplied`, `Window.give`)."""
+        return program_digest(self.program)
 
     @cached_property
     def population(self) -> int:

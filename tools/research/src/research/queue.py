@@ -3187,7 +3187,7 @@ _COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/s
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
-                  "verity/commitments/indexed.py", "verity/commitments/layout.py", "verity/commitments/limits.py",
+                  "verity/commitments/indexed.py", "verity/commitments/limits.py",
                   "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "tests/verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",

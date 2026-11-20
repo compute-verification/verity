@@ -70,5 +70,6 @@ public import Spot.BlockFile
 public import Spot.Restrict
 public import Spot.HeaderHeldAt
 public import Spot.Test.Admitted
+public import Spot.Test.Docket
 
 @[expose] public section
