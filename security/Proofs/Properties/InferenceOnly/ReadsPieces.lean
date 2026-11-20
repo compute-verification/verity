@@ -450,11 +450,14 @@ theorem segsPos_empty : segsPos #[] = [] := rfl
 
 theorem segsPos_singleton (s : Seg) : segsPos #[s] = segPos s := by simp [segsPos]
 
-theorem copy_flat (s : Seg) (h : s.rowed = false) (m : Nat) : s.copy m = Desc.shiftGates (m * s.shift) s.ps := by
+theorem copy_flat (s : Seg) (h : s.lanes = false) (m : Nat) : s.copy m = Desc.shiftGates (m * s.shift) s.ps := by
   simp [Desc.Seg.copy, h]
 
-theorem copy_rowed (s : Seg) (h : s.rowed = true) (m : Nat) : s.copy m = s.ps.map (·.row m) := by
+theorem copy_rowed (s : Seg) (h : s.lanes = true) (m : Nat) : s.copy m = s.ps.map (·.row m) := by
   simp [Desc.Seg.copy, h]
+
+theorem lanes_of_reps {s : Seg} (h : s.reps ≤ 1) : s.lanes = false := by
+  unfold Desc.Seg.lanes; cases s.rowed <;> simp <;> omega
 
 theorem posAll_map (ps : Array Piece) (f : Piece → Piece) : posAll (ps.map f) = ps.toList.flatMap fun p => pos (f p) := by
   simp [posAll, List.flatMap_map]
@@ -472,7 +475,7 @@ theorem pos_row_rowsFrom (p : Piece) (lo n m : Nat) (hm : m < n) : pos ((p.rowsF
   obtain ⟨ht, hs, hl, -, hoff⟩ := rowsFrom_spec p lo n
   rw [pos_row, pos_row, ht, hs, hl, hoff m hm]
 
-theorem copy_pos (s : Seg) (h : s.rowed = false) (m : Nat) :
+theorem copy_pos (s : Seg) (h : s.lanes = false) (m : Nat) :
     posAll (s.copy m) = (posAll s.ps).map (shiftPos ((m : Int) * s.shift)) := by
   rw [copy_flat s h]; exact shiftGates_pos _ _
 
@@ -510,20 +513,20 @@ theorem list_eq_map {α : Type} (l : List α) (d : α) : l = (List.range l.lengt
 
 /-- Every copy of a segment names as many positions as copy 0. -/
 theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll (s.copy 0)).length := by
-  cases h : s.rowed
+  cases h : s.lanes
   · rw [copy_flat s h, copy_flat s h, shiftGates_length, shiftGates_length]
   · rw [copy_rowed s h, copy_rowed s h, posAll_map, posAll_map]
     simp only [List.length_flatMap, pos_row, List.length_map, List.length_range]
 
-theorem copy_zero (s : Seg) (h : s.rowed = false) : posAll (s.copy 0) = posAll s.ps := by
+theorem copy_zero (s : Seg) (h : s.lanes = false) : posAll (s.copy 0) = posAll s.ps := by
   rw [copy_pos s h, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
 
-theorem segPos_one_rep {s : Seg} (h : s.reps = 1) (hr : s.rowed = false) : segPos s = posAll s.ps := by
+theorem segPos_one_rep {s : Seg} (h : s.reps = 1) (hr : s.lanes = false) : segPos s = posAll s.ps := by
   unfold segPos
   rw [h, List.range_one, List.flatMap_singleton, copy_pos s hr]
   simp [shiftPos_zero]
 
-theorem copy_copy (s : Seg) (h : s.rowed = false) (lo m : Nat) :
+theorem copy_copy (s : Seg) (h : s.lanes = false) (lo m : Nat) :
     posAll (Desc.shiftGates ((m : Int) * s.shift) (s.copy lo)) = posAll (s.copy (lo + m)) := by
   rw [shiftGates_pos, copy_pos s h, copy_pos s h, List.map_map, shiftPos_shiftPos, Int.natCast_add, Int.add_mul]
 
@@ -554,16 +557,15 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
     rcases Nat.eq_zero_or_pos s.len with h0 | h0
     · rw [hcnt, h0, Nat.mul_zero] at hb; omega
     · exact h0
-  by_cases hr : (s.reps ≤ 1 && !s.rowed) = true
+  by_cases hr : s.reps ≤ 1
   · rw [if_pos hr, segsPos_one, slicePieces_pos]
-    simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_eq_eq_not, Bool.not_true] at hr
     have hlen' := hlen
-    rw [copy_zero s hr.2] at hlen'
+    rw [copy_zero s (lanes_of_reps hr)] at hlen'
     have hr1 : s.reps = 1 := by
       rcases Nat.lt_or_ge s.reps 1 with h | h
       · rw [hcnt, show s.reps = 0 by omega, Nat.zero_mul] at hb; omega
       · omega
-    have e : segPos s = posAll s.ps := segPos_one_rep hr1 hr.2
+    have e : segPos s = posAll s.ps := segPos_one_rep hr1 (lanes_of_reps hr)
     rw [← e, segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
   rw [if_neg hr]
   dsimp only
@@ -582,7 +584,7 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
     rw [spt_add s m _ (by omega)]
   have hmid : ∀ lo m1 : Nat, lo ≤ m1 →
       segsPos (if lo < m1 then
-          (if s.rowed && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
+          (if s.lanes && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
           else #[{ s with ps := s.copy lo, reps := m1 - lo, rowed := false }]) else #[]) =
         (List.range' (lo * s.len) (m1 * s.len - lo * s.len)).map (spt s) := by
     intro lo m1 hlo
@@ -604,13 +606,17 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
       · rename_i hrw
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hrw
         refine hgen _ rfl fun m hm => ?_
-        rw [copy_rowed { s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo } hrw.1, copy_rowed s hrw.1,
+        have hl : ({ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo } : Seg).lanes = true := by
+          have h1 := hrw.1
+          simp only [Desc.Seg.lanes, Bool.and_eq_true, decide_eq_true_eq] at h1 ⊢
+          exact ⟨h1.1, by omega⟩
+        rw [copy_rowed _ hl, copy_rowed s hrw.1,
           posAll_map, posAll_map, Array.toList_map, List.flatMap_map]
         exact flatMap_congr_mem fun p _ => pos_row_rowsFrom p lo _ m hm
       · rename_i hrw
         refine hgen _ rfl fun m hm => ?_
         rw [copy_flat { s with ps := s.copy lo, reps := m1 - lo, rowed := false } rfl]
-        cases hs : s.rowed
+        cases hs : s.lanes
         · exact copy_copy s hs lo m
         · simp only [hs, Bool.true_and, decide_eq_true_eq] at hrw
           obtain rfl : m = 0 := by omega

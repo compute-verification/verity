@@ -293,7 +293,7 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
     (hf : ∀ q out, (∀ x ∈ pos q, x ∈ segPos s) → f q = .ok out → List.Forall₂ R (segsPos out) (pos q))
     (out : Array Seg) (h : Desc.segDown f s = .ok out) : List.Forall₂ R (segsPos out) (segPos s) := by
   unfold Desc.segDown at h
-  cases hr : s.rowed
+  cases hr : s.lanes
   · simp only [hr, Bool.not_false, ↓reduceIte] at h
     obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -397,7 +397,7 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
     · rw [e]; have := hpos p hp; unfold Desc.Piece.count at this
       exact Nat.pos_of_ne_zero (Nat.mul_ne_zero_iff.1 (Nat.pos_iff_ne_zero.1 this)).2
   unfold Desc.segDown at h
-  cases hr : s.rowed
+  cases hr : s.lanes
   · simp only [hr, Bool.not_false, ↓reduceIte] at h
     obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -549,7 +549,7 @@ theorem mem_pos_rowsFrom (p : Piece) (lo n : Nat) (x : Tgt × Int) :
     exact ⟨m, List.mem_range.2 hm, by rwa [pos_row_rowsFrom p lo n m hm]⟩
 
 /-- A rowed segment names what its pieces' first `reps` rows name. -/
-theorem mem_segPos_rowed (s : Seg) (hr : s.rowed = true) (x : Tgt × Int) :
+theorem mem_segPos_rowed (s : Seg) (hr : s.lanes = true) (x : Tgt × Int) :
     x ∈ segPos s ↔ ∃ p ∈ s.ps.toList, x ∈ pos (p.rowsFrom 0 s.reps) := by
   unfold segPos
   simp only [List.mem_flatMap, List.mem_range, copy_rowed s hr, posAll_map, mem_pos_rowsFrom, Nat.zero_add]

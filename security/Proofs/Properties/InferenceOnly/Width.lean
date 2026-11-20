@@ -701,7 +701,7 @@ theorem piecesGates_shift (δ : ℤ) (ps : Array Piece) :
     simp only [Function.comp, Prod.mk.injEq, and_true]
     ring
 
-theorem copy_gates (s : Seg) (m : ℕ) (h : s.rowed = false) :
+theorem copy_gates (s : Seg) (m : ℕ) (h : s.lanes = false) :
     piecesGates (s.copy m) = (piecesGates s.ps).map fun x => (x.1 + m * s.shift, x.2) := by
   simp only [Seg.copy, h, Bool.false_eq_true, ↓reduceIte]
   exact piecesGates_shift _ _
@@ -790,9 +790,9 @@ theorem copiesStep_inv (hG : GateIvsExact) (W : ℕ → ℕ) (s : Seg) (acc : Ar
           exact ⟨m, hm, by rw [(hrep m hm).2, mem_gs]; exact ⟨x, hx, rfl⟩⟩
       rw [this]
       exact Finset.union_right_comm _ _ _
-  by_cases hrw : s.rowed = true
+  by_cases hrw : s.lanes = true
   · simp only [hrw, ↓reduceIte]; exact hcopies
-  have hrw' : s.rowed = false := by simpa using hrw
+  have hrw' : s.lanes = false := by simpa using hrw
   simp only [hrw', Bool.false_eq_true, ↓reduceIte]
   have hcg : ∀ m, piecesGates (s.copy m) = (piecesGates s.ps).map fun x => (x.1 + m * s.shift, x.2) :=
     fun m => copy_gates s m hrw'

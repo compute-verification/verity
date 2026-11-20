@@ -243,9 +243,9 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
 
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
 of a batch whose members' return isn't one run, read by whole members. Leaves never shift: `ps` names a leaf with
-`reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). When `rowed`, copy `m`
-is instead row `m` of each of `ps`, each piece of `reps` rows, and `reps ≥ 2`: a grid of several lanes, copy `m` its
-period `m`. -/
+`reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). When `rowed` and
+`reps ≥ 2` (`lanes`), copy `m` is instead row `m` of each of `ps`, each piece of `reps` rows: a grid of several lanes,
+copy `m` its period `m`. -/
 structure Seg where
   ps : Array Piece
   len : Nat
@@ -256,10 +256,13 @@ structure Seg where
 
 def Seg.one (q : Piece) : Seg := { ps := #[q], len := q.count }
 
+/-- Copy `m` is row `m` of each piece: `rowed`, of two copies at least. -/
+def Seg.lanes (s : Seg) : Bool := s.rowed && 1 < s.reps
+
 def Seg.count (s : Seg) : Nat := s.reps * s.len
 
 /-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
-def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 && !s.rowed then { s with reps := 1 } else s
+def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 && !s.lanes then { s with reps := 1 } else s
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
@@ -269,7 +272,7 @@ offsets a callee's into one member), and copies naming leaves never shift. A row
 one lane's rows of the segment's copies. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
-  if s.rowed then s.ps.map fun p => .one (p.rowsFrom 0 s.reps)
+  if s.lanes then s.ps.map fun p => .one (p.rowsFrom 0 s.reps)
   else if s.reps == 1 then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
@@ -278,10 +281,10 @@ def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
     | _ => q
 
 /-- Copy `m`'s pieces. -/
-def Seg.copy (s : Seg) (m : Nat) : Array Piece := if s.rowed then s.ps.map (·.row m) else shiftGates (m * s.shift) s.ps
+def Seg.copy (s : Seg) (m : Nat) : Array Piece := if s.lanes then s.ps.map (·.row m) else shiftGates (m * s.shift) s.ps
 
 /-- The piece of a segment of one copy of one piece. -/
-def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 && !s.rowed then s.ps[0]? else none
+def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 then s.ps[0]? else none
 
 /-- Positions `[a, b)` of the pieces `ps` laid end to end. -/
 def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
@@ -297,7 +300,7 @@ def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
 /-- Positions `[a, b)` of `s`: part of a copy, the whole copies, part of a copy. -/
 def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
   if b ≤ a then #[]
-  else if s.reps ≤ 1 && !s.rowed then (slicePieces s.ps a b).map Seg.one
+  else if s.reps ≤ 1 then (slicePieces s.ps a b).map Seg.one
   else
     let part (m x y : Nat) : Array Seg := (slicePieces (s.copy m) x y).map Seg.one
     let (m0, t0, m1, t1) := (a / s.len, a % s.len, b / s.len, b % s.len)
@@ -307,7 +310,7 @@ def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
       let lo := if t0 == 0 then m0 else m0 + 1
       let mid : Array Seg :=
         if lo < m1 then
-          if s.rowed && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
+          if s.lanes && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
           else #[{ s with ps := s.copy lo, reps := m1 - lo, rowed := false }]
         else #[]
       first ++ mid ++ part m1 0 t1
@@ -496,7 +499,7 @@ def throughPS (ap : PS) (q : Piece) : Option Piece :=
   match ap.segs with
   | #[s] => match s.ps with
     | #[p] =>
-      if s.reps > 1 || s.rowed || p.rows > 1 || !p.lv.isEmpty || q.count == 0 || !q.lv.isEmpty then none else
+      if s.reps > 1 || p.rows > 1 || !p.lv.isEmpty || q.count == 0 || !q.lv.isEmpty then none else
       let first : Int := q.base + (if q.stride < 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
         (if q.rowStride < 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0)
       let hi : Int := q.base + (if q.stride > 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
@@ -519,7 +522,7 @@ def Piece.reshape (x : Piece) (rows len : Nat) : Option Piece :=
 and stay a rowed segment when each, of a row a copy, resolves to one piece of its rows (`Piece.reshape`); else its
 periods are resolved one by one, up to `WALK`. -/
 def segDown (f : Piece → Except String (Array Seg)) (s : Seg) : Except String (Array Seg) := do
-  if !s.rowed then
+  if !s.lanes then
     let mut out := #[]
     for q in (Array.range s.reps).flatMap s.copy do out := out ++ (← f q)
     return out
@@ -681,7 +684,7 @@ def fromCallee (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String
     let o : Int := c.body.offsets[k]! + m * callee.gates
     let mut out := #[]
     for s in (c.memo[node.fn]!).ret.slice a b do
-      if s.rowed then
+      if s.lanes then
         out := out ++ (← segDown (fun g => match g.tgt with
           | .gate _ => pure #[.one { g with base := o + g.base }]
           | .ref false _ => throw "program"
@@ -1032,7 +1035,7 @@ structure Cl where
 it is rowed or copies may overlap or go backwards, else one frame. -/
 def copiesStep (acc : Array (Nat × Nat × Nat) × Array Cl) (s : Seg) : Array (Nat × Nat × Nat) × Array Cl :=
   if s.reps ≤ 1 then acc else
-  if s.rowed then (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m), acc.2) else
+  if s.lanes then (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m), acc.2) else
   let r := gateIvs s.ps
   if r.isEmpty then acc else
   let lo := r.foldl (fun m x => min m x.1) r[0]!.1
