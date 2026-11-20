@@ -886,15 +886,6 @@ def load(pkg):
     assert _enumerator_misuses(ast.parse(stray))
 
 
-#: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
-#: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
-#: and whose task list goes through the guard (`cli.task_list_guard`, as ``--all`` runs it)
-CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
-           .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
-           .replace('cache=root / "cache")', 'cache=root / "cache", guard="check")')
-           .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
-
-
 def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     """`cache.version`: an edit to a docstring, a comment or the layout of the checker's modules keeps its version, so it
     reruns no target, while an edit to their code, or to a file of it that is no module, changes it."""

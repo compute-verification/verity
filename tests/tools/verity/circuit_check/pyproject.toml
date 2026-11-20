@@ -23,7 +23,6 @@ markers = [
 # tracer (conftest.py's `_untraced`), so that `check`'s circuit-check takes the record it stores.
 untraced = [
     "test_ambient.py",
-    "test_attention_split.py",
     "test_cache.py",
     "test_cache_expiry.py",
     "test_cache_imports_and_moves.py",
@@ -263,7 +262,7 @@ tests = ["test_cache_redteam.py", "test_cache_imports_and_moves.py", "test_catal
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_metadata_files.py"]
+tests = ["test_metadata_files.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
@@ -275,7 +274,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_bodies.py",
+tests = ["test_bodies.py",
          "test_declared_tables.py", "test_metadata_files.py", "test_named_targets.py",
          "test_pinned_targets.py", "test_ranges.py",
          "test_structural.py", "test_structural_slots.py", "test_superseded_versions.py",
