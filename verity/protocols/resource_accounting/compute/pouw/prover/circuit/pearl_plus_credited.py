@@ -32,8 +32,8 @@ At a credited linear of C, y = x · Wᵀ over M rows of x (K words) and the weig
 
 The node derives its noise from seed_B = H_"seed-B"(salt ‖ root) inside: E_B's lines are its column tile's, F_A, F_B and G
 the call's; the core derives each row's E_A from the row's own digest.  Its top level is the noise's units and the core,
-each a Call or a map member: `PearlPlusTileSeed_v3` (the line key and each line's index), `PearlPlusTileLine_v4` mapped
-over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v5` Called for each of F_B's 32 columns, and
+each a Call or a map member: `PearlPlusTileSeed_v4` (the line key, eb's TN lines and each of F's lines' index),
+`PearlPlusTileLine_v4` mapped over F's K for fa and for fb, `PearlPlusGramRow_v5` Called for each of F_B's 32 columns, and
 `PearlPlusTileCoreWired_v2`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
 input row, each in the 16-bit words C commits its values in, which every reader reads at that width.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
 C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
@@ -172,8 +172,8 @@ def _on_words(B, S, a, b, cert, salt, root, unit, rows, col):
 PearlPlusTileCoreWords = CompositeDefinition(
     "PearlPlusTileCoreWords", 4, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
     _on_words, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
-    doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v3`(salt, "
-        "root, col), `PearlPlusTileLine_v4` over eb's TN indices one a unit and F's K eight units of K/8, `PearlPlusGramRow_v5` for each of F_B's 32 columns, and "
+    doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v4`(salt, "
+        "root, col) with eb's TN lines, `PearlPlusTileLine_v4` over F's K eight units of K/8, `PearlPlusGramRow_v5` for each of F_B's 32 columns, and "
         "`PearlPlusTileCoreWired_v2` on the tile's words and that noise by wire; the salt and the root in 16-bit words, two "
         "bytes a word, low byte first")
 
@@ -184,9 +184,7 @@ def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
     Calls and each map's members."""
     s = t.bindings
     g = s["K"] // PT.F_ROWS
-    k, tn = s["K"], s["TN"]
-    return [(PT.seed(k, tn), 1), (PT.line("eb", 1, k, tn), tn), (PT.line("fa", g, k, tn), PT.F_ROWS),
-            (PT.line("fb", g, k, tn), PT.F_ROWS),
+    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("fa", g), PT.F_ROWS), (PT.line("fb", g), PT.F_ROWS),
             *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R)), (bind(PearlPlusTileCoreWired, **s), 1)]
 
 
