@@ -167,7 +167,7 @@ theorem hidden_work_le (P : Runs L) (r : P.Run) :
   simp only [Runs.hiddenGates, Finset.mem_filter]
   exact ⟨hreg.1, fun X hX hx => Finset.disjoint_left.mp (P.hiddenUnlisted r i hk X hX) hreg.2.1 hx⟩
 
-/-- A unit's class is hidden exactly when its label is: the class changes only a label of inference. -/
+/-- A unit's class is `hidden` exactly when its label is. -/
 theorem cls_eq_hidden_iff (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) :
     P.cls r u = Class.hidden ↔ P.label r u = Class.hidden := by
   unfold Runs.cls
@@ -175,8 +175,7 @@ theorem cls_eq_hidden_iff (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) :
   · rw [h.1]; decide
   · exact Iff.rfl
 
-/-- **A unit's class is hidden exactly when its parent is hidden hardware** (`labelHiddenIff`): a unit labelled
-inference is never under hidden hardware, so the class keeps the label's meaning there. -/
+/-- **A unit's class is `hidden` exactly when its parent is hidden hardware**, from `labelHiddenIff`. -/
 theorem cls_hiddenIff (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) :
     P.cls r u = Class.hidden ↔ P.kind r ((P.ref r).parent u) = false :=
   (cls_eq_hidden_iff P r u).trans (P.labelHiddenIff r u)

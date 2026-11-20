@@ -54,7 +54,7 @@ size claims: a block's credit is at most its committed size claim. In an accepte
 every set `M` of `inner`'s units and inside every server-day block `i`, PoUW's credited use `credited r i` (gates at `π`)
 is at most the work of the inference blocks directly inside `i` outside `M`, plus the committed size claims
 (`claimedSize`) of the inference blocks directly inside `i` in `M`. By the class's definition (`cls`), an inference
-block's window starts at or after its epoch's challenge tick. The credited use is fixed before the sampling coins, by the registered
+block's window starts at or after its epoch's challenge tick. The credited use is fixed before the sampling coins, by the committed
 claim (the epoch's salt is a live coin that comes before the work); the factor from multiply-accumulates, the spend's
 unit, to gates at `π` is a constant of the scheme and the pricing, assumed. Stated with `+` on the right rather than `−`
 on the left, so no truncated subtraction enters it. -/

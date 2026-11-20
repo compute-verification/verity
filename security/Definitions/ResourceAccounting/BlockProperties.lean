@@ -17,7 +17,7 @@ Core/Partition.lean`: every computed gate in exactly one unit, input gates in no
   which, by location: a server-day block is at a location the hardware description lists, hidden hardware's work at
   leaves no listed location holds);
 * the **inference blocks** and **free blocks** refining them, a partition `inner` with `inner.Refines outer`, a class
-  per unit (`cls u`: inference, free, or hidden under a hidden parent), the prover's label (`label u`) except that a
+  per unit (`cls u`: inference, free, or `hidden`, under hidden hardware), the prover's label (`label u`) except that a
   unit labelled inference whose window starts before its epoch's challenge tick (`salt u`) is a free block;
 * the **proof blocks** refine the inference blocks; they are the proof layer's own `Verity.Partition` and carry no block
   property here.

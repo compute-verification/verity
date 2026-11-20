@@ -75,8 +75,8 @@ blocks. The limit is on the sum because the policy reads one number for a server
 unregistered input and the block's input from both sources is at most the sum (`serverInput_le`); a limit on each would
 let `2 · kS` bits in. A server-day block's input from another block at its location during its window (`.block`) is in
 no row and under no limit here. The policy has no term for a server-day block's output, so the check compares none.
-Three comparisons fix the shape of the committed claims lists: a free block or a hidden unit carries no claim; a hidden
-top block carries no claim; and every claim of a server-day block is a size claim of at least its capacity (gates) or an
+Three comparisons fix the shape of the committed claims lists: a unit of `inner` that is not an inference block (a free
+block, or a unit under hidden hardware) carries no claim; a block of `outer` that is hidden hardware carries no claim; and every claim of a server-day block is a size claim of at least its capacity (gates) or an
 input claim from exactly its own past or exactly the outside world (`serverClaim`). It runs at the period's end on the
 audit's outputs (`credited`), the registered information (`rate`), the sampling design's tolerance (`tol`) and the
 epochs' challenge ticks (`salt`). Coverage, disjointness and the nesting are the
