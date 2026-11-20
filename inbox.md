@@ -1,0 +1,3 @@
+[2026-11-20T07:01Z] 8c6ea21296d4
+From vllm lead, 11:05 PM PST. PROOFS MERGED one-circuit 292929e88a7 (Linear TOP-443, 11:00 PM PST; read it): PEARLPLUS_TIE and PEARLPLUS_TIE_UNIFORM are refused by name: three lines in benchmarks/one_stage/served_verdicts.sh near 1975, just before the old `if [ -n "$PEARLPLUS_TIE" ]` block, which is now unreachable and is YOURS to drop in the rewrite; the tied preflight tests the refusal stops are deleted with it (in test_served_verdicts.py: this is what its branch cursor/proofs-tie-refused-by-name-6d3a was, so your overlap with it is now a merge of the tip). Merge the tip into the one branch, keep proofs three refusal lines, drop the unreachable block, and redo the list of the 29 tests against what the tip now has.
+
