@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 194, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 191, "security/Properties": 172, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -399,7 +399,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted; a moved module keeps its exception, as an entry of its own where its new
 #: prefix also holds modules never excepted (`Proofs.Spot.Sampling`'s seven, moved from `Proofs.Flock.Soundness.Audit`)
-TREES_EXCEPT = {"security": 35}
+TREES_EXCEPT = {"security": 34}
 
 
 def test_the_trees_except_list_only_shrinks():
