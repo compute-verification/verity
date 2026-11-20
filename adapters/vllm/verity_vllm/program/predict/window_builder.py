@@ -338,7 +338,7 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
     Such a template's units stay in the circuit and its sample: a draw of one is a failed proof. The door's own check
     replaces this when door-ready lands."""
     from verity.circuits.count import count
-    from verity.circuits.laying import ZK_M_MIN
+    from verity.circuits.laying import ZK_M_MIN, zk_min_units
     from verity.circuits.program import Program
 
     why, alone = [], {}
@@ -353,9 +353,10 @@ def check_served(circuit: IF.Circuit) -> dict[str, str]:
         prog = Program(fn)
         bits = 8 * (sum(ins) + sum(outs)) + count(prog)[descriptor_id(prog.root)].ands
         k = max(bits - 1, 1).bit_length()
-        if (m := k + max(3, (n - 1).bit_length())) < ZK_M_MIN:
+        # g is the door's, unknown before its lowering; at g = 1 the floor is the fewest units any packing needs.
+        if n < (need := zk_min_units(k, 1)):
             alone[tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of all {n} units "
-                          f"is m = {m}, under {ZK_M_MIN}")
+                          f"is under {need} (`zk_min_units` at g 1): m under {ZK_M_MIN}")
     if why:
         raise Unexpressible(f"{len(why)} templates Flock wouldn't prove: " + "; ".join(why))
     return alone
