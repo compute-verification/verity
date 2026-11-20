@@ -9,7 +9,6 @@
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
     {"file": "verity_vllm/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity_vllm/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
-    {"file": "verity_vllm/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "function", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": "lines", "count": 399},
     {"file": "verity_vllm/compiler/advice_check.py", "kind": "function", "symbol": "_bit_step", "detail": "lines", "count": 170},
     {"file": "verity_vllm/compiler/compile_slice.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 801},

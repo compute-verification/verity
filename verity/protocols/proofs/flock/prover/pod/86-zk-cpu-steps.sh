@@ -24,6 +24,7 @@
 #      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its verity-verify-proof of the same sources is used, not rebuilt)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 STEP=${STEP:?STEP=build|prove|lean}
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/zk-cpu-steps-job}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/jobs/zk-cpu-steps}; W=$FW/flock-circuit; L=$FW/cache

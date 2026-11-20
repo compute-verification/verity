@@ -5,8 +5,9 @@ Flock alone; the ZK server (`Flock.ZkServer` and the modules under it, the libra
 `flock-zk-server` and `flock-frame-tape`); and the recursion (`Flock.Rec*` and ``REC_MODULES``, the library `FlockRec`,
 with V*'s circuit `VStar` and the `flock-rec-*` and `flock-witness` executables). A module imports its own layer and the
 layers below it, so Flock alone reads neither the ZK server nor the recursion, and the ZK server reads nothing of the
-recursion. The umbrella `Flock` and the tests (`Flock.Test.*`) read every layer. ``UP`` holds the imports that still
-point up, each with what removes it; an entry that matches no import fails, so the list only shrinks.
+recursion. The umbrella `Flock` and the tests (`Flock.Test.*`, and ``TEST_ROOTS``, the executables that run one) read
+every layer. ``UP`` holds the imports that still point up, each with what removes it; an entry that matches no import
+fails, so the list only shrinks.
 
 A module that moved to a base package keeps its old name in Flock's package as a forwarder until every importer names
 the base module: it holds `module`, one `public import` of the module it re-exports, and a comment. Anything else there
@@ -31,6 +32,8 @@ REC_ROOTS = {"FlockRec", "FlockRecLinks", "FlockRecOpening", "FlockRecSparse", "
 REC_MODULES = {"Flock.Witness"}
 #: `Flock.Rec…` by spelling only: the session's record and its text are Flock alone's
 NOT_REC = {"Flock.Record", "Flock.RecordText"}
+#: the roots of executables that only run a test of `Flock.Test.*`, which read every layer as the tests do
+TEST_ROOTS = {"FlockComposeCheck"}
 #: the imports that point up, each with what removes it
 UP: dict[tuple[str, str], str] = {
     ("Flock.HmRow", "Flock.RecSparse"):
@@ -50,7 +53,7 @@ IMPORT = re.compile(r"^(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?(\S+)\
 def layer(module: str) -> int:
     """The layer of a module a file of Flock's package names; Lean's own modules sit below every layer."""
     root = module.split(".")[0]
-    if module == "Flock" or module.startswith("Flock.Test."):
+    if module == "Flock" or module.startswith("Flock.Test.") or module in TEST_ROOTS:
         return ALL
     if module == "Flock.ZkServer" or module.startswith("Flock.ZkServer.") or module in ZK_ROOTS:
         return ZK

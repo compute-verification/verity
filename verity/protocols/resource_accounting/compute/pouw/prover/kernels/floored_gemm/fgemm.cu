@@ -236,7 +236,7 @@ struct Args {
   int pa_rows;       // the tail's pa map has this many rows, shared by the batch (0: stacked as a)
 };
 
-// the edit's noise (verity/protocols/accounting/pouw/prover/kernels/masked_gemm/egemm.cu): 16 bytes of a row from one hash h, element j's index into
+// the edit's noise: 16 bytes of a row from one hash h, element j's index into
 // S = {5, 7, -5, -7} the 2 bits at 4 (j % 8) + 2 (j / 8) of h; the SWAR add can't carry between bytes, and E4M3 adds in f16
 DEV uint32_t nz_sel(uint32_t h, int w) { return (h >> ((w & 1) * 16 + (w >> 1) * 2)) & 0x3333u; }
 template <bool F8> DEV uint32_t nz_add(uint32_t x, uint32_t h, int w) {

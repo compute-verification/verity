@@ -15,7 +15,7 @@ rewritten it under a new first cell), a first cell that a side holds twice or th
 would hold it twice), a conflict that holds the row under a table's header (one side changed the table's columns, or each
 added a table), and any conflict with a line that is not a row (prose, a list, a heading).
 Exit 0: merged, written to OURS.  Exit 1: conflicts left, OURS holding git's text with their markers.  A merged
-table is a candidate: a test that holds a table to the tree (`tests/test_benchmarks_index.py`) runs on it as on any other.
+table is a candidate: a test that holds a table to the tree runs on it as on any other.
 
 It does not judge where a row is: lines inside a fenced code block that start and end with `|` merge as rows too.
 """

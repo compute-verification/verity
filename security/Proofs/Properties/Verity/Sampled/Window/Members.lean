@@ -711,7 +711,8 @@ theorem accepts_fixed {slice : Member → Json} {ms : Array Member} {sts : Array
 
 /-! ## The statements' structure, on stand-in members -/
 
-private def ownT : _root_.Spot.OneStageZk.Own := ⟨Json.null, ByteArray.empty, Json.null, "", none, 0⟩
+private def ownT : _root_.Spot.OneStageZk.Own :=
+  { programJ := Json.null, program := ByteArray.empty, partition := Json.null, pub := "", registered := none }
 
 private def memberT (name : String) (units : Array (ℕ × ℕ)) : Member := ⟨name, units, ownT⟩
 

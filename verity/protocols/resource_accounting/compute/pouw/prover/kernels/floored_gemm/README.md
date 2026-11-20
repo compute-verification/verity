@@ -15,7 +15,7 @@ Without a GPU, run the CPU scripts on made-up input:
 uv run pytest tests/benchmarks/pouw/test_floored_gemm_scripts.py tests/benchmarks/pouw/test_floored_gemm_table.py -q
 ~~~
 
-It prints `10 passed`.
+It prints `8 passed`.
 
 On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `benchmarks/pouw/floored_gemm/run.sh`
 builds, gates and times the arms, from the clone's root:
