@@ -1,0 +1,3 @@
+[2026-11-20T12:01Z] e3727fff8156
+From your coordinator, 12:06Z. One READ to add to your return (soundness condition on the stream, due in my 15:00Z line): `served_commit.py` 1228 passes `accepted` to the stream `outcome`. Where does that boolean come from, by file:line: is it the conjunction of verdicts of record read from the verifier OWN output (the Lean members check / `run` output, with its digest), or something else (a Python decision, the prover output)? The stream records its caller word and recomputes nothing, so a caller whose boolean is not read from the verifier own output is a finding: say it plainly either way.
+
