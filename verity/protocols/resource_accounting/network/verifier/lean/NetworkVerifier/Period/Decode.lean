@@ -530,10 +530,10 @@ slot entries take as a template of their own; its `SlotEntry_v2:4` row (KO 4, 32
 a slot's entry is a `SelectEntry_v1` unit's (`selectEntryPins`). A new body of `SlotEntry_v2`, or a binding a window
 circuit takes as its slot entries' template, is pinned here. -/
 def slotEntryPins : List String :=
-  ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
-    7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
-   "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f\
-    24b44567891a9ea2efb2f8a6830c9f9c957c14dc65041f8dd77bfd8d50c5b7ff"]
+  ["f17b0cdd8fff750f03e056b980a5a7f050bba60e493caf9e404e605683a9e2aa\
+    cdac33afcfdadf28c6b8941f6c87dc1e1bb8b160973214b96497c14a428d80ea",
+   "da4d295a186d39bc5da1b4e6506e1f0f8a4687ac1c3a257eb4f2627e14718400\
+    614d28ca578ff0d93032616de3dcb4de816dbbf6e581206a131cbde9d1b839bb"]
 
 #guard slotEntryPins.all (·.length == 128)
 
@@ -544,12 +544,12 @@ def slotEntryPins : List String :=
 `SlotEntry_v2` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows. A new binding or
 body is pinned here. -/
 def selectEntryPins : List String :=
-  ["f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0ebc0c9dc\
-    bd6513d2bf72aa243c499833d1173fb14236e85bb27b4d03de88df93344007d2",
-   "236d569741e3fe2026aaa65be2077b4da82d495a5b35322428051e4e07ca556b\
-    b44d1c5f59f2aef22d7c4c5b563c3819569add04ed3d2d4d57563ad471cf71c4",
-   "5460098589051bb756c5d7781e1727495952c296826b29315ec269b492ca3cea\
-    bc394ee273a2dae92ffb8eef31d8d22e83208a9e280dd80e39be9073dfc7a68a"]
+  ["75209ad1e0d6d147350819297953801bdbdd3fe84261df00ddbc82ca8baacb97\
+    4ea3b08d3dc2498a6e62cbe0149749201be3b1b07de0458094a60652b806b81e",
+   "a94aa57d743d5a51e3a2b1799dfaea59a3e056a68e54c7a26cc437e4e98580b1\
+    12b35179c3237e8f88362846d65d1308fd65282d6ec2476a12c50b8123195af4",
+   "b919aa405db1bafde6758a546d7419493ed227afc804d302ae20d35d6e03b620\
+    e63e842d4861d9a2cd251b881f7fd0a85ace60b18de9f929c2f45fb0f67af54e"]
 
 #guard selectEntryPins.all (·.length == 128)
 
