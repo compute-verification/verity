@@ -118,3 +118,23 @@ def test_the_generator_builds_the_bodies_serve_loads_fixed_load_sends(monkeypatc
     assert [json.dumps(b) for b in got] == [json.dumps(b) for b in want]
     if count is None:
         assert got == list(D.open(REMOTE)) and {len(b["prompt"]) for b in got} == {27}
+
+
+def test_a_timed_view_pairs_each_record_with_its_time_and_is_timed_once(monkeypatch, tmp_path):
+    _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=5))
+    ds = D.open("a")
+    timed = ds.timed("rate", seed=3, rate=2.0)
+    pairs = list(timed)
+    assert pairs == list(D.open("a").timed("rate", seed=3, rate=2.0)) and len(timed) == 5 and timed.kind == ds.kind
+    assert [r for _, r in pairs] == list(ds) and [t for t, _ in pairs] == sorted(t for t, _ in pairs) and pairs[0][0] > 0
+    assert [t for t, _ in ds.timed("at-once")] == [0.0] * 5
+    assert timed.identity == f"{ds.identity}|timed:rate,rate=2.0,seed=3"
+    assert len({ds.timed("at-once").identity, ds.timed("at-once", seed=9).identity}) == 1
+    assert len({timed.identity, ds.timed("rate", seed=4, rate=2.0).identity, ds.timed("rate", seed=3, rate=3.0).identity,
+                ds.timed("at-once").identity}) == 4
+    for view in (ds.splits["head"], ds.sample(2, seed=1), ds.shuffled(seed=1)):
+        assert len(view.timed("rate", seed=3, rate=2.0)) == len(view)
+    for again in (timed, timed.sample(2, seed=1)):
+        with pytest.raises(D.Refused) as e:
+            again.timed("at-once")
+        assert (e.value.name, str(e.value)) == ("timed-twice", f"{again.identity} is timed already: time the dataset it was timed from")

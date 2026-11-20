@@ -19,7 +19,7 @@ DIGESTS = ("sha256", "sha512")
 
 
 class Refused(Exception):
-    """A read refused by ``name`` (``unknown-dataset``, ``unknown-split``, ``digest``, ``missing``)."""
+    """A read refused by ``name`` (``unknown-dataset``, ``unknown-split``, ``digest``, ``missing``, ``timed-twice``)."""
 
     def __init__(self, name: str, text: str) -> None:
         super().__init__(text)
@@ -36,6 +36,7 @@ class Dataset:
     def __init__(self, kind: str, identity: str, read: Callable[[], list[Any]],
                  splits: Mapping[str, tuple[int, int]] | None = None) -> None:
         self.kind, self.identity, self._read, self._ranges = kind, identity, read, dict(splits or {})
+        self._timed = False
 
     def __iter__(self) -> Iterator[Any]:
         return iter(self._read())
@@ -44,7 +45,9 @@ class Dataset:
         return len(self._read())
 
     def _derived(self, step: str, pick: Callable[[list[Any]], list[Any]]) -> Dataset:
-        return Dataset(self.kind, f"{self.identity}|{step}", lambda: pick(self._read()))
+        ds = Dataset(self.kind, f"{self.identity}|{step}", lambda: pick(self._read()))
+        ds._timed = self._timed
+        return ds
 
     @property
     def splits(self) -> dict[str, Dataset]:
@@ -60,6 +63,30 @@ class Dataset:
             random.Random(seed).shuffle(r)
             return r
         return self._derived(f"shuffle:seed={_canonical(seed)}", pick)
+
+    def timed(self, rule: str, *, seed: int = 0, **parameters: Any) -> Dataset:
+        """Each record as ``[seconds from the start, record]``, in order, times never decreasing; the kind stays the
+        parent's, since the pairing is this view's. ``at-once``: every time 0.0 (no seed). ``rate``: exponential gaps at
+        ``rate`` a second, drawn from ``seed``. Refused (``timed-twice``) on a dataset already timed."""
+        if self._timed:
+            raise Refused("timed-twice", f"{self.identity} is timed already: time the dataset it was timed from")
+        if rule == "at-once" and not parameters:
+            step, times = "timed:at-once", lambda n: [0.0] * n
+        elif rule == "rate" and set(parameters) == {"rate"}:
+            rate = float(parameters["rate"])
+
+            def times(n: int) -> list[float]:
+                rng, at, out = random.Random(seed), 0.0, []
+                for _ in range(n):
+                    at += rng.expovariate(rate)
+                    out.append(at)
+                return out
+            step = f"timed:rate,rate={_canonical(rate)},seed={_canonical(seed)}"
+        else:
+            raise ValueError(f"timed takes at-once, or rate with rate=R, not {rule!r} with {sorted(parameters)}")
+        ds = self._derived(step, lambda r: [[t, x] for t, x in zip(times(len(r)), r)])
+        ds._timed = True
+        return ds
 
 
 def _names() -> list[str]:

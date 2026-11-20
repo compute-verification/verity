@@ -7,8 +7,8 @@ dataset, so nothing under `verity/` imports this package (`tests/import_order.to
 
 Every dataset is reproducible: a definition `definitions/NAME.toml` pins exactly what is read. A record is a plain JSON
 value the package never interprets; one record may be a whole session of several turns, and `sample` and `shuffled`
-move whole records, never parts of one. How records are played against a serve (arrival times, rates, concurrency) is
-the sender's, never a dataset's.
+move whole records, never parts of one. No definition names a timing: arrival times are the `timed` view's, laid over
+any dataset.
 
 ## API
 
@@ -20,9 +20,13 @@ the sender's, never a dataset's.
 - `iter(dataset)`, `len(dataset)`: the records in order, read afresh each time.
 - `Dataset.sample(n, seed)`: `n` records drawn without replacement, in their order; `Dataset.shuffled(seed)`: all of
   them in a seeded order. Both are deterministic and return datasets.
+- `Dataset.timed(rule, seed=0, **parameters)`: each record paired with an arrival time, `[seconds from the start,
+  record]`, in order, its kind the parent's: `at-once` (every time 0.0) or `rate` with `rate=R` (exponential gaps at R a
+  second from the seed); identity `|timed:at-once` or `|timed:rate,rate=R,seed=S`. A timed dataset is not timed again.
+  Nothing about concurrency or closed loops is here.
 - `Dataset.splits`: each split by name.
 - `Refused`, with its `name`: `unknown-dataset`, `unknown-split`, `digest` (recorded bytes whose digest is not the
-  definition's) and `missing` (recorded bytes not fetched yet), each with one text naming the fix.
+  definition's), `missing` (recorded bytes not fetched yet) and `timed-twice`, each with one text naming the fix.
 
 ## Add a definition
 
