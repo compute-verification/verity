@@ -778,15 +778,10 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
 SERVED_PARTIES = ("--party", "workers", "--party", "firewall")
 
 
-def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is_the_runners(capsys):
+def test_the_workloads_piece_is_the_prover_nodes_first(capsys):
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     first = got["plan"][0]["entries"][0]
     assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
-    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
-    runner = (ROOT / T.RUNNER).read_text()
-    assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
-    assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])
-    assert all("verbs" not in e for x in got["plan"] for e in x["entries"] if e is not first)
 
 
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on

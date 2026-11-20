@@ -1,0 +1,23 @@
+"""The top-level protocol `run`'s one monitoring period (`verity.protocols.compose.period`)."""
+
+from __future__ import annotations
+
+from verity.protocols.compose import period as P
+
+PUBLIC = P.PublicParameters(hardware=None, limits=None, window=2, sampling_design="rate:1/4")
+
+
+def test_one_registration_then_each_window_accounting_with_compilation_first_then_policy_then_the_result():
+    calls = []
+    stages = P.Stages(
+        registration=lambda public, w, state: calls.append("registration") or "registered",
+        windows=lambda public, w, state: calls.append("windows") or ("w0", "w1"),
+        accounting=lambda public, w, state, window: calls.append(f"accounting {window}") or f"blocks of {window}",
+        policy=lambda public, w, state, window, blocks: calls.append(f"policy {window} on {blocks}") or window,
+        result=lambda public, w, state: calls.append(f"result {len(state.windows)}") or "result")
+    state = P.run_period(PUBLIC, "workload", stages)
+    assert calls == ["registration", "windows", "accounting w0", "policy w0 on blocks of w0", "accounting w1",
+                     "policy w1 on blocks of w1", "result 2"]
+    assert (state.registration, state.result) == ("registered", "result")
+    assert [x["accounting"]["compilation"] for x in state.windows] == [
+        {"accepted": True, "note": P.COMPILATION_NOT_VERIFIED}] * 2

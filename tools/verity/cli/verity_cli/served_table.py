@@ -28,9 +28,7 @@ A piece names the scripts it runs (``scripts``), which must be in the tree, and 
 the party it reaches (``reaches``, default its own), ``party.component.key`` each, the ``binds`` ones bound before the run
 starts (``unbound``) and the ``optional`` ones used when bound. `describe` is what `verity run --dry-run` prints of it.
 
-The phases: Registration (the site, θ and the builder B: the weights registration before the first request, and the
-committer's compiler), then Execution (the served window), then Verification (each component's commitment, challenge,
-proof or timed response, and validation: the pieces and the onsite check).
+`live` runs one monitoring period of `run` (`verity.protocols.compose.period`), each stage's body here (`STAGES`).
 """
 from __future__ import annotations
 
@@ -54,7 +52,7 @@ from verity import config as K
 from verity.commitments.crypto import lms
 from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role, Starter
-from verity.protocols.compose import schemes
+from verity.protocols.compose import period, schemes
 from verity.lean_process import lean_env
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import (Executable, Lacks, Launch, LaunchRefused, Scheme, declared,
@@ -364,10 +362,7 @@ class Piece:
     and none while the piece's ``development`` binding is unbound). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
     binding left unbound starts the party it reaches on its own machine, under a key and coins made for the run, in a
     development run (`coins_on`), and takes none of its other bindings; one that ``follows`` a listed component's piece
-    of the same party is unbound exactly when that piece is, since its attester signs under that one's key. The
-    workload's piece names the runner's verbs it stands for (``verbs``, `RUNNER`'s ``served_verdicts.sh VERB``, in the
-    order its main path runs them) and what they write that the other pieces read (``writes``: under the serve dir,
-    ``D/``, or the public record, ``OUT/``); `live` still runs the runner whole (`served_window`)."""
+    of the same party is unbound exactly when that piece is, since its attester signs under that one's key."""
 
     component: str
     party: str
@@ -381,8 +376,6 @@ class Piece:
     session: Session | None = None
     development: str = ""
     follows: str = ""
-    verbs: tuple[str, ...] = ()
-    writes: tuple[str, ...] = ()
     starts: tuple[str, ...] = ()
     starts_optional: tuple[str, ...] = ()
     #: the scheme's own Lean executables the piece builds and answers with (`Launch.executables`)
@@ -438,8 +431,7 @@ class Piece:
         what it raises; a protocol whose halves aren't all in this tree is ``absent``, by module."""
         out = {"component": self.component, "runs": self.runs, "what": self.what, "scripts": list(self.scripts),
                "reaches": self.reaches or self.party, "missing": self.missing(),
-               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings),
-               **({"verbs": list(self.verbs), "writes": list(self.writes)} if self.verbs else {})}
+               "hooks": self.variables(cfg, bindings), "unbound": self.unbound(bindings)}
         if self.session is None:
             return out
         s, machine = self.session, {p["name"]: p["machine"] for p in cfg["party"]}[self.party]
@@ -575,10 +567,7 @@ def _local_gate(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = (
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve,
-              verbs=("predict", "serve", "seal", "window", "advice", "circuits", "publish"),
-              writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
-                      "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
+              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 class Launcher(NamedTuple):
     """What a declared piece's `Launch.entry` gives, called with its scheme's declaration: ``hooks(cfg, params, bound,
     pinned)``, the runner's variables for it, whose docstring says what the piece does, and the scripts it runs."""
@@ -1060,70 +1049,128 @@ def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[s
             if (x := launched(c).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
 
 
-def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
-    """The pieces of the parties ``here`` (module docstring): each runtime party's run beside the served window; the
-    execution phase when the workload's party is here; a gate's side as started by the gate; and the onsite check
-    (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
-    premise as `placement` read it from the challenger's outcome here, and each listed component's as `attested` reads
-    it (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
-    binding is missing, and ``unwritten`` (naming the goal) while a runtime party's start, `held` or the registration is not written, before anything starts."""
-    bindings = bindings_of(state)
-    runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
-    if missing := unbound(cfg, bindings) if WORKERS in here else list(dict.fromkeys(
-            k for x in runtime for k in x.unbound(bindings))):
+class ServedWorkload(NamedTuple):
+    """The served window's workload as today's road reaches it: the configuration, the run's state, its deploy bindings
+    and the parties on this machine. The adapter's runner builds and commits its compiler, advice and trace."""
+
+    cfg: Mapping[str, Any]
+    state: Path
+    bindings: Mapping[str, Any]
+    here: Sequence[str]
+
+
+def public(cfg: Mapping[str, Any]) -> period.PublicParameters:
+    """`run`'s public parameters as the application file states them: the window's length its engine steps
+    (``[workload.params] window-steps``) and the sampling design its ``[service] law``. No key states the hardware or the
+    policy's limits."""
+    return period.PublicParameters(hardware=None, limits=None, window=cfg["workload"]["params"]["window-steps"],
+                                   sampling_design=cfg["service"]["law"])
+
+
+def _registration(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> dict[str, Any]:
+    """What today's road does before anything starts: every listed piece's bindings given, each runtime party
+    prepared, and where one is, the run's registration (`registration`). Refused by name (``unbound``) while a listed
+    piece's binding is missing, and ``unwritten`` (naming the goal) while a runtime party's start, `held` or the
+    registration is not written. Its ``prepared`` parties are the accounting stage's to start."""
+    runtime = [x for p in w.here for x in pieces(w.cfg, p) if x.runs == RUNTIME]
+    if missing := unbound(w.cfg, w.bindings) if WORKERS in w.here else list(dict.fromkeys(
+            k for x in runtime for k in x.unbound(w.bindings))):
         raise Refused("unbound", f"the deploy bindings (verity run --bindings) don't bind {', '.join(missing)}")
     ready = []
     for x in runtime:
         try:
-            ready.append((x, prepare(cfg, state, bindings, x)))
+            ready.append((x, prepare(w.cfg, w.state, w.bindings, x)))
         except NotImplementedError as e:
             raise Refused("unwritten", f"{x.party}'s {x.component} party start is not written ({e})") from None
     if ready:
         try:
-            registration(cfg, state)
+            registration(w.cfg, w.state)
         except NotImplementedError as e:
             raise Refused("unwritten", f"the run's registration is not written ({e})") from None
+    return {"prepared": ready}
+
+
+#: the period's one window today: the one the runner picks from the serve dir's record (WINDOW, else plans.jsonl's last)
+PICKED = "the window the runner picks"
+
+
+def _windows(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> tuple[str, ...]:
+    return (PICKED,)
+
+
+def _accounting(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState,
+                window: str) -> dict[str, dict[str, Any]]:
+    """Each party's outcome here: the served window's runner (`served_window`) when the workload's party is here, with
+    each prepared runtime party's run beside it. The runner's window road runs the policy's steps too
+    (inference-policy, inference-only), in its own order."""
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:
         mine = out.setdefault(x.party, {"outcome": {}, "refused": None})
         mine["outcome"][x.component] = got.get("outcome")
         mine["refused"] = mine["refused"] or got.get("refused")
-        if (where := placement(cfg, x, got.get("outcome"))) is not None:
+        if (where := placement(w.cfg, x, got.get("outcome"))) is not None:
             mine.setdefault("placement", {})[x.component] = where
 
+    ready = state.registration["prepared"]
     with ThreadPoolExecutor(max_workers=max(1, len(ready))) as pool:
         beside = [(x, pool.submit(start)) for x, start in ready]
-        if WORKERS in here:
-            rc = served_window(cfg, state, bindings)
-            wait = pending(cfg, state, rc)
-            for p in here:
-                if any(x.runs == SERVED_WINDOW for x in pieces(cfg, p)):
+        if WORKERS in w.here:
+            rc = served_window(w.cfg, w.state, w.bindings)
+            wait = pending(w.cfg, w.state, rc)
+            for p in w.here:
+                if any(x.runs == SERVED_WINDOW for x in pieces(w.cfg, p)):
                     out[p] = {"outcome": {"served-window": rc, **({"pending": wait} if wait else {})},
                               "refused": None if rc == 0 or wait else SERVED_WINDOW}
         for x, f in beside:
             done(x, f.result())
-    for p in here:
+    return out
+
+
+def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState, window: str,
+            blocks: Mapping[str, Any]) -> Path | None:
+    """The inference-only policy's record, which the accounting stage's window road wrote (``out/record/
+    inference-only.json``), where it did: nothing is left for this stage to call."""
+    f = w.state / "out" / "record" / "inference-only.json"
+    return f if f.is_file() else None
+
+
+def _result(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> Result:
+    """Each party's outcome: its window's, else a gate's side as started by the gate; and when the verifier is here,
+    the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
+    read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
+    component -> premise), and beside it what compilation said (``compilation``)."""
+    out = {p: o for x in state.windows for p, o in x["accounting"]["blocks"].items()}
+    for p in w.here:
         if p in out or p == VERIFIER:
             continue
-        mine = pieces(cfg, p)
+        mine = pieces(w.cfg, p)
         if any(x.runs == SERVED_WINDOW for x in mine):
             out[p] = {"outcome": {"error": f"{p}'s pieces run inside the served window, whose {WORKERS} this run "
                                            "doesn't run"}, "refused": SERVED_WINDOW}
         else:
             out[p] = {"outcome": {"started": f"by the auditor's gate, for {', '.join(x.component for x in mine)}"},
                       "refused": None}
-    if VERIFIER in here:
+    if VERIFIER in w.here:
         devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
-        devices |= attested(cfg, state)
+        devices |= attested(w.cfg, w.state)
+        said = "; ".join(sorted({x["accounting"]["compilation"]["note"] for x in state.windows}))
         try:
-            check = remote_check if K.composite(cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
-            out[VERIFIER] = {"outcome": {"verdicts": [{**check(cfg, state), mc.PREMISE: devices}]},
-                             "refused": None}
+            line = remote_check if K.composite(w.cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
+            out[VERIFIER] = {"outcome": {"verdicts": [{**line(w.cfg, w.state), mc.PREMISE: devices,
+                                                       "compilation": said}]}, "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
     return Result(out)
 
+
+STAGES = period.Stages(_registration, _windows, _accounting, _policy, _result)
+
+
+def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
+    """The parties ``here`` as one monitoring period of `run` (`period.run_period`), over `STAGES`."""
+    w = ServedWorkload(cfg, state, bindings_of(state), here)
+    return period.run_period(public(cfg), w, STAGES).result
 
 __all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
            "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed", "live",
