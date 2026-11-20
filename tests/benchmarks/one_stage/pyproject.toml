@@ -24,7 +24,7 @@ untraced = [
     "test_audit_one_member.py",
     "test_audit_two_members.py",
     "test_a0_verify_members.py",
-    "test_a5_memo.py",
+    "test_a5_memo.py", "test_a5_case_v2.py",
     "test_a5_outputs.py",
     "test_a5_tp_gates.py",
     "test_a5_tp_store.py",
