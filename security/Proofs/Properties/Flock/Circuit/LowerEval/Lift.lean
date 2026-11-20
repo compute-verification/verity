@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Flock.Circuit.LowerEval.Widths
+public import Proofs.Properties.Flock.Circuit.LowerEval.Keeps
 
 /-! `UnitWidths` and `UnitComputes` from their parts, and `LiftWordEval` for templates of word-primitive calls and axis-0
 batches. -/
@@ -916,7 +916,7 @@ def Batch0 (P : Prog) (d : ℕ) : Prop :=
       (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
     isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **`LiftCalls`** (open): the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
+/-- **`LiftCalls`**: the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
 Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node
 calling its primitive's Boolean Definition, where every value of `S`'s Boolean map is a key of its index. A template of
 no node reaches no word primitive, so `Flock.Lift.closure` lifts nothing and `lift` returns `d` itself. -/
@@ -926,6 +926,21 @@ def LiftCalls : Prop :=
     S.defs.size ≤ e ∧ (∀ i < S.defs.size, L.defs[i]? = S.defs[i]?) ∧ (∀ k, L.bodyOf? k = S.bodyOf? k) ∧
     ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
       ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
+
+/-- **`LiftPlaces`** (open): `LiftCalls` but for what `liftKeeps` gives: the lift to bits of a template of
+word-primitive nodes, at least one, places Definition `d` lifted after `S`'s Definitions, each node calling its
+primitive's Boolean Definition. -/
+def LiftPlaces : Prop :=
+  ∀ (S L : Prog) (d e : ℕ), (∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true) →
+    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → PrimNodes S d → 0 < (S.defs[d]!).body.nodes.size →
+    S.defs.size ≤ e ∧ ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
+      ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
+
+/-- **`LiftCalls`**, on `LiftPlaces`. -/
+theorem liftCalls_of (h : LiftPlaces) : LiftCalls := fun S L d e hc hl hd hp hn => by
+  obtain ⟨he, hex⟩ := h S L d e hc hl hd hp hn
+  obtain ⟨-, hpre, hb⟩ := liftKeeps hc hl
+  exact ⟨he, hpre, hb, hex⟩
 
 /-- **`Batch0Typed`** (open): in a C `decode` accepts whose root has no recut, a template of word-primitive calls and
 axis-0 batches reads each of its parameters' and earlier nodes' leaves that exist, in sequences whose count is their
