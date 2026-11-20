@@ -1187,8 +1187,8 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
 def _odd(c_s: bytes, key: str) -> str:
     """``, odd field`` where the template has a field of bits not a multiple of 16 followed by another field of its side
     (`codec.odd_fields`, lean's second fault), else ``, no odd field``."""
-    from verity.circuits.codec import odd_fields
     try:
+        from verity.circuits.codec import odd_fields
         odd = any(follows for _side, _n, _bits, follows in odd_fields(json.loads(c_s), key))
     except Exception:  # noqa: BLE001 - a descriptor the scanner can't read is said so
         return ", odd fields unread"
