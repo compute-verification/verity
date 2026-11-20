@@ -164,6 +164,8 @@ public import Spot.HistoryTable
 public import Spot.PublicUnits
 public import Spot.LinkPoints
 public import Spot.Edges
+public import Spot.Levels
+meta import Spot.Select
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -770,10 +772,12 @@ a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 each template's
 circuit file, reference header and registered reads (`Run.templateCircuits`) and never `certified` entries, and no
 `links` or `wires`, which the verifier derives; null otherwise.
-The verifier flips no coins of its own: an input whose `coins_from` is not the challenger's is refused. -/
+The verifier flips no coins of its own: an input whose `coins_from` is not the challenger's is refused. A two-stage
+rule is refused by name (`Levels.TWO_LEVELS_REFUSED`) once its params and rule parse, before any check of the run. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
+  if rule matches .twoStage .. then throw Levels.TWO_LEVELS_REFUSED
   let values ← valuesOf (getD j "values") "values"
   let .arr ps := getD j "public" | throw "public is not a list"
   let declared ← ps.mapM fun
@@ -1182,5 +1186,20 @@ def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
     "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
     "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
+
+/-- **The run piece refuses a two-stage rule by name**: on any input whose params parse and whose rule is two-stage,
+`run` is exactly `Levels.TWO_LEVELS_REFUSED`, never an output, so never `accept`; `Run.run` is not reached. -/
+theorem run_refuses_two_stage {j : Json} {p : OneStage.Params} {g : Json} {t : String} {k : Select.Counts}
+    (hp : params (getD j "params") = .ok p) (hr : Select.Rule.ofJson (getD j "rule") = .ok (.twoStage g t k)) :
+    run j = .error Levels.TWO_LEVELS_REFUSED := by
+  unfold run
+  simp only [hp, hr, bind, Except.bind]
+  rfl
+
+#guard match Select.Rule.ofJson (Json.mkObj [("rule", "two-stage"), ("replay", "rate:1/2"), ("k", Lean.toJson (1 : Nat)),
+    ("grain", Json.mkObj [("name", "Q_template_instance"), ("version", Lean.toJson (0 : Nat)),
+      ("params", Json.mkObj [("template", "t")])])]) with
+  | .ok (.twoStage ..) => true
+  | _ => false
 
 end Spot.Pieces
