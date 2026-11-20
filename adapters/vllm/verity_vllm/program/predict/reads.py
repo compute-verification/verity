@@ -35,7 +35,7 @@ checked output, it would need prefix stability: changing y at or after a step ch
 its windows, and the Programs too but in one read: a batch-invariant Program's length sizes only its later decodes, but in
 class G a request's Program computes its indexer's keys and scales for the rows it runs before the window's close only where
 the close returns them, where its last row, after the close, reads past INDEX_TOPK keys. y's parts:
-- its token ids: each kept output is a token select's sampled id in its request's Program (`steps.EGRESS`), an output the
+- its token ids: each kept output is a token select's sampled id in its request's Program (`by_body.EGRESS`), an output the
   compiler never reads;
 - which response a token belongs to: the request's id, certified (the body it names is the request's, by its `user`);
 - each response's length, where its terminator goes: ``output_len``, advice, read ahead three times: on a batch-invariant
