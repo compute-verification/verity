@@ -198,7 +198,10 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
     it gives: its input ports the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j``
     where ``cut`` (`cuts`, C's) gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``,
     in u16 words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the
-    template's `definition_digest`. `Refused` too where the lowering refuses."""
+    template's `definition_digest`. `NotDerived` where the partition is no template query, before C_S is read;
+    `Refused` too where the lowering refuses."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
     D = R.program(c_s)
     key, rows, fields = admitted(D, partition, cut)
     ins = ",".join(f"{name}:{bits}" for name, bits in rows)
