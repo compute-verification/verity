@@ -9,7 +9,7 @@ a read of an output row (`interface.Read`), which fills no input and holds the p
 row, so a table that isn't what the model computed fails the proof of the proof block that reads it. Each quantizer at
 that K is `Int8RowQuant_v5{K, R, ROUND}` at its round, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
 node's words whole), read as row c·m + i of its round's A table, c its index among its position's int8 linears of that K
-and i its position's row; each position's token row (its lane's `ScanSlots_v4`'s, its `TokenFeed_v1`'s or the
+and i its position's row; each position's token row (its lane's `ScanSlots_v5`'s, its `TokenFeed_v1`'s or the
 previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
 every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is the
 class's, and a window that isn't that load is refused (`FixedLoad.held`). The circuit's program takes the tables as its values
@@ -27,8 +27,7 @@ that reads row i of its call's y and hands its BF16 words on to its readers in r
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
 call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
 ``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at its linears, reads none
-of them. Its
-census (`window_cut.census`) counts each cut linear by shape, and none is tied to PoUW's credited product yet.
+of them.
 """
 from __future__ import annotations
 
@@ -172,7 +171,7 @@ class PearlTables(FixedLoad):
     K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
     to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
     ``words``, doubled where its unit would be no proof block (`window_cut.linears`). ``scheme`` is the PoUW scheme the
-    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_cut.census`): the deployment
+    window's Pearl+ serves under, whose credited product a tie would hold y to: the deployment
     states it, since it names the device."""
     WHAT = "Pearl+'s tables"
     scheme: str

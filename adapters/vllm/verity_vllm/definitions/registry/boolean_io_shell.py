@@ -1,7 +1,7 @@
 """`io_shell`'s Definitions on bits: `IngressPrompt_v2{MODEL,LP,V}`, its word body line for line over gates (the body is
 `io_shell.parse`, written once over its steps), so its word view is its `_v1` at the same statics;
 `IngressSampled_v1{MODEL,LP,V,RID}`, ingress schema v1's parse (`io_shell`'s module docstring), which has no word view: its seed
-is a 64-bit sum; and `ScanSlots_v4{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}`, one lane's read of the scan state row (`io_shell`'s
+is a 64-bit sum; and `ScanSlots_v5{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}`, one lane's read of the scan state row (`io_shell`'s
 module docstring), which has no word view either: its gates read the row's bits.
 
 `IngressSampled_v1` is `IngressPrompt_v2`'s steps over schema v1's layout (`io_shell.layout`), then each byte of the user, each
@@ -13,11 +13,13 @@ compare, a select as `forms.mux`, an AND and a NOT of bits), and bit i of a byte
 so a field's selects of constant words are ANDs with one wire and its sums fold above the field's largest value.  No table or
 lookup gate.  Every byte of the body reaches ``ok``.
 
-`ScanSlots_v4` takes the row as the u16 words it is registered as and gives its lane's fields as the i32s its readers take:
+`ScanSlots_v5` takes the row as the u16 words it is registered as and gives its lane's fields as the i32s its readers take:
 the token `EmbeddingRead_v2`'s, the slot, occupancy word and head `TokenFeed_v1`'s, `SelectEntry_v1`'s and
-`SelectCollect_v1`'s. Its words become bits and its bits words through `WordBits{16}` and `BitsWord{32}`, which are wiring;
-between them it copies the lane's fields out of the row as they are, its ids zero-extended, and computes one thing: the slot
-its first position carries on, whose count is the prompt's length minus one (mod 2^32), a borrow chain of 30 ANDs.
+`SelectCollect_v1`'s. Its words become bits through `WordBits{16}`, which is wiring, and one call of
+`ScanSlotsBits_v1{NS,NP,IDB,K0,K,OCC,LP,MAX,IDS}` on those bits: it copies the lane's fields out of the row as they are, its
+ids zero-extended, computes one thing, the slot its first position carries on, whose count is the prompt's length minus one
+(mod 2^32), a borrow chain of 30 ANDs, and makes its bits words through `BitsWord{32}`, wiring too. Its gates read its own
+parameters, so no batch of them steps through part of a `WordBits` copy (`Flock.Lower`'s `Work.stepOf`).
 """
 from __future__ import annotations
 
@@ -161,15 +163,33 @@ def scan_bits(S) -> tuple[Any, list, Any]:
     return _SCANS[key], params, ret
 
 
-def _scan_words(B, S, state):
+def _bits_sig(S):
+    _T, params, _ret = scan_bits(S)
+    return (("bits", params[0]),), X.slots_sig(S)[1]
+
+
+def _scan_bits_words(B, S, bits):
     T, params, ret = scan_bits(S)
-    read = Coll(Array(params[0].n, Value(16)), concat([state.refs.slice(j, j + 1) for j in read_words(S)]))
-    out = emit(T, params, ret, B, B.batch(bind(WordBits, W=16), read, axes=(0,)))
+    out = emit(T, params, ret, B, bits)
     words = B.batch(bind(BitsWord, W=32), Coll(Array(S.NP + 5, X.BITS32), out.refs), axes=(0,))
     return Coll(X.slots_sig(S)[1], words.refs)
 
 
-ScanSlotsV4 = CompositeDefinition("ScanSlots", 4, SCAN_STATICS, X.slots_sig, _scan_words,
+ScanSlotsBitsV1 = CompositeDefinition("ScanSlotsBits", 1, SCAN_STATICS, _bits_sig, _scan_bits_words,
+                                      doc="`ScanSlots_v5`'s lane fields from the read words' bits, each an i32.",
+                                      refuse=X.slots_refuse,
+                                      conformance="not-yet-established: as `ScanSlots_v5`")
+
+
+def _scan_words(B, S, state):
+    _T, params, _ret = scan_bits(S)
+    read = Coll(Array(params[0].n, Value(16)), concat([state.refs.slice(j, j + 1) for j in read_words(S)]))
+    bits = B.batch(bind(WordBits, W=16), read, axes=(0,))
+    out = B.call(bind(ScanSlotsBitsV1, **{k: getattr(S, k) for k in SCAN_STATICS}), Coll(params[0], bits.refs))
+    return Coll(X.slots_sig(S)[1], out.refs)
+
+
+ScanSlotsV5 = CompositeDefinition("ScanSlots", 5, SCAN_STATICS, X.slots_sig, _scan_words,
                                   doc="One lane's first position's token and slot, occupancy word and head from the scan's "
                                       "state row of u16 words, each an i32 (`io_shell`'s module docstring; "
                                       "`io_shell.scan_reference`).",
@@ -183,6 +203,6 @@ def scan_rows(state, NP, IDB, K0, K, OCC, LP, MAX, IDS, **_):
     return np.asarray([[k, *s, o, *h] for k, s, o, h in lanes], dtype=np.uint64), None
 
 
-register_kernel(ScanSlotsV4, scan_rows, domain="every state row")
+register_kernel(ScanSlotsV5, scan_rows, domain="every state row")
 
-BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsV4]
+BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsBitsV1, ScanSlotsV5]

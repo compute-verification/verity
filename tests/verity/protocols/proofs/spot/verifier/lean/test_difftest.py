@@ -564,7 +564,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts", "window_values", "coins", "released")
+                               "certified", "verdicts", "window_values", "coins", "commitments", "released")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -627,7 +627,7 @@ def decode_params(j) -> dict:
             raise D.Reject(str(e)) from None
     try:
         G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
-                      j.get("released"), len(j["log"]))
+                      j.get("commitments"), j.get("released"), len(j["log"]))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "pinned" in j:
@@ -749,7 +749,7 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
                    compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
-                   coins=p.get("coins"), released=p.get("released"))
+                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -762,7 +762,8 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
                    pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
-                   verdicts=p.get("verdicts"), coins=p.get("coins"), released=p.get("released"))
+                   verdicts=p.get("verdicts"), coins=p.get("coins"), commitments=p.get("commitments"),
+                   released=p.get("released"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -3288,8 +3289,9 @@ def fanout(j):
     if not P.is_template_query(query):
         raise D.Reject("not a template query")
     try:
-        return {"fanout": P.fanout(PROGRAMS[sha], query),
-                "shared": P.shared_inputs(PROGRAMS[sha], query, [range(f, f + n) for f, n in held])}
+        gates = [range(f, f + n) for f, n in held]
+        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query, gates),
+                "reads": [[r.start, len(r), i] for r, i in P.held_reads(PROGRAMS[sha], query, gates)]}
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
 
@@ -6577,8 +6579,10 @@ def test_r8_reads_the_readers_python_does(pieces):
     registered (`held`), is no run Input."""
     for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
         case = {"program": s.desc, "query": _json(s.query)}
-        assert fanout(case) == {"fanout": f, "shared": shared}
+        assert fanout(case) == {"fanout": f, "shared": shared, "reads": []}
         assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
+        held = {**case, "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
+        assert fanout(held)["reads"] and D.replay(FANOUT, held, pieces) == ("output", D.canonical(fanout(held)))
         named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
         rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
         given = {"params": {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [],
@@ -6595,10 +6599,10 @@ def test_r8_reads_the_readers_python_does(pieces):
             assert D.replay(REGISTRATION, tied_given, pieces) == ("output", D.canonical(want))
     program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
     case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
-    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": []}))
+    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": [], "reads": []}))
     s = READER_SETUPS[0]
     case = {"program": s.desc, "query": _json(s.query), "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
-    assert case["held"] and fanout(case) == {"fanout": 1, "shared": []}
+    assert case["held"] and fanout(case) == {"fanout": 1, "shared": [], "reads": [[0, 1, 0], [1, 1, 0]]}
     assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
 
 

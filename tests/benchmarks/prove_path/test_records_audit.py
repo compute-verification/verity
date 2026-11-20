@@ -170,11 +170,11 @@ def test_the_advice_binding_is_the_registrations_alone_and_leaves_the_circuit_re
 
 
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
-    """A window's io shell (`ScanSlots_v4`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    """A window's io shell (`ScanSlots_v5`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
 
-    tid = descriptor_id(bind(BX.ScanSlotsV4, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=376, LP=168, MAX=200, IDS=474))
+    tid = descriptor_id(bind(BX.ScanSlotsV5, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=376, LP=168, MAX=200, IDS=474))
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
@@ -403,21 +403,15 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
     """`window_roots`: the roots a window's docket records for its parameters are its ``registered_roots`` and each
-    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
-    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations`` and
+    pinned ``registered``), one root a parameter; a group that isn't one,
     an entry with no root of hex digits, or two roots for one parameter are refused."""
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import operands as OP
-
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
-    a, b = (RV.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
-    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
-            "registered": OP.block("test/model", {"b": b})}
-    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
     assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
     assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
@@ -1285,18 +1279,18 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
 
-#: a `ScanSlots_v4` at the first lane of a 40-word state row (`test_io_shell`'s)
+#: a `ScanSlots_v5` at the first lane of a 40-word state row (`test_io_shell`'s)
 SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3, "OCC": 3, "LP": 40, "MAX": 80, "IDS": 120}
 
 
 def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`TIED`), with ``shell`` units
-    of an io shell's `ScanSlots_v4` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    of an io shell's `ScanSlots_v5` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
     from verity_vllm.definitions.registry import io_shell as X
 
-    fn = bind(BX.ScanSlotsV4, **SLOTS)
+    fn = bind(BX.ScanSlotsV5, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
     got = np.array([[v for k, s, o, h in [X.scan_reference(row.tolist(), *(SLOTS[k] for k in BX.SCAN_STATICS[1:]))]
                      for v in (k, *s, o, *h)] for row in state], dtype=np.uint32)
@@ -1320,7 +1314,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
 
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
     """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
-    shell's `ScanSlots_v4` beside the coordinates that read its scan state. `ScanSlots_v4` is a registry Definition,
+    shell's `ScanSlots_v5` beside the coordinates that read its scan state. `ScanSlots_v5` is a registry Definition,
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates with the
     registry loaded (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
     `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""

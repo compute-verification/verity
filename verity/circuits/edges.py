@@ -7,11 +7,10 @@ is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, firs
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-INPUT_ID = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
+from .program import input_id
 
 
 class Refusal(Exception):
@@ -257,7 +256,7 @@ class _Root:
                 node_args.append({"parts": _parts(g["refs"], args),
                                   "dims": None if ax is None else _axis_dims(types[g["type"]], ax)})
             args.append([g["parts"] for g in node_args])
-            self.nodes.append({"key": callees[x["fn"]], "input": prim and bool(INPUT_ID.match(callees[x["fn"]])),
+            self.nodes.append({"key": callees[x["fn"]], "input": prim and input_id(callees[x["fn"]]) is not None,
                                "form": x["form"], "members": x["n"] if x["form"] in ("batch", "scan") else 1,
                                "params": ps, "ret": ret, "out_leaves": _leaves(ret), "args": node_args})
 
@@ -330,18 +329,26 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
     return out
 
 
+def has_edge(desc: Mapping[str, Any]) -> bool:
+    """`Spot.OneStageZk.hasEdge`: an argument part of a root node reads a root node that is no input."""
+    R = _Root(desc)
+
+    def reads(q) -> list[int]:
+        return [ln[1] for ln in q[2] if not ln[0]] if q[0] == "g" else [i for s, i, _ in q[1] if not s]
+
+    return any(r >= len(R.nodes) or not R.nodes[r]["input"] for x in R.nodes for g in x["args"] for q in g["parts"]
+               for r in reads(q))
+
+
 def io_cuts(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]]) -> dict[str, dict[str, int]]:
     """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`): ``{template: {port: k}}``, each port of a template that a root node's
     argument part reads from a non-input root node cut into its leaves over the writer's output field at the part's
     first reference, uncut ports left out; ``{}`` where the root has no edge. `ValueError` on a scan node at the root
     (`NotDerived`'s text), a range-less node (``edge-template``), a field that does not divide the port
     (``edge-rows``), or a port of one template read in rows of two lengths."""
-    R = _Root(desc)
-    def reads(q) -> list[int]:
-        return [ln[1] for ln in q[2] if not ln[0]] if q[0] == "g" else [i for s, i, _ in q[1] if not s]
-
-    if not any(r >= len(R.nodes) or not R.nodes[r]["input"] for x in R.nodes for g in x["args"] for q in g["parts"] for r in reads(q)):
+    if not has_edge(desc):
         return {}
+    R = _Root(desc)
     fu = {node: t for node, t, _first, _count in ranges}
     cs: dict[str, dict[str, int]] = {}
     for k, x in enumerate(R.nodes):
