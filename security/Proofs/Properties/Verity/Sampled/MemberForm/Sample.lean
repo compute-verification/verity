@@ -121,6 +121,7 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
     (h : _root_.Spot.OneStageZk.membersStructure p ms c e sts bs = .ok ()) :
     _root_.Spot.OneStageZk.laidHeld ms c.record = .ok () := by
   unfold _root_.Spot.OneStageZk.membersStructure at h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   obtain ⟨held, -, h⟩ := ebind_ok h
   dsimp only at h
   split at h

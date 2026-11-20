@@ -148,6 +148,7 @@ meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
 meta import Spot.OneStageZkStatement
+meta import Spot.MembersWires
 meta import Flock
 meta import Flock.JsonParse
 meta import Std.Data.HashMap
@@ -890,6 +891,7 @@ theorem membersRun_held {p : Params} {ms : Array Member} {c : OneStage.Commitmen
   unfold membersRun at h
   obtain ⟨⟨⟩, h, -⟩ := Flock.HmNets.bind_ok h
   unfold membersStructure at h
+  obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨held, -, h⟩ := Flock.HmNets.bind_ok h
   dsimp only at h
   split at h
