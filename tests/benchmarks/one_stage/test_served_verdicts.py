@@ -3567,16 +3567,6 @@ else:
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
     open(os.environ["ORDER"] + ".law", "w").write(a[a.index("--sampling-design") + 1] if "--sampling-design" in a else "")
-    if "--window-registration" in a:
-        tail = a[a.index("--window-registration"):]
-        open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
-        w = json.load(open(tail[1]))
-        if "--pearl-passes" in a:
-            from verity.commitments import docket_digest as DD
-            r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else DD.digest(w)}}
-        else:
-            r = {{"format": "toy", "after": w}}
-        (out / "registration.json").write_text(json.dumps(r))
     print(json.dumps({{"run": "ab", "circuit": "cd", "population": 37, "sources": {{"pad": 3}}, "window": 7}}))
 '''
 FAKE_RECORDS_AUDIT = '''import json, os, sys
@@ -4337,69 +4327,6 @@ PEARL_WREC = {"format": "verity/registration/v2", "window": {"scheme": "pearl-c-
            "registered": {"pearl-a/0/0": {}}}
 #: a launch under PEARLPLUS_TIE, which states V3c's rule: the window cut at Pearl+'s linears has no default
 PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": "", "V3C_LAW": TIED_RULE}
-
-
-def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
-    """`served_verdicts.sh pearl-tie SERVE_DIR 7 W PASSES` as Pearl+'s piece runs it (PEARLPLUS_TIE_CMD) once W is written,
-    in a toy tree whose prove_path.py and advice note each step they run (``extra`` adds to the environment): the run and
-    the steps in order."""
-    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
-    for p in (tree / "benchmarks" / "prove_path", tree / "adapters" / "vllm", tmp_path / "piece"):
-        p.mkdir(parents=True)
-    (tree / "benchmarks" / "prove_path").mkdir(parents=True, exist_ok=True)
-    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
-    _one_stage(tree)
-    (tmp_path / "advice.py").write_text(FAKE_ADVICE)
-    _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
-                             f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
-    d.mkdir()
-    (d / "weights_registration.json").write_text("{}")
-    (tmp_path / "piece" / "window-record.json").write_text(json.dumps(PEARL_WREC))
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
-           "ORDER": str(tmp_path / "order"), "V3C_CLASS": W63K4, **PEARL_TIES, **extra}
-    run = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "pearl-tie", str(d), "7",
-                          str(tmp_path / "piece" / "window-record.json"), str(tmp_path / "piece" / "passes")],
-                         cwd=tree, env=env, check=False, capture_output=True, text=True)
-    return run, (tmp_path / "order").read_text().split() if (tmp_path / "order").exists() else []
-
-
-def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_linears_chained_right_after_its_w(tmp_path):
-    """Pearl+'s piece, once `retain --window-record` wrote W and before its coin, runs `pearl-tie`: the window's advice
-    where step 3 reads it, W kept in the serve dir's pearlplus/w<k>/ (where V3c's audit reads it), and window-commit at
-    V3C_CLASS on W with the window's passes (``--pearl-passes``, its circuit cut at Pearl+'s linears) at V3c's rule, the
-    launch's, whose docket R it holds chained right after W. It says nothing in $OUT; its commit's answer stays in
-    the serve dir."""
-    run, order = _pearl_tie(tmp_path)
-    d = tmp_path / "serve"
-    w = DD.digest(PEARL_WREC)
-    assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
-    assert run.stdout.splitlines()[-1].startswith(
-        f"PEARL-TIE: window-commit class {W63K4}, its circuit cut at Pearl+'s linears: W {w[:16]}…, R ")
-    assert json.loads((d / "pearlplus" / "w7" / "registration.json").read_text()) == PEARL_WREC
-    vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
-    assert json.loads((vw / "registration.json").read_text())["previous"] == w
-    assert (tmp_path / "order.commit").read_text().split() == [
-        "--window-registration", str(d / "pearlplus" / "w7" / "registration.json"), "--pearl-passes",
-        str(tmp_path / "piece" / "passes")]
-    assert (tmp_path / "order.law").read_text() == TIED_RULE
-    assert json.loads((d / "pearlplus" / "w7" / "window-commit.json").read_text())["population"] == 37
-    assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
-
-
-@pytest.mark.parametrize("extra, rc, said", [
-    ({"FAIL_COMMIT": "1"}, 16,
-     f"PEARL-TIE: window-commit class {W63K4} refused (no exception, exit 2): {PRIVATE}"),
-    ({"BREAK_CHAIN": "1"}, 16, f"PEARL-TIE: window-commit's registration R is chained after {'ef' * 8}…, not right after "
-                               f"Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…"),
-    ({"PEARLPLUS_TIE": ""}, 3, "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"),
-    ({"V3C_LAW": ""}, 3, "PEARL-TIE: V3C_LAW is empty: the tied window's rule is the launch's, a stratified rate"),
-])
-def test_a_pearl_tie_whose_commit_is_refused_or_not_chained_right_after_w_fails(tmp_path, extra, rc, said):
-    """A refused window-commit, or one whose docket isn't chained right after W, fails the tie, which the piece
-    says before its coin; V3c then finds no commit tied to W and audits none. So does a tie whose launch stated no rule:
-    the window cut at Pearl+'s linears has no default."""
-    run, _order = _pearl_tie(tmp_path, **extra)
-    assert (run.returncode, run.stdout.splitlines()[-1]) == (rc, said), run.stderr
 
 
 #: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
@@ -7961,8 +7888,7 @@ def test_the_tie_command_of_h1_is_refused_by_name(tmp_path):
     out = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "tie"], cwd=tmp_path,
                          env={"PATH": os.defpath, "OUT": str(tmp_path / "out")}, check=False, capture_output=True, text=True)
     assert out.returncode == 2
-    assert out.stderr.strip() == ("served_verdicts.sh tie: refused: PoUW H1 is deleted, so its window commit at its close is; "
-                                  "Pearl+'s is pearl-tie (PEARLPLUS_TIE)")
+    assert out.stderr.strip() == "served_verdicts.sh tie: refused: PoUW H1 is deleted, so its window commit at its close is"
 
 
 @pytest.mark.parametrize("command", ["program", "period", "pouw"])
