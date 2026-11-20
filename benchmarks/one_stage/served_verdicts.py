@@ -82,7 +82,8 @@ main (a session pinned off it is refused).
 ``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s
 own served run on the card after the window's serve: ``--served`` (`served_passes.py serve`'s document: every pass retained)
 and ``--verify`` (its ``verify``'s: Pearl+'s verdict over all the passes, the reference replay of the tiles it samples).
-Its verdict is accept when that run served within its caps across at least two pass boundaries, Pearl+'s verdict
+Where either step wrote no document it refuses (`PEARLPLUS_NO_VERDICT`), exit 2, its sentence in ``refused.txt`` and a
+POUW-REFUSED line, and writes no answer. Its verdict is accept when that run served within its caps across at least two pass boundaries, Pearl+'s verdict
 accepts, and each pass's salt is the live session's that the serve names (`pearlplus_coins`: the session's tree as the gate
 ``--gate`` fetches it, the ledger and pins log that gate answers now and ``--main``'s line, held by `core_check.live_salt`
 under the key ``--key-sha512`` pins), and a challenger sample (the coin record's ``draw``, `verify_run`'s "The coin record")
@@ -259,6 +260,14 @@ REFUSED = "refused.txt"
 SERVED = "served.json"
 #: a development piece's document, written in place of its core answer
 DEVELOPMENT = "development.json"
+#: Pearl+'s piece's refusal where its serve or its verify wrote no document: with no verdict it writes no answer
+PEARLPLUS_NO_VERDICT = "pearlplus-no-verdict"
+
+
+class PearlplusRefused(Exception):
+    """Pearl+'s piece refused to write an answer (`pearlplus`); its sentence is in the piece's `REFUSED`."""
+
+
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
 DEV_WHY = ("development run, credits nothing: the record takes no development piece as PoUW's verdict of record, and core's credit "
            "also needs the window in a period whose open commits its draw K, rows and weights")
@@ -1504,7 +1513,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
               coin: Path | None = None, tie: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
-    verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
+    verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Where either is
+    None there is no verdict, so it writes no document: it refuses (`PEARLPLUS_NO_VERDICT`), its sentence in
+    ``out/refused.txt`` (`REFUSED`), and raises `PearlplusRefused`. Its verdict is
     accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
     `main`; `pearlplus_coins_from`, naming the challenger as `challenger_of`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
@@ -1540,31 +1551,36 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     from verity.commitments import docket_digest as DD
 
     out.mkdir(parents=True, exist_ok=True)
+    (out / DEVELOPMENT).unlink(missing_ok=True)
+    (out / REFUSED).unlink(missing_ok=True)
+    wrote_none = [*(["serve-openai's Pearl+ arm wrote no served.json for the window" if tie is not None
+                     else "served_passes.py serve wrote no document"] if served is None else []),
+                  *(["served_passes.py verify wrote no document"] if verified is None else [])]
+    if wrote_none:
+        said = (f"{PEARLPLUS_NO_VERDICT}: {' and '.join(wrote_none)}, so Pearl+ has no verdict and the piece writes "
+                "no answer")
+        (out / REFUSED).write_text(said + "\n")
+        raise PearlplusRefused(said)
     reasons = []
-    source = None if served is None else (served.get("coins") or {}).get("source", "in-process")
-    live = bool(gate) if served is None else source == LIVE_SOURCE
-    if served is None:
-        reasons.append("no served run: " + ("serve-openai's Pearl+ arm wrote no served.json for the window"
-                                            if tie is not None else "served_passes.py serve wrote no document"))
-    elif not served.get("ok"):
+    source = (served.get("coins") or {}).get("source", "in-process")
+    live = source == LIVE_SOURCE
+    if not served.get("ok"):
         reasons.append(f"the window's Pearl+ epoch isn't one round a Commit step: {served.get('error')}"[:800]
                        if tie is not None else
                        f"the served run crossed fewer than two pass boundaries or ran over its caps (passes over their "
                        f"caps: {served.get('over_caps')})")
-    answer = (verified or {}).get("answer") or {}
-    if verified is None:
-        reasons.append("no verdict: served_passes.py verify wrote no document")
-    elif answer.get("verdict") != "accept":
+    answer = verified.get("answer") or {}
+    if answer.get("verdict") != "accept":
         reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
     challenger = challenger_of(served)
     coins: dict[str, Any] = dict(pearlplus_coins_from(challenger) if live else PEARLPLUS_COINS_IN_PROCESS)
     if tie is not None:
         coins["epoch"] = pearlplus_epoch_tied(challenger) if live else PEARLPLUS_EPOCH_TIED_IN_PROCESS
-    if served is not None and live:
+    if live:
         coins["check"] = pearlplus_coins(served, out, gate, key, main)
         if coins["check"]["reason"] is not None:
             reasons.append(f"coins: {coins['check']['reason']}")
-    elif served is not None and gate:
+    elif gate:
         reasons.append(f"coins: {source}, not a live session on the gate, so nothing checks them")
     if coin is not None and (coin.parent / COIN_RECORD).is_file():
         coins["draw"] = pearlplus_draw(coin.parent / COIN_RECORD, out, gate, key, main)
@@ -1575,45 +1591,43 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     if tie is None:
         why = pearlplus_why(challenger) if live else PEARLPLUS_WHY_IN_PROCESS
     else:
-        why = (pearlplus_why_tied(((served or {}).get("coins") or {}).get("reserved"), challenger) if live
+        why = (pearlplus_why_tied((served.get("coins") or {}).get("reserved"), challenger) if live
                else PEARLPLUS_WHY_TIED_IN_PROCESS)
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": why, "coin_source": source, "coins": coins,
                            "scheme": None, "arm": None, "passes": None, "load": None, "dropped": None, "line": None,
                            "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None,
                            "execution_phase": None, "checks": pearlplus_checks(verified, out / PEARLPLUS_LEAN_CHECK),
                            "class": pearlplus_class(verified)}
-    if served is not None and live and (out / "ledger.jsonl").is_file():
+    if live and (out / "ledger.jsonl").is_file():
         said = served.get("coins") or {}
         doc["execution_phase"] = execution_phase(out / "ledger.jsonl", (said.get("session") or {}).get("session"),
                                                  (said.get("reserved") or {}).get("period"))
         doc["execution_phase"]["prover"] = {"clock": PROVER_CLOCK, "generate_s": served.get("generate_s")}
-    if served is not None:
-        arm = served.get("arm") or served.get("entry")
-        doc.update(arm=arm, scheme=(arm or "").partition(":")[2] or None,
-                   passes=sum(1 for p in served.get("passes") or () if p.get("units")),
-                   load={"window_steps": served.get("commit_steps")} if tie is not None else
-                   {**{k: served.get(k) for k in ("requests", "prompt_tokens", "output_tokens")},
-                    "max_num_batched_tokens": (served.get("engine") or {}).get("max_num_batched_tokens")},
-                   **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
+    arm = served.get("arm") or served.get("entry")
+    doc.update(arm=arm, scheme=(arm or "").partition(":")[2] or None,
+               passes=sum(1 for p in served.get("passes") or () if p.get("units")),
+               load={"window_steps": served.get("commit_steps")} if tie is not None else
+               {**{k: served.get(k) for k in ("requests", "prompt_tokens", "output_tokens")},
+                "max_num_batched_tokens": (served.get("engine") or {}).get("max_num_batched_tokens")},
+               **{k: served.get(k) for k in ("spec", "run", "served_tokens", "generate_s", "prompt_tokens", "output_tokens")})
     if tie is not None:
         try:
             doc["tie"] = {"record": DD.digest(json.loads(tie.read_text()))}
         except (OSError, ValueError, AttributeError) as e:
             doc["tie"] = {"record": None, "why": f"W can't be read: {type(e).__name__}: {e}"[:400]}
-    if verified is not None:
-        doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
+    doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
     if coin is not None:
         doc["coin"] = pearlplus_coin(coin, answer)
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
             reasons.append(f"coin: {doc['coin']['reason']}")
     if volunteered is not None:
         doc["give_up"] = give_up(volunteered)
-    if served is not None and served.get("ok") and "generate_s" not in served:
+    if served.get("ok") and "generate_s" not in served:
         doc["shares"] = {"none": "the epoch is a Commit window's (serve_pearl's pearl/w<k>/served.json), which times no "
                                  "generate call of its own"}
-    elif served is not None and served.get("ok"):
+    elif served.get("ok"):
         try:
-            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified or {}))
+            doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified))
         except (KeyError, TypeError, ValueError) as e:
             reasons.append(f"no shares: {type(e).__name__}: {e}"[:600])
         if doc["shares"] is not None and unretained is not None:
@@ -2741,9 +2755,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(line, flush=True)
         return 0 if ok else 1
     if a.cmd == "pearlplus":
-        doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
-                        _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None,
-                        gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin, tie=a.tie)
+        try:
+            doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
+                            _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None,
+                            gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin, tie=a.tie)
+        except PearlplusRefused as e:
+            print(f"POUW-REFUSED {e}", flush=True)
+            return 2
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pearlplus-period":

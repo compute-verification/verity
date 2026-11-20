@@ -3074,7 +3074,7 @@ def test_a_reply_with_a_retired_term_posts_with_a_note_naming_what_to_write(fake
 
 
 def test_the_retired_terms_name_what_to_write_and_skip_code_and_quoted_mentions():
-    """`research msg` reads the table from tests/test_retired_terms.py, its one home."""
+    """`research msg` reads the table from tests/lint/test_repo_retired_terms.py, its one home."""
     from research import vocabulary
     doc = vocabulary.table()["DOC_TERMS"]
     service = "proof " + "service"                                   # the tree's own scan refuses the term written whole

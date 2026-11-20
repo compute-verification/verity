@@ -298,6 +298,8 @@ def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
     bin_.mkdir()
     (bin_ / "gpu-lease").write_text('#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n')
     (bin_ / "gpu-lease").chmod(0o755)
+    (bin_ / "nvidia-smi").write_text('#!/bin/sh\necho "GPU 0: toy (UUID: GPU-0)"\n')
+    (bin_ / "nvidia-smi").chmod(0o755)
     d.mkdir()
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "CALLS": str(calls), "NEEDED": needed,
            "VERITY_BENCH_VENV": str(tree / ".venv"), "PEARLPLUS_PASSES_RAM": "", "PEARLPLUS_UNRETAINED": "",
@@ -307,7 +309,8 @@ def _untied(tmp_path: Path, needed: str, volunteer: str | None = None) -> Any:
         calls.unlink(missing_ok=True)
         r = subprocess.run(["bash", "benchmarks/one_stage/served_pearlplus.sh", str(d), "3", str(p)], cwd=tree,
                            env={**env, **more}, capture_output=True, text=True, check=False)
-        return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in calls.read_text().splitlines()]
+        return r.returncode, r.stdout + r.stderr, [json.loads(x) for x in
+                                                   (calls.read_text().splitlines() if calls.exists() else ())]
     return run
 
 
@@ -342,6 +345,26 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         asked = {c["argv"][0]: c["argv"] for c in got if c["tool"] == "served_passes.py"}
         assert rc == 0 and asked["volunteer-needed"] == ["volunteer-needed", "--over-cap", "reject"], said
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
+
+
+def test_on_a_node_with_no_card_the_untied_piece_refuses_by_name_and_writes_no_answer(tmp_path):
+    """A node that lists no card serves nothing, so the piece has no verdict: it refuses (pearlplus-no-card) before any
+    step, its one sentence its POUW-REFUSED line and the piece's refused.txt, exits 2 and writes no development.json,
+    which `piece_row` makes refused, never an answer of nulls."""
+    sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
+    import served_verdicts as S
+    from verity_e2e_demo import block_record as BR
+
+    run, p = _untied(tmp_path, "no uncredited"), tmp_path / "piece"
+    (tmp_path / "bin" / "nvidia-smi").write_text("#!/bin/sh\nexit 9\n")
+    rc, said, got = run()
+    sentence = (tmp_path / "piece" / "refused.txt").read_text().strip()
+    assert (rc, got) == (2, []), said
+    assert sentence.startswith("pearlplus-no-card: this node lists no card") and f"POUW-REFUSED {sentence}" in said
+    assert not (p / S.DEVELOPMENT).exists()
+    (pieces := tmp_path / "pieces").mkdir()
+    p.rename(pieces / "pouw")
+    assert S.piece_row("work", pieces) == {"verdict": BR.REFUSED, "owner": S.PIECES["work"][2], "reason": sentence}
 
 
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):

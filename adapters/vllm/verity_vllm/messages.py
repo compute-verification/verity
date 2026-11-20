@@ -8,8 +8,7 @@ before the build's answer, and any other before serving begins, at the first ste
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by the types the proof layer and each declared scheme declare (`types`, `Scheme.messages`): a body is checked against its declared
-type as it is written and as it is read, and its bytes are left as they are. `tests/workload_messages.toml` lists each
-message's writers and readers.
+type as it is written and as it is read, and its bytes are left as they are.
 """
 
 from __future__ import annotations
