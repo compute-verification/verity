@@ -223,9 +223,7 @@ CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 #: `slotEntryId`: the slot entry's Definition, whose committed `o0` is the entry the scan reads at a slot
 SLOT_ENTRY = "SlotEntry_v1"
 #: `slotEntryPins`: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v1` at its circuit-check rows,
-#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order, which
-#: `test_slot_entry_pins.py` recomputes from `io_shell` (its `SlotEntry_v1:4` row is no pin: at KO 4 a slot's entry is a
-#: `SelectEntry_v1` unit's)
+#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order
 SLOT_ENTRY_PINS = ("8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3"
                    "7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
                    "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f"
@@ -242,8 +240,8 @@ SCAN_SLOTS = "ScanSlots_v2"
 #: `SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4,STOP=[]}`,
 #: `SelectEntry_v1{V=128256,C=16,KO=4,FIRST=false,IDB=17,NP=32,STOP=[128001]}` and
 #: `SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024,STOP=[128001]}`, in that order, each calling the
-#: `SlotEntry_v1` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows, which
-#: `test_slot_entry_pins.py` recomputes from `io_shell`; the first is `fixtures/select_entry.json`'s
+#: `SlotEntry_v1` that writes the scan's read bit: `io_shell.SelectEntry_v1` at its circuit-check rows; the first is
+#: `fixtures/select_entry.json`'s
 SELECT_ENTRY_PINS = ("f817250e0ac1d5028ea992bbe0c1ab12925bc1b709f020fdc54a57a0ebc0c9dc"
                      "bd6513d2bf72aa243c499833d1173fb14236e85bb27b4d03de88df93344007d2",
                      "236d569741e3fe2026aaa65be2077b4da82d495a5b35322428051e4e07ca556b"
@@ -1791,9 +1789,13 @@ BOOLEAN = {LOW.id: bind(CompositeDefinition("NetworkPeriodScanLowBits", 1, (), l
                                             lambda B, S, a, b: B.call(BL.xor_gate(2), BL.operands(a, b)), register=False))}
 
 
+#: the lookup registered before this module loads (the suite's `stand_in`, else the catalog's), which `_boolean` defers to
+_BEFORE = PG._BODY_LOOKUP[0] if PG._BODY_LOOKUP else V.boolean_version
+
+
 def _boolean(p: PrimitiveDefinition):
-    """A primitive's one Boolean Definition: `BOOLEAN`'s for the stand-ins', else the catalog's."""
-    return BOOLEAN[p.id] if p.id in BOOLEAN else V.boolean_version(p)
+    """A primitive's one Boolean Definition: `BOOLEAN`'s for the stand-ins', else the lookup registered before."""
+    return BOOLEAN[p.id] if p.id in BOOLEAN else _BEFORE(p)
 
 
 PG.register_boolean_bodies(_boolean)

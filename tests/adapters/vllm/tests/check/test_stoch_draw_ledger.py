@@ -2,7 +2,7 @@
 request -- the SAMPLED positions compared as an ordered set with the positions the Program's stop rule EXECUTES ({prompt_len - 1 + (t - 1) :
 r_t = 1}: to max_tokens, or the first EOS at slot t < C then min(A, C - t) lag slot(s)); every extra / missing position a FAIL reason by name
 (past max_tokens without EOS fails; the lag slot is bounded by max_tokens); a record with no EOS stop says 'not measured', never 'pass'.  Torch-free (the accounting is pure
-Python over the SampleEnd rows).  The two B8 records of record are `test_stoch_draw_ledger_of_record`."""
+Python over the SampleEnd rows)."""
 from __future__ import annotations
 
 import json

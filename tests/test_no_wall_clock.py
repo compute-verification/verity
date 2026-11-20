@@ -43,8 +43,6 @@ ALLOWED: dict[str, str] = {
         "passes timeout values to a stubbed urlopen and asserts them; nothing waits",
     "tests/adapters/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
-    "tests/adapters/vllm/tests/engine/int8_decode_split_gpu.py":
-        "a GPU probe script (not collected) that measures the int8 LM head's share of decode time; no test reads it",
     "tests/adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_config": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/adapters/vllm/tests/properties/router_tap_exactness_gpu.py::check_live": "the GPU run records the IR pass's seconds; nothing reads them",
     "tests/test_no_wall_clock.py::test_the_scan_sees_each_form": "the scan's own fixture: source it must flag, held in a string",
