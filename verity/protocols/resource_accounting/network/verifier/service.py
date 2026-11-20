@@ -76,8 +76,7 @@ block's public parameters) and ``wit`` (each end's head, its leaf's salt, its tw
 each the little-endian concatenation of its parameters' bits in whole u16 words (`TransferBlocks.layout`,
 `TransferBlocks.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
 under a hiding salt. Its circuit is `TransferBlocks.proof_block`, the registered proof block with each gate the Definition
-its pinned digest names, bound to the registered partition and Program (`verity/protocols/resource_accounting/network/prover/n2_zk.py` proves it
-behind the ZK server).
+its pinned digest names, bound to the registered partition and Program; no prover of the tree proves it.
 
 Its verifier is `TransferBlocks.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
@@ -131,8 +130,8 @@ Lean takes as an input rather than checks:
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
-The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
-ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key.
+Every proving run of N2 recorded before the switch replayed
 through both to the verdict it recorded, and the properties of the Lean's verdict are
 `security/Properties/Certifier/Check/TransferBlocks.lean`.
 

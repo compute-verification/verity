@@ -121,8 +121,6 @@
     {"file": "verity_vllm/definitions/registry/gelu_erf_table.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
     {"file": "verity_vllm/definitions/registry/hopper.py", "kind": "gpu", "symbol": "<module>", "detail": "h100"},
     {"file": "verity_vllm/definitions/registry/layer_norm.py", "kind": "sm-arch", "symbol": "LayerNormAten", "detail": "sm_89"},
-    {"file": "verity_vllm/definitions/registry/lifted.py", "kind": "layer-class", "symbol": "<module>", "detail": "OLMoE"},
-    {"file": "verity_vllm/definitions/registry/lifted.py", "kind": "model", "symbol": "<module>", "detail": "olmoe"},
     {"file": "verity_vllm/definitions/registry/moe.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
     {"file": "verity_vllm/definitions/registry/spec.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "gpu", "symbol": "<module>", "detail": "a100", "count": 2},

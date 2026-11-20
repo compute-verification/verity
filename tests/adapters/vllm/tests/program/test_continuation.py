@@ -1,8 +1,7 @@
 """Continuation_v1 -- controller first.
 
 The reference evaluator (`next_flags`), the INDEPENDENTLY written three-state machine, and the checker's recurrence over a raw
-transcript agree on EVERY EOS pattern for small caps under both profiles; the named invariants hold; each edge case is one test; the lag
-unit's guard chain (`LStepLive`/`LSelect`/`LBot`, simulated with the registered evaluators) computes exactly `r` / `u` of the rule;
+transcript agree on EVERY EOS pattern for small caps under both profiles; the named invariants hold; each edge case is one test;
 the derived invariant reproduces the three real records' executed lengths; the wrong profile FAILS by name.  Everything labelled lifted-padded; nothing here reads a trace to set A.
 """
 from __future__ import annotations
@@ -11,9 +10,8 @@ import itertools
 
 import pytest
 
-from verity_vllm.definitions.registry import lifted as L
-from verity_vllm.program.lifting import continuation as K
-from verity_vllm.program.lifting import lifted_records
+from verity_vllm.check.replay import continuation as K
+from verity_vllm.check.replay import lifted_records
 
 EOS = (17,)
 ORD = 5  # an ordinary (non-EOS) token id
@@ -62,8 +60,6 @@ def test_derived_invariant_n_executed_equals_the_run_count_on_every_pattern(A):
             n_served = sum(1 for e, _ in ref if e)
             n_exec = sum(1 for _, r in ref if r)
             assert n_exec == K.n_executed_derived(n_served, cap=cap, A=A), (cap, A, pat)
-            # the lag rule's expected_served(a_r, cap, lag) is the same number with a_r = n_served (one rule, two names)
-            assert n_exec == L.expected_served(n_served, cap, A)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -204,11 +200,12 @@ def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eo
 
 
 def test_is_eos_is_total_over_the_lifted_encoding_bot_and_noncanonical_are_not_eos():
-    assert K.is_eos_total(32, L.enc_active(32, 17), EOS) is True
-    assert K.is_eos_total(32, L.enc_active(32, 18), EOS) is False
-    assert K.is_eos_total(32, L.enc_bot(32), EOS) is False           # IsEOS(bot) = 0 by the tag gate, not a convention
-    assert K.is_eos_total(32, L.enc_bot(32) | 17, EOS) is False      # 1||17: a noncanonical word, never normalized, never EOS
-    assert K.is_eos_total(32, L.inv(32), EOS) is False
+    bot = 1 << 32                                                    # enc(bot) = 1||0^32; INV = 1||0^31||1
+    assert K.is_eos_total(32, 17, EOS) is True
+    assert K.is_eos_total(32, 18, EOS) is False
+    assert K.is_eos_total(32, bot, EOS) is False                     # IsEOS(bot) = 0 by the tag gate, not a convention
+    assert K.is_eos_total(32, bot | 17, EOS) is False                # 1||17: a noncanonical word, never normalized, never EOS
+    assert K.is_eos_total(32, bot | 1, EOS) is False
 
 
 def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_defaulted():
@@ -221,26 +218,6 @@ def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_d
     with pytest.raises(ValueError, match="post-EOS lag must be declared"):
         K.check_profile(2)
     assert K.declared_profile({"workload_fn": "Workload_v1{requests=(a,b),shared=weights,lag=1}"}) == (1, lifted_records.LAG_STATIC_FIELD + ":lag=")
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the lag unit's guard chain computes exactly r / u of the rule
-# ---------------------------------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("lag", [0, 1])
-@pytest.mark.parametrize("cap", [2, 3, 4, 5, 6])
-def test_r17_1_guard_chain_is_run_and_next_input_of_continuation_v1_on_every_pattern(cap, lag):
-    for pat in all_patterns(cap):
-        raw_ids = pattern_tokens(pat)
-        raw_words = [L.enc_active(32, t) for t in raw_ids]
-        ch = K.chain_bits(raw_words, cap=cap, lag=lag, eos=EOS)
-        sl = K.recurrence(raw_ids, cap=cap, A=lag, eos=EOS)
-        assert ch["run"] == [s.run for s in sl], (cap, lag, pat)
-        # the chain's tok_in_s (= in_{s+1}) is the recurrence's next_in of slot s: the raw token when r_{s+1} = 1, bot otherwise
-        assert ch["in"][1:] == [L.enc_active(32, s.next_in) if s.next_in is not None else None for s in sl[:-1]], (cap, lag, pat)
-        # the committed out[] of the chain is Active exactly on the run slots (strictness), bot after
-        assert [w != L.enc_bot(32) for w in ch["out"]] == [s.run for s in sl], (cap, lag, pat)
 
 
 # ---------------------------------------------------------------------------------------------------------

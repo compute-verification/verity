@@ -44,7 +44,7 @@ def test_every_input_row_of_tinys_class_circuit_is_filled_and_a_gemm_slice_is_wi
     assert gemms.pop("Gemm_v2{K=64,N=8}") == {"out": 1, "registered": 1, "wired": 4}
     assert gemms and all(rows == {"out": 1, "registered": 1, "wired": 1} for rows in gemms.values())
     assert {"rows.value", "rows.opening", "rows.table_root"} <= set(total)
-    assert [t["rows"] for lab, t in templates.items() if lab.startswith("ScanSlots_v3")] == [{"out": 8, "value": 1}]
+    assert [t["rows"] for lab, t in templates.items() if lab.startswith("ScanSlots_v5")] == [{"out": 4, "value": 1}] * 2
     assert not [lab for lab in templates if lab.startswith(("ScanSlots_v1", "SlotRow", "AllGather"))]
 
 

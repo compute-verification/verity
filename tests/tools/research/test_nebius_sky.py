@@ -85,7 +85,6 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
-                    "commit-pack": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench"),
                     "store-push": ("backfill", "backfill"), "store-fetch": ("backfill", "backfill")}
 
@@ -128,7 +127,7 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
     """A replay task must not delete a passed row's sealed bundle as soon as config_record.json exists: a tree that predates
     keep-leaves holds nothing else of the leaves a later CPU replay reads. A bundle goes only when
     commit/replay_slim_p<pair>/ is its complete keep (cpu_replay.keep's slim.json: this bundle's MANIFEST.json, dump_sha256, every
-    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml and n2_commit.sh run the same lines."""
+    file's size and sha256); any doubt keeps it, with one line in row.log. config-run.yaml runs them."""
     import hashlib
     import subprocess
     import textwrap
@@ -140,9 +139,6 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
         assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
     assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
     body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
-    n2 = (SKY.parent / "n2_commit.sh").read_text()
-    assert n2.split("discard_kept_bundles() {", 1)[1].split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0] == body
-    assert 'then discard_kept_bundles "$row_dir"; fi' in n2 and "rm -rf \"$row_dir\"/commit/replay_bundle_p" not in n2
     (tmp_path / "discard.py").write_text(body)
     def sha(p):
         return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -436,9 +432,9 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
             assert out == want, (f, row, fixed, out)
 
 
-def test_submit_limits_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
+def test_submit_limits_what_waits_in_kueue_to_skypilot_jobs(tmp_path):
     """A SkyPilot job waiting for quota holds one of its 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait. The
-    dispatcher's Kueue Jobs hold none, so any number of them waiting blocks nothing."""
+    batch Kueue Jobs hold none, so any number of them waiting blocks nothing."""
     import subprocess
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "waiting.py").write_text(sub[sub.index("\n", sub.index("<<'WAITING'")) + 1:sub.index("\nWAITING\n")])
@@ -448,7 +444,7 @@ def test_submit_limits_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
         pod = {"ownerReferences": [{"kind": "Pod", "name": "sky-head"}]}
         items = [{"metadata": pod, "spec": {"queueName": q}, "status": {}} for q in queues]
         items += [{"metadata": {"ownerReferences": [{"kind": "Job", "name": "nd-x"}]}, "spec": {"queueName": "deployments-gpu"},
-                   "status": {}}] * 40                                                  # the dispatcher's waiting Kueue Jobs
+                   "status": {}}] * 40                                                  # waiting batch Kueue Jobs
         items += [{"spec": {"queueName": "circuits"}, "status": {"admission": {"clusterQueue": "circuits"}}}] * 3
         items += [{"spec": {"queueName": "circuits"}, "status": {"conditions": [{"type": "Finished", "status": "True"}]}}] * finished
         (tmp_path / "wl.json").write_text(json.dumps({"items": items}))
@@ -472,9 +468,6 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
         if f.stem.startswith("prover-"):
             assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name
             assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
-            continue
-        if f.stem == "commit-pack":           # a pilot: each Commit it runs is config-run's gpu task script, job tree included
-            assert tasks == 0 and "job_tree.sh" not in t and 'pilot=$SRC/sky/commit_pack.py' in t, f.name
             continue
         if f.stem in ("store-push", "store-fetch"):   # only import `research` from the tree, never write it
             assert tasks == 0 and "job_tree.sh" not in t and 'PYTHONDONTWRITEBYTECODE: "1"' in t, f.name
@@ -957,26 +950,6 @@ def test_a_preempted_job_can_still_publish_its_attempt():
         tasks = t.count("\nrun: |")
         assert t.count("terminationGracePeriodSeconds: 300") == tasks, f.name        # the default 30 s killed a publish mid-way
         assert t.count("RESEARCH_STORE: /workspace/jobs/store") == tasks, f.name    # the pod's own home dies with the pod
-
-
-def test_backfill_takes_its_credentials_on_stdin_only(tmp_path, monkeypatch):
-    """Run under a sudo that refuses, as a locked node's does (and so never the machine's own): the exit trap still removes the
-    credentials file, through its plain `rm`."""
-    import os
-    import subprocess
-    script = SKY / "backfill_attempts.sh"
-    text = script.read_text()
-    assert "head -n 4 > \"$creds\"" in text and "R2_ENDPOINT=" not in text.replace("export R2_ENDPOINT", "")
-    bin_dir, tmp = tmp_path / "bin", tmp_path / "tmp"
-    bin_dir.mkdir()
-    tmp.mkdir()
-    (bin_dir / "sudo").write_text('#!/bin/sh\necho "sudo: a password is required" >&2\nexit 1\n')
-    (bin_dir / "sudo").chmod(0o755)
-    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
-    monkeypatch.setenv("TMPDIR", str(tmp))
-    r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
-    assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
-    assert list(tmp.iterdir()) == []
 
 
 def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):

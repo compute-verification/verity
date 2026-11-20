@@ -1,6 +1,6 @@
 """A credited linear of C whose nodes write its y, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v3`
+C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v4`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``, ``root``, ``unit``,
 ``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each
@@ -9,7 +9,7 @@ a reader of the linear takes by wire: the residual add of each row of y and the 
 `Bf16AddRow_v1`), C's output. y is no value C holds. No unit fits one proof block whole, so C is laid
 (`verity.circuits.laying.lay`) under the composer's limit (`fits`, `verity_flock.circuit.unit_block`'s rule on a block's
 ports and ANDs): each unit opens into its noise's seed, lines and Gram rows and its wired core
-(`pearl_plus_credited.cut`), each one proof block, and the credited blocks are the wired cores. A drawn core's outputs are
+(`pearl_plus_credited.cut`), each one proof block, and each tile is credited over all its blocks. A drawn core's outputs are
 registered as the record its reader holds them to: its digest and y under hiding salts, its ``ok`` (one u16) as 1 under
 public salts. The noise is seeded by the
 epoch's salt and W's registered root: the stager forms its tiles under them, and the verifier's side fills the public row
@@ -18,13 +18,17 @@ registered roots from that row, which every staged file's roots must equal; the 
 root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear and stages a dishonest proof of the drawn tile (``--bad``: ``y``, its claimed y
 a word other than the one it computes; ``cert``, a certificate word other than the prover's; ``filler``, a nonzero word
-in its filler row; each claiming the honest outputs), places the units' amounts
-(`resource_accounting.scheme.credited` over the laid C's strata, `PEARL_PLUS.blocks`' cost on the template's statics),
-draws one credited block, cuts it (`restrict`), lowers it by the door (`one_circuit.lower`), and finds each of its input
-rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram rows) is no
-one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`, ``FIELD_WHY``) unless the
-lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the door's lowering cuts none, so the stage
-stops there (``WIRED-ROWS``, exit 4); otherwise it stages the block for ``flock-circuit``.
+in its filler row; each claiming the honest outputs), places each laid block in its tile and each tile's amount
+(`scheme.laid_tiles` over the laid C's strata, `tile_macs` on the tile's statics), draws one block of the wired cores'
+stratum, cuts it (`restrict`), lowers it by the door (`one_circuit.lower` under C's `one_circuit.cuts`), and finds each
+of its input rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram
+rows) is no one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`,
+``FIELD_WHY``) unless the lowering cuts it into one row a writer (``p#j``, `Flock.OneCircuit.io`), and the stage stops
+there when it does not (``WIRED-ROWS``, exit 4). A row one writer's field feeds, whole and in order (`wired_rows`, which
+refuses any other row by name, ``FIELD``), is read by path in that field's one tree (``KEY/oJ``,
+`Flock.Registered.fieldTree`), which the stage commits under hiding salts from the writer template's units' outputs,
+each root node of the laid C evaluated on C's values (`node_outputs`, `field_tree`), and opens at the writer's leaf
+(`tree_leaf`) in the drawn block's statement; then it stages the block for ``flock-circuit``.
 ``door`` hands each proof to `proofs.verify` with the verifier's own program, partition, draw and registered file, and
 nothing of Pearl+'s. `credited_in_c.sh` builds, proves and verifies; run it on a node."""
 from __future__ import annotations
@@ -231,14 +235,16 @@ def reference(ln: Linear, index: int, vals: dict, unit: int) -> list[int]:
     t = ln.tiles[index]
     r, s = t.rows[0] // len(t.rows), t.core.bindings
     b = [[v << 16 for v in row] for row in vals["w"][t.col]]
-    d, y, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["cert"][index], vals["salt"], vals["root"],
+    salt, root = (b"".join(w.to_bytes(2, "little") for w in vals[v]) for v in ("salt", "root"))
+    d, y, ok = PT.reference(s["DEV"], s["K"], s["N"], vals["x"][r], b, vals["cert"][index], salt, root,
                             unit, list(t.rows), list(t.cols), s["RHO"], s["RHOR"], t.real)
     return [*(d or bytes(64)), *(w for row in (y or [[0] * len(t.cols)] * t.real) for w in row), ok]
 
 
 def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
     """``vals`` with unit ``index``'s tile made false: ``cert``, its first certificate word's low bit flipped; ``filler``,
-    its last row, a filler row, with word 3 set to 1.0; ``y``, unchanged (the forgery is in the outputs it claims)."""
+    its last row, a filler row, with word 3 set to 1.0; ``y``, unchanged (the forgery is in the outputs it claims);
+    ``eb``, unchanged (the forgery is in the wired eb row its statement reads, `stage`)."""
     t = ln.tiles[index]
     r, out = t.rows[0] // len(t.rows), json.loads(json.dumps({v: vals[v] for v in ("x", "cert")}))
     if bad == "cert":
@@ -247,7 +253,7 @@ def tamper(ln: Linear, index: int, vals: dict, bad: str) -> dict:
         if t.real == len(t.rows):
             raise ValueError(f"unit {index}'s tile has no filler row: {t.real} of {len(t.rows)} rows are real")
         out["x"][r][-1][3] = 0x3F800000
-    elif bad != "y":
+    elif bad not in ("y", "eb"):
         raise ValueError(f"no tamper {bad!r}")
     return {**vals, **out}
 
@@ -290,17 +296,171 @@ def output(program, value: str, rows: list[list[int]], supplied: bool):
                                 word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
 
 
-def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict) -> dict:
-    """The verifier's ``--registered`` file over its program and the partition's query, position-free
-    (`registered.reads_file`), with each output field of ``outs``."""
+def _field_starts(t) -> list[int]:
+    """Where each output field (`verity.circuits.edges`' fields: a Tuple's or Record's members, else the whole) of a
+    return type ``t`` starts, in leaves, and its end."""
+    from verity.circuits.types import RecordType, Tuple
+    fs = list(t.fields) if isinstance(t, Tuple) else [f for _, f in t.fields] if isinstance(t, RecordType) else [t]
+    out = [0]
+    for f in fs:
+        out.append(out[-1] + f.leaves)
+    return out
+
+
+def node_outputs(program, values: dict, skip: set[str]) -> dict[int, np.ndarray]:
+    """Each root node of the laid ``program`` but its inputs and the nodes of ``skip``'s templates, evaluated on C's
+    ``values`` one node at a time (`evaluate_batch` of the node's Definition on the leaves each member reads, by C's
+    gates): its members' outputs, one row a member."""
+    from verity.circuits.cut import member_refs
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.layout import resolve
+    from verity.circuits.program import is_input
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+    scope, at = program.circuit.root_scope, {}
+    for v, x in values.items():
+        gates = REG.parameter_gates(program, v)
+        words = _flat(x)
+        assert len(gates) == len(words), (v, len(gates), len(words))
+        at.update(zip(gates, words))
+    out = {}
+    for k, nd in enumerate(program.root.body.nodes):
+        if is_input(nd.fn) or descriptor_id(nd.fn) in skip:
+            continue
+        n = nd.n if nd.form == "batch" else 1
+        axes = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
+        args = []
+        for arg, ax in zip(nd.args, axes):
+            rows = []
+            for m in range(n):
+                rs = member_refs(arg, ax, m) if nd.form == "batch" else arg.refs
+                rows.append([at[resolve(scope, rs[j])] for j in range(rs.count)])
+            args.append(np.asarray(rows, dtype=np.int64))
+        got = np.asarray(evaluate_batch(nd.fn, *args)).reshape(n, -1)
+        per = got.shape[1]
+        for m in range(n):
+            for j in range(per):
+                at[resolve(scope, ("n", k, m * per + j))] = int(got[m, j])
+        out[k] = got
+    return out
+
+
+def wired_rows(program, node: int, port_rows: list[str], cut: dict) -> dict[str, tuple[int, int, int]]:
+    """Each input row of in(S) of the reader at root ``node`` (a call) that C wires from another unit: its writer's root
+    node, member and output field, the row being that field whole and in order. A row that is part of a field, or of
+    more than one, is refused by name (``FIELD``): Lean's registered reads read one field's tree."""
+    from verity.circuits.program import is_input
+    sig = dict(program.root.body.nodes[node].fn.signature()[0])
+    args = dict(zip(sig, program.root.body.nodes[node].args))
+    nodes, out = program.root.body.nodes, {}
+    for name in port_rows:
+        p, _, j = name.partition("#")
+        if p not in args:
+            continue
+        rows, ln = cut.get(p, 1), sig[p].leaves
+        lo, hi = (int(j) * ln // rows, (int(j) + 1) * ln // rows) if j else (0, ln)
+        refs = args[p].refs
+        got = [tuple(refs[i]) for i in range(lo, hi)]
+        if not any(r[0] == "n" and r[1] != node and not is_input(nodes[r[1]].fn) for r in got):
+            continue
+        kw = got[0][1]
+        wn = nodes[kw]
+        starts = _field_starts(wn.fn.signature()[1])
+        per = starts[-1]
+        m, at = divmod(got[0][2], per)
+        if at not in starts[:-1]:
+            raise SystemExit(f"FIELD: row {name} of the reader at node {node} starts at leaf {at} of its writer's output, "
+                             "no field's first")
+        f = starts.index(at)
+        want = [("n", kw, m * per + x) for x in range(starts[f], starts[f + 1])]
+        if got != want:
+            raise SystemExit(f"FIELD: row {name} of the reader at node {node} is no one output field of node {kw}, whole "
+                             "and in order")
+        out[name] = (kw, m, f)
+    return out
+
+
+def field_tree(program, outs: dict[int, np.ndarray], kw: int, f: int, words: int) -> tuple[str, list[list[int]]]:
+    """Output field ``f`` of the template of root node ``kw`` as the one tree a reader opens (`Flock.Registered.fieldTree`,
+    ``KEY/oJ``): one row a unit of the template, in the root body's order (`HmLinks.treeLeaf`), the field's bits in
+    16-bit words, ``words`` of them."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.types import RecordType, Tuple
+    nodes = program.root.body.nodes
+    t = descriptor_id(nodes[kw].fn)
+    ret = nodes[kw].fn.signature()[1]
+    ft = (list(ret.fields) if isinstance(ret, Tuple) else [x for _, x in ret.fields] if isinstance(ret, RecordType)
+          else [ret])[f]
+    starts, widths = _field_starts(ret), ft.leaf_widths()
+    rows = []
+    for k, nd in enumerate(nodes):
+        if k in outs and descriptor_id(nd.fn) == t:
+            for m in range(outs[k].shape[0]):
+                leaves = outs[k][m, starts[f]:starts[f + 1]].tolist()
+                bits = [(w >> j) & 1 for w, wd in zip(leaves, widths) for j in range(wd)]
+                row = words16(bits)
+                assert len(row) == words, (t, f, len(row), words)
+                rows.append(row)
+    return f"{t}/o{f}", rows
+
+
+def tree_leaf(program, kw: int, m: int) -> int:
+    """Unit (node ``kw``, member ``m``)'s row in its template's field trees (`HmLinks.treeLeaf`)."""
+    from verity.circuits.codec import descriptor_id
+    nodes = program.root.body.nodes
+    t = descriptor_id(nodes[kw].fn)
+    return sum(nd.n if nd.form == "batch" else 1 for nd in nodes[:kw] if descriptor_id(nd.fn) == t) + m
+
+
+def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict, template: str, ports=None) -> dict:
+    """The verifier's ``--registered`` file of ``template``'s statements over its program and the partition's query,
+    position-free (`registered.reads_file`), with each committed field of ``outs`` (an output row's or a wired input
+    row's)."""
     from verity.commitments import registered_value as RV
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots,
-                       schemas={v: RV.SCHEMA_HM96_SHA512_ROW_V2 for v in rows}, positions=False)
+    f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots, ports=ports,
+                       schemas={v: RV.SCHEMA_HM96_SHA512_ROW_V2 for v in rows}, positions=False, template=template)
     for p, out in outs.items():
         f["ports"][p] = {"value": out.value, "root": out.root.hex(), "leaves": out.leaves, "words": out.words,
                          "word_bits": 16, "domain": out.domain.domain_id.hex(), RV.SCHEMA_KEY: out.schema}
     return f
+
+
+def others(program, partition, rows: dict, roots: dict[str, str], outs: dict, drawn: str, own: dict, d: Path) -> dict:
+    """Two wrong ``--registered`` files for the drawn statement, each the drawn template's file ``own`` with one read
+    another template's file holds: ``registered-foreign.json`` adds a port of a parameter the drawn template does not
+    have, and ``registered-confused.json`` replaces a port the two templates both name with the other's read, of another
+    value or row kind. The door must refuse each by name. The first is also handed to the verifier's Python
+    (`registered.reads_file`'s ``ports``) for the drawn template, which refuses it by name too."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.program import input_id
+    kind = ("value", "leaves", "words", "word_bits", "row_schema")
+    mine = own["ports"]
+    found: dict = {}
+    for t in dict.fromkeys(descriptor_id(nd.fn) for nd in program.root.body.nodes if input_id(nd.fn.id) is None):
+        if t == drawn or {"foreign", "confused"} <= set(found):
+            continue
+        try:
+            theirs = {p: e for p, e in reads(program, partition, rows, roots, outs, t)["ports"].items() if p not in outs}
+        except ValueError as e:
+            found.setdefault("unread", {})[t] = str(e)
+            continue
+        if "foreign" not in found and (extra := sorted(set(theirs) - set(mine))):
+            p = extra[0]
+            try:
+                reads(program, partition, rows, roots, outs, drawn, ports={p: p})
+                python = None
+            except ValueError as e:
+                python = str(e)
+            found["foreign"] = {"template": t, "port": p, "value": theirs[p]["value"], "python_refusal": python}
+            (d / "registered-foreign.json").write_text(json.dumps({**own, "ports": {**mine, p: theirs[p]}}))
+        shared = sorted(p for p in set(theirs) & set(mine) if [theirs[p].get(k) for k in kind] != [mine[p].get(k) for k in kind])
+        if "confused" not in found and shared:
+            p = shared[0]
+            found["confused"] = {"template": t, "port": p, "drawn": {k: mine[p].get(k) for k in kind},
+                                 "other": {k: theirs[p].get(k) for k in kind}}
+            (d / "registered-confused.json").write_text(json.dumps({**own, "ports": {**mine, p: theirs[p]}}))
+    return found
 
 
 def stage(a) -> int:
@@ -315,7 +475,6 @@ def stage(a) -> int:
     from verity.circuits.program import input_id
     from verity.circuits.ops.rows import Bf16AddRow
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    from verity.protocols.resource_accounting import scheme as RS
     from verity.protocols.resource_accounting.compute.pouw import scheme as PS
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
     from verity.commitments import registered_value as RV
@@ -359,21 +518,25 @@ def stage(a) -> int:
     phase("lay", descriptor_bytes=len(c), population=population)
 
     strata = PQ.strata(program, part["query"])
-    credited = sorted(RS.credited([PS.PEARL_PLUS], strata))
-    decoded = R.program(c)
-    (block,) = PS.PEARL_PLUS.blocks
-    amounts = {u: block.cost(decoded.defs[tid].bindings) for tid, rs in strata for lo, hi in rs for u in range(lo, hi)
-               if u in credited}
-    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata], "credited": credited, "amount": amounts,
-                      "tile_macs": [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]}
+    tiles = PS.laid_tiles(ln.program, program, strata)
+    rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata],
+                      "tiles": [{"index": tl.index, "gates": tl.gates, "amount": tl.amount, "blocks": len(tl.blocks),
+                                 "kinds": dict(tl.kinds)} for tl in tiles]}
     print("AMOUNTS " + json.dumps(rec["amounts"]), flush=True)
-    assert len(credited) == units and [amounts[u] for u in credited] == rec["amounts"]["tile_macs"]
+    assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
 
     coin = os.urandom(64)
-    block_no = credited[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(credited)]
-    index = credited.index(block_no)
-    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": amounts[block_no],
-                   "of": "one block uniformly of the credited ones, whose amounts are equal"}
+    cores = [u for tid, rs in strata if tid == descriptor_id(core) for lo, hi in rs for u in range(lo, hi)]
+    if not cores:
+        raise SystemExit(f"no-core-block: the laying opened {descriptor_id(core)}, so no block of the laid C is a wired "
+                         "core for this stage to stage")
+    block_no = cores[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(cores)]
+    (index,) = [tl.index for tl in tiles if block_no in tl.blocks]
+    drawn_tid = descriptor_id(program.root.body.nodes[m_.units[block_no][0]].fn)
+    assert drawn_tid == descriptor_id(core), (drawn_tid, descriptor_id(core))
+    rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": tiles[index].amount,
+                   "of": "one block uniformly of the wired cores' stratum, the block this stage stages; its tile is "
+                         "credited its amount only when every stratum it has a block in passed (credited_tiles)"}
     print("DRAW " + json.dumps(rec["draw"]), flush=True)
     blk = OC.block(c, part, block_no)
     b = R.restrict(c, part, blk)
@@ -421,7 +584,7 @@ def stage(a) -> int:
                          np.asarray(good["r"] if a.reader else [[0] * n] * m, dtype=np.int64))
     rec["evaluate"] = {"of": "C on its words (`evaluate_batch` of its root before laying, whose gates the laid C keeps): "
                               "each unit's (digest, y, ok) and the reader's rows",
-                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": amounts[block_no]},
+                       "drawn": {"rows": drawn.rows, "real": drawn.real, "credited": tiles[index].amount},
                        "honest_ok": [g[-1] for g in got_h], "dishonest_ok": [g[-1] for g in got_d],
                        "y": y_rows, "y_is_the_served_y": y_rows == served,
                        "reader_reads_y_by_wire": z_h == add.reshape(m, n).tolist() if a.reader else None,
@@ -431,7 +594,7 @@ def stage(a) -> int:
     assert all(rec["evaluate"]["drawn_reference_agrees"].values()), rec["evaluate"]
     assert rec["evaluate"]["y_is_the_served_y"] and rec["evaluate"]["reader_reads_y_by_wire"] in (True, None), rec["evaluate"]
     assert rec["evaluate"]["honest_ok"] == [1] * units
-    assert rec["evaluate"]["dishonest_ok"][index] == (1 if a.bad == "y" else 0), rec["evaluate"]
+    assert rec["evaluate"]["dishonest_ok"][index] == (1 if a.bad in ("y", "eb") else 0), rec["evaluate"]
 
     def fields_of(g: list[int]) -> dict[str, list[int]]:
         """A unit's output fields' bits, each leaf low bit first: o0 the digest, o1 y's words, o2 ok's word."""
@@ -445,7 +608,8 @@ def stage(a) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
     try:
-        text = OC.lower(b.descriptor, part, lambda: a.lower).decode()
+        cut = OC.cuts(c, part)
+        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut).decode()
     except (OC.NotDerived, OC.Refused) as e:
         rec["lower"] = {"refused": f"{type(e).__name__}: {e}", "query": part["query"]["name"]}
         print("LOWER-REFUSED " + json.dumps(rec["lower"]), flush=True)
@@ -454,7 +618,8 @@ def stage(a) -> int:
     meta = FC.meta_of(text)
     rec["lower"] = {"by": "the door's one_circuit.lower (flock-lower-check compose)", "wall_s": round(time.perf_counter() - t0, 2),
                     "peak_gib_children": _peak_gib(resource.RUSAGE_CHILDREN), "bytes": len(text), "k_log": meta.get("k_log"),
-                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[:2] for q in meta.get("ports", [])]}
+                    "sha512": hashlib.sha512(text.encode()).hexdigest(), "ports": [q[:2] for q in meta.get("ports", [])],
+                    "cut": cut.get(descriptor_id(core), {})}
     print("LOWER " + json.dumps(rec["lower"]), flush=True)
     phase("lower")
 
@@ -471,19 +636,28 @@ def stage(a) -> int:
     if many:
         rec["wired_rows"] = {
             "refused": f"the drawn block's input rows {sorted(many)} are each wired from more than one writer unit "
-                       f"({many}), and the door's lowering (one_circuit.lower) gives each parameter one row: a row that is "
-                       "no one writer's output field, whole, is refused by Lean's registered reads "
-                       "(Flock.Registered.treeReads, FIELD_WHY); Lean's in(S) layout reads a parameter cut into one row a "
-                       "writer (p#0 … p#(k-1), Flock.OneCircuit.io), which the door's lowering does not yet emit"}
+                       f"({many}), and the door's lowering (one_circuit.lower under one_circuit.cuts) left each one row: "
+                       "a row that is no one writer's output field, whole, is refused by Lean's registered reads "
+                       "(Flock.Registered.treeReads, FIELD_WHY)"}
         print("WIRED-ROWS " + json.dumps(rec["wired_rows"]), flush=True)
         (a.out / "stage.json").write_text(json.dumps(rec, indent=1, default=str))
         return 4
+    node = m_.units[blk[0][0]][0]
+    fed = wired_rows(program, node, rows, rec["lower"]["cut"])
+    trees = sorted({(kw, f) for kw, _m, f in fed.values()})
+    rec["writer_rows"] = {"of": "each input row of in(S) C wires from a writer is that writer's output field whole, read "
+                                "by path in the field's one tree (KEY/oJ, one row a unit of the writer's template), "
+                                "committed under hiding salts",
+                          "rows": len(fed),
+                          "trees": sorted({f"{descriptor_id(program.root.body.nodes[kw].fn)}/o{f}" for kw, f in trees})}
+    print("WRITER-ROWS " + json.dumps(rec["writer_rows"]), flush=True)
+    skip = {descriptor_id(core), descriptor_id(bind(Bf16AddRow, N=n))}
     verifier_row = public_values(ln, k, unit, salt, w_reg["w"].root)
     verifier_roots = {v: r.root.hex() for v, r in register(program, rows_of(ln, verifier_row), supplied).items()}
     rec["public_row"] = {"of": "the verifier's: `public_values` from the salt, W's registered root and the tiles' places "
                          "alone, no noise value", "ports": list(PC.PUBLIC),
                          "salt": salt.hex(), "w_root": w_reg["w"].root.hex(), "supplied": list(supplied)}
-    other = PC.public(SCHEME, k, drawn, unit + 1, good["salt"], good["root"])
+    other = PC.public(SCHEME, k, drawn, unit + 1, salt, w_reg["w"].root)
     wrong_unit = rows_of(ln, {"unit": other["unit"]})
     rec["registered"] = {}
     for tag, vals in (("honest", good), ("dishonest", bad)):
@@ -500,14 +674,26 @@ def stage(a) -> int:
         outs = {"o0": output(program, f"{key}/o0", out_rows["o0"], False),
                 "o1": output(program, f"{key}/o1", out_rows["o1"], False),
                 "o2": output(program, f"{key}/o2", out_rows["o2"], True)}
-        (d / "registered.json").write_text(json.dumps(reads(program, part, rows, roots, outs)))
+        made = node_outputs(program, vals, skip)
+        words_of = {(kw, f): widths[p] for p, (kw, _m, f) in fed.items()}
+        committed = {}
+        for kw, f in trees:
+            name, trows = field_tree(program, made, kw, f, words_of[kw, f])
+            committed[kw, f] = output(program, name, trows, False)
+        held = {p: committed[kw, f] for p, (kw, _m, f) in fed.items()}
+        own = reads(program, part, rows, roots, outs | held, drawn_tid)
+        (d / "registered.json").write_text(json.dumps(own))
         if tag == "honest":
             bad_roots = roots | {"unit": register(program, wrong_unit, supplied)["unit"].root.hex()}
-            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, rows, bad_roots, outs)))
+            (d / "registered-wrong.json").write_text(
+                json.dumps(reads(program, part, rows, bad_roots, outs | held, drawn_tid)))
             zero = [list(r) for r in out_rows["o2"]]
             zero[index][0] = 0
             not_ok = outs | {"o2": output(program, f"{key}/o2", zero, True)}
-            (d / "registered-not-ok.json").write_text(json.dumps(reads(program, part, rows, roots, not_ok)))
+            (d / "registered-not-ok.json").write_text(
+                json.dumps(reads(program, part, rows, roots, not_ok | held, drawn_tid)))
+            rec["other_templates"] = others(program, part, rows, roots, outs | held, drawn_tid, own, d)
+            print("OTHER-TEMPLATES " + json.dumps(rec["other_templates"]), flush=True)
         at = {p: r for p, r in ln.reads[index].items() if p in dict(core.signature()[0])}
         tables, salts, registered = {}, {}, {}
         for p, (v, j) in at.items():
@@ -515,6 +701,17 @@ def stage(a) -> int:
             tables[p] = np.asarray([RV.row_words(r, regs[v].word_bits, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs],
                                    dtype=np.uint16)
             salts[p], registered[p] = ss, entry
+        for p, (kw, m, f) in fed.items():
+            rs, ss, entry = held[p].statement([tree_leaf(program, kw, m)])
+            tables[p] = np.asarray([RV.row_words(r, 16, RV.SCHEMA_HM96_SHA512_ROW_V2) for r in rs], dtype=np.uint16)
+            salts[p], registered[p] = ss, entry
+        if tag == "dishonest" and a.bad == "eb":
+            p = next(p for p in fed if p.partition("#")[0] == "eb")
+            tables[p] = tables[p].copy()
+            tables[p][0, 0] ^= 1 << 15
+            rec["eb_row"] = {"port": p, "word": 0, "bit": 15, "tree": committed[fed[p][0], fed[p][2]].value,
+                             "of": "the drawn statement's wired eb row with bit 15 of its first word flipped, its "
+                                   "writer's committed tree honest"}
         for p, o in outs.items():
             _rs, ss, entry = o.statement([index])
             salts[p], registered[p] = ss, entry
@@ -544,10 +741,10 @@ def door(a) -> int:
     PF.lower_executable = lambda: Path(a.lower)
     restrict, memo = OC.restrict, {}
 
-    def once(c: bytes, partition, units) -> bytes:
+    def once(c: bytes, partition, units, decoded=None) -> bytes:
         key = (hashlib.sha512(c).hexdigest(), json.dumps(partition, sort_keys=True), json.dumps([list(u) for u in units]))
         if key not in memo:
-            memo[key] = restrict(c, partition, units)
+            memo[key] = restrict(c, partition, units, decoded)
         return memo[key]
 
     OC.restrict = once
@@ -569,13 +766,16 @@ def door(a) -> int:
     honest = call("honest", "registered.json")
     if "dishonest" in a.session:
         call("dishonest", "registered.json")
-    for name in ("registered-wrong.json", "registered-not-ok.json"):
-        call("honest", name)
+    for name in ("registered-wrong.json", "registered-not-ok.json", "registered-foreign.json", "registered-confused.json"):
+        if (h / name).exists():
+            call("honest", name)
     if honest["refusal"] is None and honest["findings"] and all(f["accepted"] for f in honest["findings"]):
-        print(f"ACCEPT the door accepts drawn block {draw_['units']} of C, a unit of {partition['query']['params']['template']}"
-              ": the tile with its noise derived inside from the salt and W's root, read with its unit, rows and col from the "
-              "public row the verifier registered itself; its digest, the tile leaf, is bound to no transcript root, and the "
-              "salt and the root to no supplied function (pouw.pearlplus.salt/v1, registered.root/v1)", flush=True)
+        print(f"ACCEPT noise supplied, not derived; not credit: the door accepts drawn block {draw_['units']} of C, a "
+              "wired core, whose eb, fa, fb and g are wired rows held to their writers' committed output trees; the blocks "
+              "that derive them from the salt and W's root (the seed, the lines, the Gram rows) are not proved here. It "
+              "reads its unit, rows and col from the public row the verifier registered itself; its digest, the tile "
+              "leaf, is bound to no transcript root, and the salt and the root to no supplied function "
+              "(pouw.pearlplus.salt/v1, registered.root/v1)", flush=True)
     return 0
 
 
@@ -588,9 +788,10 @@ def main() -> int:
     st.add_argument("--out", type=Path, required=True)
     st.add_argument("--no-reader", dest="reader", action="store_false",
                     help="C without the reader: its units' y is C's output, the record a later reader is held to")
-    st.add_argument("--bad", choices=("y", "cert", "filler"), default="y",
+    st.add_argument("--bad", choices=("y", "cert", "filler", "eb"), default="y",
                     help="the dishonest proof of the drawn tile: its claimed y a word other than the one it writes, a "
-                         "certificate word not the prover's, or a word of its filler row nonzero")
+                         "certificate word not the prover's, a word of its filler row nonzero, or its wired eb row's "
+                         "first word with bit 15 flipped against its writer's committed tree")
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True, help="verity-verify-proof")

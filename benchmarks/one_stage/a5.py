@@ -195,7 +195,7 @@ import a5_memo as AM  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, definition_digest, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
@@ -209,6 +209,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     docket as R,
     verifier as V,
 )  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
@@ -390,7 +391,7 @@ def coins_sample(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, 
         if hold:
             a.coins.hold(rank)
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                              **registering(a, history))
+                              partition=mine.partition, **registering(a, history))
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
     except S.Refused as e:
@@ -457,7 +458,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read, family), held)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
-                                    **registering(a, history)))
+                                    partition=mine.partition, **registering(a, history)))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed sample {d.units} is not the honest sample {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -638,6 +639,21 @@ def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
     return FI.flock_circuit(path.read_bytes())
 
 
+def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
+                 decoded: OC.Decoded | None = None) -> tuple[Path, dict, FI.FlockCircuit]:
+    """Member ``k``'s circuit as the door derives it from C's bytes ``c`` and the partition ``part`` (`one_circuit.block`,
+    `.restrict`, `.lower` by ``lower``, `flock-lower-check`, at in(S)'s cuts `one_circuit.cuts`), the file Lean's
+    `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
+    block. ``decoded``: C decoded once for every member."""
+    decoded = decoded or OC.Decoded(c)
+    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k, decoded), decoded), part, lambda: lower,
+                    cut=OC.cuts(c, part, decoded))
+    circuit = st_dir / "circuit.txt"
+    circuit.write_bytes(text)
+    circ = FI.flock_circuit(text)
+    return circuit, {"pin": circ.pin, "class_sha512": circ.cls}, circ
+
+
 def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
     """The circuit at ``path`` is the one staging took off compose's line (``circ``: its META, pin and class), read whole once:
     ``read`` holds the circuits already read."""
@@ -805,7 +821,8 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                         program=mine.program, query=mine.query)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -871,6 +888,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     roots = {r["port"]: r for r in rec["roots"]}
     form = member_form(mine, rec)
     members, publics, checks, composed, programs_ok, kept, read, makes = [], {}, {}, {}, {}, {}, set(), {}
+    door = getattr(a, "door_lower", None)
+    c_bytes = b"".join(descriptor_chunks(program)) if door else b""
+    decoded = OC.Decoded(c_bytes) if door else None
+    unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -884,7 +905,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
-        if m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
+        if door:
+            try:
+                circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
+            except (OC.Refused, OC.NotDerived) as e:
+                unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
+                print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+                continue
+        elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
@@ -907,14 +935,29 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
-        got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+        try:
+            got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+        except ValueError as e:
+            if not door:
+                raise
+            # the door's circuit lays the member's rows otherwise than the period committed them
+            unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"UNLAID: {e}"[:600]}
+            print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+            continue
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
-        if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
+        if (m.template, circ.pin) not in programs_ok and door:   # the door binds the Definition's digest in C (`one_circuit.lower`)
+            desc = decoded.get().desc
+            programs_ok[m.template, circ.pin] = meta.get("program_digests") == {
+                m.template: definition_digest(desc["definitions"][m.template], desc)}
+        elif (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
         # the header against the member's slice of the docket: the per-member form's rule, in its one Python
-        why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key])
+        # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
+        opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
+        why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
+                                                                    opened)
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
@@ -1028,6 +1071,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
+    failed_drawn: dict[str, int] = {}     # a drawn unit of a block the door wouldn't lower: a failed proof, not resampled
+    for k, u in unlowered.items():
+        hit = sum(1 for x in D.proved(union_sample) if u["base"] <= x < u["base"] + u["n"])
+        if hit:
+            failed_drawn[u["template"]] = failed_drawn.get(u["template"], 0) + hit
+    summary.update(unlowered={str(k): u for k, u in unlowered.items()}, failed_drawn=failed_drawn)
     archived: dict = {}     # the window's files, archived once for every Lean verify (`a0.archive_put`)
     for mm in members:
         mm["st"]["archived"] = archived
@@ -1136,7 +1185,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                # a port at a shared tree is held by its registered reads there, and its header root is its own rows' alone
+                "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()
+                          if mine.tree(m, p_name) == m.port(p_name)},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -1272,6 +1323,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
+    if isinstance(pm, dict):
+        members_lean(out, result)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1358,8 +1411,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["negative_workers"] = workers.timing()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
-        and all(c["ok"] for c in summary.get("challengers", {}).values())
-    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
+        and all(c["ok"] for c in summary.get("challengers", {}).values()) and not failed_drawn
+    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives", "failed_drawn")}
     if "challengers" in summary:
         shown["challengers"] = {x: c["ok"] for x, c in summary["challengers"].items()}
     if "coins" in summary:
@@ -1465,6 +1518,31 @@ def case_written(out: Path) -> dict:
         return {"written": True}
     said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
+
+
+def members_lean(out: Path, result: dict, check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+    """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
+    verdict ``result["checks"]["members_lean"]``: the audit accepts only where Lean accepts too, and where Lean and the
+    Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its detail both texts."""
+    case = out / "case-v2.json"
+    try:
+        verdict, why = check(json.loads(case.read_text())) if case.is_file() else ("reject", case_written(out)["why"])
+    except MB.LeanError as e:
+        verdict, why = "undecided", str(e)
+    checks = result.setdefault("checks", {})
+    failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))
+    python = bool(result.get("accepted"))
+    ok = verdict == "accept"
+    codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
+    checks["members_lean"] = {"ok": ok and python, "codes": codes, "detail": {
+        "lean": {"verdict": verdict, "reason": why},
+        "python": {"accepted": python, "failed": failed}}}
+    if not ok:
+        result["accepted"] = False
+
+
+#: the code of an audit whose Python verdict and Lean's `checkMembersAt` on its per-member case differ
+MEMBERS_DISAGREE = "members-lean-python-disagree"
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, public: str, registered: dict | None,
@@ -2430,7 +2508,7 @@ def main() -> int:
     try:
         LV.command(of(__file__).raw(LV.ENV), (1,), 1)
     except LV.Refused as e:
-        ap.error(f"{e} (two levels: two_stage.py)")
+        ap.error(LV.TWO_LEVELS_REFUSED if e.reason == "levels-no-path" else str(e))
     if not (a.bundle and a.row_dir and a.window):
         ap.error("give --bundle, --row-dir and --window (a deferred Commit's)")
     a.coins, a.rule, a.window_root, a.plain = None, None, None, False

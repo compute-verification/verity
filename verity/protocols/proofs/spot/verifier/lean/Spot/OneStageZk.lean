@@ -505,7 +505,7 @@ writer's field tree's name (`WIRED_TREE_WHY`).
 One pass over the record's roots and the members' registered files. -/
 def treePortsHeld (ms : Array Member) (rec : Json) : V Unit :=
   let byPort := rootsByPort rec
-  ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered
+  ms.forM fun m => registeredTreesHeld byPort s!"member {m.name}" m.own.registered ((templateOf m.name).map (·.1))
 
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
@@ -568,17 +568,75 @@ def derivedWiring (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRang
   let W : Spot.Wires.Wiring := { templates := ts.map fun t => (t.tid, t.wired), cuts := ← ioCuts P rs, wires := [] }
   return { W with wires := ← Spot.Edges.edgesOf P rs W }
 
-/-- **The registration's roots each member's statement reads**: `rootsOf`'s, each member's own output ports at its
-template's fields' trees (`ownFieldsOf`, among the window's trees `fieldTreesOf` reads), and where C has an edge, each
-member's wired ports at their writers' output fields' trees (`fieldRoots`, at C's wiring under the verifier's
-partition, `derivedWiring`). -/
+/-- The refusal of a registration whose trees of its templates' output fields are not the ones C and the partition
+give (`fieldTreesHeld`, `derivedFieldTrees`), `what` saying which. -/
+def FIELD_TREES_WHY (what : String) : String :=
+  s!"roots: the registration's trees of its templates' output fields are not the ones C and the partition give " ++
+    s!"({what}): a window registers exactly one tree <template>/o<j> for each output field of each member's " ++
+    "template, its leaves the template's units in C"
+
+/-- The one Definition of the partition's ranges `rs` over C that the member `m`'s units meet; none where they meet
+no range or ranges of two. -/
+def Member.tidIn (m : Member) (rs : Array Flock.TemplateQuery.TRange) : Option String :=
+  match m.units.foldl (fun acc (lo, hi) => rs.foldl (fun acc r =>
+      if r.first < hi && lo < r.first + r.count && !acc.contains r.template then acc.push r.template else acc) acc)
+      (#[] : Array String) with
+  | #[t] => some t
+  | _ => none
+
+/-- **The window's trees of its templates' output fields, from C and the partition** (`rows.Binding.trees`' output
+trees): for each member's template (`templateOf`), in the members' order, `<template>/o<j>` for each return field `j`
+(`fieldsOf`) of the Definition its members' units are instances of in C (`Member.tidIn`), its leaves that
+Definition's units under the partition. Refuses a member whose name names no template or whose units are not one
+Definition's, a template whose members' units are two Definitions', and a Definition whose units are two templates'. -/
+def derivedFieldTrees (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Array Member) :
+    V (Array (String × Nat)) := do
+  let mut tids : Array (String × String) := #[]
+  for m in ms do
+    let some (t, _) := templateOf m.name | throw (FIELD_TREES_WHY s!"the member {m.name} names no template")
+    let some tid := m.tidIn rs | throw (FIELD_TREES_WHY s!"the member {m.name}'s units are not one Definition's in C")
+    match tids.find? (·.1 == t) with
+    | some (_, d) => if d != tid then throw (FIELD_TREES_WHY s!"the template {t}'s members' units are two Definitions'")
+    | none =>
+      if tids.any (·.2 == tid) then throw (FIELD_TREES_WHY s!"the Definition {tid}'s units are two templates'")
+      tids := tids.push (t, tid)
+  tids.foldlM (fun acc (t, tid) => do
+    let some fn := P.index[tid]? >>= (P.defs[·]?)
+      | throw (FIELD_TREES_WHY s!"the template {t}'s Definition {tid} is no Definition of C")
+    let n := (Spot.RecordText.rangesAt rs tid).foldl (fun a r => a + r.count) 0
+    pure (acc ++ ((Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j _ => (s!"{t}/o{j}", n)))) #[]
+
+/-- **The registration's trees of its templates' output fields are exactly `want`** (`derivedFieldTrees`): each
+derived tree is a root of the record `rec`, once, at its derived leaf count, and the record holds no other root
+`<template>/<field>` of a template of `ts` (`fieldTreesOf`'s). Refuses a tree omitted, held twice, held at another
+leaf count, and a root that is no derived tree, by name. -/
+def fieldTreesHeld (want : Array (String × Nat)) (ts : Std.HashSet String) (rec : Json) : V Unit := do
+  let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  let got := rs.filterMap fun r => match getD r "port" with
+    | .str port => if (templateOf port).any (ts.contains ·.1) then some (port, getD r "leaves") else none
+    | _ => none
+  for (tree, n) in want do
+    match got.filter (·.1 == tree) with
+    | #[] => throw (FIELD_TREES_WHY s!"it omits {tree}")
+    | #[(_, l)] => if nat? l != some n then throw (FIELD_TREES_WHY s!"it holds {tree} at {l.compress} leaves, not {n}")
+    | _ => throw (FIELD_TREES_WHY s!"it holds {tree} more than once")
+  if let some (port, _) := got.find? fun (port, _) => !want.any (·.1 == port) then
+    throw (FIELD_TREES_WHY s!"it holds {port}, no output field's tree")
+
+/-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
+output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
+output ports at its template's fields' trees (`ownFieldsOf`, among the window's trees `fieldTreesOf` reads), and where
+C has an edge, each member's wired ports at their writers' output fields' trees (`fieldRoots`, at C's wiring under the
+verifier's partition, `derivedWiring`). -/
 def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
   let roots ← rootsOf ms rec
-  let ft := fieldTreesOf (templatesOf (ms.toList.map (·.name))) rec
-  let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
+  let ts := templatesOf (ms.toList.map (·.name))
+  let ft := fieldTreesOf ts rec
   let P ← Program.parse p.own.program
-  if !hasEdge P.prog then return roots
   let rs ← Partition.evaluate P (getD p.own.partition "query")
+  fieldTreesHeld (← derivedFieldTrees P.prog rs ms) ts rec
+  let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
+  if !hasEdge P.prog then return roots
   let W ← derivedWiring P.prog rs
   fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots
 
@@ -1400,6 +1458,71 @@ private def ownSliceT (roots : List (String × String)) (name : String) : Json :
 #guard refusal (headerHeld (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0") (headerT 2 [("x", "aa"), ("o0", "ff")]))
   == "public file: not the registration's: roots, domains"
 
+-- a member of a template of several members: its header's `o0` is its own tree's (Flock's `checkPublic`), held by its
+-- registered read at the template's tree, so its own root is not compared
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == ""
+-- the old header, its own root and no registered read at the shared tree: refused by name
+#guard refusal (headerHeldAt #[] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
+-- a registered read of `o0` at another tree: not the shared tree's opening, refused by name
+#guard refusal (headerHeldAt #[("o0", "t/o1")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
+-- a template's one member, its own tree the registration's: compared as before, no read needed
+#guard refusal (headerHeldAt #[] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ee")])) == ""
+-- a header whose `instances` is not the slice's population: refused before any port is dropped
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 5 [("x", "aa"), ("o0", "ff")])) == POPULATION_WHY
+-- the member's own input at another root: still compared, and refused as before
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "ab"), ("o0", "ff")])) == "public file: not the registration's: roots, domains"
+
+/-- The ports of the registered file `regT ports`. -/
+private def heldT (ports : List (String × String × Char × Nat)) : Array Flock.Registered.Port :=
+  (Flock.Registered.ofJson (regT ports)).toOption.getD #[]
+
+/-- `headerHeldAt` on `t/c0`'s slice and a header of its port `x`, its tree at `o0` and `w`, at `reads` and the
+registered file of `ports`. -/
+private def heldAtT (reads : Array (String × String)) (ports : List (String × String × Char × Nat))
+    (n : Nat := 2) (x : String := "aa") : String :=
+  refusal (headerHeldAt reads (heldT ports) (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+    (headerT n [("x", x), ("o0", "ee"), ("w", "77")]))
+
+-- a port the slice holds no root of, read at a value the verifier's registered file holds there as a registered value:
+-- held by the reads, not compared
+#guard heldAtT #[("w", "h/w")] [("w", "h/w", 'a', 2)] == ""
+-- read at a value the file does not hold at that port, or holds at another port, or holds as a tree's name (a field
+-- tree, a run input's tree, a committed tree): refused by name
+#guard heldAtT #[("w", "h/z")] [("w", "h/w", 'a', 2)] == UNREGISTERED_WHY "w" "h/z"
+#guard heldAtT #[("w", "h/w")] [("v", "h/w", 'a', 2)] == UNREGISTERED_WHY "w" "h/w"
+#guard heldAtT #[("w", "h/w")] [] == UNREGISTERED_WHY "w" "h/w"
+#guard [("t/o0" : String), "u/o1", "input/n3", "committed/w"].all fun v =>
+  heldAtT #[("w", v)] [("w", v, 'a', 2)] == UNREGISTERED_WHY "w" v
+-- no read of it: refused as before
+#guard heldAtT #[] [("w", "h/w", 'a', 2)] == UNWIRED_WHY "w"
+#guard heldAtT #[("v", "h/w")] [("v", "h/w", 'a', 2)] == UNWIRED_WHY "w"
+-- a port the slice holds, read at a registered value: still compared to its root
+#guard heldAtT #[("w", "h/w"), ("x", "h/x")] [("w", "h/w", 'a', 2), ("x", "h/x", 'a', 2)] (x := "ab") ==
+  "public file: not the registration's: roots, domains"
+-- the population first
+#guard heldAtT #[("w", "h/w")] [("w", "h/w", 'a', 2)] (n := 5) == POPULATION_WHY
+
+/-- `Member.populationOn` of member `t/c0` with the registered file of `ports`, on its slice and a public file whose
+header names its units 0 and 1, its port `x`, its tree at `o0` and `w`: the reads and the ports `headerHeldAt` is
+handed are the file's, as `Member.population` reads them. -/
+private def populationT (ports : List (String × String × Char × Nat)) : String :=
+  let m : Member := { memberT "t/c0" #[(0, 2)] with own := { sharedT with registered := some (regT ports) } }
+  let h := (headerT 2 [("x", "aa"), ("o0", "ee"), ("w", "77")]).setObjVal! "units"
+    (Json.mkObj [("indices", Lean.toJson [0, 1])])
+  refusal (m.populationOn (pure #[("t", #[(0, 5)])]) (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+    (h.compress ++ "\n").toUTF8)
+
+#guard populationT [("w", "h/w", 'a', 2)] == ""
+#guard populationT [("w", "committed/w", 'a', 2)] == UNREGISTERED_WHY "w" "committed/w"
+#guard populationT [("w", "input/n3", 'a', 2)] == UNREGISTERED_WHY "w" "input/n3"
+#guard populationT [("v", "h/w", 'a', 2)] == UNWIRED_WHY "w"
+
 /-- A root of the port given at the hex digit `c` repeated, its domain `d`'s, two leaves. -/
 private def hexRootT (port : String) (c : Char) : Json :=
   Json.mkObj [("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("port", Json.str port),
@@ -1437,6 +1560,27 @@ private def treeRegT (c : Char) (leaves : Nat := 2) (value : String := "committe
 #guard refusal (treePortsHeld #[readerT "R/c0" (treeRegT 'a' (value := "committed/W/o0"))] treeRecT) ==
   TREE_UNHELD "member R/c0" "x" "W/o0"
 #guard !fieldTreeName "o0" && !fieldTreeName "W/o" && !fieldTreeName "W/ox" && fieldTreeName "a/b/o12"
+
+/-- A registration of template `W`'s output field `o0`'s tree at `a`'s, shared by its members `W/c0` and `W/c1`. -/
+private def treeOutRecT : Json :=
+  Json.mkObj [("population", Lean.toJson (4 : Nat)), ("roots", Json.arr #[hexRootT "W/o0" 'a']),
+    ("scheme", Json.str "s")]
+
+/-- A registered file of one port `port` read as `value`, at the root of `c`s, `d`'s domain and 2 leaves. -/
+private def outRegT (port value : String) (c : Char) : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj [(port, Json.mkObj [
+      ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("root", Json.str ("".pushn c 128)),
+      ("value", Json.str value)])])]
+
+-- a member's own output, opened at its template's tree: held to the registration's root, domain and leaves
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == ""
+-- its own output opened at another root than the registration's tree: refused
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "o0" "W/o0" 'c')] treeOutRecT) ==
+  TREE_OTHER "member W/c0" "o0" "W/o0" "root"
+-- another template's output tree named as its own output: refused as a wired read
+#guard refusal (treePortsHeld #[readerT "V/c0" (outRegT "o0" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member V/c0" "o0"
+-- a wired input (port `x`) reading `W`'s tree: still refused
+#guard refusal (treePortsHeld #[readerT "W/c0" (outRegT "x" "W/o0" 'a')] treeOutRecT) == WIRED_TREE_WHY "member W/c0" "x"
 
 /-- `treeRecT` with run input node 3's tree, `input/n3`, at the root of `f`s. -/
 private def treeFreshRecT : Json :=
@@ -1508,7 +1652,8 @@ private def chainP : Flock.Program.Prog :=
   let root : Flock.Program.Defn :=
     { key := "R", id := "R", prim := false, params := #[], ret := rowT, gates := 0, paramLeaves := 0, outLeaves := 16,
       body := { params := #[], retType := rowT, nodes := nodes, ret := default, offsets := #[] } }
-  { defs := #[input, gemm, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+  { defs := #[input, gemm, root], index := (({} : Std.HashMap String Nat).insert "Input16_v1" 0).insert "G" 1,
+    root := 2, programFn := "", sha512 := .empty }
 
 private def chainRs : Array Flock.TemplateQuery.TRange := #[⟨1, "G", 0, 2⟩, ⟨2, "G", 2, 2⟩, ⟨3, "G", 4, 2⟩, ⟨4, "G", 6, 2⟩]
 
@@ -1533,6 +1678,31 @@ private def chainRootsT (roots : List (String × String)) : V (Std.HashMap Strin
     ["G/c0", "G/c1", "G/c3"].map fun m => (r.getD m #[]).map (getD · "root")) ==
   some [#[Json.str "bb"], #[Json.str "aa"], #[Json.str "aa"]]
 #guard whyT (chainRootsT [("G/c0/x", "bb"), ("G/c2/x", "cc")]) == OWN_ROOT_WHY "G/c2" "x"
+
+/-- `fieldTreesHeld` on `chain()`'s derived trees (`derivedFieldTrees`) and a registration of the roots given, each
+its port and leaf count. -/
+private def chainTreesT (roots : List (String × Nat)) : String :=
+  let rec_ := Json.mkObj [("roots", Json.arr (roots.toArray.map fun (p, n) =>
+    Json.mkObj [("leaves", Lean.toJson n), ("port", Json.str p)]))]
+  whyT (derivedFieldTrees chainP chainRs chainMs >>= fun want =>
+    fieldTreesHeld want (templatesOf (chainMs.toList.map (·.name))) rec_)
+
+#guard (derivedFieldTrees chainP chainRs chainMs).toOption == some #[("G/o0", 8)]
+#guard chainTreesT [("G/c0/x", 2), ("G/o0", 8)] == ""
+#guard chainTreesT [("G/c0/x", 2)] == FIELD_TREES_WHY "it omits G/o0"
+#guard chainTreesT [("G/c0/o0", 2), ("G/c1/o0", 2), ("G/c2/o0", 2), ("G/c3/o0", 2)] ==
+  FIELD_TREES_WHY "it omits G/o0"
+#guard chainTreesT [("G/o0", 4), ("G/o0", 4)] == FIELD_TREES_WHY "it holds G/o0 more than once"
+#guard chainTreesT [("G/o0", 2)] == FIELD_TREES_WHY "it holds G/o0 at 2 leaves, not 8"
+#guard chainTreesT [("G/o0", 8), ("G/o1", 8)] == FIELD_TREES_WHY "it holds G/o1, no output field's tree"
+#guard whyT (derivedFieldTrees chainP chainRs #[memberT "G" #[(0, 2)]]) ==
+  FIELD_TREES_WHY "the member G names no template"
+#guard whyT (derivedFieldTrees chainP chainRs #[memberT "G/c0" #[(8, 9)]]) ==
+  FIELD_TREES_WHY "the member G/c0's units are not one Definition's in C"
+#guard whyT (derivedFieldTrees chainP chainRs #[memberT "G/c0" #[(0, 4)], memberT "H/c0" #[(4, 8)]]) ==
+  FIELD_TREES_WHY "the Definition G's units are two templates'"
+#guard whyT (derivedFieldTrees chainP (chainRs.push ⟨5, "H", 8, 2⟩) #[memberT "G/c0" #[(0, 8)], memberT "G/c1" #[(8, 10)]]) ==
+  FIELD_TREES_WHY "the template G's members' units are two Definitions'"
 
 #guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0000000000000001" ++ "0000000000000002" ++ "6162"
 #guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==

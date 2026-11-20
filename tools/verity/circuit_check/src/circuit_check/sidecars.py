@@ -348,24 +348,9 @@ def body_family(fid: str) -> str | None:
 _NAMED: dict[str, Any] = {}
 
 
-def composite_lift(fid: str) -> Any | None:
-    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the
-    lift a body calling it makes, or its hand lift), whatever version the id writes; None when the id wraps no registered
-    composite.  The on-demand ``Lifted[...]`` families lift primitives only."""
-    from verity.circuits.defs import REGISTRY, CompositeDefinition
-
-    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
-    inner = REGISTRY.defs.get(m[1]) if m else None
-    if not isinstance(inner, CompositeDefinition):
-        return None
-    from . import targets as TG
-
-    return TG._handed("lift_composite")(inner)
-
-
 def named(fid: str) -> Any | None:
-    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
-    registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
+    """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else one an
+    on-demand family makes from it
     (`verity.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
     None for one made only inside another Definition's body (a multiplexer tree's levels, `body_family`) or by nothing, built in
     this process or not."""
@@ -377,8 +362,6 @@ def named(fid: str) -> Any | None:
     if (d := _NAMED.get(fid)) is not None:
         return d
     with CC.internal():
-        if (d := composite_lift(fid)) is not None:
-            return d if d.id == fid else None
         try:
             return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
