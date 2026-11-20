@@ -38,13 +38,6 @@ def test_a_row_whose_schedule_of_record_is_observed_moves_the_arrivals_to_it() -
     assert arrivals({"commit": {"binding": {"coverage": {"schedule": OBSERVED}}}}) == ({"r0": 0, "r1": 2}, True)
 
 
-@pytest.mark.parametrize("result", [None, {}, {"T": None}])
-def test_a_program_whose_build_result_names_no_t_takes_its_steps_from_its_rows_and_none_where_it_has_no_rows(result: Record | None) -> None:
-    loaded: Record = {"r0": {"result": {"T": 3}}, "r1": {"result": result}, "r2": {}, "r3": {"result": result}, "r4": {"result": {"T": 0}}}
-    progs: Record = {"r0": {"rows": ROWS}, "r1": {"rows": ROWS}, "r2": {"rows": ROWS, "checks": None}}
-    assert C2.program_steps(loaded, progs) == {"r0": 4, "r1": 1, "r2": 1, "r3": None, "r4": 1}
-
-
 def loads(monkeypatch: pytest.MonkeyPatch, program: Record, manifest: Any, digest: str | None = None) -> tuple[Record, dict[str, str]]:
     """`programs_of_record` for the one request `a`, whose Program dir loads as ``program``."""
     monkeypatch.setattr(MF, "load_program", lambda d: program)

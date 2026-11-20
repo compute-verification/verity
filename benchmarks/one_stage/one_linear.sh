@@ -5,7 +5,8 @@
 # negatives: the weight as a registered read (refused today by the members check's header rule); the partition at
 # two levels refused at the door before any coin; a changed output word in every block (so in every drawn one)
 # refused; one changed output word in one unit, accepted unless its block is drawn; a stratified rate refused by its
-# kind (SUBSET_ONLY). The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
+# kind (SUBSET_ONLY). Each arm passes only on its own outcome, a negative's refusal by its name, and a crash is an
+# ERROR (`one_linear_arms.py`); the script fails unless every arm passes. The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
 # No accept is printed unless C's template rows hold against its evaluator (`door_walls.py census`, one unit a block)
 # and C has neither of the two word shapes (`word_shape_scan.py`), both read from the one C.json whose sha256 is printed.
 # DELTA=0.5 bash benchmarks/one_stage/one_linear.sh
@@ -45,13 +46,13 @@ except OSError:
 keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "failed_drawn", "forged")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
-  return $r
+  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json
 }
 audit honest $RULE "--weights committed" ""; H=$?
 audit registered $RULE "" ""; G=$?
 audit forged-drawn $RULE "--weights committed --forge all" "--forged"; F=$?
 audit forged-one $RULE "--weights committed --forge 1" ""; U=$?
-audit stratified stratified-${RULE#rate:} "--weights committed" ""; R=$?
+audit stratified stratified-$RULE "--weights committed" ""; R=$?
 echo "LAW the zero-knowledge audit's proved statement covers a subset design, so the accept is under $RULE, a subset draw over one stratum; the audit under a rated law waits on its claim"
 echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
 ML=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))["audit"].get("members_lean") or {}; print("ok" if m.get("ran") is True and m.get("ok") is True else "no: "+json.dumps(m)[:300])' "$B/honest/summary.json" 2>/dev/null)
@@ -84,4 +85,4 @@ if [ $OK = 0 ]; then
 else
   echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H members_lean ${ML:-?}"
 fi
-[ $OK = 0 ] && [ $F = 0 ]
+[ $OK = 0 ] && [ $G = 0 ] && [ $F = 0 ] && [ $U = 0 ] && [ $R = 0 ]

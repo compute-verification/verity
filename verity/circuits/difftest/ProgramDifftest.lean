@@ -2,6 +2,7 @@ module
 
 public import Difftest
 public import Base.Bytes
+public import Circuits.Encode
 public import Circuits.Program
 
 /-!
@@ -11,7 +12,8 @@ public import Circuits.Program
 `codec.decode_program` is held to it on the format's vectors (`tests/tools/difftest/test_program_decode_port.py`, its cases
 `tests/verity/circuits/decode_difftest.py`'s). `decode` reads `{"descriptor": TEXT}` and answers
 `{"ok": true, "program_digest": HEX, "boolean": MAP}` or `{"ok": false, "error": CODE}`, CODE the refusal's first `E_` code
-or null: a refusal is an output, so which refusal is compared, and not only the fact of one. -/
+or null: a refusal is an output, so which refusal is compared, and not only the fact of one. `encode` answers with
+`Flock.Program.Prog.encode` of the decoded Program, which the same test holds to `codec.descriptor_chunks` byte for byte. -/
 
 @[expose] public section
 
@@ -59,7 +61,18 @@ def decodeWithText : Difftest.Fn := fun j => do
         ("boolean", Json.mkObj ((P.boolean.toList.mergeSort (fun a b => a.1 ≤ b.1)).map fun (k, v) => (k, Json.str v)))]
     | .error e => Json.mkObj [("ok", false), ("message", Json.str e)]
 
+/-- `encode` of what `decode` reads: `{"ok": true, "encoded": TEXT}`, or `{"ok": false, "message": TEXT}`. -/
+def encode : Difftest.Fn := fun j => do
+  let text ← match j.getObjValAs? String "descriptor" with
+    | .ok s => pure s
+    | .error _ => throw "descriptor: not a string"
+  return match Flock.Program.decode text.toUTF8 >>= Flock.Program.Prog.encode with
+    | .ok b => match String.fromUTF8? b with
+      | some s => Json.mkObj [("ok", true), ("encoded", Json.str s)]
+      | none => Json.mkObj [("ok", false), ("message", "encode: not UTF-8")]
+    | .error e => Json.mkObj [("ok", false), ("message", Json.str e)]
+
 def table : String → Option Difftest.Fn :=
-  Difftest.table [("decode", decode), ("decode_text", decodeText), ("decode_with", decodeWithText)]
+  Difftest.table [("decode", decode), ("decode_text", decodeText), ("decode_with", decodeWithText), ("encode", encode)]
 
 end ProgramDifftest

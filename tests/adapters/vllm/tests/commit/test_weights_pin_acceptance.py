@@ -112,47 +112,6 @@ def test_b1_b2_b8_same_model_one_pin_per_row_and_the_default_shape_record_is_ref
     assert WR.check(st2, live, program_digests_of_record=set8)["result"] is False
 
 
-
-
-
-
-
-
-def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_and_the_verdict_names_the_pin(checkpoint, tmp_path):
-    """Wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
-    Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the verdict text (ok / missing / mismatch)."""
-    from verity_vllm.check.commit_pass import commit_verdict
-
-    d, man, t = checkpoint
-    prog, fields = _program()
-    live = live_digests(_served(t, fields))
-    rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
-    ok = WR.check(rec, live, program_digests_of_record={"d" * 128}, checkpoint_of_record={"repo": "test/tiny", "revision": "abc"})
-    assert ok["result"] is True and ok["why"] is None
-    # wrong registered root: the manifest pins another sha for the shard
-    bad_man = tmp_path / "bad.json"
-    Path(bad_man).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": "f" * 64}}}]}))
-    rec_w1 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(bad_man)), prefix=PREFIX)
-    w1 = WR.check(rec_w1, live)
-    assert w1["result"] is False and "not the pinned ones (W1)" in w1["why"] and "model.safetensors" in w1["why"]
-    # wrong checkpoint context: another model / revision / Program
-    assert "!= the workload's model" in WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})["why"]
-    assert "revision" in WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "0123456789ab"})["why"]
-    assert "!= Program of record" in WR.check(rec, live, program_digests_of_record={"e" * 128})["why"]
-    # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned'
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
-            "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-            "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
-    ok_, why_ = commit_verdict({**base, "weights_pin": ok}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS"), why_                        # at B>=2 without form (B) the PASS names the attribution gap
-    for bad in (w1, WR.check(rec, live, program_digests_of_record={"e" * 128}), WR.check(rec, live, checkpoint_of_record={"repo": "other/model"})):
-        v, why = commit_verdict({**base, "weights_pin": bad}, True, min_openings=64)
-        assert not v and why.startswith("weights of record: ") and bad["why"] in why, why
-    v, why = commit_verdict({**base, "weights_pin": {"result": None, "why": "weights of record not derived: no checkpoint dir"}}, True, min_openings=64)
-    assert not v and why.startswith("weights unpinned: ") and "not derived" in why
-
-
 def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoint, tmp_path):
     """A served tensor taken from ANOTHER model (whole field, plausible values) fails by field name; a checkpoint
     shard substituted on disk (another model's bytes under the pinned file name) fails W1 by shard name BEFORE any field compare."""

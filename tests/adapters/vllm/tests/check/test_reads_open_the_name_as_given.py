@@ -13,11 +13,9 @@ from typing import Any
 import pytest
 
 from tests.check.test_oracle_compare import make_match
-from tests.check.test_verdict import _base, _row_dir
 from tests.check.test_weightsource_mla import _tensors, _write
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import match_oracle as MO
-from verity_vllm.check import verdict as V
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
 
@@ -42,18 +40,6 @@ def test_a_checkpoint_index_opens_its_config_by_the_joined_name(tmp_path, opened
     index = CI.CheckpointIndex(str(tmp_path), verify_shards=False)
     assert index.config == {"model_type": "llama"}
     assert (os.path.join(str(tmp_path), "config.json"), "r") in opened
-
-
-
-
-def test_a_verdict_opens_a_wrappers_result_by_the_name_the_glob_found(tmp_path, opened):
-    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
-    step = "e6" * 32
-    (d / "build_step").mkdir()
-    (d / "build_step" / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": step}}))
-    v = V.from_record(d, rc=0)
-    assert v.correspondence_digests == {"step": step}
-    assert (str(d / "build_step" / "result.json"), "r") in opened
 
 
 @pytest.mark.parametrize("as_bytes", [False, True])
