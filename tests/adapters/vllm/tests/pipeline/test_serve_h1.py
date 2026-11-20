@@ -762,7 +762,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_sampled_r
     want = set()
     for u in units:
         call = next(r for r in record["calls"] if r["base"] <= u < r["base"] + r["units"])
-        i, op = (u - call["base"]) // (call["n"] // 32), sites[(call["step"], call["module"])]
+        i, op = (u - call["base"]) // (call["n"] // 32), sites.get((call["step"], call["module"]))
         lo, hi = 32 * i, min(32 * (i + 1), len(values[(call["step"], f"{op}/0")]) // call["k"])
         if hi > lo:
             want |= {(call["step"], f"{op}/0", lo * call["k"], hi * call["k"]), (call["step"], f"{op}/1", lo * 4, hi * 4)}
