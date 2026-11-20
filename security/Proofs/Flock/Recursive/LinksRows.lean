@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.C3.Reps.LigNames
+public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.OpenedDecode
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.VStarPartsB
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.VBridge.Family.Setup
 public import Proofs.Flock.Recursive.LinksBind
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,9 +43,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Recursive.LinksOuter

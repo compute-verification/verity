@@ -132,7 +132,6 @@ def classOf (mj : Json) (tables : List (String × ByteArray)) : V (Class × Circ
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
-  if ul.own != .derive then throw "META: the unit's layout is not derived"
   if (← J.str mj "policy" ctx) != POLICY then throw s!"META: policy is not {POLICY}"
   if !(← J.arr mj "unit_in" ctx).isEmpty then
     throw "META: unit_in binds the unit's inputs to constants, which this verifier does not derive yet"

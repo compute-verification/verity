@@ -672,14 +672,13 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
     return out
 
 
-def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program | None = None,
-           query: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
+           query: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
-    the output ports it has no root of (`OneStageZk.ownFieldsOf`), and the docket's scheme; with the verifier's
-    `program` and `query`, each wired port at its writer's tree (`_wired`, Lean's `fieldRoots`), which no slice gives
-    without them. `population_why` holds a member's
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, and each wired port at its
+    writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
@@ -687,9 +686,7 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     try:
         _laid(ms, record)
         roots, ft = _members_roots(ms, record)
-        if program is not None:
-            desc = json.loads(json.dumps(codec.encode_program(program)))
-            roots = _wired(program, query or {}, desc, ms, record, roots, ft)
+        roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft)
     except _Refused as e:
         raise ValueError(str(e)) from None
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
@@ -954,7 +951,8 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
         try:
             decoded = decoded or OC.Decoded(descriptor)
             c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
-                         cut=OC.cuts(descriptor, partition, decoded))
+                         cut=OC.cuts(descriptor, partition, decoded),
+                         formed=OC.formed_in(decoded, partition, m["units"]))
         except (OC.NotDerived, OC.Refused) as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"

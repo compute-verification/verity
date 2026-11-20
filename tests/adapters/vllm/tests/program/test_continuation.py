@@ -10,8 +10,8 @@ import itertools
 
 import pytest
 
-from verity_vllm.program.lifting import continuation as K
-from verity_vllm.program.lifting import lifted_records
+from verity_vllm.check.replay import continuation as K
+from verity_vllm.check.replay import lifted_records
 
 EOS = (17,)
 ORD = 5  # an ordinary (non-EOS) token id

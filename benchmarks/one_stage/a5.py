@@ -649,8 +649,9 @@ def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
     `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
     block. ``decoded``: C decoded once for every member."""
     decoded = decoded or OC.Decoded(c)
-    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k, decoded), decoded), part, lambda: lower,
-                    cut=OC.cuts(c, part, decoded))
+    units = OC.block(c, part, k, decoded)
+    text = OC.lower(OC.restrict(c, part, units, decoded), part, lambda: lower, cut=OC.cuts(c, part, decoded),
+                    formed=OC.formed_in(decoded, part, units))
     circuit = st_dir / "circuit.txt"
     circuit.write_bytes(text)
     circ = FI.flock_circuit(text)
@@ -1344,8 +1345,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
-    if isinstance(pm, dict):
-        members_lean(out, result)
+    members_lean(out, result, pm)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1421,6 +1421,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
+    summary["audit"]["members_lean"] = result["checks"]["members_lean"]
     if "registered_reads" in result:
         summary["audit"]["registered_reads"] = result["registered_reads"]["ok"]
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
@@ -1541,27 +1542,40 @@ def case_written(out: Path) -> dict:
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
-def members_lean(out: Path, result: dict, check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+def members_lean(out: Path, result: dict, pm: dict | str | None,
+                 check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
     """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
-    verdict ``result["checks"]["members_lean"]``: the audit accepts only where Lean accepts too, and where Lean and the
-    Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its detail both texts."""
+    verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
+    where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
+    detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
+    verdict and says why under ``reason``; one whose case Lean could not read is refused."""
+    checks = result.setdefault("checks", {})
+    if not isinstance(pm, dict):
+        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
+        return
     case = out / "case-v2.json"
     try:
-        verdict, why = check(json.loads(case.read_text())) if case.is_file() else ("reject", case_written(out)["why"])
+        if not case.is_file():
+            raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
+        verdict, why = check(json.loads(case.read_text()))
     except MB.LeanError as e:
-        verdict, why = "undecided", str(e)
-    checks = result.setdefault("checks", {})
+        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
+        result["accepted"] = False
+        return
     failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))
     python = bool(result.get("accepted"))
     ok = verdict == "accept"
     codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
-    checks["members_lean"] = {"ok": ok and python, "codes": codes, "detail": {
+    checks["members_lean"] = {"ok": ok and python, "ran": True, "codes": codes, "detail": {
         "lean": {"verdict": verdict, "reason": why},
         "python": {"accepted": python, "failed": failed}}}
     if not ok:
         result["accepted"] = False
 
 
+#: why an audit with no per-member case has no `members_lean` verdict where `members_proof` gives no reason
+ONE_MEMBER = ("a window of one member: its case is the one-statement form's (`v2_proof`), which Lean decides by "
+              "checkAt, not checkMembersAt")
 #: the code of an audit whose Python verdict and Lean's `checkMembersAt` on its per-member case differ
 MEMBERS_DISAGREE = "members-lean-python-disagree"
 
@@ -2530,7 +2544,7 @@ def main() -> int:
     try:
         LV.command(of(__file__).raw(LV.ENV), (1,), 1)
     except LV.Refused as e:
-        ap.error(f"{e} (two levels: two_stage.py)")
+        ap.error(LV.TWO_LEVELS_REFUSED if e.reason == "levels-no-path" else str(e))
     if not (a.bundle and a.row_dir and a.window):
         ap.error("give --bundle, --row-dir and --window (a deferred Commit's)")
     a.coins, a.rule, a.window_root, a.plain = None, None, None, False
