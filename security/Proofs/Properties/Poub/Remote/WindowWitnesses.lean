@@ -42,17 +42,19 @@ theorem sampleUnits_empty : Spot.Draw.sampleUnits (.subset 1) 1 ByteArray.empty 
 theorem receiptSample_empty : receiptSample 1 ByteArray.empty #[1] = none := by
   unfold receiptSample receiptSampleRead
   simp [sampleUnits_empty]
+  rfl
 
 theorem sampleValues_empty (us : Array ℕ) : ¬ SampleValues 1 1 ByteArray.empty us := by
   rintro (⟨h, -⟩ | ⟨-, read, h⟩)
   · exact absurd h (by decide)
   · rw [show min 1 1 = 1 from rfl, sampleUnits_empty] at h
-    exact Except.noConfusion h
+    cases h
 
 /-- `RecordAccepts`'s window 0 under challenge `zeros 64`. -/
 def window0 : WindowRecord := window1 reg1 (zeros 64) (root1 reg1 (seed (zeros 64) 0 reg1.digest))
 
-theorem window0_lengths : window0.passes.map (·.plan.length) = #[1] := rfl
+theorem window0_lengths : window0.passes.map (·.plan.length) = #[1] := by
+  simp [window0, window1, plan_length]
 
 theorem verifyWindow_one : verifyWindow reg1 #[] window0 (zeros 128) 1 #[opening1 reg1 (zeros 64)] = some .accept := by
   have hs : receiptSample 1 (zeros 128) (window0.passes.map (·.plan.length)) = some #[(0, 0)] := by
@@ -77,7 +79,7 @@ window's one receipt, which a verifier that accepted every window would accept. 
 theorem acceptChecksOpenings_nontrivial : ∀ sampled, ¬ receiptSample 1 ByteArray.empty #[1] = some sampled := by
   intro sampled h
   rw [receiptSample_empty] at h
-  exact Option.noConfusion h
+  cases h
 
 /-- **`AcceptOpensSamples`' premise holds at the one-block registration** (`acceptChecksOpenings_honest`). -/
 theorem acceptOpensSamples_honest :
@@ -147,7 +149,9 @@ namespace Shared
 window 0 draws that window's one receipt on 128 zero bytes. -/
 theorem acceptSamplesOpenable_honest :
     ∃ (coin : ByteArray) (sampled : Array (ℕ × ℕ)), receiptSample 1 coin (lengthsOf [window0]) = some sampled :=
-  ⟨zeros 128, #[(0, 0)], by rw [show lengthsOf [window0] = #[1] from rfl]; exact receiptSample_one⟩
+  ⟨zeros 128, #[(0, 0)], by
+    rw [show lengthsOf [window0] = #[1] by simp [lengthsOf, window0, window1, plan_length]]
+    exact receiptSample_one⟩
 
 /-- **`Shared.AcceptSamplesOpenable` fails without the draw.** On no bytes no values among one receipt are the
 draw's. -/
