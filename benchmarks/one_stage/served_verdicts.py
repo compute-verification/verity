@@ -728,14 +728,22 @@ def publish(out: Path, private: Path) -> list[str]:
 PADDED = ("binding.advice.bits", "rows")
 
 
+def _no_digest(compiler: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: _no_digest(v) if isinstance(v, Mapping) else v for k, v in compiler.items() if k != "digest"}
+
+
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     """What the run publishes of a window's advice registration: its compiler's ``cap_bits`` in place of the advice's
     length (`PADDED`), the one length the class declares (its rows at ``row_bits`` each), which hides nothing while the
     advice is committed at its own row count; no count or refusal of its requests, no window's number (`public_json`),
-    and the rest as registered. ``padded`` names the fields replaced."""
+    no digest of its compiler, which is built from the description and so tells descriptions apart, and the rest as
+    registered. ``padded`` names the fields replaced."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
     out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
+    out["compiler"] = _no_digest(reg["compiler"])
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
+    if isinstance(reg["binding"].get("compiler"), dict):
+        out["binding"]["compiler"] = _no_digest(reg["binding"]["compiler"])
     out["rows"] = -(-cap // row_bits)
     return public_json({**out, "padded": list(PADDED)})
 

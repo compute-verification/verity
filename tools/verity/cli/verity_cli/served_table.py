@@ -454,9 +454,21 @@ class Piece:
                               "carries_coins": c.carries_coins} for c in m.channels if role in (c.sender, c.receiver)]}
 
 
+def row_id(model: str, precision: str, slots: int) -> str:
+    """The served window's row name, a rule over what the window declares and nothing it was built or traced from: the
+    model's and the precision's names lowercased with each run of other characters one hyphen, then the window's request
+    slots, ``<model>__<precision>__s<slots>``. The same three give the same name and a change in any one changes it."""
+    names = [re.sub(r"[^a-z0-9]+", "-", x.lower()).strip("-") for x in (model, precision)]
+    if not all(names) or type(slots) is not int or slots < 1:
+        raise Refused("workload", f"a row is named by a model and a precision with a letter or digit and a positive number "
+                                  f"of slots, not {model!r}, {precision!r}, {slots!r}")
+    return f"{names[0]}__{names[1]}__s{slots}"
+
+
 def _serve(cfg, params, bound, pinned):
     w = cfg["workload"]["params"]
     return {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
+            "ROW_ID": row_id(w["model"], w["precision"], w["slots"]),
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
 
 
@@ -500,6 +512,8 @@ def _serve_challenger(cfg: Mapping[str, Any], state: Path, machines: Sequence[st
     main = _first_parent(state)
     public.mkdir(parents=True, exist_ok=True)
     (line := public / "main.txt").write_text("\n".join(main) + "\n")
+    print("verity run: building the Lean verifier and Pearl+'s gate: this takes minutes, and nothing prints until it is done",
+          file=sys.stderr, flush=True)
     p = subprocess.run([sys.executable, str(ROOT / PEARLPLUS_GATE), "init", "--root", str(mine / "pearl-plus")],
                        cwd=ROOT, capture_output=True, text=True, check=False)
     if p.returncode:
@@ -507,6 +521,7 @@ def _serve_challenger(cfg: Mapping[str, Any], state: Path, machines: Sequence[st
     gate = json.loads(p.stdout.strip().splitlines()[-1])
     if gate["pin"] != main[0]:
         raise Refused("challenger", f"Pearl+'s gate pins {gate['pin']}, not the run's commit {main[0]}")
+    print("verity run: making the loopback host's key at the deployed height: this takes minutes", file=sys.stderr, flush=True)
     host = _HOSTS[state] = CP.Host(mine / "sampled-proofs", main, _deployed_local)
     spot = host.start()
     made = {"loopback": spot["address"], "main-file": str(line), "gate": gate["gate"], "peer": gate["peer"],
@@ -829,14 +844,14 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 
 
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
-    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    """The served window's runner with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
+    and no composite unless the caller asks for one (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
     theirs."""
     node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
     env = lean_env({**os.environ, **node, **variables(cfg, bindings)})
-    env |= {**composite(env), "OUT": str(state / "out")}
+    env |= {**composite(env), "OUT": str(state / "out"), "APPLICATION_PROTOCOLS": " ".join(cfg["protocols"])}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
