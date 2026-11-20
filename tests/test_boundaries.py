@@ -1059,9 +1059,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
-    # standin_rows from network attestation's prover: owner network-accounting, gone by 2:00 PM PST Fri 20 Nov (top's
-    # ruling, Fri 20 Nov 9:02 AM PST, TOP-447)
-    "adapters/vllm/verity_vllm/program/predict/close_record.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
 )
 
