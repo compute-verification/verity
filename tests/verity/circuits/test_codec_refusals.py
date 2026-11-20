@@ -13,6 +13,7 @@ import test_format_spec as spec
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.program import Program
+from verity.circuits.types import Array, Value
 
 V32 = spec.V32
 
@@ -99,6 +100,56 @@ def _ret_past_leaves(d: dict) -> None:
     _root(d)["ret"] = {"affine": ["n", 2, 5, 1]}
 
 
+V1, V8 = Value(1), Value(8)
+_Id8 = spec._comp("TId8", (), lambda S: ((("a", V8),), V8), lambda B, S, a: a)
+_Bits = spec._comp("TBits16", (), lambda S: ((("a", Array(16, V1)),), Array(16, V1)), lambda B, S, a: a)
+
+
+@functools.cache
+def _recut(name: str) -> str:
+    if name == "byte":
+        f = spec._comp("TRecutByte", (), lambda S: ((("x", V8), ("w", spec.V16)), V8), lambda B, S, x, w: B.call(_Id8, x))
+    else:
+        f = spec._comp("TRecutBits", (), lambda S: ((("b", Array(16, V1)), ("w", Array(16, spec.V16))), Array(16, V1)),
+                       lambda B, S, b, w: B.call(_Bits, b))
+    return json.dumps(json.loads(spec._canon(codec.encode_program(Program(f)))))
+
+
+def byte() -> tuple[dict, DefinitionTable]:
+    """The root: node 0 the 8-bit input, node 1 the 16-bit input, node 2 `TId8` (an 8-bit parameter) on node 0."""
+    return json.loads(_recut("byte")), spec.REG
+
+
+def bits() -> tuple[dict, DefinitionTable]:
+    """The root: node 0 a batch of 16 1-bit inputs, node 1 a batch of 16 16-bit inputs, node 2 `TBits16` (16 1-bit values)
+    on node 0."""
+    return json.loads(_recut("bits")), spec.REG
+
+
+def _reads_input(d: dict) -> None:
+    """Node 2 reads node 1, the 16-bit input, in honest order: a recut read, which the recut checks decide."""
+    a = _node(d, 2)["args"][0]
+    a["refs"] = {"affine": ["n", 1, 0, a["refs"]["affine"][3]]}
+
+
+def _reads_later_input(d: dict) -> None:
+    """The same read with the 16-bit input moved after its reader: node 1 reads node 2."""
+    body = _root(d)
+    reader, inp = body["nodes"][2], body["nodes"][1]
+    n = reader["args"][0]["refs"]["affine"][3]
+    reader["args"][0]["refs"] = {"affine": ["n", 2, 0, n]}
+    body["nodes"][1:] = [reader, inp]
+    body["ret"] = {"affine": ["n", 1, 0, n]}
+
+
+#: (label, the honest descriptor, the read in honest order, the same read naming a later node, the honest read's outcome: the
+#: decoder's recut refusal, or the recut it records)
+FORWARD = [("an 8-bit parameter reading a later 16-bit input", byte, _reads_input, _reads_later_input,
+            "recut-boundary: {'affine': ['n', 1, 0, 1]} reads an input node of 16-bit "
+            "leaves in 8-bit leaves other than whole registered leaves"),
+           ("a batch of 1-bit values reading a later batch of 16-bit inputs", bits, _reads_input, _reads_later_input, {1: 16})]
+
+
 #: (the codec.py clause, the descriptor builder, its tampering, the refusal's text)
 DECODER = [
     ("E_SCHEMA v1", tiny, lambda d: d.update(schema=codec.SCHEMA_V1), "E_SCHEMA: a verity-ir/descriptor/v1 descriptor holds no Boolean bodies"),
@@ -135,6 +186,10 @@ DECODER = [
      f"definition '{STAND_IN}' node 0: grid-overrun: references {{'grid': [2, [['p', 0, 40, 1, [[2, 4]]], ['p', 0, 2, 1, [[2, 4]]]]]}} "
      "reach outside a lane's parameter or node"),
     ("a return reference past its collection", tiny, _ret_past_leaves, f"definition '{ROOT}' ret: references {{'affine': ['n', 2, 5, 1]}} name no leaf of a parameter or a node"),
+    ("an 8-bit parameter reading a later 16-bit input", byte, _reads_later_input,
+     "definition 'Root[TRecutByte_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
+    ("a batch of 1-bit values reading a later batch of 16-bit inputs", bits, _reads_later_input,
+     "definition 'Root[TRecutBits_v1]_v1' node 1: " + codec.forward_refusal(1, 2)),
     ("an alias to no earlier node", tiny, _alias_forward,
      f"definition '{ROOT}' node 2: alias to argument 0 of node 2: aliases name an argument of an earlier node"),
     ("an argument unlike the callee's parameter", tiny, lambda d: _node(d, 2)["args"][0].update(type=_type_at(d, ["Value", 16])),
@@ -167,6 +222,20 @@ def test_the_decoder_refuses(make, edit, text):
     with pytest.raises(ValueError) as e:
         codec.decode_program(d, registry)
     assert str(e.value).startswith(text), str(e.value)
+
+
+@pytest.mark.parametrize("make,honest,outcome", [(c[1], c[2], c[4]) for c in FORWARD], ids=[c[0] for c in FORWARD])
+def test_the_same_read_in_honest_order_meets_the_recut_checks(make, honest, outcome):
+    """The forward cases' controls: read in honest order, the 16-bit input is recut, and the decoder's recut checks refuse
+    the read or record the recut (`Body.recut`) for the checks after it, both of which the read naming a later node escaped."""
+    d, registry = make()
+    honest(d)
+    if isinstance(outcome, str):
+        with pytest.raises(ValueError) as e:
+            codec.decode_program(d, registry)
+        assert str(e.value) == outcome
+    else:
+        assert codec.decode_program(d, registry).root.body.recut == outcome
 
 
 def _entry(d: dict) -> dict:

@@ -85,9 +85,8 @@ def check_qcall(a, out, bad):
         path.write_text(json.dumps(d, separators=(",", ":"), sort_keys=True))
         got = qcall(a, path)
         n += 1
-        vv = got.get("evaluation", {}).get("verify", {})
-        if not got["ok"] or vv.get("codes") != want["codes"] or vv.get("inapplicable") != want["detail"]:
-            bad.append(("order refusal", label, vv or got.get("error")))
+        if got["ok"] or want["refused"] not in got.get("error", ""):
+            bad.append(("order refusal", label, got.get("error")))
     return n
 
 

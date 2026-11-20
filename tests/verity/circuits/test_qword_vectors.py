@@ -358,9 +358,9 @@ def build() -> dict:
     for label, name, key, node, arg, refs in ORDER:
         d = json.loads(_canon(PROGRAMS[name]))
         d["definitions"][key or d["root"]]["body"]["nodes"][node]["args"][arg]["refs"] = refs
-        D = codec.decode_program(d, reg)
-        v = PO.verify(PO.build(D), D)
-        order.append([label, name, key, node, arg, refs, {"codes": list(v.codes), "detail": v.detail.get("query-inapplicable", {}).get("gates")}])
+        with pytest.raises(ValueError) as e:
+            codec.decode_program(d, reg)
+        order.append([label, name, key, node, arg, refs, {"refused": str(e.value)}])
     other = copy.deepcopy(PO.build(decoded["narrow"]))
     other["program"] = "f" * 128
     refused.append(["another program", "narrow", 16, 32, _codes(PO.verify(other, decoded["narrow"]))])
@@ -449,10 +449,10 @@ def test_verify_refuses(live, n):
     assert not VECTORS["verify_refusals"][n][4]["ok"]
 
 
-def test_every_query_refuses_a_program_that_is_not_topological(live):
+def test_the_decoder_refuses_a_program_that_is_not_topological(live):
     assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
-    for _l, _n, _k, _node, _a, _r, v in VECTORS["order_refusals"]:
-        assert v["codes"] == ["query-inapplicable"] and v["detail"][0]["why"] == "not topological"
+    for _l, _n, _k, node, _a, _r, v in VECTORS["order_refusals"]:
+        assert f"node {node}: forward-reference: node {node} reads node " in v["refused"]
     reg = registry()
     for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
         assert PO.order_violation(codec.decode_program(json.loads(text), reg)) is None, name

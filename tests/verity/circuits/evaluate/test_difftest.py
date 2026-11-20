@@ -321,7 +321,7 @@ def _gate_node(desc: dict) -> dict:
 
 
 def _forward(desc: dict) -> None:
-    """The root's first gate reads the root's last node, which decodes (PROTOCOL.md §4.4) and is computed after it."""
+    """The root's first gate reads the root's last node, which is computed after it: both decoders refuse it (PROTOCOL.md §4.4)."""
     nodes = _root_nodes(desc)
     a = _gate_node(desc)["args"][0]
     assert nodes.index(_gate_node(desc)) < len(nodes) - 1

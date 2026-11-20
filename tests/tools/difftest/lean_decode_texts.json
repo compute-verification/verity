@@ -1,4 +1,5 @@
 {
+ "control: an 8-bit parameter reading a later 16-bit input": "recut-boundary: {'affine': ['n', 1, 0, 1]} reads an input node of 16-bit leaves in 8-bit leaves other than whole registered leaves",
  "lean refusal: a batch calling with arguments short": "definition 'Root[TProg_v1]_v1' node 4: batch TRow_v1{N=4,OP={\"fn\":\"TAdd32_v1\"},C={\"f64\":\"0x1.8000000000000p+0\"},D={\"dict\":{\"a\":[1,\"x\"],\"k\":2}}}: expected 2 arguments, got 1",
  "lean refusal: a batch of two mapped lengths": "definition 'Root[TProg_v1]_v1' node 4: reference count 8 does not match type [\"Array\",3,[\"Array\",4,[\"Value\",32]]] (12 leaves)",
  "lean refusal: a batch of two mapped lengths of members of the parameters' types": "definition 'Root[TProg_v1]_v1' node 4: batch TRow_v1{N=4,OP={\"fn\":\"TAdd32_v1\"},C={\"f64\":\"0x1.8000000000000p+0\"},D={\"dict\":{\"a\":[1,\"x\"],\"k\":2}}}: mapped axes have different lengths #[2, 3]",
@@ -94,6 +95,7 @@
  "refusal: a Boolean key that is no word primitive": "E_BODY_KEY: `boolean` names [Root[TTiny_v1]_v1], which are no word primitive among `definitions`",
  "refusal: a Boolean map that is no object": "E_BODY_KEY: `boolean` is not an object of descriptor ids",
  "refusal: a batch node with a malformed axis": "definition 'Root[TTiny_v1]_v1' node 0: batch counts",
+ "refusal: a batch of 1-bit values reading a later batch of 16-bit inputs": "definition 'Root[TRecutBits_v1]_v1' node 1: forward-reference: node 1 reads node 2, which is not before it; a node reads the body's parameters and earlier nodes only",
  "refusal: a callee index outside the table": "callees index 99 outside 0..2",
  "refusal: a composite id of another version spelling": "definition 'Root[TTiny_v1]_v1': form 'composite', id 'Root[TTiny_v1]_v01' (a composite's id is Name_vN)",
  "refusal: a composite id that is not Name_vN": "definition 'Root[TTiny_v1]_v1': form 'composite', id 'Root[TTiny_v1]_v1x' (a composite's id is Name_vN)",
@@ -113,6 +115,7 @@
  "refusal: a type index outside the table": "types index 99 outside 0..3",
  "refusal: a type of the table that is no type": "type [\"Value\",\"x\"]: Value<w> needs a positive int width",
  "refusal: a word primitive with no Boolean body": "E_BODY_MISSING: the word primitives [TAdd32_v1] have no Boolean body in `boolean`",
+ "refusal: an 8-bit parameter reading a later 16-bit input": "definition 'Root[TRecutByte_v1]_v1' node 1: forward-reference: node 1 reads node 2, which is not before it; a node reads the body's parameters and earlier nodes only",
  "refusal: an alias to no earlier node": "definition 'Root[TTiny_v1]_v1' node 2: alias to argument 0 of node 2: aliases name an argument of an earlier node",
  "refusal: an argument unlike the callee's parameter": "definition 'Root[TTiny_v1]_v1' node 2: call TAdd32_v1: argument 'a' has type [\"Value\",16], expected [\"Value\",32]",
  "refusal: an input node outside the root": "definition 'StandIn[TAdd32]_v1' node 0: call Input32_v1: expected 0 arguments, got 1",
