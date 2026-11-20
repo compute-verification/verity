@@ -1,7 +1,7 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network attester's scan
-state read a lane (`ScanSlots_v4`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
+state read a lane (`ScanSlots_v5`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
 round). Ingress schema v1 likewise: its encoder's JSON in whole blocks, `IngressSampled_v1` as `sampled_reference` in and out of
 the schema, and the statics it refuses."""
@@ -169,7 +169,7 @@ def _scan(fn, state) -> list[int]:
 
 
 def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_packed():
-    """`ScanSlots_v4` at each lane of a 40-word row with two: random rows give `scan_reference`'s lane, and a row packed
+    """`ScanSlots_v5` at each lane of a 40-word row with two: random rows give `scan_reference`'s lane, and a row packed
     field by field (occupancy, lp, max_tokens, and ids at `position`'s index, K0 = 2 in the first cell and K = 3 in each
     later one) gives each lane's binding its first position's `TokenFeed_v1{FIRST}` on its row (ids cut to IDB bits), its
     occupancy word and its head, at the prompt lengths where the decrement's borrow runs furthest (0, 1, 2^31 and
@@ -178,7 +178,7 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     OCC, LP, MAX, IDS = (3, 300), (40, 340), (80, 380), (120, 420)
     sts = [{"NS": NS, "NP": NP, "IDB": IDB, "K0": K0, "K": K, "OCC": o, "LP": lp, "MAX": m, "IDS": i}
            for o, lp, m, i in zip(OCC, LP, MAX, IDS)]
-    fns = [bind(BX.ScanSlotsV4, **st) for st in sts]
+    fns = [bind(BX.ScanSlotsV5, **st) for st in sts]
     assert [BX.scan_bits(SimpleNamespace(**st))[0].counts["and"] for st in sts] == [30, 30]
     state = np.random.default_rng(1).integers(0, 1 << 16, size=(3, NS), dtype=np.uint64)
     for i in range(3):
@@ -197,7 +197,7 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": 16 * NS - IDB}, {"IDB": 33}, {"OCC": (3,)}):
         with pytest.raises(ValueError, match="refuses this binding"):
-            bind(BX.ScanSlotsV4, **{**sts[0], **bad})
+            bind(BX.ScanSlotsV5, **{**sts[0], **bad})
 
 
 @pytest.mark.parametrize("KO", [1, 2, 5])
