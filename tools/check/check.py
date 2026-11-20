@@ -1929,9 +1929,6 @@ AFTER_LEAN = SUITES.AFTER_LEAN
 #: no suite's key holds a variable; a test a variable turns on that this doesn't name, circuit-check's serial-report test of
 #: about 2.5 h, stays off.
 OPT_IN = {
-    "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
-        "test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-        "test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
     "adapters/vllm/verity_vllm/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (

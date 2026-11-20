@@ -91,7 +91,7 @@ owner = "compute-accounting"
 [[distribution]]
 directory = "verity/protocols/resource_accounting/compute/pouw/prover/lowering"
 owner = "compute-accounting"
-reason = "H1's lowering (`h1unit.py`, `stagers.py`, `live.py`) runs Flock's staging (`verity_flock`); goes the day `verity_flock` joins `verity`"
+reason = "H1's lowering (`h1unit.py`, `live.py`) runs Flock's staging (`verity_flock`); goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/resource_accounting/compute/pouw/verifier/receipts"
@@ -319,6 +319,15 @@ paths = [
 
 [[place]]
 paths = [
+    "verity/commitments/cuda/salt_stream",
+]
+loads = [
+    "verity/commitments",
+    "verity/commitments/randomness",
+]
+
+[[place]]
+paths = [
     "verity/commitments/identity",
 ]
 trusted = true
@@ -523,16 +532,12 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py",
-    "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
-    "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
 ]
@@ -546,9 +551,6 @@ loads = [
 ]
 reaches = [
     "verity/circuits",
-]
-loaded_by = [
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
 ]
 
 [[place]]
@@ -583,6 +585,7 @@ loads = [
     "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -595,6 +598,7 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
+    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
@@ -642,7 +646,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/ncp2.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/pc8.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/pearl_plus_tile.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/rowk.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/window_statement.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
@@ -668,8 +671,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled_rows.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
@@ -837,7 +838,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/responder.py",
     "verity/protocols/resource_accounting/memory/pous/prover/setup_proof.py",
     "verity/protocols/resource_accounting/memory/pous/prover/weight_store.py",
-    "verity/protocols/resource_accounting/memory/pous/prover/window.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
@@ -929,8 +929,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/ingress_scan.py",
     "verity/protocols/resource_accounting/network/prover/io_ids.py",
     "verity/protocols/resource_accounting/network/prover/lengths_row.py",
-    "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
-    "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",

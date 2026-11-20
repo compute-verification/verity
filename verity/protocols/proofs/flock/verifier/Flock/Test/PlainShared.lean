@@ -17,6 +17,9 @@ namespace Flock.Test.PlainShared
 
 open ProvedScope
 
+/-- The served statement with public outputs, the form only a superseded version has. -/
+def publicOutputs : Tags := { Tags.circuit with hiddenOutputs := false }
+
 #guard sharedRowsOk Tags.circuit false true
 #guard sharedRowsOk Tags.circuit true true
 #guard sharedRowsOk (Zk.tags Tags.circuit 0 2) true true
@@ -25,7 +28,7 @@ open ProvedScope
 #guard !sharedRowsOk Tags.circuit true false
 #guard !sharedRowsOk Tags.circuitPlainLeaves false true
 #guard !sharedRowsOk Tags.circuitPlainLeaves true true
-#guard !sharedRowsOk Tags.circuit967b8d06 false true
-#guard !sharedRowsOk Tags.circuit967b8d06 true true
+#guard !sharedRowsOk publicOutputs false true
+#guard !sharedRowsOk publicOutputs true true
 
 end Flock.Test.PlainShared

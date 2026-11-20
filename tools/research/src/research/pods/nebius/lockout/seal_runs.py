@@ -289,8 +289,9 @@ def evict(path: str, roots: list[str], min_bytes: int, uid: int = 0, gid: int = 
         print(json.dumps(rep))
         return 0
     t0 = float(m["verified_from"])
+    private = {r.get("path") for r in m.get("refused") or []}                # in no record: the run dir is their only copy
     for rel, (size, sha) in sorted((m.get("files") or {}).items(), key=lambda kv: (-kv[1][0], kv[0])):
-        if size < min_bytes:
+        if size < min_bytes or rel in private:
             continue
         f = p / rel
         if not os.path.lexists(f):

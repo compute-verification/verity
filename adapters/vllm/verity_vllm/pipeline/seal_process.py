@@ -9,7 +9,7 @@ partial dir (`replay_bundle.write_store_files`): the values reach the seal's pro
 memory block is copied for it. It hands the process the rest of what the seal reads, a message at a time
 (`SealProcess.handoff`): per committed step its plan's metas as columns (`PlanMetas.columns`) and the bytes of the port's
 committed positions, and once an execution block the committer's retained ranges, its rows, the step roots and the seal's
-arguments; the required manifest once a run. While the serving process writes, the seal's process builds the binding map and
+arguments, the capture plan and the compiler among them. While the serving process writes, the seal's process builds the binding map and
 runs its checks in `seal_window`'s order; once the files are written, and the memory blocks given back to the pool
 (``written``), it writes the store's ``store.json`` (`store_dump.write_doc`), the context, the manifest, ``runs.jsonl`` and
 ``verdict.json``. A check that fails before the store is written discards the partial dir, which `seal_window` would not
@@ -90,7 +90,6 @@ class SealProcess:
         self.process = ctx.Process(target=_main, args=(child,), name="serve-seal", daemon=True)
         self.process.start()
         child.close()
-        self._manifests: dict[int, Any] = {}             # each manifest sent, by id (held, so no other object takes its id)
         self.pid = self._receive("ready")[1]
 
     def seal(self, com: Any, rc: Any, d: str | os.PathLike, *, extras: Any = None, written: Callable[[], Any] | None = None,
@@ -130,23 +129,20 @@ class SealProcess:
         return {**got[1], "engine_s": {"handoff": round(t_sent - t0, 3), "store_files": round(t_written - t_sent, 3)}}
 
     def handoff(self, com: Any, rc: Any, d: str | os.PathLike, kw: dict[str, Any], t0: float) -> list[tuple]:
-        """The messages that hand the process what the seal reads of ``com`` and ``rc`` beside the store's files: the manifest the
-        first time, the execution block's head, a message per committed step, then ``go``."""
+        """The messages that hand the process what the seal reads of ``com`` and ``rc`` beside the store's files: the execution
+        block's head (the capture plan and the compiler among it), a message per committed step, then ``go``."""
         from verity_vllm.commit import store_dump as SD
         from verity_vllm.commit.committer.plan_cache import PlanMetas
         from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort, committed_raw, served_rows
         from verity_vllm.query.manifest.bind import source_ports
 
-        manifest, sources = getattr(com, "required_manifest", None), getattr(com, "sources", None) or ()
+        plan, sources = getattr(com, "capture_plan", None), getattr(com, "sources", None) or ()
         msgs: list[tuple] = []
-        if manifest is not None and id(manifest) not in self._manifests:
-            self._manifests[id(manifest)] = manifest
-            msgs.append(("manifest", id(manifest), manifest))
         port, fams = SS.port_of(com), sorted(getattr(com, "retain_exclude", None) or ())
         view = {"program_digest": bytes(com.program_digest), "chunk": com.chunk, "name": com.name,
                 "scheme": com.commit_scheme, "retain": getattr(com, "retain", None),
-                "manifest": None if manifest is None else id(manifest), "manifest_path": getattr(com, "required_manifest_path", None),
-                "port": port, "ports": source_ports(sources) if manifest is not None else {},
+                "plan": plan, "compiler": getattr(com, "compiler", None), "aliases": getattr(com, "op_path_aliases", None) or {},
+                "port": port, "ports": source_ports(sources) if plan is not None else {},
                 "has_port": any(isinstance(s, StepInputPort) for s in sources), "rows": served_rows(com)}
         rec = kw["rec"]
         msgs.append(("seal", {"t0": t0, "d": str(d), "view": view, "fams": fams, "held": SD.held_of(com) if fams else None,
@@ -186,7 +182,6 @@ def _main(conn: Any) -> None:
     from verity_vllm.commit.committer.plan_cache import PlanMetas
     from verity_vllm.commit.served_record import ints_of
 
-    manifests: dict[int, Any] = {}
     conn.send(("ready", os.getpid()))
     while True:
         try:
@@ -195,18 +190,15 @@ def _main(conn: Any) -> None:
             return
         if msg[0] == "close":
             return
-        if msg[0] == "manifest":
-            manifests[msg[1]] = msg[2]
-            continue
         head, layouts, positions = msg[1], {}, {}
         while (m := conn.recv())[0] == "layout":
             _kind, s, (form, metas), pos = m
             layouts[s] = PlanMetas.of_columns(metas) if form == "plan" else metas
             positions[s] = None if pos is None else ints_of(*pos)
-        conn.send(_seal(conn, head, layouts, positions, manifests))
+        conn.send(_seal(conn, head, layouts, positions))
 
 
-def _seal(conn: Any, head: dict[str, Any], layouts: dict[int, Any], positions: dict[int, Any], manifests: dict[int, Any]) -> tuple:
+def _seal(conn: Any, head: dict[str, Any], layouts: dict[int, Any], positions: dict[int, Any]) -> tuple:
     """One execution block's seal in the process, its store's files written by the serving process: ``("sealed", result)``, else
     ``("error", what was raised, whether the store was still to be written)``, or ``("unstored",)`` when the serving process failed
     to write it and no check failed first."""
@@ -214,7 +206,7 @@ def _seal(conn: Any, head: dict[str, Any], layouts: dict[int, Any], positions: d
     from verity_vllm.pipeline import replay_bundle as RB
 
     v, d, fams, held = head["view"], Path(head["d"]), set(head["fams"]), head["held"]
-    view = SS.SealView(**{**v, "manifest": manifests.get(v["manifest"])}, layouts=layouts, positions=lambda: positions,
+    view = SS.SealView(**v, layouts=layouts, positions=lambda: positions,
                        unretained=lambda: SD.not_retained_of(fams, int(v["chunk"]), held, layouts) if fams else None)
     stored: list[tuple] = []
 

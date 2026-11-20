@@ -207,25 +207,6 @@ def test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_plat
         select_cuda_platform()
 
 
-ROW_TP2 = "llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager"
-
-
-@pytest.mark.parametrize("rank", [0, 1])
-def test_a_declared_tp2_target_s_rank_build_counts_the_declared_world_not_the_host_s_devices(tmp_path, monkeypatch, vllm_without_nvml, rank):
-    """vLLM's `ParallelConfig` refuses a world larger than `current_platform.device_count()` ("World size (2) is larger than the number
-    of available GPUs (0)"); a declared target of world W is W devices, whatever the Build host shows."""
-    target = parse_target_arg(R.declared_target(_wl(tmp_path), row=ROW_TP2))
-    seen: dict = {}
-    assert _build(tmp_path, monkeypatch, target, tp=2, rank=rank, seen=seen) == "NonNvmlCudaPlatform"
-    assert seen["device_count"] == 2
-
-
-def test_a_tp2_build_without_a_declared_target_counts_the_host_s_devices(tmp_path, monkeypatch, vllm_without_nvml):
-    assert _build(tmp_path, monkeypatch, None, tp=2) == "UnspecifiedPlatform"
-    from vllm.platforms.cuda import CudaPlatform
-    assert CudaPlatform.device_count() == 0, "no declared target: the host's count, as before"
-
-
 ROW_H200 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
 
@@ -239,7 +220,7 @@ def test_a_gpu_free_build_answers_the_device_name_its_row_class_reports(tmp_path
     assert devices.device_name(None) is None and devices.device_name(_wl(tmp_path)) is None, "no row id: no name"
     target = parse_target_arg(json.dumps({"compute_capability": [9, 0], "num_sms": 132}))
     seen: dict = {}
-    _build(tmp_path, monkeypatch, target, tp=8, seen=seen, device_name=devices.device_name(str(wl)))
+    _build(tmp_path, monkeypatch, target, seen=seen, device_name=devices.device_name(str(wl)))
     assert seen["device_name"] == name
 
 
@@ -250,16 +231,16 @@ def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_g
     whose card names it (`TargetProfile.device_name`), so a host with no visible GPU answers vLLM's `get_device_name` (GLM-5.3's
     fused-MoE config lookup) with it, and a target naming no card traces as before."""
     target = {"compute_capability": [9, 0], "num_sms": 132, **({"card": card} if card else {})}
-    phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 8, "rank": 3}, execution="eager")
+    phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 1, "rank": 0}, execution="eager")
     [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi, dsa_table_reads=False),
                              str(tmp_path))
     a = cli.parse("build", cmd[2:])
-    assert json.loads(a.target).get("card") == card and a.workload is None and (a.tp, a.rank, a.dead_free) == (8, 3, True)
+    assert json.loads(a.target).get("card") == card and a.workload is None and (a.tp, a.rank) == (1, 0)
     seen: dict = {}
     _stub_construction(monkeypatch, seen)
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     assert B.main(a) != 2, json.loads(Path(a.out, "result.json").read_text())["message"]
-    assert (seen["platform"], seen["device_count"], seen["device_name"]) == ("NonNvmlCudaPlatform", 8, answered)
+    assert (seen["platform"], seen["device_count"], seen["device_name"]) == ("NonNvmlCudaPlatform", 1, answered)
 
 
 def test_a_card_the_workload_row_s_class_contradicts_is_refused(tmp_path, monkeypatch):

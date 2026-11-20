@@ -17,7 +17,7 @@ RUNNERS = {"served_zk": set(), "hidden_zk": set(), "h1_prove": set(), "h1_lanes"
 #: each directory whose jobs run a Python step that sits beside the runner -> that step's file
 STEP_BESIDE = {"h1_prove": "recorded.py", "h1_lanes": "leaf.py"}
 #: each directory -> how many of its jobs the README describes without a row
-NO_ROW = {"h1_prove": 2}
+NO_ROW: dict[str, int] = {}
 
 
 def jobs(d: str) -> list[str]:

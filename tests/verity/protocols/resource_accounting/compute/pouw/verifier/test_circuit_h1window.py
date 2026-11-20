@@ -361,6 +361,12 @@ def _v1_files(prog, tp, steps: int, window: str, salt: str) -> list[dict]:
     return files
 
 
+def _positionless(file: dict) -> dict:
+    """``file`` as credit builds it (`registered.READS_V2`, Flock's `Registered.FORMAT`): no port states a position."""
+    return {"format": G.READS_V2, "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)}
+                                            for p, e in file["ports"].items()}}
+
+
 def test_a_calls_v1_file_reads_what_its_v0_file_did_at_every_step_count():
     """Registered reads v1 (`registered.READS_V1`, ``reads_from``): over a mixed-K execution phase whose steps each hold several
     calls of one K (each step's A table of K holds each of them, call after call), at every step count that divides
@@ -398,7 +404,7 @@ def test_the_real_32_by_32_window_at_k_448_reads_in_v1_what_it_read_in_v0_and_cr
     assert why is None and program == P.program_digest(prog)
     roots = {v: [r] for v, r in _roots(prog, 2).items()}
     for c, file in enumerate(files):
-        assert Cr.registered_file(program, lay, shape, c, roots, window, 2, salt) == (file, None), c
+        assert Cr.registered_file(program, lay, shape, c, roots, window, 2, salt) == (_positionless(file), None), c
 
 
 def test_a_served_windows_call_tables_bind_its_open_root_and_the_weights_none():
@@ -910,7 +916,7 @@ def test_a_llama_window_at_k_4096_and_14336_reads_each_14336_row_as_its_4_chunk_
         roots, rows = {v: [r] for v, r in _roots(prog, steps).items()}, Cr.table_rows(lay, steps, "")
         assert (rows["a/4096"], rows["a/14336"]) == (sig["a/4096"].n, sig["a/14336"].n)
         for c, file in enumerate(files):
-            assert Cr.registered_file(program, lay, shape, c, roots, window, steps, salt) == (file, None), (steps, c)
+            assert Cr.registered_file(program, lay, shape, c, roots, window, steps, salt) == (_positionless(file), None), (steps, c)
             assert all(rows[v] == n for v, (n, _w) in HW._shapes(prog, c, steps).items() if v in rows), (steps, c)
             assert {f"a_k14336_{i}" for i in range(4 * R)} <= set(file["ports"]) or LLAMA_CALLS[c][0] != "down_proj"
 

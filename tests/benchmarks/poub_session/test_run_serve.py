@@ -245,7 +245,7 @@ class Node:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "RESEARCH_MACHINE": "node",
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
-                "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
+                "GPU_LEASE": str(self.lease), "STUB_LEAN": str(self.lean), "TUNNEL_WAIT_S": "0",
                 "NODE_KIND": "rtx-pro-6000-server-x8"}
         env = {k: v for k, v in (base | env).items() if v is not None}
         return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
@@ -255,9 +255,10 @@ class Node:
         row = {"ROW": ROW, "ROW_FILE": str(self.row)} if serve_as == "row" else {}
         return self.run(**({"ROLE": "both", "SERVE": serve_as, "PORT": str(free_port())} | row | env))
 
-    def calls(self) -> list[str]:
+    def calls(self, lean: bool = False) -> list[str]:
+        """What the stubs were called for, in order; the Lean verifier's build only with ``lean``."""
         f = self.stub / "calls"
-        return f.read_text().splitlines() if f.exists() else []
+        return [c for c in (f.read_text().splitlines() if f.exists() else []) if lean or c != "lean-build"]
 
     def provers(self) -> list[dict]:
         f = self.stub / "prover.jsonl"
@@ -627,7 +628,10 @@ def test_under_role_prover_the_windows_are_checked_only_when_the_line_states_bot
     ({"STAGES": "build,match"}, "refused: STAGES=build,match holds no commit"),
     ({"SERVE": "rows"}, "refused: SERVE is tiny, row or node, not rows"),
     ({"KV_LIB": "/no/such/kv.so"}, "refused: KV_LIB=/no/such/kv.so is not build, cpu or a built kv.cu"),
-    ({"LEAN_EXE": "/no/such/verifier"}, "refused: LEAN_EXE=/no/such/verifier is not an executable"),
+    ({"LEAN_EXE": "/bin/true"}, "refused: LEAN_EXE names a Lean verifier of the caller's"),
+    ({"VERIFIER_ARGS": "--lean-exe /bin/true"}, "refused: VERIFIER_ARGS names --lean-exe"),
+    ({"VERIFIER_ARGS": "--lean-exe=/bin/true"}, "refused: VERIFIER_ARGS names --lean-exe"),
+    ({"VERIFIER_ARGS": "'unclosed"}, "refused: VERIFIER_ARGS is not shell words"),
     ({"VLLM_PY": "/no/such/python"}, "refused: VLLM_PY=/no/such/python is not an executable"),
     ({"GPU_LEASE": "/no/such/gpu-lease"}, "refused: GPU_LEASE=/no/such/gpu-lease is not a program"),
     ({"CODEC": "p512/k2"}, "refused: SERVE=row's Commit registers the deployed p1024/k3/masked, not CODEC=p512/k2"),
@@ -749,12 +753,23 @@ def test_a_failed_build_or_kv_build_ends_before_the_lease_with_its_own_code(node
 
 
 def test_a_failed_lean_build_ends_4_before_the_lease(node):
-    p = node.both("tiny", LEAN_EXE=None)
+    p = node.both("tiny", STUB_LEAN=None)
     assert p.returncode == 4 and "the Lean verifier's build failed" in p.stdout, said(p)
-    assert node.calls() == ["lean-build"]
+    assert node.calls(lean=True) == ["lean-build"]
     (node.stub / "calls").unlink()
-    assert node.both("tiny", LEAN_EXE=None, STUB_LEAN=str(node.lean)).returncode == 0
-    assert node.calls()[:2] == ["lean-build", "verifier"] and f"--lean-exe {node.lean}" in " ".join(node.verifier()["argv"])
+    assert node.both("tiny").returncode == 0
+    assert node.calls(lean=True)[:2] == ["lean-build", "verifier"]
+    assert f"--lean-exe {node.lean}" in " ".join(node.verifier()["argv"])
+
+
+def test_verifier_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
+    """VERIFIER_ARGS reach the verifier as the words they spell, quotes grouping one, and nothing in them runs."""
+    p = node.both("tiny", VERIFIER_ARGS=f"--challenger-ssh '-i KEY HOST' $(touch {tmp_path}/ran)")
+    assert p.returncode == 0, said(p)
+    argv = node.verifier()["argv"]
+    at = argv.index("--challenger-ssh")
+    assert argv[at:at + 4] == ["--challenger-ssh", "-i KEY HOST", "$(touch", f"{tmp_path}/ran)"], argv
+    assert not (tmp_path / "ran").exists()
 
 
 def test_a_verifier_that_never_listens_ends_the_line_before_the_lease(node):

@@ -32,12 +32,15 @@ def test_the_verifiers_protocol_and_assumption() -> None:
 
 
 def test_block_cost_is_the_credits_macs() -> None:
+    """A credited tile, `PearlPlusTileCoreWords_v4`, costs what the verifier credits a whole-width tile: its TR real
+    rows' MACs at K, filler rows crediting none."""
     vr = _verify_run()
     scheme = PearlC()
     tm, tn = scheme.tile
-    record = UnitRecord(Matmul(0, Shape(tm, 1024, tn), 0), real_rows=tm, k_kept=1020)
-    credit = vr.credit_at_assumption([SimpleNamespace(scheme=scheme, records=[record])], 3, Fraction(1, 100))
-    for block in PS.PEARL_PLUS.blocks:
-        assert block.cost({"TM": tm, "TN": tn, "K_KEPT": record.k_kept}) == credit["macs"]
+    (block,) = PS.PEARL_PLUS.blocks
+    for real in (tm, tm - 12):
+        record = UnitRecord(Matmul(0, Shape(tm, 1024, tn), 0), real_rows=real, k_kept=1024)
+        credit = vr.credit_at_assumption([SimpleNamespace(scheme=scheme, records=[record])], 3, Fraction(1, 100))
+        assert block.cost({"K": 1024, "TM": tm, "TR": real, "TN": tn}) == credit["macs"] == real * tn * 1024
     assert Fraction(credit["rho"]) == scheme.cap
     assert {c.bound for c in PS.PEARL_PLUS.charges} <= {*credit, *vr.grid_work(credit, credit)}

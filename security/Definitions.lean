@@ -62,6 +62,7 @@ public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
+public import Definitions.Claims.SamplingLevels
 public import Definitions.Claims.SamplingTwoServedX
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.SamplingTable
@@ -125,6 +126,7 @@ public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
+public import Definitions.Flock.Recursive.Generic
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
 

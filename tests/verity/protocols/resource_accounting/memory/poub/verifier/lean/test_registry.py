@@ -72,7 +72,7 @@ def event_op(take, n: str) -> dict:
 
 def session_op(take, index: int | None) -> dict:
     """A session over the registration sampled `index`-th in the case, or over one given in full that no registry drew;
-    now and then its two windows sampled on one openings coin (`groups_per_coin` 2)."""
+    now and then its two windows sampled on one sample's coins (`groups_per_coin` 2)."""
     windows = take(st.integers(1, 2))
     pace = {"k": take(st.integers(1, 2)), "window_ns": 5} if windows == 2 and rare(take, 4) else None
     g = 2 if windows == 2 and rare(take, 3) else 1

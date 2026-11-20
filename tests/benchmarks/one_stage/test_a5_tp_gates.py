@@ -116,7 +116,7 @@ def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_res
         assert tg != rid and mine[r].work_table == {tg: {"work": 0, "floor": Q * K * T}, rid: {"work": 1, "floor": 1}}
         publics = {m.key: c[r].public_body(k) for k, m in enumerate(mine[r].members)}
         v = V.check(regs[r], mine[r].program, mine[r].query, mine[r].law, AT.CS.SCHEME, AT.CS.expected_ports(mine[r]),
-                    leaf_layer=AT.CS.leaf_layer(publics), work_table=mine[r].work_table)
+                    leaf_layer=AT.CS.leaf_layer(publics), work_table=mine[r].work_table, partition=mine[r].partition)
         assert v.ok, v.codes
         strata = {s["template"]: s for s in D.derive(mine[r].program, mine[r].query, mine[r].law, mine[r].work_table)["strata"]}
         assert strata[tg]["units"] == [[0, Q * K * T]] and strata[tg]["k"] == Q * K * T

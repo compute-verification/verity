@@ -1,20 +1,37 @@
 """The one circuit at the served verifier's door: C_S, which the door derives from C (the registered Program), the
-partition and the block's units (`restrict`), and the holes it does not yet derive, each refusing by name
-(`NotDerived`)."""
+partition and the block's units (`restrict`), its Boolean block circuit, Lean's lowering of C_S (`lower`), and the holes
+it does not yet derive, each refusing by name (`NotDerived`)."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import json
+import subprocess
+import tempfile
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
+from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
+from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
+from verity.circuits.program import input_id
+
+from .certified_rows import _fields
 
 PREFIX = "one-circuit: not derived yet: "
 
 RESTRICT = "restrict : C -> Partition -> Block -> Circuit (C_S, the lowering of the block's Definition in C)"
 
-LOWER = "lower : C_S -> the base argument's circuit (Flock's verifier takes a Boolean block circuit and lowers it to rows)"
+LOWER = "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit"
+
+#: Lean's lowering of C_S (`Flock.Lower.lower`, `Flock.Compose.compose`), a Lake target of Flock's verifier.
+LOWER_EXE = "flock-lower-check"
+#: The prefix of every refusal of `admitted`: `Spot.OneStageZk.NOT_ADMITTED`, word for word.
+NOT_ADMITTED = "lower: not the one form the door lowers (Spot.OneStageZk.admitted)"
+
+#: The templated statement's layout mode (`Flock.Tmpl`'s `iv/hybrid/T`) the door lowers C_S at.
+LAYOUT = "iv/hybrid/4"
 
 Refused = R.Refused
 
@@ -26,18 +43,34 @@ class NotDerived(ValueError):
         super().__init__(PREFIX + what)
 
 
-def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int]]:
-    """Proof block ``k``'s units, the ``k``-th pair of the partition object's ``blocks``, which cover every unit of C's
-    population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks, its
-    blocks end short of or past the population, or has no block ``k``."""
+class Decoded:
+    """C's bytes, decoded at most once (`restrict.program`) for the door's steps on that C."""
+
+    def __init__(self, c: bytes) -> None:
+        self.c, self._D = c, None
+
+    def get(self) -> DecodedProgram:
+        if self._D is None:
+            self._D = R.program(self.c)
+        return self._D
+
+
+def block(c: bytes, partition: Mapping[str, Any], k: int, decoded: Decoded | None = None) -> list[tuple[int, int]]:
+    """Proof block ``k``'s units, the ``k``-th pair of the partition object's one level of ``blocks``, which cover every unit
+    of C's population exactly once (`partition_object.blocks`); `Refused` where the object is not valid, names no blocks or
+    more than one level (`blocks-levels`), its blocks end short of or past the population, or has no block ``k``.
+    ``decoded``: C's, when the caller holds it."""
     v = PO.validate(partition)
     if not v.ok:
         raise Refused("E_PARTITION", f"the partition object is not valid: {list(v.codes)}")
-    bs = PO.blocks(partition)
+    try:
+        bs = PO.blocks(partition)
+    except ValueError as e:
+        raise Refused("E_BLOCKS", str(e)) from e
     if bs is None:
         raise Refused("E_BLOCKS", "the partition object names no blocks")
     try:
-        population = PO.TemplatePartition(R.program(c), partition["query"]).population
+        population = PO.TemplatePartition((decoded or Decoded(c)).get(), partition["query"]).population
     except PO.QueryInapplicable as e:
         raise Refused("E_QUERY", str(e)) from e
     if bs[-1][1] != population:
@@ -47,14 +80,138 @@ def block(c: bytes, partition: Mapping[str, Any], k: int) -> list[tuple[int, int
     return [bs[k]]
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]]) -> bytes:
+def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]],
+             decoded: Decoded | None = None) -> bytes:
     """C_S (`OneStageZk.restrict`): the descriptor bytes of C compacted to the block of ``units`` (ascending ``[lo, hi)``
     ranges of the partition's units), Core's `Circuit.restrict` (`restrict.restrict`); `Refused` where C, the partition
     or the units give no block."""
-    return R.restrict(c, partition, [tuple(u) for u in units]).descriptor
+    return R.restrict(c, partition, [tuple(u) for u in units], D=(decoded or Decoded(c)).get()).descriptor
 
 
-def lower(c_s: bytes) -> bytes:
-    """The base argument's circuit of C_S, the Boolean block circuit (`restrict`): the lowering to rows is the base
-    argument's, and Flock's verifier takes no Boolean block circuit yet."""
-    raise NotDerived(LOWER)
+def _listed(query: Mapping[str, Any]) -> list[Any] | None:
+    """The templates a template query lists; None for another query."""
+    params = query.get("params") or {}
+    if query.get("name") == "Q_template_instance":
+        return [params.get("template")]
+    if query.get("name") == "Q_template_instances" and isinstance(params.get("templates"), list):
+        return list(params["templates"])
+    return None
+
+
+def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None) -> dict[str, dict[str, int]]:
+    """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
+    ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
+    node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
+    divides."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
+    D = (decoded or Decoded(c)).get()
+    try:
+        ranges = PO.TemplatePartition(D, partition["query"]).ranges
+    except PO.QueryInapplicable as e:
+        raise Refused("E_QUERY", str(e)) from e
+    try:
+        return EG.io_cuts(D.desc, ranges)
+    except ValueError as e:
+        if str(e).startswith(PREFIX):
+            raise NotDerived(str(e)[len(PREFIX):]) from e
+        raise Refused("E_LOWER", f"in(S)'s cuts: {e}") from e
+
+
+def _not_admitted(clause: str, detail: str) -> Refused:
+    return Refused("E_LOWER", f"{NOT_ADMITTED}, {clause}: {detail}")
+
+
+def _plain(n: str) -> bool:
+    return bool(n) and not any(c in ",:# \t\r\n" for c in n)
+
+
+def admitted(D: DecodedProgram, partition: Mapping[str, Any],
+             cut: Mapping[str, Mapping[str, int]] | None = None) -> tuple[str, list[tuple[str, int]], list[tuple[str, int]]]:
+    """`Spot.OneStageZk.admitted`: C_S (decoded, ``D``) in the one form the door lowers, as (its template, its input rows,
+    its return fields), each a ``(name, bits)``; `NotDerived` where the partition is no template query, else `Refused`
+    under `NOT_ADMITTED` by the first clause that fails, with Lean's text."""
+    listed = _listed(partition.get("query") or {})
+    if listed is None:
+        raise NotDerived(LOWER)
+    called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+    if len(called) != 1:
+        raise _not_admitted("one-template", f"C_S's root calls [{', '.join(called)}], and a block's units are instances "
+                                            "of one template")
+    key = called[0]
+    if key not in listed:
+        raise _not_admitted("listed", f"C_S's template {key} is not one the partition's query lists")
+    rows, fields = template_form(D, key, (cut or {}).get(key, {}))
+    return key, rows, fields
+
+
+def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    """`admitted`'s clauses from `listed` on, on template ``key`` of ``D`` at its cuts ``ks``: (its input rows, its return
+    fields), or `Refused` by the first clause that fails."""
+    fn = D.defs.get(key)
+    if fn is None:
+        raise _not_admitted("listed", f"C_S's template {key} is no Definition of C_S")
+    params, ret = fn.signature()
+    rows = [r for name, bits in ((name, sum(t.leaf_widths())) for name, t in params)
+            for r in ([(name, bits)] if ks.get(name, 1) <= 1 else
+                      [(f"{name}#{j}", bits // ks[name]) for j in range(ks[name])])]
+    fields = [(f"o{j}", sum(f.leaf_widths())) for j, f in enumerate(_fields(ret))]
+    if bad := next((n for n, _ in params if not _plain(n)), None):
+        raise _not_admitted("port-names", f"C_S's template {key}: parameter '{bad}' is empty or holds ',', ':', '#' or a space")
+    names = [n for n, _ in rows + fields]
+    if twice := next((n for n in names if names.count(n) > 1), None):
+        raise _not_admitted("port-names", f"C_S's template {key}: port {twice} is named twice")
+    try:
+        wide = lift_shape(D.desc, key)[1]
+    except ValueError as e:
+        raise _not_admitted("on-bits", f"the lift to bits refuses C_S's template {key}: {e}") from e
+    if wide:
+        raise _not_admitted("on-bits", f"C_S's template {key} reaches {wide[0]}, whose leaves are not all one bit after "
+                                       "the lift to bits")
+    types = dict(params)
+    for p, k in ks.items():
+        if p not in types:
+            raise _not_admitted("cut-rows", f"C_S's template {key}: a cut names {p}, which is no parameter")
+        t = types[p]
+        if k < 2 or t.leaves == 0 or t.homogeneous_width() is None or t.leaves % k:
+            raise _not_admitted("cut-rows", f"C_S's template {key}: parameter {p} of {t.leaves} leaves cut {k} ways, not "
+                                            "into equal runs of leaves of one width")
+    if not fields:
+        raise _not_admitted("whole-words", f"C_S's template {key} returns no field")
+    for what, rs in (("input row", rows), ("return field", fields)):
+        for name, bits in rs:
+            if bits == 0 or bits % 16:
+                raise _not_admitted("whole-words", f"C_S's template {key}: {what} {name} of {bits} bits is not a positive "
+                                                   "whole number of u16 words")
+    s_in, s_out = sum(b for _, b in rows), sum(b for _, b in fields)
+    n_in, n_out = sum(sum(t.leaf_widths()) for _, t in params), sum(ret.leaf_widths())
+    if (s_in, s_out) != (n_in, n_out):
+        raise _not_admitted("leaves-are-bits", f"C_S's template {key}: rows of {s_in} bits and fields of {s_out}, its "
+                                               f"lift's {n_in} parameter and {n_out} return leaves")
+    return rows, fields
+
+
+def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str], layout: str = LAYOUT,
+          cut: Mapping[str, Mapping[str, int]] | None = None) -> bytes:
+    """C_S's Boolean block circuit: Lean's lowering (`Flock.Lower.lower`, then `Flock.Compose.compose`),
+    `flock-lower-check compose`, the executable ``exe()`` builds, on C_S refused unless `admitted`, at the rows and fields
+    it gives: its input ports the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j``
+    where ``cut`` (`cuts`, C's) gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``,
+    in u16 words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the
+    template's `definition_digest`. `NotDerived` where the partition is no template query, before C_S is read;
+    `Refused` too where the lowering refuses."""
+    if _listed(partition.get("query") or {}) is None:
+        raise NotDerived(LOWER)
+    D = R.program(c_s)
+    key, rows, fields = admitted(D, partition, cut)
+    ins = ",".join(f"{name}:{bits}" for name, bits in rows)
+    outs = ",".join(f"{name}:{bits // 16}" for name, bits in fields)
+    digests = json.dumps({key: definition_digest(D.desc["definitions"][key], D.desc)})
+    with tempfile.TemporaryDirectory(prefix="one-circuit-lower-") as d:
+        src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
+        src.write_bytes(c_s)
+        p = subprocess.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
+                            PO.digest(partition), digests, str(dst)], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
+        return dst.read_bytes()

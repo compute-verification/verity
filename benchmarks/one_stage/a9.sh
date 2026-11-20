@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A9, on a CPU machine: GLM-5.3 TP8 B1's routed-expert GEMMs in the static pair form (a9.py), then the
-# units that fit M0 through the one-stage audit (a11.py --load-values), on hidden_zk's builds as a11.sh runs them. From a clone:
+# units that fit M0 through the one-stage audit (a11.py --load-values), on hidden_zk's builds. From a clone:
 #   A9_MEM_GB=256 bash benchmarks/one_stage/a9.sh
 #   (a job run from a clone of the tree, 32 CPUs, 256 GB, up to 300 min, with a11-values-r0-s01.tar, a9-experts-r0-l3.tar, derive-report.json sent)
 # Inputs: a11_slice.py's value slice (inputs/a11-values*.tar), a11_slice.ckpt_experts' share (inputs/a9-experts*.tar), the

@@ -309,7 +309,11 @@ UNREAD_KEPT = 64
 UNREAD_CAPS = "tools/verity/lean/unread-caps.json"
 CAPS_TEST = "tests/test_lean_packages.py"
 LOCK_CAPS = {"UNWITNESSED": lambda lock: len(lock.get("unwitnessed") or {}),
+             "UNREASONED": lambda lock: sum(isinstance(v, str) or (isinstance(v, dict) and "why" not in v)
+                                            for v in (lock.get("unwitnessed") or {}).values()),
              "INLINE": lambda lock: sum(map(len, ((lock.get("shape") or {}).get("inline") or {}).values()))}
+#: the caps of `LOCK_CAPS` that the lock run lowers and never raises: a count above one fails it
+NEVER_RAISED = ("UNREASONED",)
 #: who a repaired cap's warning names
 CAPS_OWNER = "@lean"
 
@@ -342,7 +346,7 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
     its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
     changes queued still use), and a warning naming each. LookupError when a cap's line is not one dict literal
-    there."""
+    there, and ValueError when a count is above a cap of `NEVER_RAISED`."""
     def literal(name: str) -> tuple[re.Match, dict]:
         if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
             raise LookupError(f"{CAPS_TEST} has no line `{name} = {{...}}` for --bookkeeping warn to hold to the locks")
@@ -353,6 +357,10 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
         got = {p: n for p, lock in sorted(locks.items()) if (n := count(lock)) or p in caps}
         new = dict(caps)
         for p, n in got.items():
+            if name in NEVER_RAISED and n > caps.get(p, 0):
+                raise ValueError(f"{name}[{p!r}] in {CAPS_TEST}: {p}'s lock has {n}, above its cap of {caps.get(p, 0)}, "
+                                 f"and no run raises it: a whole `unwitnessed` exemption is {{type_hash, why}}, its "
+                                 f"owner's reason on soundness's word, never a bare hash")
             held = n if n > caps.get(p, 0) else n + room.get(f"{name} {p}", 0)
             if held != caps.get(p, 0) and (n > caps.get(p, 0) or caps.get(p, 0) > held):
                 new[p] = held
@@ -991,6 +999,12 @@ RECORDS_KEPT = 3
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: `lean_changed.py`'s kept passes under `lean-records/`, not a tree: they have their own cap (`PASSES_KEPT`)
 RECORDS_PASSES = "passes"
+#: `lean_changed.py`'s facts cache under `lean-records/` (`facts_dir`), not a tree: `check.py --facts-from` reads it after
+#: the run that stored it
+RECORDS_FACTS = "facts"
+#: the facts documents `RECORDS_FACTS` keeps, last stored first: a records run stores one per audited package, under a
+#: megabyte gzipped each, so this is some ten runs' worth; one dropped costs that package's audit again
+RECORDS_FACTS_KEPT = 400
 
 
 def build_slots(slots: Path | None = None) -> int:
@@ -1019,7 +1033,7 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
     used = []
     for tree in store.iterdir() if store.is_dir() else ():
         try:
-            if tree.is_dir() and tree.name != RECORDS_PASSES:
+            if tree.is_dir() and tree.name not in (RECORDS_PASSES, RECORDS_FACTS):
                 stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
                 used.append((tree.name in own, max(stamps, default=tree.stat().st_mtime), tree))
         except OSError:
@@ -1039,22 +1053,37 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
     return n
 
 
+def prune_records_facts(cache: Path, kept: int = RECORDS_FACTS_KEPT) -> int:
+    """Remove all but the ``kept`` facts documents of ``cache`` (`lean-records/facts`) last stored, each by its sidecar
+    `<key>.json` with its `<key>.json.gz` (`check.store_cached_facts`). The number of documents removed."""
+    if not cache.is_dir():
+        return 0
+    sides = sorted(((e.stat().st_mtime, e.name[:-5]) for e in os.scandir(cache) if e.name.endswith(".json")), reverse=True)
+    gone = [k for _, k in sides[kept:]]
+    for k in gone:
+        for p in (cache / f"{k}.json", cache / f"{k}.json.gz"):
+            p.unlink(missing_ok=True)
+    return len(gone)
+
+
 def prune_replays(cache: Path, kept: int | None = None) -> int:
     """Remove all but the ``kept`` (`REPLAYS_KEPT`) replay entries of ``cache`` (`check.py --replay-cache`) last stored or
-    reused (`check.touch_replays`): each is one module's pass under its key, so one dropped costs that module one replay. The
-    number removed."""
+    reused (`check.touch_replays`): each is one module's pass under its key, so one dropped costs that module one replay;
+    and the same of its `graphs/` (`check.store_graphs`), where one dropped costs one module's graph walk. The number
+    removed."""
     kept = REPLAYS_KEPT if kept is None else kept
-    try:
-        entries = [(e.stat().st_mtime, e) for e in os.scandir(cache) if e.name.endswith(".json")]
-    except OSError:
-        return 0
     n = 0
-    for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+    for d in (cache, cache / "graphs"):
         try:
-            os.unlink(e.path)
-            n += 1
+            entries = [(e.stat().st_mtime, e) for e in os.scandir(d) if e.name.endswith(".json")]
         except OSError:
-            pass
+            continue
+        for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+            try:
+                os.unlink(e.path)
+                n += 1
+            except OSError:
+                pass
     return n
 
 
@@ -2203,7 +2232,8 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--prune"]:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
-               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records")}
+               "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
+               "lean-records/facts": prune_records_facts(root / "lean-records" / RECORDS_FACTS)}
         # a build's `module_keys.stage` reads the index, the records of what `put` couldn't index and the artifacts under
         # this lock, shared, and `put` and `take` prune under it already
         artifacts = LakeArtifacts(root / "lean-artifacts")

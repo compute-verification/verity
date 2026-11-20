@@ -404,8 +404,8 @@ def evict_runs(store: LocalStore, runs_root: Path, *, target_free_bytes: int, dr
 
 def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MIN_BYTES) -> dict[str, Any]:
     """The run dir's files that `custody.verify` has just found in the run record on the remote (`custody`, its report with
-    `preserved`), at least `min_bytes` each: `research data custody --publish` removes them, so a published run stops holding the
-    disk.  A file is removed only while it is still the size it had and
+    `preserved`), at least `min_bytes` each, but the private files it refused (`refused`): `research data custody --publish` removes
+    them, so a published run stops holding the disk.  A file is removed only while it is still the size it had and
     unchanged since `verified_from`; the small records (job.json, status.json, result.json, the logs under `min_bytes`) stay, so
     `status` and `inspect` still read the run.  `run-files.evicted.json` lists what went and the fetch that brings it back."""
     rd = Path(run_dir)
@@ -413,8 +413,9 @@ def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MI
     if not custody.get("preserved") or not custody.get("run_record"):
         return rep
     t0 = float(custody["verified_from"])
+    private = {r.get("path") for r in custody.get("refused") or []}          # in no record: the run dir is their only copy
     for rel, (size, sha) in sorted((custody.get("files") or {}).items(), key=lambda kv: (-kv[1][0], kv[0])):
-        if size < min_bytes:
+        if size < min_bytes or rel in private:
             continue
         p = rd / rel
         if not os.path.lexists(p):

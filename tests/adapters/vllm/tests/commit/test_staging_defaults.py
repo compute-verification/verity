@@ -108,11 +108,3 @@ def test_the_commit_reads_only_the_keys_enable_windows_returns(monkeypatch):
                                   f"whose keys are {sorted(info)}: a windowed Commit stops there with a KeyError")
 
 
-def test_tp_commit_reads_the_ranks_ring_as_their_committers_do():
-    from verity_vllm.pipeline.tp import commit as tc
-
-    assert tc.ring_slots("native_collect_v2b", None, None, "none") == 8
-    assert tc.ring_slots("native_collect_v2b", None, None, None) is None          # unset VERITY_RETAIN: device, per-step blocks
-    assert tc.ring_slots("native_collect_v2b", "256", "3", "host") == 3
-    assert tc.ring_slots("native_collect_v2b", "0", "8", "host") is None
-    assert tc.ring_slots("native_host", None, None, "none") is None

@@ -3,6 +3,7 @@ run verifier's credit is `tests/benchmarks/pouw/test_pearl_plus_scheme_credit.py
 from __future__ import annotations
 
 import json
+import math
 from fractions import Fraction
 from types import SimpleNamespace
 
@@ -15,14 +16,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover import serving as 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_credited import PearlPlusTileCoreWords
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 
 
 def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
-    assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
+    assert [b.definition for b in PS.PEARL_PLUS.blocks] == [PS.TILE] == [PearlPlusTileCoreWords.id]
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
@@ -57,6 +57,45 @@ def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -
     assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
     assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
     assert [s.type for s in S.declared(PS.PEARL_PLUS, "channel_schemas")] == ["PearlSalt"]
+
+
+def test_its_credited_product_is_one_block_a_grid_tile_in_the_lean_verifiers_order_and_tickets() -> None:
+    """`credited_blocks` on two passes of Pearl+'s test instance (k = 128) at 32 x 16 tiles: ids per pass in `Run.lean`'s
+    `tile?` order (call by call, row-major, the last row block narrower), and each ticket `ticketWeight`'s, |credited rows|
+    x |credited columns| x `wref`(1, |K|, n) / n (the H100 record's `wref`, written here as `Records.lean` states it), over the
+    lcm of every pass's denominators; each block's real-row count is its rows below the call's ``real_rows``. Weight 1's excluded B row 20 takes its block of 64 columns, so its calls' tiles have
+    ticket 0 and `drawn_blocks` never draws them."""
+    from verity.commitments.randomness import derive
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+
+    scheme = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(32, 16))
+    k = 128
+
+    def call(index: int, m: int, n: int, weight: int, real: int, **rows: tuple[int, ...]) -> UnitRecord:
+        return UnitRecord(Matmul(index, Shape(m, k, n), weight), real, k, **rows)
+
+    passes = [[call(0, 32, 16, 0, 20, excluded_a=(5,)), call(1, 16, 32, 1, 16, excluded_b=(20,))],
+              [call(2, 48, 16, 0, 40), call(3, 16, 32, 1, 16, excluded_b=(20,))]]
+    blocks = PS.credited_blocks(scheme, passes)
+    r16, r32, r48 = tuple(range(16)), tuple(range(32)), tuple(range(32, 48))
+    c0, c1 = tuple(range(16)), tuple(range(16, 32))
+    want = [((0, 0), 0, 0, r32, c0, 0, (k, 32, 16, 16), 20, 19 * 16), ((0, 1), 1, 1, r16, c0, 0, (k, 16, 16, 32), 16, 0),
+            ((0, 2), 1, 1, r16, c1, 1, (k, 16, 16, 32), 16, 0), ((1, 0), 0, 2, r32, c0, 0, (k, 32, 16, 16), 32, 32 * 16),
+            ((1, 1), 0, 2, r48, c0, 0, (k, 16, 16, 16), 8, 8 * 16), ((1, 2), 1, 3, r16, c0, 0, (k, 16, 16, 32), 16, 0),
+            ((1, 3), 1, 3, r16, c1, 1, (k, 16, 16, 32), 16, 0)]
+    assert [(b.id, b.record, b.unit, b.rows, b.cols, b.col, b.size, b.real) for b in blocks] == [w[:8] for w in want]
+
+    def wref(m: int, k: int, n: int) -> int:
+        return m * n * (k + 32 * (k // 128)) - 32 * m * n + m * k * 32 + 2 * 64 * m * n + 68 * m * k
+
+    weights = [Fraction(wref(1, k, b.size[3]) * cells, b.size[3]) for b, (*_, cells) in zip(blocks, want)]
+    den = math.lcm(*(w.denominator for w in weights))
+    assert [b.ticket for b in blocks] == [int(w * den) for w in weights]
+    key = derive(b"verifier" * 4, "verity/pouw/pearl-plus-run-draw/v1", {"run": bytes(64)})
+    drawn = PS.drawn_blocks(scheme, passes, key, 16)
+    assert len(drawn) == 16 and {b.id for b in drawn} <= {(0, 0), (1, 0), (1, 1)}
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
@@ -505,9 +544,10 @@ def test_weights_outside_the_kernels_domain_are_refused_before_any_commitment(mo
 
 def test_its_settings_are_declared_and_checked() -> None:
     assert S.settings(PS.PEARL_PLUS, {}) == PS.SETTINGS
-    assert S.settings(PS.PEARL_PLUS, {"tie-uniform": True})["tie-uniform"] is True
-    with pytest.raises(ValueError, match="tie-uniform is a bool"):
-        S.settings(PS.PEARL_PLUS, {"tie-uniform": "yes"})
+    with pytest.raises(ValueError, match=r"pearl-plus has no setting \['tie-uniform'\]"):
+        S.settings(PS.PEARL_PLUS, {"tie-uniform": True})
+    with pytest.raises(ValueError, match="schedule is a str"):
+        S.settings(PS.PEARL_PLUS, {"schedule": 1})
     for given, refused in (({"schedule": "sideways"}, "schedule is one of serial"),
                            ({"coins": "beacon"}, "coins is 'in-process'"),
                            ({"coins": "in-process", **CTX["settings"]}, "coins and challenger are both set"),
@@ -534,7 +574,7 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     assert on.commitment() == {} and on.run is None
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
-    assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
+    assert on.record() == {"entry": PS.OPTION, "schedule": "serial"}
     assert on.summary() == {"max_step_tokens": 64}
     on.release()
     assert run.finished and on.run is None
@@ -622,7 +662,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     session = {"session": "s-1", "seq": 4, "root": "ab" * 64, "commitment": "cd" * 64, "host": "auditor.s-1"}
     w = SV.weights_root({0: bytes([0]) * 64})
     reports = {"configuration": {"scheme": "pearl-plus", "settings": {**PS.SETTINGS, **CTX["settings"]},
-                                 "record": {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}},
+                                 "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
                "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,

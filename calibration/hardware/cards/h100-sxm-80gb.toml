@@ -29,7 +29,7 @@ warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Pro
 [clock]
 default = "sm"
 sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non-Tensor Core Ops 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous for NVIDIA Data Center GPUs'; art:6a05f4880c43 (nvidia-smi clocks.max.sm 1980 MHz on one card)" }
-tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds, on two readings, each figure it moves quoted at both; a credit is claimed at the 1980 MHz one, the higher ceiling (clock.default, price.fp32.sm: a figure is stated at the reading with the higher ceiling unless it names the other), unless it says it rests on 1830 MHz (price.fp32.tensor). 1830 MHz: H100 whitepaper V1.04 Table 3, H100 SXM5, 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops 1830 MHz', at which its 'Peak INT8 Tensor TOPS 1978.9' is 4096 a SM-clock on 132 SMs, so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's boost clock for its other pipes (the same table), so 1.0705e15 s8 MACs a second. Falsified by any run of calibration/tensor_duty above 132 x 4096 x 1830 MHz = 9.894e14 s8 MACs a second over the host's wall clock; no such run has been made on an H100" }
+tensor = { value = 1830, unit = "MHz", mark = "placeholder", source = "the whitepaper's tensor boost clock, a vendor's figure and no ceiling: the tensor's ceiling is clock.sm's 1980 MHz alone, and a credit is claimed there (clock.default, price.fp32.sm). 1830 MHz: H100 whitepaper V1.04 Table 3, H100 SXM5, 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops 1830 MHz', at which its 'Peak INT8 Tensor TOPS 1978.9' is 4096 a SM-clock on 132 SMs, so 9.894e14 s8 MACs a second. 1980 MHz, clock.sm: the card's boost clock for its other pipes (the same table), so 1.0705e15 s8 MACs a second. A run of calibration/tensor_duty on one H100 reached 1.0225 of the eight-bit tensor rate this clock implies, so it is not a ceiling" }
 memory = { value = 2619, unit = "MHz", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3, H100 SXM5: 'Memory Data Rate 2619 MHz DDR', the row footnoted 'Not Finalized for H100' though the cover says 'Includes final GPU / memory clocks'; art:6a05f4880c43 (nvidia-smi clocks.max.memory 2619 MHz on one card)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
@@ -80,13 +80,13 @@ f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H100
 
 # What an operation costs in tensor units (rate.tensor's unit). The unit: each operation is charged in seconds
 # at its own pipe's data-sheet ceiling, so a program's time is at least the sum of its operations over their pipes'
-# ceilings. An FP32 add's price at the ceilings is stated at both clock readings, each keyed by its reading's name:
-# fp32.sm, both pipes at clock.sm, the higher tensor ceiling and the default (clock.default), which a credit is claimed
-# under unless it says it rests on the other; and fp32.tensor, the tensor pipe at clock.tensor. fp32_loop is a timed
-# loop's price, at or above fp32.sm.
+# ceilings. An FP32 add's price at the ceilings is fp32.sm, both pipes at clock.sm, the tensor's ceiling and the default
+# (clock.default), which a credit is claimed under; fp32.tensor is the same add at the vendor's tensor clock, a figure that
+# bounds nothing, kept beside it as the cards of a kind state both readings. fp32_loop is a timed loop's price, at or above
+# fp32.sm.
 [price]
-fp32.sm = { value = 32, unit = "tensor unit/add", mark = "ceiling", source = "the default reading (clock.default): the tensor and the FP32 pipe both at clock.sm's 1980 MHz, so an add is rate.tensor / (32 x rate.issue) = 4096 / 128 = 32 tensor units, a SM-clock each; W1's FP32 price Pouw.PearlC.W1.W1Prices.h100. A credit is claimed at this reading unless it says it rests on fp32.tensor" }
-fp32.tensor = { value = 29.58, unit = "tensor unit/add", mark = "ceiling", source = "the second reading: the tensor pipe at clock.tensor's 1830 MHz beside the FP32 pipe at clock.sm's 1980 MHz, so an add is 32 x 1830 / 1980 = 976/33 = 29.5758 tensor units (here to two places); W1's FP32 price Pouw.PearlC.W1.W1Prices.h100Tensor. It credits more and holds only if the tensor pipe never exceeds 1830 MHz; a figure that rests on it says so" }
+fp32.sm = { value = 32, unit = "tensor unit/add", mark = "ceiling", source = "the default reading (clock.default): the tensor and the FP32 pipe both at clock.sm's 1980 MHz, so an add is rate.tensor / (32 x rate.issue) = 4096 / 128 = 32 tensor units, a SM-clock each; W1's FP32 price Pouw.PearlC.W1.W1Prices.h100. A credit is claimed at this reading" }
+fp32.tensor = { value = 29.58, unit = "tensor unit/add", mark = "placeholder", source = "a figure at the vendor's clock, which bounds nothing: the tensor pipe at clock.tensor's 1830 MHz beside the FP32 pipe at clock.sm's 1980 MHz, so an add is 32 x 1830 / 1980 = 976/33 = 29.5758 tensor units (here to two places); W1's FP32 price Pouw.PearlC.W1.W1Prices.h100Tensor. A run of calibration/tensor_duty on one H100 exceeded that tensor clock, so the price holds nowhere; the ceiling's is fp32.sm" }
 fp32_loop = { value = 33.5, unit = "tensor unit/add", mark = "placeholder", source = "no run read times an FP32 add in a loop on this card: this is the loop of 64 adds and 3 loop instructions at the card's ceilings, rate.tensor / (32 x rate.issue) x 67 / 64, a SM-clock each, and the add alone is fp32.sm's 32; a run of that loop on an H100 closes it" }
 
 # The model's own ranges (Accel.Card's exact and text).

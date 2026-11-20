@@ -3,6 +3,7 @@ before any replay; the replay's own worker count replaces the Commit's; and the 
 later run's coverage file as the Commit in one process leaves it: none for a run that passed, its failure for one that did not."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import types
@@ -10,20 +11,156 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from tests.pipeline import test_tp_replay_deferred as RD
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.commit import step_rows
+from verity_vllm.commit import store_dump as SD
+from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit_replay as TPR
+from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import run_root as RT
+from verity_vllm.program.frontend import collective_kinds as CK
 
-stubbed = RD.stubbed       # the fixture of the deferred Commit's own tests: the rank's Programs, checkpoint and C2 stood in for
-WORLD = RD.WORLD
+from tests.check.opened import commit_steps
+
+WORLD = 2
+
+
+SEED = 7
+
+
+REPLAY_CFG = {"programs": {"0": "/b/rank0", "1": "/b/rank1"}, "of_record": {"0": ["a" * 64], "1": ["b" * 64]}, "requests": [],
+              "per_stratum": 2, "max_evaluate": 2000, "seed": SEED, "workers": None, "challenge": None, "targets": [], "ring_slots": None}
+
+
+VERSIONS = {"sampled_replay": {"of_record": REPLAY_CFG["of_record"], "seed": SEED}}
+
+
+XRANK = {"result": True, "by_family": {}}
+
+
+XF = CK.cross_rank_families(WORLD)
+
+
+def _sr(result=True, grade="complete", *, rank=0, qp_ok=True, mismatch=0):
+    """A rank's sampled-replay record as `driver.sampled_replay` writes it (population reconciled against Q(P) unless qp_ok is not True)."""
+    pop = {"vus": 10, "strata_n": 3, "source": "rows", "by_family": {"Gemm_v1": 10}, "query_total": {"identities": 10}}
+    if qp_ok is not None:
+        outside = [] if qp_ok else [{"request_id": "r0", "step": 0, "op_path": "x", "member": "y"}]
+        pop["query_checks"] = {"ok": qp_ok, "vus_outside_query": {"n": 2 * len(outside), "first": outside},
+                               **{k: {"n": 0, "first": []} for k in ("identities_without_rows", "rows_disagree")},
+                               "ranks": {"replay": [rank], "manifest": [rank], "equal": True}, "accounted": True, "unstated_families": []}
+    return {"result": result, "grade": grade, "rank": rank, "why": None if result else f"rank {rank}: {grade}",
+            "population": pop, "sample": {"picked": 4, "evaluated": 4, "equal": 4 - mismatch, "mismatch_n": mismatch, "not_evaluated_n": 0,
+                                          "per_stratum": 2, "seed": SEED, "seed_source": "--replay-seed (targeted)"},
+            "strata_keys": {"mechanisms": ["Gemm_v1"], "requests": ["r0"], "phases": ["prefill"], "steps": {"early": [0], "late": [1]},
+                            "lifetime": {"values": {"fresh-window": 10}, "ring_slots": 8}, "key": "spec | request | rank"},
+            "unreplayable": [{"family": "AllReduce2_v1", "n": 3, "why": "no registered evaluator"}], "weights": {"equal": True},
+            "mismatch": [{"i": 1, "op_path": "model.layers.0.mlp"}] * mismatch, "strata": {"a": {}}, "trace": "t"}
+
+
+def _lk(result=True, rank=0):
+    return {"result": result, "rank": rank, "pairs": 9, "linked": 9 if result else 8, "why": None if result else f"rank {rank}: step 3 unlinked"}
+
+
+def _fin(rank, sr, lk, pin=True):
+    return {"rank": rank, "sampled_replay": {"schema": RR.SCHEMA, "rank": rank, "method": RR.METHOD, "sampled_replay": sr, "boundary_linkage": lk},
+            "weights_pin": {"result": pin, "why": None if pin else "1 served weight(s) differ", "mismatched": [] if pin else [{"served_name": "model.x.weight"}]}}
+
+
+def _deferred_fin(rank, out=Path("/o"), pin=True):
+    sr, lk = RB.deferred_records(RB.path(out, 0, rank=rank))
+    return _fin(rank, dict(sr, rank=rank), dict(lk, rank=rank), pin)
+
+
+def _bmap(rank, root):
+    entries = [{"identity": {"rank": rank, "op": "model.embed_tokens"}, "kind": "leaf", "step_root": "00", "leaf_lo": 0, "leaf_hi": 1}]
+    digest = hashlib.sha256(json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    return {"schema": "m", "run_root": root, "rank": rank, "entries_n": 1, "digest": digest, "entries": entries}
+
+
+def _cblock(rank, root, bmap):
+    return {"run_root": root, "steps": 2, "leaves": 3, "bytes_bound": 516, "tensors": 2, "openings": {"n": 64, "verified": 64},
+            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}}}
+
+
+def _seal_deferred(tmp_path):
+    """A one-run TP2 Commit (the config run's only-arm form) as `tp-commit --replay-deferred` leaves it: every rank PENDING, its bundle
+    sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
+    rank commits under rows-sha512 and the TP run root is its v2 form."""
+    pytest.importorskip("torch")
+
+    out = tmp_path / "commit"
+    out.mkdir()
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
+    root = rc.run_root.hex()
+    man = tmp_path / "manifest.json"
+    man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
+    bundles_of: dict[int, dict[int, Any]] = {0: {}}
+    per_rank, fins = {}, []
+    for r in range(WORLD):
+        bmap = _bmap(r, root)
+        part = RB.partial(out, 0, rank=r)
+        SD.dump(com, rc, part / "store")
+        (part / "weights").mkdir()
+        (part / "weights" / "tree.json").write_text(json.dumps({"names": [], "tensor_roots": [], "root": "ab" * 32, "chunk": step_rows.ROW_BYTES, "extra": {}}))
+        (part / "binding_map.json").write_text(json.dumps(bmap))
+        f = _deferred_fin(r, out)
+        cb = _cblock(r, root, bmap)
+        ok, why = C2.c2_and_pin_gates(cb, f, True, None, rank=r, replay_on=True, required=True, bundle=RB.path(out, 0, rank=r).name, xrank_families=XF)
+        cb["commit_pass"], cb["commit_fail_reason"] = ok, why
+        per_rank[r], bundles_of[0][r] = cb, {"partial": str(part), "hashed": {}, "engine_of_record": {"vllm": "test"}, "programs": {}}
+        fins.append({k: v for k, v in f.items()})
+    vec = {r: rc.run_root for r in range(WORLD)}
+    rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
+             "commit": {"tp_run_root": RT.combine(RT.TP_ROOT_TAG, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
+                        "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
+    sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
+    qp_comp = C2.query_population_component(rows, True)
+    comps = {"weights_pin": {"result": True}, "cross_rank_collectives": {"result": True}, "fold_match_binding": {"result": None, "why": "no --match-dir"}}
+    vc = C2.annotate_value_correspondence(None, sr_comp, lk_comp, qp_comp, comps["weights_pin"], comps["cross_rank_collectives"], comps["fold_match_binding"], replay_on=True)
+    assert sr_comp["result"] is None and qp_comp["result"] is None and vc["result"] is None and vc["c2_of_record"]["result"] is None
+    summ = {"label": "t", "tp": WORLD, "pairs": 1, "commit_pass": [None], "sampled_replay": {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS},
+            "boundary_linkage": lk_comp, "query_population": qp_comp, "pass": True, "only_arm": "instrumented", "runs": 1}
+    summ.update(commit_pass=False)          # `only_arm_summary` over a None row
+    C2.seal(out, summ, rows, bundles_of, replay_cfg=REPLAY_CFG, required_manifest=str(man), world=WORLD, versions={"git_head": "c0de"},
+             all_pass=True, vc_base=None, comps=comps, xrank_pairs=[XRANK], xrank_families=sorted(XF), label="t")
+    assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
+    (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
+    (out / "summary.json").write_text(json.dumps(summ, default=str))
+    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": RT.TP_ROOT_TAG.decode()}))
+    (out / "finalize_pair0.json").write_text(json.dumps(fins, default=str))
+    (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
+                                                   "value_correspondence": vc}))
+    (out / "sampled_replay.json").write_text(json.dumps({"sampled_replay": sr_comp, "boundary_linkage": lk_comp}, default=str))
+    return types.SimpleNamespace(out=out, rc=rc, man=man, dd=json.loads((out / C2.DEFERRED).read_text()))
+
+
+@pytest.fixture
+def stubbed(monkeypatch):
+    """The rank's Programs, its checkpoint and its C2 stood in for: what `replay_rank` hands each of them is recorded."""
+    seen: dict = {}
+    wc = {"equal": True, "opened": 0, "servable": 0, "committed_root": "ab" * 32, "opened_by_source": {}, "unopened_n": 0, "wall_s": 0.0, "why": None}
+    monkeypatch.setattr(RR, "load", lambda cfg, rank, world: seen.update(load=(cfg, rank, world)) or types.SimpleNamespace(rank=rank, loaded={}, index=types.SimpleNamespace(prefix="")))
+    monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: "ck")
+    monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: seen.update(open=(root, k)) or ({}, dict(wc)))
+
+    def evaluate(p, cfg, **k):
+        seen["evaluate"] = (p, cfg, k)
+        return _sr(rank=p.rank), _lk(True, p.rank)
+
+    monkeypatch.setattr(RR, "evaluate", evaluate)
+    return seen
+
+stubbed = stubbed       # the fixture of the deferred Commit's own tests: the rank's Programs, checkpoint and C2 stood in for
+WORLD = WORLD
 
 
 def _sealed(tmp_path: Path, monkeypatch, **replay: Any) -> types.SimpleNamespace:
-    """A sealed deferred Commit of one run (`test_tp_replay_deferred._seal_deferred`), its replay configuration with ``replay`` over it."""
-    monkeypatch.setattr(RD, "REPLAY_CFG", dict(RD.REPLAY_CFG, **replay))
-    return RD._seal_deferred(tmp_path)
+    """A sealed deferred Commit of one run (`_seal_deferred`), its replay configuration with ``replay`` over it."""
+    monkeypatch.setitem(globals(), "REPLAY_CFG", dict(REPLAY_CFG, **replay))
+    return _seal_deferred(tmp_path)
 
 
 def _options(d: types.SimpleNamespace, **kw: Any) -> TPR.Options:
@@ -88,7 +225,7 @@ def test_the_replays_own_worker_count_replaces_the_commits(tmp_path, monkeypatch
     d = _sealed(tmp_path, monkeypatch, workers=3)
     TPR.replay_rank(_options(d, replay_workers=own), d.out, _record(d), 0, 1)
     cfg = stubbed["load"][0]
-    assert cfg == dict(RD.REPLAY_CFG, workers=want) and stubbed["evaluate"][1] == cfg
+    assert cfg == dict(REPLAY_CFG, workers=want) and stubbed["evaluate"][1] == cfg
 
 
 # ------------------------------------------------------------------------------------------------ a Commit of two runs, folded
@@ -115,9 +252,9 @@ def _replay(d: types.SimpleNamespace, *failed: tuple[int, int]) -> None:
     """Every rank's replay of both runs on the record: complete and linked, but each of ``failed``'s (run, rank), which mismatched."""
     for b in _record(d)["bundles"]:
         ok = (b["pair"], b["rank"]) not in failed
-        sr = RD._sr(ok, "complete" if ok else "mismatch", rank=b["rank"], mismatch=int(not ok))
+        sr = _sr(ok, "complete" if ok else "mismatch", rank=b["rank"], mismatch=int(not ok))
         doc = {"schema": TPR.RESULT_SCHEMA, "pair": b["pair"], "rank": b["rank"], "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "where": "cpu",
-               "host": "h", "sampled_replay": sr, "boundary_linkage": RD._lk(True, b["rank"]), "wall_s": 2.5, "peak_rss_bytes": 1 << 30, "utc": "u"}
+               "host": "h", "sampled_replay": sr, "boundary_linkage": _lk(True, b["rank"]), "wall_s": 2.5, "peak_rss_bytes": 1 << 30, "utc": "u"}
         TPR.result_path(d.out, b["pair"], b["rank"]).write_text(json.dumps(doc))
 
 

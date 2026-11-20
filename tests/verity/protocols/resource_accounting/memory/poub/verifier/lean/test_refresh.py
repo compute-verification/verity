@@ -15,8 +15,8 @@ import ra_cases as M
 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger
 
-OFF_DIGEST = ("543a23a0082c8c8855250c645f9faf1a3335afa6462ce9459703f993742a63dc"
-              "fe04996af6026e75ccae86e8ac270fd3fbeb664b44f704adf0fda9ff3a6a6bd1")
+OFF_DIGEST = ("e0c67ab4ad79b4042f8397f99cd8b13448d5631e010de661c3b20b7debc34337"
+              "54e6e427127f1d29b53ddb6f3942df5e653bfbc8d7fdd7c4a8b12fadcc166f5e")
 """SHA-512 over every recorded scenario's case, outcome and, accepted, its record's public form, profile and ledger, as
 `off_digest` lists them, before refresh, under the challenger's coin commitment as it now forms it."""
 
@@ -175,8 +175,8 @@ def test_a_coin_leaves_only_after_its_own_append_is_committed() -> None:
 def _session(blocks: int) -> audit.AuditRun:
     reg = audit.register(M.SOURCE, M.NODE, blocks, bytes(64), M.P512, nonce=bytes(32))
     params = audit.Params(blocks, 100, 2, window_ns=10, codec=M.P512, refresh=True, lifetime=2, fresh_slots=1)
-    s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, 2, M.Entropy(b"coins")), not_before_ns=0,
-                       clock=M.Clock())
+    s = audit.AuditRun(params, reg, None, coins.local(reg.digest, 0, 2, M.Entropy(b"coins"), samples=params.samples),
+                       not_before_ns=0, clock=M.Clock())
     s.start()
     return s
 

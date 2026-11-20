@@ -10,19 +10,25 @@ import os
 from pathlib import Path
 
 from tests.pipeline import tp_toy as T
-from tests.pipeline.test_tp_build_relabel import SAMPLING, _res
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import row_records
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
+SAMPLING = {"kind": "greedy", "source": "default"}
 IR = {"ir": "boolean", "word_root": "w" * 64, "word_digest": "d" * 128, "sigma_check": {"nodes": 3, "definitions": 2, "ok": True}}
+
+
+def _res(W: int, r: int, record: list, wrapper: str) -> dict:
+    return {"schema": "cb-a/derive_step/v3", "utc": "2026-10-03T00:00:00Z", "wrapper": wrapper, "sampling": SAMPLING,
+            "tp": {"world": W, "rank": r, "collectives": {"n": len(record), "record": record}, "embedding_shards": T.embedding_shards(W, r)},
+            "model_pin": {"model": "toy", "rank": r}, "attention_impls_observed": {}, "export_facts": {}, "ok": True}
 
 
 def _write(out: str, rep, record: list, model_root: str) -> dict:
     os.makedirs(out)
     res = _res(2, 0, record, "request")
-    B._write_program(out, res, rep, target=TargetProfile.default(), applied={}, sampling=SAMPLING, launch=None, tp=2, rank=0, model_root=model_root)
+    B._write_program(out, res, rep, target=TargetProfile.default(), applied={}, sampling=SAMPLING, launch=None, rank=0)
     Path(f"{out}/result.json").write_text(json.dumps(res, default=str))
     return res
 

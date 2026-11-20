@@ -22,8 +22,17 @@ law = "rate:1/3481648"
 commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
 
 [params."verity/pouw/pearl-plus/v1"]
-class = "4,27,2"
-tie-uniform = true
+kernel = ""
+cubin = ""
+schedule = "serial"
+transcript_dir = ""
+coins = ""
+challenger = ""
+lane = ""
+peer = ""
+users = ""
+
+[params."verity/pouw/pearl-plus/v1".session]
 
 [[party]]
 name = "workers"

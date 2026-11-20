@@ -3,7 +3,10 @@ each call index of their epoch (their salt) once, each below `pearl_c.CALL_RANGE
 from __future__ import annotations
 
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as PC
+import pytest
+
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
+from verity.protocols.resource_accounting.compute.pouw.verifier import protocol as P
 
 SALT, OTHER = "ab" * 32, "cd" * 32
 
@@ -37,3 +40,13 @@ def test_a_call_index_at_2_to_the_32_is_refused():
 def test_a_pass_that_is_no_manifest_is_refused():
     for bad in (None, [], {"salt": SALT}, {"matmuls": []}, {"salt": 1, "matmuls": []}, {"salt": SALT, "matmuls": [1]}):
         assert Cr.passes_distinct_twin([bad])[0] == "manifest", bad
+
+
+def test_a_calls_index_is_its_place_and_a_round_or_position_past_2_to_the_16_is_refused():
+    """`protocol.call_place`: round s's call c is at s·2^16 + c, so every place is below `pearl_c.CALL_RANGE`."""
+    assert P.ROUND_CALLS == 1 << 16 and P.CALL_RANGE == PC.CALL_RANGE == P.ROUND_CALLS ** 2
+    assert (P.call_place(0, 0), P.call_place(0, 1), P.call_place(1, 0)) == (0, 1, 1 << 16)
+    assert P.call_place(P.ROUND_CALLS - 1, P.ROUND_CALLS - 1) == PC.CALL_RANGE - 1
+    for bad in ((P.ROUND_CALLS, 0), (0, P.ROUND_CALLS), (-1, 0), (0, -1)):
+        with pytest.raises(P.DomainError, match="end the pass, or the epoch"):
+            P.call_place(*bad)

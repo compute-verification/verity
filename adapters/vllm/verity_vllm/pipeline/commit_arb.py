@@ -1,13 +1,13 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
-        --required-manifest PREDICTED/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
+        --row-build PREDICTED [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
-(`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_row.row_refusal`, and
+(`serve_seal.committer`, over the row's ``--row-build``, its Build of record, `serve_row.row_refusal`, and
 taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and each request seeded as
 serve-openai seeds it (`engine.served_seed.served`: an unseeded stochastic one from its window's seed coin and its request id,
@@ -98,6 +98,9 @@ class Options:
                             "turns (an instruct model's own EOS ends its answers); plain: the questions and filler as plain text")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=2048)
+    window_class: str | None = option("--window-class", default=None,
+                                      help="S,P,O: the window class the application declares (S slots, each of at most P prompt ids and O outputs); the "
+                                         "Commit's arena is sized from it alone, and the engine admits no more")
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048)
     chunked_prefill: bool = option("--chunked-prefill", action="boolean_optional", default=True,
                                    help="--no-chunked-prefill: the scheduler holds a prefill that doesn't fit the step instead of cutting it")
@@ -113,14 +116,12 @@ class Options:
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the committer's run id (default $RESEARCH_RUN_ID)")
-    required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="the row's required manifest, DIR/manifest.json of its Build of record (`verity-vllm "
-                                                "predict row --out DIR`), which serve-openai's rows-sha512 Commit's parts are built from "
-                                                "(serve_seal.committer)")
+    row_build: str | None = option("--row-build", default=None,
+                                   help="the row's Build of record, the DIR of `verity-vllm predict row --out DIR`, which "
+                                        "serve-openai's rows-sha512 Commit commits by (serve_seal.committer)")
     hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap (as serve-openai's --norm-tap-so)")
 
 
 def committer_opts(opts: Options) -> SimpleNamespace:
@@ -131,11 +132,10 @@ def committer_opts(opts: Options) -> SimpleNamespace:
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which, environ: Mapping[str, str] | None = None) -> None:
     """What the committer would refuse after the model has loaded, refused before it."""
-    if not opts.required_manifest:
-        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "
-                         "row's manifest names: pass --required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm "
-                         "predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
-    if why := RW.row_refusal(opts.required_manifest):
+    if not opts.row_build:
+        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS}: pass --row-build DIR, DIR the row's Build "
+                         "of record (`verity-vllm predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
+    if why := RW.row_refusal(opts.row_build) or SS.class_refusal(opts):
         raise UsageError(why)
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "
@@ -492,7 +492,7 @@ def main(opts: Options) -> int:
     (out / "run.json").write_text(json.dumps({"options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
                                               "engine": llm.engine_record, "scheduler": cfg, "arena": com.arena_sizing_record,
                                               "committer": com.name, "scheme": com.commit_scheme,
-                                              "required_manifest_path": com.required_manifest_path, "run_id": opts.run_id},
+                                              "compiler": getattr(com, "compiler", None), "run_id": opts.run_id},
                                              indent=1, default=str))
     try:
         summary = run(llm, com, reqs, out, opts.window_steps, max_model_len=opts.max_model_len, prefix_caching=opts.prefix_caching)

@@ -2,16 +2,16 @@
 statements, its credit period's committed circuit files and the verifier's answers.
 
 A `verified` case is a served execution phase (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
-one to three rounds), one to six sampled proof blocks, the entries a statement of each sampled call reads (its round's A table of
-its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one statement a sampled
-call in a shuffled order (its circuit and public files' paths and one to three sessions' directories), each K's
-committed circuit file, the execution phase's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
-calls (`credit._lean_verified`), or the answers the served path gives: one a statement `credit._asks` names, in its
-order, until one the Lean refuses at, each session accepted with the units of its call split among them and its
-registered finding the ``--registered`` file's ports at their values and roots.
+one to three rounds), one to six sampled proof blocks (one unit each), the entries a statement of each sampled call reads (its
+round's A table of its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one
+statement a sampled unit, of its call, in a shuffled order (its circuit and public files' paths, ``/w/u<u>/``, and one to three
+sessions' directories), each K's committed circuit file, the execution phase's open root, rounds and Program salt, and
+`runs`: null, the first of the Lean's two calls (`credit._lean_verified`), or the answers the served path gives: one a
+statement `credit._asks` names, in its order, until one the Lean refuses at, each session accepted with its statement's
+unit and its registered finding the ``--registered`` file's ports at their values and roots.
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, the statements'
-form or name a call past the execution phase's, give a call two statements or one to a call with no sampled proof block, drop a K's
+form or name a call past the execution phase's, give a unit two statements or a call with no sampled proof block one, drop a K's
 circuit file, register the execution phase's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
 and give a descriptor that is no H1 execution phase's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
 fail to run (``error``) or refuse it (``refused``), reject one session (``rejected``), open a public table or the ok
@@ -20,21 +20,18 @@ rows at another port, value or root, open no ok row (``ok-none``), and prove a u
 A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 execution phase with one K in the lanes form (``lane<K>`` and
 ``combine<K>``, its leaf Programs `leaf_desc`'s, its zy unit's TILE the one they are over) and perhaps one in the tile
 form, one or two sampled leaves at the lanes-form K and perhaps tile-form units, and the lanes evidence: each sampled leaf's
-lanes and combine statements among the calls' in a shuffled order, and the produced record of their partials under the
-execution phase's sample root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
-opened of the partials and the known rows (``openings``). Its mutations: a K outside `LeafLanesSound`'s reach, no lanes
-evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution phase's own, a statement
-twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the leaf reads unregistered,
-the sample malformed, the evidence's or the circuit files' lanes form broken; then a leaf session's partials or known row
-opened at another opening or reported without openings (``P-shared``), its ports at another root, rejected, proving
-other units, a run that fails or refuses, and every leaf run reporting no session (``P-opened``).
+lanes and combine statements among the units' in a shuffled order, and the produced record of their partials under the
+execution phase's sample root. No leaf statement is run (each is refused at its ``--registered`` file,
+`credit.leaf_registered_file`), so its answers are the tile-form units'. Its mutations: a K outside `LeafLanesSound`'s
+reach, no lanes evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution
+phase's own, a statement twice, of an unsampled unit or none of the leaf's, the produced record's P- codes, a table the
+leaf reads unregistered, the sample malformed, and the evidence's or the circuit files' lanes form broken.
 
 `tests/test_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier (`replay`).
 """
 from __future__ import annotations
 
 import bisect
-import dataclasses
 import hashlib
 import itertools
 import random
@@ -51,9 +48,7 @@ RUN_NAMES = ["error", "refused", "rejected", "pub-other", "ok-other", "ok-none",
 LANES_PRE = ["lanes-shape", "lanes-missing", "lanes-no-combine", "lanes-leaf-digest", "lanes-leaf-other",
              "lanes-twice", "lanes-undrawn", "lanes-statement", "lanes-record", "lanes-unregistered", "lanes-draw",
              "lanes-form", "lanes-files"]
-LANES_RUN = ["lanes-partial", "lanes-known", "lanes-openings-none", "lanes-root", "lanes-rejected", "lanes-units",
-             "lanes-error", "lanes-refused", "lanes-empty"]
-LANES_NAMES = ["lanes-honest", *LANES_PRE, *LANES_RUN]
+LANES_NAMES = ["lanes-honest", *LANES_PRE]
 NAMES = PRE_NAMES + RUN_NAMES + LANES_NAMES
 
 
@@ -66,6 +61,16 @@ def _reads(lay: dict, prefix: str, steps: int, c: int) -> list[str]:
     """The values call `c`'s statement reads that the execution phase registers (`credit.registered_file`'s)."""
     k = {lin: k for lin, k, _n in lay["linears"]}[lay["calls"][c][0]]
     return [f"{prefix}a/{k}@{Cr.step_row(lay, steps, c)[0]}", f"{prefix}zy@{c}", f"{prefix}b/{k}"]
+
+
+def unit_of(s: dict) -> int:
+    """The one unit statement `s`'s public file names: its directory's, ``/w/u<u>/``."""
+    return int(s["public"].split("/")[2][1:])
+
+
+def _statement(rng: random.Random, c: int, u: int) -> dict:
+    return {"call": c, "circuit": f"/w/u{u}/circuit.bin", "public": f"/w/u{u}/public.bin",
+            "sessions": [f"/w/u{u}/s{j}" for j in range(rng.randint(1, 3))]}
 
 
 def _finding(rng: random.Random, session: str, ask: dict, units: list[int], program: str) -> dict:
@@ -86,9 +91,7 @@ def _answers(rng: random.Random, case: dict, asks: list[dict], name: str, starts
     for j, a in enumerate(asks):
         s = case["statements"][a["statement"]]
         c = s["call"]
-        mine = [u for u in case["units"] if starts[c] <= u < starts[c] + sizes[c]]
-        parts = [mine[i::len(s["sessions"])] for i in range(len(s["sessions"]))]
-        fs = [_finding(rng, x, a, part, program) for x, part in zip(s["sessions"], parts)]
+        fs = [_finding(rng, x, a, [unit_of(s)], program) for x in s["sessions"]]
         ans = {"findings": fs}
         if j == at:
             f = rng.choice(fs)
@@ -137,8 +140,7 @@ def verified_instance(rng: random.Random, name: str = "honest") -> dict:
     reads = {v for c in drawn for v in _reads(lay, prefix, steps, c)}
     entries = [{"value": v, "root": C._hex(rng)} for v in sorted(reads)]
     rng.shuffle(entries)
-    statements = [{"call": c, "circuit": f"/w/c{c}/circuit.bin", "public": f"/w/c{c}/public.bin",
-                   "sessions": [f"/w/c{c}/s{j}" for j in range(rng.randint(1, 3))]} for c in drawn]
+    statements = [_statement(rng, bisect.bisect_right(starts, u) - 1, u) for u in units]
     rng.shuffle(statements)
     files = {f"k{k}": C._hex(rng) for k in sorted({k for _lin, k, _n in lay["linears"]})}
     case = {"statements": statements, "files": files, "descriptor": C.descriptor(rng, lay, prefix), "entries": entries,
@@ -264,8 +266,7 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
                          **{x: y for x, y in PR.entry(program, v, lanes, 2 * LL.words(lk), draw["root"]).items()
                             if x != "word_bits"}})
         openings[v] = [(row, _bc(rng)) for row in range(lanes)]
-    statements = [{"call": call, "circuit": f"/w/c{call}/circuit.bin", "public": f"/w/c{call}/public.bin",
-                   "sessions": [f"/w/c{call}/s{j}" for j in range(rng.randint(1, 2))]} for call in drawn]
+    statements = [_statement(rng, bisect.bisect_right(starts, u) - 1, u) for u in tiled]
     for u in leaves:
         for kind, ln in LL.statements(r, c) if not shape_off else [(LL.LANE, 0), (LL.COMBINE, None)]:
             d = f"/w/u{u}/{kind}{'' if ln is None else ln}"
@@ -343,95 +344,24 @@ def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
                                         {**files, Cr.LEAF_PROGRAMS: {**files[Cr.LEAF_PROGRAMS], "lane32": C._hex(rng)}},
                                         {**files, Cr.LEAF_PROGRAMS: {x: "ab" for x in files[Cr.LEAF_PROGRAMS]}},
                                         {**files, Cr.LEAF_PROGRAMS: None}])
-    if name in LANES_RUN or name == "lanes-honest" or rng.random() < 0.6:
+    if name == "lanes-honest" or rng.random() < 0.6:
         asks = Cr._asks(case["statements"], case["files"], raw, layout, case["entries"], case["window"], units, steps,
                         case["salt"], case["draw"])[0]
-        case["runs"] = _lanes_answers(rng, case, asks, name, starts, sizes)
+        listed = evidence["statements"] if case["statements"] is evidence else case["statements"]
+        case["runs"] = _answers(rng, {**case, "statements": listed}, asks, "honest", starts, sizes)
     return case
 
 
-def _leaf_finding(session: str, ask: dict, rec: dict) -> dict:
-    """An accepted leaf session's finding: every port of its ``--registered`` file at its value and root, and the rows
-    it opened of each value the verifier holds openings of (the record's partials, its known rows), each the one
-    opening."""
-    ports = ask["registered"]["ports"]
-    want = PR.wanted(rec, ask["known"])
-    return {"session": session, "accepted": True, "why": "accepted", "program": ask["partition"]["program"],
-            "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in ports.items()}, "units": [0],
-            "openings": {p: [[e["reads"][0], want[e["value"]][e["reads"][0]]]] for p, e in ports.items()
-                         if e["value"] in want}}
-
-
-def _lanes_answers(rng: random.Random, case: dict, asks: list[dict], name: str, starts: list[int],
-                   sizes: list[int]) -> list:
-    """`_answers` over a lanes case: the call statements' as there, each leaf session `_leaf_finding`'s, with `name`'s
-    mutation at one leaf run (every one for ``lanes-empty``), cut after the first the Lean refuses at."""
-    lanes = case["statements"]
-    listed = lanes["statements"] if isinstance(lanes, dict) else lanes
-    calls = [a for a in asks if "leaf" not in a]
-    out = _answers(rng, {**case, "statements": listed}, calls, "honest", starts, sizes)
-    if len(out) < len(calls) or not all("findings" in a and all(f["accepted"] for f in a["findings"]) for a in out):
-        return out
-    leafs = [a for a in asks if "leaf" in a]
-    at = rng.randrange(len(leafs)) if leafs else None
-    for j, a in enumerate(leafs):
-        s = listed[a["statement"]]
-        fs = [_leaf_finding(x, a, lanes["produced"]) for x in s["sessions"]]
-        ans = {"findings": fs}
-        if name == "lanes-empty":
-            ans = {"findings": []}
-        elif j == at:
-            f = rng.choice(fs)
-            match name:
-                case "lanes-partial" | "lanes-known":
-                    wanted = [p for p, e in a["registered"]["ports"].items()
-                              if (e["value"] in a["known"]) == (name == "lanes-known") and p in f["openings"]]
-                    p = rng.choice(wanted)
-                    row, bc = f["openings"][p][0]
-                    f["openings"][p] = rng.choice([[[row, ("0" if bc[0] != "0" else "1") + bc[1:]]], [],
-                                                   [[row + 1, bc]], [[row, bc], [row, bc[::-1]]]])
-                case "lanes-openings-none":
-                    f["openings"] = rng.choice([None, {}])
-                case "lanes-root":
-                    p = rng.choice(sorted(f["registered"]))
-                    f["registered"] = rng.choice([{**f["registered"], p: {**f["registered"][p], "root": C._hex(rng)}},
-                                                  {x: y for x, y in f["registered"].items() if x != p},
-                                                  {**f["registered"], "o9": f["registered"][p]}])
-                case "lanes-rejected":
-                    f.update(accepted=False, why=rng.choice(["sumcheck round 3", "opening root"]), units=[])
-                case "lanes-units":
-                    f.update(rng.choice([{"units": [0, 1]}, {"units": []}, {"program": C._hex(rng)}]))
-                case "lanes-error":
-                    ans = {"error": rng.choice(["verity-verify-proof ended on a signal", "no such file: public.bin"])}
-                case "lanes-refused":
-                    ans = {"refused": [rng.choice(["proof", "circuit", "registration"]),
-                                       "the statement's public file is not its circuit's"]}
-        out.append(ans)
-        if "findings" not in ans or not all(f["accepted"] for f in ans["findings"]):
-            break
-    return out
-
-
-@dataclasses.dataclass(frozen=True)
-class Opened(PF.Finding):
-    """A verdict with the rows its session opened (``{port: [[position, b || c] ...]}``), as `produced.shared` reads."""
-
-    openings: dict | None = None
-
-
 def replay(runs: list) -> Cr.Run:
-    """A verifier that answers `runs` in turn, as `credit._answer` reads its run: a finding with
-    ``openings`` (a leaf session's) as `Opened`."""
+    """A verifier that answers `runs` in turn, as `credit._answer` reads its run."""
     answers = iter(runs)
 
-    def run(_proof, *, circuit_sha512, program, partition, registered):
+    def run(_proof, *, program, partition, draw, registered):
         a = next(answers)
         if "error" in a:
             raise ValueError(a["error"])
         if "refused" in a:
             return None, tuple(a["refused"])
-        return [Opened(f["session"], f["accepted"], f["why"], f["program"], f["registered"], tuple(f["units"]),
-                       f["openings"]) if "openings" in f else
-                PF.Finding(f["session"], f["accepted"], f["why"], f["program"], f["registered"], tuple(f["units"]))
+        return [PF.Finding(f["session"], f["accepted"], f["why"], f["program"], f["registered"], tuple(f["units"]))
                 for f in a["findings"]], None
     return run

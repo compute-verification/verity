@@ -1070,9 +1070,10 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     assert p["circuit"] == audit["registration"]["program"]
     window_record = tmp_path / "window-circuit.json"
     window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
+    held_to = audit["registration"]["program"]
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=held_to))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
         got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64))
@@ -1081,13 +1082,13 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
             json.dumps(block_audit(progs, sampled=k, served=True)))
         assert json.loads(served.read_text())["registration"]["window"]["activations"]["values"][sz.SCAN_STATE] == {
             "value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
-        got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=SP.circuit_of_record(window_record)))
+        got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=held_to))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
         (held_period := tmp_path / f"period-registered-{k}.json").write_text(
             json.dumps(block_audit(progs, sampled=k, registered=True)))
         (held_entry,) = json.loads(held_period.read_text())["registration"]["registered"]
         assert held_entry == {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
-        held_case = SP.rows_case(run, scan, v3c=held_period, circuit=SP.circuit_of_record(window_record))
+        held_case = SP.rows_case(run, scan, v3c=held_period, circuit=held_to)
         held_c = PC.commitment(bytes.fromhex(held_case["commitment"]))
         assert len(held_c.windows) == 1 and PC._state_tied(PC.params(held_case["params"]), held_c.audits,
                                                            held_c.windows[0])
@@ -1095,7 +1096,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
         assert (held_got["verdict"], held_got["public"]["audits"][0]["drawn"],
                 held_got["public"]["audits"][0]["units"]) == ("accept", k, E), held_got
     monkeypatch.setattr(SP, "mirror", lambda path: PC)
-    accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
+    accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=held_to))
     for name, period, lean, want, rc in (
             ("served", served, PC.reference, "reject at the state tie", 0),
             ("stated", v3c, PC.reference, "accept", 0),
@@ -1105,7 +1106,11 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
         monkeypatch.setattr(SP, "lean_check", lambda exe, case, d, lean=lean: lean(case))
         argv = ["--mirror", str(PERIOD_CASE), "--lean", "unused", "--out", str(tmp_path / name), "--v3c", str(period),
                 "--circuit", str(window_record), f"honest={run},{scan}"]
-        assert SP.main(argv) == rc, name
+        with pytest.raises(SystemExit, match=re.escape(SP.SERVED)):
+            SP.main(argv)
+        with monkeypatch.context() as held:  # the command's cases past its record's refusal, which no flag lifts
+            held.setattr(SP, "circuit_of_record", lambda path: held_to)
+            assert SP.main(argv) == rc, name
         ran = json.loads((tmp_path / name / "period.json").read_text())
         assert (ran["ok"], ran["cases"]["honest"]["want"]) == (rc == 0, want), ran
         assert (PC.UNSTATED in (ran["cases"]["honest"]["mirror"].get("reason") or "")) == (period == served), ran
@@ -1473,3 +1478,16 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=sz.CC.ChallengerCoins(None)).digest
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
+
+
+def test_every_window_circuit_record_is_refused_by_name_whatever_it_lists(tmp_path):
+    """A served window's circuit writes its entries in the order its Programs end, not slot k's at k, so
+    `circuit_of_record` refuses every window-circuit record by `SERVED`: one that registers the scan state alone, one
+    that lists a table's value beside it, one with no `registered` at all. No field of the record lifts the refusal."""
+    from verity.protocols.resource_accounting.network.prover import scan_period as SP
+    head = {"format": SP.CIRCUIT, "program": "c3" * 64}
+    for i, rest in enumerate(({"registered": {"values": [sz.SCAN_STATE]}},
+                              {"registered": {"values": ["h1/a/0", sz.SCAN_STATE]}}, {"registered": {}}, {})):
+        (record := tmp_path / f"record-{i}.json").write_text(json.dumps({**head, **rest}))
+        with pytest.raises(SystemExit, match=re.escape(SP.SERVED)):
+            SP.circuit_of_record(record)

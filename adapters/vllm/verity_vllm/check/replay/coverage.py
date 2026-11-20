@@ -63,8 +63,7 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "fa3_hidden_m1_stream": ("attention interior (the Hopper launch's M1 export stream): no VU row of its own; the attention VU it belongs to is "
                              "state-linked (NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain"),
     "norm_scales": ("opt-in, never the record (query.norm_scales): a norm's scale, one f32 per row -- interior to the kernel norms' Calls (the "
-                    "norm-scale tap) or an ATen-chain norm's rsqrt output: no VU row of its own under Q_module_body_v1; C1 / C3 here, and the "
-                    "tapped kernels' scale == the IR model's scale bit for bit is the norm-tap exactness property (tests.properties.norm_tap_exactness)"),
+                    "norm-scale tap) or an ATen-chain norm's rsqrt output: no VU row of its own under Q_module_body_v1; C1 / C3 here"),
     "router_softmax": ("opt-in, never the record (query.router_softmax): the selection-order router's softmax per token row -- interior to the "
                        "router Call (the router-softmax tap): no VU row of its own under Q_module_body_v1; C1 / C3 here, and every tapped word == the "
                        "ordered router's committed value in the IR bit for bit is the router-tap exactness property (tests.properties.router_tap_exactness)"),

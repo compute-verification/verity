@@ -244,10 +244,13 @@ def test_an_expert_map_or_a_second_call_is_refused(monkeypatch) -> None:
 def test_the_blocks_call_boundaries_are_claimed_and_attached_on_a_rank() -> None:
     rows = align_rows(3, M * TOPK)
     assert [CB.claimed(r) for r in rows] == [None, None, "moe_align", "moe_align", None]
-    man = {"ranks": 8, "identities": rows}
-    assert "moe_align" in taps.attached(man) and CB.unattached(man, taps.attached(man)) == []
-    assert "moe_align" not in taps.attached({"ranks": 1, "identities": rows})
-    assert not CB.manifest_sites(man)
+    assert not CB.manifest_sites({"ranks": 8, "identities": rows})
+    # the capture plan's road attaches no align source: a plan class of the blocks is no source's, and `taps.attach` refuses it
+    cls = {"op_path": "model.layers.3.ffn/align", "member": "0", "capture": "call_boundary", "width": 1, "dtype": "i32",
+           "definitions": ["MoeAlignBlocks_v1"]}
+    assert CB.claimed(cls) is None and CB.sites([cls]) == [cls] and taps.attached([cls]) == []
+    with pytest.raises(SystemExit):
+        taps.attach(types.SimpleNamespace(sources=[]), [cls], ())
 
 
 def test_the_match_capture_records_the_witness_the_commit_commits(monkeypatch, tmp_path) -> None:
@@ -425,33 +428,3 @@ def test_a_call_routed_otherwise_runs_its_own_schedule_and_is_counted(monkeypatc
     assert fresh.replay is None and MA.replay_stats([fresh]) is None and MA.arm_replay([], tmp_path, 0) is None
 
 
-def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monkeypatch, tmp_path) -> None:
-    """`tp2_commit_install` arms the rank's align source with the capture's schedule before its committer installs: once, at the
-    warm-up's install, and the record's install reuses it.  A Commit without a capture arms nothing."""
-    from verity_vllm.pipeline.tp import rank_worker as RW
-
-    _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
-    events: list = []
-    arm = MA.MoeAlignSource.arm
-
-    def armed(self, calls):
-        events.append(("arm", len(calls)))
-        return arm(self, calls)
-
-    monkeypatch.setattr(MA.MoeAlignSource, "arm", armed)
-
-    def worker(capture_dir: str | None) -> tuple[RW.TP2CaptureWorkerExtension, MA.MoeAlignSource]:
-        src = MA.MoeAlignSource(Committer(), model_of([ids_of(1), ids_of(2)]))
-        com = types.SimpleNamespace(sources=[object(), src], reset=lambda: None,
-                                    install=lambda: events.append(("install", src.replay is not None)))
-        ext = object.__new__(RW.TP2CaptureWorkerExtension)
-        ext._tp2_commit = {"com": com, "match_capture_dir": capture_dir, "rank": 0}
-        return ext, src
-
-    ext, _src = worker(str(tmp_path))
-    want = {"armed": True, "file": str(tmp_path / OW.schedule_file(0)), "calls": 4}
-    assert [ext.tp2_commit_install()["schedule_replay"] for _ in range(2)] == [want, want]
-    assert events == [("arm", 4), ("install", True), ("install", True)]
-    events.clear()
-    ext, src = worker(None)
-    assert ext.tp2_commit_install()["schedule_replay"] is None and src.replay is None and events == [("install", False)]

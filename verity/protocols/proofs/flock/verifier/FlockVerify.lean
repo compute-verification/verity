@@ -330,8 +330,7 @@ SHA-512. With `flag` `--rec-rows`, the verifier's record of V*'s shared rows (`R
 form. A file naming a key twice in one object (a port, or a port's key) is refused (`JsonKeys.dupKey`): the parser
 would keep one of them. A port the file names at known content (`Registered.KNOWN_KEY`) is refused unless its root is
 the root of that content (`Registered.checkKnownAll`). Beside the ports, the rows `KnownRead.check` holds every
-statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, then each port
-the file marks `read_in_full` (`KnownRead.readOf`) as one row of its registered row's words (`KnownRead.fullRows`), and the
+statement to: the known content (`Registered.knownOf`), whose input ports every statement must read in every bit, and the
 template parameter each port reads (`Registered.paramsOf`, which `Registered.checkCover` holds the program's registered
 reads to), the ports it binds to the window's committed values (`RegBound.ofJson`, which `RegBound.check` reads), and
 the file's digest, the SHA-512 of its canonical JSON (`sha512Of`), which a verdict names it by. -/
@@ -358,7 +357,7 @@ def registeredFile (args : List String) (flag : String := "--registered") (ctx :
           let own ← Registered.ofJson j
           let known ← Registered.knownOf j
           Registered.checkKnownAll own known
-          return (own, known ++ KnownRead.fullRows own (← KnownRead.readOf j), ← Registered.paramsOf j, bound,
+          return (own, known, ← Registered.paramsOf j, bound,
             ← sha512Of file)
         return (r.mapError fun e => if flag == "--registered" then e else s!"{ctx}: {e}").map some
       | .error e, _ => return .error s!"{ctx}: not JSON: {e}"
@@ -797,7 +796,7 @@ def UPSTREAM_PLAIN : String :=
   "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
-names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
+names the statement's tags (`verity/flock-circuit` by default; `Tags.byName?`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`), as is every session of a
 wide-leaf statement (`Tags.wideLeaf`) without `--zk` or with a `--rec-…` argument (`ProvedScope.wideLeafWhy`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one sample of fixed count, a
@@ -835,13 +834,14 @@ whose circuit links sets up only with the verifier's own program of it, `--rec-i
 as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
-sample; one verdict line per session, in order, naming with `--program` the verifier's own program's digest: as `program_sha512`
+sample; one verdict line per session, in order, each saying whether it ran `--zk` (`zk`), naming with `--program` the
+verifier's own program's digest: as `program_sha512`
 only when it is META's `program_sha512`, else as `program_handed_sha512` with a `program_note` (`ProvedScope.programFields`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
 with `--rec-part J` its part (`rec_part`), the SHA-512 of every other input V*'s parts share (`rec_shared`,
-`recSharedInput`), whether it ran `--zk` (`zk`) and its session's coin key (`coin_key`), with `--rec-rows F` the
+`recSharedInput`) and its session's coin key (`coin_key`), with `--rec-rows F` the
 SHA-512 of the shared rows file it checked (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file
 it read (`rec_inner_sha512`), and with `--rec-inner-session DIR` and `--rec-inner-transcript F` the SHA-512 of the inner
 session's record and of the transcript (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`,
@@ -914,11 +914,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
+  let zk := args.contains "--zk"
   let emit : String → Except String (Except String Unit) → List (String × Lean.Json) → IO Bool := fun dir outcome extra => do
     match upstream with
     | none =>
       let (ok, why) := match outcome with | .ok (.ok ()) => (true, "") | .ok (.error e) | .error e => (false, e)
-      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why)] ++ extra)
+      let line := Lean.Json.mkObj ([("session", Lean.Json.str dir), ("accepted", Lean.Json.bool ok), ("why", Lean.Json.str why),
+        ("zk", Lean.Json.bool zk)] ++ extra)
       IO.println s!"VERDICT {line.compress}"
       return ok
     | some up =>
@@ -946,7 +948,6 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
-  let zk := args.contains "--zk"
   let ksForm := args.contains "--ks-form"
   if ksForm && !zk then
     IO.eprintln "verify --ks-form: the sampled audit's knowledge soundness is over --zk sessions, so --ks-form goes with --zk"; return 2
@@ -1148,7 +1149,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
     -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
     -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
     -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`), then under `agree` upstream's
-    -- plain files, which `verify` refuses whatever else holds
+    -- plain files, which `verify` refuses whatever else holds, then a recursive session's (`RecSetup.notRecursive`)
     let refusals : String × Array Setup → Except String Unit := fun (record, tabs) => do
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
@@ -1164,6 +1165,7 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
       ProvedScope.servedForm stmtTags coins
       if stmtTags.upstreamPlain then throw UPSTREAM_PLAIN
+      RecSetup.notRecursive (args.any (·.startsWith "--rec-"))
     if let some k := coinKey then coinKeys := coinKeys.push k
     -- the partition finding: the rule, the query, the digest, and whether the units were derived or taken as stated
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
@@ -1181,13 +1183,13 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : Circui
       (match identifier with | some (j, _) => [("identifier", j)] | none => []) ++
       -- the verifier's own inner shape's word, never the prover's META
       (match recInner with | some i => [("private_circuit", Lean.Json.bool i.holo)] | none => []) ++
-      -- the part, the shared rows and every other shared input it was checked against, whether it ran --zk, and its
-      -- session's coin key, which `rec-compose` holds every part to (`RecCompose.Accepts`)
+      -- the part, the shared rows and every other shared input it was checked against, and its session's coin key,
+      -- which `rec-compose` holds every part to (`RecCompose.Accepts`)
       (match recPart with | some j => [("rec_part", Lean.toJson j)] | none => []) ++
       (match recRowsSha with | some h => [("rec_rows_sha512", Lean.Json.str h)] | none => []) ++
       (match recInnerSha with | some h => [("rec_inner_sha512", Lean.Json.str h)] | none => []) ++ recSessionShas ++
       (match recShared with
-        | some s => [("rec_shared", s.toJson), ("zk", Lean.Json.bool zk)] ++
+        | some s => [("rec_shared", s.toJson)] ++
           (match coinKey with | some k => [("coin_key", Lean.Json.str k)] | none => [])
         | none => []))
     all := all && ok
@@ -1751,6 +1753,27 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
     IO.println s!"TEMPLATEQUERY {line.compress}"
   return 0
 
+/-- `partition-object FILE...`: a partition object's form (`HmRow.checkPartitionObject`) for each case `{"object"}`, and
+with `"descriptor"` (the program's bytes as a string) its levels of `blocks` as a reader gets them (`HmRow.levelsOf`),
+or the refusal. One `PARTITIONOBJECT` line per file. -/
+def partitionObjectCmd (paths : List String) : IO UInt32 := do
+  for path in paths do
+    let text ← try IO.FS.readFile path catch _ => pure ""
+    let res : V Lean.Json := do
+      let j ← match Flock.JsonParse.parse text with | .ok j => pure j | .error e => throw s!"not JSON: {e}"
+      let obj := (j.getObjVal? "object").toOption.getD Lean.Json.null
+      discard <| HmRow.checkPartitionObject obj
+      let some d := (j.getObjValAs? String "descriptor").toOption | return Lean.Json.mkObj []
+      let ls ← HmRow.levelsOf obj d.toUTF8
+      return Lean.Json.mkObj [("blocks", match ls with
+        | some ls => Lean.Json.arr (ls.map fun ps => Lean.Json.arr (ps.map fun (lo, hi) => Lean.toJson #[lo, hi]))
+        | none => Lean.Json.null)]
+    let line := match res with
+      | .ok r => (r.setObjVal! "file" (Lean.Json.str path)).setObjVal! "ok" (Lean.Json.bool true)
+      | .error e => Lean.Json.mkObj [("file", Lean.Json.str path), ("ok", Lean.Json.bool false), ("error", Lean.Json.str e)]
+    IO.println s!"PARTITIONOBJECT {line.compress}"
+  return 0
+
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
 `CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
@@ -1903,9 +1926,10 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 /-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG...`: a recursive statement's verdict from
 its V* parts' `verify` logs and the challenger's interactive-run record (`RecCompose.check`). The verifier's own inner
 shape (`--rec-inner`) gives V*'s statements, `--rec-rows` is the one shared rows file the prover staged, and
-`--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It accepts
-exactly when `RecCompose.Accepts` holds of the logs' verdicts (`RecCompose.check_accepts`): one log per V* statement
-with one `VERDICT`, each accepted at its own part, under `--zk`, without an identifier and at that rows file's SHA-512;
+`--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It refuses
+every composition, after its checks, by name (`RecSetup.RECURSION_REFUSED`); its checks pass exactly when
+`RecCompose.Accepts` holds of the logs' verdicts (`RecCompose.check_accepts`): one log per V* statement with one
+`VERDICT`, each accepted at its own part, under `--zk`, without an identifier and at that rows file's SHA-512;
 every part naming one set of the other shared inputs, the first at this inner shape's SHA-512 and in the compiled
 verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
 staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
@@ -1947,7 +1971,7 @@ def recComposeCmd (args : List String) : IO UInt32 := do
     try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   -- a record that can't be read is no record: not JSON, so refused
   let run ← try IO.FS.readFile ⟨runFile⟩ catch _ => pure ""
-  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts
+  let res := RecCompose.check n digest innerDigest (RecCompose.linksOf links) run parts *> RecSetup.notRecursive true
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
     ("rec_rows_sha512", Lean.Json.str digest), ("rec_inner_sha512", Lean.Json.str innerDigest),
@@ -1970,6 +1994,7 @@ def main (args : List String) : IO UInt32 := do
   | "sigma-check" :: rest => Flock.Sigma.cmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
+  | "partition-object" :: paths => partitionObjectCmd paths
   | "net-check" :: paths => netCheckCmd paths
   | "draw" :: rest => sampleCmd rest
   | "draw-test" :: path :: rest => sampleTest path rest

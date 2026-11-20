@@ -83,6 +83,8 @@ from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.boolean_moe import (
     _eq_word,
+    _ex2_in,
+    _ex2_out,
     _fmaxf,
     _key,
     _key_of,
@@ -92,7 +94,7 @@ from verity_vllm.definitions.registry.boolean_moe import (
 from verity_vllm.definitions.registry.gumbel_boolean import NvLogf
 
 __all__ = ["Dsv4HashWeight", "Dsv4HashWeightIn", "Dsv4HashWeightMid", "Dsv4HashWeightOut", "Dsv4SqrtSoftplus",
-           "Dsv4SqrtSoftplusIn", "Dsv4SqrtSoftplusMid", "Dsv4SqrtSoftplusSelect", "Ex2Approx", "Ex2ApproxIn", "Ex2ApproxOut",
+           "Dsv4SqrtSoftplusIn", "Dsv4SqrtSoftplusMid", "Dsv4SqrtSoftplusSelect",
            "MoeRouterHash", "MoeRouterHashNorm", "MoeRouterHashPick", "MoeRouterSqrtSoftplus", "MoeRouterSqrtSoftplusTopK", "MufuLg2Mantissa", "SiluMulClamp", "SiluMulClampBf16", "SiluMulClampIn",
            "mufu_lg2_mantissa"]
 
@@ -167,43 +169,6 @@ def mufu_lg2_mantissa(C, x):
 MufuLg2Mantissa = definition("MufuLg2Mantissa", 2, mufu_lg2_mantissa, (("x", F32),), F32, word=D.MufuLg2Mantissa,
                              doc="MUFU.LG2 of 1.m on bits: MufuLg2Mantissa_v1's interpolator as one carry-save sum, the word "
                                  "rounded toward zero by a leading-zero count and a shift")
-
-
-# --- ex2.approx.f32 ------------------------------------------------------------------------------------------------------------
-
-def _ex2_in(C, t):
-    """(the MUFU.EX2 operand, whether t < -126): ``t * 0.5`` (F32Mul_v1) below -126, else t; a NaN is not below."""
-    small = C.AND(NOT(_nan(C, t)), _less(C, _key(C, t), const_bits(_key_of(D.MINUS_126), 32)))
-    return mux(C, small, fp.f32_mul(C, t, _w(D.HALF), ir_nan=True), list(t)), small
-
-
-def _ex2_out(C, y, small):
-    """``y * y`` (F32Mul_v1) where t was below -126, else y."""
-    return mux(C, small, fp.f32_mul(C, y, y, ir_nan=True), list(y))
-
-
-def ex2_approx_in(C, t):
-    op, small = _ex2_in(C, t)
-    return [op, [small]]
-
-
-def ex2_approx_out(C, y, small):
-    return _ex2_out(C, y, small[0])
-
-
-Ex2ApproxIn = definition("Ex2ApproxIn", 1, ex2_approx_in, (("t", F32),), Tuple(F32, FLAG),
-                         doc="ex2.approx.f32 before its MUFU.EX2: the operand (t * 0.5 below -126) and whether t < -126")
-Ex2ApproxOut = definition("Ex2ApproxOut", 1, ex2_approx_out, (("y", F32), ("small", FLAG)), F32,
-                          doc="ex2.approx.f32 after its MUFU.EX2: y * y where t < -126")
-
-
-def _ex2_approx(B, S, t):
-    """`Ex2Approx_v1` on bits: `Ex2ApproxIn_v1`, `MufuEx2Ftz_v2`, `Ex2ApproxOut_v1`."""
-    a = B.call(Ex2ApproxIn, t)
-    return B.call(Ex2ApproxOut, B.call(BM.MufuEx2Ftz, a[0]), a[1])
-
-
-Ex2Approx = EW.on_bits("Ex2Approx", 2, (), lambda S: ((("t", F32),), F32), _ex2_approx, D.Ex2Approx)
 
 
 # --- the CUDA hash router (layers 0-2) -----------------------------------------------------------------------------------------

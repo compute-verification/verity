@@ -1,10 +1,12 @@
 """Pearl+ as a resource scheme (`verity.protocols.resource_accounting.scheme`), registered as ``pearl-plus``.
 
-Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). A tile that passes
-the tile rule costs its credited cells at the record's kept width |K| (`Credit.lean`'s `creditAtAssumption`), so a
-block's cost reads the record's kept width (``K_KEPT``, `UnitRecord.k_kept`) beside the tile's TM × TN, not the
-Definition's K, which is the unit's padded width. The cost is of a tile whose every cell is credited: filler, excluded and
-given-up rows credit none (`UnitRecord.credited`).
+Its verifier is `verity/pouw/pearl-plus/v1` (`verifier/lean/pearlplus/PouwPearlPlus/Protocol.lean`). In C, a credited
+linear is its grid's units of `PearlPlusTileCoreWords_v4` (`prover.circuit.pearl_plus_credited`), which write its y; its
+block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K,
+since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
+many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048):
+`laid_tiles` gives each laid block its tile by a public rule from the laying, and `credited_tiles` credits the window's
+tiles all or none, on an audit that drew every stratum holding a tile's block at its registered count.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
@@ -13,26 +15,30 @@ arrives (`Attached.step`); outside an epoch a block is the workload's own. At a 
 ``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
 in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
-linears it computes, whose calls commit their A rows and y. Its settings are
-`SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
-record states.
+linears it computes, whose calls commit their A rows and y. Its credited product is one block per grid tile of every
+call of every pass, in the Lean verifier's tile order (`credited_blocks`), and its sample draws over those blocks
+(`drawn_blocks`). Its settings are `SETTINGS`. A served run launches it untied (`_hooks`): its verdict is its own over its own passes, held to no window
+record, and credits nothing.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
+from verity.config import COMPOSITES
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, LaunchRefused, Order,
+                                                             Scheme, Term, register)
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -42,8 +48,181 @@ OPTION = f"pouw:{KERNEL}"
 READS = ("bf16",)
 
 
-def tile_macs(shape: Mapping[str, int]) -> int:
-    return shape["TM"] * shape["TN"] * shape["K_KEPT"]
+def tile_macs(statics: Mapping[str, int]) -> int:
+    return statics["TR"] * statics["TN"] * statics["K"]
+
+
+@dataclass(frozen=True)
+class CreditedBlock:
+    """One credited block: tile ``id`` = (pass, tile id) of the run, the tile id its transcript leaf's position; ``record``
+    its call's position in the pass, ``unit`` the call's index, ``rows`` and ``cols`` the tile's, ``col`` its column block
+    (``cols[0] // TN``), ``size`` its template's (K, TM, TN, N), ``real`` its template's static real-row count TR (its
+    rows below the call's ``real_rows``; the rest are filler, held to zero), and ``ticket`` its integer sample weight."""
+
+    id: tuple[int, int]
+    record: int
+    unit: int
+    rows: tuple[int, ...]
+    cols: tuple[int, ...]
+    col: int
+    size: tuple[int, int, int, int]
+    real: int
+    ticket: int
+
+
+def credited_blocks(scheme: Any, passes: Sequence[Sequence[Any]]) -> list[CreditedBlock]:
+    """The run's credited product as blocks, one per grid tile of every call of every pass (``passes``, each pass's
+    `UnitRecord`s in order), in the Lean verifier's order (`Run.lean`'s `tile?` and `tickets`): pass by pass, call by call,
+    each call's tiles row-major (`audit.tile_refs` over `grid_tiles`), each ticketed at its credited cells' `wref` share
+    (`clear_work.tickets` over every pass's records together). A tile with no credited cell has ticket 0 and is never
+    drawn."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.clear import clear_work as CW
+    from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Workload, tile_refs
+
+    tickets = iter(CW.tickets(scheme, [r for records in passes for r in records]))
+    tn, out = scheme.tile[1], []
+    for i, records in enumerate(passes):
+        for ref in tile_refs(scheme, Workload(tuple(r.matmul for r in records))):
+            _, tile, ticket = next(tickets)
+            r = records[ref.matmul]
+            u = r.matmul
+            assert tile == ref.tile, "clear_work.tickets and audit.tile_refs enumerate one grid"
+            out.append(CreditedBlock((i, ref.id), ref.matmul, u.index, tile.rows, tile.cols, tile.cols[0] // tn,
+                                     (u.shape.k, len(tile.rows), tn, u.shape.n),
+                                     sum(row < r.real_rows for row in tile.rows), ticket))
+    return out
+
+
+def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
+                 draw: Callable[..., Any] | None = None) -> list[CreditedBlock]:
+    """The ``t`` blocks of `credited_blocks` that ``key`` draws (``draw``, `clear_work.draw` unless a caller holding
+    `clear_work` by its bare name gives its own: work-weighted with replacement, in its order): `Run.lean`'s `draw` under
+    `drawKey`."""
+    if draw is None:
+        from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_work import draw
+
+    blocks, at = credited_blocks(scheme, passes), [0]
+    for records in passes:
+        at.append(at[-1] + len(records))
+    by_tile = {(at[b.id[0]] + b.record, b.rows[0], b.cols[0]): b for b in blocks}
+    return [by_tile[(pos, tile.rows[0], tile.cols[0])]
+            for pos, tile in draw(scheme, [r for records in passes for r in records], key, t)]
+
+
+#: a credited tile's template in C before C is laid (`prover.circuit.pearl_plus_credited.PearlPlusTileCoreWords`): its
+#: statics are the tile's, and `tile_macs` of them is what the tile is credited
+TILE = "PearlPlusTileCoreWords_v4"
+#: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
+#: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
+#: of the laid C lies partly inside a tile's gates, so the rule places it in no tile
+TILE_ABSENT = "tile-absent"
+BLOCK_NOT_UNIT = "tile-block-not-unit"
+TILE_STRADDLES = "tile-straddles"
+#: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
+#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
+AUDIT_SHORT = "tile-audit-short"
+AUDIT_STRAY = "tile-audit-stray"
+
+
+@dataclass(frozen=True)
+class LaidTile:
+    """A credited tile of C as C's laying lays it: ``index`` its place among C's tiles in C's root order, ``gates`` its
+    gates [lo, hi) in C, ``amount`` its credited MACs (`tile_macs` on its template's statics, public in C before any
+    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, and ``kinds`` its m_s: its blocks in each
+    stratum, by the stratum's descriptor id."""
+
+    index: int
+    gates: tuple[int, int]
+    amount: int
+    blocks: tuple[int, ...]
+    kinds: Mapping[str, int]
+
+
+def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[LaidTile]:
+    """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of ``laid`` (C as
+    `verity.circuits.laying.lay` lays it) that it holds, by a public rule from the laying: since laying keeps C's gates in
+    C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do. ``strata`` are
+    the laid C's (`verity.circuits.partition_query.strata` under its template-instance query): their blocks must be its
+    root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), no unit may lie partly in a tile
+    (`TILE_STRADDLES`), and C must hold a tile (`TILE_ABSENT`)."""
+    import bisect
+
+    from verity.circuits import laying as LY
+    from verity.circuits import partition_object as PO
+
+    before, after = PO.TemplatePartition(program, LY.query(program)), PO.TemplatePartition(laid, LY.query(laid))
+    of: list[str | None] = [None] * after.population
+    for tid, rs in strata:
+        for lo, hi in rs:
+            if not 0 <= lo <= hi <= after.population or any(of[lo:hi]):
+                raise ValueError(f"{BLOCK_NOT_UNIT}: stratum {tid}'s blocks [{lo}, {hi}) are not among the laid C's "
+                                 f"{after.population} root units, each in one stratum")
+            of[lo:hi] = [tid] * (hi - lo)
+    if wrong := next(((a, tid) for _k, tid, a, n in after.ranges if of[a:a + n] != [tid] * n), None):
+        raise ValueError(f"{BLOCK_NOT_UNIT}: the laid C's root unit {wrong[0]} is one {wrong[1]}, and the strata place "
+                         f"block {wrong[0]} in {of[wrong[0]]}: a block is one root unit of its stratum's template")
+    nodes = program.root.body.nodes
+    tiles = [(a + m, nodes[k].fn) for k, tid, a, n in before.ranges if tid == TILE or tid.startswith(TILE + "{")
+             for m in range(n)]
+    if not tiles:
+        raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
+    spans = [before.gates(u) for u, _fn in tiles]
+    starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
+    held: list[list[int]] = [[] for _ in tiles]
+    root = laid.root.body
+    for k, _tid, a, n in after.ranges:
+        g, at = root.nodes[k].fn.gates, root.offsets[k]
+        for m in range(n):
+            lo, hi = at + m * g, at + (m + 1) * g
+            i = bisect.bisect_right(starts, lo) - 1
+            if i >= 0 and lo < spans[i][1] and hi <= spans[i][1] and (lo < hi or spans[i][0] < lo):
+                held[i].append(a + m)
+            elif (i >= 0 and lo < spans[i][1]) or (i + 1 < len(spans) and spans[i + 1][0] < hi) or \
+                    (lo == hi and lo in edges):
+                raise ValueError(f"{TILE_STRADDLES}: the laid C's root unit {a + m}, gates [{lo}, {hi}), lies partly "
+                                 "in a tile's gates, or holds none at a tile's edge")
+    out = []
+    for i, ((_u, fn), span, blocks) in enumerate(zip(tiles, spans, held)):
+        kinds: dict[str, int] = {}
+        for b in blocks:
+            kinds[of[b]] = kinds.get(of[b], 0) + 1
+        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds)))
+    return out
+
+
+def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
+                   verdicts: Mapping[int, bool], counts: Mapping[str, int]) -> list[LaidTile]:
+    """The window's tiles credited: all of them or none, each its ``amount``, which C fixes before any coin. A credited
+    unit is a public set of blocks with one amount, credited on one event; the shared interface
+    (`resource_accounting.scheme.Block`) does not yet express it, and this stands in.
+
+    S, the strata holding a block of any tile, is fixed by the laying. ``verdicts`` are the drawn blocks, each with
+    whether its proof verified, and ``counts`` each stratum's registered count of drawn blocks. Unless every stratum of
+    S has its registered count, at least one, of drawn blocks with a verdict, it refuses `AUDIT_SHORT`: an audit short of
+    its draw, an empty one included, is no evidence. Then every tile is credited when each of those verdicts passed, and
+    none when any failed: the bound on spoiled tiles counts bad blocks over all of S at the draw's rate, which holds for
+    the tiles together and clears no tile by the strata it holds alone. A stratum outside S neither credits nor spoils.
+    A verdict on a block of no stratum is refused (`AUDIT_STRAY`)."""
+    import bisect
+
+    if not tiles:
+        raise ValueError(f"{TILE_ABSENT}: no tile to credit")
+    held = set().union(*(t.kinds for t in tiles))
+    ranges = sorted((lo, hi, tid) for tid, rs in strata for lo, hi in rs)
+    starts = [lo for lo, _hi, _tid in ranges]
+    drawn, failed = dict.fromkeys(held, 0), False
+    for b, ok in verdicts.items():
+        i = bisect.bisect_right(starts, b) - 1
+        if i < 0 or not b < ranges[i][1]:
+            raise ValueError(f"{AUDIT_STRAY}: a verdict on block {b}, which is in no stratum")
+        if (tid := ranges[i][2]) in held:
+            drawn[tid] += 1
+            failed = failed or ok is not True
+    if short := sorted(s for s in held if counts.get(s, 0) < 1 or drawn[s] != counts[s]):
+        raise ValueError(f"{AUDIT_SHORT}: {len(short)} strata holding a tile's block lack their registered count of "
+                         f"drawn blocks with a verdict, first {short[0]}: {drawn[short[0]]} drawn of "
+                         f"{counts.get(short[0], 0)}")
+    return [] if failed else list(tiles)
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
@@ -53,10 +232,10 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
 #: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`);
-#: ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset: every
-#: phase's); and ``tie-uniform``
-SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
+#: and ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset:
+#: every phase's)
+SETTINGS: dict[str, Any] = {"kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "", "coins": "",
+                            "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
 COINS = ("", "in-process")
 
 
@@ -328,7 +507,7 @@ class Attached:
         return dict(self.life["commitment"]) if self.life else dict(self.run.commits) if self.run is not None else {}
 
     def record(self) -> Mapping[str, Any]:
-        return {"entry": OPTION, "schedule": self.own["schedule"], "tie-uniform": self.own["tie-uniform"]}
+        return {"entry": OPTION, "schedule": self.own["schedule"]}
 
     def summary(self) -> Mapping[str, Any]:
         if self.phased:
@@ -495,7 +674,7 @@ PEARL_PLUS = register(Scheme(
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
-    blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
+    blocks=(Block(TILE, tile_macs),),
     assumptions=("Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",),
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
@@ -505,14 +684,11 @@ PEARL_PLUS = register(Scheme(
     under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
           "at g₀ = 1/400)",
     settings=SETTINGS,
-    # the class's slots and outputs are the tied workload's slots and window steps (4, 2): Pearl+'s launcher refuses
-    # any other, so an application on other workload values does not tie
-    tie={"class": "4,27,2", "tie-uniform": True},
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
     provides=("cut",),
-    requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
+    requires={"one-labelling": "its own pass manifests, held to no window record",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",
               "one-design": "its own tile sampling by ticket weight"},
@@ -525,16 +701,20 @@ PEARL_PLUS = register(Scheme(
     depends=(),
     pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
                               starts=("gate", "peer", "lane", "key-sha512", "main-file"),
-                              starts_optional=("lane", "main-file"))},
+                              starts_optional=("lane", "main-file"),
+                              entry="verity.protocols.resource_accounting.compute.pouw.scheme:launch_pearlplus",
+                              executables=(Executable(
+                                  "verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus",
+                                  "pouw-pearlplus"),))},
     answers=Lacks("has no piece that answers outside an exchange"),
     # until the salt and sample sessions' signature pin is in Lean
     unchecked={"coins-signatures-checked-by-the-auditor":
                "coins' signatures checked on the served node only; not checked by the auditor",
                # no record the verifier reads states vLLM's graph mode: `requests`' eager is held on the serving node
-               "cuda-graph-rows-outside-the-tie":
-               "the tie covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) "
-               "a step's linear runs at the capture size, with rows no request owns, and those rows are outside what "
-               "the tie covers"},
+               "cuda-graph-rows-outside-the-verdict":
+               "Pearl+'s verdict covers a workload served eager (vLLM's graph mode NONE): under a CUDA graph (FULL or "
+               "PIECEWISE) a step's linear runs at the capture size, with rows no request owns, and those rows are "
+               "outside what its verdict covers"},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
@@ -554,3 +734,35 @@ PEARL_PLUS = register(Scheme(
                               "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
                               "nothing.",
 ))
+
+SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
+#: served_verdicts.sh's variable for each binding of Pearl+'s live challenger, the party that sends its salt
+_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
+_CHALLENGER = workload.PEARL_CHANNELS[0].sender
+
+
+def _hooks(cfg, params, bound, pinned):
+    """Pearl+ on the workload's engine (POUW=pearlplus), untied: each engine step's passes retained under the gate's
+    salts, then its verdict over its own passes, held to no window record, and the Lean verifier
+    (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the
+    lane's gate: Pearl+'s epoch coins are then an in-process challenger's on the workload's machine, its verdict claims
+    none, and the run is a development one."""
+    product = "remote" if sorted(cfg["protocols"]) == sorted(COMPOSITES["verity/remote/v1"]) else "onsite"
+    hooks = {"POUW": "pearlplus", "PRODUCT": product}
+    if given := [k for k in _LIVE if k in bound]:
+        if lacking := [k for k in _LIVE if k not in bound]:
+            raise LaunchRefused("unbound", f"Pearl+'s live challenger takes {', '.join(_LIVE)} together, and the "
+                                           f"deploy bindings bind {', '.join(given)} without "
+                                           f"{', '.join(f'{_CHALLENGER}.pearl-plus.{k}' for k in lacking)}: bind "
+                                           f"them, or none for coins flipped on the workload's machine")
+        hooks |= {v: bound[k] for k, v in _LIVE.items()}
+    else:
+        hooks |= {"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
+    return hooks | {v: bound[k] for k, v in (("lane", "PEARLC_CHALLENGER_LANE"), ("main-file", "MAIN_FILE"))
+                    if k in bound}
+
+
+def launch_pearlplus(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """Pearl+'s workers piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _hooks, (SCRIPT,)

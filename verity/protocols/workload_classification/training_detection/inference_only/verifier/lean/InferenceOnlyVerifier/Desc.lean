@@ -63,7 +63,8 @@ same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none 
 ## Refusals
 
 In the order checked: `instance` and `params` (`InferenceOnlyCheck.parse`), `program` (the decoder refuses it, among them a
-reference that reads a leaf at another width than it was committed with, `E_REINTERPRET`: `InferenceOnlyCheck.decodeProgram`), `not-topological`
+reference that reads a leaf at another width than it was committed with, `E_REINTERPRET`: `InferenceOnlyCheck.decodeProgram`),
+`recut-unread` (the root reads an input node in leaves of part of its leaf width, `Body.recut`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
@@ -1046,11 +1047,11 @@ where an earlier one was. -/
 def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
 
 /-- Every reference `Flock.Program.resolve` follows from an activation of the walk ends at a gate: the root has no
-parameters (the decoder's refusal), and no scan of no iterations has output leaves, which `resolve` refuses to read. A
-scan of no iterations carrying a value is refused here wherever it is, read or not; `analyze` would refuse it only where
-a gate's operand reaches it. -/
+parameters (the decoder's refusal), the root reads no input node recut (`resolve`'s `recut-gates`), and no scan of no
+iterations has output leaves, which `resolve` refuses to read. A scan of no iterations carrying a value is refused here
+wherever it is, read or not; `analyze` would refuse it only where a gate's operand reaches it. -/
 def resolvable (P : Prog) : Bool :=
-  (P.defs[P.root]!).body.params.isEmpty && (List.range P.defs.size).all fun d =>
+  ((P.defs[P.root]!).body.params.isEmpty && (P.defs[P.root]!).body.recut.isEmpty) && (List.range P.defs.size).all fun d =>
     (P.defs[d]!).prim || (P.defs[d]!).body.nodes.all fun n => n.form != .scan || n.n != 0 || n.out.leaves == 0
 
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
@@ -1119,6 +1120,7 @@ def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "p
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
   let P ← decodeProgram i.program
+  if !(P.defs[P.root]!).body.recut.isEmpty then throw "recut-unread"
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"

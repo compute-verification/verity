@@ -26,10 +26,9 @@ import pearl_c_vectors as V
 from verity.circuits import partition_object as PO
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
 from verity.circuits.silicon import fp32
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8, plan
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound, pc8
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
@@ -629,19 +628,15 @@ def test_the_split_computes_every_value_in_exactly_one_unit(side, row_rho):
     assert verdict.detail["certified"] == verdict.detail["computed_gates"]
 
 
-def test_no_unit_of_a_deployed_tiles_closure_has_more_than_66_rows():
+def test_no_unit_of_a_deployed_tile_has_more_than_66_rows():
     """Flock's composer gives each row a unit reads or writes an hm96 slot of 2^18 bits, a unit at most 2^27 bits
     (`circuit.K_MAX`, so at most 256 rows), and refuses a unit none of whose rows hashes a SHA-512 block before its last.
-    At the deployed 64 × 64 tile and K = 8,192 a sampled tile's closure is 4,291 units (its 64 rows of A, its strip, 4,096
-    word units, 64 row digests and 64 row tallies, the tile and the tally), none with more than 66 rows (the row tally's;
-    128 slots, 2^25 bits), and each with a row-seg row or a v2 row past one block."""
+    At the deployed 64 × 64 tile and K = 8,192 no unit of a tile (its rows of A, its strip, its word units, its row digests
+    and row tallies, the tile and the tally) has more than 66 rows (the row tally's; 128 slots, 2^25 bits), and each has
+    a row-seg row or a v2 row past one block."""
     shape = pc8.Shape(64, 8192, 64, tile=(64, 64), dev="sm120", hidden=True, cap=True)
-    lay = plan.tile_layout(shape, 1)
-    (closure,) = lay.closure.values()
-    roles = Counter(lay.units[i].role for i in closure)
-    assert roles == {"tile": 1, "row_a": 64, "strip": 1, "word": 4096, "row_digest": 64, "row_tally": 64, "tally": 1}
     reads, sizes = inert_bound.reads(shape.tile), {}
-    for role in roles:
+    for role in ("tile", "row_a", "strip", "word", "row_digest", "row_tally", "tally"):
         rows = L.statement_rows(inert_bound.PORTS[role], shape.k, reads[role])["row_schemas"]
         sizes[role] = len(rows)
         assert any(s == SCHEMA_HM96_SHA512_ROW_SEG or -(-bits // 8) + 17 > 128 for s, bits in rows), role
@@ -714,35 +709,6 @@ def test_the_split_call_is_the_hiding_call_with_each_tiles_inert_bound(dev):
     assert caps == [1] * tiles
 
 
-def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
-    """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
-    row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each sampled tile
-    (`Plan.proved`), never sampling one; the tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
-    tm, tn = SPLIT.tile
-    lay = plan.tile_layout(SPLIT, 1000)
-    lay.check()
-    us = lay.units
-    tiles = [u for u in us if u.role == "tile"]
-    assert len(tiles) == 4 and set(lay.closure) == {t.index for t in tiles}
-    for t in tiles:
-        rs, cs = t.where
-        got = [(us[i].role, us[i].where) for i in lay.closure[t.index][1:]]
-        assert got == ([("row_a", (rs * tm + i,)) for i in range(tm)] + [("strip", (rs,))]
-                       + [("word", (rs * tm + i, cs * tn + j)) for i in range(tm) for j in range(tn)]
-                       + [(r, (rs * tm + i, cs)) for r in ("row_digest", "row_tally") for i in range(tm)]
-                       + [("tally", (rs, cs))])
-    assert [(s.role, s.work) for s in lay.strata] == [("row_a", 0), ("strip", 0), ("word", 0), ("row_digest", 0),
-                                                       ("row_tally", 0), ("tile", 4 * 1000), ("tally", 0)]
-    for sampling_design in (plan.CountSamplingDesign(2), plan.WorkSamplingDesign(2)):
-        p = plan.draw(derive(bytes(32), plan.DRAW_DOMAIN, {"test": "cap"}), lay, sampling_design)
-        drawn = [u for u in p.drawn if us[u].role == "tile"]
-        assert drawn and set(p.proved) == set(p.drawn) | {i for t in drawn for i in lay.closure[t]}
-        for t in drawn:
-            assert sum(us[i].role == "word" for i in lay.closure[t]) == tm * tn
-    off = plan.tile_layout(replace(SPLIT, cap=False), 1000)
-    assert all(len(c) == 1 + tm for c in off.closure.values())
-
-
 def test_the_inert_bound_flag_is_off_by_default_and_refuses_shapes_outside_the_split():
     """``cap`` is off by default, so a shape's ports and Programs are pc8's; on, the ports are `inert_bound.PORTS`.  A cap shape
     that is not hiding, has more than 64 rows or columns a tile, a unit of columns too large for 31-bit sums, or fewer
@@ -761,11 +727,11 @@ def test_the_inert_bound_flag_is_off_by_default_and_refuses_shapes_outside_the_s
 
 def test_the_inert_bound_refuses_a_short_tile_row():
     """The cap takes whole tiles only (as the row cut does): 80 rows and decode's 32 at 64-row tiles, admitted by the
-    hiding Programs without it, are refused with it by every root and by the tile layout, and 64 rows are admitted with it."""
+    hiding Programs without it, are refused with it by every root, and 64 rows are admitted with it."""
     pc8.Shape(64, 256, 64, hidden=True, cap=True).check()
     for m in (80, 32):
         pc8.Shape(m, 256, 64, hidden=True).check()
         shape = pc8.Shape(m, 256, 64, hidden=True, cap=True)
-        for refused in (pc8.check, pc8.weight, pc8.call, lambda s: plan.tile_layout(s, 4096)):
+        for refused in (pc8.check, pc8.weight, pc8.call):
             with pytest.raises(DomainError, match="cap takes whole tiles only"):
                 refused(shape)

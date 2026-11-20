@@ -43,9 +43,6 @@ RELATIONS: dict[str, str] = {
     "StopCheck_v1":
         "tests/adapters/vllm/tests/program/predict/test_steps.py::"
         "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
-    "ClassStopCheck_v1":
-        "tests/adapters/vllm/tests/program/predict/test_class_window.py::"
-        "test_a_request_that_stops_early_commits_zeros_past_its_stop_and_the_check_accepts_it_alone",
     "SeedCheck_v2":
         "tests/adapters/vllm/tests/program/test_seed_rule.py::test_the_word_check_accepts_the_rules_seed_alone",
 }
@@ -86,8 +83,7 @@ PARAMS: dict[str, Kind] = {
                                    "outputs it (`IngressSampled_v1`)"),
     "seed_salt": Kind("certified", "the window's seed salt, the challenger's coin released at its open (``window.seed_salt``)"),
     "request": Kind("certified", "a class Program's limits (``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``): "
-                                 "`b.request`'s first four u32 fields, `b.ingress`'s fields before its ids "
-                                 "(`predict.class_window.LIMITS`)"),
+                                 "`b.request`'s first four u32 fields, `b.ingress`'s fields before its ids"),
     "user": Kind("certified", "the request's certified id's bytes: ingress v1's parse unit outputs them (`IngressSampled_v1`)"),
     "prefix": Kind("block", "a request's first C positions' rows: the producers' outputs (a prefix-cache hit) or the last "
                             "window's edge ports (a carried request)"),

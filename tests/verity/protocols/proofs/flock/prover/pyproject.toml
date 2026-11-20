@@ -27,6 +27,7 @@ untraced = [
     "test_lean_compose.py",
     "test_lean_forged_proofs.py",
     "test_lean_hidden_outputs.py",
+    "test_lean_lower.py",
     "test_lean_out_group_slot.py",
     "test_lean_plain_hidden_tables.py",
     "test_lean_public_inputs.py",
@@ -116,6 +117,20 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-veri
 tests = ["test_recorded_texts.py"]
 # the source of each file that writes a pinned text
 paths = ["verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs", "verity/protocols/proofs/flock/verifier/Flock/Tags.lean"]
+
+[[tool.verity.tests.reads]]
+tests = ["test_lean_lower.py"]
+# the chain's first block (`restrict`), its chain and its periods loaded by file, and `lake build flock-lower-check`: its
+# package and those it requires by path
+paths = [
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/commitments/periods",
+    "verity/protocols/proofs/spot/verifier/one_stage",
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
+    "verity/protocols/proofs/flock/verifier",
+]
 
 [[tool.verity.tests.reads]]
 tests = ["test_challenger_audit.py"]

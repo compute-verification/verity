@@ -11,6 +11,7 @@ public import NetworkVerifier.ScanOk
 public import NetworkVerifier.Period
 public import NetworkVerifier.ConnectionRowsGuards
 public import NetworkVerifier.TransferBlocks
+public import NetworkVerifier.Load
 public import NetworkVerifier.RowsAudit
 public import NetworkVerifier.Span
 
@@ -45,6 +46,13 @@ certifier program and the LMS port.
 `NetworkCheck.TransferBlocks` is N2's verdict of record on one execution phase from its proof (`service.TransferBlocks.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
+-/
+
+/-!
+`NetworkVerifier.Load` is the check of the registrations a run kept of a workload's own requests, sent through the
+network attester (`relay_check.check_load`'s verdict, the `load` function of `network-records verdicts`): one
+registration of each value of the shape's manifest, each read for the transfer the verifier expects under the
+deployment's key and session. Beyond the above it imports Flock's registered value's domain (`Flock.Registered`).
 -/
 
 /-!

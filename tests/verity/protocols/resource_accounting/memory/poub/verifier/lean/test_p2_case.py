@@ -8,9 +8,8 @@ replayed, each refusal by name: a key the params don't trust, a line count or a 
 head, the commitment's digest and the clock floor, then its log), a
 signature that doesn't verify, a close replayed under another session, a coin that isn't the challenger's whole coin,
 and a PoUS session record or a wipe record the same key signed for the same session put as the close. Edits of a root,
-a coin or the plan are rejected, and the plan is bound by the commitment's digest. A session the books veto has no
-case. And a session over the `C*` of PoUS's own setup names PoUS's store: onsite's `same_store` takes the two as one
-store, and the Lean accepts the case."""
+a coin or the plan are rejected, and the plan is bound by the commitment's digest. A session over the `C*` of PoUS's own setup, its case held to PoUS's store (`p2_case.storing`), is accepted, and
+a case whose params name another store than its registration's is refused by name (`P2Protocol.NOT_POUS_STORE`)."""
 
 from __future__ import annotations
 
@@ -34,7 +33,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import period as 
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.poub.verifier import p2_case, p2_lean, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2_case, p2_lean, p2_parties, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -45,6 +44,7 @@ OTHER_SESSION = hashlib.sha512(b"p2-case-test/another session").digest()[:32]
 UNTRUSTED = "the close is signed by a key that is not a trusted memory challenger's"
 UNCHAINED = "the close's chain is not the case's"
 UNSIGNED = "the close's signature does not verify on the params' session"
+NOT_POUS_STORE = "the bandwidth session's store is not PoUS's: its registration's root is not the params' store_root"
 
 
 @pytest.fixture(scope="module")
@@ -113,8 +113,8 @@ def test_an_honest_sessions_case_is_accepted_with_its_credited_reads(exe, lean, 
     assert got["verdict"] == "accept" and got["protocol"] == p2_case.PROTOCOL
     assert got["public"]["q_bytes"] == answer["q_bytes"] > 0 and got["public"]["span_ns"] == answer["span_ns"]
     assert got["commitment"] == p2_case.digest(case).hex()
-    assert sorted(case) == ["commitment", "evidence", "params", "store_root"]
-    assert sorted(case["params"]) == ["not_before_ns", "request", "session", "trusted"]
+    assert sorted(case) == ["commitment", "evidence", "params"]
+    assert sorted(case["params"]) == ["not_before_ns", "request", "session", "store_root", "trusted"]
     assert case["params"]["session"] == SESSION_ID.hex() and case["params"]["trusted"] == [signer().public_key.hex()]
     evidence = _evidence(case)
     assert sorted(evidence) == ["close", "log"] and sorted(evidence["close"]) == ["chain", "lines", "public_key",
@@ -122,9 +122,11 @@ def test_an_honest_sessions_case_is_accepted_with_its_credited_reads(exe, lean, 
     assert evidence["close"]["lines"] == len(evidence["log"])
     assert evidence["close"]["chain"] == p2_case.chain(p2_case.head_of(case), evidence["log"]).hex()
     assert p2_parties.case_digest(case) == evidence["close"]["chain"]
-    coins = [x["coin"] for x in evidence["log"] if x["op"] == "p2_event" and x["coin"] is not None]
-    assert coins and all(len(bytes.fromhex(c)) == p2_case.COIN_BYTES == 64 for c in coins)
-    assert case["store_root"] == store.registration.root.hex() == p2_case.store_root(case).hex()
+    sizes = {(x["event"]["kind"] == "close", len(bytes.fromhex(x["coin"]))) for x in evidence["log"]
+             if x["op"] == "p2_event" and x["coin"] is not None}
+    whole = p2_case.COIN_BYTES * coins.sample_coins(p2_parties.SESSION["samples"])
+    assert p2_case.COIN_BYTES == 64 and sizes == {(False, 64), (True, whole)}
+    assert case["params"]["store_root"] == store.registration.root.hex()
     assert case["params"]["request"] == request(store, p2_parties.SESSION)
     ops = [x["op"] for x in _evidence(case)["log"]]
     windows, passes = p2_parties.SESSION["windows"], p2_parties.SESSION["passes"]
@@ -179,7 +181,7 @@ def test_with_no_executable_an_accepted_sessions_case_is_refused_and_never_the_s
     assert answer["verdict"] == "accept" and case is not None
     with pytest.raises(ValueError, match="no poub-p2-protocol to answer the case"):
         p2_case.judged(case, answer, None)
-    assert p2_case.unjudged(case, answer)["verdict"] == "undecided"
+    assert p2_case.unjudged(case)["verdict"] == "undecided"
 
 
 def test_a_case_before_its_last_window_is_verified_is_undecided(exe, lean, store) -> None:
@@ -320,14 +322,6 @@ def test_the_commitment_binds_the_plan(exe, lean, store) -> None:
     assert got["verdict"] == "reject" and got["reason"] == UNCHAINED, got
 
 
-def test_a_session_the_books_veto_has_no_case(exe, store) -> None:
-    def accepting(lean):
-        return Lying(lean, "p2_openings", lambda req, _got: {"accepted": req["t"]})
-
-    answer, case = session(exe, store, lean_of=accepting, skip=1)
-    assert answer["failure"] == p2_parties.DISAGREEMENT and case is None
-
-
 def test_the_written_piece_is_private(exe, store, tmp_path) -> None:
     answer, case = session(exe, store)
     d = p2_case.write(tmp_path / "private" / "bandwidth", case, p2_case.answer(case, answer))
@@ -347,8 +341,8 @@ def _signer():
 
 def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, lean, store, tmp_path) -> None:
     """PoUS's audit of the committed `C*` (its setup published at that `C*`'s commitment, salt and vk root) and PoUB-P2
-    registered on the same setup, an honest session over that `C*`: the case names the root PoUS published, onsite's
-    `same_store` takes the two as one store, and the Lean accepts the case."""
+    registered on the same setup, an honest session over that `C*`: the case held to PoUS's store names the root PoUS
+    published, and the Lean accepts it."""
     S = _signer()
     reg = store.registration
     q, n = reg.params, reg.params.blocks_per_segment
@@ -361,10 +355,36 @@ def test_a_session_on_pous_setups_store_names_pous_store_and_is_accepted(exe, le
                        clock=lambda: 10 ** 9)
     assert R.Setup.from_json(json.loads(bytes.fromhex(space.case["commitment"]))).root == reg.root
     answer, case = session(exe, store)
-    assert answer["verdict"] == "accept"
-    assert p2_case.store_root(case) == reg.root
-    assert p2_case.same_store(case, space.case) is None
-    assert replayed(lean, case)["verdict"] == "accept"
+    assert answer["verdict"] == "accept" and case["params"]["store_root"] == reg.root.hex()
+    stored = p2_case.storing(case, space.case)
+    assert stored["params"]["store_root"] == reg.root.hex()
+    assert replayed(lean, stored)["verdict"] == "accept"
+    other = json.loads(bytes.fromhex(space.case["commitment"]))
+    other["root"] = _flip(other["root"])
+    moved = p2_case.storing(case, space.case | {"commitment": canonical_json_bytes(other).hex()})
+    assert moved == case | {"params": case["params"] | {"store_root": other["root"]}}
+    assert replayed(lean, moved)["reason"] == NOT_POUS_STORE
+    for bad in ({}, space.case | {"commitment": "00"}, space.case | {"commitment": case["commitment"]}):
+        with pytest.raises(ValueError, match="^PoUS's case names no setup: "):
+            p2_case.storing(case, bad)
+
+
+@pytest.mark.parametrize("root, reason", [
+    (_flip, NOT_POUS_STORE), (lambda h: "00" * 64, NOT_POUS_STORE), (lambda h: h[:-2], NOT_POUS_STORE),
+    (lambda h: "", NOT_POUS_STORE), *((lambda h, r=r: r, "params: params.store_root: ") for r in (None, 7, "zz" * 64, "0")),
+    (None, "params: ")], ids=["another-store", "zeros", "short", "empty", "null", "integer", "not-hex", "odd", "missing"])
+def test_a_case_held_to_another_store_than_its_registrations_is_refused_by_name(lean, honest, root, reason) -> None:
+    """The honest case, accepted, held to another store than the one its registration names (another PoUS run's `C*`,
+    or bytes that are no store's root): refused by name before its close or its log is read; a root that isn't hex, or
+    none, doesn't decode."""
+    params = {k: v for k, v in honest["params"].items() if k != "store_root"}
+    edited = honest | {"params": params if root is None else params | {"store_root": root(honest["params"]["store_root"])}}
+    got = replayed(lean, edited)
+    assert got["verdict"] == "reject" and got["reason"].startswith(reason), got
+    if reason == NOT_POUS_STORE:
+        assert got == {"commitment": p2_case.digest(honest).hex(), "profile": None, "protocol": p2_case.PROTOCOL,
+                       "public": None, "reason": NOT_POUS_STORE, "verdict": "reject"}, got
+    assert replayed(lean, honest)["verdict"] == "accept"
 
 
 def test_the_trusted_keys_are_the_pins_and_never_the_cases_own() -> None:

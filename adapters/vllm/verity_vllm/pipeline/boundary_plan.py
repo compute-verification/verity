@@ -95,7 +95,7 @@ def main(o: Options) -> int:
     if os.path.exists(o.out):
         os.remove(o.out)
     man = json.loads(Path(o.required_manifest).read_text())
-    plan = CB.plan_of(man, *roots(o)) if CB.manifest_sites(man) else None
+    plan = G.host_plan(man, *roots(o))
     rec = G.call_boundaries_of(man, plan)
     rec["seconds"] = round(time.monotonic() - t0, 1)
     if o.gate_out:

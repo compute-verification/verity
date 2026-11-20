@@ -25,8 +25,10 @@ a window or a grid field outside its integer width, a frame of other than B byte
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
 `link-window` (`Server.call`), N2's verdict of record on one execution phase's proof (`service.TransferBlocks.verify`),
-and `certificates`, the client's check of one window's served attestations (`certificate_refusals`, with
-`audit.certificate_refusals` beside it as the reference).
+`certificates`, the client's check of one window's served attestations (`certificate_refusals`, with
+`audit.certificate_refusals` beside it as the reference), and `load`, the check of a run's load's registrations
+(`relay_check.check_load`, `NetworkVerifier.Load.loadCheck`), with `transfer-registration`, its read of one
+registration, which the load's agreement test holds to `transfer_rows.check_registration`.
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -186,8 +188,9 @@ class Server:
         return self.call(fn, case)["link_windows"]
 
     def call(self, fn: str, case: dict) -> Any:
-        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.TransferBlocks`'s verdict
-        of record on one execution phase); `ValueError` when the Lean refuses the case."""
+        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, `link-window`: `NetworkCheck.TransferBlocks`'s verdict
+        of record on one execution phase, `certificates`, `load` or `transfer-registration`); `ValueError` when the Lean
+        refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:

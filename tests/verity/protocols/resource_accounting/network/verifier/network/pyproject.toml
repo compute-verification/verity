@@ -14,6 +14,7 @@ untraced = [
     "test_inference_only_protocol.py",
     "test_inference_only_record_check.py",
     "test_network_check_protocol.py",
+    "test_network_load_agreement.py",
     "test_network_period_protocol.py",
     "test_network_records_protocol.py",
     "test_network_rows_agreement.py",
@@ -22,8 +23,10 @@ untraced = [
 # `verity_difftest`, through which the network checks' tests speak to their Lean executables
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
 # the network attester's runs (`relay_runs`), which the rows audit's agreement test holds both checks to
+# the Python reference of the load's check (`load_reference`), which the load's agreement test holds the Lean check to
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
-          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py"]
+          "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py",
+          "tests/verity/protocols/resource_accounting/network/verifier/load_reference.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

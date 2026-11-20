@@ -70,6 +70,9 @@ from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
 
 ATTESTATION_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
+#: why the period step refuses every period case whose compute audit is a window commit
+SERVED = ("a served window's circuit writes its Programs' entries in the order its Programs end, and the period check "
+          "reads entry k as slot k's: refused until the check holds each entry to its slot")
 
 
 def certificates(run: Path, w: int) -> list[dict]:
@@ -98,8 +101,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's registration. Without
     ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check refuses first (with no
     block audit, none, whose parameters the check refuses). ``answers`` is the scan's ``answers.json`` where ``scan``
-    doesn't hold it: a chain record keeps it on its private side (chain_record.sh), for the row registrations it
-    carries whole."""
+    doesn't hold it, kept on the private side for the row registrations it carries whole."""
     if v3c is not None and circuit is None:
         raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
     dep = json.loads(SA._found(run, "deployment.json").read_text())
@@ -148,11 +150,12 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
 def circuit_of_record(path: Path) -> str:
     """The class circuit a window-circuit record names (``verity/window-circuit/v1``, the verifier's own, which
     ``served_verdicts.sh`` keeps as ``window-circuit-w<K>-<class>.json`` beside V3c's ``v3c-w<K>-<class>``): its
-    Program's digest, which a window's registration under that class names too."""
+    Program's digest, which a window's registration under that class names too. Refused (`SERVED`) whatever the
+    record holds: no field of it lifts the refusal."""
     doc = json.loads(path.read_text())
     if doc.get("format") != CIRCUIT or not isinstance(doc.get("program"), str):
         raise SystemExit(f"{path}: not a {CIRCUIT} record naming its program")
-    return doc["program"]
+    raise SystemExit(f"{path}: {SERVED}")
 
 
 def mirror(path: Path):

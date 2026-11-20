@@ -199,11 +199,21 @@ def test_on_read_opens_a_tensor_on_its_first_read_as_open_weights_does_and_refus
         CPU.OnRead(world["bundle"], world["tree"], world["root"], None)
 
 
+def _safetensors(path, tensors):
+    """A safetensors file of `tensors` (name -> (safetensors dtype, array))."""
+    hdr, off, blobs = {}, 0, []
+    for name, (dt, a) in tensors.items():
+        b = np.ascontiguousarray(a).tobytes()
+        hdr[name] = {"dtype": dt, "shape": list(a.shape), "data_offsets": [off, off + len(b)]}
+        off += len(b)
+        blobs.append(b)
+    h = json.dumps(hdr).encode()
+    path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
+
+
 def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
     """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as int32 [V, 6], stored I64 in the checkpoint: it opens as the
     checkpoint's values in i32 words (the replay's `GatherI32x{V}` rows read it), and a value outside int32 leaves it unopened."""
-    from tests.pipeline.test_tp_replay_deferred import _safetensors
-
     name = "model.layers.0.ffn.gate.tid2eid"
     table = RNG.integers(0, 384, (16, 6), dtype=np.int64)
 

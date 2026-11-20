@@ -14,7 +14,7 @@ Verity itself knows nothing of vLLM.
   engine. It commits every engine step under `rows-sha512`, with the committer the Build of record's manifest builds
   (`--required-manifest`, which `verity-vllm predict row` writes). A window opens at the first step after the engine was
   idle and closes when it is idle again or after `--window-steps`. Each window is one Commit, and `--seal` seals it.
-  `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
+  `--protocols pearl-plus` attaches Pearl+ by its declared name, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
   flag and record.
 - **The served run** (`bash adapters/vllm/tools/served_run/run.sh`) starts the served-verdicts launcher,
@@ -33,7 +33,6 @@ Verity itself knows nothing of vLLM.
 | `serve-openai` | the committing endpoint |
 | `row run\|stage\|chain` | a workload's Build, Match and Commit (`chain` also publishes its record) |
 | `build`, `match`, `commit` | one stage of one workload |
-| `tp-capture`, `tp-match`, `tp-commit` | the same stages at a tensor-parallel size above 1 |
 | `predict row\|compare\|emit` | the Build of record from the workload alone; held to a traced Build; a switched workload's Build |
 | `advice` | a served run's advice, from its step trace and Commit record |
 | `commit-replay`, `serving-rows` | a sealed Commit's replay on CPU; its serving rows and registration |
@@ -141,7 +140,7 @@ verity_vllm/
   commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: SPOT, PoUS, PoUB's node store on the engine (poub/)
-    pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
+    linear/          the linear-layer executor's interface
   records/           typed stage records, one for each kind one stage writes and another reads
   ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device

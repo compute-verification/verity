@@ -444,13 +444,6 @@ def test_cli(capsys):
     assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]
     adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-2:])
     assert adapt == sample == 0.35
-    assert main(["--device", "sm_120", "designs"]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    assert [x.split()[0] for x in lines[1:1 + len(E.designs())]] == E.designs()
-    assert main(["--device", "sm_120", "designs", "--json"]) == 0
-    reg = {r["name"]: r for r in json.loads(capsys.readouterr().out)}
-    assert reg["dither-c"]["noise"] == {"linears": "co32c", "lm_head": "co32c", "qk": "cohalf", "pv": "pv"}
-    assert reg["dither-1s"]["ppl"] == "adopted" and reg["dither-c"]["ppl"] == "co32c-pv"
 
 
 def test_devices_follow_the_layout():

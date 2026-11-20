@@ -119,7 +119,8 @@ def test_the_tied_window_runs_with_the_settings_the_tree_writes(tmp_path):
     env, tie = env_of(got), PLACEMENT["run"]["window"]["tie"]["env"]
     design = next(k for k, v in tie.items() if "stratified-rate:" in v)
     assert {k: env[k] for k in tie} == {**tie, design: "stratified-rate:1/2097152"}
-    assert (env["POUW"], env["PEARLPLUS_TIE"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "1", "4,32,4", "bfloat16")
+    assert (env["POUW"], env["V3C_CLASS"], env["PRECISION"]) == ("pearlplus", "4,32,4", "bfloat16")
+    assert "PEARLPLUS_TIE" not in env, "the application's Pearl+ is untied: the window commit takes no tie"
     assert env["H1_PEER"] == env["PP_PEER"] == "vy-spot-glm53" and "COMPOSITE" not in env
     assert int(env["V3C_AUDIT_MEM_GB"]) > 2015, "the records audit defers off node A, which has 2015 GB"
     piece, lean = 60 * int(env["POUW_TIMEOUT"].removesuffix("m")), int(env["PEARLPLUS_LEAN_TIMEOUT"])
@@ -281,39 +282,19 @@ def test_the_h100_node_sets_up_its_own_tied_row_and_serves_none_before_its_build
 
 
 SETUP_PIN = re.search(r"\npin=\$\(python3 - [^\n]*<<'EOF'\n(.*?)\nEOF\n", (HERE / "setup.sh").read_text(), re.S)[1]
-VERDICTS = HERE.parents[3] / "benchmarks" / "one_stage" / "served_verdicts.sh"
 
 
-def build_of_record(row: str) -> subprocess.CompletedProcess:
-    """What `served_verdicts.sh`'s tied form sets BUILD_OF_RECORD to for `row`, given none."""
-    case = re.search(r"\n  case \$\{ROW_ID:-\$\{ROW##\*/\}\} in\n.*?\n  esac\n", VERDICTS.read_text(), re.S)[0]
-    return subprocess.run(["bash", "-c", case + 'echo "$BUILD_OF_RECORD"'], capture_output=True, text=True, check=False,
-                          env={"PATH": os.environ["PATH"], "ROW_ID": row})
-
-
-def setup_pin(tmp_path: Path, row: str, program: str, manifest: str) -> subprocess.CompletedProcess:
-    (got := tmp_path / "predicted.json").write_text(json.dumps({"program_digest": program, "manifest_digest": manifest}))
+def setup_pin(tmp_path: Path, row: str, workload: str) -> subprocess.CompletedProcess:
+    (got := tmp_path / "predicted.json").write_text(json.dumps({"workload_digest": workload}))
     return subprocess.run([sys.executable, "-c", SETUP_PIN, str(HERE.parents[3]), row, "unsloth/Llama-3.2-1B", str(got)],
                           capture_output=True, text=True, check=False)
 
 
-def test_setup_holds_the_h200_tied_rows_predicted_build_to_the_verdicts_build_of_record_for_its_row(tmp_path):
-    row = PLACEMENT["tied_row"]
-    got = build_of_record(row)
-    assert got.returncode == 0, got.stderr
-    program, manifest = got.stdout.strip().split(":")
-    assert len(program) == len(manifest) == 128
-    assert setup_pin(tmp_path, row, program, manifest).returncode == 0
-    refused = setup_pin(tmp_path, row, program, "0" * 128)
-    assert refused.returncode == 1 and f"are not served_verdicts.sh's BUILD_OF_RECORD, {program}:{manifest}" in refused.stdout
-
-
-def test_a_tied_row_with_no_build_of_record_is_set_up_with_none(tmp_path):
-    row = H100["rows"]["tied_row"]
-    got = build_of_record(row)
-    assert (got.returncode, got.stdout) == (0, "\n")
-    told = setup_pin(tmp_path, row, "a" * 128, "b" * 128)
-    assert told.returncode == 0 and f"{row} has no served_verdicts.sh's BUILD_OF_RECORD: its predicted {'a' * 128}:{'b' * 128}" in told.stdout
+def test_a_tied_rows_predicted_workload_is_held_to_its_traced_build_by_predict_compare(tmp_path):
+    """A predicted row's record holds its workload digest and no Program or manifest digest, so no BUILD_OF_RECORD pins it."""
+    for row in (PLACEMENT["tied_row"], H100["rows"]["tied_row"]):
+        told = setup_pin(tmp_path, row, "a" * 128)
+        assert told.returncode == 0 and f"{row}: its predicted workload {'a' * 128} is held to its traced Build by predict compare" in told.stdout
 
 
 def test_no_file_of_the_served_run_names_the_retired_node():

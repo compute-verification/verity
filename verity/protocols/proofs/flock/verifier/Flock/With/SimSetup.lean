@@ -149,14 +149,24 @@ theorem publicDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Ha
   unfold HmRow.publicDigestWith
   sim_walk
 
+theorem templateRangesBy_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (refusal name : String) (version : Nat)
+    (obj : Json) (program : ByteArray) :
+    S.R (HmRow.templateRangesBy (TemplateQuery.Desc.parseWith hs.sha512) refusal name version obj program)
+      (HmRow.templateRangesBy (TemplateQuery.Desc.parseWith hs'.sha512) refusal name version obj program) := by
+  unfold HmRow.templateRangesBy
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [descParseWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [descParseWith_sim S tM tN hh])
+
 theorem deriveTemplateUnitsWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (obj : Json) (program : ByteArray)
     (indices : Array Nat) :
     S.R (HmRow.deriveTemplateUnitsWith hs c obj program indices) (HmRow.deriveTemplateUnitsWith hs' c obj program indices) := by
-  unfold HmRow.deriveTemplateUnitsWith
-  simp -zeta only [tM.bind, tN.bind]
-  sim_walk [descParseWith_sim S tM tN hh]
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [descParseWith_sim S tM tN hh])
+  unfold HmRow.deriveTemplateUnitsWith HmRow.deriveTemplateUnitsBy
+  try simp -zeta only [tM.bind, tN.bind]
+  sim_walk [templateRangesBy_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [templateRangesBy_sim S tM tN hh])
 
 theorem deriveQwordUnitsWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M}
     {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) :
@@ -209,10 +219,10 @@ theorem sampledWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Thro
 theorem templateStrataWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (samplingDesign : String) (obj : Json) (program : ByteArray) :
     S.R (HmRow.templateStrataWith hs samplingDesign obj program) (HmRow.templateStrataWith hs' samplingDesign obj program) := by
-  unfold HmRow.templateStrataWith
-  simp -zeta only [tM.bind, tN.bind]
-  sim_walk [descParseWith_sim S tM tN hh]
-  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [descParseWith_sim S tM tN hh])
+  unfold HmRow.templateStrataWith HmRow.templateStrataBy
+  try simp -zeta only [tM.bind, tN.bind]
+  sim_walk [templateRangesBy_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [templateRangesBy_sim S tM tN hh])
 
 theorem stratifiedSamplingDesignWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (obj : Json) (program : ByteArray) (k : Nat) :

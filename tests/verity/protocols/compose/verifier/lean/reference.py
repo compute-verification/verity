@@ -57,6 +57,7 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.commitments import docket_digest as DD
+from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -308,7 +309,8 @@ def _two_stage_evidence(j: Any) -> dict:
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        return _two_stage().params_of_json(j)
+        _two_stage().params_of_json(j)
+        raise Reject(TWO_LEVELS_REFUSED)
     return _one_stage_params(rest)
 
 
@@ -739,7 +741,7 @@ def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Excepti
         return [b""]
 
 
-#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names.
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record, the tie of remote's development

@@ -1,7 +1,7 @@
 """`machine-model`'s commands, one module a command, which `cli` finds here: a new command is a new module and touches no
 other file.
 
-A command module `NAME.py` (`list_.py` for `list`, a builtin's name; `lean_headline.py` for `lean-headline`) holds its
+A command module `NAME.py` (`lean_headline.py` for `lean-headline`) holds its
 usage as its docstring, which `machine-model` prints with no command, `add(sub)`, which adds its parser to `sub`
 (argparse's subparsers), and `run(args) -> int`. `cli` refuses a command given no device unless its module sets
 `READS_DEVICE = False`: it reads every device it covers. A module whose name starts with `_` holds what several

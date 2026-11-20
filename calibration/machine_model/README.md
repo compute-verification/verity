@@ -33,14 +33,11 @@ What it computes:
 - **ε** (`eps`): a design's core ε in the tensor–scalar model, every term from data.
 - **The headline** (`headline`): each GPU family's design of record at the data-sheet and measured readings, the numbers
   the Lean headline guarantees are exported from ("The headline is per node").
-- **The card table** (`theta`, `sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
+- **The card table** (`sheet`): each card's rates, capacities and clocks with their sources, and its data-sheet
   lines.
 - **The opcode table** (`cover`): the evidence for the card assumption.
 
-This file holds no table of the data. `machine-model render` prints every one as Markdown from a data directory alone:
-the vectors, the epochs and their census, the rows, the floors, the designs, the honest kernels, the proof blocks, the
-MMA forms, the table route, the headline's designs, the attack families, the devices and the card table.
-`tests/calibration/machine_model/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
+This file holds no table of the data, so a new vector, design or census row touches only its own data file.
 
 ## The headline is per node
 

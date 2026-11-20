@@ -684,8 +684,6 @@ KNOWN: dict[str, str] = {
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "calibration/machine_model/verity_machine_model/capacity.py::Window":
-        "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "calibration/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
     "calibration/machine_model/verity_machine_model/sheet.py::Sheet":
@@ -835,7 +833,6 @@ KNOWN: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/PouwVerifier/Inputs.lean::PouwVerifier.SamplingDesign":
@@ -915,7 +912,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean::Flock.ZkServer.Level0.Registry":
         "homonym, the ZK server loop's tables: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, Flock's block-type layout: rename (proofs)",
-    "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
+    "verity/circuits/lean/Circuits/Descriptor.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
         "homonym, a recursion link from a reader to a port: rename (proofs)",

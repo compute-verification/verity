@@ -8,7 +8,7 @@
 # (1) fetches the three pinned vLLM sources build_ext.py reads (csrc/libtorch_stable/{layernorm_kernels.cu,cub_helpers.h,type_convert.cuh}
 # at the pinned commit; build_ext refuses a file whose sha256 differs); (2) builds with `verity-vllm norm-tap-build` into $NT/build, the
 # path config.RunEnv.norm_tap_so names, rebuilding only when the inputs changed (their sha256 beside the .so, source_set.sha256);
-# (3) `verity-vllm norm-tap-build --check`.  Exactness is a separate step: tests/properties/norm_tap_exactness_gpu.py (needs the GPU).
+# (3) `verity-vllm norm-tap-build --check`.
 # Env: VENV (default /workspace/venv312), CUDA_HOME (required), CARD_SKU (required: the card file the tap compiles for), NT (default
 # <build root>/norm_tap: VERITY_BUILD_ROOT, else cli.MACHINE's), REPO (default: this tree), NORM_TAP_FORCE=1 (rebuild regardless).
 set -uo pipefail

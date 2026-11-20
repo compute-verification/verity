@@ -13,7 +13,7 @@ port the file does not name is not checked. A known name no port has, or a circu
 the file names known content, and not checked where it names none. A bit read only at a copy past `upv`, or only
 through another copy's leaf, is not read. A known output row passes where some copy returns each of its bits at a
 computed column, and is refused at the first bit none does. A known port that is no `sha512/row/v2` row, or whose
-known rows are not its words, is refused. A port marked `read_in_full` is checked as one row of its registered row's
+known rows are not its words, is refused. A port named read in full is checked as one row of its registered row's
 words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
 
@@ -123,17 +123,6 @@ def reg (name : String) (words : Option Nat) (bits : Nat := 16) : Registered.Por
   { name, value := "v", root := ByteArray.empty, leaves := 1, words, wordBits := bits, domain := ByteArray.empty,
     readsRel := #[some 0] }
 
-/-- The ports a file's JSON marks read in full, or its refusal. -/
-def marked (t : String) : String :=
-  match JsonParse.parse t >>= Flock.KnownRead.readOf with
-  | .ok ns => toString ns
-  | .error e => e
-
--- the ports marked read in full, by name; false or absent is not, and a value other than true or false is refused
-#guard marked "{\"ports\": {\"k0\": {\"read_in_full\": true}, \"k1\": {}, \"x\": {\"read_in_full\": false}}}" ==
-  "#[k0]"
-#guard marked "{\"ports\": {\"k0\": {\"read_in_full\": 1}}}" ==
-  "registered reads: port k0: read_in_full is true or false"
 -- a port read in full is one row of its registered row's u16 words, 32-bit leaves two each
 #guard KnownRead.fullRows #[reg "k0" (some 2)] #["k0"] == #[("k0", #[(#[0, 0], ByteArray.empty)])]
 #guard KnownRead.fullRows #[reg "k0" (some 1) 32] #["k0"] == #[("k0", #[(#[0, 0], ByteArray.empty)])]

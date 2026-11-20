@@ -186,7 +186,7 @@ def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
 
 @pytest.mark.slow
 def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word_one() -> None:
-    """At Qwen3-0.6B's served statics (`benchmarks/bool_build_cost`'s small case: D = 128, BN = 64, rows of 1 and 65 keys), the
+    """At Qwen3-0.6B's served statics (D = 128, BN = 64, rows of 1 and 65 keys), the
     Definitions a row has one of per key length (`Attention`, `AttentionHead`) or per block width (`AttnBlock`) take at most twice
     the word Build's descriptor bytes.  The Boolean primitives' bit circuits, written once per Program whatever the row, are not
     counted."""

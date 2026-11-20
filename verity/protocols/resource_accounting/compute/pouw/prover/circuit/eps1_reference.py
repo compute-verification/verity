@@ -3,8 +3,7 @@
 The one registered `eps1-sm120-h1fx1` is `h1tile`'s compile-pass scheme (`compile.SCHEMES`); the design is one across
 schemes, so there is one registration.  This module is kept only as that design on words and on SPOT's primitives
 (`circuit.segment`): a second, independent implementation that `h1tile`'s gates are tested against (`test_h1tile_matches_eps1`),
-and the home of the scheme's attack catalog (`test_eps1_attacks`).  Nothing registers it, and `circuit.traced_as` does not
-reach it.
+and the home of the scheme's attack catalog (`test_eps1_attacks`).  Nothing registers it.
 
 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.

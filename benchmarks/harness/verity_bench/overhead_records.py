@@ -53,6 +53,8 @@ DOOR_ENV = frozenset({"VERITY_BENCH_VENV", kit.TRIAL})
 #: the run's bound, which its GPU lease enforces too: the sweep's and a timed run's
 MINUTES = {"points": 150, "run": 60}
 CENSUS = Path("calibration/census")
+#: the reading of each census line the table quotes: the data sheet's figure, beside the card's own (`readings`)
+READING = "datasheet"
 DATACENTER, WORLD = "dc-12500-machines-600s", "world-inference-2027"
 #: the one conversion from FLOP to Boolean gates, with its source and status
 GATES = Path("benchmarks/slowdown/data/hardware.toml")
@@ -337,7 +339,8 @@ def census(root: Path) -> dict:
     gates = tomllib.loads((root / GATES).read_text())["units"]
     return {"datacenter": DATACENTER, "gpus": dc["machines"] * dc["gpus_per_machine"], "window_s": dc["window_s"],
             "world": WORLD, "world_flop_per_year": world[WORLD]["total_flop"],
-            "flop_per_s": {c.gpu: hardware[c.datasheet]["flop_per_second"] for c in O.DOOR},
+            "flop_per_s": {c.gpu: next(r for r in hardware[c.datasheet]["readings"] if r["name"] == READING)["flop_per_second"]
+                           for c in O.DOOR},
             "gates_per_flop": gates["gates_per_flop"]["value"],
             "gates_basis": f"{GATES} units.gates_per_flop ({gates['gates_per_flop']['status']}, {gates['basis']})"}
 
@@ -473,7 +476,7 @@ def _section(c: Mapping, rows: list[dict], covers: str) -> str:
                    f"{c['window_s']} s windows, spending the share γ/(1+γ) of its compute on proving, and the world's "
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
                    "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
-                   f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate."), "",
+                   f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's rate under the census line's `{READING}` reading."), "",
               "| Scheme | Card | Point | Share | Time period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in rows:

@@ -66,15 +66,10 @@ theorem FregX_eq_FregAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fin
 /-! ## The event's bound from bounds on its two binding terms -/
 
 set_option synthInstance.maxSize 1024 in
-/-- **The event's bound from bounds on its two binding terms**, at a table `T` of the statement that may read the
-tape: an accepted run samples a proof block incorrect at the table (`Encodings.FregAt`) with probability at most
-`κ_s + √(k·γ_s·Pr[B]) + b_I + b_O`, where `b_I` bounds one run's own disagreement and `b_O` the accepted runs whose
-extractions open a gate off the table. At such a run the first sampled block of the set has its session unfound at its
-first slot (the sessions' bound at `leadSel (selOf …)`), or the run's extractions disagree with themselves or open a
-gate off the table (`trace_split`). The contract's clauses it reads are `slots`, `shared` and `opens`. -/
-theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H) {x : Msg}
-    {s : AuditStatement} {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
-    (hin : InScope Pt s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+/-- **The event's bound from `SharedOpens`**: `event_le_of_off` at the contract's clauses it reads. -/
+theorem event_le_of_off_of {H : Msg → Msg} {L : Compiled Coin A} {x : Msg} {s : AuditStatement}
+    {Pt : Sampling.Partition} (hS : L.SharedOpens H x s Pt) (hSK : L.SessionKS H) (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (T : Ω → AuditStatement → ℕ → Option Bool) {bI bO : ℝ}
     (hI : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤ bI)
     (hO : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (run H P L.V x q.1 q.2.1).out = .acc ∧
@@ -114,9 +109,9 @@ theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions
       ∃ u ∈ L.checked x r, u ∈ Encodings.FregAt L x (T ω))).symm.trans_le
         (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
     obtain ⟨hacc, v, hvl, hvF⟩ := hrc
-    obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1) (hFlt ω) hvl hvF
+    obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots rc.1) (hFlt ω) hvl hvF
     obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
-    rcases trace_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu (T ω s) (hFno ω _ huF) i₀ u₀ hlead hu₀
+    rcases trace_split_of hS hs P ω rc.1 rc.2 hacc i u hiu (T ω s) (hFno ω _ huF) i₀ u₀ hlead hu₀
       with h | h | h
     · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
     · exact Or.inr (Or.inl h)
@@ -133,22 +128,35 @@ theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions
   rw [Ex_add, Ex_add]
   linarith
 
+set_option synthInstance.maxSize 1024 in
+/-- **The event's bound from bounds on its two binding terms**, at a table `T` of the statement that may read the
+tape: an accepted run samples a proof block incorrect at the table (`Encodings.FregAt`) with probability at most
+`κ_s + √(k·γ_s·Pr[B]) + b_I + b_O`, where `b_I` bounds one run's own disagreement and `b_O` the accepted runs whose
+extractions open a gate off the table. At such a run the first sampled block of the set has its session unfound at its
+first slot (the sessions' bound at `leadSel (selOf …)`), or the run's extractions disagree with themselves or open a
+gate off the table (`trace_split`). The contract's clauses it reads are `slots`, `shared` and `opens`. -/
+theorem event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H) {x : Msg}
+    {s : AuditStatement} {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    (hin : InScope Pt s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (T : Ω → AuditStatement → ℕ → Option Bool) {bI bO : ℝ}
+    (hI : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤ bI)
+    (hO : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (run H P L.V x q.1 q.2.1).out = .acc ∧
+      ∃ g < L.nG x, ∃ b, L.opensAt H P x q.1 q.2.1 q.2.2 g = some b ∧ T q.1 s g ≠ some b) ≤ bO) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ Encodings.FregAt L x (T p.1)) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + bI + bO :=
+  event_le_of_off_of (hS.toSharedOpens hs hPt hin) hSK hs hPt P T hI hO
+
 /-! ## The committed form -/
 
 set_option synthInstance.maxSize 1024 in
-/-- **`KSReg` from the sessions' bound**: `event_le_of_off` at the committed trace of each tape, where one run's own
-disagreement is `B_conf`'s collision and a run's extractions open a gate off the committed trace with probability at
-most `N·√Pr[conflict]` at each tape (the rewinding lemma), at most `N·√Pr[B_conf]` on average (Jensen's inequality);
-and a set refused at `δ` is missed with probability at most `P_a ≤ δ` (`miss_of_event`). -/
-theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
-    (hSK : L.SessionKS H) : L.KSReg H := by
-  intro x hsc Ω _ _ P
-  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
-  have hFlt : ∀ ω, ∀ v ∈ L.Freg H P x ω, v < L.nPU x := by
-    intro ω v hv
-    simp only [Freg, hs, mem_filter, mem_range] at hv
-    simp only [Compiled.nPU, hs]
-    exact hv.1
+/-- **The committed form's event from `SharedOpens`**: an accepted run samples a block of `Freg` with probability
+at most `ε_reg` (`event_le_of_off_of` at the committed trace, `B_conf` and the rewinding lemma). -/
+theorem pr_freg_le_of {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg} {s : AuditStatement}
+    {Pt : Sampling.Partition} (hS : L.SharedOpens H x s Pt) (hSK : L.SessionKS H) (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+      ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εreg H x P := by
   have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
       ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=
     (Ex_sqrt_le _ fun _ => Pr_nonneg _).trans (Real.sqrt_le_sqrt (pr_conflict_le hbind hs P))
@@ -167,12 +175,28 @@ theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
       _ = L.nG x * Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
             ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) := Ex_mul_left _ _
       _ ≤ L.nG x * Real.sqrt ((Bconf H L Ω P x).Pr H) := mul_le_mul_of_nonneg_left hC (Nat.cast_nonneg _)
+  simp only [Freg_eq_FregAt]
+  refine (event_le_of_off_of hS hSK hs hPt P (fun ω _ => L.regVal H P x ω) (pr_inConf_le hbind hs P) hO).trans ?_
+  unfold Compiled.εreg
+  linarith
+
+set_option synthInstance.maxSize 1024 in
+/-- **`KSReg` from the sessions' bound**: `event_le_of_off` at the committed trace of each tape, where one run's own
+disagreement is `B_conf`'s collision and a run's extractions open a gate off the committed trace with probability at
+most `N·√Pr[conflict]` at each tape (the rewinding lemma), at most `N·√Pr[B_conf]` on average (Jensen's inequality);
+and a set refused at `δ` is missed with probability at most `P_a ≤ δ` (`miss_of_event`). -/
+theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) : L.KSReg H := by
+  intro x hsc Ω _ _ P
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
+  have hFlt : ∀ ω, ∀ v ∈ L.Freg H P x ω, v < L.nPU x := by
+    intro ω v hv
+    simp only [Freg, hs, mem_filter, mem_range] at hv
+    simp only [Compiled.nPU, hs]
+    exact hv.1
   have h1 : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εreg H x P := by
-    simp only [Freg_eq_FregAt]
-    refine (event_le_of_off hS hSK hs hPt hin P (fun ω _ => L.regVal H P x ω) (pr_inConf_le hbind hs P) hO).trans ?_
-    unfold Compiled.εreg
-    linarith
+      ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εreg H x P :=
+    pr_freg_le_of hbind (hS.toSharedOpens hs hPt hin) hSK hs hPt P
   refine ⟨h1, fun s' hs' δ hδ => ?_⟩
   rw [show s' = s from Option.some.inj (hs'.symm.trans hs)]
   exact miss_of_event hS hs hPt hin P (L.Freg H P x) hFlt h1 hδ

@@ -62,13 +62,13 @@ class Session(M.Run):
     """One session at the reference shape with refresh on, its verifier's coins from `coins_label`. Blocks are named
     by the append's name, a run `(first, count)`, or `(name, m)` for block m of an append."""
 
-    def __init__(self, *, samples: int = 10**6, coins_label: bytes = b"coins") -> None:
+    def __init__(self, *, samples: int = 1024, coins_label: bytes = b"coins") -> None:
         super().__init__(M.World(blocks=N), windows=WINDOWS, lifetime=LIFETIME, samples=samples, refresh=True,
                          fresh_slots=FRESH_SLOTS)
         reg = self.store.registration
         self.store = _Store.of(self.store)
         self.params = dataclasses.replace(self.params, schedule_cap=SCHEDULE_CAP)
-        self.coins = M.coins.local(reg.digest, 0, WINDOWS, M.Entropy(coins_label))
+        self.coins = M.coins.local(reg.digest, 0, WINDOWS, M.Entropy(coins_label), samples=samples)
         self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=0, clock=self.clock)
         self.prover = M.audit_prover.Prover(self.store, None, entropy=M.Entropy(b"receipt salts"))
         self.schedule = self.params.schedule

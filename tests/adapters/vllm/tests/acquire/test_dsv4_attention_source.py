@@ -541,8 +541,12 @@ def test_the_source_declares_the_ports_of_the_calls_it_binds_and_claims_their_ca
     row = {"family": CB.FAMILY, "spec": "FlashMlaDecode_v1{NH=16}"}
     assert CB.claimed(row) == DS.BINDER and CB.claimed({**row, "spec": "GemmF32Out_v1{K=7168}"}) is None
     assert CB.claimed({**row, "family": "instance_outputs"}) is None
-    man = {"ranks": 8, "fixture": {"model": CMAP["pins"]["checkpoint"]["repo"]}, "identities": [row]}
-    assert DS.BINDER in taps.attached(man) and CB.unattached(man, taps.attached(man)) == []
+    # the capture plan's road attaches no attention source: a plan class of the body is no source's, and `taps.attach` refuses it
+    cls = {"op_path": "model.layers.0.attn/mla", "member": "0", "capture": "call_boundary", "width": 1, "dtype": "bf16",
+           "definitions": ["FlashMlaDecode_v1"]}
+    assert CB.claimed(cls) is None and CB.sites([cls]) == [cls] and taps.attached([cls]) == []
+    with pytest.raises(SystemExit):
+        taps.attach(types.SimpleNamespace(sources=[]), [cls], ())
 
 
 def test_a_layer_s_names_bind_the_identities_of_record(runs):

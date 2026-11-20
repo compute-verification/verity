@@ -88,8 +88,9 @@ holds it to the day it audits; without it W names no day.
 round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin recorded in ``DIR/coin.json``
 (``--coin-record``; a verdict over other passes or records after it is refused, ``after-coin``), else every
 ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
-``DIR/coins.json``.  It first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`:
-the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
+``DIR/coins.json``.  It first holds each pass's calls to their places, round s's call c at index s * 2^16 + c
+(`verify_run.passes_placed`: the device derives each index from its place, and a run with a call elsewhere is refused
+before any replay), then
 reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
 the salt and the call's index, and each fixed operand's ``pearl-b/<w>`` its epoch's root for it and `audit.weight_binding`'s
@@ -860,7 +861,7 @@ def uncredited(args: argparse.Namespace) -> int:
 
 
 def tile_files(p, tile: int) -> list[dict]:
-    """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`verify_run.Opened`'s ``open`` and
+    """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`opened.Opened`'s ``open`` and
     ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its fixed operand's, the pass's leaves and transcript tree, and
     its call's y where the call commits one."""
     pos, man = p.verifier.refs[tile].matmul, p.man

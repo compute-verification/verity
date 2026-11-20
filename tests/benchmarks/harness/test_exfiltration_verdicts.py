@@ -23,8 +23,8 @@ from verity_bench import kit
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "5bf694eac13fa20e31d237fbc779f21cd912dda70fbdc24fd434e75849b3a49a",
-               "json": "b202cf9f69e87c637ca361ddf79faebf46509b2a74f4144ed44b1f633988ebb7"}
+NO_VERDICTS = {"text": "697a771baae029d944d341ac2811569aea0411ab91f0a2758a89faf5274c0822",
+               "json": "2c7d28dcf6f3da00e1921079e407e4d0d1375f5677437d95c2abcb995aee372f"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}

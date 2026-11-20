@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 OPS = "adapters/vllm/verity_vllm/ops"
-TAPS = ("pod_fa2_tap.sh", "pod_fa3_tap.sh", "pod_norm_tap.sh", "pod_router_tap.sh", "cuda_headers.sh")
+TAPS = ("pod_fa2_tap.sh", "pod_fa3_tap.sh", "pod_router_tap.sh", "cuda_headers.sh")
 PROPERTIES = ("kind", "card", "cards", "cpus", "threads_per_core", "numa", "compiler", "profiler", "clock_lock", "root", "lease",
               "launcher", "python", "job_cap_minutes")
 
@@ -84,7 +84,7 @@ def test_built_without_a_card_then_its_taps_under_the_lease_and_reused_while_its
     key = (d / "key.txt").read_text()
     assert d.parent == tmp_path / "boot" and (d / "ready").is_file() and (tmp_path / "out1/key.txt").read_text() == key
     assert " torch==2.9.0\n" in key and "\narch 9.0\n" in key and f"\ncuda {tmp_path / 'cuda'} Cuda compilation tools" in key
-    for f in (*(f"verity_vllm/ops/{t}" for t in TAPS), "verity_vllm/acquire/norm_tap_src/", "verity_vllm/acquire/fa3_tap_src/",
+    for f in (*(f"verity_vllm/ops/{t}" for t in TAPS), "verity_vllm/acquire/router_tap_src/", "verity_vllm/acquire/fa3_tap_src/",
               "manifests/checkpoints.json"):
         assert f"  {f}" in key, f
 

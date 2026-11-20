@@ -110,7 +110,6 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "adapters/vllm/verity_vllm/pipeline/cli.py",
     "adapters/vllm/verity_vllm/check/__init__.py",
     "adapters/vllm/verity_vllm/check/match/__init__.py",
-    "adapters/vllm/verity_vllm/check/match/rank_match.py",
     "adapters/vllm/verity_vllm/config.py",
     "adapters/vllm/verity_vllm/engine/collectives/__init__.py",
     "adapters/vllm/verity_vllm/engine/collectives/collective_sites.py",

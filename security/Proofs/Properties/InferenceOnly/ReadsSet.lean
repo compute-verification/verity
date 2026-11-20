@@ -183,7 +183,7 @@ theorem locR_unique {P : Prog} {sc : Flock.Program.Scope} {g : Nat} {ops ops' : 
 theorem locR_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocR P P.rootScope g c.reads[g]! := by
   obtain ⟨p, sc, hp, -⟩ := circuitOf_gate hc hg
-  unfold Flock.Program.Prog.gate at hp
+  rw [Flock.Program.Prog.gate_of (Flock.Program.Prog.gate_recut hp)] at hp
   by_cases hge : g ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hp
   simp only [hge, ite_false, bind, Except.bind] at hp
@@ -431,7 +431,7 @@ theorem operands_ok (P : Prog) (sc : Flock.Program.Scope) (node : Flock.Program.
         ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
       ∃ a, Flock.Program.resolve P sc (if (node.form == .batch) = true then (node.args[i]!).memberRef m t
         else (node.args[i]!).seq.get t) = .ok a := by
-  unfold Flock.Program.operands at h
+  rw [Flock.Program.operands_of (Flock.Program.operands_cond h)] at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   have h' := ok_bind_pure h
   intro i hi t ht
@@ -3565,6 +3565,7 @@ theorem param_ok (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
         ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
     omega
   exact OperandsResolve.resolve_ok P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) hc hF.2.2.1 hz hfuel
+    (OperandsResolve.resolvable_recut P hres)
     sc.off sc ⟨true, i, j⟩ ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩
 
 /-- **Every parameter position a body node reads resolves**, in any activation of the body resolution reaches: the
@@ -3723,31 +3724,32 @@ primitive is read by a member unless it is a batch of none (`hCov`), and every n
 `CompShape` says: at a root node calling a primitive `rootSet_prim_of`, at one calling a composite `rootSet_comp`
 with `rootNodeSet`. -/
 theorem rootSet_of
-    (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → RootFacts P)
+    (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.walkable P = true →
+      RootFacts P)
     (hWF : ∀ bytes P, Flock.Program.decode bytes = .ok P → Desc.walkable P = true → WidthFacts P)
-    (hCov : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P →
+    (hCov : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → Desc.walkable P = true →
       ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
       (P.defs[node.fn]!).prim = true → ¬ (node.form == .batch && node.n == 0) = true →
       ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
         ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
           ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
         (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t)
-    (hShape : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P →
+    (hShape : ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → Desc.walkable P = true →
       ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
       (P.defs[node.fn]!).prim = false → CompShape P node) :
     RootSet := by
   intro bytes P memo c hd ho hl hi hw hm hc k hk node rs hn hrs hg a
-  have hF' := hF bytes P hd ho
+  have hF' := hF bytes P hd ho hw
   have hWF' := hWF bytes P hd hw
   have hgk : (P.defs[P.root]!).body.nodes[k]! = node := node_get hn
   rcases hp : (P.defs[node.fn]!).prim with _ | _
   · have := rootSet_comp P memo hm hF' c hc hl hk hn hrs
       (rootNodeSet P memo hm hF' hWF' hw
-        (usedExact_reached P memo hm hF' hWF' hw (fun d hd' _ _ => hCov bytes P hd d hd') (hShape bytes P hd))
-        (hShape bytes P hd) hn hrs hp) a
+        (usedExact_reached P memo hm hF' hWF' hw (fun d hd' _ _ => hCov bytes P hd hw d hd') (hShape bytes P hd hw))
+        (hShape bytes P hd hw) hn hrs hp) a
     simpa using this
   · have := rootSet_prim_of P memo hm hF' hWF' hw c hc hl hk hn hp hrs hg
-      (hCov bytes P hd P.root hF'.1 k hk node hgk hp) a
+      (hCov bytes P hd hw P.root hF'.1 k hk node hgk hp) a
     simpa using this
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact

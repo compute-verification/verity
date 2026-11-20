@@ -69,7 +69,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.check.match.rank_match import RECORDER_DIGESTS
 from verity_vllm.config import option, row_batch
 from verity_vllm.pipeline import private_names
 from verity_vllm.pipeline.cli import write
@@ -93,8 +92,8 @@ KEPT_APART, PRIVATE = private_names.load()
 TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
-if not {TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} <= set(PRIVATE):
-    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS, RECORDER_DIGESTS} - set(PRIVATE))} as "
+if not {TOKENS_DIGESTS, TENSOR_DIGESTS} <= set(PRIVATE):
+    raise RuntimeError(f"{PRIVATE_NAMES} lists {sorted({TOKENS_DIGESTS, TENSOR_DIGESTS} - set(PRIVATE))} as "
                        "private: add them to its `private`")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",

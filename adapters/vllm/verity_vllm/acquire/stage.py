@@ -10,12 +10,13 @@ Writes DIR/runtime_tree.json (always: the CPU gate's off-pod input), and with a 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.gate import run as gate_run
+from verity_vllm.acquire.gate import run_plan as gate_run_plan
 from verity_vllm.acquire.install import IncompletePlan
 from verity_vllm.acquire.plan import AcquisitionPlan
 from verity_vllm.records.runtime_tree import RuntimeTree, runtime_tree_of
@@ -38,16 +39,21 @@ class StageDocs:
         return out
 
 
-def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str) -> StageDocs:
+def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str,
+                  capture: Sequence[Mapping[str, Any]] | None = None) -> StageDocs:
+    """The runtime tree and the acquisition plan, of the capture plan's classes when `capture` is given, else of `manifest`'s Values."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rt = runtime_tree_of(model, runner, source=source)
     rt.save(out / "runtime_tree.json")
     docs = StageDocs(runtime=rt, paths={"runtime_tree": str(out / "runtime_tree.json")})
-    if manifest is None:
+    if capture is not None:
+        plan = gate_run_plan(capture, rt)
+    elif manifest is None:
         return docs
-    man = manifest if isinstance(manifest, Mapping) else json.loads(Path(manifest).read_text())
-    plan = gate_run(man, rt)
+    else:
+        man = manifest if isinstance(manifest, Mapping) else json.loads(Path(manifest).read_text())
+        plan = gate_run(man, rt)
     plan.save(out / "acquisition_plan.json")
     docs.plan = plan
     docs.paths["acquisition_plan"] = str(out / "acquisition_plan.json")

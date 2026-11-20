@@ -208,12 +208,11 @@ theorem row_count {vm : _root_.Spot.OneStageZk.Member} {rec : Json} {roots : Std
     {pubB : ByteArray} (hpop : vm.population (vm.slice rec roots) pubB = .ok ()) {tags : Flock.Tags}
     {c : Flock.Circuit} {pop : Flock.Public} (hl : Flock.HmRow.loadPublic tags c pubB = .ok pop) :
     pop.n = vm.count := by
-  obtain ⟨hd', hh, hheld⟩ := population_header hpop
+  obtain ⟨hd', hh, hj⟩ := population_header hpop
   rw [← Flock.With.loadPublicWith_std] at hl
   obtain ⟨nl, hd, counts, -, hhd, hi, -⟩ := Flock.Bridge.loadPublic_core _ _ _ _ _ hl
   have e : hd = hd' := Except.ok.inj ((header_of_headerOf hhd).symm.trans hh)
   subst e
-  have hj := headerHeld_instances hheld
   have hg : _root_.Spot.getD hd "instances" = .num ⟨Int.ofNat pop.n, 0⟩ := by
     simp only [_root_.Spot.getD, _root_.Spot.field?, FlockComplete.JsonRT.nat_ok hi]
     rfl

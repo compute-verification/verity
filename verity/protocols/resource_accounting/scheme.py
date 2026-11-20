@@ -76,6 +76,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
@@ -134,6 +135,7 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
+_TARGET = re.compile(r"[A-Za-z0-9][\w-]*")
 
 
 @dataclass(frozen=True)
@@ -254,13 +256,38 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Executable:
+    """One of a scheme's own Lean executables, a Lake target: ``package``, its Lake package's directory relative to the
+    tree, and ``target``, the executable's target name. `built` is the file ``lake build <target>`` writes in that
+    package, the one whose digest a verdict's record carries."""
+
+    package: str
+    target: str
+
+    def __post_init__(self) -> None:
+        parts = self.package.split("/")
+        if not self.package or self.package.startswith("/") or any(s in ("", ".", "..") for s in parts):
+            raise ValueError(f"an executable's package is a directory relative to the tree, not {self.package!r}")
+        if not _TARGET.fullmatch(self.target):
+            raise ValueError(f"an executable's target is a Lake target's name ({_TARGET.pattern}), not {self.target!r}")
+
+    def built(self, root: Path | str) -> Path:
+        return Path(root) / self.package / ".lake" / "build" / "bin" / self.target
+
+
+@dataclass(frozen=True)
 class Launch:
     """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
     the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
     the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
     ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
     bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
-    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``."""
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``. ``entry``, a
+    ``module:attribute``, names the callable the launcher calls with one argument, the scheme's declaration, for the
+    piece's hooks and the scripts they run; it launches and collects and decides nothing, nothing a node sets
+    overrides it, and its hooks refuse by name with `LaunchRefused`. ``executables`` are the scheme's own Lean
+    executables the piece builds and answers with (`Executable`). A piece whose launch declares either one not is
+    refused by name when it is launched."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
@@ -268,6 +295,17 @@ class Launch:
     reaches: str = ""
     starts: tuple[str, ...] = ()
     starts_optional: tuple[str, ...] = ()
+    entry: str | Lacks = UNDECLARED
+    executables: tuple[Executable, ...] | Lacks = UNDECLARED
+
+
+class LaunchRefused(Exception):
+    """A piece's hooks (its `Launch.entry`'s) refusing by name: ``name`` the rule, ``detail`` what broke it. The
+    launcher raises it as `verity.channel.Refused`, which a scheme's module does not load."""
+
+    def __init__(self, name: str, detail: str) -> None:
+        super().__init__(f"{name}: {detail}")
+        self.name, self.detail = name, detail
 
 
 @dataclass(frozen=True)
@@ -323,7 +361,9 @@ class Scheme:
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
     against the committed root once at build; ``copy_beside_storage_ruled`` (`BESIDE_STORAGE`), the sentence that rules
     that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
-    it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
+    it (`Launch`), a `Lacks` where it launches nothing. ``reads``, by party, what that party's start reads beside its
+    bindings: each binding's name to (scheme, party), the state directory of that party's run of a scheme among
+    ``depends`` on the same machine; empty where none reads any. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
@@ -381,6 +421,7 @@ class Scheme:
     keeps_weight_copy: bool | Lacks = UNDECLARED
     copy_beside_storage_ruled: str | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
+    reads: Mapping[str, Mapping[str, tuple[str, str]]] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
     unchecked: Mapping[str, str] = field(default_factory=dict)
 
@@ -438,7 +479,28 @@ class Scheme:
                 if extra := sorted(set(p.starts_optional) - set(p.starts)):
                     raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
                                      f"not {extra}")
+                if not isinstance(p.entry, Lacks) and not _ENTRY.fullmatch(p.entry):
+                    raise ValueError(f"{self.name}: {party}'s entry is a module:attribute ({_ENTRY.pattern}), "
+                                     f"not {p.entry!r}")
+                if not isinstance(p.executables, Lacks):
+                    if not all(isinstance(e, Executable) for e in p.executables):
+                        raise ValueError(f"{self.name}: {party}'s executables are Executable records, not "
+                                         f"{p.executables!r}")
+                    if len(set(p.executables)) != len(p.executables):
+                        raise ValueError(f"{self.name}: {party} declares an executable twice")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
+        if not isinstance(self.reads, Lacks):
+            named = set() if isinstance(self.parties, Lacks) else {r.name for r in self.parties}
+            beside = () if isinstance(self.depends, Lacks) else self.depends
+            for party, read in self.reads.items():
+                if party not in named:
+                    raise ValueError(f"{self.name}: what its parties' starts read is by its parties {sorted(named)}, "
+                                     f"not {party!r}")
+                if stray := sorted({s for s, _ in read.values()} - set(beside)):
+                    raise ValueError(f"{self.name}: {party}'s start reads runs of {stray}, which are not among its "
+                                     f"depends {list(beside)}")
+            object.__setattr__(self, "reads", MappingProxyType({p: MappingProxyType(dict(r))
+                                                               for p, r in self.reads.items()}))
         if not isinstance(self.answers, Lacks) and not _ENTRY.fullmatch(self.answers):
             raise ValueError(f"{self.name}: answers is an entry, module:attribute, not {self.answers!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
@@ -698,7 +760,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "Answers", "Charge", "Executable", "Kernels", "Lacks", "Launch", "LaunchRefused", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]

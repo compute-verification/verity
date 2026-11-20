@@ -150,15 +150,15 @@ def test_several_templates_one_population():
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
 #: the program and docket digests of `_registration(6, version=0)`: what an old record holds
-V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
-             "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
-V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
-               "4ae03cca27ecd15b541e99f4769335f0aef7c726024f30fbbee1c35cdc764c53")
+V0_PAIR_6 = ("f48ead5729310772f4e376c2d9b3c45f09b86becd9b385821bb28eed0e9d1255"
+             "538ccc1c88449fce13baf1525f7d523e875470e06c0c0fe102a7e1b73d257e5d")
+V0_RECORD_6 = ("aabbe23588d9df8fd0e58d7d7f5c5ff0fe0231d36769183ec8f8bc146dc306dc"
+               "ba2c2d0b7212a8cec870cc81446b4ac3bf3845171b458cae6bc6264f748b7d6f")
 #: v1's program digests of `population_program(PAIR, 6)` and `mixed_population_program([(PAIR, 3), (XOR3, 5)])`
-V1_PAIR_6 = ("e8e632dcd15c1ebfde2fa1250164377934de456593abe8d655f36953ffd6ec09"
-             "3aea8ce599b6fe1fb99faaa4a4335e6d9e3c15ff4b79f853f709daf3fb84fccc")
-V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a36ddc"
-                    "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
+V1_PAIR_6 = ("d46d56b21d3be0fef873edbc247f883f97e70b03bc9cbd1194df7212c26ff04a"
+             "8b78c7cb5e49c5126b584c351c82b519a862a2f178e8d8f78c414720487dfded")
+V1_PAIR_3_XOR3_5 = ("f545623af3880e3b987fbdcbb6dd51f8db2b56ebd75af01621755e3b6a5c66e1"
+                    "1d8af0b21fa7c1117bf6d7a5d928c77ed975169deec98d46d6f5e5246dedc2a8")
 
 
 def _xor8_registry() -> DefinitionTable:

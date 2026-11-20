@@ -73,9 +73,7 @@ Open premises (`open`):
     `network/tests/period_case.py` for the third;
   - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
     an active network attester's run, each record held to its attested head and its attestation to the key in the
-    session, then the network attester's program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`.
-    `benchmarks/network_traces/attester_piece.py` runs it in step 1 of each of its steps, on the kept network
-    attester run (`network_attester_chain.rows_audit_case`);
+    session, then the network attester's program's rows audit (below). The Python it is held to is `network_attester.py`'s `audit`;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it.
 
@@ -90,11 +88,9 @@ Open premises (`open`):
   Against the reference it refuses three kinds of run the network attester never writes and holds two things less:
   no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
-- **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
-  runs the check and writes it as network attestation's piece (`attester_piece.py`), which `benchmarks/one_stage` reads;
-  on the served launch the piece, its chain's and its period's checks included, runs on the node that serves, so its
-  answer is the developer's and establishes no `trusted-device`. It also writes the
-  check's parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
+- **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. On the served launch
+  network attestation's piece (`benchmarks/network_traces/attester_piece.py`) runs no check: it writes `refused.txt`
+  with the one text, and the served window reads the network audit as pending. The check reads its parameters, whose `"keys"` list the link's network attester's entries, each a key, its session and the
   start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
   `start`).
@@ -153,8 +149,8 @@ A spec-level reference for network attestation's timing channel:
   network attester's cells (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a
   cell of CERT-VARLEN's id
   request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
-  hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
-  built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
+  hold each request's prompt_len to the advice's and which the ingress tie's verdict is
+  to be built from. It has the reference, the lanes the verifier computes from the advice and the network attester's release
   (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
   `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) would add the
   Commit's `c00.input/ids` rows to the same scan and hold every prompt id to them: a reference on a fake upstream
@@ -289,8 +285,12 @@ A spec-level reference for network attestation's timing channel:
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
-  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` calls it; no
-  verifier does yet), and `port` the verifier's own
+  `check_registration` reads it for the transfer it expects (`benchmarks/one_stage/a5_network_attester.py` and
+  `blocks.pins` call it). The check of a run's load, one registration of each value of its shape's manifest
+  (`load_check.manifest`) under the deployment's key and session, is the Lean verifier's:
+  `NetworkVerifier.Load.loadCheck`, the `load` function of `network-records verdicts`, which `relay_check.check_load`
+  asks and whose verdict it gives, with `check_registration` its reference in the agreement test
+  (`tests/verity/protocols/resource_accounting/network/verifier/network/test_network_load_agreement.py`). `port` is the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `verity/protocols/resource_accounting/network/attester/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class execution phase circuit, and which host runs which
@@ -342,16 +342,7 @@ A spec-level reference for network attestation's timing channel:
   `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress proof block
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress proof block
   t + 1 and egress proof block t read, and egress proof block t's row as a registered read of the network attester's egress row t, so the
-  chains are wires through the registered roots;
-- the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
-  proof blocks, one a bucket row of the network attester's registered ingress cells, proved as
-  `NetworkIngressTieBucket` (one gate
-  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the network attester's root
-  (`network_attester_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the network attester's
-  release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
-  stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
-  which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
+  chains are wires through the registered roots.
 
 The attestation's signature scheme is a parameter: the network attester's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
@@ -391,8 +382,7 @@ N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk`
 block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, and the attestations verify on their public fields (`TransferBlocks.certified`).
-It reads no head, salt or sibling. `verity/protocols/resource_accounting/network/prover/n2_zk.py` proves a
-`../attester/network_attester_serve.py` run's execution phases this way through the link's own stream, and scans what the verifier received. The
+It reads no head, salt or sibling. No prover of the tree proves it. The
 in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
 - **The attestations aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
@@ -423,8 +413,6 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, attested on both ends and synced within Σ_sync (a network attester link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
-
-`tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
 (`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the

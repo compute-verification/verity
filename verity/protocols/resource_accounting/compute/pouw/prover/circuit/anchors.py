@@ -51,7 +51,6 @@ from verity.commitments.randomness import Key, derive
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, DomainError, PoUWScheme
 
 from .ncp2 import Shape
-from .plan import DRAW_DOMAIN
 
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
@@ -404,15 +403,15 @@ class Ledger:
 
     @classmethod
     def open(cls, receipt: Receipt) -> Ledger:
-        """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
-        ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
+        """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under
+        `domains.POUW_CLOSURE_SAMPLING` with ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so an execution phase's secret is fresh and used once (C2)."""
         if not isinstance(receipt, Receipt):
             raise TypeError("a window's ledger opens from its complete Receipt")
         ledger, source = cls(), _fresh_source()
         object.__setattr__(ledger, "_receipt", receipt)
         object.__setattr__(ledger, "_source", source)
-        object.__setattr__(ledger, "_key", derive(source, DRAW_DOMAIN, {"receipt": receipt.digest()}))
+        object.__setattr__(ledger, "_key", derive(source, domains.POUW_CLOSURE_SAMPLING, {"receipt": receipt.digest()}))
         return ledger
 
     def admit(self, anchors: Anchors, shape: Shape) -> None:
@@ -432,7 +431,7 @@ class Ledger:
 
     def commitment(self, anchors: Anchors) -> bytes:
         """The call's commitment as the execution phase's receipt lists it, by call index: the only commitment its openings are
-        checked against (`Traced.check_openings`), never one supplied with them."""
+        checked against, never one supplied with them."""
         if self._receipt is None:
             raise DomainError("a call's commitment comes from its window's receipt (Ledger.open)")
         entry = self._receipt.entry(anchors)
@@ -454,7 +453,7 @@ class Ledger:
         a third party to check it."""
         if not self._sent:
             raise DomainError("a window's source is recorded only once its draw is sent")
-        return {"domain": DRAW_DOMAIN, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
+        return {"domain": domains.POUW_CLOSURE_SAMPLING, "receipt": self._receipt.digest().hex(), "source": self._source.hex()}
 
 
 class SaltWindows:
@@ -490,10 +489,10 @@ class SaltWindows:
 
 
 def replay_key(record: dict[str, str]) -> Key:
-    """The execution phase's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
-    if record.get("domain") != DRAW_DOMAIN:
-        raise DomainError(f"the record's domain is not {DRAW_DOMAIN!r}")
-    return derive(bytes.fromhex(record["source"]), DRAW_DOMAIN, {"receipt": bytes.fromhex(record["receipt"])})
+    """The execution phase's key from its audit record: `derive(source, POUW_CLOSURE_SAMPLING, {"receipt": digest})`."""
+    if record.get("domain") != domains.POUW_CLOSURE_SAMPLING:
+        raise DomainError(f"the record's domain is not {domains.POUW_CLOSURE_SAMPLING!r}")
+    return derive(bytes.fromhex(record["source"]), domains.POUW_CLOSURE_SAMPLING, {"receipt": bytes.fromhex(record["receipt"])})
 
 
 __all__ = ["ANCHORED", "ANCHOR_RULE", "Anchors", "Derivation", "Ledger", "PUBLIC_INPUTS_FORMAT", "REGION_WORD_BITS",

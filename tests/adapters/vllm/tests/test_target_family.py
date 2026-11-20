@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from tests.pipeline.test_row import _row, _tp_row
+from tests.pipeline.test_row import _row
 from verity_vllm import target_family as tf
 
 TREE = (Path(__file__).resolve().parents[4] / "adapters" / "vllm")
@@ -89,20 +89,6 @@ def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses
     for stages, phase in ((["match"], "all"), (["match"], "gpu"), (["match", "commit"], "cpu"), (["bench"], "cpu")):
         rec = tf.check(ROW_H200_TP8, {"sweep": {}}, stages, match_phase=phase)
         assert rec["verdict"] == "FAIL" and [m["fact"] for m in rec["mismatches"]] == ["device"], (stages, phase)
-
-
-def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
-    """`--match-phase cpu` on a workload's run reaches `target-family`, which then passes on a host with no GPU; the same
-    workload's GPU stages (`--match-phase all`) are refused there."""
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
-           "CUDA_VISIBLE_DEVICES": ""}
-    for phase, rc, head in (("cpu", 0, "TARGET-FAMILY-OK"), ("all", 3, "PRECHECK_FAIL_TARGET_FAMILY: no GPU visible for a GPU stage")):
-        t = _tp_row(tmp_path, ROW_H200_TP8, "--stages", "match", "--match-phase", phase)
-        os.makedirs(t.d, exist_ok=True)
-        t.child_env = env
-        got = t.target_family(out=str(tmp_path / f"{phase}.json"))
-        assert got[0] == rc and got[1].startswith(head), got
-        assert json.loads((tmp_path / f"{phase}.json").read_text())["match_phase"] == phase
 
 
 def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):

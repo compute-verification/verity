@@ -38,27 +38,28 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.circuits import partition_object as PO
 from verity.commitments import hm96
 
-from holes import waits_on
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
+FIXTURE = "art:49a1a88a003174e302e974951734bafd43abb6b52f64bc8652cb92f3674ff6f0"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 #: the docket's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
 STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
-    "cs": {"value": "cs_table", "root": "e06311d0afa0492b635c50a6a983041b1ed4a577f27209d705aebcb1d5690820"
-                                        "97d7da63c77fb2c614f5838501f22e2a557f838d48fa0c143a43751f4593296e"},
-    "x": {"value": "x", "root": "504f74c35b38fceacb9485685bf8a2fa753254d9e47eab2cd788584f4f2d417c"
-                                "bde4dc5c56538d21d7047a2b834c0c7ef816e3b8b68378738e38820ad0e3fe70"},
-    "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
-                                         "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
+    "cs": {"value": "cs_table", "root": "85292b4d73b4a2f9ac4429451f7f6ad95ff6054e372e2ac4b557d7df2d82c84b"
+                                        "f236ea2d67845e034944c6ca2deb6df384e6a84bd31e199b83ddcaa3072d128e"},
+    "x": {"value": "x", "root": "b4a7cbb6cae041ca9e291069059940c00e7a9f776e2f2038af4f69e8a190e960"
+                                "983b2495a73c0b78b37b4a9cd6d0f45d4dbabe2a720a174762161b58b71ed82e"},
+    "out": {"value": "RoPEHead_v1{D=64}/o0",
+            "root": "9b65f4ba583ca2491f6240c66adfdb622c1164dc84ed00ba042c58f5a42f1690"
+                    "96976200fcfc0a879d4c5639199291795a80754f964ad13c6fde3f18eaefdbc0"},
 }
 #: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
+DRAWN = (3, 4, 6, 8, 10, 13, 14, 16, 17, 19, 21, 23, 26, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -77,7 +78,7 @@ def test_without_registered_reads_a_program_that_reads_registered_values_is_refu
         tmp_path, monkeypatch, program):
     monkeypatch.setattr(PF, "executable", _never)
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
-                         program=program, partition={}, block=0, registered=None)
+                         program=program, partition={}, draw={"units": [0]}, registered=None)
     assert got is None and why[0] == "registered", why
     assert PF.reads_registered(program)
 
@@ -88,7 +89,7 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_block(t
                                                                                registered):
     monkeypatch.setattr(PF, "executable", _never)
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
-                         program=program, partition={}, block=0, registered=registered)
+                         program=program, partition={}, draw={"units": [0]}, registered=registered)
     assert got is None and why[0] == "circuit" and why[1].startswith("E_PARTITION"), why
 
 
@@ -113,11 +114,12 @@ def test_the_population_is_the_public_files_units_in_order(indices, strata, ok):
 
 
 def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
-    """A circuit file's head (its META and a ``unit`` circuit of `groups` input groups) and a public file's header."""
+    """A circuit file's head (its META and a ``unit`` circuit of `groups` input groups) and a public file's header,
+    naming unit 0 unless `header` names its units."""
     unit = f"flock-ir-unit/v2 u 1 2 {groups}" + " 0 1 1 16" * groups + " 1 1 1 1 16\n0 0\n"
     circuit, public = d / "circuit.txt", d / "pub.bin"
     circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta or {})}\nCIRCUIT unit 2\n{unit}")
-    public.write_bytes(json.dumps(header or {}).encode() + b"\n")
+    public.write_bytes(json.dumps({"units": {"indices": [0]}, **(header or {})}).encode() + b"\n")
     return circuit, public
 
 
@@ -139,9 +141,10 @@ def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, wan
 def _derived(monkeypatch, circuit: Path) -> None:
     """C_S, which `verify` derives from C and the partition (`one_circuit.restrict`), taken to be `circuit`'s bytes:
     these tests are of what `verify` does with a verdict, whatever the derivation."""
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: circuit.read_bytes())
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
-    monkeypatch.setattr(OC, "lower", lambda c_s: c_s)
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: circuit.read_bytes())
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
 
 
 def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
@@ -149,12 +152,12 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         block=0, registered=None)
+                         draw={"units": [0]}, registered=None)
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
 
 
@@ -164,7 +167,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     children = []
 
     def child(cmd, **kw):
@@ -179,7 +182,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", child)
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         block=0, registered=None)
+                         draw={"units": [0]}, registered=None)
     assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
     (env,) = children
     wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
@@ -266,15 +269,15 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     circuit = _template(tmp_path, 129, {"units_per_vu": 0, "leaves_out": []})
     _derived(monkeypatch, circuit)
     public = tmp_path / "pub.bin"
-    public.write_bytes(b"{}\n")
+    public.write_bytes(b'{"units": {"indices": [0]}}\n')
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p", "zk": True}
     monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         block=0, registered=None)
+                         draw={"units": [0]}, registered=None)
     assert why is None, why
     (f,) = got
     assert (f.accepted, f.why, f.units) == (False, PF.NO_ROW_WHY, ()), f
@@ -299,19 +302,18 @@ def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = Tru
     return PF.verify(PF.Proof(circuit or st / "circuit.txt", st / public, (session,)),
                      program=(st / "program.json").read_bytes(),
                      partition=partition or json.loads((st / "partition.json").read_text()),
-                     block=_block(st / public, partition or json.loads((st / "partition.json").read_text())),
+                     draw={"units": [_block(st / public, partition or json.loads((st / "partition.json").read_text()))]},
                      registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
 
 
 def _block(public: Path, partition: dict) -> int:
     """The partition's block holding the statement's first unit, as its public file names it."""
     u = PF._header(public)["units"]["indices"][0]
-    return next(k for k, (lo, hi) in enumerate(partition.get("blocks", [[0, u + 1]])) if lo <= u < hi)
+    return next(k for k, (lo, hi) in enumerate((PO.levels(partition) or [[(0, u + 1)]])[0]) if lo <= u < hi)
 
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
     """The honest session's sample is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
     the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
@@ -340,22 +342,15 @@ def _unnamed(fx: Path) -> str:
     return "pub-unnamed.bin"
 
 
-@lean
 @pytest.mark.slow
 @pytest.mark.parametrize("unnamed", [False, True], ids=["public file names its reads", "public file names none"])
-@waits_on("restrict", "lower")
-def test_lean_without_registered_reads_refuses_the_statement_that_reads_them(fx, unnamed):
-    """The program binds ``cs`` as a run input (`Input16_v1`), registered only by the verifier's own file, so `verify`
-    without that file goes on to Lean: the honest public file, which names the ``cs`` read, is refused by
-    `Registered.check`; with that name taken out and the shared rows kept, the session is still not accepted. Neither
-    finding proves a proof block."""
-    assert not PF.reads_registered((fx / "stage" / "program.json").read_bytes())
+def test_without_registered_reads_the_fixtures_statement_is_refused_before_lean_runs(fx, monkeypatch, unnamed):
+    """The program binds ``x`` and ``cs_table`` as registered inputs (`RegisteredInput16_v1`), so `verify` without the
+    verifier's own registered reads refuses before Lean runs, whether or not the public file names its reads."""
+    monkeypatch.setattr(PF, "executable", _never)
+    assert PF.reads_registered((fx / "stage" / "program.json").read_bytes())
     got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
-    assert why is None, why
-    (f,) = got
-    assert f.accepted is False and f.units == (), f
-    if not unnamed:
-        assert "the verifier holds no registered roots" in f.why, f
+    assert got is None and why[0] == "registered", why
 
 
 def _pointed(fx: Path) -> str:
@@ -379,7 +374,6 @@ def _pointed(fx: Path) -> str:
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
     """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
     instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a sampled proof block's input ref
@@ -400,7 +394,7 @@ def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(t
     _derived(monkeypatch, circuit)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
-    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused"}
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
     ran = []
 
     def child(cmd, **kw):
@@ -410,8 +404,245 @@ def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(t
     monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
     monkeypatch.setattr(PF.subprocess, "run", child)
     got, why = PF.verify(PF.Proof(tmp_path / "absent.txt", public, (tmp_path / "s",)), program=RUN_ONLY,
-                         partition={"program": "p"}, block=0, registered=None)
+                         partition={"program": "p"}, draw={"units": [0]}, registered=None)
     assert why is None and ran == [circuit.read_bytes()], (why, ran)
+
+
+@pytest.mark.parametrize("draw, want", [
+    ({"units": [0, 2]}, None), ({"units": [0], "closure": [2]}, None), ({"units": [], "closure": []}, None),
+    ({"units": [3]}, [(3, 4)]), ({"units": [0], "closure": [3]}, [(3, 4)]),
+], ids=["sampled others", "closure others", "nothing sampled", "sampled", "in the closure"])
+def test_the_door_proves_only_a_block_the_draw_sampled_and_refuses_an_undrawn_one_by_name(tmp_path, monkeypatch, draw,
+                                                                                          want):
+    """The door's block is the drawn block (`draw`'s units and closure) holding the unit the proof's public file names:
+    a proof of a block the draw did not sample is refused as ``undrawn`` before C_S is derived or Lean runs."""
+    circuit, public = _files(tmp_path, header={"units": {"indices": [3]}})
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    derived = []
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(k, k + 1)])
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
+    verdict = {"session": str(tmp_path / "s"), "accepted": False, "why": "refused", "zk": True}
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
+                         draw=draw, registered=None)
+    if want is None:
+        assert got is None and why[0] == "undrawn" and "unit 3, which the draw did not sample" in why[1], why
+        assert derived == []
+    else:
+        assert why is None and derived == [want] and [f.why for f in got] == ["refused"], (why, derived)
+
+
+def _door(tmp_path: Path, monkeypatch, name: str, indices: list, draw: dict, blocks=lambda k: [(k, k + 1)],
+          inputs=None):
+    """`verify` on a proof whose public file names `indices`, each block ``k`` of the partition object `blocks(k)`, the
+    verifier answering a rejection; the derivations it asked for beside its answer."""
+    d = tmp_path / name
+    d.mkdir()
+    circuit, public = _files(d, header={"units": {"indices": indices}})
+    (d / "s").mkdir()
+    (d / "s" / "session.json").write_text("{}")
+    derived = []
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: blocks(k))
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: derived.append(units) or circuit.read_bytes())
+    monkeypatch.setattr(OC, "cuts", lambda c, partition, *_: {})
+    monkeypatch.setattr(OC, "lower", lambda c_s, partition, exe, **_: c_s)
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(PF.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "VERDICT " + json.dumps(
+        {"session": cmd[cmd.index("--session") + 1], "accepted": False, "why": "refused", "zk": True}) + "\n", ""))
+    return PF.verify(PF.Proof(circuit, public, (d / "s",)), program=RUN_ONLY, partition={"program": "p"}, draw=draw,
+                     registered=None, inputs=inputs), derived
+
+
+def test_the_door_holds_the_drawn_blocks_inputs_to_the_schemes_reading_of_its_records(tmp_path, monkeypatch):
+    """The scheme's reading of the drawn block's public inputs from its committed records (``inputs``) is
+    called with the block the proof matched, once, and its refusal refuses the proof as ``inputs``
+    before C_S is derived or Lean runs; a reading that passes leaves the verdict to Lean."""
+    asked = []
+
+    def uncovered(k):
+        asked.append(k)
+        raise ValueError("kept-width: call 0 keeps |K| = 128 of K = 256")
+
+    (got, why), derived = _door(tmp_path, monkeypatch, "refused", [3], {"units": [1, 3]}, inputs=uncovered)
+    assert got is None and derived == [] and asked == [3], (why, derived, asked)
+    assert why == ("inputs", "drawn block 3: kept-width: call 0 keeps |K| = 128 of K = 256"), why
+    (got, why), derived = _door(tmp_path, monkeypatch, "held", [3], {"units": [1, 3]}, inputs=asked.append)
+    assert why is None and asked == [3, 3] and [f.block for f in got] == [3], (why, asked)
+
+
+def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole():
+    """`one_circuit.lower` is Lean's lowering of C_S's template under a template query: a partition of another query is
+    the hole ``lower``, refused before any executable is built."""
+    def never():
+        raise AssertionError("built an executable for a partition the lowering does not cover")
+
+    for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}},
+                      {"program": "p", "query": {"name": "Q_template_instances", "params": {"templates": "T"}}}):
+        with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that is no template query"):
+            OC.lower(b"{}", partition, never)
+
+
+def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
+    """C of `counts[i]` units of the i-th of two Boolean templates (NOT of each bit of ``x``, of one word, of two), in that
+    order, its ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
+    from verity.circuits import codec
+    from verity.circuits import partition_object as PO
+    from verity.circuits.boolean import BIT, NOT
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.types import Array
+    # ``pad``, read by no gate, is a row past a compression before its last block, which a Flock block's pin needs
+    ts = [bind(CompositeDefinition(f"DoorLowerNot{n}", 0, (),
+                                   lambda S, n=n: ((("x", Array(16 * n, BIT)), ("pad", Array(1024, BIT))), Array(16 * n, BIT)),
+                                   lambda B, S, x, pad: B.batch(NOT, x, axes=(0,)), register=False)) for n in (1, 2)]
+    ts = [(t, m) for t, m in zip(ts, counts) if m]
+    ids = [codec.descriptor_id(t) for t, _ in ts]
+    program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
+    c = b"".join(codec.descriptor_chunks(program))
+    return c, PO.build(json.loads(c), query, [[(u, u + 1) for u in range(sum(counts))]]), ids
+
+
+def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_many_templates(tmp_path):
+    """Under ``Q_template_instances`` the template lowered is the one C_S's root calls: Lean's lowering is called on
+    it, with the partition's digest; a C_S whose root calls two templates, and one whose template the partition's query
+    does not list, are refused before any executable is built."""
+    from verity.circuits import partition_object as PO
+    c, part, ids = _two_templates(2, 2)
+    exe = tmp_path / "lower"
+    exe.write_text(f"#!{sys.executable}\nimport json, sys\nopen(sys.argv[-1], 'w').write(json.dumps(sys.argv[1:]))\n")
+    exe.chmod(0o755)
+    for u, tid in ((1, ids[0]), (2, ids[1])):
+        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe))
+        assert argv[0] == "compose" and argv[2:4] == [tid, f"unit/{tid}"], argv
+        assert argv[7:9] == [part["program"], PO.digest(part)], argv
+
+    def never():
+        raise AssertionError("built an executable for a C_S the door refuses")
+
+    with pytest.raises(OC.Refused, match="C_S's root calls .*, and a block's units are instances of one template"):
+        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never)
+    _, only_first, _ = _two_templates(2, 0)
+    with pytest.raises(OC.Refused, match="is not one the partition's query lists"):
+        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never)
+
+
+def test_a_drawn_block_of_a_partition_of_many_templates_is_in_range_and_its_blocks_cover_c():
+    """`one_circuit.block` under ``Q_template_instances``: a block index past the partition's blocks, and blocks that end
+    short of C's population, are refused."""
+    c, part, _ = _two_templates(2, 2)
+    assert OC.block(c, part, 3) == [(3, 4)]
+    with pytest.raises(OC.Refused, match="no block 4 among the partition's 4"):
+        OC.block(c, part, 4)
+    with pytest.raises(OC.Refused, match="end at 3, not at C's population 4"):
+        OC.block(c, PO.build(json.loads(c), part["query"], [[(0, 1), (1, 3)]]), 0)
+
+
+@lean
+@pytest.mark.slow
+def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
+    """Lean's lowering (`flock-lower-check compose`, the door's executable) on a block of each template of a
+    ``Q_template_instances`` partition: a templated circuit of that template, bound to the partition."""
+    from verity.circuits import partition_object as PO
+    c, part, ids = _two_templates(2, 2)
+    for u, tid in ((0, ids[0]), (3, ids[1])):
+        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable).decode()
+        head, meta = text.split("\n", 2)[:2]
+        assert head.startswith("flock-circuit/tmpl") and f"unit/{tid}" in head, head
+        assert PO.digest(part) in meta and tid in meta, meta[:400]
+
+
+@lean
+@pytest.mark.slow
+def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_word_primitive():
+    """A template of a word parameter ``w`` (``Value 8``) that no gate reads beside two bits it XORs: the lift lifts only
+    a Definition reaching a word primitive, so Lean's lowering, the door's executable, refuses it by name
+    (`Flock.Lower.WIDE`) rather than lowering ``w`` as one wire."""
+    from verity.circuits import codec
+    from verity.circuits import partition_object as PO
+    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.types import Array, Value
+    t = bind(CompositeDefinition("DoorLowerWordUnread", 0, (),
+                                 lambda S: ((("x", Array(2, BIT)), ("w", Value(8)), ("pad", Array(1024, BIT))), BIT),
+                                 lambda B, S, x, w, pad: B.call(xor_gate(2), x), register=False))
+    tid = codec.descriptor_id(t)
+    program, query = wired_population_program([(t, 2)], {"templates": [[tid, 2]]})
+    c = b"".join(codec.descriptor_chunks(program))
+    part = PO.build(json.loads(c), query, [[(0, 1), (1, 2)]])
+    with pytest.raises(OC.Refused, match="a parameter or return leaf wider than one bit, not lifted to bits"):
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable)
+
+
+@pytest.mark.parametrize("indices, blocks, want", [
+    ([3, 5], lambda k: [(k, k + 1)], ("undrawn", "names units [3, 5], not exactly drawn block 3's [[3, 4]]")),
+    ([3], lambda k: [(k, k + 2)], ("undrawn", "names units [3], not exactly drawn block 3's [[3, 5]]")),
+    ([1.0], lambda k: [(k, k + 1)], ("proof", "names unit 1.0, which is no natural number")),
+    ([True], lambda k: [(k, k + 1)], ("proof", "names unit true, which is no natural number")),
+    ([3, -1], lambda k: [(k, k + 1)], ("proof", "names unit -1, which is no natural number")),
+], ids=["a unit outside the drawn block", "short of the drawn block", "a float", "a bool", "a negative"])
+def test_the_door_refuses_a_public_file_whose_units_are_not_exactly_the_drawn_blocks(tmp_path, monkeypatch, indices,
+                                                                                     blocks, want):
+    """The proof's public file names exactly the drawn block's units (`units_exactly`), each a natural number (a float or
+    a bool selects no block): its first unit in a drawn block and another outside it, a file short of the block, or a
+    unit ``1.0``, ``true`` or negative, is refused before C_S is derived or Lean runs."""
+    (got, why), derived = _door(tmp_path, monkeypatch, "p", indices, {"units": [1, 3]}, blocks)
+    assert got is None and derived == [] and why[0] == want[0] and want[1] in why[1], why
+
+
+def test_verify_names_the_drawn_block_each_proof_matched_so_each_drawn_block_has_exactly_one_proof(tmp_path,
+                                                                                                    monkeypatch):
+    """Each finding names the drawn block its proof's units are exactly (``block``): a caller holds the draw's blocks to
+    one proof each, and a second proof of block 3 in place of block 5's leaves 5 unproved and 3 proved twice."""
+    draw = {"units": [3], "closure": [5]}
+    drawn = [*draw["units"], *draw["closure"]]
+
+    def matched(proofs: dict[str, list[int]]) -> list[int]:
+        out = []
+        for name, indices in proofs.items():
+            (got, why), _ = _door(tmp_path, monkeypatch, name, indices, draw)
+            assert why is None, why
+            out += sorted({f.block for f in got})
+        return out
+
+    def one_each(blocks: list[int]) -> bool:
+        return sorted(blocks) == sorted(drawn)
+
+    honest = matched({"a": [3], "b": [5]})
+    assert honest == [3, 5] and one_each(honest)
+    twice = matched({"c": [3], "d": [3]})
+    assert twice == [3, 3] and not one_each(twice)
+
+
+NOT_ZK = {"no zk": {}, "zk false": {"zk": False}, "zk a string": {"zk": "true"}}
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+@pytest.mark.parametrize("zk", NOT_ZK.values(), ids=NOT_ZK.keys())
+def test_a_verdict_line_that_does_not_say_zk_true_is_refused(tmp_path, monkeypatch, zk, accepted):
+    """Flock's verifier says ``zk`` on every verdict line: the door refuses a line that does not say it true, accepted or
+    not, as no zero-knowledge session's, and so does a member's verdict (`members.flock_verdict`)."""
+    circuit, public = _files(tmp_path)
+    _derived(monkeypatch, circuit)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": accepted, "why": "", "program_sha512": "p", **zk}
+    monkeypatch.setattr(PF, "executable", lambda: Path(PF.EXE))
+    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
+                         draw={"units": [0]}, registered=None)
+    assert got is None and why == ("proof", PF.not_zk_why(verdict)) and "not true: no --zk session's" in why[1], why
+    st = M.Statement(circuit, public, RUN_ONLY, {"program": "p"}, None, (), tmp_path / "s" / "session.json", ())
+    with pytest.raises(M.Outside, match="not true: no --zk session's"):
+        M.flock_verdict(st)
+    verdict["zk"] = True
+    assert M.flock_verdict(st) == verdict and PF.not_zk_why(verdict) is None
 
 
 def _tmpl(d: Path, **meta) -> Path:
@@ -449,29 +680,30 @@ def test_the_door_under_the_templated_statement_refuses_a_flat_file(tmp_path, mo
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         block=0, registered=None)
+                         draw={"units": [0]}, registered=None)
     assert got is None and why == ("circuit", PF.TMPL_FLAT_WHY), why
 
 
 def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
     """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
-    hand it are refused, and a partition naming no blocks gives it none."""
-    with pytest.raises(M._Refused, match=M.UNITS_HANDED):
+    hand it are refused, and a partition naming no blocks gives it none, each as Lean's parse refuses the parameters
+    (`Outside`, with its ``params:`` reason)."""
+    with pytest.raises(M.Outside, match=f"^params: proofs: member a/c0: {M.UNITS_HANDED}$"):
         M._block("a/c0", {"block": 0, "units": [[0, 1]]}, b"", {})
-    with pytest.raises(M._Refused, match="partition: E_PARTITION"):
+    with pytest.raises(M.Outside, match="^params: proofs: member a/c0: partition: E_PARTITION"):
         M._block("a/c0", {"block": 0}, b"", {"program": "p"})
 
 
 def test_the_door_refuses_at_the_base_arguments_lowering_of_c_s(tmp_path, monkeypatch):
     """C_S derived, the door stops where the base argument takes no Boolean block circuit (`one_circuit.lower`)."""
     circuit, public = _files(tmp_path)
-    monkeypatch.setattr(OC, "block", lambda c, partition, k: [(0, 1)])
-    monkeypatch.setattr(OC, "restrict", lambda c, partition, units: b"C_S")
+    monkeypatch.setattr(OC, "block", lambda c, partition, k, *_: [(0, 1)])
+    monkeypatch.setattr(OC, "restrict", lambda c, partition, units, *_: b"C_S")
     monkeypatch.setattr(PF, "executable", _never)
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
-                         block=0, registered=None)
+                         draw={"units": [0]}, registered=None)
     assert got is None and why == ("circuit", OC.PREFIX + OC.LOWER), why
 
 
@@ -493,7 +725,6 @@ def _tampered(fx: Path, to: Path, rehash: bool) -> Path:
 @lean
 @pytest.mark.slow
 @pytest.mark.parametrize("rehash", [False, True], ids=["record-kept", "record-rehashed"])
-@waits_on("restrict", "lower")
 def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, rehash):
     """One bit of the first rep's proof flipped: with the record's proof digest kept the verifier refuses the file the
     record doesn't bind, and with it rewritten to the flipped bytes it refuses the proof itself. Either way the finding is
@@ -506,12 +737,11 @@ def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, 
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_missing_proof_files_are_refused(fx, tmp_path):
     st = fx / "stage"
     got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)),
                          program=(st / "program.json").read_bytes(),
-                         partition=json.loads((st / "partition.json").read_text()), block=_block(st / "pub-32.bin", json.loads((st / "partition.json").read_text())),
+                         partition=json.loads((st / "partition.json").read_text()), draw={"units": [_block(st / "pub-32.bin", json.loads((st / "partition.json").read_text()))]},
                          registered={})
     assert got is None and why[0] == "proof", why
 
@@ -533,7 +763,6 @@ def _same(v1, v2):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`Spot.OneStageZk`) runs `verity-verify-proof verify --zk`'s one-stage path inside its own Lean, on
     the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
@@ -553,7 +782,6 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_an_accepted_session_of_another_population_is_rejected(fx):
     """Under a docket of 31 units, the honest session that the verifier accepts on its public file of 32 is
     rejected with `population_why`'s reason: its file's unit 31 is no slot of the docket's."""
@@ -565,7 +793,6 @@ def test_an_accepted_session_of_another_population_is_rejected(fx):
 
 @lean
 @pytest.mark.slow
-@waits_on("restrict", "lower")
 def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
     """A docket whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
     heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the

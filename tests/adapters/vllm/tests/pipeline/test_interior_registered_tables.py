@@ -215,7 +215,7 @@ def _first():
     links = _links()
     names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(_member(), CELLS, "00", [0], links=links))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     supplied = tuple(v for v, _per, _leaf in IR.span_values(links))
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),

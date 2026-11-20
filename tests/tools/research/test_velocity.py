@@ -233,7 +233,7 @@ def test_agents_are_counted_by_lane_from_their_names():
               ("verity: kernels", "RUNNING"), ("top", "RUNNING"), ("CERTNEG: negative tests (NET-340)", "RUNNING"),
               ("XYZ-1 a team with no lane", "RUNNING"), ("TOP-9 stopped", "IDLE")]
     text = "Listing cloud agents: 8 shown.\n" + json.dumps({"hasMore": False, "agents": [{"name": n, "status": s} for n, s in listed]})
-    assert V.agents(text, REG) == {"running": 7, "limit": 100, "more": False,
+    assert V.agents(text, REG) == {"running": 7, "limit": 75, "more": False,
                                    "lanes": {"kernels": 2, "top": 2, "unnamed": 2, "compute-accounting": 1}}
     with pytest.raises(V.Unread, match="list-cloud-agents"):
         V.agents("no listing here", REG)
@@ -401,11 +401,11 @@ def test_a_reading_now_saves_the_page_and_starts_from_the_newest_known_dump_at_t
         "mark_to_main": "p50 95, p90 200 min (n=10)", "unread": []})
     assert V.main(["--agents", "93", "--no-save"], now=NOW) == 0
     out = capsys.readouterr().out
-    assert "AGENTS    93 running of 100 (the count --agents gave)\n" in out
+    assert "AGENTS    93 running of 75 (the count --agents gave)\n" in out
     assert ("LANDING   within 2 h of the mark, 7 of 10 landed (70%); counting the 2 marked in the window and waiting over 2 h as "
             "misses, 58%; mark to `main` p50 95, p90 200 min (n=10) (`research queue stats`, the 6 h to Mon 9 Nov 6:00 PM PST)\n") in out
     assert V.main(["--agents", "93", "--no-save", "--line"], now=NOW) == 0
-    assert "Landing within 2 h of the mark: 7 of 10 landed (70%); 93 of 100 agents running; " in capsys.readouterr().out
+    assert "Landing within 2 h of the mark: 7 of 10 landed (70%); 93 of 75 agents running; " in capsys.readouterr().out
     # a window that ended: the newest known dump at or before each end, and nothing saved
     assert V.main(["--since", "2026-11-09T06:00-08:00", "--until", "2026-11-09T12:05-08:00", "--json"], now=NOW) == 0
     r = json.loads(capsys.readouterr().out)

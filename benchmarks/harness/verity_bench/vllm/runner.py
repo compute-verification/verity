@@ -220,8 +220,8 @@ def _pearl_c_gate(run: Any, scheme: str | None) -> dict[str, Any]:
         check.coins = {"source": "in-process"}
     check.weights = {w: x.tensor for w, x in run.weights.items()}
     got = check.gate(None)
-    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
-    # one between steps.
+    # The check's passes are on twins of the run (`e2e.call_checks`); the next forward's calls need an open stepped pass,
+    # as the adapter's hook leaves one between steps.
     run.begin(stepped=True)
     return {**got, "provided": True}
 

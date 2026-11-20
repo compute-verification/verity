@@ -6,7 +6,7 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol
 
 import numpy as np
@@ -100,10 +100,11 @@ class CommittedStore:
 
     @classmethod
     def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
-                  manifest: RequiredManifest | dict[str, Any] | None) -> CommittedStore:
-        """The store the replay of record uses: the binding map read through the manifest's alias table (None manifest = no aliases: a
-        shared module's layer-N path is then missing by name, never silently the lowest invocation)."""
-        return cls(bmap, committed, alias_table(manifest))
+                  aliases: Mapping[str, Sequence[Any]] | None = None) -> CommittedStore:
+        """The store the replay of record uses: the binding map read through ``aliases``, op_path -> (canonical op_path,
+        invocation) (`alias_table`'s, or a seal's runtime tree's; none: a shared module's layer-N path is then missing by name,
+        never silently the lowest invocation)."""
+        return cls(bmap, committed, {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()})
 
     def resolve(self, op_path: str) -> tuple[str, int]:
         return resolve_op_path(self.aliases, op_path)

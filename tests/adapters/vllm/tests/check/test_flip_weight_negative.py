@@ -81,8 +81,7 @@ def test_commit_delta_declares_flip_weight_and_applies_it_before_register_weight
     # the flip refuses to be a no-op (an unchanged element would make the negative un-failable)
     assert "did not change the element" in src
     # the flag is documented as a negative-test-only flag, never a row-procedure flag
-    for driver in ("row_stages.py", "row_tp.py"):
-        assert "--flip-weight" not in (BENCH.parent / "pipeline" / driver).read_text()
+    assert "--flip-weight" not in (BENCH.parent / "pipeline" / "row_stages.py").read_text()
 
 
 def test_canary_flipweight_regex_matches_the_verdict_text_of_a_pin_fail():

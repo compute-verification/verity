@@ -54,7 +54,7 @@ declaration's blocks and name the one that failed, and stay in the private recor
 
 In the order checked: `instance` (a field missing or of the wrong JSON kind), `params` (`c`, `k` or `n` not a natural, an
 entry of `blocks` not a string, a value of `table` not a natural), then the Program's refusals in `InferenceOnlyCheck.Desc`'s order
-(`program`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, `unwalked` for `Desc.gridWalk`, and `program` or `unwalked`
+(`program`, `recut-unread`, `not-topological`, `program` for `rootLaidOut`, `inputsAtRoot` and `walkable`, `unwalked` for `Desc.gridWalk`, and `program` or `unwalked`
 from the summaries), then θ entry by entry as `InferenceOnlyCheck.Desc` reads it (`theta-unknown`, `theta-not-input`,
 `theta-not-registered`, `theta-duplicate`), then `blocks` entry by entry (`block-unknown`: no Definition the root
 reaches, `block-root`, `block-input`: an input primitive, `block-duplicate`), then `gate-in-no-block`, then `gate-table`
@@ -258,6 +258,7 @@ def verdict (rows : Array Row) (total : Nat) (f : Option (Option Nat × String))
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
   let P ← decodeProgram i.program
+  if !(P.defs[P.root]!).body.recut.isEmpty then throw "recut-unread"
   if P.orderViolation.isSome then throw "not-topological"
   if !(Desc.rootLaidOut P && Desc.inputsAtRoot P) then throw "program"
   if !Desc.walkable P then throw "program"

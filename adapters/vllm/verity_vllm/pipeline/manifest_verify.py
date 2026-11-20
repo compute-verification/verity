@@ -75,8 +75,9 @@ class Options:
 
 
 def main(a: Options) -> int:
+    from verity_vllm.pipeline.manifest import one_gpu, taps_of
+    one_gpu([a.rank], a.ranks)
     used = _load(a.manifest)
-    from verity_vllm.pipeline.manifest import taps_of
     rebuilt = rebuild(program=a.program, workload=a.workload, fixture=a.fixture, programs_root=a.programs_root, workload_digest=a.workload_digest,
                       rank=a.rank, ranks=a.ranks, profile=a.profile, norm_scales=a.norm_scales,
                       taps=taps_of(a.router_softmax, a.vocab_range), query=a.query, log=logger.info)

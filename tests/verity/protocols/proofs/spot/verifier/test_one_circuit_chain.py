@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -69,7 +70,7 @@ def registered() -> dict[str, Any]:
     win = I.Window(circuit(), TI.RUN, TI.SAMPLING_DESIGN, 2)
     program, _query = circuit().program()
     c = b"".join(descriptor_chunks(program))
-    assert win.window.partition["blocks"] == I.partition_blocks(circuit(), 2)
+    assert win.window.partition["blocks"] == [I.partition_blocks(circuit(), 2)]
     return {"window": win, "C": c, "theta": theta().doc(), "partition": win.window.partition}
 
 
@@ -87,22 +88,29 @@ def committed(x=None) -> Any:
 
 
 def drawn(win: Any) -> Any:
-    """One proof block of the window, by a stand-in coin (the challenger's live coin is not the door's input)."""
+    """One proof block of the window, by a stand-in coin: the door's draw (`python_door`) samples it alone."""
     ms = win.window.members
     return ms[int(np.random.default_rng(0).integers(len(ms)))]
 
 
-def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
+def python_door(member: Any, circuit_file: bytes = b"", public: bytes | None = None,
                 partition: dict | None = None) -> tuple[Any, Any]:
+    """The door on a proof of ``member``'s block, under a draw that sampled that block alone; ``public`` defaults to a
+    public file naming exactly the block's units."""
     r = registered()
     with tempfile.TemporaryDirectory() as d:
         cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
         cf.write_bytes(circuit_file)
-        pub.write_bytes(public)
+        k = [m.base for m in r["window"].window.members].index(member.base)
+        try:
+            units = [u for lo, hi in OC.block(r["C"], r["partition"], k) for u in range(lo, hi)]
+        except OC.Refused:
+            units = [member.base]
+        pub.write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n" if public is None else public)
         s.mkdir()
         (s / "session.json").write_text("{}")
         return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
-                         block=[m.base for m in r["window"].window.members].index(member.base), registered=r["theta"])
+                         draw={"units": [k]}, registered=r["theta"])
 
 
 def own_root_public(k: int) -> bytes:
@@ -224,8 +232,9 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor).decode()
-    except OC.NotDerived as e:
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable,
+                            cut=OC.cuts(r["C"], r["partition"])).decode()
+    except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
     if [p[0] for p in meta["ports"]] != [*rows, *outs]:
@@ -236,7 +245,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         (d / "circuit.txt").write_text(text)
-        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["unit"], inputs=[], outputs=[]))
+        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta.get("unit", f"block-{member.base}"), inputs=[], outputs=[]))
         FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", indices=list(range(member.base, member.base + n)),
                  rows=rows, outs=outs)
         with socket.socket() as s:
@@ -263,12 +272,27 @@ def stage_python_door() -> str:
 
 
 def stage_lean_door() -> str:
-    """The Lean door built (`spot-one-stage-zk`): its own `#guard`s hold that a member's statement refuses at
-    `restrict`."""
-    PF.v2_executable()
-    text = LEAN_DOOR.read_text().splitlines()
-    at = next(i for i, x in enumerate(text, 1) if "one-circuit: not derived yet: restrict" in x)
-    raise Stop(f"lean door: built; every statement refuses at Spot.OneStageZk.restrict ({LEAN_DOOR}:{at})")
+    """The Lean door (`spot-one-stage-zk restrict`): the drawn block's circuit file as Lean's `OneStageZk.restrict`
+    derives it from C and the partition, byte for byte the Python door's (`one_circuit.lower` of `one_circuit.restrict`)."""
+    r = registered()
+    m = drawn(committed()[0])
+    k = [x.base for x in r["window"].window.members].index(m.base)
+    try:
+        units = OC.block(r["C"], r["partition"], k)
+        want = OC.lower(OC.restrict(r["C"], r["partition"], units), r["partition"], PF.lower_executable,
+                        cut=OC.cuts(r["C"], r["partition"]))
+    except (OC.NotDerived, OC.Refused) as e:
+        raise Stop(f"lean door: the Python door derives no C_S for block {k} ({OC.__file__}): {e}") from e
+    with tempfile.TemporaryDirectory() as d:
+        c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
+        c.write_bytes(r["C"])
+        p.write_text(json.dumps(r["partition"], sort_keys=True, separators=(",", ":")))
+        run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), str(units[0][0]), str(out)],
+                             capture_output=True, text=True)
+        assert run.returncode == 0, f"lean door: Lean's restrict refused block {k} ({LEAN_DOOR}): {run.stderr[-600:]}"
+        got = out.read_bytes()
+    assert got == want, f"lean door: Lean's C_S for block {k} ({len(got)} bytes) is not the Python door's ({len(want)})"
+    return f"block {k} at unit {units[0][0]}: Lean's C_S is the Python door's, {len(got)} bytes"
 
 
 def stage_crossing() -> str:
@@ -295,7 +319,7 @@ def stage_left_out() -> str:
     """(c) a block left out, at the door: a partition whose blocks leave C's last block out."""
     win, _c = committed()
     part = registered()["partition"]
-    bad = {**part, "blocks": part["blocks"][:-1]}
+    bad = {**part, "blocks": [lv[:-1] for lv in part["blocks"]]}
     _f, why = python_door(drawn(win), partition=bad)
     stopped(why)
     assert why is not None, "cheat (c): the door accepted a partition that leaves C's units out"

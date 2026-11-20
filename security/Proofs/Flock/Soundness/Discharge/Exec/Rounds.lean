@@ -20,8 +20,7 @@ when the tags retain rounds. Together, at verity-verify-proof's acceptance:
 * `rep_rounds_retained`: `rep_rounds` on a session whose streams all retained their bytes.
 * `accepts_rep_rounds`: when verity-verify-proof accepts under tags that retain rounds, both reps of every table of the
   session satisfy `RepRounds`, at the table's `fast100` schedule and proof files `proofs[2j]` and `proofs[2j + 1]`.
-  Every `hm96Rows` tag pinned today retains rounds (`retainRounds_circuitEb90718f`, `retainRounds_circuit`,
-  `retainRounds_circuit967b8d06`, `retainRounds_circuitTypes`).
+  Every statement a prover writes today retains rounds (`retainRounds_circuit`, `retainRounds_circuitTypes`).
 
 The bytes a round retained are the encodings of its chunk's frames, so they determine the frames (`encs_inj`); which of
 `repC`'s messages each chunk carries is the part of `DecodesAll` still open.

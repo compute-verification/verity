@@ -60,8 +60,6 @@ Program is from pure bits.
   Definition's cut, and `word.check_query` checks a served Program's.
 - `cross_call`: the same invariant across a Program's Calls, a value computed in two Calls.
 - `call_scope`: what the two share (the Definition a spec id names, its parts, `QueryRuleViolation`).
-- `encoding`: a specialization's Definitions in the codec's form (`encode_specialization`), a Definition's digest
-  (`definition_digest`), and the values of a varying static a Program graph is partitioned at (`word_values`).
 
 ## Fast evaluators: `numerics/`
 

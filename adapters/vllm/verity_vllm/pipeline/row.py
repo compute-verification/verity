@@ -10,8 +10,8 @@
                                                                           its record (`pipeline.research.chain`)
     verity-vllm row shed  [--force]
 
-A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
-``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
+A row runs the single-GPU stages (``row_stages``); a row id with ``__tp<N>__``, N >= 2, or a ``--world`` above 1 is refused:
+the multi-GPU model is not served.  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
 (``PROTOCOLS``) runs the row with protocol options beside SPOT (`verity_vllm.protocols`): a set it cannot
 run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
@@ -50,9 +50,8 @@ from verity_vllm.config import (
     row_world,
     run_store,
 )
-from verity_vllm.pipeline import cli, row_stages, row_tp
+from verity_vllm.pipeline import cli, row_stages
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm.records.schema_ids import EFFECTIVE_CONFIG_SCHEMA
 
@@ -211,8 +210,10 @@ def run_row(o: Run | Stage, stages: str) -> int:
 
     wl = row_file(o.row)
     doc = json.loads(wl.read_text()) if wl.is_file() else {}
+    if row_world(o.row) > 1 or (o.world or 1) > 1:
+        raise UsageError(f"the multi-GPU model is not served: row {o.row} at --world {o.world or row_world(o.row)}; a row runs on one GPU")
     try:
-        protocols = row_protocols(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
+        protocols = row_protocols(o.protocols, doc)
     except PO.Refused as e:
         cli.write(f"[row] REFUSE (fail-closed): {e}")
         return 3
@@ -228,21 +229,8 @@ def run_row(o: Run | Stage, stages: str) -> int:
     with open(os.path.join(d, EFFECTIVE_NAME), "w") as f:
         json.dump(effective_config(o, stages, protocols), f, indent=1, sort_keys=True, default=str)
         f.write("\n")
-    if row_world(o.row) > 1:
-        from verity_vllm.pipeline.tp.c2 import DEFER_WORLDS
-        world = o.world if o.world is not None else R.tp_world(_workload(o.row))
-        if world < 2:
-            raise UsageError(f"--world {world}: a tensor-parallel row needs a world of at least 2 ranks")
-        if o.commit.replay_deferred == "slim" and world in DEFER_WORLDS:     # at any other world the TP Commit replays in process
-            raise UsageError(f"--replay-deferred slim: {o.row} is a tensor-parallel row; the slim plan is a single-GPU Commit's (TP defers with 1)")
-        return row_tp.TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,
-                            build=o.build, match=o.match, commit=o.commit).run()
     return row_stages.SingleRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, gpu_util=o.gpu_util or "0.5",
                                 build=o.build, match=o.match, commit=o.commit, protocols=protocols).run()
-
-
-def _workload(row: str) -> str:
-    return str(row_file(row))
 
 
 def fa_version(workload: str, target: str | None = None) -> int:

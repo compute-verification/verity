@@ -75,10 +75,11 @@ def shortOps : Words.Ops := ⟨shortSide, shortSide, #[], #[]⟩
 /-! ## One honest pass
 
 One pass of the deployed scheme (`pearl-c-h100-v1-h3`, `k_min` 1,024, 64 × 64 tiles): one call of A (16 × 1,024) against
-its fixed operand's B (64 × 1,024), each element a BF16 value sampled from a standard normal, proved by the honest prover
-(`clear_audit.Prover`) and declared by it (`clear_work.declare`: no row excluded), whose one tile `clear_audit.Verifier`
-and `clear_work.check_opened` pass. Every hm96 salt in it is zero, the challenger's (which its entropy may give) and the
-prover's rows' and leaf's. Its epoch's coins are the challenger's of epoch 0, the salt coin 0x11…11 and the sampling coin
+its fixed operand's B (64 × 1,024), each element a BF16 value sampled from a standard normal (truncated, B's rows then A's
+from `np.random.default_rng(11)`), proved by the honest prover (`clear_audit.Prover`) and declared by it
+(`clear_work.declare`: no row excluded), whose one tile `clear_audit.Verifier` and `clear_work.check_opened` pass; its
+served y is committed (`served_y.commit_y`), since its rows are credited. Every hm96 salt in it is zero, the challenger's
+(which its entropy may give) and the prover's rows', leaf's and y rows'. Its epoch's coins are the challenger's of epoch 0, the salt coin 0x11…11 and the sampling coin
 0x22…22. The digests below are the Python's for these values, and the kernel computes the Lean's in each witness. -/
 
 /-- Bytes from hex, as `bytes.fromhex` reads them. -/
@@ -115,6 +116,10 @@ def honestRecordsRoot : String :=
 def honestTranscriptRoot : String :=
   "b7c34fb15b6e08ef6a689eb67becfbcea9ccbf8a212f710b40e13ca678809dc7a3283764b46e5204b1d3f979ec81d3ad4d160cb9fdd65786bd69694669b17761"
 
+/-- The root of the call's served y (`served_y.commit_y`): its 16 rows, each tile's checked U unscaled. -/
+def honestRootY : String :=
+  "2dd374124cf0be70f1446f2e7e307a0840dc5b1452378614e3e583aa30efd5c09a75dc3eae96cc6b1cc81564fb63c10e55a3dc0ca417d88d6d86ca6ee375eceb"
+
 /-- The epoch's coin commitment, the verifier's copy. -/
 def honestCoins : CoinCommitment := ⟨0, hexBytes honestCoinsRoot⟩
 
@@ -129,7 +134,8 @@ def honestManifest : Lean.Json := Lean.Json.mkObj [
   ("salt", .str honestSalt),
   ("weights", Lean.Json.mkObj [("0", Lean.Json.mkObj [("root", .str honestRootB), ("k", .num 1024), ("excluded_b", .arr #[])])]),
   ("matmuls", .arr #[Lean.Json.mkObj [("index", .num 0), ("m", .num 16), ("k", .num 1024), ("n", .num 64), ("weight", .num 0),
-    ("real_rows", .num 16), ("k_kept", .num 1024), ("excluded_a", .arr #[]), ("root_a", .str honestRootA)]]),
+    ("real_rows", .num 16), ("k_kept", .num 1024), ("excluded_a", .arr #[]), ("root_a", .str honestRootA),
+    ("y", Lean.Json.mkObj [("root", .str honestRootY)])]]),
   ("records_root", .str honestRecordsRoot),
   ("commitment", Lean.Json.mkObj [("root", .str honestTranscriptRoot), ("count", .num 1)])]
 
@@ -147,7 +153,7 @@ def honestPass : Pass where
   transcriptRoot := hexBytes honestTranscriptRoot
   count := 1
   recordsRoot := hexBytes honestRecordsRoot
-  yRoots := [none]
+  yRoots := [some (hexBytes honestRootY)]
 
 /-- The verifier's 32-byte source of the sample (the Pearl+ difftest's). -/
 def honestSource : ByteArray := "verifierverifierverifierverifier".toUTF8
@@ -158,9 +164,10 @@ def honestRun (draws : Nat) : Input := { coins := honestCoins, manifests := [hon
 /-! ## A test tile
 
 One tile of a test instance of the scheme (`capScheme`, a manifest's `"instance": {"k_min": 128, "tile": [1, 1]}`): one
-1 × 128 call of A against its fixed operand's 1 × 128 B, each element a BF16 value sampled from a standard normal, proved by the
-honest prover (`clear_audit.Prover`) and declared by it (`clear_work.declare`: `inertBoundRecord`, no row excluded), whose tile
-`clear_audit.Verifier` and `clear_work.check_opened` pass. Every hm96 salt is zero and the epoch's coins are
+1 × 128 call of A against its fixed operand's 1 × 128 B, each element a BF16 value sampled from a standard normal (truncated,
+B's row then A's from `np.random.default_rng(11)`), proved by the honest prover (`clear_audit.Prover`) and declared by it
+(`clear_work.declare`: `inertBoundRecord`, no row excluded), whose tile `clear_audit.Verifier` and `clear_work.check_opened`
+pass, its served y, the cell's U unscaled, committed (`served_y.commit_y`). Every hm96 salt is zero and the epoch's coins are
 `honestPass`'s; each tree holds one leaf, so every opening's path is empty. The bytes are the Python's, written as
 big-endian numerals, which the kernel reads as numbers (a hex string it would decode character by character), and the
 noise's codes and words as arrays of numbers, which it indexes without decoding bytes. -/
@@ -193,6 +200,10 @@ def testRecordsRoot : ByteArray :=
 def testTranscriptRoot : ByteArray :=
   beBytes 64 [0xe9844401a7849666a6eec250fe3fedf13753cb1bdc8b24f3e9480f2fab4071bbaf8a6121f0006cd8ed269ef1564d42c6b922b666512df2bf5f80d02356124476]
 
+/-- The root of the call's served y, over its one row. -/
+def testRootY : ByteArray :=
+  beBytes 64 [0xd3135b43bf66d7ad101ec91b41b668f93a9fd399d61f3a5791b3bcd861d7a06b2d9a8025cf370758c8823b4d2c7d1ce318d13a58b14b70c445d70519767c9205]
+
 /-- The test pass: `inertBoundRecord`'s one call. -/
 def testPass : Pass where
   scheme := capScheme
@@ -204,7 +215,7 @@ def testPass : Pass where
   transcriptRoot := testTranscriptRoot
   count := 1
   recordsRoot := testRecordsRoot
-  yRoots := [none]
+  yRoots := [some testRootY]
 
 /-- A zero hm96 salt. -/
 def zeroSalt : ByteArray := ⟨Array.replicate 192 0⟩
@@ -235,10 +246,14 @@ def testRowB : ByteArray := beBytes 64 [
 def testLeafDigest : ByteArray :=
   beBytes 64 [0xafd43203d3e48bdf3c722a960000b4aee50641cb6f985fa7be62d1f6cc2bb64adf1bc1ec742600885fc5362bc7a65ac1161ef47bbac8549ed2abc99face2a3f4]
 
-/-- The prover's openings of tile 0: its A row, its B row and its transcript leaf, each followed by its zero salt. The
-call commits no y. -/
+/-- The served y's one row: the cell's word, the unscale of its U (`Rule.yOf`), widened to FP32 (`served_y.f32_rows`). -/
+def testRowY : ByteArray := beBytes 4 [0x000072c1]
+
+/-- The prover's openings of tile 0: its A row, its B row, its transcript leaf and its y row, each followed by its zero
+salt. -/
 def testOpening : TileOpening :=
-  { a := [⟨0, testRowA ++ zeroSalt, []⟩], b := [⟨0, testRowB ++ zeroSalt, []⟩], leaf := ⟨0, testLeafDigest ++ zeroSalt, []⟩ }
+  { a := [⟨0, testRowA ++ zeroSalt, []⟩], b := [⟨0, testRowB ++ zeroSalt, []⟩], leaf := ⟨0, testLeafDigest ++ zeroSalt, []⟩,
+    y := .ok [⟨0, testRowY ++ zeroSalt, []⟩] }
 
 /-- seed_B of the test pass. -/
 def testSeedB : ByteArray :=
@@ -914,7 +929,8 @@ def testManifest : Lean.Json := Lean.Json.mkObj [
   ("weights", Lean.Json.mkObj [("0", Lean.Json.mkObj [("root", .str (hex testRootB)), ("k", .num 128),
     ("excluded_b", .arr #[])])]),
   ("matmuls", .arr #[Lean.Json.mkObj [("index", .num 0), ("m", .num 1), ("k", .num 128), ("n", .num 1), ("weight", .num 0),
-    ("real_rows", .num 1), ("k_kept", .num 128), ("excluded_a", .arr #[]), ("root_a", .str (hex testRootA))]]),
+    ("real_rows", .num 1), ("k_kept", .num 128), ("excluded_a", .arr #[]), ("root_a", .str (hex testRootA)),
+    ("y", Lean.Json.mkObj [("root", .str (hex testRootY))])]]),
   ("records_root", .str (hex testRecordsRoot)),
   ("commitment", Lean.Json.mkObj [("root", .str (hex testTranscriptRoot)), ("count", .num 1)])]
 

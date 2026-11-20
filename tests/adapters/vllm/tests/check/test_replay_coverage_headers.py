@@ -168,5 +168,5 @@ def test_a_module_a_mechanism_names_is_one_the_tree_has():
     named = {(family, m) for family, text in COV.QUERY_FAMILY_MECHANISM.items() for m in MODULE_NAMED.findall(text)}
     assert {m for _family, m in named} >= {"query.norm_scales", "query.router_softmax", "query.vocab_range", "query.scale_products",
                                            "check.replay.checks"}
-    assert {family for family, m in named if "exactness" in m} == {"norm_scales", "router_softmax", "vocab_range"}
+    assert {family for family, m in named if "exactness" in m} == {"router_softmax", "vocab_range"}
     assert sorted(fm for fm in named if not _stands(fm[1])) == []

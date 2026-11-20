@@ -5,8 +5,9 @@ public import Properties.Flock.Circuit.CircuitOf
 public import Properties.Flock.Circuit.UnitInst
 public import Properties.InferenceOnly
 public import InferenceOnlyVerifier.Desc
-public import Spot.BlockFront
+public import Spot.Restrict
 public import Properties.Flock.EvalBool
+public import Properties.Flock.DecodeBoolean
 public import Definitions.Core.Rblk
 
 /-!
@@ -20,10 +21,12 @@ tree):
   each copy, the rows of the net its template unrolls to (Core's `Partition.Correct` read as `Rows.Sat`, through the key
   program's wiring).
 * `LowerEval`: rows of the net the template `Flock.Lower.lower` writes unrolls to, satisfied with the constant 1, hold at
-  each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
-* `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
-  local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean
-  Definition in `P`'s own map (`BodyAgrees`).
+  each output port bit the value `Prog.evalBool` gives the Definition's lift to bits (`Flock.Lift.lift`) on the input port
+  bits, an evaluation of exactly the output's width.
+* `BlockEval`: the block's Program (`Spot.Restrict.portedOf`, `restrict` with its input nodes as parameters), lifted to
+  bits as the lowering lifts it (`Flock.Lift.lift`), evaluates, on C's values at its input ports, to block `u`'s local
+  evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as its Boolean Definition
+  in `P`'s own map (`BodyAgrees`).
 * `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
 * `PortsBind`: the trace a proof block's openings show (`Partition.Rblk`) and the statement's own openings at the same
   positions (`PortsOpenAt`) agree at the ports, so the rows agree with C's committed values there, or SHA-512 collides.
@@ -51,17 +54,6 @@ def BlockIs (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.siz
   ∀ g : Fin (ofProgram P).N,
     (partOf P blocks).unit g = some u.castSucc ↔ (Spot.BlockFront.inside fr.ranges g.val = true ∧ inputAt P g = false)
 
-/-- Each word primitive of `P` the Boolean map `boolean` names a Definition for evaluates as that Definition. -/
-def BooleanAgrees (P : Prog) (boolean : Std.HashMap String String) : Prop :=
-  ∀ p q, (P.defs[p]!).prim = true → boolean[(P.defs[p]!).key]? = some (P.defs[q]!).key →
-    Prog.evalBool P p = Prog.evalBool P q
-
-/-- **`BodyAgrees`**: each primitive of `P` with a Boolean Definition in `P`'s own map (`Prog.bodyOf?`) evaluates as
-that Definition. -/
-def BodyAgrees (P : Prog) : Prop :=
-  ∀ p < P.defs.size, ∀ b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b →
-    Prog.evalBool P p = Prog.evalBool P b
-
 /-- **`V5Rows`, the adapter to the sampled proof's guarantee.** A unit `u` correct in the key circuit of the templated
 statement `c` carrying the template `tu.t`: the statement's unit is the net `tu.t` unrolls to, and at every copy `u'` the
 unit's local evaluation, read at copy `u'`'s columns wired as the key program wires the unit (`rowsWireC`, cast along
@@ -79,27 +71,31 @@ def V5Rows : Prop :=
         else false
       (Rows.ofNet hU).Sat (fun x => z x.val) ∧ z (Flock.Desc.tmpl c).unroll.unit.constPos = true
 
-/-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d`**: wherever the rows of the net it unrolls to
-hold with the constant 1, output port bit `k` of every output leaf `k` of `d` is `Prog.evalBool P d`'s bit `k` on the input
-port bits of `d`'s parameter leaves. The net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every
-net `Tmpl.unroll` gives is; `Rows.ofNet` reads `hb` only as a proof, so the rows are the same at every one. -/
+/-- **`LowerEval`, the template `lower` writes of Definition `d` computes `d` on bits**: `lower` lowers `d`'s lift to bits,
+Definition `e` of `Q` (`Flock.Lift.lift`). Wherever the rows of the net its template unrolls to hold with the constant 1,
+`Prog.evalBool Q e` on the input port bits of `e`'s parameter leaves is exactly `e`'s output leaves, and output port bit
+`k` is its bit `k`, so an empty evaluation never counts as agreement. `P`'s own Boolean map is §4.9's (`Prog.BoolMapOk`,
+which `DecodeBoolean` gives every decoded Program) and its word primitives evaluate as their bodies (`BodyAgrees`). The
+net's rows are `Rows.ofNet hb` at any proof `hb` that it is built, which every net `Tmpl.unroll` gives is; `Rows.ofNet`
+reads `hb` only as a proof, so the rows are the same at every one. -/
 def LowerEval : Prop :=
-  ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net}
+  ∀ {P : Program.Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl} {n : Net} {Q : Program.Prog} {e : ℕ}
+    (_hm : P.BoolMapOk) (_hb : BodyAgrees P) (_hq : Flock.Lift.lift P d = .ok (Q, e))
     (_hl : Flock.Lower.lower P d inP outP = .ok t) (_h : Tmpl.unroll t = .ok n) (_hu : n.unitLog ≤ 32) (hb : Built n)
     {z : ℕ → Bool} (_hs : (Rows.ofNet hb).Sat fun c => z c.val) (_hone : z t.constPos = true),
-    ∀ k < (P.defs.getD d default).outLeaves,
-      z (Flock.Lower.outBit t k) =
-        (P.evalBool d ((List.range (P.defs.getD d default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))).getD k false
+    let v := Q.evalBool e ((List.range (Q.defs.getD e default).paramLeaves).map fun i => z (Flock.Lower.inBit t i))
+    v.length = (Q.defs.getD e default).outLeaves ∧
+      ∀ k < (Q.defs.getD e default).outLeaves, z (Flock.Lower.outBit t k) = v.getD k false
 
-/-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
-evaluation at its output ports, bit for bit. -/
+/-- **`BlockEval`, (C).** The block's Program, lifted to bits as the lowering lifts it, evaluates, on C's values at its
+input ports, to block `u`'s local evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog),
-    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
-    BodyAgrees P →
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q L : Prog) (e : ℕ),
+    Spot.BlockFront.front P units = .ok fr → Spot.Restrict.portedOf P units = .ok Q →
+    Flock.Lift.lift Q Q.root = .ok (L, e) → BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
-      Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
+      Prog.evalBool L e (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
 
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
@@ -107,10 +103,10 @@ the input and output port bits, make block `u` correct in C. -/
 def BlockCorrect : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog)
     (t : Tmpl.Tmpl) (nt : Net),
-    Spot.BlockFront.front P units = .ok fr → Spot.BlockFront.program P units = .ok Q →
+    Spot.BlockFront.front P units = .ok fr → Spot.Restrict.portedOf P units = .ok Q →
     Flock.Lower.lower Q Q.root (fr.ins.map (·.width)) (fr.outs.map (·.width)) = .ok t → Tmpl.unroll t = .ok nt →
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
-    BooleanAgrees P P.boolean →
+    BodyAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       (∀ i < portWidth fr.ins, (portBits X fr.ins).getD i false = z (Flock.Lower.inBit t i)) →

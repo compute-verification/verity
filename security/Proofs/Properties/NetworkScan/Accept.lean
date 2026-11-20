@@ -38,7 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.InferenceOnly.BodiesOk.Basic
+import Proofs.Properties.Flock.Decoder.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

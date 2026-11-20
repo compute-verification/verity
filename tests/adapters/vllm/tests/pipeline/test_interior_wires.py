@@ -86,7 +86,7 @@ def _first(members):
     """A two-stage stream over `W` and `T`, a stand-in boundary registered and its first stage sampled (spans 0 and 2)."""
     names: dict[str, tuple] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(members, CELLS, "00", [0], WIRES))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),

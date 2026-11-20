@@ -140,20 +140,24 @@ def test_a_failed_stop_of_pearl_plus_gate_fails_the_challenger_and_the_run(stand
     assert Host.made[0].stopped
 
 
-def test_spots_piece_hands_the_runner_the_loopback_host_a_development_run_under_the_placement_hold_and_a_gate_first(
+def test_spots_piece_hands_the_runner_the_loopback_host_its_development_marker_whatever_the_hold_and_a_gate_first(
         monkeypatch):
+    """The hold's development run is served_verdicts.sh's to decide (placement.sh's ``development_under_hold``): the
+    hooks hand the same variables held or not."""
     cfg, piece = R.load(CONFIG, REG), T.PIECES["sampled-proofs"][T.WORKERS]
     loop = {"loopback": ADDRESS, "main-file": "/s/public/challenger/main.txt"}
-    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
-        "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt"}
-    assert piece.variables(cfg, {}) == {}
-    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
-        "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt", "DEVELOPMENT": "1"}
-    gated = piece.variables(cfg, {"challenger": {"sampled-proofs": {**loop, "gate": "user@gate-1"}}})
-    assert gated["PP_CHALLENGER"] == "gate:user@gate-1" and "DEVELOPMENT" not in gated
-    assert piece.variables(cfg, {}) == {"DEVELOPMENT": "1"}
+    for hold in (None, "1"):
+        if hold is None:
+            monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+        else:
+            monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+        assert piece.variables(cfg, {"challenger": {"sampled-proofs": loop}}) == {
+            "PP_CHALLENGER": f"loopback:{ADDRESS}", "MAIN_FILE": "/s/public/challenger/main.txt",
+            "PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        assert piece.variables(cfg, {}) == {"PP_DEVELOPMENT_UNDER_HOLD": "1"}
+        gated = piece.variables(cfg, {"challenger": {"sampled-proofs": {**loop, "gate": "user@gate-1"}}})
+        assert gated["PP_CHALLENGER"] == "gate:user@gate-1"
+        assert "DEVELOPMENT" not in gated and "PP_DEVELOPMENT_UNDER_HOLD" not in gated
 
 
 def test_verity_run_starts_it_first_binds_what_it_wrote_and_stops_it_at_the_end(stand_ins, capsys):

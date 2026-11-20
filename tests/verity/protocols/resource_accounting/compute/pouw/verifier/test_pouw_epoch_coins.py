@@ -182,7 +182,6 @@ OS_RANDOMNESS = {
                                                                            "``call_draw``), which credits nothing",
     "protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "the run's fresh hm96 salts (`RunSalts`), "
                                                              "no coin",
-    "protocols/resource_accounting/compute/pouw/prover/serving/h1/sampled.py": "the stager's hiding keys (`_random`), no coin",
     "protocols/proofs/spot/prover/audit/local_challenger.py": "the development challenger's session token and gate "
                                                               "secret, compose's service and no SPOT coin",
     "protocols/proofs/spot/verifier/one_stage/member_trees.py": "the tree relay's shared secret with its verifier "

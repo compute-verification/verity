@@ -40,7 +40,13 @@ rfetch() {   # rfetch STORE ARGS...: the statement's files through the tree's re
 
 setup() {
   # the setup writes under RESEARCH_RUN_DIR/out/setup, and it and the CUDA unpacker it sources read unset names
-  export RESEARCH_RUN_DIR=$O/setup-run; mkdir -p "$RESEARCH_RUN_DIR"; set +u
+  # and its toolkit reader (machine.py) reads the run's machine's record, which this private run directory carries
+  export RESEARCH_RUN_DIR=$O/setup-run; mkdir -p "$RESEARCH_RUN_DIR"
+  if [ -f "$RD/inputs/${RESEARCH_MACHINE:-}.toml" ]; then
+    mkdir -p "$RESEARCH_RUN_DIR/inputs" && cp "$RD/inputs/$RESEARCH_MACHINE.toml" "$RESEARCH_RUN_DIR/inputs/" \
+      || { export RESEARCH_RUN_DIR=$RD; log "REFUSED: cannot copy the machine's record into $O/setup-run/inputs"; exit 4; }
+  fi
+  set +u
   # shellcheck disable=SC1091
   . benchmarks/harness/setup/flock_prover.sh || { export RESEARCH_RUN_DIR=$RD; log "REFUSED: the setup failed ($O/setup-run/out/setup)"; exit 4; }
   set -u; export RESEARCH_RUN_DIR=$RD

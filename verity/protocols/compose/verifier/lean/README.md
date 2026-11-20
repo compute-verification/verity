@@ -135,7 +135,7 @@ neither value, which can be witness). `tiedSame id ss ties components`
 reject when a tie strays, and a reject stays itself. Onsite's ties are remote's `Core.Remote.windows` (below), read
 from `core_remote` rather than restated, then `Core.Onsite.store`, which puts PoUS and PoUB-P2 on one store: the root
 of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's registration names (its commitment's
-`root`, the case's `store_root`). PoUB's generic session (`verity/remote-bandwidth/v0`), whose payload
+`root`; the case's params' `store_root`, which `Poub.P2Protocol` refuses unless it is that root, is PoUS's). PoUB's generic session (`verity/remote-bandwidth/v0`), whose payload
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
