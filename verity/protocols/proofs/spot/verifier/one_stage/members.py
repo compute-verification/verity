@@ -682,10 +682,28 @@ def shared_unread(port: str, tree: str) -> str:
             "opening it at the leaves C gives, and the header's own root there is no commitment to them")
 
 
-def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], header: Any) -> tuple[Any, Any]:
+def registered_at(held: Mapping[str, Any], p: str, v: str) -> bool:
+    """`OneStageZk.registeredAt`: the verifier's registered file's ports ``held`` (its ``ports``, by name) hold ``p`` at
+    ``v``, which names no committed tree, run input's tree or field tree."""
+    e = held.get(p)
+    return (isinstance(e, dict) and e.get("value") == v and not v.startswith(COMMITTED) and not G.is_fresh_value(v)
+            and not _field_tree_name(v))
+
+
+def unregistered_why(p: str, v: str) -> str:
+    """`OneStageZk.UNREGISTERED_WHY`: the refusal of a header port ``p`` the slice holds no root of, read at ``v``, which
+    the verifier's registered file holds at ``p`` as no registered value."""
+    return (f"public file: port {p} reads {v}, and the verifier's registered file holds no registered value {v} at {p}: "
+            "a port the registration holds no root of is held only at a registered value's root")
+
+
+def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_: Mapping[str, Any],
+             header: Any) -> tuple[Any, Any]:
     """`OneStageZk.headerHeldAt` before `headerHeld`: the slice and the header without each port the slice holds at a
-    template's field tree (its entry's ``tree``) that ``reads`` opens there; `_Refused` (`shared_unread`) for one
-    ``reads`` doesn't open whose header root or domain is not the registration's."""
+    template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of, that the
+    header names and ``reads`` names at a value the verifier's registered file's ports ``held`` hold there as a
+    registered value (`registered_at`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose header root
+    or domain is not the registration's, and (`unregistered_why`) for one read at any other value."""
     h = header if isinstance(header, dict) else {}
     if not _same(h.get("instances"), slice_.get("population")):
         raise _Refused(POPULATION_WHY)
@@ -699,8 +717,14 @@ def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], head
             continue
         if (p, t) in reads:
             drop.add(p)
-        elif p in roots and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
+        elif roots.get(p) is not None and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
             raise _Refused(shared_unread(p, t))
+    ported = {r.get("port") for r in slice_["roots"]}
+    for p, v in sorted(reads):
+        if p not in ported and roots.get(p) is not None:
+            if not registered_at(held, p, v):
+                raise _Refused(unregistered_why(p, v))
+            drop.add(p)
     if not drop:
         return slice_, header
     fv2 = {**fv, "roots": {k: v for k, v in roots.items() if k not in drop},
@@ -708,8 +732,16 @@ def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], head
     return {**slice_, "roots": [r for r in slice_["roots"] if r.get("port") not in drop]}, {**h, "frame_v3": fv2}
 
 
+def registered_reads(registered: Mapping[str, Any] | None) -> tuple[set[tuple[str, str]], Mapping[str, Any]]:
+    """`OneStageZk.Member.reads` and `Member.held`: the member's registered file's ``(port, value)`` reads and its ports
+    by name, none without one."""
+    held = registered["ports"] if registered is not None else {}
+    return {(p, e["value"]) for p, e in held.items()}, held
+
+
 def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
-                   slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = ()) -> str | None:
+                   slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
+                   held: Mapping[str, Any] | None = None) -> str | None:
     """`OneStageZk.Member.population` past its files' reads: why a member of the units `units` (ranges ``[lo, hi)``) is
     not what its public file's header `header` holds at the docket's `strata` and the member's slice `slice_` of
     the record (``{population, roots, scheme}``); None when it is. The docket's strata read stratum by stratum
@@ -731,7 +763,7 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
     if not (type(indices) is list and len(indices) == len(mine) and all(_nat(i) and i == u for i, u in zip(indices, mine))):
         return MEMBER_UNITS
     try:
-        slice_, h = _held_at(set(reads), slice_, h)
+        slice_, h = _held_at(set(reads), held or {}, slice_, h)
     except _Refused as e:
         return str(e)
     fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
@@ -772,7 +804,8 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
 
 
 def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], units: Sequence[Sequence[int]],
-              strata: Any, slice_: Mapping[str, Any], form: Form, reads: Collection[tuple[str, str]] = ()) -> str | None:
+              strata: Any, slice_: Mapping[str, Any], form: Form, reads: Collection[tuple[str, str]] = (),
+              held: Mapping[str, Any] | None = None) -> str | None:
     """`OneStageZk.StepAt.filesHeld` as far as this answers it (module docstring): why the files of a member of the
     units `units` are refused with no session, the first of Lean's that applies, None where none does. A circuit that
     does not parse or a public file that does not load (`form`'s refusal, which is the scope's word for word,
@@ -793,7 +826,7 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
         header = _header(public)
     except ValueError as e:
         raise Outside(f"{e}, whose refusal is the Lean parser's own") from None
-    return population_why(units, strata, header, slice_, reads)
+    return population_why(units, strata, header, slice_, reads, held)
 
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
@@ -832,8 +865,8 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
         if _nat(g) and g != m["vus_per_block"]:
             raise _Refused(f"vus_per_block: the member's circuit has {g} units a proof block, not the "
                            f"{m['vus_per_block']} the parameters name")
-        reads = {(p, e["value"]) for p, e in m["registered"]["ports"].items()} if m["registered"] is not None else set()
-        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form, reads)) is not None:
+        reads, held = registered_reads(m["registered"])
+        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form, reads, held)) is not None:
             raise _Refused(why)
     except _Refused as e:
         raise _Refused(f"member {name}: {e}") from None
@@ -980,5 +1013,5 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "return_fields", "run_reason", "shared_unread",
-           "unwired_why", "wired_tree_why"]
+           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
+           "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "wired_tree_why"]

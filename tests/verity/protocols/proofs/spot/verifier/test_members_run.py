@@ -441,6 +441,39 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
     assert M.population_why(UNITS[B], strata, named, got) is None
 
 
+def registered_file(ports: dict[str, str]) -> dict:
+    """A `verity/registered-reads/v2` file of the ports given, each its name and value."""
+    return {"format": "verity/registered-reads/v2",
+            "ports": {p: {"domain": "dd" * 64, "leaves": 2, "root": "aa" * 64, "value": v} for p, v in ports.items()}}
+
+
+def test_a_members_port_is_held_by_its_registered_reads_only_at_a_registered_value_its_file_holds():
+    """A port the slice holds no root of (``w``) is not compared where the verifier's registered file holds it at the
+    value the reads name, as a registered value (`OneStageZk.headerHeldAt`): `Flock.Registered.checkPort` holds its
+    rows to that file's root. Read at any other value, it is refused by name (`unregistered_why`), through the file
+    as `_files` reads it (`registered_reads`) and with the reads and the file apart; with no read of it, as before
+    (`unwired_why`); a port the slice holds is compared whatever the reads name."""
+    strata = P.strata(PROGRAM, QUERY)
+    got = M.slices(UNITS, RECORD)[B]
+
+    def own(out: str = ROOTS[B][0]) -> dict:
+        return header(B, frame_v3=frame(B, (out, ROOTS[B][1]), w=("77" * 64, "dd" * 64)))
+
+    def why(ports: dict[str, str]) -> str | None:
+        return M.population_why(UNITS[B], strata, own(), got, *M.registered_reads(registered_file(ports)))
+    assert why({"w": "h1/w"}) is None
+    for v in ("b/o0", "input/n3", "committed/w"):
+        assert why({"w": v}) == M.unregistered_why("w", v)
+    assert why({"v": "h1/w"}) == M.unwired_why("w")
+    assert M.population_why(UNITS[B], strata, own(), got) == M.unwired_why("w")
+    held = registered_file({"w": "h1/w"})["ports"]
+    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/z")}, held) == M.unregistered_why("w", "h1/z")
+    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/w")}) == M.unregistered_why("w", "h1/w")
+    assert M.population_why(UNITS[B], strata, own(out="55" * 64), got,
+                            *M.registered_reads(registered_file({"w": "h1/w", "out": "h1/w"}))) == (
+        "public file: not the registration's: roots")
+
+
 def test_a_member_named_as_another_members_template_is_refused():
     """Members ``a`` and ``a/c0``: a root ``a/out`` would be the member ``a``'s own port and template ``a``'s tree of
     ``out`` at once, so the window is refused by name in either order of the members (`OneStageZk.NAME_TEMPLATE`)."""

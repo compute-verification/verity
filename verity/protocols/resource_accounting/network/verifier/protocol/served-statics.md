@@ -36,7 +36,7 @@ The verdict has bit 0 ``count`` (every slot's valid and n are the statics') and 
 is 0x3. The request ids and kinds are not the Program's to show. In the design, the ingress-ids tie (`io_ids`) is to hold
 each prefill slot's ids to its attested request's prompt ids at those positions, and the egress tie (`io_tie`) each
 decode slot's input to the request's last sample; no proof of either runs. A zero-knowledge proof of `IoTieRequest`
-alone runs (`n2_tie_zk`), and it holds each request's prompt length and arrival ordinal to the network attester's ingress cells,
+would hold each request's prompt length and arrival ordinal to the network attester's ingress cells,
 not the ids' values.
 
 **Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vLLM's
