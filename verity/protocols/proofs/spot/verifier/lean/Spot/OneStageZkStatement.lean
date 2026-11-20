@@ -197,7 +197,10 @@ structure Admit where
   fields : Array (String × Nat)
 
 /-- The composite Definitions Definition `d` of `P` reaches, itself included, whose parameter or return leaves are not
-all one bit (`Flock.Lower.onBits`), by key, ascending. Its work is the Definitions reached, each once, with their nodes. -/
+all one bit (`Flock.Lower.onBits`), by key, ascending. Its work is the Definitions reached, each once, with their nodes.
+It reads no primitive: in a lift every word primitive is replaced by its Boolean Definition, a gate or a composite on bits
+(`Flock.Lift.closure` refuses any other), and an input node appears only in the root's body (the decoder's
+`inputOutsideRoot`), so every primitive a lifted template reaches is on bits. -/
 def wideFrom (P : Flock.Program.Prog) (d : Nat) : Array String := Id.run do
   let bound := P.defs.foldl (fun n x => n + x.body.nodes.size + 1) 2
   let mut seen : Std.HashSet Nat := {}
