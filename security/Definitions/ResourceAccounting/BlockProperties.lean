@@ -30,22 +30,16 @@ registered input gates of at most the registered width.
 Every accounting statement has one form: for every block of a class, a property holds, except with probability at
 most `ε` (`Division.Runs.Established`); a sampled statement holds outside a set of blocks whose declared use is at
 most the tolerance (`Division.Runs.EstablishedOutside`). `UseAtLeast` states that at least `b` of a capacity was used
-inside every block of a class. One conversion, `FreeBlockAtMost`, turns capacity minus use into a free block's
-quantity at most; it alone carries the capacity figure (`CapacityAtMost`) and the premise that declared work does not
+inside every block of a class. One conversion, `FreeBlockAtMost`, turns capacity minus use into a bound on the sum of
+the free blocks' quantities directly inside each block; it alone carries the capacity figure (`CapacityAtMost`) and the premise that declared work does not
 double as other work (`DeclaredWorkExclusive`), which for size follows from the division
-(`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`). The protocols' instances, the policy and the chain
-are in `Definitions/Compose/Guarantees/Blocks.lean`.
+(`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`). The policy's check is in `Definitions/Compose/Blocks.lean`; the
+protocols' instances, the policy's theorem and the chain are in `Definitions/Compose/Guarantees/Blocks.lean`.
 
 **Against `Scheme`.** `Verity.Scheme` is what a protocol hands the proof layer and gets back (`Scheme.GetsBack`); this
 file is the form a block property takes once a scheme's result is read on the actual circuit.
 
-**What this is to replace, for lean to fold onto it.** `Verity.Blocks` and `Blocks.carried` (a server-day block's input
-from its own past, in the device model); `ServingBlocks.ServingSizes`; `ServerBlocksAt` and `ServerBlocks`;
-`ResourceAccounting.Run.work`, `read` and `held` (`Definitions/Compose/Joint.lean`: `UseAtLeast`'s quantities in the
-device model); and the accounting envelopes `Definitions/Core/Formalism.lean` names.
-
-Its home is to be `Core`, which accounting and policy both read; `Placed` is in `ResourceAccounting` and `Core` may not
-import it, so the form sits beside `Placed` until the actual circuit moves into `Core`.
+`Placed` is in `ResourceAccounting`, which `Core` may not import, so the form sits beside it.
 -/
 
 @[expose] public section
@@ -75,8 +69,8 @@ inductive Property where
 
 /-- **The division**, committed by the prover before any coin and private under the outer proof (the policy's check
 reads it inside that proof): the blocks `ι`, the server-day, inference and free blocks among them, the block each lies
-inside (`none` for a top block), each block's location `X` and window `win`, the registered width, and the properties
-claimed of each. -/
+inside (`none` for a top block), a depth that grows from a block to each block inside it (so `parent` is a forest),
+each block's location `X` and window `win`, the registered width, and the properties claimed of each. -/
 structure Division (L : Type*) where
   ι : Type
   [fintype : Fintype ι]
@@ -85,6 +79,8 @@ structure Division (L : Type*) where
   inference : Finset ι
   free : Finset ι
   parent : ι → Option ι
+  depth : ι → ℕ
+  depth_lt : ∀ i j, parent i = some j → depth j < depth i
   X : ι → Finset L
   win : ι → Window
   registered : ℕ
@@ -99,10 +95,8 @@ variable {L : Type*} (Dv : Division L)
 /-- The ticks of block `i`'s window. -/
 def ticks (i : Dv.ι) : Set ℕ := Set.Ico (Dv.win i).start ((Dv.win i).start + (Dv.win i).len)
 
-open Classical in
-/-- The blocks of the class `K` below block `i`, at any depth. -/
-noncomputable def within (K : Finset Dv.ι) (i : Dv.ι) : Finset Dv.ι :=
-  K.filter fun j => Relation.TransGen (fun a b => Dv.parent a = some b) j i
+/-- The blocks of the class `K` directly inside block `i`. -/
+def within (K : Finset Dv.ι) (i : Dv.ι) : Finset Dv.ι := K.filter fun j => Dv.parent j = some i
 
 /-- **A division's blocks in an actual circuit**: block `i` is a `Verity.Block` of `A` in its window, lying in its
 location during it. Every computed gate is in a top block, every gate of a block with children is in one of its
@@ -226,22 +220,22 @@ description). -/
 def CapacityAtMost (K : Finset Dv.ι) (enclosing : P.Run → Dv.ι → ℕ) (cap : Dv.ι → ℕ) : Prop :=
   ∀ r, ∀ i ∈ K, enclosing r i ≤ cap i
 
-/-- **Declared work does not double as other work**: in an accepted run, for every free block `j` of the class `F`,
-its quantity `free r j` and the use inside its enclosing block `encl j` add up to at most the enclosing block's own
-quantity. For size, with `use` the enclosing block's inference children, it follows from the division
-(`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other quantities it is open. -/
-def DeclaredWorkExclusive (F : Finset Dv.ι) (encl : Dv.ι → Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ j ∈ F, free r j + use r (encl j) ≤ enclosing r (encl j)
+/-- **Declared work does not double as other work**: in an accepted run, inside every block `i` of the class `K`, the
+quantities `free r j` of the free blocks `j` of `F` directly inside `i`, summed, and the use inside `i` add up to at
+most `i`'s own quantity. For size, with `use` the sum over inference blocks directly inside `i` and `F` disjoint from
+them, it follows from the division (`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other
+quantities it is open. -/
+def DeclaredWorkExclusive (K F : Finset Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) : Prop :=
+  ∀ r, P.accepts r → ∀ i ∈ K, ∑ j ∈ Dv.within F i, free r j + use r i ≤ enclosing r i
 
-/-- **The one conversion: capacity minus use bounds the free block.** For every free block `j` of the class `F`, whose
-enclosing block `encl j` is of the class `K`: use at least `b` inside every block of `K`, the capacity figure and
-exclusivity give `j`'s quantity at most `cap (encl j) − b (encl j)`, except with the use's probability. Proved by
+/-- **The one conversion: capacity minus use bounds the free blocks.** Inside every block `i` of the class `K`: use at
+least `b` inside every block of `K`, the capacity figure and exclusivity give the free blocks of `F` directly inside
+`i`, summed, at most `cap i − b i`, except with the use's probability. Proved by
 `ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
 def FreeBlockAtMost : Prop :=
-  ∀ (K F : Finset Dv.ι) (encl : Dv.ι → Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) (cap b : Dv.ι → ℕ)
-    (ε : ℝ≥0∞), (∀ j ∈ F, encl j ∈ K) →
-    P.UseAtLeast K use b ε → P.CapacityAtMost K enclosing cap → P.DeclaredWorkExclusive F encl free use enclosing →
-      ExceptWith P.pr P.accepts (fun r => ∀ j ∈ F, free r j ≤ cap (encl j) - b (encl j)) ε
+  ∀ (K F : Finset Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) (cap b : Dv.ι → ℕ) (ε : ℝ≥0∞),
+    P.UseAtLeast K use b ε → P.CapacityAtMost K enclosing cap → P.DeclaredWorkExclusive K F free use enclosing →
+      ExceptWith P.pr P.accepts (fun r => ∀ i ∈ K, ∑ j ∈ Dv.within F i, free r j ≤ cap i - b i) ε
 
 end Division.Runs
 

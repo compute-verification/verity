@@ -24,7 +24,6 @@ public import Definitions.ResourceAccounting.Guarantees.LinkEnds
 public import Definitions.ResourceAccounting.Guarantees.Gates
 public import Definitions.Pouw.Guarantees.Headline
 public import Definitions.Pouw.Guarantees.HeadlineDc
-public import Definitions.Compose.Guarantees.Blocks
 public import Definitions.Compose.Guarantees.Joint
 public import Definitions.Compose.Guarantees.JointLive
 public import Definitions.Certifier.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
