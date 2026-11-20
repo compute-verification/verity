@@ -19,9 +19,6 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
 
 Every difference is reported with counts and examples; nothing is dropped silently.  `--operands progressions` holds both sides'
 operands in compact form (program.compact), for Programs whose strided reads are ~1e6 runs each (GLM-5.3's W_UK_T / W_UV).
-
-    verity-vllm program-compare --a <dir with descriptor.json.gz + derive-report.json> \\
-        --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a | --operands progressions]
 """
 
 from __future__ import annotations

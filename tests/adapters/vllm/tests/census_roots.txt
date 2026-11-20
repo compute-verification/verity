@@ -10,23 +10,14 @@
 # below); never let the census decide that a runner is dead.  Shells matched by no entry are still never deleted by the census -- a
 # module only such a shell runs stays non-live and must be named in dead_code_keep.json.
 
-# --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
-verity_vllm/ops/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)
-verity_vllm/ops/epoch_row.sh     # the re-baseline epoch's row job (runs epoch_store.sh, epoch_failfast.sh and `verity-vllm epoch`)
-verity_vllm/ops/epoch_store.sh
-verity_vllm/ops/epoch_failfast.sh
-verity_vllm/ops/fa3_row_negatives.sh
+# --- rules: every sweep runner
 verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
-verity_vllm/ops/pod_norm_tap.sh
 verity_vllm/ops/pod_router_tap.sh
-verity_vllm/ops/stoch_negatives.sh
-**/*_negatives.sh
 
 # --- pod runtime and acquisition gates
 verity_vllm/ops/pod_bootstrap.sh
-verity_vllm/ops/pod_gate.sh
-verity_vllm/ops/served_build.sh  # a served Build's acquire job (`verity-vllm served-match`, no Commit stage); its build.json is served_commit.sh's manifest
+verity_vllm/ops/served_build.sh  # a served Build's acquire job (`verity-vllm served-match`, no Commit stage)
 
 # --- Python entry points
 verity_vllm.pipeline.research_tools
@@ -47,7 +38,6 @@ verity_vllm.pipeline.boundary_windows      # the boundary commitment's hook on t
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
 verity_vllm.pipeline.scheme_plugin    # schemes by name inside vLLM's own server: vLLM imports its general plugin (register) and its middleware by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
-verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
 verity_vllm.commit.row_tables_device      # a step's row tables hashed on the GPU: a library entry point (`step_roots`, `host_step`), read by benchmarks/commitments/step_root_gpu.py
 verity_vllm.engine.profiles.stand_in      # GLM-5.3's one-card stand-in: a library entry point (`stand_in`), read by benchmarks/serve_tax's standin
 verity_vllm.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild

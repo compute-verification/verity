@@ -94,24 +94,6 @@ def test_the_dot_forms_with_the_sm120_step_are_its_ascending_chain():
     assert ampere != _chain(x, rows).tolist(), "the two k16 steps give the same accumulators: the inputs do not tell them apart"
 
 
-def test_vocabulary_replay_rows_and_vu_export_read_the_dot_static():
-    from verity_vllm.definitions.numerics import rows
-    from verity_vllm.pipeline import vu_export as VX
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-
-    assert V.kind("moe_expert_gemm_dot", E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16).id == f"MoeExpertGemm_v2{{E={E},K={K},N={N},DOT=HopperBF16WgmmaDot16_v1}}"
-    assert V.kind("moe_expert_gemm_w_dot", E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16).id.startswith("MoeExpertGemmW_v2{")
-    assert V.kind("moe_expert_gemm", E=E, K=K, N=N).id == f"MoeExpertGemm_v1{{E={E},K={K},N={N}}}"
-    rng = np.random.default_rng(7)
-    x, w = _bf16(rng, K), _bf16(rng, E * N * K)
-    st = {"E": E, "K": K, "N": N, "DOT": "HopperBF16WgmmaDot16_v1"}
-    got = rows.ROWS["MoeExpertGemm_v2"].fn(st, [x, np.array([1], np.uint32), w])["up"]
-    assert got.astype(np.uint64).tolist() == list(evaluate(bind(M.MoeExpertGemmV2, E=E, K=K, N=N, DOT=HopperBF16WgmmaDot16), x.tolist(), [1],
-                                                           w.tolist()))
-    assert VX.template_of(f"MoeExpertGemm_v2{{E={E},K={K},N={N},DOT=HopperBF16WgmmaDot16_v1}}")[1]["dot"] == "HopperBF16WgmmaDot16_v1"
-    assert VX.template_of(f"MoeExpertGemm_v1{{E={E},K={K},N={N}}}")[1]["dot"] == "AmpereBF16TcDot16_v2"
-
-
 def test_gp01_reads_an_sm120_component_as_the_declared_indexed_construction(tmp_path):
     from verity_vllm.pipeline import global_program as GP
     hist = {"Gemm_v2{K=2048,N=64,DOT=HopperBF16WgmmaDot16_v1}": 16, "MoeRouterTopKOrdered_v1{E=64,TOPK=8}": 16,

@@ -23,7 +23,6 @@ markers = [
 # tracer (conftest.py's `_untraced`), so that `check`'s circuit-check takes the record it stores.
 untraced = [
     "test_ambient.py",
-    "test_attention_split.py",
     "test_cache.py",
     "test_cache_expiry.py",
     "test_cache_imports_and_moves.py",
@@ -34,7 +33,6 @@ untraced = [
     "test_metadata_listings.py",
     "test_named_targets.py",
     "test_shard.py",
-    "test_split_prims_serve.py",
     "test_units.py",
 ]
 # a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
@@ -73,6 +71,7 @@ workers = 14
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 # spot/prover/__init__.py, produced.py and served.py: pouw's h1 rows and network's charge rows import produced, and the
 # catalog's records digest served.py as an import site.
+# pous/prover/setup_proof.py: PoUS's setup sidecar binds its unit through it.
 # spot/prover/docket.py: verity_vllm's boundary rows, which a process the cache and superseded-versions tests start imports,
 # build the docket's record with it.
 inputs_only = true
@@ -190,16 +189,13 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
-          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins; its row builders import chunk_rows,
-          # interior_rows, serving_rows and interior_links when they run, which a build does where no record of the long
-          # row's units counts
+          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
           "adapters/vllm/verity_vllm/pipeline/long_row.py", "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.json",
           # serve_seal is the home of `target_of`, which the package's `__all__` lists: a check run in a process of its
           # own (test_named_targets.py's C++ model test) reads it when the package's names are resolved
           "adapters/vllm/verity_vllm/pipeline/serve_seal.py", "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
-          "adapters/vllm/verity_vllm/pipeline/interior_rows.py", "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
-          "adapters/vllm/verity_vllm/pipeline/interior_links.py",
+          "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
           "tests/adapters/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "adapters/vllm/verity_vllm/compiler/cache_step.py", "adapters/vllm/verity_vllm/compiler/cache_step.circuit-check.py",
@@ -260,7 +256,7 @@ tests = ["test_cache_redteam.py", "test_cache_imports_and_moves.py", "test_catal
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_attention_split_digests_*.py", "test_metadata_files.py"]
+tests = ["test_metadata_files.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "tools/verity/circuit_check/src/circuit_check",
@@ -272,9 +268,9 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["test_attention_split.py", "test_attention_split_digests_*.py", "test_bodies.py",
+tests = ["test_bodies.py",
          "test_declared_tables.py", "test_metadata_files.py", "test_named_targets.py",
-         "test_pinned_targets.py", "test_ranges.py", "test_split_prims_serve.py",
+         "test_pinned_targets.py", "test_ranges.py",
          "test_structural.py", "test_structural_slots.py", "test_superseded_versions.py",
          "test_targets.py"]
 paths = [
@@ -293,7 +289,7 @@ tests = ["test_targets.py"]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/struct_slots.circuit-check.py"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_shard.py", "test_split_prims_serve.py"]
+tests = ["test_shard.py"]
 paths = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "tools/verity/circuit_check/src/circuit_check",

@@ -1,4 +1,4 @@
-"""Kernels for host evaluation (`acquire.sources.call_boundary_plan`) of the dense chain of `registry.dense` -- GemmaRMSNorm's unfused
+"""Kernels for host evaluation of the dense chain of `registry.dense` -- GemmaRMSNorm's unfused
 ATen chain and the logits soft cap -- and the Ampere k16 GEMM chain of a large Gemm row (the logits `lm_head`).
 
 The chain's kernels are numpy, elementwise over a leading batch axis (one instance is a batch of one), registered with core

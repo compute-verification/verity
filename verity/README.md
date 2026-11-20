@@ -35,6 +35,7 @@ query_ast.evaluate(program, "//GemmCoordinate")   # its 8 output coordinates, ea
 | [`runtime/`](runtime/README.md) | Runs a protocol's parties over channels and keeps each party's log of the run. It knows no protocol. |
 | `party.py`, `channel.py`, `protocol.py`, `errors.py` | What a party is (a next-message machine), what its messages declare, what a protocol declares with the placement check, and the shared exception classes. |
 | `ports.py` | A loopback port the OS has free now (`free_port`), for a local session or server. |
+| `lean_process.py` | How a compiled Lean verifier whose answer can become a verdict is started (`LEAN_ABORT_ON_PANIC` set) and read (a panic line on its error stream refuses the answer, whatever the exit status). |
 | `device.py` | The registered hardware (the Site) and the readers of the data sheets in [`calibration/hardware/`](../calibration/hardware/README.md). The site log it is folded from and the check each entry passes are registration's (`protocols/registration/verifier/site_log.py`). |
 | `config.py` | The configuration a run starts from (`verity run CONFIG`). |
 

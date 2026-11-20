@@ -100,12 +100,11 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, inter: int | 
 
 def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
     """The in-Commit hook's window over the Commit's members in ``out_dir``, as a deferred Commit's C2 site commits it
-    (`c2_replay.serving_rows`, its request as the row stage writes it): ``served``.  The site reads the bundle's store opened
+    (`readers`, its request as the row stage writes it): ``served``.  The site reads the bundle's store opened
     against the record where a Commit's reads its committer, and the weights opened against the committed root where it reads
     the engine's."""
     from types import SimpleNamespace
 
-    from verity_vllm.pipeline import c2_replay as C2
     from verity_vllm.pipeline import deferred_rows as DRW
 
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
@@ -114,11 +113,27 @@ def hook(c: dict, out_dir: Path, run: str = "served-rope") -> Path:
     args = CPU.replay_args(SimpleNamespace(row_dir=str(c["row_dir"]), replay_workers=None), r.ctx)
     args.serving_rows = str(req)
     weights = DRW.opened_weights(r)
-    C2.serving_rows(SimpleNamespace(args=args, out=r.out, pair=r.pair, com=r.store, rc=r.run, reqs=r.ctx["requests"],
-                                    sampling=r.ctx["sampling"], row=r.row, manifest=r.manifest, weights_of=lambda _prefix: weights))
+    readers(SimpleNamespace(args=args, out=r.out, pair=r.pair, com=r.store, rc=r.run, reqs=r.ctx["requests"],
+                              sampling=r.ctx["sampling"], row=r.row, manifest=r.manifest, weights_of=lambda _prefix: weights))
     if (out_dir / "error.txt").exists():
         raise RuntimeError(f"the in-Commit hook failed: {(out_dir / 'error.txt').read_text()[-2000:]}")
     return out_dir
+
+
+def readers(s) -> None:
+    """`serving_rows.readers` over the Programs of record of ``s`` (a `c2_replay.ReplaySources`), as the in-Commit hook calls it
+    once the run's roots are final."""
+    from verity_vllm.pipeline import c2_replay as C2
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    bm = json.loads((s.out / f"binding_map_p{s.pair}.json").read_text())
+    rl = C2.request_labels(s.reqs)
+    loaded, digs = C2.programs_of_record(s, rl, definitions=False)
+    progs = {k: v["instances"] for k, v in loaded.items()}
+    arr, _moved = C2.arrivals(s, rl)
+    k0 = next(iter(progs))
+    prefix = ProgramIndex(progs[k0], program_dir=loaded[k0].get("dir")).prefix
+    SRW.readers(s.args.serving_rows, s.com, s.rc, s.weights_of(prefix), progs, bm, arr, loaded, s.manifest, s.args.label, digs)
 
 
 def main(argv: list[str]) -> int:

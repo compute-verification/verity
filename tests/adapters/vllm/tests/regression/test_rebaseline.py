@@ -1,6 +1,6 @@
 """The re-baseline tool (`tests.regression.rebaseline`) and the oracle switch: `write` keeps the contract's shape and takes v2's values,
 records the decision that explains a difference from the R2 record, refuses a recorded failure, keeps the v1 reference as history;
-`resolver.oracle()` defaults to `expected`, `frozen` lifts from the records; `record_result` writes the document `write` reads.
+`resolver.oracle()` defaults to `expected`, `frozen` lifts from the records.
 Self-contained (a temporary expected/ and record dir; no store, no VERITY_REGRESSION=1).  Run from adapters/vllm:
     python -m pytest tests/regression/test_rebaseline.py -q
 """
@@ -34,36 +34,6 @@ def test_oracle_default_and_values(monkeypatch):
     with pytest.raises(ValueError):
         resolver.oracle()
     assert resolver.ENGINE == "v2"
-
-
-def test_record_result_writes_the_document_write_reads(monkeypatch, tmp_path):
-    monkeypatch.setenv(resolver.RECORD_ACTUAL_ENV, str(tmp_path))
-    monkeypatch.setenv(resolver.ORACLE_ENV, "frozen")
-    act = {"a": 1, "source": "recomputed", "sanctioned_by": "F-x", "decision_status": "accepted"}
-    p = resolver.record_result(ROW, "executed_prefix", {"a": 1}, act, [])
-    assert p == tmp_path / ROW / "executed_prefix.json"
-    res = RB.results(tmp_path)
-    doc = res[ROW]["executed_prefix"]
-    assert doc["matched"] == "decision F-x (accepted)" and doc["oracle"] == "frozen" and doc["expected"] == {"a": 1} and doc["actual"]["a"] == 1
-    monkeypatch.delenv(resolver.RECORD_ACTUAL_ENV)
-    assert resolver.record_result(ROW, "x", {}, {}, []) is None
-
-
-def _nested(depth: int) -> dict:
-    doc: dict = {}
-    at = doc
-    for _ in range(depth):
-        at["a"] = {}
-        at = at["a"]
-    return doc
-
-
-@pytest.mark.parametrize("make", [lambda: None, list, lambda: _nested(200_000)], ids=["none", "a-list", "nested-past-what-json-writes"])
-def test_a_result_that_cannot_be_recorded_is_not_recorded_and_nothing_raises(monkeypatch, tmp_path, make):
-    """`record_result` never raises: an `actual` that is no mapping, or one nested deeper than `json.dumps` writes, records nothing."""
-    monkeypatch.setenv(resolver.RECORD_ACTUAL_ENV, str(tmp_path))
-    assert resolver.record_result(ROW, "x", {}, make(), []) is None
-    assert not list(tmp_path.rglob("*.json"))
 
 
 def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys):
@@ -103,7 +73,7 @@ def test_write_takes_v2_values_keeps_shape_and_records_the_decision():
     assert doc["checks"]["manifest_digest"]["rebaselined"]["matched"] == "decision F-r19-int-20 (accepted)"
     assert doc["checks"]["executed_prefix"]["rebaselined"]["matched"] == "frozen"
     assert doc["reference"]["tag"] == "v2-reference" and doc["reference"]["frozen"]["tag"] == "v1-reference"
-    assert any(n.startswith("coverage: no recorded result") for n in notes)              # untouched checks are listed, not dropped
+    assert any(n.startswith("program_digest: no recorded result") for n in notes)            # untouched checks are listed, not dropped
     # idempotent on the reference history: a second re-baseline keeps the v1 block, not a v2 one
     doc2, _ = RB.merge(row, doc, res, reference=dict(ref, commit="c0ffee"), force=False)
     assert doc2["reference"]["commit"] == "c0ffee" and doc2["reference"]["frozen"]["tag"] == "v1-reference"

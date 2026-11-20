@@ -86,6 +86,9 @@ FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     # is `head` bytes, fixed by the registered blocks, k, limit and block bytes, read as whole u16 words
     Function("pous.session.header/v1", "supplied", ("commitment",), ("head",), _bits(lambda a: 8 * (a["head"] + a["head"] % 2))),
     Function("pous.session.context/v1", "supplied", ("commitment",), (), _fixed(106)),
+    # storage session: m, the digest the memory attester signed, released in the clear beside its signature, which the
+    # verifier checks under the pinned key and the session's digest unit recomputes from its committed salt and records
+    Function("pous.session.message/v1", "supplied", ("commitment",), (), _fixed(64)),
     # storage setup: the memory attester's salt, drawn after the weights' commitment and before the store's; a unit's
     # prefix is the keys' tag, the framed protocol id, the framed prime's id and this salt framed, zero-padded to 128
     # bytes, the first three registered constants
