@@ -60,7 +60,7 @@ import math
 import os
 import subprocess
 import tempfile
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -395,22 +395,38 @@ def held_read_why(member: str, node: int) -> str:
             "tied parameter opens its rows by its registered reads")
 
 
+#: `OneStageZk.HELD_QUERY_WHY`.
+HELD_QUERY_WHY = ("the per-member form's partition is no template query that applies to the program (Q_template_instance, "
+                  "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off")
+
+
+def held_refusal(reads: Sequence[tuple[range, int]],
+                 ms: Iterable[tuple[str, Sequence[tuple[int, int]], bool]]) -> str | None:
+    """`OneStageZk.heldRefusal`: the first member, by name, unit ranges and whether it carries a registered file, that
+    carries none and whose units meet a range of `reads`, refused at that range's node."""
+    for name, units, filed in ms:
+        if not filed:
+            for r, i in reads:
+                if any(lo < r.stop and r.start < hi for lo, hi in units):
+                    return held_read_why(name, i)
+    return None
+
+
 def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
     """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
-    tied parameter's run Input (`registered.held_gates`, `docket._tied`) carries a registered file."""
+    tied parameter's run Input (`registered.held_gates`, `docket._tied`) carries a registered file; refused under a
+    partition that is no template query applying to the program (`HELD_QUERY_WHY`)."""
     if not P.is_template_query(params["query"]):
-        return
+        raise _Refused(HELD_QUERY_WHY)
     registered = list(params.get("registered") or {})
     tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
     try:
         reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
     except P.QueryRefused:
-        return
-    for name, m in ms.items():
-        if m.get("registered") is None:
-            for units, i in reads:
-                if any(lo < units.stop and units.start < hi for lo, hi in m["units"]):
-                    raise _Refused(held_read_why(name, i))
+        raise _Refused(HELD_QUERY_WHY) from None
+    why = held_refusal(reads, ((name, m["units"], m.get("registered") is not None) for name, m in ms.items()))
+    if why is not None:
+        raise _Refused(why)
 
 
 def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:

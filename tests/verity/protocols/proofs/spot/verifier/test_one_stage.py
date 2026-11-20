@@ -875,6 +875,10 @@ def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
     with pytest.raises(M._Refused) as e:
         M._held_read({"m0": {"units": [(0, 6)], "registered": None}}, {"query": q, "registered": {"x": 12}}, prog)
     assert str(e.value) == M.held_read_why("m0", k)
+    for query in ({"name": "Q_all"}, P.template_instance_query("OneStageTestAbsent")):
+        with pytest.raises(M._Refused) as e:
+            M._held_read(own, {"query": query}, prog)
+        assert str(e.value) == M.HELD_QUERY_WHY, query
 
 
 def test_registration_check_refuses_a_query_core_does_not_digest():

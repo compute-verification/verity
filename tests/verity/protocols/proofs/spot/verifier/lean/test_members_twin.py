@@ -261,6 +261,19 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[1]}"), why
 
 
+def test_a_member_whose_registered_file_names_no_port_is_refused_by_both(tmp_path):
+    """A member's registered file that opens nothing: a list is no registered file, refused at the parse; an empty
+    object and a v2 file naming no port are refused by both at the registered values' class (`OneStageZk.classHeld`,
+    `Flock.Registered.ofJson`), before any member's file or session, so an empty file never stands for a reader's."""
+    a = Audit("members-twin-empty")
+    why = a.refused(tmp_path / "list", a.members(A, registered=[]))
+    assert why == "params: proofs: registered is not the verifier's registered file (an object) or null", why
+    for k, f in (("object", {}), ("no-port", {"format": "verity/registered-reads/v2", "ports": {}})):
+        why, (run, refused) = a.ask(tmp_path / k, params=a.members(A, registered=f))
+        assert run is None and why.startswith(f"proofs: member {A}: registered reads: "), (k, why, refused)
+        assert why == M.run_reason(run, refused), (k, why, refused)
+
+
 def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_session(tmp_path):
     """A window audited with a statement of its second member alone, that statement's tree logged and closed: Lean
     holds every member's files, sampled or not (`OneStageZk.membersFiles`), so it refuses the first member, which has

@@ -3272,8 +3272,8 @@ def unit_gates(j):
 def fanout(j):
     """A template query's fan-out and the run Input nodes outside `held`, the gates `[[first, count], ...]` of the
     parameters a verifier expects registered, its proof blocks don't each read alone over a program (`partition.fanout`,
-    `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), refused for another query or one that
-    doesn't apply."""
+    `partition.shared_inputs`; `Partition.fanout`, `Partition.sharedInputs`), and with `members` the members' refusal
+    (`members.held_refusal`; `OneStageZk.heldRefusal`), refused for another query or one that doesn't apply."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
@@ -3282,6 +3282,12 @@ def fanout(j):
     if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
                                              for h in held):
         raise D.Reject("held is not a list of [first, count]")
+    members = j.get("members")
+    if members is not None and not (isinstance(members, list) and all(
+            isinstance(m, list) and len(m) == 3 and isinstance(m[0], str) and isinstance(m[2], bool)
+            and isinstance(m[1], list) and all(isinstance(u, list) and len(u) == 2 and all(_nat(x) for x in u)
+                                               for u in m[1]) for m in members)):
+        raise D.Reject("members is not a list of [name, [[lo, hi], ...], filed]")
     query = _obj(j.get("query"), "query")
     sha = PO.program_sha512(desc)
     if sha not in PROGRAMS:
@@ -3290,10 +3296,14 @@ def fanout(j):
         raise D.Reject("not a template query")
     try:
         gates = [range(f, f + n) for f, n in held]
-        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query, gates),
-                "reads": [[r.start, len(r), i] for r, i in P.held_reads(PROGRAMS[sha], query, gates)]}
+        reads = P.held_reads(PROGRAMS[sha], query, gates)
+        out = {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query, gates),
+               "reads": [[r.start, len(r), i] for r, i in reads]}
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
+    if members is not None:
+        out["refused"] = M.held_refusal(reads, ((n, [tuple(u) for u in us], f) for n, us, f in members))
+    return out
 
 
 @functools.cache
@@ -3334,7 +3344,7 @@ def fanout_cases(draw) -> dict:
     """A program and a query for the fan-out: a population program of `PAIR`, or a root over `x`, two to five pairs of
     bytes, a run Input or a registered one, of one to four instances of `PAIR` wired at random (`_readers`), under `PAIR`'s
     template query, or rarely a query that is not one or doesn't apply; with no `held`, the first parameter's gates, or
-    gate intervals at random."""
+    gate intervals at random; two times in three, members laid over units from 0, each with a registered file or none."""
     query = draw(st.sampled_from([P.template_instance_query(PAIR.id)] * 6 + [P.template_instances_query([PAIR.id]),
                                                                             P.template_instance_query(TRIPLE.id),
                                                                             PO.query()]))
@@ -3353,6 +3363,11 @@ def fanout_cases(draw) -> dict:
         case["held"] = [[g.start, len(g)] for g in G.held_gates(program, [program.fn.signature()[0][0][0]])]
     elif held == 2:
         case["held"] = draw(st.lists(st.lists(st.integers(0, 48), min_size=2, max_size=2), max_size=2))
+    if draw(st.integers(0, 2)):
+        cuts = sorted(set(draw(st.lists(st.integers(1, 8), max_size=4))))
+        bounds = [0, *cuts, draw(st.integers(max([1, *cuts]), 9))]
+        case["members"] = [[f"{PAIR.id}/m{k}", [[lo, hi]], draw(st.booleans())]
+                           for k, (lo, hi) in enumerate(zip(bounds, bounds[1:])) if lo < hi]
     return case
 
 
@@ -6604,6 +6619,13 @@ def test_r8_reads_the_readers_python_does(pieces):
     case = {"program": s.desc, "query": _json(s.query), "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
     assert case["held"] and fanout(case) == {"fanout": 1, "shared": [], "reads": [[0, 1, 0], [1, 1, 0]]}
     assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
+    for members, refused in (([["A/m0", [[0, 1]], True], ["A/m1", [[1, 2]], False]], M.held_read_why("A/m1", 0)),
+                             ([["A/m0", [[0, 2]], False]], M.held_read_why("A/m0", 0)),
+                             ([["A/m0", [[0, 1]], True], ["A/m1", [[1, 2]], True]], None),
+                             ([["A/m0", [[2, 3]], False]], None)):
+        filed = {**case, "members": members}
+        assert fanout(filed)["refused"] == refused, members
+        assert D.replay(FANOUT, filed, pieces) == ("output", D.canonical(fanout(filed))), members
 
 
 @pytest.mark.parametrize("name, change, code", [

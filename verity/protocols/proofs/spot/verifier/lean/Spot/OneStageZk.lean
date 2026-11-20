@@ -513,6 +513,15 @@ def HELD_READ_WHY (member : String) (node : Nat) : String :=
     "blocks read only as one registered tree, and it carries no registered file: a reader of a held or tied " ++
     "parameter opens its rows by its registered reads"
 
+/-- The first of the members `ms`, each its name, its unit ranges and whether it carries a registered file, that
+carries none and whose units meet a range of `reads`: its refusal (`HELD_READ_WHY`), at that range's node. -/
+def heldRefusal (reads : Array (Flock.TemplateQuery.TRange × Nat)) (ms : Array (String × Array (Nat × Nat) × Bool)) :
+    Option String :=
+  ms.findSome? fun (name, units, filed) =>
+    if filed then none else
+    (reads.find? fun (r, _) => units.any fun (lo, hi) => r.first < hi && lo < r.first + r.count).map
+      fun (_, i) => HELD_READ_WHY name i
+
 /-- **A reader of a held or tied parameter carries a registered file**: where R8 lets a run Input through as held or
 tied (`Docket.heldGates`, `Docket.tiedGates`, over the template query's ranges as `Partition.readAlone` derives them,
 `Partition.heldReads`),
@@ -520,17 +529,21 @@ each member whose units meet a range whose instance node reads it carries a regi
 name (`HELD_READ_WHY`). Derived from C, the query and the verifier, never from a member's file; a member reading only
 its own run Inputs is untouched. Its cost is the ranges' arguments' runs and the members' unit ranges. -/
 def heldFiled (reads : Array (Flock.TemplateQuery.TRange × Nat)) (ms : Array Member) : V Unit :=
-  ms.forM fun m =>
-    if m.own.registered.isSome then pure () else
-    match reads.find? fun (r, _) => m.units.any fun (lo, hi) => r.first < hi && lo < r.first + r.count with
-    | some (_, i) => throw (HELD_READ_WHY m.name i)
-    | none => pure ()
+  match heldRefusal reads (ms.map fun m => (m.name, m.units, m.own.registered.isSome)) with
+  | some why => throw why
+  | none => pure ()
+
+/-- The refusal of the per-member form under a partition that is no template query applying to the program, whose
+ranges its members' held reads are read off (`heldReadsFiled`). -/
+def HELD_QUERY_WHY : String :=
+  "the per-member form's partition is no template query that applies to the program (Q_template_instance, " ++
+    "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off"
 
 @[inherit_doc heldFiled]
 def heldReadsFiled (v : Docket.Verifier) (ms : Array Member) : V Unit :=
   match Partition.templateRanges? v.program v.query with
   | some rs => heldFiled (Partition.heldReads v.program.prog rs (Docket.heldGates v ++ Docket.tiedGates v)) ms
-  | none => pure ()
+  | none => throw HELD_QUERY_WHY
 
 section HeldReadExamples
 open Flock.Program (Prog Node Defn Ty)

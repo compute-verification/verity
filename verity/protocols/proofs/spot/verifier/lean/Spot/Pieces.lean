@@ -237,11 +237,12 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
-parameters a verifier expects registered, to `{"fanout", "shared", "reads"}`: its fan-out, the run Input nodes outside
-`held` its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]`
-for each range reading a run Input inside `held` (`Partition.heldReads`); refused for another query or one that doesn't
-apply. -/
+/-- `{"program", "query", "held"?, "members"?}`, a program object, a template query, the gates `[[first, count], ...]`
+of the parameters a verifier expects registered and members `[[name, [[lo, hi], ...], filed], ...]`, to `{"fanout",
+"shared", "reads"}`: its fan-out, the run Input nodes outside `held` its proof blocks don't each read alone
+(`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]` for each range reading a run Input inside
+`held` (`Partition.heldReads`); with `members`, `"refused"` beside them, the members' refusal (`OneStageZk.heldRefusal`)
+or null. Refused for another query or one that doesn't apply. -/
 def fanout (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
@@ -254,11 +255,27 @@ def fanout (j : Json) : V Json := do
         | _, _ => bad
       | _ => bad
     | _ => throw "held is not a list of [first, count]"
+  let badM : V (String × Array (Nat × Nat) × Bool) := throw "members is not a list of [name, [[lo, hi], ...], filed]"
+  let members ← match getD j "members" with
+    | .null => pure none
+    | .arr xs => some <$> xs.mapM fun x => match x with
+      | .arr #[.str name, .arr us, .bool filed] => do
+        let units ← us.mapM fun u => match u with
+          | .arr #[a, b] => match nat? a, nat? b with
+            | some lo, some hi => pure (lo, hi)
+            | _, _ => throw "members is not a list of [name, [[lo, hi], ...], filed]"
+          | _ => throw "members is not a list of [name, [[lo, hi], ...], filed]"
+        pure (name, units, filed)
+      | _ => badM
+    | _ => badM
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
-  return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
+  let reads := Partition.heldReads p.prog rs held
+  return Json.mkObj ([("fanout", Lean.toJson (Partition.fanout p.prog rs)),
     ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held)),
-    ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
-      Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
+    ("reads", Json.arr (reads.map fun (r, i) => Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))] ++
+    (members.map fun ms => ("refused", match OneStageZk.heldRefusal reads ms with
+      | some why => Json.str why
+      | none => Json.null)).toList)
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
