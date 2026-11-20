@@ -15,7 +15,9 @@ fails unless `InferenceOnlyCheck.Desc.check` gives Python's result on every inst
 for `test_inference_only_lean_difftest.py`, the audit checks the data against the record's SHA-256 and caches its pass on the Lean
 package's files alone, so this test is what says the data is still what the generator and the reference write. The
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
-fixture's descriptor, the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
+fixture's descriptor: every refusal it makes but `not-topological`, since the decoder refuses a node's argument naming the
+node itself or a later one first (`program`, with its forward-reference text, on both sides), the third that the data
+holds the decoys: a root Call or batch of a composite keyed with an input
 id, whose gates are computed, which `InferenceOnlyCheck.Desc` once took for an input node, the fourth that it holds the walks: a
 gate reading a nested scan's carry, past `InferenceOnlyCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps, and the
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
@@ -49,9 +51,20 @@ reference = vectors.reference
 RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyVerifier.DescDifftestMain"]
 
 
+def _forward_refused(inst) -> bool:
+    """Whether the decoder refuses the instance's Program for a node's argument naming the node itself or a later one."""
+    desc = json.loads(inst["program"])
+    try:
+        reference.codec.decode_program(desc, reference.declared(desc))
+    except ValueError as e:
+        return "forward-reference:" in str(e)
+    return False
+
+
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,093 instances, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 4,093 instances, their expansions and the reference's results, byte for byte as the record pins them: the only
+    test of the bytes the Lean audit compares, which no test of a sample of the instances can stand for."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}",
@@ -69,7 +82,9 @@ def test_the_generator_covers_what_it_says():
     assert {"fixture:partition_v2_vectors", "fixture:template_instance_vectors", "fixture:qcall_vectors"} <= shapes
     assert {m["theta_kind"] for m in made} == {"none", "all", "registered", "random"}
     assert {m["division"] for m in made} == {"single", "singletons", "runs", "random"}
-    assert {r.get("error") for r in results} == set(vectors.MALFORMED) | {None}
+    assert {r.get("error") for r in results} == set(vectors.MALFORMED) - {"not-topological"} | {None}
+    later = [m["instance"] for m in made if m["malformed"] == "not-topological" and _forward_refused(m["instance"])]
+    assert later and all(reference.check_desc(i) == {"error": "program"} for i in later)
     good = [(m, r) for m, r in zip(made, results, strict=True) if "error" not in r]
     assert {r["failure"][1] for _, r in good if r["failure"]} == {"size", "nci"}
     assert any(r["complies"] for _, r in good)
@@ -140,8 +155,8 @@ def test_the_shared_members_read_both_nodes():
 def test_the_mistyped_ones_are_reinterpretations():
     """The mistyped instances come just before the pinned ones. On each of the `shapes()` and each pair reading that
     isn't well-typed, the codec refuses the Program as `E_REINTERPRET` (a shape that reads an input node at a width that
-    divides its own, off its whole leaves, as `recut-boundary`) and the reference refuses it (`program`); each
-    well-typed neighbour gets a verdict; and the tampered declarations hold both."""
+    divides its own, off its whole leaves, as `recut-boundary`) and the reference refuses it (`program`), the later node read
+    as the decoder's forward reference; each well-typed neighbour gets a verdict; and the tampered declarations hold both."""
     mv = _load("mistyped_vectors")
     first = vectors.total() - len(vectors.vectors.pinned()) - len(vectors.recuts()) - len(vectors.grids()) - len(vectors.mistyped())
     made = [vectors.instance(s)["instance"] for s in range(first, first + len(vectors.mistyped()))]
@@ -162,7 +177,7 @@ def test_the_mistyped_ones_are_reinterpretations():
         if how in mv.WELL_TYPED:
             assert why(inst) is None and "error" not in reference.check_desc(inst)
         elif how == "later":
-            assert reference.check_desc(inst) == {"error": "not-topological"}
+            assert _forward_refused(inst) and reference.check_desc(inst) == {"error": "program"}
         else:
             assert "E_REINTERPRET" in why(inst) and reference.check_desc(inst) == {"error": "program"}
     tampered = made[len(shapes) + len(pairs):]

@@ -196,3 +196,29 @@ def test_the_auditors_own_gate_runs_the_challenger_where_it_says_and_half_of_it_
     capsys.readouterr()
     with pytest.raises(Refused, match="challenger.pearl-plus.gate of what challenger writes, not all of it"):
         R.starting(REG, [T.CHALLENGER], {T.CHALLENGER: {"pearl-plus": {"gate": "gate-command"}}})
+
+
+def test_it_says_before_each_long_build_what_is_being_built_and_that_it_takes_minutes(stand_ins, monkeypatch, capsys):
+    """One line before the Lean verifier's build and Pearl+'s gate start, one before the loopback host's key is made at the
+    deployed height: each printed before the work it says, not after."""
+    state, calls, _ = stand_ins
+    seen = []
+    run, Made = T.subprocess.run, T.CP.Host
+
+    def run_say(argv, **kw):
+        if len(argv) > 2 and argv[2] == "init":
+            seen.append(("gate", capsys.readouterr().err))
+        return run(argv, **kw)
+
+    class HostSay(Made):
+        def __init__(self, *a, **kw):
+            seen.append(("host", capsys.readouterr().err))
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(T.subprocess, "run", run_say)
+    monkeypatch.setattr(T.CP, "Host", HostSay)
+    T.STARTS[T.CHALLENGER].serve(R.load(CONFIG, REG), state)
+    gate, host = dict(seen)["gate"], dict(seen)["host"]
+    assert "building the Lean verifier and Pearl+'s gate" in gate and "takes minutes" in gate and "loopback" not in gate
+    assert "making the loopback host's key at the deployed height" in host and "takes minutes" in host
+    assert [w for w, _ in seen] == ["gate", "host"]

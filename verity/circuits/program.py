@@ -162,6 +162,12 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
     raise TypeError(t)
 
 
+
+def recut_gates(recut: Any) -> str:
+    """The gate layout's refusal of a root reading the input nodes ``recut`` recut (`Circuits.Program.recutGates`)."""
+    return (f"recut-gates: input nodes {sorted(recut)} are read in leaves of part of their width, which the gate layout "
+            "doesn't lay out")
+
 class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
     `registered`: the names of `fn`'s parameters bound at registration; `supplied`: the supplied ones, each name to its mark
@@ -214,8 +220,7 @@ class Program:
         leaf of its width, and the layout has no operand of part of a gate."""
         if self._circuit is None:
             if self.root.body.recut:
-                raise ValueError(f"recut-gates: input nodes {sorted(self.root.body.recut)} are read in leaves of part of "
-                                 "their width, which the gate layout doesn't lay out")
+                raise ValueError(recut_gates(self.root.body.recut))
             self._circuit = Circuit(self.root)
         return self._circuit
 

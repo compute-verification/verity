@@ -55,8 +55,9 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
 
 
 def standin_rows(cls: Any, slots: Sequence[tuple[Sequence[int], int]]) -> list[list[int]]:
-    """The state rows where no scan ran that give slot k its row (occupancy, prompt length, ids) and ``max_tokens``,
-    ``slots[k]``, at its anchor and lane, every other field zero."""
+    """The scan's state rows where no scan ran that give slot k its row (occupancy, prompt length, ids) and
+    ``max_tokens``, ``slots[k]``, at its anchor and lane, every other field zero. A window closed with them holds no
+    network claim."""
     scan = IS.Class(**cls.scan.shape)
     states = [IS.empty(scan) for _ in range(cls.buckets)]
     for k, (row, max_tokens) in enumerate(slots):

@@ -71,7 +71,7 @@ Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z a
 does not cover.
 
 Under cuda.matmul.allow_tf32 an f32 torch.mm on sm_120 at the rotation codecs' shapes (`TRAIN_TF32`) is an unsplit
-`cutlass_80_tensorop_s1688gemm` kernel whose k8 TF32 steps are `mhc.HopperTf32WgmmaDot8_v1`'s (`CONFORMANCE_TF32`):
+`cutlass_80_tensorop_s1688gemm` kernel whose k8 TF32 steps are `tf32_wgmma.HopperTf32WgmmaDot8_v1`'s (`CONFORMANCE_TF32`):
 
     DotTf32_v1{K}                   (x, wrow: Array<K, F32>) -> F32
                                     K/8 `HopperTf32WgmmaDot8_v1` steps in ascending k from +0, no epilogue
@@ -99,7 +99,7 @@ from verity.circuits.refs import Coll, array_of, broadcast, concat
 from verity.circuits.types import Array, Type
 
 from verity_vllm.definitions.evidence import EVIDENCE
-from verity_vllm.definitions.registry import mhc as MHC
+from verity_vllm.definitions.registry import tf32_wgmma as TW
 
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmAligned",
            "CublasSerialSplitKGemmAlignedWord", "CublasSerialSplitKGemmWord", "CublasSplitKGemm", "CublasSplitKGemmAligned",
@@ -599,7 +599,7 @@ def _refuse_k8(b: dict) -> str | None:
 def _dot_tf32(B, S, x, wrow):
     acc = B.call(P.ZERO32)
     for s in range(S.K // 8):
-        acc = B.call(MHC.HopperTf32WgmmaDot8, acc, x[8 * s:8 * s + 8], wrow[8 * s:8 * s + 8])
+        acc = B.call(TW.HopperTf32WgmmaDot8, acc, x[8 * s:8 * s + 8], wrow[8 * s:8 * s + 8])
     return acc
 
 
