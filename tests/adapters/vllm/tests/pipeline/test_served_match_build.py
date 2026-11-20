@@ -123,7 +123,7 @@ def test_a_process_that_was_not_given_its_own_compile_dirs_is_refused_before_the
     monkeypatch.delenv(engine_env.INDUCTOR_DIR_MARK)
     with pytest.raises(UsageError) as stop:
         sm.build_here(_Source(), _facts(tmp_path), SCHEDULE, 3, str(tmp_path / "out"))
-    assert str(stop.value) == "this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)"
+    assert str(stop.value) == "this process was not given its own compile dirs (engine.env.own_compile_dirs)"
     assert process == []
 
 

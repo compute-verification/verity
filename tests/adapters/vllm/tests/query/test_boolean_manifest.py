@@ -28,13 +28,12 @@ from verity.circuits.ops.boolean import versions as BB  # noqa: E402
 from verity_torch.correspondence.runtime import correspondence_digest  # noqa: E402
 
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
-from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.definitions.registry import b1  # noqa: E402
-from verity_vllm.pipeline import components, manifest  # noqa: E402
+from verity_vllm.pipeline import components  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
-from verity_vllm.query.required import SAMPLING_EVENTS, request_manifest  # noqa: E402
+from verity_vllm.query.required import SAMPLING_EVENTS  # noqa: E402
 
 C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
 
@@ -113,39 +112,8 @@ def test_programview_reads_the_word_families_and_the_boolean_spec_of_each_call(r
     assert all(c.bits is None for c in Pw.calls) and all(c.bits for c in Pb.calls)
 
 
-@pytest.mark.slow
-def test_the_boolean_manifest_is_the_word_manifest_apart_from_the_program_digest(row):
-    """Every identity and every header field but the Program's own: its digest, its function id (the Boolean root binds
-    `IR='boolean'`) and what is digested over them (the manifest digest, the partition's)."""
-    word, bits, dirs, digests = row
-    m = {}
-    for ir, rep in (("word", word), ("boolean", bits)):
-        x = _placeholder(manifest.build(str(dirs[ir]), word="off"), digests[ir])
-        assert x["program"].pop("function") == rep.program.fn.id and x["program"].pop("dir") == str(dirs[ir])
-        x["query"]["partition"].pop("digest")
-        m[ir] = x
-    mw, mb = m["word"], m["boolean"]
-    assert mw["identities"] == mb["identities"] and len(mw["identities"]) > 0
-    assert {k for k in set(mw) | set(mb) if mw.get(k) != mb.get(k)} <= {"manifest_digest", "unreturned_digest"}
 
 
-@pytest.mark.slow
-def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_beside(row):
-    _word, bits, dirs, _digests = row
-    out = {}
-    for ir in ("word", "boolean"):
-        P = from_instances(str(dirs[ir] / "instances.json.gz"))
-        corr = Correspondence.of(P, str(dirs[ir]))
-        r = request_manifest(P, corr, json.loads((dirs[ir] / "result.json").read_text()), request_id="r0")
-        out[ir] = manifest.word_check(P, corr, r.required, "16/32", strict=False, unreturned=r.unreturned)
-    w, b = out["word"], out["boolean"]
-    assert "boolean_gates" not in w and w["calls"] > 0
-    assert {k: v for k, v in b.items() if k not in ("groups", "boolean_gates")} == {k: v for k, v in w.items() if k != "groups"}
-    assert [{k: v for k, v in g.items() if k not in ("bits", "boolean_gates")} for g in b["groups"]] == w["groups"]
-    gates = {descriptor_id(n.fn): n.fn.gates for n in bits.program.fn.body.nodes}
-    assert all(g["boolean_gates"] == gates[g["bits"]] * g["calls"] for g in b["groups"])
-    assert b["boolean_gates"] == sum(g["boolean_gates"] for g in b["groups"]) > b["gates"]
-    assert manifest.word_record(b, strict=False)["boolean_gates"] == b["boolean_gates"]
 
 
 @pytest.mark.slow

@@ -103,7 +103,7 @@ def test_write_takes_v2_values_keeps_shape_and_records_the_decision():
     assert doc["checks"]["manifest_digest"]["rebaselined"]["matched"] == "decision F-r19-int-20 (accepted)"
     assert doc["checks"]["executed_prefix"]["rebaselined"]["matched"] == "frozen"
     assert doc["reference"]["tag"] == "v2-reference" and doc["reference"]["frozen"]["tag"] == "v1-reference"
-    assert any(n.startswith("coverage: no recorded result") for n in notes)              # untouched checks are listed, not dropped
+    assert any(n.startswith("program_digest: no recorded result") for n in notes)            # untouched checks are listed, not dropped
     # idempotent on the reference history: a second re-baseline keeps the v1 block, not a v2 one
     doc2, _ = RB.merge(row, doc, res, reference=dict(ref, commit="c0ffee"), force=False)
     assert doc2["reference"]["commit"] == "c0ffee" and doc2["reference"]["frozen"]["tag"] == "v1-reference"

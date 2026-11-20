@@ -1151,7 +1151,7 @@ def session_jobs() -> int:
     return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
-#: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
+#: the agreement's memory floor: the GEMM set's upstream replay (m = 26) alone takes more than 15 GB
 AGREEMENT_MIN_GB = 24
 
 
@@ -1160,10 +1160,11 @@ def _version(v: str) -> tuple[int, ...]:
 
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
-    """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
-    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
-    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
+    """One real replay per upstream binary that `vectors.json` gives a stored honest session or a selftest record (a set
+    without lookup tables): (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the
+    unpacked build and inputs in ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended
+    divergence (`agree.py`): Lean refuses it for completeness, upstream accepts it. A selftest record's case is one upstream
+    accepted live (its `case.json`)."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -1178,16 +1179,27 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     out: dict[str, tuple] = {}
     for s in json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]:
         st = s.get("statement", {})
-        if s["pr83"] in out or not s.get("sessions") or "tables" in st:
+        if s["pr83"] in out or "tables" in st:
             continue
-        honest = fetch(s["sessions"][0]["dir"])
+        if s.get("sessions"):
+            honest = fetch(s["sessions"][0]["dir"])
+            e = s["sessions"][0]["expect"]
+            expect = {"accepted": e.get("upstream_accepted", e["accepted"])}
+        elif s.get("selftest"):
+            d = w / "smoke" / s["pr83"]
+            subprocess.run([sys.executable, str(FLOCK_VERIFIER / "selftest_records.py"), str(fetch(s["selftest"][0])), str(d)],
+                           check=True, capture_output=True)
+            live = [p for p in sorted(d.iterdir()) if json.loads((p / "case.json").read_text())["live"]["accepted"]]
+            if not live:
+                continue
+            honest, expect = live[0], {"accepted": True}
+        else:
+            continue
         a = argparse.Namespace(upstream=str(w / "upstream" / f"upstream-{s['pr83']}"), statement=s["lean_statement"],
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        e = s["sessions"][0]["expect"]
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
-                          {"accepted": e.get("upstream_accepted", e["accepted"])})
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], expect)
     return list(out.values())
 
 
@@ -1197,7 +1209,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
     Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
-        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
+        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (the GEMM set's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
