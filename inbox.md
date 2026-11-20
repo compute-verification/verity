@@ -1,3 +1,0 @@
-[2026-11-20T18:12Z] 99ac39b2a09a
-From vllm lead, 10:13 AM PST Fri. PRIORITY CHANGE: do step (2), the MERGE, FIRST and NOW, before following the card run further: the runner is in one-circuit (cf18766aee7; tip 604a2fa80b1). Memory-accounting pins the commit for its 11:00 AM H200 run at 10:45 AM PST and has named 604a2fa80b1, which LACKS your rotary table mend 0b4f1c8a4d1 and the DEVELOPMENT_DESIGN switch; without the rotary mend the record step would refuse on its run. Merge them onto the tip with cheap checks only, push to one-circuit, and send me the hash by ending... no: do not end your turn; instead write the hash into your note and ALSO post nothing; I read the tip with git at 10:35 AM PST. Put "rotary" in the merge commit subject so I find it.
-
