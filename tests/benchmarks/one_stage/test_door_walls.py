@@ -369,18 +369,18 @@ def _site(clause: str, text: str) -> tuple[str, str] | None:
     return None
 
 
-def _input_body() -> list[str]:
-    """`Spot.OneStageZk.INPUT_BODY`: what refuses `IB16`, the lowering's name or the decoder's."""
+def _input_body() -> str:
+    """`INPUT_BODY` of `Spot/Admitted.lean`: the decoder's refusal of `IB16`."""
     import re
-    m = re.search(r"^def INPUT_BODY : List String := \[(.*?)\]$", _admitted_lean(), re.M | re.S)
-    return [x.replace('\\"', '"') for x in re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))]
+    m = re.search(r'^def INPUT_BODY : String :=\n  "((?:[^"\\]|\\.)*)"$', _admitted_lean(), re.M)
+    return m.group(1).replace('\\"', '"')
 
 
 def _outside(text: str) -> str:
     """A refusal outside the door predicate by the case it is: `recut-gates`, `input-body`, else its text."""
     if "recut-gates: " in text:
         return "recut-gates"
-    return "input-body" if any(n in text for n in _input_body()) else text
+    return "input-body" if _input_body() in text else text
 
 
 def _q(t: str) -> dict:
@@ -456,8 +456,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
     `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
     `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
     a decoded C can reach refuses: each refusal of `admitted` and `admittedBlock` is reached or is `UNREACHED`'s. A C
-    refused outside the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
-    `flock-lower-check`."""
+    refused outside the predicate (`RC16` by the gate layout, `IB16` by the decoder) is refused by both doors alike."""
     from verity.circuits import partition_object as PO
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
