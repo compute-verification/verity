@@ -559,7 +559,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
     assert SC.replay(bare, log, tmp_path / "replay", record=ORL.Record()) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
-    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"], record=ORL.Record) == 0
+    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2")], record=ORL.Record) == 0
 
 
 #: the network attester's run ids, fixed so the prover can name its run in the stream it records
