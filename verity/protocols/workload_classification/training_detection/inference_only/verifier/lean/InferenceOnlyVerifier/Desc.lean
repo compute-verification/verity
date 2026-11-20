@@ -153,7 +153,7 @@ def Piece.rowsOf (q : Piece) : Array Piece := (Array.range q.rows).map q.row
 /-- Elements `[a, b)` of `q`, in order: a part of a row, the whole rows, a part of a row. -/
 def Piece.slice (q : Piece) (a b : Nat) : Array Piece :=
   if b ≤ a then #[]
-  else if q.rows ≤ 1 then #[{ q.row 0 with base := q.at a, len := b - a }]
+  else if q.rows ≤ 1 then #[{ q.row 0 with base := (q.row 0).at a, len := b - a }]
   else
     let part (r s e : Nat) : Array Piece := if s < e then #[{ q.row r with base := (q.row r).at s, len := e - s }] else #[]
     let (r0, t0, r1, t1) := (a / q.len, a % q.len, b / q.len, b % q.len)

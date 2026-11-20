@@ -87,14 +87,42 @@ theorem flatMap_range_getElem? {α : Type} (f : Nat → List α) (L : Nat) (hf :
         apply List.getElem?_eq_none
         rw [hf]; omega
 
-/-- A piece's positions in order: row `r`, column `t` is `(tgt, base + r·rowStride + t·stride)`. -/
+/-- A piece's positions in order: row `r`, column `t` is `(tgt, base + rowOff r + t·stride)`. -/
 def pos (q : Piece) : List (Tgt × Int) :=
   (List.range q.rows).flatMap fun (r : Nat) => (List.range q.len).map fun (t : Nat) =>
-    (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride)
+    (q.tgt, q.base + q.rowOff r + (t : Int) * q.stride)
 
 /-- Position `t` of a piece: row `t / len`, column `t % len`. -/
 def ppt (q : Piece) (t : Nat) : Int :=
-  q.base + ((t / q.len : Nat) : Int) * q.rowStride + ((t % q.len : Nat) : Int) * q.stride
+  q.base + q.rowOff (t / q.len) + ((t % q.len : Nat) : Int) * q.stride
+
+theorem rowOff_flat (q : Piece) (h : q.lv = []) (r : Nat) : q.rowOff r = (r : Int) * q.rowStride := by
+  simp [Desc.Piece.rowOff, h]
+
+/-- What `Piece.rowsFrom` keeps: its rows are `q`'s from `lo`. -/
+theorem rowsFrom_spec (q : Piece) (lo n : Nat) :
+    (q.rowsFrom lo n).tgt = q.tgt ∧ (q.rowsFrom lo n).stride = q.stride ∧ (q.rowsFrom lo n).len = q.len ∧
+      (q.rowsFrom lo n).rows = n ∧
+      ∀ r < n, (q.rowsFrom lo n).base + (q.rowsFrom lo n).rowOff r = q.base + q.rowOff (lo + r) := by
+  unfold Desc.Piece.rowsFrom
+  by_cases h1 : q.lv.isEmpty = true
+  · have hl : q.lv = [] := by simpa using h1
+    simp only [h1, ↓reduceIte]
+    refine ⟨rfl, rfl, rfl, rfl, fun r _ => ?_⟩
+    rw [rowOff_flat _ hl, rowOff_flat _ hl]
+    push_cast; ring
+  · have hl : q.lv ≠ [] := by simpa using h1
+    simp only [h1, Bool.false_eq_true, ↓reduceIte]
+    by_cases h2 : (n == 1) = true
+    · have hn : n = 1 := by simpa using h2
+      simp only [h2, ↓reduceIte, Desc.Piece.row]
+      refine ⟨rfl, rfl, rfl, hn.symm, fun r hr => ?_⟩
+      obtain rfl : r = 0 := by omega
+      rw [rowOff_flat _ rfl]
+      simp
+    · simp only [h2, Bool.false_eq_true, ↓reduceIte]
+      refine ⟨rfl, rfl, rfl, rfl, fun r _ => ?_⟩
+      simp [Desc.Piece.rowOff, hl, Nat.add_assoc]
 
 theorem pos_length (q : Piece) : (pos q).length = q.count := by
   unfold pos Piece.count
@@ -136,9 +164,9 @@ theorem toNat_div_cast (a b : Nat) : (((a / b : Nat)) : Int) = ((a / b : Nat) : 
 
 /-- A one-row piece of `q`'s target, `len'` positions of `q` from `s` (all in row `s / q.len`): `q`'s positions
 `[s, s + len')`. -/
-theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + (r : Int) * q.rowStride + (s : Int) * q.stride)
+theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + q.rowOff r + (s : Int) * q.stride)
     (hse : s ≤ e) (he : e ≤ q.len) :
-    pos ⟨q.tgt, B, q.stride, e - s, 1, 0⟩ =
+    pos ⟨q.tgt, B, q.stride, e - s, 1, 0, [], 0⟩ =
       (List.range' (r * q.len + s) (e - s)).map fun t => (q.tgt, ppt q t) := by
   rw [pos_eq_map]
   apply List.ext_getElem?
@@ -155,24 +183,23 @@ theorem pos_run (q : Piece) (r s e : Nat) (B : Int) (hB : B = q.base + (r : Int)
       rw [Nat.add_assoc, Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt (by omega)]
     unfold ppt
     simp only [Nat.mod_eq_of_lt (show t < e - s by omega), Nat.div_eq_of_lt (show t < e - s by omega)]
-    rw [h1, h2, hB]
-    push_cast
-    rw [Int.add_mul]; omega
+    rw [h1, h2, hB, rowOff_flat _ rfl]
+    push_cast; ring
   · rw [List.getElem?_eq_none (by simp; omega), if_neg h]; rfl
 
 
-/-- Whole rows `[lo, lo + n)` of `q`: its positions `[lo · len, (lo + n) · len)`. -/
+/-- Whole rows `[lo, lo + n)` of `q` (`Piece.rowsFrom`): its positions `[lo · len, (lo + n) · len)`. -/
 theorem pos_rows (q : Piece) (lo n : Nat) :
-    pos ⟨q.tgt, q.base + (lo : Int) * q.rowStride, q.stride, q.len, n, q.rowStride⟩ =
-      (List.range' (lo * q.len) (n * q.len)).map fun t => (q.tgt, ppt q t) := by
+    pos (q.rowsFrom lo n) = (List.range' (lo * q.len) (n * q.len)).map fun t => (q.tgt, ppt q t) := by
+  obtain ⟨ht, hs, hl, hr, hoff⟩ := rowsFrom_spec q lo n
   rw [pos_eq_map]
   apply List.ext_getElem?
   intro t
-  simp only [Desc.Piece.count, List.getElem?_map]
+  simp only [Desc.Piece.count, List.getElem?_map, hr, hl]
   rw [range'_getElem?]
   by_cases h : t < n * q.len
   · rw [List.getElem?_range h, if_pos h]
-    simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq, true_and]
+    simp only [Option.map_some, Option.some.injEq, Prod.mk.injEq, ht, true_and]
     have hL : 0 < q.len := by
       rcases Nat.eq_zero_or_pos q.len with h0 | h0
       · rw [h0, Nat.mul_zero] at h; omega
@@ -182,10 +209,7 @@ theorem pos_rows (q : Piece) (lo n : Nat) :
     have h2 : (lo * q.len + t) % q.len = t % q.len := by
       rw [Nat.mul_comm, Nat.mul_add_mod]
     unfold ppt
-    simp only
-    rw [h1, h2]
-    push_cast
-    rw [Int.add_mul]; omega
+    rw [h1, h2, hl, hs, ← hoff _ ((Nat.div_lt_iff_lt_mul hL).2 h)]
   · rw [List.getElem?_eq_none (by simp; omega), if_neg h]; rfl
 
 theorem posAll_append (a b : Array Piece) : posAll (a ++ b) = posAll a ++ posAll b := by
@@ -224,11 +248,11 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
       have : q.rows * q.len ≤ 1 * q.len := Nat.mul_le_mul_right _ hr
       omega
     have := pos_run q 0 a b _ rfl (by omega) hb'
-    simp only [Int.natCast_zero, Int.zero_mul, Int.add_zero, Nat.zero_mul, Nat.zero_add] at this
+    simp only [Nat.zero_mul, Nat.zero_add] at this
     exact this
   rw [if_neg hr]
   have hpart : ∀ r s e : Nat, s ≤ e → e ≤ q.len →
-      posAll (if s < e then #[(⟨q.tgt, q.base + (r : Int) * q.rowStride + (s : Int) * q.stride, q.stride, e - s, 1, 0⟩ :
+      posAll (if s < e then #[(⟨q.tgt, q.base + q.rowOff r + (s : Int) * q.stride, q.stride, e - s, 1, 0, [], 0⟩ :
         Piece)] else #[]) = (List.range' (r * q.len + s) (e - s)).map fun t => (q.tgt, ppt q t) := by
     intro r s e h1 h2
     split
@@ -257,8 +281,7 @@ theorem slice_pos (q : Piece) (a b : Nat) (hb : b ≤ q.count) :
       omega
     have hlast := hpart r1 0 t1 (by omega) (by omega)
     rw [posAll_append, posAll_append, hlast, Nat.add_zero, Nat.sub_zero]
-    have hmid : ∀ lo, lo ≤ r1 → posAll (if lo < r1 then #[(⟨q.tgt, q.base + (lo : Int) * q.rowStride, q.stride, q.len,
-        r1 - lo, q.rowStride⟩ : Piece)] else #[]) =
+    have hmid : ∀ lo, lo ≤ r1 → posAll (if lo < r1 then #[q.rowsFrom lo (r1 - lo)] else #[]) =
         (List.range' (lo * q.len) (r1 * q.len - lo * q.len)).map fun t => (q.tgt, ppt q t) := by
       intro lo hlo2
       split

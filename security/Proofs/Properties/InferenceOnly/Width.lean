@@ -1589,7 +1589,7 @@ theorem ivPI_mem (L : Array (ℕ × ℕ)) (a : ℕ) :
 
 /-- `Piece.levelIvs`'s step at a level of radix `r` and step `d`. -/
 def lvStep (I : Ivs) (p : ℕ × ℤ) : Ivs :=
-  Ivs.norm ((Array.range p.1).flatMap fun c => I.map fun (x : ℕ × ℕ) =>
+  Ivs.norm ((Array.range p.1).flatMap fun (c : Nat) => I.map fun (x : ℕ × ℕ) =>
     (((x.1 : Int) + (c : Int) * p.2).toNat, ((x.2 : Int) + (c : Int) * p.2).toNat))
 
 theorem levelIvs_eq (q : Piece) : q.levelIvs = q.lv.foldl lvStep (Ivs.norm (PI.ivs (q.row 0).rowPis)) := rfl
@@ -1680,7 +1680,7 @@ theorem go_cons₂ (r : ℕ) (d : ℤ) (x : ℕ × ℤ) (xs : List (ℕ × ℤ))
 theorem go_zero : ∀ L : List (ℕ × ℤ), Flock.Program.Lane.leafAt.go L 0 = 0
   | [] => rfl
   | [(r, d)] => by simp [Flock.Program.Lane.leafAt.go]
-  | (r, d) :: x :: xs => by rw [go_cons₂, go_zero (x :: xs)]; simp
+  | (r, d) :: x :: xs => by rw [go_cons₂, Nat.zero_mod, Nat.zero_div, go_zero (x :: xs)]; simp
 
 /-- **A level's digits.** `Reach` is `R` shifted by the levels' offset at each period below their product. -/
 theorem reach_go : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop) (y : ℤ),
@@ -1691,7 +1691,7 @@ theorem reach_go : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop) (y : ℤ),
     · rintro ⟨n, hn, b, hb, rfl⟩
       simp only [prodL, List.foldl_nil, Nat.lt_one_iff] at hn
       subst hn
-      simpa [go_zero] using hb
+      simpa [go_zero, Reach] using hb
   | (r, d) :: L, R, y => by
     show Reach (shift R r d) L y ↔ _
     rw [reach_go L, prodL_cons]
@@ -1717,7 +1717,7 @@ theorem reach_go : ∀ (L : List (ℕ × ℤ)) (R : ℤ → Prop) (y : ℤ),
         ⟨n % r, Nat.mod_lt _ hr, b, hb, rfl⟩, ?_⟩
       rcases L with _ | ⟨x, xs⟩
       · simp only [prodL, List.foldl_nil, Nat.mul_one] at hn
-        simp [Flock.Program.Lane.leafAt.go, Nat.mod_eq_of_lt hn, Nat.div_eq_of_lt hn]
+        simp [Flock.Program.Lane.leafAt.go, Nat.mod_eq_of_lt hn]
       · rw [go_cons₂]; ring
 
 /-- **A whole lane's intervals are its elements.** Of a lane piece from period 0 through all its levels' periods, whose
