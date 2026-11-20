@@ -198,7 +198,7 @@ class _Builder:
         self.fns.setdefault(tid, fn)
         start = self.units.get(tid, 0)
         self.units[tid] = start + len(labels)
-        self.spans.setdefault(tid, []).extend((start + i, 1, *(label or (None, 0))) for i, label in enumerate(labels))
+        self.spans.setdefault(tid, []).extend((start + i, 1, *(label or (-1, 0))) for i, label in enumerate(labels))
         self.starts.setdefault(tid, []).append(start)
         return tid, start
 
@@ -394,13 +394,13 @@ def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> 
     """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, consecutive slots'
     runs of one length at one step side by side, are one entry (the slot from the first of them, then the run), and like
     entries that follow on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Units of
-    no request (slot None) are entries of no slot digit, a run each. Refused where a run's slot is at or past ``slots``."""
+    no request (slot -1) are entries of no slot digit, a run each. Refused where a run's slot is at or past ``slots``."""
     out = []
     for tid, spans_ in spans.items():
         merged: list[tuple[int, int, int, int]] = []
         loose: list[list[int]] = []
         for at, n, slot, step in sorted(spans_, key=lambda s: s[0]):
-            if slot is None:
+            if slot < 0:
                 if loose and loose[-1][0] + loose[-1][1] == at:
                     loose[-1][1] += n
                 else:

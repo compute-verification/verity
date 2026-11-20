@@ -637,7 +637,7 @@ class Rows:
 
     def record(self, win: IF.Window) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
-        labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
+        labelled ``{"step", "slot", "form"}`` (module docstring), a unit of no request's without ``slot``: each input by reference but an opening's ports, each port
         in its element width."""
         for tid, fn in self.fns.items():
             lay, steps, slots, node = self.lays[tid], self.steps(tid), self.slots(tid), self.node[tid]
@@ -648,7 +648,8 @@ class Rows:
                 ins = [None if p not in self.inputs[tid] else _elements(self.inputs[tid][p][a:b], w)
                        for (p, _), w in zip(lay.rows, ins_w)]
                 outs = [_elements(o[a:b], w) for o, w in zip(self.outs[tid], outs_w)]
-                win.record(fn, ins, outs, {"step": int(steps[a]), "slot": int(slots[a]), "form": FORMS[0 if node[a] else 1]})
+                slot = {"slot": int(slots[a])} if slots[a] >= 0 else {}
+                win.record(fn, ins, outs, {"step": int(steps[a]), **slot, "form": FORMS[0 if node[a] else 1]})
 
 
 def leaf_strings(win: IF.Window, key: RND.Key) -> dict[tuple[str, str], tuple[bytes, bytes]]:
