@@ -349,7 +349,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
     rc, why = (job.get("rc") or {}).get("tie"), (job.get("why") or {}).get("tie")
     if t is None or rc not in (None, "0") and not t.get("tie"):
         return {"verdict": "not run" if t is None and rc in (None, "2") else "failed", "why": why,
-                "in_the_clear": CLEAR["tie"]}
+                "summary": t is not None, "in_the_clear": CLEAR["tie"]}
     tie, link = t.get("tie") or {}, t.get("link") or {}
     honest, forged = tie.get("honest") or [], tie.get("forged") or []
     units = len(honest) * int(link.get("T") or 0)
@@ -412,7 +412,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
     if s is None or (rc not in (None, "0") and not any((m.get("windows") or [])
                                                         for m in (s.get("members") or {}).values())):
         return {"verdict": "not run" if s is None and rc in (None, "2") else "failed",
-                "why": why, "stand_in": stand_in, "in_the_clear": CLEAR["n2"]}
+                "why": why, "stand_in": stand_in, "summary": s is not None, "in_the_clear": CLEAR["n2"]}
     members = {}
     for name, m in (s.get("members") or {}).items():
         wins, escape = m.get("windows") or [], escaped(name, m, s)
@@ -461,7 +461,7 @@ def scan_step(s: dict | None, network_attester_run: str | None, job: dict | None
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
-                "why": scan_exit(s, job), "in_the_clear": CLEAR["scan"]}
+                "why": scan_exit(s, job), "summary": s is not None, "in_the_clear": CLEAR["scan"]}
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}

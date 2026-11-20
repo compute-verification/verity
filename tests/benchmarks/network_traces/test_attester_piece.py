@@ -387,23 +387,37 @@ def test_a_refused_chain_a_request_off_the_scans_phase_and_a_rejected_period_are
 #: a network attester chain's steps (`chain_record.report`'s) with every step accepted
 ACCEPTED_STEPS = {k: {"verdict": "accepted", "why": None}
                   for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan")}
-#: N2 crashed (its tool exited 1 with no summary: `chain_record.n2_step`'s ``failed``), every other step accepted
-CRASHED = ACCEPTED_STEPS | {"n2": {"verdict": "failed", "why": "N2ZK failed: NoBooleanBody"}}
+#: N2 crashed: its tool exited 1 and wrote no summary, every other step accepted
+CRASHED = ACCEPTED_STEPS | {"n2": CR.n2_step(None, {}, {"rc": {"n2": "1"}, "why": {"n2": "N2ZK failed: NoBooleanBody"}})}
+WINDOW = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
 
 
-def test_a_chain_step_that_crashed_is_not_run_and_one_that_refused_is_a_reject(tmp_path, network_attester):
-    """A step that failed or didn't run (``failed``, ``not run``, no verdict) is no verdict of the protocol: the piece
-    can't run (`NotRun`, naming the step and its why), never a reject. A step that ran and refused is the chain's
-    reject, beside a crashed one too, and every step accepted goes on to the period check."""
-    for step, v in (("n2", "failed"), ("tie", "not run"), ("scan", None)):
-        steps = ACCEPTED_STEPS | {step: {"verdict": v, "why": "it exited 1"}}
+def test_a_chain_step_whose_tool_wrote_no_summary_is_not_run_and_one_that_ran_to_anything_but_accepted_is_a_reject(
+        tmp_path, network_attester):
+    """A step whose tool wrote no summary is no verdict of the protocol: the piece can't run (`NotRun`, naming the
+    step and its why). A step whose tool ran is the chain's reject whatever it found short of accepted: refused, N2
+    with windows and not proved, the scan's rounds not as their kinds say, dry; so is a crashed step beside it. Every
+    step accepted goes on to the period check."""
+    scan_crashed = CR.scan_step(None, None, {"rc": {"scan": "1"}})
+    for step, got in (("n2", CRASHED["n2"]), ("tie", CR.tie_step(None)), ("scan", scan_crashed)):
+        assert got["verdict"] in ("failed", "not run"), got
         with pytest.raises(CP.NotRun, match=f"^the chain's {step} didn't run to a verdict: "):
-            _decide(tmp_path / step, network_attester, "refused", steps=steps)
-    refused = ACCEPTED_STEPS | {"tie": {"verdict": "refused", "why": "window 0's ingress isn't its request"}}
-    for name, steps in (("refused", refused), ("both", CRASHED | {"tie": refused["tie"]})):
+            _decide(tmp_path / step, network_attester, "refused", steps=ACCEPTED_STEPS | {step: got})
+    forged_accepted = CR.n2_step({"ok": True, "members": {
+        "honest": {"windows": [WINDOW], "network": {"accepted": True}},
+        "tampered": {"windows": [WINDOW], "network": {"accepted": True}}}}, {}, {"rc": {"n2": "0"}})
+    wrong = CR.scan_step({"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {"window_accepted": True}},
+                                                         "chain-0": {"audit": {"window_accepted": True}}}},
+                         "g1/network_attester", {"rc": {"scan": "0"}})
+    dry = CR.n2_step({"ok": True, "members": {"honest": {"windows": []}}}, {}, {"rc": {"n2": "0"}})
+    refused = {"verdict": "refused", "why": "window 0's ingress isn't its request"}
+    assert (forged_accepted["verdict"], wrong["verdict"], dry["verdict"]) == ("failed", "failed", "dry")
+    for name, steps in (("refused", ACCEPTED_STEPS | {"tie": refused}), ("both", CRASHED | {"tie": refused}),
+                        ("n2 not proved", ACCEPTED_STEPS | {"n2": forged_accepted}),
+                        ("scan wrong", ACCEPTED_STEPS | {"scan": wrong}),
+                        ("dry", ACCEPTED_STEPS | {"n2": dry}), ("dry beside crashed", CRASHED | {"scan": wrong})):
         a = _decide(tmp_path / name, network_attester, "refused", steps=steps)
-        assert a["verdict"] == "reject" and a["reason"].startswith('the chain refused: {"') and (
-            "refused: window 0's ingress isn't its request" in a["reason"]), a
+        assert a["verdict"] == "reject" and a["reason"].startswith('the chain refused: {"'), a
     accepted = CP.answer("accept", "")
     assert _decide(tmp_path / "accepted", network_attester, "accepted", steps=ACCEPTED_STEPS,
                    check=lambda c, p: accepted) == accepted
