@@ -1,6 +1,7 @@
 module
 
 public import Spot.OneStageZk
+public import Properties.Spot
 
 /-!
 # The per-member form holds every port of every member's statement (`Spot.OneStageZk.headerHeldAt`)
@@ -65,5 +66,26 @@ def MembersPortsHeld : Prop :=
         ∀ m ∈ ms, ∃ a hd reads held, m.statement (m.slice c.record roots) bs = .ok a ∧
           FilePart.header a.I.publicFile = .ok hd ∧ m.reads = .ok reads ∧ m.held = .ok held ∧
           PortsHeld reads held (m.slice c.record roots) hd
+
+/-- **`r` is the committed record `rec`'s root for the port `q`**: the record's `roots` hold exactly one root naming `q`
+(R3: no port twice), and `r` has its root, domain and leaves. -/
+def IsRecordRoot (rec : Json) (q : String) (r : Json) : Prop :=
+  ∃ r0 ∈ Properties.Spot.rootsOf rec, getD r0 "port" = .str q ∧ (∀ r1 ∈ Properties.Spot.rootsOf rec, getD r1 "port" = .str q → r1 = r0) ∧
+    getD r "root" = getD r0 "root" ∧ getD r "domain" = getD r0 "domain" ∧ getD r "leaves" = getD r0 "leaves"
+
+/-- **What the per-member form's check accepts reads each member's slice root as the record's root for its port**:
+every root of every member's slice (`OneStageZk.Member.slice`, at the roots `OneStageZk.membersRootsOf` returned) is
+the committed record's root for a port `q` (`IsRecordRoot`): the member's own port `<member>/<port>`, the tree the
+slice root names, or a window's tree of a template's field `<template>/<field>`, which a wired port reads. -/
+def MembersRootsRecord : Prop :=
+  ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
+    (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
+    (prof : Core.Integrity),
+    OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof →
+      ∃ roots, OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
+        ∀ m ∈ ms, ∀ r ∈ (match getD (m.slice c.record roots) "roots" with | .arr rs => rs | _ => #[]),
+          ∃ q, IsRecordRoot c.record q r ∧
+            ((∃ b, getD r "port" = .str b ∧ q = m.name ++ "/" ++ b) ∨ getD r "tree" = .str q ∨
+              ∃ t f, OneStageZk.templateOf q = some (t, f))
 
 end Properties.Spot
