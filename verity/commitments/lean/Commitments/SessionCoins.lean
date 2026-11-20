@@ -102,20 +102,21 @@ def pyJsonStr (s : String) : String := Id.run do
              else let m := n - 0x10000; out ++ "\\u" ++ hex4 (0xd800 + (m >>> 10)) ++ "\\u" ++ hex4 (0xdc00 + (m &&& 0x3ff))
   return out ++ "\""
 
-/-- The session commitment's header fields, in key order, as `SessionCommitment.header()` and `message` write them. -/
-def headerFields (session coinRoot coinKey binding : ByteArray) (blocks k limitNs blockBytes : Nat) :
+/-- The session commitment's header fields, in key order, as `SessionCommitment.header()` and `message` write them: the key
+only by its hash, which the header holds from before the session, the key itself being released after it. -/
+def headerFields (session coinRoot coinKeySha512 binding : ByteArray) (blocks k limitNs blockBytes : Nat) :
     List (String × String) :=
   [("binding", pyJsonStr (hexOf binding)), ("block_bytes", toString blockBytes), ("blocks", toString blocks),
-   ("clock", pyJsonStr CLOCK), ("coin_key_sha512", pyJsonStr (hexOf (Sha512.hash coinKey))),
+   ("clock", pyJsonStr CLOCK), ("coin_key_sha512", pyJsonStr (hexOf coinKeySha512)),
    ("coin_root", pyJsonStr (hexOf coinRoot)), ("coin_tree", pyJsonStr COIN_TREE), ("k", toString k),
    ("limit_ns", toString limitNs), ("protocol", pyJsonStr PROTOCOL), ("records", pyJsonStr RECORDS),
    ("session", pyJsonStr (hexOf session))]
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds, as
 `json.dumps(sort_keys=True, separators=(",", ":"))`. -/
-def header (session coinRoot coinKey binding : ByteArray) (blocks k limitNs blockBytes : Nat) (ended : String)
+def header (session coinRoot coinKeySha512 binding : ByteArray) (blocks k limitNs blockBytes : Nat) (ended : String)
     (rounds : Nat) : String :=
-  let fields := (headerFields session coinRoot coinKey binding blocks k limitNs blockBytes ++
+  let fields := (headerFields session coinRoot coinKeySha512 binding blocks k limitNs blockBytes ++
     [("ended", pyJsonStr ended), ("rounds", toString rounds)]).toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
