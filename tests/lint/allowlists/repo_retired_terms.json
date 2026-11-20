@@ -2747,7 +2747,6 @@
     {"file": "verity/protocols/resource_accounting/network/verifier/network_attester.py", "count": 47},
     {"file": "verity/protocols/resource_accounting/network/verifier/protocol/charge-chain.md", "count": 1},
     {"file": "verity/protocols/resource_accounting/network/verifier/relay_check.py", "count": 3},
-    {"file": "verity/protocols/resource_accounting/network/verifier/scan_answer.py", "count": 3},
     {"file": "verity/protocols/resource_accounting/network/verifier/service.py", "count": 3},
     {"file": "verity/protocols/workload_classification/training_detection/inference_only/verifier/README.md", "count": 2},
     {"file": "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean", "count": 49},
