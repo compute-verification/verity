@@ -672,6 +672,10 @@
    "descriptor_id": "DsaMqaLogit_v1{H=32,D=128}",
    "digest": "4b01774f3db9ced30b09256def437353c56825d13b63420fc2a1e191869521a553082b8d89d9620146423df2a2a476f323f8a2159ab9b1c3ec77ed1a86ebcec0"
   },
+  "DsaMqaLogit_v2{H=8,D=32}": {
+   "descriptor_id": "DsaMqaLogit_v2{H=8,D=32}",
+   "digest": "b0eb8e48a79603f47fa0d38ef0befe46d6e414a06a9d78edac781ac63b550ca6da813a9081f70bc7ce5049973e243d05df871a61231c714c70eaf8f2c5923f1f"
+  },
   "DsaTopKShortRow_v1{TOPK=2048}": {
    "descriptor_id": "DsaTopKShortRow_v1{TOPK=2048}",
    "digest": "8dd53d0bc5e2abf6c50426f3470ee6c6072f69543c1316bc21f015a6042a8b8c184e337a34a0697679ef688849e6e7e1d6f4d215f195a1aac77399490f87daab"
@@ -888,6 +892,7 @@
   "DsaIndexerQ_v1": "dsa",
   "DsaIndexerQ_v2": "boolean_dsa",
   "DsaMqaLogit_v1": "dsa",
+  "DsaMqaLogit_v2": "boolean_dsa",
   "DsaTopKShortRow_v1": "dsa",
   "DsaTopKShortRow_v2": "boolean_dsa",
   "DsaUe8m0Quant_v1": "dsa",
@@ -3898,6 +3903,7 @@
    "DsaIndexerQ_v1{H=32,D=128,ROPE=64}",
    "DsaIndexerQ_v2{H=2,D=32,ROPE=16}",
    "DsaMqaLogit_v1{H=32,D=128}",
+   "DsaMqaLogit_v2{H=8,D=32}",
    "DsaTopKShortRow_v1{TOPK=2048}",
    "DsaTopKShortRow_v2{TOPK=16}",
    "DsaUe8m0Quant_v1{N=128}",
@@ -4046,6 +4052,7 @@
    "GeluRef_v1{N=16,DT='bf16',APPROX='tanh'}",
    "GeluRef_v1{N=16,DT='f32',APPROX='tanh'}",
    "GeluTanhMulBf16_v1",
+   "GeluTanhMulBf16_v3",
    "GeluTanhMul_v1{I=16}",
    "GemmBiasCoordinate_v1{K=32}",
    "GemmBiasCoordinate_v2{K=32,DOT=AmpereBF16TcDot16_v2}",
@@ -4324,8 +4331,14 @@
    "MoeExpertCoordinate_v2{E=4,K=32,DOT=AmpereBF16TcDot16_v2}",
    "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=32,SWAP=False}",
    "MoeExpertFp8BlockCoordinateW_v1{K=64,G=32,KB=32,SWAP=True}",
+   "MoeExpertFp8BlockCoordinateW_v2{K=32,G=32,KB=32,SWAP=True}",
+   "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}",
    "MoeExpertFp8BlockCoordinate_v1{K=128,G=64,KB=32,SWAP=False}",
    "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=32,SWAP=False}",
+   "MoeExpertFp8BlockCoordinate_v2{K=32,G=32,KB=32,SWAP=False}",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}",
+   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}",
    "MoeExpertGemmW_v1{E=2,K=32,N=3}",
    "MoeExpertGemmW_v1{E=4,K=32,N=16}",
    "MoeExpertGemmW_v1{E=4,K=64,N=1}",
@@ -4765,6 +4778,7 @@
    "TanhBf16_v1",
    "TanhBf16_v2",
    "TanhF32Rn_v1",
+   "TanhF32Rn_v2",
    "TemperatureLane_v1",
    "TemperatureScaleGivenGreedy_v1{V=16}",
    "TemperatureScale_v1{V=16}",
