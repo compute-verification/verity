@@ -1920,20 +1920,25 @@ f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": list(do
 EOF
 }
 road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application lists them: each through its owner's
-  # launcher as step 4 runs it, each taking its own gpu-lease; on a node with no card, each refused as needing one
-  local only=() args=() c owner
-  [ "$POUW" != pearlplus ] || { only+=(pouw); args+=(--only pouw); }
-  [ -z "${POUS_CMD:-}" ] || { only+=(pous); args+=(--only pous); }
-  [ -z "${BANDWIDTH_CMD:-}" ] || { only+=(bandwidth); args+=(--only bandwidth); }
+  # launcher as step 4 runs it, each taking its own gpu-lease; on a node with no card nvidia-smi lists, each refused as
+  # needing one. A piece ran only where it exited 0 and its own answer has a verdict: a piece that answers nothing ran nothing
+  local only=() c step owner card=
+  [ "$POUW" != pearlplus ] || only+=(pouw)
+  [ -z "${POUS_CMD:-}" ] || only+=(pous)
+  [ -z "${BANDWIDTH_CMD:-}" ] || only+=(bandwidth)
   [ ${#only[@]} -gt 0 ] || return 0
-  if ! command -v gpu-lease > /dev/null; then
-    for c in "${only[@]}"; do
-      owner="memory accounting's"; [ "$c" != pouw ] || owner="compute accounting's"
-      step_refused "${c/#pouw/pearl-plus}" "needs a card: its piece takes its own gpu-lease, and this node has none: $owner"
-    done
-    return 0
-  fi
-  if pieces "${args[@]}"; then RAN+=("${only[@]/#pouw/pearl-plus}"); else FAILED+=("${only[@]/#pouw/pearl-plus}"); fi
+  if ! command -v gpu-lease > /dev/null; then card="this node has no gpu-lease"
+  elif ! nvidia-smi -L 2> /dev/null | grep -q '^GPU '; then card="nvidia-smi lists no card on this node"; fi
+  for c in "${only[@]}"; do
+    step=${c/#pouw/pearl-plus} owner="memory accounting's"; [ "$c" != pouw ] || owner="compute accounting's"
+    if [ -n "$card" ]; then step_refused "$step" "needs a card: its piece takes its own gpu-lease, and $card: $owner"; continue; fi
+    pieces --only "$c"
+    if "$PY" -c 'import json, pathlib, sys
+d = pathlib.Path(sys.argv[1])
+doc = next((json.loads((d / n).read_text()) for n in ("answer.json", "development.json") if (d / n).is_file()), {})
+sys.exit(0 if json.loads((d / "piece.json").read_text())["rc"] == 0 and doc.get("verdict") else 1)' "$OUT/pieces/$c" 2> /dev/null
+    then RAN+=("$step"); else FAILED+=("$step"); say "$step: its piece answered no verdict ($owner)"; fi
+  done
 }
 road_wipe() {  # the wipe runs under the serve's lease before its engine loads, so the road only reads what it answered
   [ -n "${WIPE_CMD:-}" ] || return 0

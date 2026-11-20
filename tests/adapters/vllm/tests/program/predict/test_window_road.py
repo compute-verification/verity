@@ -102,8 +102,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert "COMPILER: the record's registered compiler is predict row's: PASS" in log, log
     assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
             "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
-    assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has none: compute "
-            "accounting's") in log, log
+    assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
+            "compute accounting's") in log, log
     assert "record: not run:" in log and "composite: not run:" in log, log
     end = _end(log)
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
