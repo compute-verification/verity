@@ -561,7 +561,17 @@ def _check_domain(desc: dict) -> None:
 def program_digest(program_or_desc) -> str:
     """The program digest (PROTOCOL.md §1): SHA-512 of the canonical JSON of the schema, `program_fn`, `inputs`, the root's
     digest, the digests of the functions `program_fn`'s record names, and the Boolean map's body digests, each definition's
-    digest composed from its callees' (`definition_digests`).  ``annotations`` never enter it."""
+    digest composed from its callees' (`definition_digests`).  ``annotations`` never enter it.  A dict missing a key or a
+    reference the digest reads is no descriptor: ValueError."""
+    if not isinstance(program_or_desc, dict):
+        return _program_digest(program_or_desc)
+    try:
+        return _program_digest(program_or_desc)
+    except (KeyError, IndexError, TypeError, AttributeError) as e:
+        raise ValueError(f"program digest: not a {SCHEMA} descriptor ({type(e).__name__}: {e})") from e
+
+
+def _program_digest(program_or_desc) -> str:
     if isinstance(program_or_desc, dict):
         desc = program_or_desc
         schema, pfn, inputs, root, bm = desc["schema"], desc["program_fn"], desc.get("inputs"), desc["root"], desc.get("boolean", {})
