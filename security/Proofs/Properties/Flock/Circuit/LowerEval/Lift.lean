@@ -16,16 +16,15 @@ open Flock.Program hiding Form
 theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
   ⟨unitArgs_widths hd hr hov hG hu hR, unitOuts_widths hd hr hov hG hu hR⟩
 
-/-- **`LowerGateBodies`** (open): where the block's lowering (`blockTmpl`) succeeds, each Boolean Definition a node of the
-template `admitted` gives leads to evaluates through gates alone. `gateBodies_batch0` proves it for a template of
-word-primitive calls and axis-0 batches. -/
+/-- **`LowerGateBodies`**: where the block's lowering (`blockTmpl`) succeeds, each Boolean Definition the nodes of a
+composite reached from the template `admitted` gives lead to evaluates through gates alone. -/
 def LowerGateBodies : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) → Spot.OneStageZk.blockTmpl S a = .ok t →
-    GateBodies P a.d
+    GateBodiesDeep P a.d
 
 /-- **`UnitComputes`**, on `UnitWordComputes`, `LiftWordEval` and `LowerGateBodies`. -/
 theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) (hLG : LowerGateBodies) : UnitComputes := by
@@ -941,6 +940,24 @@ inductive Batch0Nested (P : Prog) : ℕ → Prop
         Batch0Nested P nd.fn) →
       Batch0Nested P d
 
+theorem reach_batch0 {P : Prog} {d y : ℕ} (h : Batch0 P d) (hy : Reach P d y) : y = d ∨ (P.defs[y]!).prim = true := by
+  induction hy with
+  | root => exact Or.inl rfl
+  | callee _ hp hn ih =>
+    rcases ih with rfl | hpt
+    · have := (h.2 _ hn).2
+      simp only [isWordPrim, Bool.and_eq_true] at this
+      exact Or.inr this.1.1
+    · rw [hpt] at hp; cases hp
+
+/-- For a template of word-primitive calls and axis-0 batches, `GateBodiesDeep` is `GateBodies`: the only composite
+reached from it is itself. -/
+theorem gateBodiesDeep_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) : GateBodiesDeep P d ↔ GateBodies P d :=
+  ⟨gateBodies_of_deep h.1, fun hg y hy hp => by
+    rcases reach_batch0 h hy with rfl | hpt
+    · exact hg
+    · rw [hpt] at hp; cases hp⟩
+
 theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (P.defs[d]!).body.nodes.size) :
     Batch0Nested P d :=
   .mk h.1 hn (fun nd hnd => (h.2 nd hnd).1)
@@ -966,17 +983,6 @@ def LiftPlaces : Prop :=
     Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → PrimNodes S d → 0 < (S.defs[d]!).body.nodes.size →
     S.defs.size ≤ e ∧ ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
       ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
-
-/-- **`LiftWordNodes`** (open): the lift to bits of a composite `d` one of whose nodes calls a word primitive places `d`
-lifted at the index the lift returns, each node calling a word primitive calling that primitive's Boolean Definition
-(`Prog.bodyOf?`), whatever the node's form. -/
-def LiftWordNodes : Prop :=
-  ∀ (S L : Prog) (d e : ℕ), (∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true) →
-    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → (S.defs[d]!).prim = false →
-    (∃ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true) →
-    ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
-      ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
-        S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
 
 /-- **`LiftCalls`**, on `LiftPlaces`. -/
 theorem liftCalls_of (h : LiftPlaces) : LiftCalls := fun S L d e hc hl hd hp hn => by

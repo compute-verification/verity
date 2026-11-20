@@ -13,12 +13,6 @@ namespace Flock.Chain
 open Flock.Program
 open Std.Do
 set_option mvcgen.warning false
-/-- Definitions the lift's walk from `d` reaches: `d`, and each callee of a reached composite. -/
-inductive Reach (S : Prog) (d : ℕ) : ℕ → Prop
-  | root : Reach S d d
-  | callee {y : ℕ} {nd : Node} : Reach S d y → (S.defs[y]!).prim = false → nd ∈ (S.defs[y]!).body.nodes →
-      Reach S d nd.fn
-
 /-- Definition `x` reaches a word primitive: it is one, or it is a composite with a node whose callee reaches one. -/
 inductive ReachesWord (S : Prog) : ℕ → Prop
   | word {x : ℕ} : isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → ReachesWord S x

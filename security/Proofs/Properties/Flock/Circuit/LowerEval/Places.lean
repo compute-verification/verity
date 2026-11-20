@@ -377,17 +377,6 @@ theorem liftPlaces : LiftPlaces := by
     exc_of_triple (closure_places S d hd hp.1 ⟨_, Array.getElem_mem hn, hp.2 _ (Array.getElem_mem hn)⟩) hc
   exact ⟨hle, fnOf, primOf, gatesOf, hde, fun nd hnd => hfn nd hnd (hp.2 nd hnd)⟩
 
-/-- **`LiftWordNodes`** holds. -/
-theorem liftWordNodes : LiftWordNodes := by
-  intro S L d e _ h hd hp1 hex
-  unfold Flock.Lift.lift at h
-  rcases hc : Flock.Lift.closure S #[d] with _ | ⟨Q, fnOf⟩
-  · rw [hc] at h; simp [bind, Except.bind] at h
-  rw [hc] at h
-  have h' : (Q, fnOf d) = (L, e) := by simpa [bind, Except.bind, pure, Except.pure] using h
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h'
-  exact (exc_of_triple (closure_places S d hd hp1 hex) hc).2
-
 /-- **`LiftCalls`** holds. -/
 theorem liftCalls : LiftCalls := liftCalls_of liftPlaces
 

@@ -1182,6 +1182,21 @@ theorem gateDef_prefix {P L : Prog} (hpre : ∀ i < P.defs.size, L.defs[i]! = P.
 def GateBodies (P : Prog) (d : ℕ) : Prop :=
   ∀ nd ∈ (P.defs[d]!).body.nodes, ∀ b, P.bodyOf? (P.defs[nd.fn]!).key = some b → GateDef P b
 
+/-- The Definitions reached from `d` through composites: `d`, and each callee of a reached composite. -/
+inductive Reach (S : Prog) (d : ℕ) : ℕ → Prop
+  | root : Reach S d d
+  | callee {y : ℕ} {nd : Node} : Reach S d y → (S.defs[y]!).prim = false → nd ∈ (S.defs[y]!).body.nodes →
+      Reach S d nd.fn
+
+/-- Each Boolean Definition a node of a composite reached from `d` leads to evaluates through gates alone (`GateBodies` at
+every reached composite). -/
+def GateBodiesDeep (P : Prog) (d : ℕ) : Prop :=
+  ∀ y, Reach P d y → (P.defs[y]!).prim = false → GateBodies P y
+
+theorem gateBodies_of_deep {P : Prog} {d : ℕ} (hp : (P.defs[d]!).prim = false) (h : GateBodiesDeep P d) :
+    GateBodies P d :=
+  h d .root hp
+
 end GateDefs
 
 /-- **`UnitComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
@@ -1505,13 +1520,13 @@ def UnitWidths : Prop :=
 
 /-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
 `g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`), where C is topological, its gates
-are located, `g` resolves, as `UnitWidths` reads, and each Boolean Definition its callee's nodes lead to evaluates
-through gates alone (`GateBodies`). -/
+are located, `g` resolves, as `UnitWidths` reads, and each Boolean Definition the nodes of a composite reached from its
+callee lead to evaluates through gates alone (`GateBodiesDeep`). -/
 def UnitWordComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
-      GateBodies P (P.child P.rootScope k m).d →
+      GateBodiesDeep P (P.child P.rootScope k m).d →
       ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
@@ -1519,13 +1534,13 @@ def UnitWordComputes : Prop :=
 
 /-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of the template `admitted` gives, a Definition of C
 taken in the block's Program, evaluated on bits (`Prog.evalBool`), is C's value of it on words (`wordEval`), bit for
-bit, on words of its parameter leaf widths, where each Boolean Definition its nodes lead to evaluates through gates
-alone (`GateBodies`). -/
+bit, on words of its parameter leaf widths, where each Boolean Definition the nodes of a composite reached from it lead
+to evaluates through gates alone (`GateBodiesDeep`). -/
 def LiftWordEval : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
     decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) → GateBodies P a.d →
+    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) → GateBodiesDeep P a.d →
     ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[a.d]!) →
       Prog.evalBool L e x.flatten = (wordEval P a.d x).flatten
 
