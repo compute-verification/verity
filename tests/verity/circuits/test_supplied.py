@@ -361,8 +361,7 @@ ORDER_REFUSALS = [
 ]
 #: the same marks in an order that holds: the commitment's place before the coin's
 ORDER_HOLDS = [("a commitment before its coin", (ROUND_0, HEADER_0), held(place=0), {ROUND: 1}),
-               ("a commitment held and no coin read", (HEADER_0,), held(place=7), {}),
-               ("a coin read with no commitment held", (ROUND_0,), ({ROUND: held()[0][ROUND]}, {}), {})]
+               ("a commitment held and no coin read", (HEADER_0,), held(place=7), {})]
 
 
 def order_of(marks, tables, released):
@@ -381,6 +380,11 @@ def test_a_commitment_must_precede_the_coin_it_is_read_beside(name, marks, table
 @pytest.mark.parametrize("name, marks, tables, released", ORDER_HOLDS, ids=[r[0] for r in ORDER_HOLDS])
 def test_the_order_that_holds_is_accepted(name, marks, tables, released):
     order_of(marks, tables, released)
+
+
+def test_a_coin_with_no_commitment_held_has_nothing_to_follow():
+    """The order rule alone (the round coin's body refuses what it holds no commitment of, which the program's check does)."""
+    order_of((ROUND_0,), ({ROUND: held()[0][ROUND]}, {}), {})
 
 
 def test_an_unread_commitment_or_coin_has_no_place_to_hold():
