@@ -611,9 +611,9 @@ check failed: under pads `h + v` a stopped rep releases byte for byte what the h
 (`Flock.ZkServer.Session.relay`) ends it where the prover closes its connection or sends a frame the loop can't read, and
 closes the auditor's connection there, so the auditor sees how many of the session's frames reached it. A release therefore
 also leaks its end position: a session of `M` messages has up to `M + 1` stops beside its finish, `log₂(M + 2)` bits rather
-than one. It is counted by position, as `Flock.Guarantees.RecursiveZKLoopAnySum` counts a recursive session's stops
-(`1 + Σ_p (M_p + 1)`, `LoopAny.card_loopStops`), and the bound that holds at a prover that cuts is §10.5's (its table's first
-row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack. It
+than one. It is counted by position: a recursive session's stops number `1 + Σ_p (M_p + 1)`, and the bound that holds at a prover
+that cuts is §10.5's (its table's first row a recursive session, and its bound over a stream); no guarantee of the lock
+states that count. A ZK server that refuses is evidence against its rack. It
 never stops serving for good after failed sessions: a worker chooses its sessions' verdicts, so the leak is bounded per
 outcome of each session, and is not capped over a monitoring period (`Flock.Guarantees.SessionLoopZKAnyDeployed`).
 

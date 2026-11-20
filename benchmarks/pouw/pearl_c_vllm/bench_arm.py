@@ -15,8 +15,8 @@ setting exposes.
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
 `runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
-against x·Wᵀ within `ERR` rel RMS, the same call twice with equal tile digests under different roots (its salts are
-fresh), and the ``hash_leaf``-omitted negative control changing the tile digests (`e2e.call_verdict`).
+against x·Wᵀ within `ERR` rel RMS, and the same call twice with equal tile digests under different roots (its salts
+are fresh; `e2e.call_verdict`).
 
 Env: ``PEARLC_KERNEL`` (default the tree's directory of the kernel scheme on the card, `kernel_directory`), ``PEARLC_CUBIN``
 (default the directory's build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the
@@ -341,8 +341,8 @@ class PearlCArm:
         self.run, self.stack, self.weights = run, stack, weights
 
     def gate(self, target: Any) -> dict[str, Any]:
-        """`e2e.gate`'s call check (`e2e.call_checks`, each pass on a twin of the run): y against x·Wᵀ, the call twice under
-        the salt, and the negative control."""
+        """`e2e.gate`'s call check (`e2e.call_checks`, each pass on a twin of the run): y against x·Wᵀ and the call twice under
+        the salt."""
         import torch
 
         run, weights, e2e = self.run, self.weights, _e2e()

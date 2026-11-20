@@ -4,6 +4,7 @@ the deployment's registration, its second W and its last the window's registrati
 test of the step, not a result."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -17,11 +18,28 @@ import pytest
 import rate_limits as L
 import record as R
 import report
-from test_served_record import DEV_WHY, _run, case, made, no_out, stand_in  # noqa: F401
+from test_served_record import DEV_WHY, _run, _vectors, made, no_out, stand_in  # noqa: F401
+
+from verity.commitments.periods import interface as IF
 
 SCHEME = "pearl-c-made"
 PHI = {"model": B.MODEL, "revision": "made", "execution": "bi-eager", "target": {}}
 DAY = "2000-01-01"
+PARTITION, RUN = "0f" * 64, "1e" * 64
+
+
+@pytest.fixture(scope="module")
+def case() -> dict:
+    """The record check's shaped case (`test_served_record.case`) with its circuit record and R naming one partition and
+    one run (`interface.tied_record`), which the generator's pinned case leaves out."""
+    V = _vectors()
+    c = copy.deepcopy({m["shape"]: m for m in V.shaped()}["2x3 registered"]["case"])
+    tr = c["trusted"]
+    reg = tr["log"][[V.reference.record_digest(r) for r in tr["log"]].index(tr["run"])]
+    reg["partition"], reg["window"]["run"] = PARTITION, RUN
+    tr["run"] = V.reference.record_digest(reg)
+    V._commit(c, IF.circuit_bytes({**json.loads(c["instance"]["record"]), "partition": PARTITION, "run": RUN}).decode())
+    return c
 
 
 def tied(case: dict, where: Path, *, accept: bool = True, limits: bool = False) -> dict:
@@ -104,6 +122,8 @@ def test_the_limits_assemble_fixes_from_the_policy_are_judged_and_refused_on_the
 
 def test_without_R_the_log_ends_at_W_so_an_accept_tied_to_W_is_refused_and_the_check_refuses_the_rest(
         case, tmp_path, stand_in, capsys) -> None:
+    """Without R no count is written, so the record is refused for the count's limits it lacks, before its verdict's tie
+    is read (`test_served_record`'s refusals hold that tie)."""
     names = tied(case, tmp_path, limits=True)
     calls: list = []
     said = _assemble(case, tmp_path, {"first": names["first"]}, calls=calls)
@@ -113,12 +133,7 @@ def test_without_R_the_log_ends_at_W_so_an_accept_tied_to_W_is_refused_and_the_c
     capsys.readouterr()
     with pytest.raises(SystemExit):
         _run(["--from", str(tmp_path)], stand_in)
-    assert "the verdict is about another record than the check's" in capsys.readouterr().err
-    dev = tmp_path / "dev"
-    _assemble(case, dev, {"first": tied(case, dev, accept=False, limits=True)["first"]})
-    capsys.readouterr()
-    code, doc = _run(["--from", str(dev)], stand_in)
-    assert (code, doc["value"]) == (1, None) and doc["record"]["no_number"].startswith("the check refused the record")
+    assert "the run wrote no count's limits" in capsys.readouterr().err
 
 
 def test_a_program_rebuilt_to_another_digest_is_refused_before_anything_is_written(case, tmp_path) -> None:

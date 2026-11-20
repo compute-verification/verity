@@ -35,8 +35,11 @@ the blobs' pinned tables among the names its circuit looks up (`ownTables_ok`), 
 by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those tables and no other (`statement_tables`,
 `checkBlobsAt_members_tables`).
 
-`tablesRegistered_honest` is its honest lemma: where the circuit file derived from C and the partition looks up
-`rcp`, blobs holding `rcp`'s table (`honestBlobs`) pass the refusal. `tablesRegistered_nontrivial` is its
+`tablesRegistered_honest` is a conditional lemma, not an honest witness: where the circuit file derived from C and the
+partition of any `p` is `honestCircuit`, blobs holding `rcp`'s table (`honestBlobs`) pass the refusal. It ranges over
+`p` and takes the file's equality as a hypothesis, which an honest witness may not, and no `Own` is shown to meet it: the
+file `Own.circuitFile` derives carries the Definition's and the partition's SHA-512 digests (`Spot.lowerBlock`), which the
+kernel does not reduce, so no concrete instance's derived file is a kernel theorem. `tablesRegistered_nontrivial` is its
 nontrivial lemma: blobs holding `rcp`'s table (`tableBlobs`) don't hold the tables of `witnessOwn`, whose partition has
 no blocks, so `Spot.OneStageZk.restrictOn` refuses its circuit file by name, and so a check that accepts every input, as one without the refusal does there, does not have
 `TablesRegistered`'s conclusion. The kernel evaluates the lookups on the witnesses' circuit files (`decide +kernel`),
@@ -230,8 +233,9 @@ private theorem table_lookups : OneStageZk.lookupsOf tableCircuit = .ok [] := by
   rw [metaOf_of (n1 := 7) (by decide +kernel) (by decide +kernel) table_trim (by decide +kernel)]
   decide +kernel
 
-/-- **`TablesRegistered`'s honest lemma**: where the circuit file derived from C and the partition of `p` looks up
-`rcp`, blobs holding `rcp`'s table pass v2's refusal. -/
+/-- Where the circuit file derived from C and the partition of `p` is `honestCircuit`, which looks up `rcp`, blobs
+holding `rcp`'s table pass v2's refusal. A conditional lemma: no honest instance of `TablesRegistered` is stated in
+Lean (module docstring). -/
 theorem tablesRegistered_honest {p : OneStageZk.Own} (hc : p.circuitFile = .ok honestCircuit) :
     OneStageZk.tablesHeld p honestBlobs = .ok () := by
   refine tablesHeld_of hc ?_
