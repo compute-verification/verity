@@ -25,6 +25,8 @@ import decode_difftest as C  # noqa: E402
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 CASES = C.cases()
+TEXTS = json.loads((Path(__file__).parent / "lean_decode_texts.json").read_text())
+REWRITE = "Lean's refusal differs from the pinned text; a change meant to move it rewrites `lean_decode_texts.json` with `write_lean_texts.py`"
 REGISTRY = {text: registry for _, text, registry in CASES}
 
 
@@ -49,6 +51,13 @@ LEAN_TAKES = ("refusal: a primitive with ports the registry lacks", "refusal: a 
 def test_decode_agrees(server, name):
     text = next(t for n, t, _ in CASES if n == name)
     assert D.replay(DECODE, {"descriptor": text}, server)[0] == "output"
+
+
+@pytest.mark.parametrize("name", [n for n, _, _ in CASES])
+def test_leans_refusal_text_is_the_pinned_one(server, name):
+    text = next(t for n, t, _ in CASES if n == name)
+    verdict = json.loads(server.call("decode_text", {"descriptor": text})[1])
+    assert verdict.get("message") == TEXTS.get(name), REWRITE
 
 
 @pytest.mark.parametrize("name", LEAN_TAKES)
