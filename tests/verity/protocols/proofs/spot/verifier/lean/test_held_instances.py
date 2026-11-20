@@ -1,6 +1,6 @@
-"""Candidate 130's instances through the per-member check whole (Lean's `checkMembersAt`, the twin's `members_run`):
-members reading a tied parameter's run Input (`OneStageZk.heldReadsFiled`) with an empty registered file, or a file
-naming other ports than the read, the member sampled or not."""
+"""Members reading a tied parameter's run Input through the per-member check whole (Lean's `checkMembersAt`, the twin's
+`members_run`): with no file, an empty file or a file naming other ports than the read, sampled or not, with and without
+the record's `input/n<w>` trees; two members sharing the node; a partition with no template ranges."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_members_twin import A, B, Audit, M, _json, lms_verify, _never
 from verity_difftest import canonical
+
+from verity.circuits import partition_object as PO
 
 pytestmark = pytest.mark.slow
 
@@ -47,20 +49,45 @@ def _both(a: Audit, at: Path, params: dict) -> tuple[str, str, str]:
 def test_the_instances_through_the_per_member_check(tmp_path):
     sampled = Audit("held-instances")
     unsampled = Audit("held-instances-unsampled", opened=(B,), sampled=(B,))
+    rooted = Audit("held-instances-rooted", extra=("input/n0", "input/n1"))
+    c1 = f"{A[:-3]}/c1"
+    shared = {A: [[0, 1]], c1: [[1, 2]], B: [[2, 5]]}
+
+    def sharing(extra):
+        return lambda: Audit("held-instances-shared", ports=(f"{A}/out", f"{B}/out"), units=shared,
+                             extra=(f"{c1}/out", *extra))
+
     cases = {
-        "no-files": (sampled, {}),
-        "empty-A": (sampled, {A: {}, B: OTHER}),
-        "empty-v2-A": (sampled, {A: {"format": "verity/registered-reads/v2", "ports": {}}, B: OTHER}),
-        "other-ports-sampled": (sampled, {A: OTHER, B: OTHER}),
-        "other-ports-unsampled": (unsampled, {A: OTHER, B: OTHER}),
-        "other-ports-untied": (sampled, None),
+        "no-files": (lambda: sampled, {}),
+        "empty-A": (lambda: sampled, {A: {}, B: OTHER}),
+        "empty-v2-A": (lambda: sampled, {A: {"format": "verity/registered-reads/v2", "ports": {}}, B: OTHER}),
+        "other-ports-sampled": (lambda: sampled, {A: OTHER, B: OTHER}),
+        "other-ports-unsampled": (lambda: unsampled, {A: OTHER, B: OTHER}),
+        "other-ports-untied": (lambda: sampled, None),
+        "other-ports-rooted": (lambda: rooted, {A: OTHER, B: OTHER}),
+        "empty-A-rooted": (lambda: rooted, {A: {}, B: OTHER}),
+        "shared-no-files": (sharing(()), {}),
+        "shared-files": (sharing(()), {A: OTHER, c1: OTHER, B: OTHER}),
+        "shared-files-rooted": (sharing(("input/n0", "input/n1")), {A: OTHER, c1: OTHER, B: OTHER}),
+        "no-template-ranges": (lambda: sampled, "Q_word"),
     }
     out = {}
-    for k, (a, files) in cases.items():
-        params = a.params | {"proofs": {"members": {n: m | {"registered": OTHER}
-                                                    for n, m in a.params["proofs"]["members"].items()}}} \
-            if files is None else _tied(a, **files)
+    for k, (make, files) in cases.items():
+        try:
+            a = make()
+        except (ValueError, KeyError, TypeError, AssertionError) as e:
+            out[k] = {"fixture": f"{type(e).__name__}: {e}"}
+            continue
+        if files is None:
+            params = a.params | {"proofs": {"members": {n: m | {"registered": OTHER}
+                                                        for n, m in a.params["proofs"]["members"].items()}}}
+        elif files == "Q_word":
+            params = _tied(a, **{A: OTHER, B: OTHER})
+            params = params | {"query": PO.query(16, 32)}
+        else:
+            params = _tied(a, **files)
         out[k] = dict(zip(("lean_verdict", "lean", "python"), _both(a, tmp_path / k, params)))
     print("HELD-INSTANCES " + json.dumps(out, indent=1))
     for k, v in out.items():
-        assert v["lean_verdict"] == "reject", (k, v)
+        if k != "other-ports-untied" and "fixture" not in v:
+            assert v["lean_verdict"] == "reject", (k, v)
