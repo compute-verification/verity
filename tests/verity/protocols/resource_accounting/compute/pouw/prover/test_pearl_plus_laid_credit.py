@@ -132,3 +132,30 @@ def test_strata_whose_blocks_are_not_the_laid_units_or_a_c_of_no_tile_are_refuse
         PS.laid_tiles(program, laid, strata[1:])
     with pytest.raises(ValueError, match=PS.TILE_ABSENT):
         PS.laid_tiles(laid, laid, strata)
+
+
+@pytest.mark.slow
+def test_a_unit_with_the_tiles_id_and_statics_and_another_body_is_refused(c) -> None:
+    """Slow: the forged unit's body calls the tile's noise and core, which only the module's built tiles make cheap. A
+    unit carrying the tile's id and statics, its body the tile's with F_A's and F_B's lines swapped into the core, is
+    refused at the reader, not credited its statics' MACs."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+
+    ts, *_ = c
+    real = ts[0].core
+
+    def swapped(B, S, a, b, cert, salt, root, unit, rows, col):
+        eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col)
+        return B.call(PC._wired(S), a, b, cert, salt, root, unit, rows, eb, fb, fa, g)
+
+    forged = bind(CompositeDefinition("PearlPlusTileCoreWords", 5, PC._STATICS, PC.PearlPlusTileCoreWords.signature,
+                                      swapped, register=False), **real.bindings)
+    assert descriptor_id(forged) == descriptor_id(real) and PS.foreign_tile(real) is None
+    sig, ret = forged.signature()
+    root = CompositeDefinition("PearlPlusForgedTileC", 1, (), lambda S: (sig, ret),
+                               lambda B, S, *xs: B.call(forged, *xs), register=False)
+    program = Program(root, registered=[v for v, _ in sig])
+    limit = ands(bind(PC.PearlPlusTileCoreWired, **real.bindings))
+    laid = LY.lay(program, lambda _ins, _outs, a: a < limit)
+    with pytest.raises(ValueError, match=PS.TILE_FOREIGN):
+        PS.laid_tiles(program, laid, PQ.strata(laid, LY.query(laid)))

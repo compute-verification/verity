@@ -114,10 +114,12 @@ def drawn_blocks(scheme: Any, passes: Sequence[Sequence[Any]], key: Any, t: int,
 TILE = "PearlPlusTileCoreWords_v5"
 #: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
-#: of the laid C lies partly inside a tile's gates, so the rule places it in no tile
+#: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
+#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
+TILE_FOREIGN = "tile-body-foreign"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
 #: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
 AUDIT_SHORT = "tile-audit-short"
@@ -138,13 +140,62 @@ class LaidTile:
     kinds: Mapping[str, int]
 
 
+def foreign_tile(fn: Any) -> str | None:
+    """Why ``fn``, a root unit's Definition carrying `TILE`'s id, is not the registry's `TILE` bound at its statics, or
+    None when it is: the registry's own object, or one whose Definition and every Definition it reaches (its body's
+    callees and the functions its statics bind, down to the primitives) have the registry's ids and definition digests
+    (`codec.definition_digest`), compared pairwise from the root."""
+    from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
+    from verity.circuits.defs import REGISTRY, FunctionDefinition, SpecializedDefinition, bind
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited  # noqa: F401
+
+    def reached(f: SpecializedDefinition) -> list[Any]:
+        def fns(v: Any) -> list[Any]:
+            if isinstance(v, FunctionDefinition):
+                return [v]
+            if isinstance(v, (list, tuple)):
+                return [g for x in v for g in fns(x)]
+            if isinstance(v, dict):
+                return [g for x in v.values() for g in fns(x)]
+            return []
+        return [nd.fn for nd in f.body.nodes] + fns([f.bindings[k] for k in f.defn.statics])
+
+    if not isinstance(fn, SpecializedDefinition) or fn.base_id != TILE:
+        return f"it is {getattr(fn, 'id', fn)!r}, no binding of {TILE}"
+    try:
+        want = bind(REGISTRY.defs[TILE], **fn.bindings)
+    except (TypeError, ValueError, KeyError) as e:
+        return f"the registry's {TILE} binds no such statics ({e})"
+    seen: set[str] = set()
+    todo = [(fn, want)]
+    while todo:
+        f, w = todo.pop()
+        if f is w:
+            continue
+        i, j = descriptor_id(f), descriptor_id(w)
+        if i != j:
+            return f"it reaches {i} where the registry's reaches {j}"
+        if i in seen:
+            continue
+        seen.add(i)
+        if definition_digest(definition_entry(f)) != definition_digest(definition_entry(w)):
+            return f"its {i} is not the registry's (definition digests differ)"
+        if isinstance(f, SpecializedDefinition):
+            fs, ws = reached(f), reached(w)
+            if len(fs) != len(ws):
+                return f"its {i} reaches {len(fs)} Definitions where the registry's reaches {len(ws)}"
+            todo += zip(fs, ws)
+    return None
+
+
 def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[LaidTile]:
     """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of ``laid`` (C as
     `verity.circuits.laying.lay` lays it) that it holds, by a public rule from the laying: since laying keeps C's gates in
     C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do. ``strata`` are
     the laid C's (`verity.circuits.partition_query.strata` under its template-instance query): their blocks must be its
     root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), no unit may lie partly in a tile
-    (`TILE_STRADDLES`), and C must hold a tile (`TILE_ABSENT`)."""
+    (`TILE_STRADDLES`), C must hold a tile (`TILE_ABSENT`), and each tile must be the registry's `TILE` at its statics,
+    its body and every Definition it reaches (`TILE_FOREIGN`, `foreign_tile`)."""
     import bisect
 
     from verity.circuits import laying as LY
@@ -166,6 +217,10 @@ def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Seq
              for m in range(n)]
     if not tiles:
         raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
+    for u, fn in tiles:
+        if why := foreign_tile(fn):
+            raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
+                             "are not what it computes")
     spans = [before.gates(u) for u, _fn in tiles]
     starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
     held: list[list[int]] = [[] for _ in tiles]
