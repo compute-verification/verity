@@ -207,7 +207,7 @@ class Lowered:
     requests: tuple[int, ...] | None = None
     empty: tuple[tuple[int, int, tuple[str, int], tuple[str, int]], ...] = ()
     scans: tuple[tuple[int, int, tuple[str, int]], ...] = ()
-    unprovable: dict[str, str] = field(default_factory=dict)
+    unprovable: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def cut(self) -> frozenset[int]:
@@ -410,7 +410,7 @@ def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any
     """A served window compiled and its circuit lowered, the one call the serve's close and the window commit make: I2's
     Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`, with each Program's names under
     ``named``), their requests within ``cls`` (`takes`), the circuit (`lower`), refused (`Unexpressible`) where the door
-    wouldn't take a template, and with the templates under the prover's floor named in ``unprovable`` (`check_served`). ->
+    wouldn't take a template, and with each template the door cannot prove named by reason in ``unprovable`` (`check_served`). ->
     the compile (its requests' ids and arrivals, which place the slots) and the lowering."""
     compiled = compile_steps(registered, advice, ingress, named=named)
     low = lower(registered, cls, None, grain, requests=takes(compiled, cls, placed))

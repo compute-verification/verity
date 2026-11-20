@@ -97,7 +97,8 @@ got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else
 p = got[-1] if got else {"error": "no plan line"}
 why = p.get("refused") or p.get("error") or p.get("pending")
 print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}, seconds {json.dumps(p.get('seconds'))}, "
-      f"unprovable alone {len(p.get('unprovable_alone') or [])}: {' '.join(p.get('unprovable_alone') or [])}"))
+      "unprovable " + ("; ".join(f"{why} {len(u['templates'])} templates, {u['units']} units: {' '.join(u['templates'])}"
+                                 for why, u in (p.get('unprovable') or {}).items()) or "none named")))
 h = p.get("handoff") or {"error": "no handoff"}
 print(f"WINDOW-HANDOFF window {k}: " + (f"none, {str(h['error'])[:200]}" if "error" in h else
       f"{h['ports']} ports, {h['units']} units hashed by {h['where']} in {h['s']} s under the lease, files {' '.join(h['files'])}"))

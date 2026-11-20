@@ -11,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity.circuits.codec import descriptor_id
+
 from verity_vllm.pipeline import advice as ADV
 
 from . import window_circuit as WC
@@ -28,8 +30,8 @@ class ClosePlan:
     Program written beside the window's seal (`naming.write_build`, under `steps.trace_dir`'s name); without it the outcome
     names the circuit's templates and units alone. Given a ``record``, its card's part (`Record.handoff`: the acquired units'
     strings, made where they are committed) runs at the close, and its record there too only ``in_lease``; else
-    `close_record.finish` makes it once the card is released, and the outcome says so by name. Either names, in ``unprovable_alone``, the templates `check_served` finds
-    under the prover's floor, which stay in the circuit and its sample. A window whose advice is pending or refused, or that
+    `close_record.finish` makes it once the card is released, and the outcome says so by name. Either names, in ``unprovable``, each template `check_served` finds the door
+    cannot prove, by reason, with its units; they stay in the circuit and its sample. A window whose advice is pending or refused, or that
     the class doesn't take, has no circuit and says why."""
 
     def __init__(self, out: Path, cls: Any, *, registered: Any = None, compiler: Any = None, grain: Any = None,
@@ -75,7 +77,9 @@ class ClosePlan:
                                                named=binding is not None)
         except (Unexpressible, ValueError) as e:
             return {**got, "refused": f"{type(e).__name__}: {e}"[:500]}
-        got["unprovable_alone"] = sorted(low.unprovable)
+        units = {descriptor_id(fn): n for fn, n in low.circuit.templates}
+        got["unprovable"] = {why: {"templates": named, "units": sum(units[t] for t in named)}
+                             for why, named in low.unprovable.items()}
         lowered = time.perf_counter()
         if binding is None:
             self.held[window] = (compiled, low, None)
