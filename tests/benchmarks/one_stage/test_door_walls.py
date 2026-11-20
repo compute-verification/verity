@@ -6,6 +6,7 @@ lowering, an honest block passes the row check, the same block flags a planted w
 kept (`SEEDS`) is still open, under a strict mark that fails once it is mended."""
 from __future__ import annotations
 
+import json
 import random
 import shutil
 import sys
@@ -148,3 +149,48 @@ def test_each_seed_reaches_the_door_and_its_rows_hold(what, spec, seed, klass):
     found = {f.klass for f in W.check_case(W.Spec(**spec), W._exe(None), seed)}
     assert klass not in found, found
     assert not [k for k in found if k.startswith(("rows:", "restrict: ZeroDivisionError"))], found
+
+
+def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_read_as_lean(tmp_path):
+    """Under ``whole`` the internal read is no input row: the block's template is its ported Program, one row of in(S)'s
+    run (a, w1, w2), where the unit form's template has the reader's x as a row of its own; a registered read is refused
+    in `Spot.Restrict.ported`'s words."""
+    W._catalog()
+    exe = _stub(tmp_path)
+    c, q = W.internal_read()
+    from verity.circuits import partition_object as PO
+    from verity.circuits import restrict as R
+    p = PO.build(json.loads(c), q, [[(0, 2)]])
+    w, wq, ported, (ins, outs) = W.whole_circuit(c, p, [(0, 2)], R.program(c))
+    fn = R.program(w).defs[wq["params"]["templates"][0]]
+    assert ported == "yes" and [(n, t.leaves) for n, t in fn.signature()[0]] == [("p0", 16 + 2 * 2048)]
+    assert len(ins) == 16 + 2 * 2048 and len(outs) == 16
+    whole, = W.census(c, q, "0-2", lambda: exe, rows=False, form="whole")
+    unit, = W.census(c, q, "0-2", lambda: exe, rows=False)
+    assert (whole.step, unit.step) == ("lower", "lower") and "unit/Block_v1" in whole.text and "unit/WallsRead_v1" in unit.text
+    assert (whole.row_bits, unit.row_bits) == (16 + 2 * 2048, 2048) and whole.tmpl_gates == 2 * unit.tmpl_gates
+    from verity.circuits import boolean as BL
+    from verity.circuits.types import Value
+    ps = (("a", Value(1)), ("b", Value(1)))
+    rc, rq = W._rooted(W._composite("WallsReg", ps, Value(1), lambda B, S, a, b: B.call(BL.NOT, b)), ps, Value(1),
+                       registered=["b"])
+    rp = PO.build(json.loads(rc), rq, [[(0, 1)]])
+    assert W.whole_circuit(rc, rp, [(0, 1)], R.program(rc))[2] == (
+        "ported: the block reads a registered value (RegisteredInput1_v1), and a parameter does not carry that it is "
+        "registered: its rows would be committed afresh")
+    assert W.Result(0, (0, 1), (), ported="ported: x").klass == "ported: ported: x"
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_internal_read_is_free_under_the_unit_form_and_a_column_under_the_whole():
+    """On Lean's lowering: the unit form's rows take a reader whose x is not the writer's output (each copy's rows are
+    its own, candidate 127's hole at the statement); the whole form's rows hold C's values and refuse the block output
+    such a read gives."""
+    got = W.internal_case(W._exe(None))
+    unit, whole = got["unit"], got["whole"]
+    assert unit["honest_ok"] and unit["forged_accepted"], unit
+    assert unit["in_ports"] == ["x", "w"] and unit["in_bits"] == [16 + 2048, 16 + 2048], unit
+    assert whole["step"] is None and whole["ported"] == "yes", whole
+    assert whole["honest_ok"] and not whole["wrong_accepted"] and not whole["forged_accepted"], whole
+    assert whole["in_ports"] == ["p0"] and whole["in_bits"] == [16 + 2 * 2048], whole

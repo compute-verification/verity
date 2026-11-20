@@ -41,7 +41,8 @@ an internal read a reference between its nodes, called once by a root of in(S)'s
 ``cuts`` on as a circuit of one unit, so that `Lower.lower` lowers the block's root and `Compose.compose` writes rows of
 in(S)'s runs and out(S)'s; its rows are held on `WHOLE_TRACES` evaluations, and a block that reads a registered value
 is refused as Lean's `Spot.Restrict.ported` refuses it (class ``ported``). ``case internal_read`` puts the smallest
-block with an internal read through both (`internal_case`).
+block with an internal read through both (`internal_case`). ``--piece EXE`` (the Spot difftest) adds, per whole block,
+Lean's own `Spot.Restrict.piece`: Lean's `restrict` against Python's, and `Lower.lower` on Lean's `ported` of it.
 
 ``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word-typed parameters and fields of bits of widths not a multiple of
 16, calls, nested calls, batches, scans, callees whose word parameters reach no word primitive, mixed widths, parts of
@@ -369,6 +370,7 @@ class Result:
     cut: dict = field(default_factory=dict, repr=False)
     tmpl_gates: int | None = None
     ported: str = ""
+    piece: str = ""
     ports: tuple = field(default=((), ()), repr=False)
 
     @property
@@ -459,15 +461,34 @@ def whole_circuit(c: bytes, partition: dict, units: Sequence[tuple[int, int]], D
     return _bytes(prog), PO.template_instances_query([fn]), ported, (b.inputs, b.outputs)
 
 
+def lean_piece(server: Any, c: bytes, partition: dict, units: Sequence[tuple[int, int]], decoded: Any) -> str:
+    """Lean's `Spot.Restrict.piece` on the block (the Spot difftest's ``restrict``): ``lowers`` where Lean's `restrict`
+    is Python's and `Flock.Lower.lower` lowers Lean's `ported` of it at the front's port widths, else what differs or
+    the lowering's refusal."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    us = [u for lo, hi in units for u in range(lo, hi)]
+    try:
+        py = OC.restrict(c, partition, units, decoded).decode()
+        kind, body = server.call("restrict", {"descriptor": c.decode(), "units": us, "python": py})
+    except Exception as e:  # noqa: BLE001 - a census records the cross-check's crash by its text
+        return f"crashed: {_err(e)[:300]}"
+    if kind != "output":
+        return f"{kind}: {str(body)[:300]}"
+    out = json.loads(body)
+    if not out["agree"]:
+        return f"restrict differs at {out['at']}"
+    return "lowers" if out["lowers"] is None else f"refuses: {out['lowers'][:300]}"
+
+
 class Door:
     """The door's static steps on C and one partition of it, each run once where it is the partition's and not a block's.
     Under ``form="whole"`` each block's steps from ``cuts`` on run on `whole_circuit` of it, a partition of its one unit."""
 
     def __init__(self, c: bytes, query: dict, blocks: Sequence[tuple[int, int]], exe: Callable[[], Path],
-                 form: str = "unit"):
+                 form: str = "unit", piece: Any = None):
         from verity.circuits import partition_object as PO
         from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-        self.c, self.query, self.exe, self.form = c, query, exe, form
+        self.c, self.query, self.exe, self.form, self.piece = c, query, exe, form, piece
         self.decoded = OC.Decoded(c)
         self.tp = PO.TemplatePartition(self.decoded.get(), query)
         self.partition = PO.build(json.loads(c), query, [list(blocks)])
@@ -540,6 +561,8 @@ class Door:
             r.step, r.text = "restrict", _err(e)
             return r
         r.seconds["restrict"] = round(time.perf_counter() - t, 3)
+        if self.piece is not None:
+            r.piece = lean_piece(self.piece, self.c, self.partition, units, self.decoded)
         try:
             inner = Door(w, q, [(0, 1)], self.exe).run(0, 0, 1)
         except Exception as e:  # noqa: BLE001 - the whole block's partition refused is the door's partition step
@@ -705,7 +728,7 @@ UNITS = ("one", "floor", "plan")
 
 
 def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True, units: str = "one",
-           plan: Sequence[tuple[int, int]] | None = None, form: str = "unit") -> list[Result]:
+           plan: Sequence[tuple[int, int]] | None = None, form: str = "unit", piece: Any = None) -> list[Result]:
     """Each chosen block through the door's static steps and, with ``rows``, its template's rows (`block_rows`, once
     per template digest and block size). ``units``: ``one``, each chosen unit a block; ``plan``, the block of ``plan``
     (one level of the population) holding each chosen unit, all in that one partition; ``floor``, from each chosen unit
@@ -731,19 +754,20 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
         if log:
             log(json.dumps({"block": r.block, "units": list(r.units), "templates": list(r.templates), "shape": r.shape,
                             "step": r.step, "text": r.text[:600], "rows": r.rows, "row_bits": r.row_bits,
-                            "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "tried": r.tried,
+                            "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "piece": r.piece,
+                            "tried": r.tried,
                             "seconds": r.seconds}))
         return r
 
     out = []
     if units == "floor":
-        return [said(r) for r in floors(c, query, tp, chosen, exe, rows_of, form)]
+        return [said(r) for r in floors(c, query, tp, chosen, exe, rows_of, form, piece)]
     if units == "plan":
         if plan is None:
             raise ValueError("--units plan needs the circuit's plan (`plan_blocks`)")
         blocks = sorted(plan)
         starts = [lo for lo, _ in blocks]
-        door = Door(c, query, blocks, exe, form)
+        door = Door(c, query, blocks, exe, form, piece)
         done = set()
         for lo, _hi, s in chosen:
             k = bisect.bisect_right(starts, lo) - 1
@@ -755,7 +779,7 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
             out.append(said(r))
         return out
     blocks, ks = tiling(chosen, tp.population)
-    door = Door(c, query, blocks, exe, form)
+    door = Door(c, query, blocks, exe, form, piece)
     for (lo, hi, s), k in zip(chosen, ks):
         r = door.run(k, lo, hi, s)
         rows_of(r)
@@ -764,7 +788,7 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
 
 
 def floors(c: bytes, query: dict, tp: Any, chosen: Sequence[tuple[int, int, str]], exe: Callable[[], Path],
-           rows_of, form: str = "unit") -> list[Result]:
+           rows_of, form: str = "unit", piece: Any = None) -> list[Result]:
     """For each chosen unit ``u``, the block [u, u + k) at the fewest ``k`` (1, 2, 4, ..., then the units of u's range
     from u, short of the next chosen unit) that passes every step, else at the largest tried; its ``tried`` lists each
     ``k`` with its class (``through``) and widest row. Round ``i`` puts every unpassed unit's ``i``-th size through
@@ -787,7 +811,7 @@ def floors(c: bytes, query: dict, tp: Any, chosen: Sequence[tuple[int, int, str]
             break
         trial = sorted((chosen[j][0], chosen[j][0] + ks[j][i], chosen[j][2], j) for j in live)
         blocks, at = tiling([(lo, hi, s) for lo, hi, s, _j in trial], tp.population)
-        door = Door(c, query, blocks, exe, form)
+        door = Door(c, query, blocks, exe, form, piece)
         for (lo, hi, s, j), k in zip(trial, at):
             r = door.run(k, lo, hi, s)
             r.circuit = None
@@ -844,7 +868,7 @@ def floor_table(results: Sequence[Result]) -> list[dict]:
         k = r.units[1] - r.units[0]
         out.append({"template": r.templates[0] if len(r.templates) == 1 else "|".join(r.templates), "first": r.units[0],
                     "passes_at": k if r.step is None else f"never, up to {k}", "row_bits": r.row_bits,
-                    "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "rows": r.rows,
+                    "gates": r.gates, "tmpl_gates": r.tmpl_gates, "ported": r.ported, "piece": r.piece, "rows": r.rows,
                     "class": r.klass or "through", "tried": r.tried})
     return out
 
@@ -1684,6 +1708,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--no-rows", action="store_true")
     a.add_argument("--units", choices=UNITS, default="one")
     a.add_argument("--form", choices=FORMS, default="unit")
+    a.add_argument("--piece", help="the Spot difftest executable: under --form whole, Lean's restrict piece on each block")
     a.add_argument("--cap", type=int, default=CAP)
     a.add_argument("--one-circuit", default="", help="the one-circuit commit C's tree holds, where the clone has no such ref")
     b = sub.add_parser("fuzz")
@@ -1717,8 +1742,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     plan, by = plan_blocks(args.circuit, args.cap) if args.units == "plan" else (None, "")
     if by:
         say("PLAN " + json.dumps({"by": by, "blocks": len(plan)}))
+    server = None
+    if args.piece:
+        from verity_difftest import Server
+        server = Server([args.piece])
     results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows, units=args.units,
-                     plan=plan, form=args.form)
+                     plan=plan, form=args.form, piece=server)
     rows = table(results, hashlib.sha256(c).hexdigest(), built_at(args.one_circuit))
     sized = floor_table(results) if args.units != "one" else []
     if args.json:

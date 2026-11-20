@@ -27,12 +27,27 @@ LOW=$L/lean-$LSHA/flock-lower-check
   fi
 ) > $O/build-lean.log 2>&1 || { tail -30 $O/build-lean.log; exit 1; }
 echo "LOWER $LOW $(sha256sum $LOW | cut -c1-16)"
+PIECE_ARG=""
+if [ "${PIECE:-0}" = 1 ]; then
+  SPOT=verity/protocols/proofs/spot/verifier/lean
+  PSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key $SPOT)
+  PEX=$L/spot-$PSHA/spot-difftest
+  (
+    exec 9>$L/spot.lock; flock 9
+    if [ ! -x $PEX ]; then
+      S=$(mktemp -d); trap 'rm -rf $S' EXIT
+      SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy $SPOT $S) \
+        && (cd $SRC && lake build spot-difftest) && mkdir -p $L/spot-$PSHA && cp $SRC/.lake/build/bin/spot-difftest $PEX
+    fi
+  ) > $O/build-spot.log 2>&1 || { tail -30 $O/build-spot.log; exit 1; }
+  echo "PIECE $PEX $(sha256sum $PEX | cut -c1-16)"; PIECE_ARG="--piece $PEX"
+fi
 $UV sync -q --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 1; }
 PY=.venv/bin/python
 rc=0
 for item in $CIRCUITS; do
   IFS=: read -r name blocks units form <<< "$item"; units=${units:-one}; form=${form:-unit}; f=$O/census-$name-$units-$form
-  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
+  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form $([ $form = whole ] && echo $PIECE_ARG) --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
     > $f.log 2>&1
   r=$?; echo "CENSUS $name $blocks $units $form rc $r"; grep -h '^BUILT\|^PLAN\|^CENSUS\|^|' $f.log | cut -c1-600
   [ $r -gt 1 ] && { tail -20 $f.log; rc=1; }
