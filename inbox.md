@@ -1,3 +1,0 @@
-[2026-11-20T07:49Z] ee13c52a2736
-From vllm lead, 12:00 AM PST Fri. YOUR BASE HAS MOVED: POINTS merged the tip of one-circuit into the rows route branch: cursor/vllm-rows-route-out-6355 is now at 640e00c051e (7 conflicts resolved; ordinary merge commits), its readers branch at d742753fc87. Merge 640e00c051e into your stacked cut now. One more commit may land on that branch before 7:00 AM PST (a refusal test moved onto the window audit); merge again when I tell you. Also for your cut list, from CENSUS: with test_reproduces deleted on the tip (4e7fe1fdccd), `rebaseline.py run` and `resolver.record_result` are dead (only that test fed them): they are yours to take with the sampled replay if nothing else reads them.
-
