@@ -237,6 +237,21 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
+/-- The refusal of `fanout`'s `members` in another form. -/
+def MEMBERS_FORM : String := "members is not a list of [name, [[lo, hi], ...], filed]"
+
+/-- One of `fanout`'s `members`: `[name, [[lo, hi], ...], filed]`. -/
+def fanoutMember (x : Json) : V (String × Array (Nat × Nat) × Bool) :=
+  match x with
+  | .arr #[.str name, .arr us, .bool filed] => do
+    let units ← us.mapM fun u => match u with
+      | .arr #[a, b] => match nat? a, nat? b with
+        | some lo, some hi => pure (lo, hi)
+        | _, _ => throw MEMBERS_FORM
+      | _ => throw MEMBERS_FORM
+    pure (name, units, filed)
+  | _ => throw MEMBERS_FORM
+
 /-- `{"program", "query", "held"?, "members"?}`, a program object, a template query, the gates `[[first, count], ...]`
 of the parameters a verifier expects registered and members `[[name, [[lo, hi], ...], filed], ...]`, to `{"fanout",
 "shared", "reads"}`: its fan-out, the run Input nodes outside `held` its proof blocks don't each read alone
@@ -255,19 +270,10 @@ def fanout (j : Json) : V Json := do
         | _, _ => bad
       | _ => bad
     | _ => throw "held is not a list of [first, count]"
-  let badM : V (String × Array (Nat × Nat) × Bool) := throw "members is not a list of [name, [[lo, hi], ...], filed]"
   let members ← match getD j "members" with
     | .null => pure none
-    | .arr xs => some <$> xs.mapM fun x => match x with
-      | .arr #[.str name, .arr us, .bool filed] => do
-        let units ← us.mapM fun u => match u with
-          | .arr #[a, b] => match nat? a, nat? b with
-            | some lo, some hi => pure (lo, hi)
-            | _, _ => throw "members is not a list of [name, [[lo, hi], ...], filed]"
-          | _ => throw "members is not a list of [name, [[lo, hi], ...], filed]"
-        pure (name, units, filed)
-      | _ => badM
-    | _ => badM
+    | .arr xs => some <$> xs.mapM fanoutMember
+    | _ => throw MEMBERS_FORM
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   let reads := Partition.heldReads p.prog rs held
   return Json.mkObj ([("fanout", Lean.toJson (Partition.fanout p.prog rs)),
