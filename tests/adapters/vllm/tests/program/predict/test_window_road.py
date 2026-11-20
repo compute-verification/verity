@@ -264,10 +264,11 @@ def test_the_seal_reads_each_field_at_its_path_in_the_registration_and_refuses_a
 
 
 SCRIPT = ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh"
-#: what the road's steps call beyond the functions under test: our tools' public lines, and the counted circuit's paths
+#: what the road's steps call beyond the functions under test, stood in: our tools' public lines, and the counted
+#: circuit's paths
 STUBS = """say() { printf '%s\\n' "$*" | tee -a "$OUT/verdicts.txt"; }
-failed() { "$SAY_PY" "$SV" failed "$@"; }
-said() { "$SAY_PY" "$SV" said "$@"; }
+failed() { echo "(a tool's refusal, exit $1)"; }
+said() { echo "counted"; }
 counted_pair() { echo "$D/circuit.json $D/registration.json"; }
 io_class() { echo 2,4,2; }
 gpu-lease() { :; }
@@ -299,8 +300,7 @@ def _steps(tmp_path, body, py, **env):
     stub = tmp_path / "python"
     stub.write_text(f'#!/bin/bash\n[ "$1" = -c ] && exec {sys.executable} "$@"\n{py}\n')
     stub.chmod(0o755)
-    env = {**os.environ, "D": str(d), "OUT": str(out), "PY": str(stub), "SAY_PY": sys.executable,
-           "SV": str(SCRIPT.parent / "served_verdicts.py"), "CLASSES": "2,4,2", "WREG": str(d / "none.json"),
+    env = {**os.environ, "D": str(d), "OUT": str(out), "PY": str(stub), "CLASSES": "2,4,2", "WREG": str(d / "none.json"),
            "IO_POLICY": str(tmp_path / "policy.json"), "IO_LEAN": str(tmp_path / "no-lean"), "BASIS_129": "basis",
            "POUW": "", "POUS_CMD": "", "BANDWIDTH_CMD": "", **env}
     fns = _fns("step_not_run", "step_refused", "road_step", "road_end", "block_counts", "inference_only", "road_pieces")
@@ -315,8 +315,7 @@ def test_a_step_whose_command_refuses_is_refused_by_its_first_line_and_one_that_
     rc, out = _steps(tmp_path / "a", "RAN+=(seal); road_step block-counts block_counts; road_end 20", refuse)
     assert rc == 20, out
     assert ("ROAD END (the window's record): ran 1 (seal); refused or undecided 1 (block-counts); not run 0 ()") in out, out
-    assert ("  REFUSED block-counts: BLOCK-COUNTS class 2,4,2 refused (ValueError, exit 1): its log is in the run's "
-            "private directory (exit 1)") in out.splitlines(), out
+    assert "  REFUSED block-counts: BLOCK-COUNTS class 2,4,2 refused (a tool's refusal, exit 1) (exit 1)" in out.splitlines(), out
     rc, out = _steps(tmp_path / "b", "road_step block-counts block_counts; road_end 20", refuse, IO_POLICY="")
     assert rc == 20 and "not run 1 (block-counts)" in out, out
     assert "  NOT RUN block-counts: the run declares no c, k and n" in out.splitlines(), out
