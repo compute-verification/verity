@@ -678,17 +678,18 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
     source). With ``bin_dir``, each package's executables instead (`fetch_bin`, with ``exact``), and 1 also for a package
     that has none published or a cache that can't be read: what was asked for isn't there."""
     want = 1 if bin_dir is not None else 0
+    then = "" if bin_dir is not None else "; building from source"
     if env.get("LEAN_CACHE", "").strip().lower() in OFF:
-        log("lean-cache: off on this machine (LEAN_CACHE); building from source")
+        log(f"lean-cache: off on this machine (LEAN_CACHE){then}")
         return want
     s3 = reader(env)
     if s3 is None:
-        log(f"lean-cache: no read credential ({', '.join(READ_ENV)}); building from source")
+        log(f"lean-cache: no read credential ({', '.join(READ_ENV)}){then}")
         return want
     cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / DOWNLOADS
     ok, q, why = state(env.get("LEAN_CACHE_STATE_URL") or STATE_URL, cache, now(), fetch_state)
     if not ok:
-        log(f"lean-cache: {why}; building from source")
+        log(f"lean-cache: {why}{then}")
         return want
     revs, status = ancestors(root), 0
     for pkg in pkgs:
@@ -699,11 +700,10 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
             else:
                 restore(root, pkg, s3, revs, q, log, env, branch=branch)
         except CacheError as e:
-            log(f"lean-cache: {pkg}: {e}; building from source")
+            log(f"lean-cache: {pkg}: {e}{then}")
             status = 1
         except (OSError, ValueError, ET.ParseError) as e:     # urllib's errors are OSErrors
-            log(f"lean-cache: {pkg}: the cache is unreachable ({getattr(e, 'code', None) or type(e).__name__}); "
-                f"building from source")
+            log(f"lean-cache: {pkg}: the cache is unreachable ({getattr(e, 'code', None) or type(e).__name__}){then}")
             status = max(status, want)
     return status
 

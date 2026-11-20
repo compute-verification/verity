@@ -673,15 +673,29 @@ def test_get_bin_fails_where_the_executables_arent_there(s3, tmp_path):
     b, url = s3
     r, rev = repo(tmp_path)
     lines = []
+    assert C.get(r, ["pkg"], {**env(url, tmp_path), "LEAN_CACHE": "off"}, lines.append) == 0
+    assert lines[-1].endswith("; building from source")
     assert C.get(r, ["pkg"], {**env(url, tmp_path), "LEAN_CACHE": "off"}, lines.append, bin_dir=tmp_path / "bin") == 1
     assert C.get(r, ["pkg"], env(url, tmp_path), lines.append, fetch_state=lambda u: ON, bin_dir=tmp_path / "bin",
                  plat=PLAT) == 1
+    assert not [m for m in lines[1:] if "building from source" in m]
     stage(tmp_path)
     exes(tmp_path)
     C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
     assert C.get(r, ["pkg"], env(url, tmp_path), lines.append, fetch_state=lambda u: ON, bin_dir=tmp_path / "bin",
                  plat=PLAT) == 0
     assert (tmp_path / "bin" / "pkg" / "pkg-verifier").read_bytes() == b"\x7fELF verifier"
+
+
+def test_get_bin_says_what_failed_and_nothing_of_building(s3, tmp_path):
+    """`get --bin` builds nothing, so its refusal names the failure alone."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    without_bin(b, published(url, r, tmp_path, rev))
+    lines = []
+    assert C.get(r, ["pkg"], env(url, tmp_path), lines.append, fetch_state=lambda u: ON, bin_dir=tmp_path / "bin",
+                 plat=PLAT) == 1
+    assert lines[-1].endswith("published before records held them")
 
 
 # ---------------------------------------------------------------- the client's switches
