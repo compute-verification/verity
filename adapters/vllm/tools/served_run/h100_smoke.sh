@@ -25,6 +25,8 @@ TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
 MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} CLASS=${CLASS:-4,27,2} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
+# the sampling design is the auditor's and not public: a printed line says only that one is registered
+DESIGN="(the registered sampling design)"
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
 # the window class (S,P,O[,LANES,EVERY]: slots, prompt ids, outputs) the serve's arena is sized from and the load fills
@@ -194,9 +196,9 @@ pp = g["prove_path"]
 pp.window_commit_of_advice = lambda a, **_: {"parsed": sorted(k for k, v in vars(a).items() if v is not None)}
 sys.exit(pp.main(sys.argv[2:], kept_ingress=g["attester_piece"].kept_ingress, scan_state_file=g["SCAN_STATE_FILE"]))
 EOF
-  echo "WINDOW-COMMIT PARSED (at window 0; the run's is the fixed load's): ${WC[*]}"
+  echo "WINDOW-COMMIT PARSED (at window 0; the run's is the fixed load's): ${WC[*]//"$LAW"/$DESIGN}"
   (cd adapters/vllm && "$PY" "${FIN[@]}" --serve-run "$D" --window 0 --out "$SR/record.json" --parse-only)
-  echo "RECORD AFTER THE LEASE PARSED (RECORD_IN_LEASE=$RECORD_IN_LEASE): ${FIN[*]} --serve-run $D --window K --out $SR/record.json"
+  echo "RECORD AFTER THE LEASE PARSED (RECORD_IN_LEASE=$RECORD_IN_LEASE): ${FIN[*]//"$LAW"/$DESIGN} --serve-run $D --window K --out $SR/record.json"
   echo "SMOKE DRY OK${NOKIT:+ (no toolkit here: the native collector not built)}; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal, the card's strings, the open, the record after the lease and the window commit; no proof is made, and Lean verifies nothing"
   exit 0
 fi
@@ -268,14 +270,15 @@ timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}" > "$SR/window-commit.json" 2> "$SR/
   || { e=$?; say "$said"$'\n'"$(plan_lines)"$'\n'"SMOKE FAILED window-commit of window $K, exit $e ($SR/window-commit.err)"; exit 1; }
 mkdir -p "$OUT/window"
 cp "$VW/registration.json" "$VW/circuit.json" "$OUT/window/" && cp "$DREG" "$OUT/"
-said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" <<'EOF'
+said+="; $("$PY" - "$SR/window-commit.err" "$VW/registration.json" "$K" "$CLASS" "$SR" <<'EOF'
 import json, sys
 from verity.commitments import docket_digest as DD
-err, reg, k, cls = sys.argv[1:]
+err, reg, k, cls, sr = sys.argv[1:]
 rows = json.loads([x for x in open(err) if x.startswith("WINDOW-ROWS ")][-1].removeprefix("WINDOW-ROWS "))
 o, u = rows["opened"] or {}, rows["units"]
 print(f"WINDOW-COMMIT window {k} class {cls}: reads {o.get('reads')}, failed {o.get('failed')}, not retained {o.get('not_retained')}; "
-      f"units served {u['served']}, computed {u['computed']}, evaluated {u['evaluated']}; registration {DD.digest(json.load(open(reg)))}")
+      f"units served {u['served']}, computed {u['computed']}, evaluated {u['evaluated']}; registration written, its digest kept in SR (it binds the circuit's own digest)")
+open(f"{sr}/registration.digest", "w").write(DD.digest(json.load(open(reg))) + "\n")
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"

@@ -112,6 +112,7 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     _, _, commit = served(calls)
     assert commit[0] == "window-commit"
     assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", "4,27,2", "rate:1/3481648"]
+    assert "rate:" not in p.stdout and "(the registered sampling design)" in p.stdout, p.stdout
     d = opt(commit, "--serve-run")
     assert opt(commit, "--row-dir") == f"{d}/windows/w0"
     assert opt(commit, "--advice") == f"{d}/advice/w0/private/advice.bin"
