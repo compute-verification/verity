@@ -633,8 +633,8 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
             bits: int | None = None) -> list[np.ndarray]:
-    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
-    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
+    """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`): a
+    GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
     element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
     vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []

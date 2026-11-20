@@ -56,13 +56,6 @@ def world() -> Any:
     return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
 
 
-@NO_LIST
-def test_a_row_that_states_no_operands_has_none(left_out):
-    assert IX.row_args(_with({"i": 0}, "args", left_out)) == []
-    assert IX.row_args(None) == [] and IX.row_args({}) == []
-    assert IX.row_args({"args": [[["n", 3, 0, 4]]]}) == [[["n", 3, 0, 4]]]
-
-
 @NO_DICT
 def test_an_observed_schedule_that_states_no_arrive_steps_leaves_the_declaration(left_out):
     declared = {"a": 0, "b": 1}

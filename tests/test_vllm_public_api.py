@@ -231,7 +231,7 @@ PUBLIC = {
                                    "(Rewrites, build_roles, requant, absorbed), which benchmarks/one_stage and "
                                    "benchmarks/spot_proved stage from",
     "verity_vllm.check.replay.index": "I7: the Program rows sampled replay reads, indexed per request (ProgramIndex, "
-                                      "row_args, const_word), which benchmarks/one_stage and benchmarks/prove_path read",
+                                      "const_word), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.check.replay.opening": "I7: committed words by identity, the store sampled replay reads "
                                         "(CommittedStore), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "

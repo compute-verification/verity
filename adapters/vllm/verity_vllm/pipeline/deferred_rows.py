@@ -89,11 +89,6 @@ def window_of(r: SimpleNamespace, partition_file: str) -> Any:
     return window
 
 
-def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: str, required_manifest: str | None = None) -> Any:
-    """`window_of` the bundle opened against its record (`of_record`)."""
-    return window_of(of_record(bundle, row_dir, required_manifest), partition_file)
-
-
 #: the bytes of the only run root a ``served`` window is taken over: the SHA-512 record's (``frame-v3-sha512`` / ``hm96-sha512``)
 SERVED_ROOT = DIGEST_BYTES["sha512"]
 

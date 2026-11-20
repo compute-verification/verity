@@ -46,12 +46,12 @@ def _world(reqs: dict[str, tuple[int, int, int | None]], *, seed_word=None):
     for rid, (arrive, n, seed) in reqs.items():
         prompt = [11, 12, 13]
         steps = list(range(arrive, arrive + n))
-        blocks[(rid, arrive, EMB, IX.IDS_MEMBER)] = np.asarray(prompt, dtype=np.uint32)
+        blocks[(rid, arrive, EMB, "in")] = np.asarray(prompt, dtype=np.uint32)
         for i, s in enumerate(steps):
             tok = 100 + 7 * i + int(rid[1:])
             blocks[(rid, s, IX.SAMPLER_OP, RK.SAMPLED_MEMBER)] = np.asarray([tok], dtype=np.uint64)
             if i > 0:
-                blocks[(rid, s, EMB, IX.IDS_MEMBER)] = np.asarray([100 + 7 * (i - 1) + int(rid[1:])], dtype=np.uint32)
+                blocks[(rid, s, EMB, "in")] = np.asarray([100 + 7 * (i - 1) + int(rid[1:])], dtype=np.uint32)
             if seed is not None:
                 w = (seed_word or {}).get((rid, s), seed)
                 blocks[(rid, s, IX.SAMPLER_OP, IX.SEED_PARAM)] = np.asarray([np.int64(w)], dtype=np.int64).view(np.uint64)
