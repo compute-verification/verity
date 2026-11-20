@@ -8854,6 +8854,135 @@
    },
    "type_hash": "52f5b47364f4690bdf9114529dc51477c6fd881636bb104e4f2d5233e46992ac"
   },
+  "Claims.Witness.Recursion.BitsFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin2_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_meets_deployed": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBoundLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBound_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlockLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSLin2_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets_ready": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_meets": {
+   "owner": "@proofs"
+  },
   "Claims.Witness.SamplingGeneric.capTwo_honest": {
    "owner": "@proofs",
    "signature": [
