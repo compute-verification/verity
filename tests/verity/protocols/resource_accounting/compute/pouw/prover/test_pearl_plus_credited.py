@@ -1,4 +1,4 @@
-"""A credited linear of C as Pearl+'s product (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v4`,
+"""A credited linear of C as Pearl+'s product (`pearl_plus_credited`): its grid's units of `PearlPlusTileCoreWords_v5`,
 each a top level of maps over its noise's lines and Gram rows and one wired core, the units C's laying makes of it, each
 unit the scheme's block whose amount is its credited MACs, each unit's public row, the noise the unit derives inside, and
 the unit on C's words beside the core fed that noise. That one drawn unit goes through the door is
@@ -84,11 +84,11 @@ def test_the_node_reads_its_place_and_no_noise_and_writes_ok_as_one_word() -> No
     params, ret = node.signature()
     assert [p for p, _t in params] == ["a", "b", "cert", *PC.PUBLIC] and PC.PUBLIC == ("salt", "root", "unit", "rows", "col")
     assert ret.fields[2] == Value(16)
-    assert "PearlPlusTileCoreWords_v4" in REGISTRY.defs and "PearlPlusTileCoreWords_v2" not in REGISTRY.defs
+    assert "PearlPlusTileCoreWords_v5" in REGISTRY.defs and "PearlPlusTileCoreWords_v2" not in REGISTRY.defs
     assert {"PearlPlusTileSeed_v4", "PearlPlusTileLine_v4", "PearlPlusGramRow_v5", "PearlPlusTileCoreWired_v2"} <= set(REGISTRY.defs)
     assert not {"PearlPlusTileNoise_v1", "PearlPlusTileNoise_v2", "PearlPlusTileKey_v1", "PearlPlusTileSeed_v1",
                 "PearlPlusGramRow_v2", "PearlPlusGramRow_v3", "PearlPlusTileLine_v2", "PearlPlusTileCoreWired_v1",
-                "PearlPlusTileCoreWords_v3", "PearlPlusTileSeed_v2", "PearlPlusTileSeed_v3", "PearlPlusTileLine_v3",
+                "PearlPlusTileCoreWords_v3", "PearlPlusTileCoreWords_v4", "PearlPlusTileSeed_v2", "PearlPlusTileSeed_v3", "PearlPlusTileLine_v3",
                 "PearlPlusGramRow_v4"} & \
         set(REGISTRY.defs)
 

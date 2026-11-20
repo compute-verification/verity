@@ -1,5 +1,5 @@
 """The vectors of the noise a credited unit derives inside from its public row (the eb, fa, fb and g of
-`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v4`, `PearlPlusTileLine_v4` and
+`pearl_plus_credited.PearlPlusTileCoreWords_v5`, its units `PearlPlusTileSeed_v4`, `PearlPlusTileLine_v4` and
 `PearlPlusGramRow_v5`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
 (`pearl_plus_credited.row_eb` …) and compared byte for byte, and the units, on their words and on bits, held to them.
 

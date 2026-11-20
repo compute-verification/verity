@@ -22,7 +22,7 @@ word, the first the low byte, and a value on bits (a line's 32 E4M3 codes, an in
 bits in order, low bit first, 16 a word; each unit takes its words' bits inside (`WordBits{16}`) and writes its bits
 back in words (`BitsWord{16}`), so no reader reads a writer's field at a width other than the writer's.
 
-The node (`pearl_plus_credited.PearlPlusTileCoreWords_v4`) Calls the seed, which writes eb's TN lines (SIDE 1, FACTOR 0)
+The node (`pearl_plus_credited.PearlPlusTileCoreWords_v5`) Calls the seed, which writes eb's TN lines (SIDE 1, FACTOR 0)
 itself, maps the line over F's 8 groups of K/8 indices (SIDE 0 and 1, FACTOR 1, G K/8), and Calls the Gram row for each
 of F_B's 32 columns: each line unit and each row is independent given the key, so each is a unit of its own when C is
 laid (`verity.circuits.laying`), and eb, fa, fb and g reach the core as wired values. Every unit reads each of its
@@ -59,7 +59,7 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
     a non-finite word and a BF16 overflow) and each filler row's every word zero, and-ed.
 
 The core reads no column index: E_B's lines ``eb`` are the column tile's, which the noise derives from ``col``.  The node
-(`pearl_plus_credited.PearlPlusTileCoreWords_v4`) derives the noise and Calls the core on the salt and B's root of the public row
+(`pearl_plus_credited.PearlPlusTileCoreWords_v5`) derives the noise and Calls the core on the salt and B's root of the public row
 the verifier fills itself (`pearl_plus_credited.public`), so the salt and the root reach the tile only through that row.
 
 The core is one registered Definition, its σ: its word body is an unregistered Definition the σ lifts and names as its
@@ -440,13 +440,15 @@ def _lines_body(B, S, key, index):
 
 def _refuse_lines(b: dict) -> str | None:
     g = b.get("G", 1)
+    if (b.get("SIDE", 1), b.get("FACTOR", 1)) == LINES["eb"]:
+        return "E_B's lines (SIDE 1, FACTOR 0) are the seed's (`PearlPlusTileSeed_v4`), no line unit's"
     return _refuse_line(b) or (None if isinstance(g, int) and g >= 1 else f"G is a count of lines, G >= 1: {g!r}")
 
 
 PearlPlusTileLineV4 = CompositeDefinition(
     "PearlPlusTileLine", 4, ("SIDE", "FACTOR", "G"), _lines_signature, _lines_body, refuse=_refuse_lines,
     conformance=_NOISE_CONF,
-    doc="G of a -h3 tile's noise lines on 16-bit words: the key's words and each of the G indices' words their bits, "
+    doc="G of a -h3 tile's F lines (F_A's, SIDE 0, or F_B's, SIDE 1; FACTOR 1) on 16-bit words: the key's words and each of the G indices' words their bits, "
         "`PearlPlusTileLine_v2` (σ of `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)) on each index, and each "
         "line's 32 E4M3 codes back in 16 words, low bit first")
 
