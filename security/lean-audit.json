@@ -3218,7 +3218,6 @@
   "extra": {}
  },
  "deployed": [
-  "Flock.SecurityProofs.SampledKSLiveV5",
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
   "Pous.SecurityProofs.StreamedWipe",
   "ResourceAccounting.SecurityProofs.Remote.AuditRO",
