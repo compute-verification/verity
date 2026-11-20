@@ -837,7 +837,7 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             decoded = decoded or OC.Decoded(descriptor)
             c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
                          cut=OC.cuts(descriptor, partition, decoded),
-                         formed=lambda key: OC.formed(decoded.get(), partition, m["units"], key))
+                         formed=lambda key: OC.admitted_block(decoded.get(), partition, m["units"], key))
         except (OC.NotDerived, OC.Refused) as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"

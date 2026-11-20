@@ -1689,7 +1689,7 @@ private def chainRoots01 (roots : List (String × String)) : V (Std.HashMap Stri
 
 -- C states the wire into units 2 and 3, but a member over two ranges meets none (`fieldRoots`' `inRange`): `G/c01`'s
 -- `x` gets no writer's tree and a root of its own there stands; its block is refused at the door instead
--- (`blockFormed`'s `operands-outside`, `AA16`'s guard)
+-- (`admittedBlock`'s `operands-outside`, `AA16`'s guard)
 #guard ((chainRoots01 []).toOption.map fun r => (r.getD "G/c01" #[]).size) == some 0
 #guard whyT (chainRoots01 [("G/c01/x", "bb")]) == ""
 

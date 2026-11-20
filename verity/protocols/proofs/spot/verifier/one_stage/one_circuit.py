@@ -206,25 +206,25 @@ def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[l
     return rows, fields
 
 
-def formed(D: DecodedProgram, partition: Mapping[str, Any], units: Sequence[Sequence[int]], key: str) -> None:
-    """`Spot.OneStageZk.blockFormed`: the block of ``units`` (``[lo, hi)`` ranges) of C (decoded, ``D``), whose C_S
+def admitted_block(D: DecodedProgram, partition: Mapping[str, Any], units: Sequence[Sequence[int]], key: str) -> None:
+    """`Spot.OneStageZk.admittedBlock`: the block of ``units`` (``[lo, hi)`` ranges) of C (decoded, ``D``), whose C_S
     `admitted` gave the template ``key``, `Refused` by the first clause that fails, in Lean's words: C's root reads no
-    input node recut (`root-not-recut`), no two units hold a gate in common (`units-disjoint`), every unit calls ``key``
-    (`units-of-template`), and every unit's operand gates are outside the block (`operands-outside`)."""
+    input node recut (`no-recut`), no two units hold a gate in common (`disjoint-ranges`), every unit calls ``key``
+    (`one-callee`), and every unit's operand gates are outside the block (`operands-outside`)."""
     if D.root.body.recut:
-        raise _not_admitted("root-not-recut", f"C's root reads input nodes {sorted(D.root.body.recut)} recut, in leaves "
+        raise _not_admitted("no-recut", f"C's root reads input nodes {sorted(D.root.body.recut)} recut, in leaves "
                                               "of part of their width")
     tp = PO.TemplatePartition(D, partition["query"])
     us = [(u, *tp.gates(u)) for lo, hi in units for u in range(lo, hi)]
     by_lo = sorted(us, key=lambda x: x[1])
     for (u, _, hi), (v, lo, _) in zip(by_lo, by_lo[1:]):
         if lo < hi:
-            raise _not_admitted("units-disjoint", f"units {u} and {v} of the block hold gates in common")
+            raise _not_admitted("disjoint-ranges", f"units {u} and {v} of the block hold gates in common")
     nodes = D.root.body.nodes
     for u, _, _ in us:
         k, _m = tp.locate(u)
         if (c := descriptor_id(nodes[k].fn)) != key:
-            raise _not_admitted("units-of-template", f"unit {u} calls {c}, not the block's template {key}")
+            raise _not_admitted("one-callee", f"unit {u} calls {c}, not the block's template {key}")
         for g in tp.inputs(u):
             held = next((v for v, lo, hi in us if lo <= g < hi), None)
             if held is not None:
@@ -239,7 +239,7 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
     it gives: its input ports the template's parameters as bit rows, in order, each cut ``k`` ways into rows ``p#j``
     where ``cut`` (`cuts`, C's) gives the template's port ``p`` a ``k``, and one output port a return field, ``o{j}``,
     in u16 words, each a field's tree (`Flock.Registered.outReads`); META binds the partition, C's digest and the
-    template's `definition_digest`. ``formed``: the door's check of the block in C at the template (`formed`), after
+    template's `definition_digest`. ``formed``: the door's check of the block in C at the template (`admitted_block`), after
     `admitted`. `NotDerived` where the partition is no template query, before C_S is read; `Refused` too where the
     lowering refuses."""
     if _listed(partition.get("query") or {}) is None:

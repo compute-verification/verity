@@ -63,7 +63,7 @@ def _args_in(s: str) -> tuple[str, list[str], list[int]]:
     return descriptor(name), re.findall(STR, ts), [int(u) for u in us.split(",")]
 
 
-#: the guards on the block's form in C (`blockFormed`), each a descriptor, a template, units and C's root changed or not
+#: the guards on the block's form in C (`admittedBlock`), each a descriptor, a template, units and C's root changed or not
 FORMED = ("lowerIn", "formedIn")
 
 
@@ -111,16 +111,16 @@ def _formed_in(how: str, d: str, t: tuple[str, bool], us: list[int]) -> None:
     q = PO.template_instances_query(sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None}))
     units = [(u, u + 1) for u in us]
     if how == "formedIn":
-        return OC.formed(D, {"query": q}, units, key)
+        return OC.admitted_block(D, {"query": q}, units, key)
     ranges = [(min(us), max(us) + 1)]
     part = PO.build(json.loads(d), PO.template_instance_query(key), [ranges])
-    OC.lower(OC.restrict(c, part, ranges), part, lambda: "/nonexistent", formed=lambda k: OC.formed(D, part, ranges, k))
+    OC.lower(OC.restrict(c, part, ranges), part, lambda: "/nonexistent", formed=lambda k: OC.admitted_block(D, part, ranges, k))
 
 
 def test_every_lean_guard_is_read():
     assert len(guards()) == lean_text().count("#guard refusedBy")
     assert {g[4] for g in guards()} >= {"one-template", "listed", "port-names", "on-bits", "cut-rows", "whole-words",
-                                        "root-not-recut", "units-disjoint", "units-of-template", "operands-outside"}
+                                        "no-recut", "disjoint-ranges", "one-callee", "operands-outside"}
 
 
 def test_the_prefix_is_leans():
