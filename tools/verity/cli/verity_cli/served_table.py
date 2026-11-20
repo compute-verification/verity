@@ -719,11 +719,13 @@ CLASS_KEYS = ("V3C_CLASS", "CLASSES")
 
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
     """The served window's runner's variables: the configuration's hash and its `[[pin]]` entries
-    (``VERITY_CONFIGURATION``, ``VERITY_PINS``), which every device's `trusted-device` premise reads, and every listed
+    (``VERITY_CONFIGURATION``, ``VERITY_PINS``), which every device's `trusted-device` premise reads, the protocols
+    it lists (``APPLICATION_PROTOCOLS``, space-separated), and every listed
     piece's hooks, whichever party's they are, since the prover's pieces reach the auditor's sides through their
     bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
-    out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
+    out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True),
+           "APPLICATION_PROTOCOLS": " ".join(cfg["protocols"])}
     by: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]:
         for k, v in p.variables(cfg, bindings).items():

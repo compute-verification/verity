@@ -570,10 +570,16 @@ case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: 
 case $POUW in
   pearlplus) ;;
   h1) say "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"; exit 3 ;;
-  # Pearl+'s hooks set POUW wherever the application lists compute accounting, so with none listed it is empty
   '') ;;
   *) say "PREFLIGHT: POUW is pearlplus, not $POUW"; exit 3 ;;
 esac
+# the application's own list (`verity run`'s APPLICATION_PROTOCOLS), read both ways: Pearl+'s hooks set POUW
+if [ -n "${APPLICATION_PROTOCOLS+set}" ]; then
+  case " $APPLICATION_PROTOCOLS " in
+    *" pearl-plus "*) [ -n "$POUW" ] || { say "PREFLIGHT: the application lists compute accounting (pearl-plus), and POUW is unset: Pearl+'s hooks set POUW=pearlplus"; exit 3; } ;;
+    *) [ -z "$POUW" ] || { say "PREFLIGHT: the application lists no compute accounting, and POUW is $POUW: unset it"; exit 3; } ;;
+  esac
+fi
 for v in H1_GATE H1_TIE H1_CIRCUITS H1_STATEMENTS H1_LIVE_EVIDENCE H1_RECEIPTS H1_PROTOCOLS_CONFIG; do
   [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is PoUW H1's setting, and PoUW H1 is deleted"; exit 3; }
 done
@@ -1111,7 +1117,8 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
       head+=" (the record PEARLPLUS-CIRCUIT built before the serve: $(cmp -s "$f" "$PEARLPLUS_CIRCUIT" && echo the same || echo ANOTHER))"
     fi
     say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
-      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
+      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json")"
+    keep "$head: record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
   elif [ "$rc" = 124 ]; then
     say "$head timed out after $2 (exit 124): no count"
   else
@@ -1820,13 +1827,14 @@ TPY=$TREE/.venv/bin/python
 RAN=() REFUSED=() FAILED=()
 step_refused() { REFUSED+=("$1"); say "$1: not run: $2"; }
 road_end() {
-  say "ROAD END (the window's record): ran $(IFS=,; echo "${RAN[*]:-none}"); refused $(IFS=,; echo "${REFUSED[*]:-none}"); failed $(IFS=,; echo "${FAILED[*]:-none}"); no verdict stands for a step that did not run"
+  say "ROAD END (the window's record): ran ${#RAN[@]} ($(IFS=,; echo "${RAN[*]:-none}")); refused ${#REFUSED[@]} ($(IFS=,; echo "${REFUSED[*]:-none}")); failed ${#FAILED[@]} ($(IFS=,; echo "${FAILED[*]:-none}")); no verdict stands for a step that did not run"
   exit "$1"
 }
 road_stop() { FAILED+=("$1"); say "STOP at $1 (exit $2)"; road_end "$2"; }
 window_preflight() {  # K the close's window with a record (WINDOW's, else plans.jsonl's last); each thing absent refused by name
   local miss=() f why
   [ -e "$PY" ] || miss+=("PY, python under VENV")
+  [ -n "${APPLICATION_PROTOCOLS+set}" ] || miss+=("APPLICATION_PROTOCOLS, the application's list, which `verity run` sets")
   [ -n "${WINDOW_CLASS:-}" ] || miss+=("WINDOW_CLASS, the class the serve took (its --window-class), which serve.json doesn't record")
   if [ ! -f "$D/plans.jsonl" ]; then miss+=("D/plans.jsonl, the close's plan of each window")
   elif ! K=$("$PY" - "$D/plans.jsonl" "${WINDOW:-}" 2>&1 <<'EOF'
@@ -1858,8 +1866,9 @@ EOF
 }
 window_seal() {  # the window's seal held to its record (close_record's finish opened its bundle to make it): the seal's
   # run root, the record's circuit and its compiler, held to predict row's; the commit's bound Program digest beside the
-  # predicted workload digest, which no check here compares
-"$PY" - "$D" "$K" "$PRED" <<'EOF' 2>&1 | publish_lines
+  # predicted workload digest, which no check here compares. Only the SEAL line is public: the digests describe the circuit
+local out rc
+out=$("$PY" - "$D" "$K" "$PRED" <<'EOF' 2>&1
 import hashlib, json, sys
 from pathlib import Path
 d, k, pred = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
@@ -1888,17 +1897,51 @@ if found(reg, "circuit") != hashlib.sha512((w / "record" / "circuit.json").read_
     why.append("the record's circuit.json is not the circuit its registration binds")
 compiler, p = found(reg, "compiler") or {}, predicted.get("compiler")
 same = bool(compiler) and compiler.get("digest") == (p.get("digest") if isinstance(p, dict) else p)
+if not same:
+    why.append("the record's compiler is not predict row's")
 print(f"SEAL: the window's seal, run root {str(v.get('run_root'))[:16]}…, and its record: {'PASS' if not why else 'FAIL (' + '; '.join(why) + ')'}")
 print(f"COMPILER: the record's {compiler.get('name')} {str(compiler.get('digest'))[:16]}…, predict row's {str(p)[:80]}: "
       f"{'PASS' if same else 'FAIL'}")
 print(f"BOUND-PROGRAM: the commit's bound Program digest {str((c.get('binding') or {}).get('program_digest'))[:16]}…, "
       f"the predicted workload digest {str(predicted.get('workload_digest'))[:16]}…")
-sys.exit(0 if same and not why else 1)
+sys.exit(0 if not why else 1)
 EOF
-return "${PIPESTATUS[0]}"
+)
+rc=$?
+while IFS= read -r l; do case $l in SEAL:*) say "$l" ;; *) keep "$l" ;; esac; done <<< "$out"
+return "$rc"
+}
+road_piece() {  # STEP COMPONENT NAME OWNER: the piece by its owner's launcher, under the gpu-lease it takes itself
+  command -v gpu-lease > /dev/null || { step_refused "$1" "needs a card: $3's piece takes its own gpu-lease, and this node has none: $4's"; return; }
+  pieces --only "$2"
+  if [ "$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["rc"])' "$OUT/pieces/$2/piece.json" 2>/dev/null)" = 0 ]; then RAN+=("$1")
+  else FAILED+=("$1"); fi
+}
+road_wipe() {  # the wipe ran under the serve's lease, before its engine loaded: its answer is the serve dir's
+  local a=$D/pieces/wipe/answer.json
+  [ -f "$a" ] || { step_refused wipe "the serve dir holds no wipe answer (D/pieces/wipe/answer.json): the wipe runs under the serve's lease before its engine loads, and the card launcher that served this window ran none: memory-accounting's"; return; }
+  mkdir -p "$OUT/pieces/wipe" && cp "$D"/pieces/wipe/*.json "$OUT/pieces/wipe/"
+  say "WIPE: $("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["verdict"])' "$a" 2>&1 | cut -c1-80)"
+  RAN+=(wipe)
+}
+road_attester() {  # the network attester's piece called as its hook names it; a refusal is its own text (attester_piece.NOT_RUN)
+  local dir=$OUT/pieces/certifier cmd=${CERTIFIER_CMD:-$CERTIFIER_CHAIN_CMD}
+  mkdir -p "$dir"
+  (cd "$TREE" && bash -c "$cmd" _ "$D" "$K" "$dir" "$D/v3c-w$K") > "$dir/piece.log" 2>&1
+  if [ -f "$dir/refused.txt" ]; then REFUSED+=(network-attester); say "NETWORK-ATTESTER: $(head -c 600 "$dir/refused.txt")"
+  elif [ -f "$dir/answer.json" ]; then RAN+=(network-attester)
+  else FAILED+=(network-attester); fi
 }
 window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
   [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE names the tied leg, which is deleted: unset it"; exit 3; }
+  # the circuit's description is the auditor's secret: the plan, the handoff and every circuit file stay off custody
+  if [ -d "${RESEARCH_RUN_DIR:-}" ]; then
+    "$PY" -c 'import json, pathlib, sys
+f = pathlib.Path(sys.argv[1]); doc = json.loads(f.read_text()) if f.is_file() else {}
+f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": sorted(doc.get("private", [])),
+                         "names": sorted({*doc.get("names", []), *sys.argv[2:]})}, indent=1) + "\n")' \
+      "$RESEARCH_RUN_DIR/private-paths.json" plans.jsonl handoff/ circuit.json 'window-circuit-w*.json' || exit 9
+  fi
   say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
   RAN+=(preflight)
   say "PREDICT, SERVE: the window's serve's, before and under its lease (PRED/predicted.json, D)"
@@ -1906,7 +1949,7 @@ window_road() {  # in TREE: the runner's steps in its order, each from the windo
   mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
     || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
   KN=$K CLASSES=$WINDOW_CLASS
-  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took ($CLASSES)"
+  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took"
   RAN+=(window)
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
     || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
@@ -1916,14 +1959,11 @@ window_road() {  # in TREE: the runner's steps in its order, each from the windo
   if circuits; then RAN+=(circuits); block_counts; RAN+=(block-counts)
   else FAILED+=(circuits); step_refused block-counts "it counts the circuits step's window circuit, which failed"; fi
   step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
-  if [ "$POUW" = pearlplus ]; then
-    step_refused pearl-plus "Pearl+'s piece serves its own passes on a card (POUW_CMD's served_pearlplus.sh), and this road runs after the lease: compute accounting's"
-  fi
-  [ -z "${WIPE_CMD:-}" ] || step_refused wipe "the wipe runs on the served card's memory, which this road runs without: memory accounting's"
-  [ -z "${POUS_CMD:-}" ] || step_refused pous "PoUS's piece answers from the served card's memory, which this road runs without: memory accounting's"
-  [ -z "${BANDWIDTH_CMD:-}" ] || step_refused bandwidth "the bandwidth audit reads the served card's links, which this road runs without: memory accounting's"
-  [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ] \
-    || step_refused network-attester "its front stamps the requests during the serve, and its chain and period are on V3c's committed window, which this road doesn't make: network's"
+  [ "$POUW" != pearlplus ] || road_piece pearl-plus pouw "Pearl+" compute-accounting
+  [ -z "${POUS_CMD:-}" ] || road_piece pous pous PoUS memory-accounting
+  [ -z "${BANDWIDTH_CMD:-}" ] || road_piece bandwidth bandwidth "the bandwidth audit" memory-accounting
+  [ -z "${WIPE_CMD:-}" ] || road_wipe
+  [ -z "${CERTIFIER_CMD:-}${CERTIFIER_CHAIN_CMD:-}" ] || road_attester
   if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
   else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
   step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
