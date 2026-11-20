@@ -14438,6 +14438,12 @@
   "Pous.SecurityProofs.StreamedWipeResidual": {
    "owner": "@memory-accounting"
   },
+  "Pous.SecurityProofs.StreamedWipeResidual_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeResidual_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.StreamedWipe_honest": {
    "owner": "@memory-accounting",
    "signature": [
