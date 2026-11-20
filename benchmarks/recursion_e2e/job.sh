@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The recursion bench's job (README.md): verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
+# The recursion bench's job (README.md): verity/protocols/proof/flock/prover/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # vstage, vcap and lean REPEAT times (both metrics are medians over their repeats), icheck and oreplay once, and every GPU
 # step once with its runs, oprove's log a stamped line each; then the result (run.py result) in
@@ -81,9 +81,9 @@ RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> /dev/null) && export CUDA_TK
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
-REC=verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh
+REC=verity/protocols/proof/flock/prover/pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
-LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
+LSHA=$(python3 verity/protocols/proof/flock/prover/pod/lake_closure.py key verity/protocols/proof/flock/verifier)
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)

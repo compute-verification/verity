@@ -38,7 +38,7 @@ REQUESTS=${REQUESTS:-$SLOTS} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} MNBT=${MNBT:-51
 FIXED=${FIXED:-} WINDOW_STEPS=${WINDOW_STEPS:-}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 ROOT=${SERVE_ROOT:-${TMPDIR:-/tmp}/served-stock}
 export PRED=${PRED:-$ROOT/predicted/${RESEARCH_RUN_ID:-local}}
 PRIV=$ROOT/runs/${RESEARCH_RUN_ID:-local}; mkdir -p "$PRIV"; export PRIV
@@ -54,7 +54,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11
   fi
   mkdir -p "$D"
-  local na=network-attester; "$PY" -m verity.protocols.compose.schemes "$na" settings > /dev/null || return 9
+  local na=network-attester; "$PY" -m verity.protocols.run.schemes "$na" settings > /dev/null || return 9
   cd "$TREE/adapters/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \

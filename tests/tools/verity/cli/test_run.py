@@ -20,10 +20,10 @@ import pytest
 from verity.commitments import docket_digest as DD
 from verity import config as K
 from verity.protocol import Channel, Role
-from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
-from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.accounting.network.verifier import parties as NC
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.policy.training_detection.inference_only.verifier import parties as IO
+from verity.protocols.proof.spot.verifier import parties as SP
 from verity.channel import Refused
 import verity_cli as V
 from verity_cli import run as R

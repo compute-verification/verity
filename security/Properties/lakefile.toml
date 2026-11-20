@@ -20,43 +20,43 @@ path = ".."
 
 [[require]]
 name = "pouw_window"
-path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/window"
+path = "../../verity/protocols/accounting/compute/pouw/verifier/lean/window"
 
 [[require]]
 name = "pouw_verifier"
-path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
+path = "../../verity/protocols/accounting/compute/pouw/verifier/lean/check"
 
 [[require]]
 name = "pouw_commit"
-path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit"
+path = "../../verity/protocols/accounting/compute/pouw/verifier/lean/commit"
 
 [[require]]
 name = "pouw_pearlplus"
-path = "../../verity/protocols/resource_accounting/compute/pouw/verifier/lean/pearlplus"
+path = "../../verity/protocols/accounting/compute/pouw/verifier/lean/pearlplus"
 
 [[require]]
 name = "inference_only_verifier"
-path = "../../verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
+path = "../../verity/protocols/policy/training_detection/inference_only/verifier/lean"
 
 [[require]]
 name = "pous_verifier"
-path = "../../verity/protocols/resource_accounting/memory/pous/verifier/check"
+path = "../../verity/protocols/accounting/memory/pous/verifier/check"
 
 [[require]]
 name = "core_memory_attester"
-path = "../../verity/protocols/resource_accounting/memory/pous/attester/lean"
+path = "../../verity/protocols/accounting/memory/pous/attester/lean"
 
 [[require]]
 name = "core_zk_server"
-path = "../../verity/protocols/proofs/recursion/verifier/zk_server"
+path = "../../verity/protocols/proof/recursion/verifier/zk_server"
 
 [[require]]
 name = "network_verifier"
-path = "../../verity/protocols/resource_accounting/network/verifier/lean"
+path = "../../verity/protocols/accounting/network/verifier/lean"
 
 [[require]]
 name = "core_spot"
-path = "../../verity/protocols/proofs/spot/verifier/lean"
+path = "../../verity/protocols/proof/spot/verifier/lean"
 
 [[require]]
 name = "verity_evaluate"
@@ -64,7 +64,7 @@ path = "../../verity/circuits/evaluate"
 
 [[require]]
 name = "poub"
-path = "../../verity/protocols/resource_accounting/memory/poub/verifier/lean"
+path = "../../verity/protocols/accounting/memory/poub/verifier/lean"
 
 [[require]]
 name = "core_requirement"
@@ -72,11 +72,11 @@ path = "../../verity/circuits/requirement"
 
 [[require]]
 name = "core_composition"
-path = "../../verity/protocols/compose/verifier/lean"
+path = "../../verity/protocols/run/verifier/lean"
 
 [[require]]
 name = "core_onsite"
-path = "../../verity/protocols/compose/verifier/onsite"
+path = "../../verity/protocols/run/verifier/onsite"
 
 [[require]]
 name = "core_registration"
@@ -84,7 +84,7 @@ path = "../../verity/protocols/registration/verifier/lean"
 
 [[require]]
 name = "flock_verifier"
-path = "../../verity/protocols/proofs/flock/verifier"
+path = "../../verity/protocols/proof/flock/verifier"
 
 [[lean_lib]]
 name = "Properties"

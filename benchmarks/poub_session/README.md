@@ -1,6 +1,6 @@
 # PoUB's session harness
 
-The session harness of PoUB (`verity/protocols/resource_accounting/memory/poub/verifier`), not the remote
+The session harness of PoUB (`verity/protocols/accounting/memory/poub/verifier`), not the remote
 protocol's application, which is `applications/remote.toml`. It runs PoUB end to end: a verifier's process and a prover's, over TCP,
 and the memory line a gate run publishes.
 

@@ -39,8 +39,8 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.prover import docket as DK
-from verity.protocols.proofs.spot.prover import served as RS
+from verity.protocols.proof.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
     EGRESS,

@@ -2,7 +2,7 @@
 runtime's panic switch set (`lean_env`), so a panic ends the process where it would print its line, return a default value
 and carry on; refused by name where its standard error holds a panic line, whatever its exit status and answer; and refused
 where it was killed by a signal or ended with a status its caller does not document, whatever it wrote. One place for every
-launch in `verity` (`verity.protocols.proofs.spot.verifier.one_stage.lean_child` re-exports it for the door).
+launch in `verity` (`verity.protocols.proof.spot.verifier.one_stage.lean_child` re-exports it for the door).
 `tests/test_lean_child_rule.py` holds the copies other distributions must keep equal to it."""
 
 from __future__ import annotations

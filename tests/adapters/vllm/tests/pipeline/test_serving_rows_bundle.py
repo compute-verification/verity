@@ -15,9 +15,9 @@ from verity.commitments import domains as DM
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import DESIGN, HEADS, ROPE, D

@@ -68,7 +68,7 @@ SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 D=$SR/serve PRED=$SR/predicted PORT=${PORT:-18282}
 mkdir -p "$SR" "$OUT"
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proof/flock/prover/python:$TREE/tools/research/src
 export VERITY_PROTOCOLS_CONFIG="{\"private\": \"$SR/private\"}"
 WL=adapters/vllm/workloads/$ROW.json
 say() { echo "$1"; [ "$DRY" = 1 ] || echo "$1" > "$OUT/smoke.txt"; }
@@ -86,10 +86,10 @@ REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no reco
 # reads under the name of the scheme that provides admission
 ADMIT=$("$PY" - <<'EOF'
 import json
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 print(json.dumps({schemes.named("provides", "admission"): {"order": "release-order"}}))
 EOF
-) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.compose.schemes, above)"; exit 3; }
+) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.run.schemes, above)"; exit 3; }
 SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"

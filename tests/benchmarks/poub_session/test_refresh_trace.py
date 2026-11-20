@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session"))
+sys.path.insert(0, str(HERE.parents[2] / "verity/protocols/accounting/memory/poub/prover/poub_session"))
 
 from verity.commitments import Commitment, verify_opening  # noqa: E402
 from verity.commitments import Opening as MerkleOpening  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 import prover  # noqa: E402
 

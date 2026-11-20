@@ -201,9 +201,9 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.compose import schemes  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.accounting.compute.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.run import schemes  # noqa: E402
+from verity.protocols.proof.spot.verifier import service as S  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
@@ -694,7 +694,7 @@ def device_day(lines: list[str], root: str, key: Any, verify: Callable[[Any, byt
     one-stage R2's shape: the UTC day of the window open's signed ``started_utc``, and the declarations its lane signed
     before that open), never ``--day``. The tied W's naming is held to `registration.Declaration` rebuilt from the
     device's entry of its day. ValueError (`challenger.CoinError`) where the reader refuses the ledger."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
     got = Ch.declared_day(lines, {"root": root}, key, verify)
     day = got["day"]
     declarations = [{"blocks": list(d["blocks"]), "day": d["day"], "program": d["program"]} for d in got["declarations"]]
@@ -859,7 +859,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     caller passes, since SPOT reads the attester's output as a certified input and never imports it. ValueError where the
     circuit isn't the one the docket binds, the window commits no ``tied`` value its circuit reads, the audit wrote no
     Program or another than the docket names, or its answer commits to another docket."""
-    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI
+    from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
     body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
@@ -947,7 +947,7 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     # the directory of `zk_mutants.py` and the modules it imports beside it
-    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py").parent))
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proof/flock/prover/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -1082,8 +1082,8 @@ def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1115,7 +1115,7 @@ def audit(a: argparse.Namespace) -> int:
         pins |= histories
         reads = IF.registered_file(doc, mine, pins, docket.get("roots") or ())
         if a.day_ledger:
-            from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
+            from verity.protocols.proof.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
             day = device_day(SPR.ledger_lines(a.day_ledger), mine.run, key, AC.lms_verify, w_tie)
         else:
@@ -1141,7 +1141,7 @@ def audit(a: argparse.Namespace) -> int:
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     if a.lower is None:
-        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        from verity.protocols.proof.spot.verifier.one_stage import proofs as PF
         a.door_lower = PF.lower_executable()
     else:
         a.door_lower = Path(a.lower)

@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "verity/protocols/proofs/spot/verifier/lean"
+PACKAGE = ROOT / "verity/protocols/proof/spot/verifier/lean"
 LEAN = PACKAGE / "Spot"
-SUITE = ROOT / "tests/verity/protocols/proofs/spot/verifier"
+SUITE = ROOT / "tests/verity/protocols/proof/spot/verifier"
 #: the small tests of the members road's refusals
 TESTS = [SUITE / "lean/test_members_twin.py", SUITE / "lean/test_header_held_at_difftest.py", SUITE / "test_members_run.py"]
 STATEMENT, ZK = LEAN / "OneStageZkStatement.lean", LEAN / "OneStageZk.lean"

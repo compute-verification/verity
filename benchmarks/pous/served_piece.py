@@ -24,7 +24,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
-2. **Setup** by PoUS's scheme, ``compose.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
+2. **Setup** by PoUS's scheme, ``run.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
    with ``W`` registered as its weight operands (`memory/pous/prover/served.py`): the commitment to ``W``, then the
    salt, which the memory attester samples after it from its own host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
    verb on a salt request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and
@@ -63,7 +63,7 @@ same sessions, which no second session replaces. With neither, one process does 
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the
    developer, not the auditor, which the ``POUS`` line prints after the premise.
 
-6. **The bandwidth session**: the bandwidth audit, ``compose.schemes.get("bandwidth")``, attached by name on the same
+6. **The bandwidth session**: the bandwidth audit, ``run.schemes.get("bandwidth")``, attached by name on the same
    exchange after PoUS's scheme, reads the store PoUS binds (`p2_stage.bandwidth.Attached`); once PoUS's session
    completed, before either is answered and before ``C*`` is released, it runs PoUB-P2's session over that store on
    the card (`Attached.session`), so both audits are of one store and no second one is encoded. The session's request carried setup's published outputs and P2's parameters (`challenger_session.request_of`'s
@@ -118,16 +118,16 @@ import torch
 
 from verity import hooks as H
 from verity.runtime.stream import Side
-from verity.protocols.compose import schemes as table
-from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting.memory.pous.verifier import period
-from verity.protocols.resource_accounting.memory.pous.verifier import run as R
-from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+from verity.protocols.run import schemes as table
+from verity.protocols.accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.memory.pous.verifier import period
+from verity.protocols.accounting.memory.pous.verifier import run as R
+from verity.protocols.accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocols.resource_accounting.scheme import answering
+from verity.protocols.accounting.scheme import answering
 from verity_vllm import messages
 
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -751,7 +751,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("window", type=int)
     ap.add_argument("out", type=Path)
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="libp2v1.so's directory (verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")

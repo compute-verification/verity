@@ -10,7 +10,7 @@ With it, M0's block for the unit (`block`): the in-circuit hashing of its rows a
 ``rows_log`` passes `K_MAX` is refused whatever its ANDs.  The same is computed for each family's split units (its unit
 templates past the row itself: ``units``), and for each ``--also`` Definition (``candidates``: a split's unit main lacks).
 
-    PYTHONPATH=...:<tree>/verity/protocols/proofs/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
+    PYTHONPATH=...:<tree>/verity/protocols/proof/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
       [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
 from __future__ import annotations
