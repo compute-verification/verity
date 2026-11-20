@@ -870,6 +870,10 @@ def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(NEBIUS / "launch.sh"), *args], env={**base, **env}, capture_output=True, text=True)
 
 
+ROOT = NEBIUS.parents[5]
+GPU_REGISTRY = ROOT / "tools" / "config" / "verity_config" / "registry" / "gpus.toml"
+
+
 def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIdummy research@test"
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub)
@@ -899,6 +903,56 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither(tmp_path):
+    """The memory lock is the clock.memory of the card file the GPU registry's entry for the platform names; a locking
+    platform is refused before anything is created when the registry refuses an entry naming no card."""
+    (entry,) = [g for g in tomllib.loads(GPU_REGISTRY.read_text())["gpu"] if "gpu-rtx6000" in g["nebius_platforms"]]
+    clock = tomllib.loads((ROOT / "calibration" / "hardware" / "cards" / f"{entry['card']}.toml").read_text())["clock"]
+
+    def settings(**env: str) -> list[str]:
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", **env)
+        assert r.returncode == 0, r.stderr
+        b64 = re.search(r"  - path: /etc/vy/vy.env\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", r.stdout)[1]
+        return [ln for ln in gzip.decompress(base64.b64decode(b64)).decode().splitlines() if "CLOCK" in ln]
+
+    gpu = int(re.search(r"^GPU_LOCK_MHZ=(\d+)$", (NEBIUS / "launch.sh").read_text(), re.M)[1])
+    assert gpu <= clock["sm"]["value"]
+    assert settings() == ["VY_LOCK_CLOCKS=1", f"VY_GPU_CLOCK_MHZ={gpu}", f"VY_MEM_CLOCK_MHZ={clock['memory']['value']}"]
+    assert settings(NEBIUS_PLATFORM_PREFIX="gpu-h100-sxm") == ["VY_LOCK_CLOCKS=0"]
+    copy = tmp_path / NEBIUS.relative_to(ROOT)
+    copy.mkdir(parents=True)
+    for name in ("launch.sh", "common.sh"):
+        shutil.copy(NEBIUS / name, copy / name)
+    package = GPU_REGISTRY.parents[1]
+    shutil.copytree(package, tmp_path / package.relative_to(ROOT), ignore=shutil.ignore_patterns("__pycache__"))
+    registry = tmp_path / GPU_REGISTRY.relative_to(ROOT)
+    registry.write_text(re.sub(r"^card = .*\n", "", GPU_REGISTRY.read_text(), flags=re.M))
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "RUNPOD_"))}
+    r = subprocess.run(["bash", str(copy / "launch.sh"), "--dry-run"], env={**base, "NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy"},
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and f"GPU {entry['id']} names no card" in r.stderr and not r.stdout, r.stderr
+
+
+def test_the_first_boot_refuses_to_lock_with_a_clock_unset_before_writing_anything(tmp_path):
+    """vm_setup.sh has no clock of its own: told to lock with either clock unset or empty it stops, naming both, before its
+    first write; untold, it locks nothing and writes no clock unit."""
+    text = (NEBIUS / "vm_setup.sh").read_text()
+    head, rest = text.split("\nfi\n", 1)
+    assert "cat >" not in head and "systemctl" not in head
+    assert re.search(r'^\[ "\$LOCK_CLOCKS" = 0 \] \|\| cat > /etc/systemd/system/vy-clocks\.service', rest, re.M)
+    env_file = tmp_path / "vy.env"
+    prefix = tmp_path / "head.sh"
+    prefix.write_text(head.replace("/etc/vy/vy.env", str(env_file)) + "\nfi\necho passed\n")
+    for settings, refused in [("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=\nVY_MEM_CLOCK_MHZ=12481\n", True),
+                              ("VY_LOCK_CLOCKS=1\nVY_GPU_CLOCK_MHZ=2100\nVY_MEM_CLOCK_MHZ=12481\n", False),
+                              ("VY_USER=research\n", False), ("VY_LOCK_CLOCKS=0\n", False)]:
+        env_file.write_text(settings)
+        r = subprocess.run(["bash", str(prefix)], capture_output=True, text=True)
+        assert (r.returncode, r.stdout) == ((2, "") if refused else (0, "passed\n")), settings
+        assert not refused or ("VY_GPU_CLOCK_MHZ" in r.stderr and "VY_MEM_CLOCK_MHZ" in r.stderr), settings
 
 
 def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
