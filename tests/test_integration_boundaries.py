@@ -58,8 +58,6 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.moe"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py", "verity_vllm.definitions.registry.sampling"),
     ("tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py", "verity_vllm.definitions.registry.catalog"),
-    ("tests/verity/protocols/proofs/spot/verifier/test_served_select.py", "verity_vllm.definitions.registry"),
-    ("tests/verity/protocols/proofs/spot/verifier/test_served_select.py", "verity_vllm.definitions.registry.prims"),
     # network-accounting's: the network attester's tests take the sampling Definitions from `verity`.
     ("tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py", "verity_vllm.definitions.registry.sampling"),
     ("tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_response_tie.py", "verity_vllm.definitions.registry"),

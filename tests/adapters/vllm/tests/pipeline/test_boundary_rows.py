@@ -23,7 +23,7 @@ import pytest
 
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
-from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.circuits import replay_links as RL
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
@@ -219,7 +219,7 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     key = descriptor_id(L.replay)
     assert (L.returned, L.values, L.return_rows, L.leaves("o0"), L.words("o0")) == ("o0", (*BR.PORTS, "o0"), (4, 32), 20, 2)
     assert (off.returned, off.values) == (None, BR.PORTS)
-    assert SS.replay_links(L.program, key, {"roots": [{"port": p} for p in L.ports()]})[-1] == SS.Link(
+    assert RL.replay_links(L.program, key, {"roots": [{"port": p} for p in L.ports()]})[-1] == RL.Link(
         P.template_id(PICK), "o0", "o0")
     assert L.ports()["o0"] == {"leaves": 20, "domain": R.window_domain(L.partition["program"], P.digest(L.partition), "o0",
                                                                       BR.SCHEMA, 20, L.run)}
@@ -261,7 +261,7 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     tabled = BR.Layout(PICK, 0, 1, 3, 4, 2, "a" * 128, layers=(0,), ids=True)
     assert "/" in tabled.tables[0] and tabled.returned == f"{key}/o0" == BR.return_port(key, tabled.tables)
     assert list(tabled.ports()) == [*BR.PORTS, f"{key}/o0", *tabled.tables]
-    assert SS.replay_links(tabled.program, key, {"roots": [{"port": p} for p in tabled.ports()]})[-1].value == f"{key}/o0"
+    assert RL.replay_links(tabled.program, key, {"roots": [{"port": p} for p in tabled.ports()]})[-1].value == f"{key}/o0"
     with pytest.raises(ValueError, match="one 32-bit id an output"):
         BR.commit(_spans(), BR.Layout(PAIR, 0, 1, 3, 4, 5, "a" * 128, ids=True), 0)
     with pytest.raises(ValueError, match="of 7 instances at 4 outputs"):
@@ -304,8 +304,8 @@ def _return_links(L: BR.Layout, ports) -> list[tuple[str, str, str, int]]:
     """Round 2's own links to the replay block's return, in a record of ports ``ports``: each one's template, its output
     port, the value it reads as that record names it, and that value's rows a block."""
     key = P.template_id(L.replay)
-    per = {(x.template, x.port): n for x, n, _runs in SS.link_runs(definitions(L.program), key)}
-    links = SS.replay_links(L.program, key, {"roots": [{"port": p} for p in ports]})
+    per = {(x.template, x.port): n for x, n, _runs in RL.link_runs(definitions(L.program), key)}
+    links = RL.replay_links(L.program, key, {"roots": [{"port": p} for p in ports]})
     return [(x.template, x.port, x.value, per[x.template, x.port]) for x in links if x.value.rpartition("/")[2] == BR.RETURN]
 
 
@@ -357,7 +357,7 @@ def test_a_class_of_verdicts_commits_its_blocks_return_as_a_third_value(tmp_path
 
 
 def test_the_returns_name_is_round_twos_in_a_record_of_either_form():
-    """`return_port` names the return as round 2 names the value its return link reads (`second_stage.replay_links`):
+    """`return_port` names the return as round 2 names the value its return link reads (`replay_links.replay_links`):
     bare in a record none of whose ports has a ``/``, and under the replay block's id in one that has such a port. A
     class whose block returns anything but bits can't say they are verdicts, in either form of its block."""
     L = BR.Layout(SAME, 0, 1, 3, 4, 5, "a" * 128, verdicts=True)
@@ -708,7 +708,7 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     """A class's Definition (`class_signature`) reads a span's `b.request` and `b.prompt` rows and returns its
     `b.egress` row, each u32 one 32-bit leaf, two of the u16 words the class commits under a stop rule, which the stop
     block reads too. On a small one whose body reads each parameter whole by a template and returns one template's
-    output whole, round 2's own derivation (`second_stage.replay_links`) makes one link for each value, to the name the
+    output whole, round 2's own derivation (`replay_links.replay_links`) makes one link for each value, to the name the
     class's record gives it (`ends`), bare or under the replay block's id beside a port with a ``/``, one row a replay
     block. A size that is no class's, and a row of no value a Definition reads or returns, are refused."""
     D = bind(CLASS, P=4, O=2)
@@ -727,11 +727,11 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     assert BR.ends(key) == {BR.REQUEST: BR.REQUEST, BR.PROMPT: BR.PROMPT, BR.EGRESS: BR.RETURN}
     for others in ((), ("table/x",)):
         ends = BR.ends(key, others)
-        links = SS.replay_links(program, key, {"roots": [{"port": p} for p in (*ends.values(), *others)]})
+        links = RL.replay_links(program, key, {"roots": [{"port": p} for p in (*ends.values(), *others)]})
         want = sorted((*templates[v], ends[v]) for v in BR.PARTS)
         assert sorted((x.template, x.port, x.value) for x in links) == want
     assert BR.ends(key, ("table/x",)) == {v: f"{key}/{n}" for v, n in BR.ends(key).items()}
-    per = {x.value: n for x, n, _rs in SS.link_runs(definitions(program), key)}
+    per = {x.value: n for x, n, _rs in RL.link_runs(definitions(program), key)}
     assert per == dict.fromkeys(BR.ends(key).values(), 1)
     for prompt, outputs in ((0, 2), (4, 3)):
         with pytest.raises(ValueError, match="at a class's"):
