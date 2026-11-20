@@ -1505,9 +1505,9 @@ verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`p
 design has the verifier hold by b‖c to the served rows the Commit side registers before the sample
 (`verity_vllm.compiler.served_rows`); at G < P, the served rows' blocks, its P / G rows (`CompileSliceRowGroups_v1`,
 [protocol/served-statics.md](protocol/served-statics.md)). Today nothing that runs refuses the phase-10 attack's six
-passes. No session of the compile slice runs; only its tests call the b‖c check; and the check that runs in the slice's
-place, `records_audit.py audit`'s recompile of the advice opened in the clear (`records_audit.compile_check`), reads no
-served rows. Under the slice, with the served rows in ``srv``, ``rows`` would refuse them, but the served rows are the
+passes. No session of the compile slice runs; only its tests call the b‖c check; and nothing runs in the slice's place:
+`records_audit.py audit` holds the docket to the circuit the verifier registered (`--circuit`) and recompiles no
+advice. Under the slice, with the served rows in ``srv``, ``rows`` would refuse them, but the served rows are the
 prover's registration, tied to nothing the server ran, and a prover that registers the passes' own rows passes both. Its
 charge is `ChargeLink_v1{D}` over the decisions the execution phase commits, from its carry-in to its carry-out in the session's
 carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served execution phases' slice except under the
