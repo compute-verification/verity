@@ -380,6 +380,10 @@ def DENSE_ONLY : String := "RecursiveKS covers the dense form only (no holo, no 
 -- and a recursive session (a --rec-* flag) without --zk (`RecSetup.zkOnly`): its model reads the masked verifier only
 #guard err (Flock.RecSetup.zkOnly false true) == some Flock.RecSetup.notZk
 #guard [(true, true), (true, false), (false, false)].all fun (z, r) => err (Flock.RecSetup.zkOnly z r) == none
+-- and, by design, every recursive session (`RecSetup.notRecursive`): the recursive form is built and refused by name
+#guard err (Flock.RecSetup.notRecursive true) == some Flock.RecSetup.RECURSION_REFUSED
+#guard err (Flock.RecSetup.notRecursive false) == none
+#guard Flock.RecSetup.RECURSION_REFUSED.startsWith "refused: the recursive form "
 #guard commitsAt c3 none == some NO_REG
 #guard [commitsAt { c3 with sparse := none } none, commitsAt c3 (some "{}")].all
   (· == some "rec inner transcript: not a rec/inner-transcript/v1 record")

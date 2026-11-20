@@ -57,6 +57,7 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.commitments import docket_digest as DD
+from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -308,7 +309,8 @@ def _two_stage_evidence(j: Any) -> dict:
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        return _two_stage().params_of_json(j)
+        _two_stage().params_of_json(j)
+        raise Reject(TWO_LEVELS_REFUSED)
     return _one_stage_params(rest)
 
 

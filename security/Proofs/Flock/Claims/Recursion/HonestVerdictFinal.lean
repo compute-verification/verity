@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Claims.Recursion.HonestStreams
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
@@ -62,7 +63,7 @@ decodes as the printed record does (`decodeJ_recordObj`). The verdict at it is t
 which accepts (`Run.verdict_ok`).
 
 * **The goals** (`goals_plain`): `complete_plain`'s goals, at 64-byte outputs.
-* **SHA-512's outputs are 64 bytes** (`out64_sha512`).
+* **SHA-512's outputs are 64 bytes** (`out64_sha512`, in `Proofs.Flock.Claims.DeployReads`).
 * **The verdict at a value that decodes as the record** (`verifyJWithM_eq_verifyWithM`).
 * **The honest record's reads** (`run_recordJ`): `Run.json`'s, with the decode of every value alike the record.
 * **The verdict** (`honestVerdict`).
@@ -189,16 +190,6 @@ end Flock
 namespace FlockDeploy
 
 open Flock FlockComplete
-
-/-- **SHA-512's outputs are 64 bytes.** -/
-theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
-  show (Claims.toMsg (Sha512.hash (Claims.ofMsg m))).length = 64
-  have h := Sha512.hash_size (Claims.ofMsg m)
-  generalize Sha512.hash (Claims.ofMsg m) = b at h ⊢
-  cases b
-  unfold Claims.toMsg
-  rw [Array.length_toList]
-  exact h
 
 /-- **The verdict passes on the honest proofs at the reader's record**: at every plain
 completeness run and the deployed verifier's coins, `verifyJPWith` at `jAt` of `recJ` accepts. -/

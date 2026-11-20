@@ -153,7 +153,7 @@ def _vllm(path: str) -> str:
 #: controller that lifts a request to its cap, the workload and executed prefix that declare it, and their tests, whose
 #: ``CAP`` in capitals is the same cap
 REQUEST_CAPS = tuple(_vllm(p) for p in (
-    "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/workload.py",
+    "verity_vllm/check/replay/continuation.py", "verity_vllm/program/workload.py",
     "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
     "tests/program/test_continuation.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
@@ -227,10 +227,6 @@ OWN_NAMES = {
          "the attestation period of `Attest.Period`, in its guarantees' names (`PeriodSigned`, `PeriodSound`, "
          "`PeriodRun`), in their two files only: elsewhere `PeriodRun` is compose's and `PeriodSound` PoUW's",
          ("security/Properties/Attest.lean", "security/Proofs/Properties/Pous/MemoryAttester/Attest.lean")),
-        (r"_PeriodAuditor",
-         "the auditor of H1's challenge period in the vLLM adapter's PoUW tests: a span of time, which retired_terms.md's row "
-         "of \"window\" calls a period, and not the stretch of time a bound is about that its row of `*Period*` retires",
-         ("tests/adapters/vllm/tests/pipeline/test_serve_h1.py",)),
     ),
     "row of record": (
         (r"row[\s_]+of[\s_]+record",
@@ -1134,15 +1130,13 @@ def test_the_responder_s_and_a_party_s_periods_keep_the_word_and_attest_s_names_
         "PeriodSigned", "PeriodSound", "PeriodRun"]
 
 
-def test_the_adapter_s_row_of_record_and_h1_s_period_auditor_keep_their_words_only_in_their_files() -> None:
-    """vLLM's "row of record" and H1's ``_PeriodAuditor`` aren't sites in the adapter's files that name them, and are
-    elsewhere."""
-    text = "the row of record, row_of_record and _PeriodAuditor"
-    for term, (_, _, files) in (("row of record", OWN_NAMES["row of record"][0]), ("*Period*", OWN_NAMES["*Period*"][4])):
-        for f in files:
-            assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
-            assert [w.split("'")[1] for _, w in sites(text, f) if (term == "*Period*") == ("Period" in w)] == []
-    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record", "_PeriodAuditor"]
+def test_the_adapter_s_row_of_record_keeps_its_words_only_in_its_files() -> None:
+    """vLLM's "row of record" isn't a site in the adapter's files that name it, and is elsewhere."""
+    text = "the row of record and row_of_record"
+    for f in OWN_NAMES["row of record"][0][2]:
+        assert Path(ROOT, f).is_file(), f"{f} is gone: move its line of OWN_NAMES with it"
+        assert [w.split("'")[1] for _, w in sites(text, f)] == []
+    assert [w.split("'")[1] for _, w in sites(text, "verity/a.py")] == ["row of record", "row_of_record"]
 
 
 ARM_KEYS = ('bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")\n'

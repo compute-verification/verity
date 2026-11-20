@@ -36,8 +36,8 @@ same as without ``--out``. Under DIR: ``serve.json``, ``advice_trace.jsonl``, ``
 engine id, ``user``, the network attester's release headers on it, its prompt and streamed ids, its finish and the
 clock at its arrival, first id and finish), ``windows.jsonl`` and ``served_rows/`` (`demo_endpoint`'s Commit windows, at
 most ``--window-steps`` steps each), and at SIGTERM or SIGINT, once the open window is closed, ``summary.json``. Its EOS
-id is ``--vocab``, which no answer holds, so every answer is ``--tokens`` ids long: the chain takes it as the model's
-EOS ids (chain_record.sh's ``CR_EOS_IDS``).
+id is ``--vocab``, which no answer holds, so every answer is ``--tokens`` ids long: the endpoint step takes it as the
+model's EOS ids (``chain_record.py endpoint --eos``).
 
 `prompts` prints ``--count`` prompts of the class (`prompts`), the JSON array the gate's `--prompts` reads off its stdin:
 
