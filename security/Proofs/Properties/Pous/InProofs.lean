@@ -9,6 +9,7 @@ public import Proofs.Properties.ResourceAccounting.InProofs
 public import Proofs.Properties.Pous.MemoryAttester
 import Proofs.Properties.Pous.WipeSigned
 import Proofs.Properties.Pous.MemoryAttester.Session
+import Proofs.Properties.Pous.MemoryAttester.Inputs
 import Proofs.Properties.Hash.Lms
 
 /-!
@@ -205,13 +206,14 @@ def honestRound : Round := ⟨0, 0, 0, 0, honestDigest⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
 theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := by
-  have hk : honestCoinKey.size = HM96.keyBytes ∧ honestCoinKey.get! (HM96.keyBytes - 1) &&& 128 = 0 := by
-    refine ⟨by simp [honestCoinKey, ByteArray.size, HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits], ?_⟩
-    have h255 : HM96.keyBytes - 1 = 255 := by simp [HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
-    rw [h255]
-    set_option maxRecDepth 100000 in decide
-  have hs : honestSalt.size = HM96.saltBytes := by simp [honestSalt, ByteArray.size, HM96, Flock.Hm96.sha512]
-  simp [coinLeaf, coinDigest, beN, checkKey, checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
+  have hk : Flock.SessionCoins.checkKey honestCoinKey = .ok () := by
+    have hkb : Flock.SessionCoins.HM96.keyBytes = 256 := rfl
+    have hb : (honestCoinKey.size == 256 && honestCoinKey.get! (256 - 1) &&& 0x80 == 0) = true := by
+      set_option maxRecDepth 100000 in decide
+    unfold Flock.SessionCoins.checkKey
+    simp only [hkb, hb, if_true]
+    rfl
+  exact Inputs.coinLeaf_of _ _ 0 0 _ hk (by decide) (by decide) (by simp [honestSalt, ByteArray.size])
 
 /-- The commitment of a session of one round over one block, its coin root the one leaf `leaf`. -/
 def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
