@@ -14,9 +14,14 @@ from verity.protocols.proofs.spot.prover import docket as DK
 
 from . import window_rows as WRS
 
-__all__ = ["SALTS", "commit", "place_slots", "window_design"]
+__all__ = ["SALTS", "commit", "key_of", "place_slots", "window_design"]
 
 SALTS = "verity/window-commit/salts/v1"
+
+
+def key_of(run: str) -> bytes:
+    """A window's salt key, drawn fresh for the one window under ``run``."""
+    return RND.derive(os.urandom(64), SALTS, {"window": run})
 
 
 def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
@@ -72,10 +77,12 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
 
 def commit(low: Any, cls: Any, slots: Sequence[Any], values: Mapping[str, Any], run: str, design: Mapping[str, Any],
            cap: int, advice: Mapping[str, Any], out: str | Path, window: int, *,
-           strings: Callable[[Any, Any], Any], workers: int, lap: Callable[[str], None]) -> tuple[Any, Any]:
+           strings: Callable[[Any, Any], Any], workers: int, lap: Callable[[str], None],
+           key: bytes | None = None) -> tuple[Any, Any]:
     """``low``'s window recorded and written to ``out``: its slots' and output rows (`window_rows.Rows`) recorded into a
     `Window` under ``run``, ``design`` and ``cap``, bound to ``advice`` (`interface.advice_binding`) with the registered
-    ``values``, closed with ``strings(win, key)`` under one key drawn fresh for the window, and written with its docket.
+    ``values``, closed with ``strings(win, key)`` under ``key``, the one key drawn fresh for the window (`key_of`, here
+    where none is given), and written with its docket.
     -> the rows and the window."""
     filled = WRS.Rows(low, slots, values)
     lap("rows")
@@ -83,7 +90,7 @@ def commit(low: Any, cls: Any, slots: Sequence[Any], values: Mapping[str, Any], 
     win.supply()
     filled.record(win)
     lap("record")
-    key = RND.derive(os.urandom(64), SALTS, {"window": run})
+    key = key if key is not None else key_of(run)
     c = win.close(workers=workers, strings=strings(win, key))
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(window)}}

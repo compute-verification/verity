@@ -24,7 +24,8 @@ from verity.commitments.rowleaf import (
 
 from .window_plan import stage
 
-__all__ = ["Device", "HostTwin", "acquired", "block_of", "leaf_strings", "strings_of"]
+__all__ = ["HANDOFF", "Device", "HostTwin", "acquired", "block_of", "card_ports", "card_strings", "handed_strings",
+           "leaf_strings", "load_card", "save_card", "strings_of"]
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -197,3 +198,117 @@ def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None, block: Callabl
     sys.stderr.write("WINDOW-STRINGS " + json.dumps(got) + "\n")
     sys.stderr.flush()
     return strings
+
+
+def card_ports(circuit: Any, ports: Collection) -> dict[tuple[str, str], tuple[int, int, int]]:
+    """By each of ``ports`` (template id, port), the numbering `Window.leaf_rows` gives it as the circuit's layouts give
+    it: its template's ordinal, its ordinal among a member's rows then outputs, and its row's bytes (an output's words
+    zero-padded to whole SHA-512 blocks, `rows.Member.out_rows`). `handed_strings` holds it to the window's."""
+    tids = {t: i for i, t in enumerate(circuit.ids)}
+    out = {}
+    for tid, port in ports:
+        lay = circuit.layouts[tid][0]
+        rows, outs = dict(lay.rows), dict(lay.outs)
+        words = rows[port] if port in rows else -(-outs[port] // 64) * 64
+        out[(tid, port)] = (tids[tid], [p for p, _ in lay.rows + lay.outs].index(port), 2 * words)
+    return out
+
+
+def card_strings(plan: Any, block: Callable[[int, str], tuple[Any, int]], circuit: Any, key: Any,
+                 hasher: Any) -> tuple[dict[tuple[str, str], tuple[tuple[int, int, int], np.ndarray, np.ndarray, np.ndarray]], dict]:
+    """The strings of every unit ``plan`` feeds, hashed by ``hasher`` (on a card, `Device`) under ``key`` from its row where
+    it is committed (`acquired`), at `card_ports`' numbering. -> by port, its numbering, units, the rows' host copies and
+    their strings; and the cost."""
+    t0 = time.perf_counter()
+    staged = acquired(plan, block, {(f.tid, f.out) for f in plan.feeds})
+    idx, out = card_ports(circuit, staged), {}
+    for k, fed in staged.items():
+        t, p, lb = idx[k]
+        units = sorted(fed)
+        ys = hasher.salts(key, (t, p), units[-1] + 1)[units]
+        rows = hasher.rows([fed[u] for u in units], _stride(lb))
+        bc = hasher.host(hasher.strings(rows, lb, ys))
+        out[k] = ((t, p, lb), np.asarray(units, dtype=np.int64), np.ascontiguousarray(hasher.host(rows)[:, :lb]), bc)
+    return out, {"where": type(hasher).__name__, "ports": len(out), "units": sum(len(v[1]) for v in out.values()),
+                 "s": round(time.perf_counter() - t0, 3)}
+
+
+#: what the card leaves for the host to finish the record from, in a window's ``handoff/``: its salt key, so private
+HANDOFF = ("handoff.json", "card.npz", "key.bin")
+
+
+def save_card(to: Any, card: Mapping, key: bytes, meta: Mapping[str, Any]) -> None:
+    """``card`` (`card_strings`) and ``key`` written as `HANDOFF` under ``to``, ``meta`` beside the ports."""
+    from pathlib import Path
+
+    to = Path(to)
+    to.mkdir(parents=True, exist_ok=True)
+    (to / HANDOFF[2]).write_bytes(bytes(key))
+    ks = sorted(card)
+    np.savez(to / HANDOFF[1], **{f"{x}{i}": card[k][j] for i, k in enumerate(ks) for j, x in ((1, "u"), (2, "r"), (3, "s"))})
+    (to / HANDOFF[0]).write_text(json.dumps({**meta, "ports": [[*k, *card[k][0]] for k in ks]}) + "\n")
+
+
+def load_card(to: Any) -> tuple[bytes, dict, dict[str, Any]]:
+    """`save_card`'s ``(key, card, meta)`` from ``to``; refused by name where one of `HANDOFF` is missing."""
+    from pathlib import Path
+
+    to = Path(to)
+    if missing := [f for f in HANDOFF if not (to / f).is_file()]:
+        raise ValueError(f"handoff {to}: no {', '.join(missing)}; the card's part of the close did not leave it")
+    meta = json.loads((to / HANDOFF[0]).read_text())
+    z = np.load(to / HANDOFF[1])
+    card = {(tid, port): ((t, p, lb), z[f"u{i}"], z[f"r{i}"], z[f"s{i}"]) for i, (tid, port, t, p, lb) in enumerate(meta["ports"])}
+    return (to / HANDOFF[2]).read_bytes(), card, meta
+
+
+def handed_strings(win: Any, key: Any, twin: HostTwin, card: Mapping, *, sample: int = 0,
+                   cost: dict[str, Any] | None = None) -> dict[tuple[str, str], tuple[bytes, bytes]]:
+    """`Window.close`'s strings with each unit ``card`` holds (`card_strings`, under ``key``) the card's, every other unit on
+    the host from its recorded row. Refused by the port's name: a handed port whose numbering differs from the window's
+    `leaf_rows`, or a handed row not the recorded one; and, on up to ``sample`` handed ports drawn from the OS, a string
+    of the card's that the host reference ``twin`` doesn't recompute byte for byte. Prints one ``WINDOW-STRINGS`` line."""
+    lrs = win.leaf_rows()
+    out, got = {}, {"ports": len(lrs), "where": "card, handed", "acquired": 0, "host": 0, "host_s": 0.0, "handed_unleafed": 0}
+    for k, lr in lrs.items():
+        if lr.schema != SCHEMA_HM96_SHA512_ROW_V2:
+            raise ValueError(f"strings: {k} is {lr.schema}, and the row hash computes {SCHEMA_HM96_SHA512_ROW_V2}'s strings alone")
+        units, rows = list(lr.units), lr.rows
+        lb = 2 * int(rows.shape[1])
+        ys = twin.salts(key, (int(lr.template), int(lr.port)), units[-1] + 1)[units]
+        bc, pos, at = np.empty((len(units), BC_BYTES), dtype=np.uint8), {u: i for i, u in enumerate(units)}, []
+        if (h := card.get(k)) is not None:
+            if tuple(h[0]) != (int(lr.template), int(lr.port), lb):
+                raise ValueError(f"handoff: port {k}: the card hashed it as (template, port, bytes) {tuple(h[0])}, the window's "
+                                 f"leaf rows are {(int(lr.template), int(lr.port), lb)}")
+            pairs = [(pos[int(u)], j) for j, u in enumerate(h[1]) if int(u) in pos]
+            at, js = [i for i, _ in pairs], [j for _, j in pairs]
+            mine = np.ascontiguousarray(rows[at]).astype("<u2").view(np.uint8).reshape(len(at), lb)
+            if not np.array_equal(mine, h[2][js]):
+                raise ValueError(f"handoff: port {k}: a row the card hashed is not the window's recorded row")
+            bc[at] = h[3][js]
+            got["handed_unleafed"] += len(h[1]) - len(at)
+        taken = set(at)
+        if rest := [i for i in range(len(units)) if i not in taken]:
+            t0 = time.perf_counter()
+            r = np.ascontiguousarray(rows[rest]).astype("<u2").view(np.uint8).reshape(len(rest), lb)
+            bc[rest] = host_strings(r, lb, ys[rest])
+            got["host_s"] += time.perf_counter() - t0
+        got["acquired"], got["host"] = got["acquired"] + len(at), got["host"] + len(rest)
+        out[k] = (ys.tobytes(), bc.tobytes())
+    fed = sorted(k for k in card if k in lrs)
+    pick = random.Random(os.urandom(16)).sample(fed, min(sample, len(fed)))
+    t0 = time.perf_counter()
+    for k in pick:
+        (t, p, lb), units, rows, bc = card[k]
+        ys = twin.salts(key, (t, p), int(units[-1]) + 1)[units]
+        if not np.array_equal(host_strings(rows, lb, ys), bc):
+            raise ValueError(f"WINDOW-STRINGS: port {k}: the card's strings are not the host reference's, byte for byte")
+    got["host_s"] = round(got["host_s"], 3)
+    got["twin"] = {"ports": len(pick), "of": len(fed), "units": sum(len(card[k][1]) for k in pick), "equal": True,
+                   "unequal": [], "s": round(time.perf_counter() - t0, 3)}
+    if cost is not None:
+        cost.update(got)
+    sys.stderr.write("WINDOW-STRINGS " + json.dumps(got) + "\n")
+    sys.stderr.flush()
+    return out

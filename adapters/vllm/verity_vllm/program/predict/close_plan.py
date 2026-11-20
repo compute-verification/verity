@@ -26,16 +26,18 @@ class ClosePlan:
     advice trace (`StepTrace.drain`) before it is read. Given the binding map the window's close built (`serve_seal.binding_of`:
     ``bmap`` and ``aliases``), each slot's `window_rows.Served` locates its request's committed members, from a Build of its
     Program written beside the window's seal (`naming.write_build`, under `steps.trace_dir`'s name); without it the outcome
-    names the circuit's templates and units alone. Either names, in ``unprovable_alone``, the templates `check_served` finds
+    names the circuit's templates and units alone. Given a ``record``, its card's part (`Record.handoff`: the acquired units'
+    strings, made where they are committed) runs at the close, and its record there too only ``in_lease``; else
+    `close_record.finish` makes it once the card is released, and the outcome says so by name. Either names, in ``unprovable_alone``, the templates `check_served` finds
     under the prover's floor, which stay in the circuit and its sample. A window whose advice is pending or refused, or that
     the class doesn't take, has no circuit and says why."""
 
     def __init__(self, out: Path, cls: Any, *, registered: Any = None, compiler: Any = None, grain: Any = None,
                  flush: Callable[[], Any] | None = None, registered_roots: dict[str, str] | None = None,
-                 hf_config: str | None = None, record: Record | None = None) -> None:
+                 hf_config: str | None = None, record: Record | None = None, in_lease: bool = False) -> None:
         self.out, self.cls, self.registered, self.compiler, self.record = Path(out), cls, registered, compiler, record
         self.grain = grain if grain is not None else WC._GRAIN
-        self.flush, self.registered_roots, self.hf_config = flush, registered_roots, hf_config
+        self.flush, self.registered_roots, self.hf_config, self.in_lease = flush, registered_roots, hf_config, in_lease
         self.held: dict[int, tuple[Any, Any, Plan | None]] = {}
         self.unregistered: str | None = None
 
@@ -91,9 +93,21 @@ class ClosePlan:
             try:
                 if self.unregistered is not None:
                     raise ValueError(self.unregistered)
-                got["record"] = self.record.make(self, window, compiled, low, plan, served, binding)
-            except Exception as e:  # noqa: BLE001  (a window whose record fails says so; the server goes on)
-                got["record"] = {"error": f"{type(e).__name__}: {e}"[:500]}
+                got["handoff"] = self.record.handoff(self, window, low, plan, binding)
+            except Exception as e:  # noqa: BLE001  (a window whose card part fails says so; the server goes on)
+                got["handoff"] = {"error": f"{type(e).__name__}: {e}"[:500]}
+            sys.stderr.write("WINDOW-HANDOFF " + json.dumps({"window": window, **got["handoff"]}) + "\n")
+            if "error" in got["handoff"]:
+                got["record"] = {"error": f"not made: the card's part failed ({got['handoff']['error'][:200]})"}
+            elif not self.in_lease:
+                got["record"] = {"pending": "not made at the close (no --record-in-lease): close_record's finish makes it "
+                                            "from the handoff once the card is released"}
+            else:
+                try:
+                    got["record"] = self.record.make(self, window, compiled, low, plan, served, binding,
+                                                     handoff=Path(got["handoff"]["out"]))
+                except Exception as e:  # noqa: BLE001  (a window whose record fails says so; the server goes on)
+                    got["record"] = {"error": f"{type(e).__name__}: {e}"[:500]}
             sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": window, **got["record"]}) + "\n")
             sys.stderr.flush()
         return got

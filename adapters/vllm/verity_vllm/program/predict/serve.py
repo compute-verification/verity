@@ -27,6 +27,10 @@ class RecordOptions:
     record_workers: int = option("--record-workers", type=int, default=8, help="the record's close's workers")
     twin_ports: int = option("--twin-ports", type=int, default=8,
                              help="ports a window's strings are recomputed on the host and compared (0: none)")
+    record_in_lease: bool = option("--record-in-lease", action="boolean_optional", default=False,
+                                   help="make each window's record at its close, after the card's strings; default: the close "
+                                        "leaves the card's strings (close_record.Record.handoff) and close_record's finish "
+                                        "records the window once the card is released")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,7 +60,8 @@ def plan_of(out: Path, opts: Any, flush: Callable[[], Any]) -> Any:
     from .window_class import WindowClass
 
     cls = WindowClass(*(int(p) for p in opts.window_class.split(","))) if opts.window_class else None
-    return ClosePlan(out, cls, flush=flush, record=record_of(out, opts))
+    r = getattr(opts, "record", None)
+    return ClosePlan(out, cls, flush=flush, record=record_of(out, opts), in_lease=bool(r is not None and r.record_in_lease))
 
 
 def preflight(opts: Any, *, card: bool) -> dict[str, Any]:
