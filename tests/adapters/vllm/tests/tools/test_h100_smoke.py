@@ -22,7 +22,8 @@ PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/co
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
 #: the stand-in ``PY``: each call's argv (and, for the serve, its config) as one JSON line in ``$STUB_LOG``; the
-#: script's own Python run for real; every check off a card answered as a card-less machine answers it
+#: script's own Python run for real; every check off a card answered as a card-less machine answers it, a toolkit query
+#: as `kit.toolkit` answers it from ``$CUDA_HOME`` alone
 STUB = r'''
 import json, os, subprocess, sys
 a = sys.argv[1:]
@@ -36,7 +37,13 @@ if a[:1] == ["-"]:
 with open(os.environ["STUB_LOG"], "a") as fh:
     fh.write(json.dumps(rec) + "\n")
 if a[:2] == ["benchmarks/kernels/machine.py", "toolkit"]:
-    sys.exit(1)
+    home = os.environ.get("CUDA_HOME")
+    if not home:
+        sys.exit(1)
+    said = json.load(open(os.path.join(home, "version.json")))["cuda"]["version"]
+    if said != a[2] and not said.startswith(a[2] + "."):
+        sys.exit(1)
+    print(home)
 '''
 
 
@@ -112,6 +119,16 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     _, _, commit = served(calls)
     assert commit[0] == "window-commit"
     assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", "4,27,2", "rate:1/3481648"]
+    assert "rate:" not in p.stdout and "(the registered sampling design)" in p.stdout, p.stdout
+    script = (ROOT / SMOKE).read_text()
+    done = next(x for x in script.splitlines() if '"SMOKE DONE' in x)
+    assert done.endswith('no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it '
+                         'before the coins"'), done
+    assert "its circuit registered by the prover; no proof is made, and Lean verifies nothing; " in done
+    said = [x.lower() for x in script.splitlines() if re.search(r"\b(say|print)\b|said\+=", x)]
+    assert not [x for x in said for p in ("compiled by the registered compiler", "charged", "bounded by", "capped at") if p in x]
+    assert 'cp "$VW/registration.json" "$VW/circuit.json" "$DREG" "$OUT/window/"' in script
+    assert re.search(r'^names = \{.*"window/"', script, re.M)
     d = opt(commit, "--serve-run")
     assert opt(commit, "--row-dir") == f"{d}/windows/w0"
     assert opt(commit, "--advice") == f"{d}/advice/w0/private/advice.bin"
@@ -119,9 +136,24 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
     assert opt(commit, "--checkpoint-dir").endswith("/hub/models--unsloth--Llama-3.2-1B/snapshots/"
                                                     "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
     assert re.search(r"^LEASE: gpu-lease 1 --wait --max-min 30 --mem-gb 64 -- bash \S+/h100_smoke\.sh card$", p.stdout, re.M), p.stdout
-    script = (ROOT / SMOKE).read_text()
     assert script.index('"${LEASE[@]}"') < script.index('timeout -k 1m "$WC_TIMEOUT" "$PY" "${WC[@]}"')
     assert re.search(r"benchmarks/one_stage/window_commit\.py window-commit --serve-run \"\$D\"", VERDICTS.read_text())
+
+
+def test_the_serve_makes_each_windows_record_as_window_commit_does_unless_record_0_and_its_plan_is_preflighted_first(tmp_path):
+    p, calls = run_dry(tmp_path)
+    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+    serve, _, commit = served(calls)
+    args = serve["argv"][1:]
+    assert [opt(args, k) for k in ("--sampling-design", "--checkpoint-dir")] == \
+        [opt(commit, k) for k in ("--sampling-design", "--checkpoint-dir")]
+    pre = [i for i, c in enumerate(calls) if c["argv"][:3] == ["-", "1", "serve-openai"]]
+    assert len(pre) == 1 and calls[pre[0]]["argv"][2:] == serve["argv"][1:], calls
+    script = (ROOT / SMOKE).read_text()
+    assert script.index("serve.preflight(opts") < script.index('"${LEASE[@]}" ||')
+    p, calls = run_dry(tmp_path / "plan", RECORD="0")
+    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+    assert "--sampling-design" not in served(calls)[0]["argv"]
 
 
 def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
@@ -129,3 +161,27 @@ def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
         env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: "1" if var == "PEARLPLUS_TIE" else "pearl-plus"}
         p = subprocess.run(["bash", str(ROOT / SMOKE)], env=env, capture_output=True, text=True)
         assert p.returncode == 3 and f"h100_smoke.sh: {var} is retired" in p.stderr, p.stdout + p.stderr
+
+
+def test_the_toolkit_is_12_9_unless_toolkit_names_another_and_cuda_home_must_be_that_one(tmp_path):
+    """``TOOLKIT`` (default 12.9) is the version the launcher asks machine.py for; where machine.py gives none (a
+    ``CUDA_HOME`` of another version, off a machine whose record lists none) the launcher refuses by name, and where it
+    gives one (a ``CUDA_HOME`` of that version) the launcher goes on."""
+    _, calls = run_dry(tmp_path / "default")
+    assert [c["argv"] for c in calls if c["argv"][:2] == ["benchmarks/kernels/machine.py", "toolkit"]] == \
+        [["benchmarks/kernels/machine.py", "toolkit", "12.9"]]
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "gpu-lease").write_text("#!/bin/sh\nexit 0\n")
+    (bin_ / "gpu-lease").chmod(0o755)
+    for i, (home, said) in enumerate((("cuda-12.9", "12.9.1"), ("cuda-13.0", "13.0.0"))):
+        kit = tmp_path / home
+        kit.mkdir()
+        (kit / "version.json").write_text(json.dumps({"cuda": {"version": said}}))
+        p, _ = run_dry(tmp_path / f"t{i}", DRY="0", TOOLKIT="13.0", CUDA_HOME=str(kit), HF_HOME=str(tmp_path / "hf"),
+                       PATH=f"{bin_}:{os.environ['PATH']}")
+        assert p.returncode == 3, p.stdout + p.stderr
+        if said.startswith("12.9"):
+            assert "SMOKE REFUSED toolkit: neither CUDA_HOME nor the machine gives CUDA 13.0" in p.stdout, p.stdout + p.stderr
+        else:
+            assert "SMOKE REFUSED toolkit" not in p.stdout and "SMOKE REFUSED model" in p.stdout, p.stdout + p.stderr
