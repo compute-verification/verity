@@ -1151,7 +1151,7 @@ def session_jobs() -> int:
     return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
-#: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
+#: the agreement's memory floor: the GEMM set's upstream replay (m = 26) alone takes more than 15 GB
 AGREEMENT_MIN_GB = 24
 
 
@@ -1197,7 +1197,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
     Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
-        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
+        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (the GEMM set's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
