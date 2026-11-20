@@ -182,7 +182,7 @@ def egress(fn: Any) -> bool:
 
 
 def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
-    """Some registered composite of ``families`` bound at ``fn``'s statics has the definition digest
+    """Some registered composite of ``families`` bound at ``fn``'s statics, of ``fn``'s signature, has the definition digest
     (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
     if not isinstance(fn, SpecializedDefinition):
         return False
@@ -196,6 +196,8 @@ def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
             continue
         if want is fn:
             return True
+        if want.signature() != fn.signature():
+            continue
         mine = mine or definition_entry(fn)
         theirs = definition_entry(want)
         if definition_digest({**mine, "id": theirs["id"]}) == definition_digest(theirs):
