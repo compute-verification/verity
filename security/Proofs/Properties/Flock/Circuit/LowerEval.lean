@@ -1355,10 +1355,11 @@ def ScanCarryBits : Prop :=
     ∃ y, (Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k]? = some y ∧ y.nxs = x.nxs ∧ y.members = x.members ∧
       y.args.size = x.args.size ∧ ∀ i < x.args.size, (y.args[i]!).ty = Ty.bitType (x.args[i]!).ty
 
-/-- **`RestrictWordEval`**: C's Definitions keep their value on words in the block's Program `restrict P units`. -/
+/-- **`RestrictWordEval`**: C's Definitions keep their value on words in the block's Program `restrict P units`, for a
+C `decode` accepts whose root has no recut. -/
 def RestrictWordEval : Prop :=
-  ∀ (P S : Prog) (units : Array ℕ), Spot.Restrict.restrict P units = .ok S →
-    ∀ d < P.defs.size, ∀ x, wordEval S d x = wordEval P d x
+  ∀ (bytes : ByteArray) (P S : Prog) (units : Array ℕ), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → ∀ d < P.defs.size, ∀ x, wordEval S d x = wordEval P d x
 
 theorem widths_homo_all {t : Ty} {w : ℕ} (h : Widths.homo t = some w) : ∀ x ∈ t.widths.toList, x = w := by
   intro x hx
@@ -1561,9 +1562,9 @@ theorem liftSeqRefs : LiftSeqRefs := by
       rw [range_mul_map, List.flatMap_map]
       apply List.flatMap_congr
       intro k _
-      dsimp only
+      try dsimp only
       rw [hh p i w hw (b + k)]
-      dsimp only
+      try dsimp only
       apply List.map_congr_left
       intro t _
       simp [Nat.add_mul, Nat.add_assoc]
@@ -1571,6 +1572,189 @@ theorem liftSeqRefs : LiftSeqRefs := by
     dsimp only
     rw [explicit_refs]
     exact hG _
+
+/-! ## `RestrictWordEval`, proved -/
+
+/-- The walk's one call reads Definition `d`, the Definitions below it and, for a primitive with no gate, its Boolean
+Definition: two Programs and two recursive calls that agree there give the same value. -/
+theorem walkStep_congr {W : Type} [Inhabited W] (I : Flock.Program.Wires Option W) (hI : ∀ {α : Type} (o : Option α), I.lift o = o)
+    {P Q : Prog} {ev ev' : ℕ → List W → Option (List W)} {d : ℕ} (x : List W)
+    (hd : P.defs[d]? = Q.defs[d]?) (hlow : ∀ i < d, P.defs[i]? = Q.defs[i]?)
+    (hev : ∀ e < d, ∀ ins, ev e ins = ev' e ins)
+    (hprim : ∀ defn, P.defs[d]? = some defn → defn.prim = true → P.bodyOf? defn.key = Q.bodyOf? defn.key ∧
+      ∀ b, P.bodyOf? defn.key = some b → ∀ ins, ev b ins = ev' b ins) :
+    Flock.Program.walkStep I P ev d x = Flock.Program.walkStep I Q ev' d x := by
+  unfold Flock.Program.walkStep
+  rw [← hd]
+  cases hD : P.defs[d]? with
+  | none => simp [hI]
+  | some defn =>
+    simp only [hI]
+    by_cases hp : defn.prim = true
+    · obtain ⟨hb, hbe⟩ := hprim defn hD hp
+      simp only [hp, ↓reduceIte, hb]
+      split
+      · rfl
+      · cases hB : Q.bodyOf? defn.key with
+        | none => rfl
+        | some b =>
+          have := hbe b (by rw [hb, hB])
+          simp [this]
+    · simp only [hp, Bool.false_eq_true, ↓reduceIte]
+      congr 1
+      congr 1
+      funext outs nd
+      by_cases h : d ≤ nd.fn
+      · simp only [h, ↓reduceIte]
+        rfl
+      · simp only [h, ↓reduceIte, hlow nd.fn (by omega), hev nd.fn (by omega)]
+
+theorem get?_of_pre {P S : Prog} (hle : P.defs.size ≤ S.defs.size) (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!)
+    {i : ℕ} (hi : i < P.defs.size) : S.defs[i]? = P.defs[i]? := by
+  have h1 : i < S.defs.size := by omega
+  rw [getElem?_pos S.defs i h1, getElem?_pos P.defs i hi]
+  congr 1
+  have := hpre i hi
+  rwa [getElem!_pos S.defs i h1, getElem!_pos P.defs i hi] at this
+
+theorem body_lt {P : Prog} (hm : P.BoolMapOk) {k : String} {b : ℕ} (h : P.bodyOf? k = some b) : b < P.defs.size := by
+  have h0 := h
+  unfold Prog.bodyOf? at h0
+  cases hv : P.boolean[k]? with
+  | none => rw [hv] at h0; cases h0
+  | some v =>
+    obtain ⟨w, hw, -, hkey, hword⟩ := hm.2 k v hv
+    obtain ⟨b', hb', hbo, -⟩ := hm.1 w hw (by rw [hkey]; exact hword)
+    rw [hkey] at hbo
+    obtain rfl : b' = b := Option.some.inj (hbo.symm.trans h)
+    exact hb'
+
+/-- The walk on bits in `S` is the walk in `P` at `P`'s Definitions, where `S` keeps them and their Boolean
+Definitions. -/
+theorem evalDef_restrict {P S : Prog} (hle : P.defs.size ≤ S.defs.size)
+    (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) (hbody : ∀ k, S.bodyOf? k = P.bodyOf? k)
+    (hblt : ∀ k b, P.bodyOf? k = some b → b < P.defs.size) :
+    ∀ f e ins, e < P.defs.size → Flock.Program.evalDef? S f e ins = Flock.Program.evalDef? P f e ins
+  | 0, _, _, _ => rfl
+  | f + 1, e, ins, he => by
+    unfold Flock.Program.evalDef?
+    apply walkStep_congr _ (fun _ => rfl) _ (get?_of_pre hle hpre he)
+      (fun i hi => get?_of_pre hle hpre (by omega))
+      (fun e' he' ins' => evalDef_restrict hle hpre hbody hblt f e' ins' (by omega))
+    intro defn _ _
+    refine ⟨hbody _, fun b hb ins' => evalDef_restrict hle hpre hbody hblt f b ins' ?_⟩
+    rw [hbody] at hb
+    exact hblt _ _ hb
+
+theorem evalDef_fuel_iter (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf? k = none) {b : ℕ}
+    (hb : P.BoolDef b) (x : List Bool) :
+    ∀ k, Flock.Program.evalDef? P (b + 1 + k) b x = Flock.Program.evalDef? P (b + 1) b x
+  | 0 => rfl
+  | k + 1 => by
+    rw [show b + 1 + (k + 1) = (b + 1 + k) + 1 from by omega,
+      FlockSoundness.DecodeBoolean.fuel_stable P hB hb (by omega) x, evalDef_fuel_iter P hB hb x k]
+
+theorem evalDef_fuel_at (P : Prog) (hB : ∀ k, isBooleanPrim k = true → P.bodyOf? k = none) {b m : ℕ}
+    (hb : P.BoolDef b) (hm : b < m) (x : List Bool) :
+    Flock.Program.evalDef? P m b x = Flock.Program.evalDef? P (b + 1) b x := by
+  obtain ⟨k, rfl⟩ : ∃ k, m = b + 1 + k := ⟨m - (b + 1), by omega⟩
+  exact evalDef_fuel_iter P hB hb x k
+
+/-- `restrict` keeps every primitive of C evaluating as in C. -/
+theorem evalBool_restrict {bytes : ByteArray} {P S : Prog} {units : Array ℕ} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) (hs : Spot.Restrict.restrict P units = .ok S) {p : ℕ}
+    (hp : p < P.defs.size) (hprim : (P.defs[p]!).prim = true) (y : List Bool) :
+    Prog.evalBool S p y = Prog.evalBool P p y := by
+  obtain ⟨hle, hpre, hbool, hidx, -⟩ := restrictShape P units S hs
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
+  have hbody := bodyOf_eq hm hbool hidx
+  have hB := FlockSoundness.DecodeBoolean.bool_none hkeys
+  have hBS : ∀ k, isBooleanPrim k = true → S.bodyOf? k = none := fun k hk => by rw [hbody]; exact hB k hk
+  have hdp : S.defs[p]? = some (P.defs[p]!) := by
+    rw [get?_of_pre hle hpre hp, getElem!_pos P.defs p hp]; exact getElem?_pos P.defs p hp
+  have hdP : P.defs[p]? = some (P.defs[p]!) := by rw [getElem!_pos P.defs p hp]; exact getElem?_pos P.defs p hp
+  unfold Prog.evalBool
+  rw [show 2 * S.defs.size + 2 = (2 * S.defs.size + 1) + 1 from rfl,
+    show 2 * P.defs.size + 2 = (2 * P.defs.size + 1) + 1 from rfl]
+  unfold Flock.Program.evalDef?
+  unfold Flock.Program.walkStep
+  rw [hdp, hdP]
+  simp only [Flock.Program.Wires.bool, Option.pure_def, Option.bind_eq_bind, Option.bind_some, hprim, ↓reduceIte]
+  split
+  · rfl
+  · rw [hbody]
+    cases hb : P.bodyOf? (P.defs[p]!).key with
+    | none => rfl
+    | some b =>
+      have hbl := body_lt hm hb
+      have hbd : P.BoolDef b := by
+        have h0 := hb
+        unfold Prog.bodyOf? at h0
+        cases hv : P.boolean[(P.defs[p]!).key]? with
+        | none => rw [hv] at h0; cases h0
+        | some v =>
+          obtain ⟨w, hw, -, hkey, hword⟩ := hkeys _ v hv
+          obtain ⟨b', -, hbo, hbody', -⟩ := hmap w hw (by rw [hkey]; exact hword)
+          rw [hkey] at hbo
+          obtain rfl : b' = b := Option.some.inj (hbo.symm.trans hb)
+          exact hbody'
+      have hbdS : S.BoolDef b := boolDef_lift hpre hbd hbl
+      simp only [Option.bind_some]
+      rw [evalDef_fuel_at S hBS hbdS (by omega) y, evalDef_fuel_at P hB hbd (by omega) y,
+        evalDef_restrict hle hpre hbody (fun k b' h' => body_lt hm h') (b + 1) b y hbl]
+
+theorem wordDef_restrict {P S : Prog} (hle : P.defs.size ≤ S.defs.size)
+    (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!)
+    (hpe : ∀ p < P.defs.size, (P.defs[p]!).prim = true → ∀ y, Prog.evalBool S p y = Prog.evalBool P p y) :
+    ∀ f d x, d < P.defs.size → wordDef? S f d x = wordDef? P f d x
+  | 0, _, _, _ => rfl
+  | f + 1, d, x, hd => by
+    unfold wordDef?
+    rw [get?_of_pre hle hpre hd]
+    cases hD : P.defs[d]? with
+    | none => rfl
+    | some defn =>
+      have hdn : P.defs[d]! = defn := by rw [getElem!_def, hD]
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      by_cases hp : defn.prim = true
+      · simp only [hp, ↓reduceIte, hpe d hd (by rw [hdn]; exact hp)]
+      · simp only [hp, Bool.false_eq_true, ↓reduceIte]
+        apply walkStep_congr _ (fun _ => rfl) _ (get?_of_pre hle hpre hd)
+          (fun i hi => get?_of_pre hle hpre (by omega))
+          (fun e he ins => wordDef_restrict hle hpre hpe f e ins (by omega))
+        intro defn' h' hp'
+        rw [get?_of_pre hle hpre hd, hD] at h'
+        cases h'
+        exact absurd hp' hp
+
+theorem wordDef_fuel (P : Prog) : ∀ d f x, d < f → wordDef? P f d x = wordDef? P (d + 1) d x := by
+  intro d
+  induction d using Nat.strong_induction_on with
+  | _ d ih =>
+    intro f x hf
+    obtain ⟨f', rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
+    unfold wordDef?
+    cases hD : P.defs[d]? with
+    | none => rfl
+    | some defn =>
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      by_cases hp : defn.prim = true
+      · simp only [hp, ↓reduceIte]
+      · simp only [hp, Bool.false_eq_true, ↓reduceIte]
+        apply walkStep_congr _ (fun _ => rfl) _ rfl (fun _ _ => rfl)
+          (fun e he ins => by rw [ih e he f' ins (by omega), ih e he d ins he])
+        intro defn' h' hp'
+        rw [hD] at h'
+        cases h'
+        exact absurd hp' hp
+
+theorem restrictWordEval : RestrictWordEval := by
+  intro bytes P S units h hr hs d hd x
+  obtain ⟨hle, hpre, -⟩ := restrictShape P units S hs
+  unfold wordEval
+  rw [wordDef_fuel S d _ x (by omega), wordDef_fuel P d _ x (by omega),
+    wordDef_restrict hle hpre (fun p hp hprim y => evalBool_restrict h hr hs hp hprim y) (d + 1) d x hd]
 
 end Flock.Chain
 
