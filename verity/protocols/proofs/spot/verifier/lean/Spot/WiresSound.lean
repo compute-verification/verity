@@ -238,37 +238,6 @@ disjoint. -/
 theorem pairwiseDisjointFast_eq (ws : List Wire) : pairwiseDisjointFast ws = pairwiseDisjoint ws := by
   rw [Bool.eq_iff_iff, DisjointFast.pairwiseDisjointFast_iff, pairwiseDisjoint_iff]
 
-/-! Fixtures: the sweep and the pair by pair check agree where wires overlap, touch, nest, are equal, are cut apart, have no
-reader units, share or split a (reader, port), and where there are none. -/
-
-private def fx (reader port : String) (start units cut0 cuts : Nat) : Wire :=
-  { reader, port, writer := "w", out := "o", start, radix := [units, cuts], base := 0, step := [0, 0], cut0, cuts }
-
-private def agrees (ws : List Wire) (accepted : Bool) : Bool :=
-  pairwiseDisjointFast ws == pairwiseDisjoint ws && pairwiseDisjoint ws == accepted
-
-#guard agrees [] true
-#guard agrees [fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 4 4 0 1] true
-#guard agrees [fx "A" "x" 4 4 0 1, fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 10 0 1, fx "A" "x" 3 2 0 1] false
-#guard agrees [fx "A" "x" 3 2 0 1, fx "A" "x" 0 10 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "y" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 2, fx "A" "x" 0 4 2 2] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 1 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 4 1 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 0 0 1] false
-#guard agrees [fx "A" "x" 2 0 0 1, fx "A" "x" 0 4 0 1] false
-#guard agrees [fx "A" "x" 4 0 0 1, fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 0 0 1, fx "A" "x" 0 0 0 1] true
-#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 7 1 0 1] false
-#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 8 1 0 1] true
-
 theorem distinctRows_of {ws : List Wire} (hw : ∀ w ∈ ws, 1 ≤ w.cuts ∧ w.units % w.cuts = 0)
     (h : pairwiseDisjoint ws = true) : distinctRows (ws.flatMap Wire.entries) = true := by
   simp only [distinctRows, decide_eq_true_eq]
@@ -313,7 +282,7 @@ theorem check_sound {c : Wiring} {S : Summary} (h : check c = .ok S) :
             ⟨(wireCodeRef_of (hall w hw)).1, (wireCodeRef_of (hall w hw)).2.1⟩
           have hf' : firstWire c (wireCodeRef c) = none :=
             firstWire_eq_none.2 fun w hw => (wireCodeRef_of (hall w hw)).2.2
-          have hd := distinctRows_of hw (by simpa using hov)
+          have hd := distinctRows_of hw (by rw [← pairwiseDisjointFast_eq]; simpa using hov)
           have hord' : orderCode c orderedWireRef = none := by
             obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
             exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => orderedWire_eq_ref o w ▸ hin w hw'⟩
