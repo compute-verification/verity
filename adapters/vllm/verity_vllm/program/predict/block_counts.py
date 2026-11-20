@@ -27,7 +27,9 @@ which would count every wired read.
 binds under that id, so a record is counted only where the Program those Definitions rebuild (`interface.program_of_record`)
 has the record's program digest (`codec.program_digest`), as `interface.window_of_record` holds a period's: a body under
 an id that is not the declared circuit's, or a record that names no program digest, is refused by name and counted at
-no gate and no unregistered input bit.
+no gate and no unregistered input bit. `main` counts a record only beside the registration that binds it
+(`interface.tied_record`: its SHA-512, program, partition and run), so the program digest `pinned` holds the Definitions
+to is the registered one.
 
 **The judgment** (`judge`). A window adds m blocks to its class, and the day's blocks are the classes' summed, exactly. The
 declaration (``--declaration``, a JSON object with natural ``c``, ``k`` and ``n``, such as the inference-only policy) is
@@ -253,8 +255,9 @@ class Options:
     private: Path = option("--private", type=Path,
                            help="write the private judgment, with the exact counts, here (0600), beside the run's private files")
     window: list = option("--window", nargs=2, action="append", metavar=("CIRCUIT", "REGISTRATION"), default=[],
-                          help="one served window: its circuit record (circuit.json) and its registration (the "
-                               "registered roots it records), or - for none; repeat for each of the day's windows")
+                          help="one served window: its circuit record (circuit.json) and the registration that binds it "
+                               "(its SHA-512, program, partition and run, and the registered roots it records); repeat "
+                               "for each of the day's windows")
     pins: Path | None = option("--pins", default=None, type=Path,
                                help="the committer's weights registration, the verifier's pins (none: every read is free)")
     out: Path | None = option("--out", default=None, type=Path, help="write the public judgment here as well as to stdout")
@@ -266,8 +269,11 @@ def main(a: Options) -> int:
         pins = dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)
     d = Day(a.day, pins)
     for circuit, registration in a.window:
-        roots = None if registration == "-" else IF.registered_roots(json.loads(Path(registration).read_text()))
-        d.add(json.loads(Path(circuit).read_text()), roots)
+        if registration == "-":
+            raise ValueError(f"{circuit}: no registration is given, so nothing holds the circuit record to the registered "
+                             "circuit, and it is not counted")
+        reg = json.loads(Path(registration).read_text())
+        d.add(IF.tied_record(Path(circuit).read_bytes(), reg, circuit), IF.registered_roots(reg))
     pub, private = d.judgment(json.loads(a.declaration.read_text()))
     pub = RBC.BlockJudgment.of(pub.dump(), "block-counts")
     write_private(a.private, private)
