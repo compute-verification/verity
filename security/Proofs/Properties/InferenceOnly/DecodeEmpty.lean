@@ -5,6 +5,7 @@ import Batteries.Tactic.OpenPrivate
 import Proofs.Core.QSort
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Std.Data.HashMap.Lemmas
+import Std.Data.TreeMap.Lemmas
 import Std.Data.HashSet.Lemmas
 import Std.Data.String.ToNat
 import Base.Canon
@@ -327,13 +328,20 @@ theorem memo_none (m : Std.HashMap String String) (h : m = ∅) (k : String) : m
   subst h; exact Std.HashMap.getElem?_empty
 theorem memo_one (k k' v : String) (h : k = k') : ((∅ : Std.HashMap String String).insert k v)[k']? = some v := by
   subst h; exact Std.HashMap.getElem?_insert_self
+theorem tmemo_none (m : Std.TreeMap String String) (h : m = ∅) (k : String) : m[k]? = none := by
+  subst h; exact Std.TreeMap.getElem?_empty
+theorem tmemo_one (k k' v : String) (h : k = k') : ((∅ : Std.TreeMap String String).insert k v)[k']? = some v := by
+  subst h; exact Std.TreeMap.getElem?_insert_self
+theorem tddefs_rule (m : Std.TreeMap String Json) (hm : m = (∅ : Std.TreeMap String Json).insert "Root_v1" rootE)
+    (k : String) (hk : k = "Root_v1") : m[k]? = some rootE := by
+  subst hm hk; exact Std.TreeMap.getElem?_insert_self
 
 set_option maxHeartbeats 4000000 in -- the walk steps through `decode` and leaves closed checks to the kernel
 fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
   [fromUTF8?_toUTF8, parse_empty, domain_none, ofJson_tuple0, split_rule, toNat_rule, rfi_rule, ddefs_rule,
     index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
     st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite, st_mapConst, st_lift,
-    st_forIn_nil, st_forIn_range0, st_forIn_root, memo_one, memo_none, lift_self, leaves_rule, dup_rule,
+    st_forIn_nil, st_forIn_range0, st_forIn_root, memo_one, memo_none, tmemo_one, tmemo_none, tddefs_rule, lift_self, leaves_rule, dup_rule,
     names_rule, reached_rule, refs_rule, subFns_rule, canon_rule]
   block [domainError, Ty.ofJson, checkReached]
   shallow [programEmpty]
