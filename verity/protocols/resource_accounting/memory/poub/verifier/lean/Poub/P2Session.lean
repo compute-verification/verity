@@ -100,11 +100,22 @@ def Held.json (h : Held) : Json :=
     ("plan", .arr (h.plan.runs.map fun (f, c) => .arr #[toJson f, toJson c])), ("plan_units", toJson h.plan.length),
     ("units", toJson h.reg.units)]
 
-/-- The members of every object in `j`, counted. -/
-partial def members : Json → Nat
-  | .obj kvs => kvs.toArray.foldl (fun n (_, v) => n + 1 + members v) 0
-  | .arr xs => xs.foldl (fun n x => n + members x) 0
+mutual
+/-- The members of every object in `j`, counted. Structural over `j`'s array lists and object trees, so the kernel sees it
+(`Flock.canonForm`'s shape). -/
+def members : Json → Nat
+  | .obj ⟨⟨t⟩⟩ => membersObj t
+  | .arr ⟨a⟩ => membersList a
   | _ => 0
+/-- `members` of each value of a list, summed. -/
+def membersList : List Json → Nat
+  | [] => 0
+  | j :: js => members j + membersList js
+/-- An object tree's members: one for each field and those of its value. -/
+def membersObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → Nat
+  | .leaf => 0
+  | .inner _ _ v l r => membersObj l + (1 + members v) + membersObj r
+end
 
 /-- What a JSON text `b` writes outside its strings: its keys (each string followed by `:`), and whether one of its
 numbers has a fraction or an exponent. -/
@@ -131,13 +142,23 @@ def scan (b : ByteArray) : Nat × Bool := Id.run do
       else inNum := false
   return (keys, frac)
 
+mutual
 /-- Whether a string of `j`, a key or a value, holds U+FFFD: what Lean's reader makes of a lone surrogate escape, which
-Python's reader keeps as the surrogate. -/
-partial def replaced : Json → Bool
+Python's reader keeps as the surrogate. Structural over `j`, as `members` is. -/
+def replaced : Json → Bool
   | .str s => s.contains '\ufffd'
-  | .obj kvs => kvs.toArray.any fun (k, v) => k.contains '\ufffd' || replaced v
-  | .arr xs => xs.any replaced
+  | .obj ⟨⟨t⟩⟩ => replacedObj t
+  | .arr ⟨a⟩ => replacedList a
   | _ => false
+/-- `replaced` of some value of a list. -/
+def replacedList : List Json → Bool
+  | [] => false
+  | j :: js => replaced j || replacedList js
+/-- `replaced` of some key or value of an object tree. -/
+def replacedObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → Bool
+  | .leaf => false
+  | .inner _ k v l r => replacedObj l || k.contains '\ufffd' || replaced v || replacedObj r
+end
 
 /-- A line's JSON as the prover alone reads it, so no reader could read it otherwise: `jsonOf`'s, refused when an object
 in it names a key twice (Lean's reader keeps the last, another reader the first), a number in it has a fraction or an
