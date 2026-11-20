@@ -4,6 +4,7 @@ public import Proofs.Properties.Flock.Circuit.LowerAsm
 public import Proofs.Properties.Flock.Circuit.Chain
 public import Proofs.Properties.Flock.DecodeBoolean
 public import Proofs.Properties.Poub.Remote.Sort
+public import Proofs.Properties.InferenceOnly.OperandWidths
 
 /-!
 # `LowerEval`, proved
@@ -932,6 +933,8 @@ def UnitComputes : Prop :=
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Flock.Lift.lift S a.d = .ok (L, e) →
+    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ g ∈ units, UnitResolves P g) →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d →
     ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
@@ -1221,11 +1224,15 @@ theorem portBits_length {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (po
     (portBits X ports).length = (ports.toList.map (leafWidth P)).sum := by
   simp [portBits_eq, List.length_flatten, Function.comp_def, portWord_length]
 
-/-- **`UnitWidths`** (open): unit `g`'s arguments, as `portBits` lays them, have its callee's parameter leaf widths, and
-its return leaves its callee's return widths, for every trace alike. -/
+/-- **`UnitWidths`**: unit `g`'s arguments, as `portBits` lays them, have its callee's parameter leaf widths, and its
+return leaves its callee's return widths, for every trace alike, where C is topological (`Prog.orderViolation`), every
+gate of C is located (`GateOk`) and `g` resolves (`UnitResolves`). Without the order it is false: `decode` checks no
+width of a reference to a later node, so a Value<8> parameter can read a later Value<16> leaf. Without gates located
+it is false: a gate `Prog.gate` cannot locate has width 0. -/
 def UnitWidths : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) →
+    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
       (unitArgs P g).toList.map (leafWidth P) = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
         (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList
 
@@ -1249,12 +1256,291 @@ def LiftWordEval : Prop :=
     ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[a.d]!) →
       Prog.evalBool L e x.flatten = (wordEval P a.d x).flatten
 
-/-- **`UnitComputes`**, on `UnitWidths`, `UnitWordComputes` and `LiftWordEval`. -/
-theorem unitComputes_of (hWd : UnitWidths) (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
-  intro bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu hda Y hY
+section UnitWidthsProof
+open Std.Do
+open InferenceOnlyVerifier.Properties.SecurityProofs
+set_option mvcgen.warning false
+
+/-- Root node `k` is a call or a batch, and `m` is one of its members. -/
+def UnitShape (P : Prog) (k m : ℕ) : Prop :=
+  (((P.defs[P.root]!).body.nodes[k]!).form = Form.call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = Form.batch) ∧
+    m < ((P.defs[P.root]!).body.nodes[k]!).members
+
+theorem unitAt_triple (P : Prog) (u : ℕ) :
+    ⦃⌜True⌝⦄ Spot.BlockFront.unitAt P u ⦃⇓? r => ⌜UnitShape P r.1 r.2⌝⦄ := by
+  unfold Spot.BlockFront.unitAt
+  mvcgen [exc_throw_spec, -Spec.throw_Except] invariants
+  · Invariant.withEarlyReturnNewDo (onContinue := fun _ at_ => ⌜at_ ≤ u⌝)
+      (onReturn := fun (r : ℕ × ℕ) _ => ⌜UnitShape P r.1 r.2⌝) (onExcept := ExceptConds.true)
+  case vc1.step.h_1.isTrue =>
+    rename_i pref cur suff h2 b at_ x jp hf h1 h
+    have hb : b.snd ≤ u := by rcases h1 with ⟨_, h⟩ | ⟨_, _, h, _⟩; exact h; cases h
+    have e : at_ = b.snd := rfl
+    have hm : Node.members x = 1 := by unfold Node.members; rw [hf]; rfl
+    refine Or.inr ⟨_, rfl, trivial, Or.inl hf, ?_⟩
+    show u - at_ < Node.members x
+    omega
+  case vc3.step.h_2.isTrue =>
+    rename_i pref cur suff h2 b at_ x jp hf h1 h
+    have hb : b.snd ≤ u := by rcases h1 with ⟨_, h⟩ | ⟨_, _, h, _⟩; exact h; cases h
+    have e : at_ = b.snd := rfl
+    have hm : Node.members x = x.n := by unfold Node.members; rw [hf]; rfl
+    refine Or.inr ⟨_, rfl, trivial, Or.inr hf, ?_⟩
+    show u - at_ < Node.members x
+    omega
+  case vc2.step.h_1.isFalse =>
+    rename_i pref cur suff h2 b at_ x jp hf h1 h
+    have e : at_ = b.snd := rfl
+    exact Or.inl ⟨trivial, by omega⟩
+  case vc4.step.h_2.isFalse =>
+    rename_i pref cur suff h2 b at_ x jp hf h1 h
+    have e : at_ = b.snd := rfl
+    exact Or.inl ⟨trivial, by omega⟩
+  case vc6.pre => exact Or.inl ⟨trivial, Nat.zero_le u⟩
+  case vc7.post.success.h_1 =>
+    rename_i r a hr h
+    rcases h with ⟨h, _⟩ | ⟨a', h', _, hs⟩
+    · rw [hr] at h; cases h
+    · rw [hr] at h'; cases h'; exact hs
+
+/-- A unit `unitAt` locates is a member of a call or a batch of the root. -/
+theorem unitAt_shape {P : Prog} {u k m : ℕ} (h : Spot.BlockFront.unitAt P u = .ok (k, m)) : UnitShape P k m := by
+  have hT := unitAt_triple P u
+  revert hT
+  generalize Spot.BlockFront.unitAt P u = x at h ⊢
+  intro hT
+  subst h
+  exact hT True.intro
+
+theorem forall₂_zip_map {α : Type} (f : α → ℕ → ℕ) {l : List α} {ws : List ℕ}
+    (h : List.Forall₂ (fun a w => f a w = w) l ws) : (l.zip ws).map (fun p => f p.1 p.2) = ws := by
+  induction h with
+  | nil => rfl
+  | cons h _ ih => simp only [List.zip_cons_cons, List.map_cons, h, ih]
+
+theorem forall₂_map_eq {α β : Type} (f : α → ℕ) (g : β → ℕ) {l : List α} {r : List β}
+    (h : List.Forall₂ (fun a b => g b = f a) l r) : r.map g = l.map f := by
+  induction h with
+  | nil => rfl
+  | cons h _ ih => simp only [List.map_cons, h, ih]
+
+theorem mapM_forall₂ {α β ε : Type} (f : α → Except ε β) :
+    ∀ (l : List α), (∀ a ∈ l, ∃ b, f a = .ok b) →
+      ∃ r, l.mapM f = .ok r ∧ List.Forall₂ (fun a b => f a = .ok b) l r := by
+  intro l
+  induction l with
+  | nil => intro _; exact ⟨[], rfl, .nil⟩
+  | cons a l ih =>
+    intro hf
+    obtain ⟨b, hb⟩ := hf a (List.mem_cons_self ..)
+    obtain ⟨r, hr, h2⟩ := ih fun a ha => hf a (List.mem_cons_of_mem _ ha)
+    refine ⟨b :: r, ?_, .cons hb h2⟩
+    rw [List.mapM_cons, hb, hr]
+    rfl
+
+theorem forall₂_mem {α β : Type} {R : α → β → Prop} {l : List α} {r : List β} (h : List.Forall₂ R l r) :
+    List.Forall₂ (fun a b => a ∈ l ∧ R a b) l r := by
+  induction h with
+  | nil => exact .nil
+  | cons hab _ ih =>
+    exact .cons ⟨List.mem_cons_self .., hab⟩ (ih.imp fun _ _ ⟨hm, h⟩ => ⟨List.mem_cons_of_mem _ hm, h⟩)
+
+theorem flatten_widths (ps : Array (String × Ty)) :
+    ((ps.map fun p => p.2.widths).flatten).toList = ps.toList.flatMap fun p => p.2.widths.toList := by
+  simp only [Array.toList_flatten, Array.toList_map, List.map_map]
+  rfl
+
+theorem operandsW_ok {P : Prog} {x : Node} {m : ℕ} {ops : Array (ℕ × ℕ)}
+    (h : Spot.BlockFront.operandsW P x m = .ok ops) :
+    ∃ raw, operands P P.rootScope x m = .ok raw ∧
+      ops = raw.zip (((P.defs[x.fn]!).params.map fun p => p.2.widths).flatten) := by
+  unfold Spot.BlockFront.operandsW at h
+  cases hop : operands P P.rootScope x m with
+  | error e => simp [hop, bind, Except.bind] at h
+  | ok raw =>
+    refine ⟨raw, rfl, ?_⟩
+    simp [hop, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · first | exact (Except.ok.inj h).symm | exact h.symm
+    · cases h
+
+/-- The width `leafWidth` gives a gate of C `Prog.gate` locates at a primitive returning `Value<w>`. -/
+theorem leafWidth_of_gate {P : Prog} (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P,
+      InferenceOnlyVerifier.Properties.GateOk P h) (q w : ℕ)
+    (hq : q < (Flock.OfProgram.ofProgram P).N → ∀ p o s, P.gate q = .ok (p, o, s) → (P.defs[p]!).ret = .value w) :
+    leafWidth P { gate := q, width := w } = w := by
+  unfold leafWidth
+  split
+  · rename_i hlt
+    obtain ⟨p, o, w', ⟨⟨s, hg⟩, -, -⟩, -⟩ := hG q hlt
+    show Flock.OfProgram.widthAt P q = w
+    simp [Flock.OfProgram.widthAt, Flock.OfProgram.gateAt, hg, hq hlt p o s hg]
+  · rfl
+
+/-- **`UnitWidths`, the arguments**: each operand of unit `g` that `operandsW` gives is as wide in C as its callee's
+parameter leaf. -/
+theorem unitArgs_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g) :
+    (unitArgs P g).toList.map (leafWidth P) = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
+  obtain ⟨k', m', x, hu', hx0, ⟨ops, hops⟩, -⟩ := hR
+  rw [hu] at hu'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hu'
+  obtain ⟨rfl, rfl⟩ := hu'
+  have hx : (P.defs[P.root]!).body.nodes[k]? = some x := by rw [Array.getElem!_eq_getD]; exact hx0
+  have hk : k < (P.defs[P.root]!).body.nodes.size := (Array.getElem?_eq_some_iff.1 hx).1
+  have hxk : (P.defs[P.root]!).body.nodes[k]! = x := by
+    rw [getElem!_pos _ k hk]; exact (Array.getElem?_eq_some_iff.1 hx).2
+  have hx0' : (P.defs[P.root]?.getD default).body.nodes[k]? = some x := by
+    rw [← Array.getD_eq_getD_getElem?]; exact hx0
+  have hua : unitArgs P g = ops.map fun (q, w) => ({ gate := q, width := w } : Spot.BlockFront.Port) := by
+    simp [unitArgs, hu, hx0', hops, bind, Except.bind]
+  obtain ⟨raw, hraw, rfl⟩ := operandsW_ok hops
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_full bytes P hd hr
+  have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
+  have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
+    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hL := OperandWidths.decoded_laid bytes P hd hr
+  have hW := LeafWidths.decoded_wide bytes P hd hr
+  obtain ⟨hsh, hmem⟩ := unitAt_shape hu
+  rw [hxk] at hsh hmem
+  have hxk' : (P.defs[P.rootScope.d]!).body.nodes[k]! = x := hxk
+  have hns : x.form ≠ .scan := by rcases hsh with h | h <;> rw [h] <;> exact fun h => nomatch h
+  have hw := OperandWidths.node_operand_widths P hroot hB hL hD hW P.rootScope ⟨rfl, rfl, rfl⟩ k hk m
+    (by rw [hxk']; exact hmem) (by rw [hxk']; exact hns) raw (by rw [hxk']; exact hraw)
+  rw [hxk'] at hw
+  rw [hua, child_d, hxk]
+  unfold leafWidths
+  rw [← flatten_widths] at hw ⊢
+  simp only [Array.toList_map, Array.toList_zip, List.map_map]
+  exact forall₂_zip_map (fun q w => leafWidth P { gate := q, width := w })
+    (hw.imp fun a w haw => leafWidth_of_gate hG a w fun _ => haw)
+
+/-- **`UnitWidths`, the return leaves**: each return leaf of unit `g` resolves to a gate of C as wide as its callee's
+return leaf. -/
+theorem unitOuts_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g) :
+    (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList := by
+  obtain ⟨k', m', x, hu', hx0, -, hres⟩ := hR
+  rw [hu] at hu'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hu'
+  obtain ⟨rfl, rfl⟩ := hu'
+  have hx : (P.defs[P.root]!).body.nodes[k]? = some x := by rw [Array.getElem!_eq_getD]; exact hx0
+  have hk : k < (P.defs[P.root]!).body.nodes.size := (Array.getElem?_eq_some_iff.1 hx).1
+  have hxk : (P.defs[P.root]!).body.nodes[k]! = x := by
+    rw [getElem!_pos _ k hk]; exact (Array.getElem?_eq_some_iff.1 hx).2
+  have hc : P.defs.getD x.fn default = P.defs[x.fn]! := Array.getElem!_eq_getD.symm
+  rw [hc] at hres
+  rw [child_d, hxk]
+  generalize hcd : P.defs[x.fn]! = c at hres
+  let F : ℕ → V Spot.BlockFront.Port := fun l => do
+    let q ← resolve P P.rootScope { p := false, i := k, j := m * c.ret.leaves + l }
+    pure ({ gate := q, width := c.ret.widths.getD l 0 } : Spot.BlockFront.Port)
+  obtain ⟨r, hrm, h2⟩ := mapM_forall₂ F (List.range c.ret.leaves) fun l hl => by
+    obtain ⟨q, hq⟩ := hres l (List.mem_range.1 hl)
+    exact ⟨_, by simp only [F, hq]; rfl⟩
+  have huo : unitOuts P g = r.toArray := by
+    unfold unitOuts
+    simp only [hu, hx0, hc, hcd, bind, Except.bind]
+    rw [Array.mapM_eq_mapM_toList, Array.toList_range]
+    change (match (Functor.map List.toArray (List.mapM F (List.range c.ret.leaves)) : V _) with
+      | .ok ps => ps | .error _ => #[]) = _
+    rw [hrm]
+    rfl
+  rw [huo, List.toList_toArray]
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_full bytes P hd hr
+  have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
+  have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
+    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hL := OperandWidths.decoded_laid bytes P hd hr
+  have hW := LeafWidths.decoded_wide bytes P hd hr
+  obtain ⟨hsh, hmem⟩ := unitAt_shape hu
+  rw [hxk] at hsh hmem
+  obtain ⟨-, hnd, -⟩ := (hD P.root hrt).2.1 k hk
+  obtain ⟨-, -, -, -, hshape, -⟩ := hnd
+  rw [hxk, hcd] at hshape
+  have hxk' : (P.defs[P.rootScope.d]!).body.nodes[k]! = x := hxk
+  have hwsz : c.ret.widths.size = c.ret.leaves := by rw [← Array.length_toList, Flock.Sigma.widths_length]
+  have hrw : c.ret.widths.toList = (List.range c.ret.leaves).map fun l => c.ret.widths.getD l 0 := by
+    rw [← hwsz]
+    apply List.ext_getElem (by simp)
+    intro t h1 _
+    simp only [Array.length_toList] at h1
+    simp [Array.getD, h1]
+  rw [hrw]
+  refine forall₂_map_eq _ _ ((forall₂_mem h2).imp fun l b hlF => ?_)
+  obtain ⟨hl, hF⟩ := hlF
+  have hl := List.mem_range.1 hl
+  cases hq : resolve P P.rootScope { p := false, i := k, j := m * c.ret.leaves + l } with
+  | error e => simp [F, hq, bind, Except.bind] at hF
+  | ok q =>
+    simp only [F, hq, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hF
+    subst hF
+    have hty : LeafWidths.tyOf P P.rootScope { p := false, i := k, j := m * c.ret.leaves + l } = x.out := by
+      simp only [LeafWidths.tyOf, Bool.false_eq_true, ↓reduceIte]
+      rw [← hxk]
+      rfl
+    have hmod : (m * c.ret.leaves + l) % c.ret.leaves = l := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]
+    have hfin : ∀ w, Widths.wAt x.out (m * c.ret.leaves + l) = w → w = c.ret.widths.getD l 0 →
+        leafWidth P { gate := q, width := c.ret.widths.getD l 0 } = c.ret.widths.getD l 0 := by
+      intro w hwa hw
+      exact leafWidth_of_gate hG q _ fun _ p o s hg => by
+        have hRef : Resolve.RefOk P P.rootScope.d (P.defs[P.rootScope.d]!).body.nodes.size
+            { p := false, i := k, j := m * c.ret.leaves + l } := by
+          refine ⟨fun h => absurd h Bool.false_ne_true, fun _ => ⟨hk, ?_⟩⟩
+          show m * c.ret.leaves + l < ((P.defs[P.rootScope.d]!).body.nodes[k]!).out.leaves
+          rw [hxk']
+          rcases hsh with hf | hf
+          · simp only [hf, BodiesOk.Shape] at hshape
+            have h1 : x.members = 1 := by unfold Node.members; rw [hf]; rfl
+            rw [hshape.1]
+            have : m = 0 := by omega
+            subst this
+            omega
+          · simp only [hf, BodiesOk.Shape] at hshape
+            have h1 : x.members = x.n := by unfold Node.members; rw [hf]; rfl
+            rw [hshape.1, BodiesOk.leaves_array]
+            have := Nat.mul_le_mul_right c.ret.leaves (show m + 1 ≤ x.n by omega)
+            rw [Nat.add_mul, Nat.one_mul] at this
+            omega
+        rw [LeafWidths.resolve_wide P hroot hB hL hD hW P.rootScope ⟨rfl, rfl, rfl⟩ _ hRef q hq p o s hg, hty, hwa, hw]
+    rcases hsh with hf | hf
+    · simp only [hf, BodiesOk.Shape] at hshape
+      have h1 : x.members = 1 := by unfold Node.members; rw [hf]; rfl
+      have h0 : m = 0 := by omega
+      refine hfin _ rfl ?_
+      rw [hshape.1, h0, Nat.zero_mul, Nat.zero_add, LeafWidths.wAt_widths _ _ hl, Array.getElem!_eq_getD]
+      rfl
+    · simp only [hf, BodiesOk.Shape] at hshape
+      refine hfin _ rfl ?_
+      rw [hshape.1, LeafWidths.wAt_array _ _ _ (by omega), hmod, LeafWidths.wAt_widths _ _ hl,
+        Array.getElem!_eq_getD]
+      rfl
+
+end UnitWidthsProof
+
+/-- **`UnitWidths`** holds. -/
+theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
+  ⟨unitArgs_widths hd hr hov hG hu hR, unitOuts_widths hd hr hov hG hu hR⟩
+
+/-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
+theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
+  intro bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu hda Y hY
   have ho := hW bytes P hd hr g k m hu Y hY
   have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
-    rw [← (hWd bytes P hd hr g k m hu).1]
+    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
     simp [argWords, Function.comp_def, portWord_length]
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
@@ -1272,20 +1558,20 @@ theorem unitComputes_of (hWd : UnitWidths) (hW : UnitWordComputes) (hL : LiftWor
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl hov hG hRs blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu
+  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
-/-- **`DoorLengths`**, on `UnitWidths`. -/
-theorem doorLengths_of (hWd : UnitWidths) : DoorLengths := by
-  intro bytes P partition cuts units S a fr hd hr hs ha hab hf X g hg
+/-- **`DoorLengths`** holds. -/
+theorem doorLengths : DoorLengths := by
+  intro bytes P partition cuts units S a fr hd hr hs ha hab hf hov hG hRs X g hg
   obtain ⟨k, m, hu, -⟩ := frontUnitRanges P units fr hf g hg
   have hda := admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu
-  obtain ⟨hwa, hwo⟩ := hWd bytes P hd hr g k m hu
+  obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]
