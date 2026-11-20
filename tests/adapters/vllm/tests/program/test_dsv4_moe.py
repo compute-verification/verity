@@ -16,31 +16,12 @@ from verity_vllm.definitions.registry import prims as P
 
 NEG_INF, PINF, QNAN, GPU_NAN = 0xFF800000, 0x7F800000, 0x7FC00000, 0x7FFFFFFF
 
-#: `lg2.approx.ftz.f32(1.m)` as `LG2_MEASURED`'s run read it, at segment boundaries and both ends
-MEASURED = {0x1: 0x3495F600, 0x2: 0x34F24A00, 0x3: 0x35274F00, 0x1FFFF: 0x3CB73C76, 0x20000: 0x3CB73CD1, 0x20001: 0x3CB73D2C,
-            0xA0000: 0x3DDE4224, 0x3FFFFF: 0x3F15C019, 0x400000: 0x3F15C01B, 0x7E3039: 0x3F7D6088, 0x7FFFFE: 0x3F7FFFFE,
-            0x7FFFFF: 0x3F7FFFFF}
-
-
 def _w(x: float) -> int:
     return P.bits_of(x)
 
 
 def _f(w: int) -> float:
     return float(P.f32_of(w))
-
-
-def test_lg2_is_the_measured_unit_where_pinned():
-    for m, y in MEASURED.items():
-        assert D.MufuLg2Mantissa.evaluate(0x3F800000 | m) == y, hex(m)
-    assert D.MufuLg2Mantissa.evaluate(0x3F800000) == 0
-
-
-def test_lg2_reads_only_the_mantissa_and_stays_near_log2():
-    for m in [*MEASURED, 0x155555, 0x2AAAAA, 0x6DB6DB]:
-        y = D.MufuLg2Mantissa.evaluate(0x3F800000 | m)
-        assert all(D.MufuLg2Mantissa.evaluate(e << 23 | s << 31 | m) == y for e in (0, 1, 0x80, 0xFF) for s in (0, 1))
-        assert abs(_f(y) - math.log2(1 + m / 2 ** 23)) < 2 ** -21
 
 
 def _weight(x: int) -> int:

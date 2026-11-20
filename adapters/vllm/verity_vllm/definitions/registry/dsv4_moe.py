@@ -66,7 +66,7 @@ exactly; ``alpha = 1`` makes ``-f * alpha`` the ``-f`` of `silu_and_mul`.
 """
 from __future__ import annotations
 
-from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.defs import bind, composite
 from verity.circuits.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
 from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import tuple_of
@@ -75,6 +75,18 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import act, b1
 from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.boolean_gate_ops import (  # noqa: F401
+    LG2_COEFFS,
+    LG2_MEASURED,
+    LG2_OFFSET_BITS,
+    LG2_SCALE,
+    LG2_SHIFT,
+    LG2_SQUARE_FROM,
+    MufuLg2Mantissa,
+    lg2_interpolant,
+    mufu_lg2_mantissa_bits,
+    truncated_square,
+)
 from verity_vllm.definitions.registry.moe import (
     ArgmaxStepF32,
     Ex2Approx,
@@ -96,80 +108,7 @@ TOPK = 6
 LOG2E, NEG_LOG2E, LN2 = 0x3FB8AA3B, 0xBFB8AA3B, 0x3F317218
 TWO, TWENTY = 0x40000000, 0x41A00000
 NAN_SCORE = 0xF149F2CA       # -1e30
-
-# --- MUFU.LG2 on [1, 2) ---------------------------------------------------------------------------------------------------------
-
-LG2_OFFSET_BITS, LG2_SQUARE_FROM, LG2_SHIFT, LG2_SCALE = 17, 19, 2, -36
-#: (C0, C1, C2) per segment g = m >> 17
-LG2_COEFFS = (
-    (29509, 47272, -1454), (6148432709, 46545, -1410), (12203000645, 45840, -1370), (18166489925, 45156, -1330),
-    (24041640773, 44492, -1292), (29831013189, 43847, -1254), (35537077061, 43221, -1220), (41162191685, 42612, -1184),
-    (46708667205, 42020, -1152), (52178604869, 41444, -1118), (57574130501, 40884, -1088), (62897230661, 40339, -1060),
-    (68149822277, 39809, -1036), (73333732165, 39292, -1008), (78450783045, 38788, -982), (83502646085, 38297, -958),
-    (88490939205, 37818, -932), (93417288517, 37351, -910), (98283180869, 36896, -890), (103090078533, 36451, -866),
-    (107839419205, 36018, -850), (112532534085, 35594, -828), (117170770757, 35180, -808), (121755394885, 34776, -792),
-    (126287618885, 34380, -770), (130768622405, 33994, -754), (135199564613, 33616, -736), (139581543237, 33247, -722),
-    (143915623237, 32886, -708), (148202869573, 32532, -692), (152444248901, 32186, -678), (156640731973, 31847, -662),
-    (160793285445, 31516, -652), (164902798149, 31191, -638), (168970179397, 30872, -622), (172996260677, 30561, -614),
-    (176981869381, 30255, -600), (180927816517, 29955, -586), (184834904901, 29662, -578), (188703847237, 29374, -566),
-    (192535413573, 29091, -552), (196330328901, 28814, -542), (200089273157, 28542, -532), (203812897605, 28276, -524),
-    (207501906757, 28014, -514), (211156931397, 27757, -506), (214778549061, 27505, -498), (218367394629, 27257, -488),
-    (221924049733, 27013, -476), (225449096005, 26774, -468), (228943086405, 26540, -464), (232406541125, 26309, -454),
-    (235840037701, 26082, -446), (239244047173, 25859, -438), (242619102021, 25640, -432), (245965656901, 25424, -422),
-    (249284195141, 25213, -418), (252575208261, 25004, -408), (255839150917, 24799, -402), (259076424517, 24598, -398),
-    (262287512389, 24399, -390), (265472783173, 24204, -384), (268632675141, 24012, -378), (271767585605, 23823, -372),
-)
-#: the measurement the coefficients reproduce: ``lg2.approx.ftz.f32`` of ``0x3F800000 | m`` for every m (`registry.mla_capture`'s
-#: probe), the SHA-256 of the 2^23 little-endian u32 words
-_DIFFTEST, _CAPTURE = EVIDENCE["cc12_difftest"], EVIDENCE["dsv4_moe_capture"]
-LG2_MEASURED = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0",
-                "run_record": _DIFFTEST["run_record"], "words": 1 << 23,
-                "sha256": "7fd9be9a924e40a0ee18ba20e7f5158135112947597c8dd86131d3d4d8f9dbfa"}
-
-
-def truncated_square(u):
-    """Q(u) for a 17-bit offset (an int, or an array of integers wide enough for 2^16): the folded partial products of u^2 (u_a
-    at column 2a, u_a u_b at a + b + 1 for a < b) in columns >= 19, shifted right by 19."""
-    nb, p = LG2_OFFSET_BITS, LG2_SQUARE_FROM
-    bit = [(u >> a) & 1 for a in range(nb)]
-    q = u * 0
-    for a in range(nb):
-        if 2 * a >= p:
-            q = q + (bit[a] << (2 * a - p))
-        for b in range(max(a + 1, p - a - 1), nb):
-            q = q + ((bit[a] & bit[b]) << (a + b + 1 - p))
-    return q
-
-
-def lg2_interpolant(m: int) -> int:
-    """G at the mantissa m: ``(C0[g] + C1[g] u + C2[g] Q(u)) >> 2``, g = m >> 17, u = m mod 2^17."""
-    c0, c1, c2 = LG2_COEFFS[m >> LG2_OFFSET_BITS]
-    u = m & ((1 << LG2_OFFSET_BITS) - 1)
-    return (c0 + c1 * u + c2 * truncated_square(u)) >> LG2_SHIFT
-
-
-def mufu_lg2_mantissa_bits(x: int) -> int:
-    """MUFU.LG2 of 1.m, m = x & 0x7FFFFF: G 2^-36 rounded toward zero, and +0 at m = 0."""
-    m = x & 0x7FFFFF
-    if m == 0:
-        return 0
-    G = lg2_interpolant(m)
-    e = G.bit_length() - 1
-    frac = G << (23 - e) if e <= 23 else G >> (e - 23)
-    return (e + 127 + LG2_SCALE) << 23 | frac & 0x7FFFFF
-
-
-@primitive("MufuLg2Mantissa", 1, [("x", F32)], F32,
-           conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on a cc 12.0 GPU "
-                       f"({_DIFFTEST['run_record']}) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
-                       "lg2.approx.ftz.f32 and lg2.approx.f32 on every 1.m are those words, lg2(2) = 1 and a NaN 0x7FFFFFFF "
-                       f"({_CAPTURE['run_record']}, the harness at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)",
-           tables=(("lg2", "library"),))
-def MufuLg2Mantissa(x: int) -> int:
-    """MUFU.LG2 (``lg2.approx.f32``) of 1.m, m = x's 23 mantissa bits: the unit's quadratic interpolator rounded toward zero on
-    the 2^-36 grid, +0 at m = 0."""
-    return mufu_lg2_mantissa_bits(x)
-
+_CAPTURE = EVIDENCE["dsv4_moe_capture"]
 
 # --- the CUDA hash router (layers 0-2) -------------------------------------------------------------------------------------------
 

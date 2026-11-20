@@ -51,7 +51,6 @@ are never NaN.  A slot's score is the XOR of the scores under the one-hot decode
 """
 from __future__ import annotations
 
-from functools import cache
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (
@@ -60,12 +59,9 @@ from verity.circuits.boolean.forms import (
     OR,
     ZERO,
     and_reduce,
-    compress_columns,
     const_bits,
-    lzc,
     mux,
     or_reduce,
-    shl_window,
     sub,
 )
 from verity.circuits.boolean.trace import definition
@@ -81,6 +77,8 @@ from verity_vllm.definitions.registry import act
 from verity_vllm.definitions.registry import dsv4_moe as D
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.boolean_gate_ops import MufuLg2MantissaV2 as MufuLg2Mantissa
+from verity_vllm.definitions.registry.boolean_gate_ops import mufu_lg2_mantissa
 from verity_vllm.definitions.registry.boolean_moe import (
     _eq_word,
     _ex2_in,
@@ -107,68 +105,6 @@ ONE_BITS, NEG_INF_BITS = 0x3F800000, 0xFF800000
 
 def _w(bits: int) -> list:
     return const_bits(bits, 32)
-
-
-# --- MUFU.LG2 on [1, 2) --------------------------------------------------------------------------------------------------------
-
-#: the columns of 2v (2v < 2^39 on every mantissa), and the low bits of 2v below G
-LG2_COLUMNS, LG2_DROP = 39, 1 + D.LG2_SHIFT
-LG2_SEGMENT_BITS = 23 - D.LG2_OFFSET_BITS
-LG2_SQUARE_BITS = 2 * D.LG2_OFFSET_BITS - D.LG2_SQUARE_FROM
-
-
-@cache
-def _lg2_plan() -> tuple[tuple[int, int], tuple[tuple[int, ...], ...]]:
-    """The segment functions of `table_word`'s encoding for `dsv4_moe.LG2_COEFFS`: the digit signs n_k of C1 (K1 of them), of
-    C2 (K2), then the 39 bits of 2 C0 with the digits' constants folded in, each as the monomials of the segment bits in its
-    algebraic normal form; and (K1, K2)."""
-    c0 = [2 * c for c, _, _ in D.LG2_COEFFS]
-    rows, Ks = [], []
-    for n, cs in ((D.LG2_OFFSET_BITS, [c for _, c, _ in D.LG2_COEFFS]), (LG2_SQUARE_BITS, [c for _, _, c in D.LG2_COEFFS])):
-        K, B = BM._digits(cs)
-        Ks.append(K)
-        rows += [[1 - ((b >> k) & 1) for b in B] for k in range(K)]
-        c0 = [c - ((1 << n) - 1) * ((((1 << K) - 1) ^ b) + 1) for c, b in zip(c0, B)]
-    rows += [[(c >> j) & 1 for c in c0] for j in range(LG2_COLUMNS)]
-    for r in rows:
-        for i in range(LG2_SEGMENT_BITS):
-            for g in range(len(r)):
-                if g >> i & 1:
-                    r[g] ^= r[g ^ (1 << i)]
-    return (Ks[0], Ks[1]), tuple(tuple(g for g, a in enumerate(r) if a) for r in rows)
-
-
-def mufu_lg2_mantissa(C, x):
-    """`MufuLg2Mantissa_v1` on bits: the interpolant G as one carry-save sum, then G 2^-36 rounded toward zero, +0 at m = 0."""
-    (K1, K2), anf = _lg2_plan()
-    m = list(x[:23])
-    u = m[:D.LG2_OFFSET_BITS]
-    terms = BM._monomials(C, m[D.LG2_OFFSET_BITS:])
-    fns = [BM._xor_all(terms[i] for i in r) for r in anf]
-    cols: list[list] = [[] for _ in range(LG2_COLUMNS)]
-    for v, signs in ((u, fns[:K1]), (BM.truncated_square(C, u, D.LG2_SQUARE_FROM), fns[K1:K1 + K2])):
-        for k, n_k in enumerate(signs):
-            for j, b in enumerate(v):
-                if j + k < LG2_COLUMNS:
-                    cols[j + k].append(b ^ n_k)
-        for j, b in enumerate(v):
-            cols[j].append(NOT(b))
-    for j, b in enumerate(fns[K1 + K2:]):
-        cols[j].append(b)
-    G = compress_columns(C, cols)[LG2_DROP:LG2_COLUMNS]
-    top = [ZERO] * (64 - len(G)) + list(G)
-    _, z = lzc(C, top)
-    mant = shl_window(C, top, z, 40, 63)
-    exp, _ = sub(C, const_bits(len(G) - 1 + 127 + D.LG2_SCALE, 8), z, 8)
-    # m = 0 from the NOTs of u the sum reads and the segment bits' zero test, the XOR of all their monomials (no AND), so that
-    # no AND repeats a monomial or a product of the square
-    nz = NOT(and_reduce(C, [NOT(b) for b in u] + [BM._xor_all(terms)]))
-    return [C.AND(nz, b) for b in mant + exp] + [ZERO]
-
-
-MufuLg2Mantissa = definition("MufuLg2Mantissa", 2, mufu_lg2_mantissa, (("x", F32),), F32, word=D.MufuLg2Mantissa,
-                             doc="MUFU.LG2 of 1.m on bits: MufuLg2Mantissa_v1's interpolator as one carry-save sum, the word "
-                                 "rounded toward zero by a leading-zero count and a shift")
 
 
 # --- the CUDA hash router (layers 0-2) -----------------------------------------------------------------------------------------

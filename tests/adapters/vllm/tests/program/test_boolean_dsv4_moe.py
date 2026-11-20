@@ -7,7 +7,6 @@ deciding bias, non-finite logits and biases and rows with fewer than six current
 program digest, and the routers pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
 
-import hashlib
 import json
 
 import numpy as np
@@ -23,23 +22,18 @@ from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
 
 from verity_vllm.definitions.registry import boolean_dsv4_moe as BD
-from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import dsv4_moe as D
-from verity_vllm.definitions.registry import moe as M
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MufuLg2Mantissa_v2": (986, 4749, 92, "661ff9649d6e2fd4720a6168c02df12165d60caf36009433d919ca127311ab0e4ad3c1fb557a319eafe9b72f6c3e216cfbdbbdaa69f75171e7c6af211ad8e7bf"),
     "SiluMulClampBf16_v2{LIMIT=10.0}": (1489, 7153, 207, "358977ab42320caf6c2008addaba915a349b13759f6ec6a9268ada1af957dff1371aef27df91e0fd827e628cc433c4732d6b67c0e38bf62e5eb3af076f7c2f82"),
     "SiluMulClamp_v2{I=4,LIMIT=10.0}": (5956, 28612, 828, "80c41c17691bc59136048ebfaa3da835b0dc91ab9c998026ef2ae33b7cdc2519970ce799d3ac2a7b0a452eac4e13b7cf8ab1cdd65ef9b73b3680a9baa5e1d59d"),
-    "Ex2Approx_v2": (3857, 9772, 300, "c2434f87fc4b34073d872137698e699959a8a3b3f27c36b2127100f328632626c7beb577fc75d4cdd67e12a1de05b797ee1e8c693d5afe1d15ae0df646869da9"),
     "Dsv4HashWeight_v2": (11576, 26283, 1059, "c52570cc5cb16190f63bf09c62fba3300e687b2f8904ad25a33998406137840a59da6b2bf1b1653a7390dad7ccff50a13b7bb1ecc74052a4a67002cf70a75e4d"),
     "MoeRouterHash_v2{E=8,SCALE=2.5}": (93595, 205463, 9019, "cd0d247a7f236356e9b6be4b998e0f83663896b22a2c2415680e461f501dc8b3c0f19b643dc4fb69f2d4509a5359996f0d4507c81b3e404843f2db2f79581229"),
     "Dsv4SqrtSoftplus_v2": (50376, 93380, 3493, "6448d2ab003ba1434121a0bddfd6d9a525ee692d923163dc6445086866c96b6fc3e4971ec74350016148c786ca7af66b307f9bef81bdc9fcec5013a91befd3eb"),
     "MoeRouterSqrtSoftplus_v2{E=8,SCALE=2.5}": (435870, 808659, 32308, "e7c3920f524633cd133e52da5ee1c73b44e7ed252f6e3e00b54e16c175e982d982026727fac3eaa4291788770f4fbc54e356b60899df1e659903caa3c6197178"),
 }
-TARGETS = [bind(BD.MufuLg2Mantissa), bind(BD.SiluMulClampBf16, LIMIT=10.0), bind(BD.SiluMulClamp, I=4, LIMIT=10.0),
-           bind(BMOE.Ex2Approx), bind(BD.Dsv4HashWeight),
+TARGETS = [bind(BD.SiluMulClampBf16, LIMIT=10.0), bind(BD.SiluMulClamp, I=4, LIMIT=10.0), bind(BD.Dsv4HashWeight),
            *[pytest.param(t, marks=pytest.mark.slow) for t in (bind(BD.MoeRouterHash, E=8, SCALE=2.5), bind(BD.Dsv4SqrtSoftplus),
                                                                bind(BD.MoeRouterSqrtSoftplus, E=8, SCALE=2.5))]]
 
@@ -99,9 +93,7 @@ def test_pinned_counts_and_digests(target) -> None:
 
 
 def test_the_word_views() -> None:
-    assert TR.word_of(bind(BD.MufuLg2Mantissa)).id == D.MufuLg2Mantissa.id == "MufuLg2Mantissa_v1"
-    assert SW.boolean_version(D.MufuLg2Mantissa).id == "MufuLg2Mantissa_v2"
-    for b, w in ((BMOE.Ex2Approx, M.Ex2Approx), (BD.Dsv4HashWeight, D.Dsv4HashWeight), (BD.Dsv4SqrtSoftplus, D.Dsv4SqrtSoftplus)):
+    for b, w in ((BD.Dsv4HashWeight, D.Dsv4HashWeight), (BD.Dsv4SqrtSoftplus, D.Dsv4SqrtSoftplus)):
         assert TR.word_of(bind(b)).id == bind(w).id
         assert SW.boolean_version(bind(w)).id == bind(b).id
     for b, w, st in ((BD.MoeRouterHash, D.MoeRouterHash, {"E": 384, "SCALE": 2.5}),
@@ -110,30 +102,6 @@ def test_the_word_views() -> None:
                      (BD.SiluMulClamp, D.SiluMulClamp, {"I": 384, "LIMIT": 10.0})):
         assert TR.word_of(bind(b, **st)).id == bind(w, **st).id
         assert SW.boolean_version(bind(w, **st)).id == bind(b, **st).id
-
-
-def test_lg2_where_measured_and_on_every_exponent_and_sign() -> None:
-    rng = np.random.default_rng(0xD54)
-    m = np.concatenate([np.array([0, 1, 2, 3, 0x1FFFF, 0x20000, 0x3FFFFF, 0x400000, 0x7FFFFE, 0x7FFFFF], np.uint32),
-                        rng.integers(0, 1 << 23, 2000, dtype=np.uint32)])
-    x = m | (rng.integers(0, 1 << 9, len(m), dtype=np.uint32) << 23)
-    _agree(bind(BD.MufuLg2Mantissa), x)
-
-
-def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
-    """All 2^23 words of [1, 2) against `LG2_MEASURED`'s SHA-256 (about 10 s): the Boolean interpolator is the measured unit, not
-    only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
-    h = hashlib.sha256()
-    for lo in range(0, 1 << 23, 1 << 19):
-        m: np.ndarray = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
-        y = np.asarray(BS.evaluate_words(bind(BD.MufuLg2Mantissa), m | np.uint32(0x3F800000))).astype("<u4").reshape(-1)
-        assert np.array_equal((y >> 23 & 0xFF) == 0, m == 0)
-        h.update(y.tobytes())
-    assert h.hexdigest() == D.LG2_MEASURED["sha256"]
-
-
-def test_ex2_approx_on_special_edge_and_random_words() -> None:
-    _agree(bind(BMOE.Ex2Approx), _words(np.random.default_rng(0xE2), 3000, -160, 130))
 
 
 def test_the_hash_weight_on_special_edge_and_random_words() -> None:

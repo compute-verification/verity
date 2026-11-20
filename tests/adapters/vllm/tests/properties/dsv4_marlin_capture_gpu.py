@@ -117,7 +117,6 @@ import re
 import struct
 import sys
 import tempfile
-from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -130,6 +129,7 @@ from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.ops.boolean.versions import boolean_version
 
 from tests.properties import fa2_target_capture_gpu as C
+from tests.properties.glm53_flashmla_fp8_capture_gpu import FP_OP, sass_census  # noqa: F401
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.glm53_block_fp8_capture_gpu import (
     _activation,
@@ -189,8 +189,7 @@ EM_CUDA = 190
 #: a mangled `marlin_moe_wna16::Marlin<...>` (kernel.h): its twelve template arguments are literals `L<type><value>E` (the four
 #: ScalarTypeIds int64_t, `l`; the bools `b`; a negative value prefixed `n`)
 MANGLED = re.compile(r"_ZN16marlin_moe_wna166MarlinI((?:L[a-z]n?\d+E){12})E")
-#: the floating-point SASS opcodes `sass_census` counts, and the ones the served kernels may hold (module docstring)
-FP_OP = re.compile(r"(?:HMMA|HFMA|HMUL|HADD|HMNMX|FADD|FFMA|FMUL|FMNMX|FSET|FCHK|F2F|MUFU|DADD|DFMA|DMUL)")
+#: the floating-point SASS opcodes the served kernels may hold (module docstring)
 FP_OPS = {"HMMA.16816.F32.BF16", "FADD", "HFMA2.BF16_V2", "HMUL2.BF16_V2", "HADD2.BF16_V2", "F2FP.BF16.F32.PACK_AB", "MUFU.RCP"}
 
 
@@ -355,12 +354,6 @@ def elf_functions(img: bytes) -> dict[str, bytes]:
         if name.startswith(".text.") and sh_type != 8:
             out[name[len(".text."):]] = img[off:off + size]
     return out
-
-
-def sass_census(sass: str) -> dict[str, int]:
-    """The floating-point opcodes (`FP_OP`) of a `cuobjdump -sass` listing, counted."""
-    ops = re.findall(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", sass)
-    return dict(sorted(Counter(op for op in ops if FP_OP.match(op)).items()))
 
 
 def function_registers(res_usage: str) -> dict[str, int]:
