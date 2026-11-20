@@ -125,7 +125,7 @@ theorem round_one (b : ByteArray) (hb : b.size = 1) :
 
 theorem message_one (c : ChallengePhaseCommitment) (e : String) {d : ByteArray} (hd : d.size = 64) :
     ∃ m, message c e #[oneRecord d] = .ok m := by
-  simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
+  simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Flock.SessionCoins.beN, Bind.bind, Except.bind, Pure.pure,
     Except.pure]
 
 /-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/

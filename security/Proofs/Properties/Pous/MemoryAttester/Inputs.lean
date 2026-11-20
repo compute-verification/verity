@@ -29,7 +29,7 @@ open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_
 
 theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) :
     x < 2 ^ (8 * n) ∧ bs b = (List.range n).map fun i => (x >>> (8 * (n - 1 - i))).toUInt8 := by
-  unfold beN at h
+  unfold beN SessionCoins.beN at h
   split at h
   · rename_i hx
     simp only [pure, Except.pure, Except.ok.injEq] at h
