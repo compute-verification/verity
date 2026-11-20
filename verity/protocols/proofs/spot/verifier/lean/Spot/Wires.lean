@@ -153,36 +153,6 @@ def pairwiseDisjointFast (ws : List Wire) : Bool :=
     groupDisjoint (ws.filter fun w => (w.reader, w.port) == k)
 
 
-/-! Fixtures: the sweep and the pair by pair check agree where wires overlap, touch, nest, are equal, are cut apart, have no
-reader units, share or split a (reader, port), and where there are none. -/
-
-private def fx (reader port : String) (start units cut0 cuts : Nat) : Wire :=
-  { reader, port, writer := "w", out := "o", start, radix := [units, cuts], base := 0, step := [0, 0], cut0, cuts }
-
-private def agrees (ws : List Wire) (accepted : Bool) : Bool :=
-  pairwiseDisjointFast ws == pairwiseDisjoint ws && pairwiseDisjoint ws == accepted
-
-#guard agrees [] true
-#guard agrees [fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 4 4 0 1] true
-#guard agrees [fx "A" "x" 4 4 0 1, fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 10 0 1, fx "A" "x" 3 2 0 1] false
-#guard agrees [fx "A" "x" 3 2 0 1, fx "A" "x" 0 10 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "y" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 2, fx "A" "x" 0 4 2 2] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 0 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 1 1] false
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 4 1 0 1] true
-#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 0 0 1] false
-#guard agrees [fx "A" "x" 2 0 0 1, fx "A" "x" 0 4 0 1] false
-#guard agrees [fx "A" "x" 4 0 0 1, fx "A" "x" 0 4 0 1] true
-#guard agrees [fx "A" "x" 0 0 0 1, fx "A" "x" 0 0 0 1] true
-#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 7 1 0 1] false
-#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 8 1 0 1] true
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where

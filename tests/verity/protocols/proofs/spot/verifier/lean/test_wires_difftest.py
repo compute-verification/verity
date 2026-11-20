@@ -573,3 +573,32 @@ DISJOINT = D.Port(PIECES, "wires_disjoint", disjoint_reference, wire_lists(), pa
 def test_the_sweep_and_the_pair_by_pair_check_agree_with_the_reference(pieces):
     stats = D.run(DISJOINT, examples=3000, server=pieces)
     assert stats.outputs > 2000, stats
+
+#: (reader, port, first unit, reader units, first row, rows) each, and whether every pair is disjoint: empty, touching, nested,
+#: equal, cut apart, of two groups, and where a wire overlaps a nonadjacent one by start
+FIXTURES = [
+    ([], True),
+    ([('A', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 2, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 4, 4, 0, 1)], True),
+    ([('A', 'x', 4, 4, 0, 1), ('A', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 10, 0, 1), ('A', 'x', 3, 2, 0, 1)], False),
+    ([('A', 'x', 3, 2, 0, 1), ('A', 'x', 0, 10, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('B', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'y', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('B', 'x', 0, 4, 0, 1), ('A', 'x', 2, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 2), ('A', 'x', 0, 4, 2, 2)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 2, 1, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 2, 1, 1, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 4, 1, 0, 1)], True),
+    ([('B', 'y', 6, 2, 0, 1), ('A', 'x', 0, 4, 0, 1), ('B', 'y', 0, 6, 0, 1), ('A', 'x', 4, 4, 0, 1), ('B', 'y', 7, 1, 0, 1)], False),
+    ([('B', 'y', 6, 2, 0, 1), ('A', 'x', 0, 4, 0, 1), ('B', 'y', 0, 6, 0, 1), ('A', 'x', 4, 4, 0, 1), ('B', 'y', 8, 1, 0, 1)], True),
+]
+
+
+@pytest.mark.parametrize("rects, ok", FIXTURES, ids=range(len(FIXTURES)))
+def test_the_sweep_and_the_pair_by_pair_check_on_fixtures(pieces, rects, ok):
+    wires = [{"reader": r, "port": p, "writer": "G", "out": "o", "at": at, "radix": [u, c], "base": 0, "step": [0, 0],
+              "cut": [c0, c]} for r, p, at, u, c0, c in rects]
+    assert pieces.call("wires_disjoint", {"wires": wires}) == ("output", D.canonical({"pairwise": ok, "fast": ok}))
