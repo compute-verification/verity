@@ -604,7 +604,7 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
 def _periods_interface_tests():
     import importlib.util
     from pathlib import Path
-    path = Path(__file__).resolve().parents[5] / "tests/verity/commitments/periods/test_interface.py"
+    path = Path(__file__).resolve().parents[6] / "tests/verity/commitments/periods/test_interface.py"
     spec = importlib.util.spec_from_file_location("periods_test_interface", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
