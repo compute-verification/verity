@@ -16,7 +16,7 @@ The committed run, and the only one (``--tp-commit`` is refused by name: the TP 
   a `verity-vllm serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
   the prover's); the window's Commit is its sealed row dir (``commit/replay_bundle_p0``, the Commit's records, the
-  window's Programs file (`advice_compile`'s ``programs.json``)). The compiler is `Capped` over `I2Compiler`: I2's
+  window's Programs). The compiler is `Capped` over `I2Compiler`: I2's
   `predict.steps.compile_steps` on the advice and the requests' bodies under φ of the served engine (`phi_of_serve`), the
   bodies each request's ingress record (`serve_ingress`), named as `verity-vllm advice` names it (`served_identity`:
   compile_steps over the tree's code identity), so its digest covers what the compile reads of ``serve.json``
@@ -213,8 +213,6 @@ ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> row
 #: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
 #: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
-#: the schema of the request Programs vllm's registered compiler writes into a served window's row dir (``programs.json``)
-SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
 #: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of), with the
 #: changes it waits on (``sources.json``)
 PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_interim"]
@@ -909,24 +907,6 @@ def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
-def i2_against_record(a: argparse.Namespace, requests: list[dict], compiler: Mapping[str, str]) -> dict:
-    """A served window's I2 Programs against the ones the server's registered compiler wrote for it (`advice_compile`'s
-    ``programs.json``, `SERVED_PROGRAMS`): its docket's compiler (``registration.binding.compiler``) against I2's
-    ``compiler``, and each request's Program digest (``requests[<I1 id>].digest``) against I2's. Refused without the file."""
-    if not served(a):
-        raise ValueError("a single-GPU window is a served one (--serve-run): the rows route's Commit is retired")
-    p = Path(a.row_dir) / "programs.json"
-    doc = json.loads(p.read_text())
-    if doc.get("schema") != SERVED_PROGRAMS:
-        raise ValueError(f"{p} is {doc.get('schema')!r}, not {SERVED_PROGRAMS}")
-    of = {str(k): str(v["digest"]) for k, v in doc["requests"].items()}
-    theirs = ((doc.get("registration") or {}).get("binding") or {}).get("compiler")
-    units = {q["request_id"]: {"i2": q["digest"], "of_record": of.get(q["request_id"]), "equal": q["digest"] == of.get(q["request_id"])}
-             for q in requests}
-    return {"compiler": {"i2": dict(compiler), "of_record": theirs, "equal": theirs == dict(compiler)}, "units": units,
-            "equal": theirs == dict(compiler) and len(units) == len(of) and all(u["equal"] for u in units.values())}
-
-
 @contextlib.contextmanager
 def forging(member: int, unit: int) -> Iterator[None]:
     """Inside, serving rows commit member ``member``'s unit ``unit`` with bit 0 of its first output word flipped, before its commit
@@ -1000,7 +980,7 @@ def commit(a: argparse.Namespace) -> int:
     for (_a, r, _q, _b), got in in_processes(commit_rank, a.jobs or 1, [(a, r, requests, bound) for r in ranks]):
         rows[str(r)] = got
         print(f"[prove-path commit] rank {r}: {json.dumps(got, sort_keys=True, default=str)}", flush=True)
-    doc = {"binding": bound, "ranks": rows, "compile_s": compile_s, **({"i2": i2_against_record(a, requests, bound["compiler"])} if served(a) else {})}
+    doc = {"binding": bound, "ranks": rows, "compile_s": compile_s}
     Path(a.out, "commit.json").write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     return 0
 
@@ -1221,7 +1201,6 @@ def audit(a: argparse.Namespace) -> int:
                      "inner_compiler": {"name": compiler.inner.name, "digest": compiler.inner.digest}, "compile_s": compile_s,
                      "transfer_gates": list(compiler.transfer_gates),
                      "gap": "the advice is opened to the verifier until the compile slice's proof block exists (README.md)",
-                     **({"i2": i2_against_record(a, requests, bound["compiler"])} if served(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
                      **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
@@ -1253,7 +1232,6 @@ def audit(a: argparse.Namespace) -> int:
                                       "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),
                                       "advice_bits": bound["advice"]["bits"], "delta": a.delta,
                                       "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
-                                      **({"i2_equal": summary["i2"]["equal"]} if served(a) else {}),
                                       **({"serve": {k: summary["serve"][k] for k in ("window", "ok", "codes")}} if served(a) else {}),
                                       "ranks": shown},
                                      sort_keys=True, default=str))
@@ -1675,7 +1653,7 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
         p = sub.add_parser(name)
         p.add_argument("--tp-commit", help="refused: the TP Commit is deleted")
         p.add_argument("--build-root", help="refused with --tp-commit")
-        p.add_argument("--row-dir", help="with --serve-run: the window's row dir (programs.json, commit/)")
+        p.add_argument("--row-dir", help="with --serve-run: the window's row dir (its Builds, commit/)")
         p.add_argument("--serve-run", help="instead: a serve-openai run dir (serve.json, windows.jsonl, requests.jsonl, advice/w<K>/), "
                        "its window --window from the sealed row dir --row-dir (its bundle <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")

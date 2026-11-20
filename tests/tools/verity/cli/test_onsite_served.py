@@ -782,7 +782,7 @@ def test_the_workloads_piece_is_the_prover_nodes_first_and_each_verb_it_names_is
     rc, got, _ = dry(capsys, "--on", T.PROVER_NODE)
     first = got["plan"][0]["entries"][0]
     assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
-    assert first["verbs"] == ["predict", "serve", "seal", "window", "advice", "circuits", "publish"]
+    assert first["verbs"] == ["predict", "serve", "seal", "window", "circuits", "publish"]
     runner = (ROOT / T.RUNNER).read_text()
     assert [v for v in first["verbs"] if f'if [ "${{1:-}}" = {v} ]; then' not in runner] == []
     assert first["writes"] and all(w.split("/", 1)[0] in ("D", "OUT") for w in first["writes"])

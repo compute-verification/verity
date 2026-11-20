@@ -889,7 +889,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     """A serve-openai run dir with one closed window (w0, the stand-in workload's two requests by their `user`) and a request of
     another window, its advice committed as `verity-vllm advice` commits it under the served compiler (or, ``uncapped``, under
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
-    request Programs as vllm's registered compiler writes them (``programs.json``, with the window's docket);
+    request Programs as vllm's registered compiler writes them;
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
     from verity_vllm.program.predict import steps as ST
 
@@ -917,8 +917,6 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
                "compiler": {**bound["compiler"], "cap_bits": PP.CAP_BITS, "inner": {"name": SERVER[0], "digest": SERVER[1]}},
                "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}
     (adv / "registration.json").write_text(json.dumps(reg_doc))
-    (rows / "programs.json").write_text(json.dumps({"schema": PP.SERVED_PROGRAMS, "window": 0, "registration": reg_doc,
-                                                    "requests": {"r0": {"digest": "d0" * 64}, "r1": {"digest": "d1" * 64}}}))
     (adv / "private" / "advice.bin").write_bytes(data)
     (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
 
@@ -1573,25 +1571,6 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     assert PP.serve_check_of(s.a, bound) == {"ok": True, "codes": [], "detail": {
         "window": 0, "published_root": s.root, "commitment": step_rows.NAME, "compiler": s.bound["compiler"],
         "advice": s.bound["advice"], "run_id": "RUN/w0", "follows": {"last": None, "carried": []}}}
-    by_id = PP.i2_against_record(s.a, requests, bound["compiler"])
-    assert by_id["equal"] and by_id["units"]["r1"] == {"i2": "d1" * 64, "of_record": "d1" * 64, "equal": True}
-    assert by_id["compiler"] == {"i2": bound["compiler"], "of_record": bound["compiler"], "equal": True}
-    other = {**bound["compiler"], "digest": "ff" * 64}
-    got = PP.i2_against_record(s.a, requests, other)
-    assert not got["equal"] and got["compiler"]["equal"] is False and all(u["equal"] for u in got["units"].values())
-    programs = Path(s.a.row_dir) / "programs.json"
-    doc = json.loads(programs.read_text())
-    programs.write_text(json.dumps({**doc, "requests": {"r0": doc["requests"]["r0"], "r1": {"digest": "ee" * 64}}}))
-    got = PP.i2_against_record(s.a, requests, bound["compiler"])
-    assert not got["equal"] and got["compiler"]["equal"] and got["units"]["r1"]["equal"] is False
-    programs.write_text(json.dumps({**doc, "schema": "verity-vllm/other/v1"}))
-    with pytest.raises(ValueError, match=r"programs.json is 'verity-vllm/other/v1', not verity-vllm/served-window-programs/v1"):
-        PP.i2_against_record(s.a, requests, bound["compiler"])
-    programs.unlink()
-    with pytest.raises(FileNotFoundError, match="programs.json"):
-        PP.i2_against_record(s.a, requests, bound["compiler"])
-    with pytest.raises(ValueError, match="a single-GPU window is a served one"):
-        PP.i2_against_record(argparse.Namespace(bundle="b", row_dir=s.a.row_dir), requests, bound["compiler"])
 
 
 @pytest.mark.parametrize("kw, codes", [
