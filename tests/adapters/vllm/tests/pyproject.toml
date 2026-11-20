@@ -38,7 +38,6 @@ untraced = [
     "pipeline/test_commit_tree_of_record.py",
     "pipeline/test_experiment_index.py",
     "pipeline/test_gpu_lease.py",
-    "pipeline/test_interior_rows.py",
     "pipeline/test_research_tools.py",
     "pipeline/test_row_tables_stream.py",
     "pipeline/test_source_identity.py",
@@ -147,11 +146,9 @@ paths = ["adapters/vllm/verity_vllm", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "check/test_commit_verdict_replay_seed_of_record.py",
     "check/test_g4_addressed_instances.py",
     "check/test_verdict.py",
     "observe/test_gen_batch_engine_arg.py",
-    "pipeline/test_replay_plan.py",
     "pipeline/test_tp_build_width.py",
     "pipeline/test_workload_fetch.py",
     "pipeline/test_workload_file.py",
