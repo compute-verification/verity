@@ -2818,57 +2818,6 @@ theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn :
         unfold nodePos
         rw [if_neg hpr, if_neg hm]
 
-/-- A read of one copy that `Seg.split` makes is one piece of a row at least: a piece of the segment, or a lane's rows
-of its copies. -/
-theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hc : ∀ q ∈ s.ps.toList, 0 < q.count) (hg : g ∈ (Seg.split s).toList)
-    (h1 : g.reps ≤ 1) : ∃ q, g = Seg.one q ∧ 1 ≤ q.rows := by
-  have har : s.alike.reps ≠ 0 := by
-    unfold Desc.Seg.alike
-    split
-    · simp
-    · exact hr
-  have hap : s.alike.ps = s.ps := by
-    unfold Desc.Seg.alike
-    split <;> rfl
-  revert hg
-  unfold Desc.Seg.split
-  dsimp only
-  split
-  · intro hg
-    simp only [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, -, rfl⟩ := hg
-    refine ⟨_, rfl, ?_⟩
-    rw [(rowsFrom_spec q 0 _).2.2.2.1]
-    omega
-  split
-  · intro hg
-    simp only [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, hq, rfl⟩ := hg
-    refine ⟨q, rfl, ?_⟩
-    have := hc q (by rwa [hap] at hq)
-    unfold Desc.Piece.count at this
-    rcases Nat.eq_zero_or_pos q.rows with h0 | h0
-    · rw [h0, Nat.zero_mul] at this; omega
-    · exact h0
-  · rename_i hne
-    intro hg
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
-    subst hg
-    exfalso
-    have hal : Seg.alike s = s := by
-      unfold Desc.Seg.alike
-      split
-      · rename_i hc
-        exfalso
-        apply hne
-        unfold Desc.Seg.alike
-        rw [if_pos hc]
-        rfl
-      · rfl
-    rw [hal] at h1 hne
-    simp only [beq_iff_eq] at hne
-    omega
-
 /-- **A leaf `used` names is a parameter position a node reads**, the segments its read splits naming positions at or
 past 0, of pieces of positive count, of a copy at least. -/
 theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.Summary)
