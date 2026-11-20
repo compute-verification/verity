@@ -1,6 +1,6 @@
 """kind_scan: what the network attester's piece releases holds only fields of the four public kinds and the network
 attester's attestations. A piece's DIR as it is released (the answer with the piece's placement, and the execution
-phase's attestations as `attester_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s
+phase's attestations as `_certificates` cuts them from a rows-form period's evidence, `period_case`'s
 accept) scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
 it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no declaration names is a finding too: a
 count of requests in an answer, a registration's head beside an attestation. The chain's endpoint step (CR_ENDPOINT's
@@ -69,12 +69,23 @@ def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
         "placement": PLACEMENT}}
 
 
+def _certificates(evidence: bytes) -> dict:
+    """The attestations of a case's ``evidence``, each with its own fields alone (`scan_period.ATTESTATION_KEYS`):
+    ``records``, each execution phase's records', and ``rows``, its row registrations'."""
+    from verity.protocols.resource_accounting.network.prover.scan_period import ATTESTATION_KEYS
+    windows = json.loads(evidence)["windows"]
+    rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
+             "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}
+            for x in windows for r in x["registrations"]]
+    return {"records": [{k: c[k] for k in ATTESTATION_KEYS} for x in windows for c in x["certificates"]],
+            "rows": [{k: r[k] for k in ATTESTATION_KEYS} for r in rows]}
+
+
 def _dir(d: Path, case: dict, answer: dict) -> Path:
-    """DIR as the piece releases it: the answer and the attestations of the case's evidence
-    (`attester_piece.write_case`'s), the case itself nowhere in it."""
+    """DIR with the answer and the attestations of the case's evidence, the case itself nowhere in it."""
     d.mkdir(parents=True)
     (d / "answer.json").write_text(json.dumps(answer))
-    (d / CP.CERTIFICATES).write_text(json.dumps(CP.certificates(bytes.fromhex(case["evidence"]))))
+    (d / CP.CERTIFICATES).write_text(json.dumps(_certificates(bytes.fromhex(case["evidence"]))))
     return d
 
 
@@ -128,8 +139,7 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
 
 
 def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
-    """The report's steps are the network attester path's (`STEPS`, the five `chain_record.report` writes there, which
-    test_attester_piece holds a published report to): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
+    """The report's steps are the network attester path's (`STEPS`): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
     and its tie negatives beside it) is `ENDPOINT`'s finding, and a step of no other name is one of no declared kind."""
     def found(steps: dict, name: str) -> list[tuple[str, str, str]]:
         d = _dir(tmp_path / name, *_case(period))
