@@ -433,9 +433,11 @@ def UNWALKED : String := "unwalked: "
 def walkAtMost (what : String) (n : Nat) : Except String Unit :=
   if n > WALK then throw s!"{UNWALKED}{what}: {n} of them, past the {WALK} this verifier walks one by one" else pure ()
 
-/-- `q` as one row when its rows are consecutive (`rowStride` one row's span): the same elements in the same order. -/
+/-- `q` as one row when its rows are consecutive (`rowStride` one row's span), and a piece of at most one row with
+no levels: the same elements in the same order. -/
 def Piece.flat (q : Piece) : Piece :=
-  if q.rows ≤ 1 || !q.lv.isEmpty then q
+  if !q.lv.isEmpty then (if q.rows ≤ 1 then { q.row 0 with rows := q.rows } else q)
+  else if q.rows ≤ 1 then q
   else if q.len == 1 then { q with stride := q.rowStride, len := q.rows, rows := 1, rowStride := 0 }
   else if q.rowStride == q.len * q.stride then { q with len := q.rows * q.len, rows := 1, rowStride := 0 }
   else q

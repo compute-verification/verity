@@ -824,16 +824,8 @@ theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
   rw [hs, partsPos_get, (Walk.ofParts_spec _).1]
 
 /-- A sequence as segments (`Desc.ofSeq`) has pieces each of positive count: one to a segment, empty ones dropped. -/
-theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
-  intro g hg q hq
-  unfold Desc.ofSeq at hg
-  rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
-  obtain ⟨⟨p, -, rfl⟩, hc⟩ := hg
-  have hq' : q = p := by simpa [Desc.Seg.one] using hq
-  subst hq'
-  have h1 : (Desc.Seg.one q).count > 0 := of_decide_eq_true hc
-  have h2 : (Desc.Seg.one q).count = q.count := Nat.one_mul _
-  omega
+theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count :=
+  fun g hg => (ofSeq_counts s g hg).2
 
 /-- **The context's arguments' pieces are of positive count** (`ofSeq_count`). -/
 theorem ctxOf_argCount (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
@@ -887,9 +879,15 @@ def calleePos (c : Desc.Ctx) (k m a b : Nat) : List (Tgt × Int) :=
   | .ok segs => segsPos segs
   | .error _ => []
 
+/-- The positions of `segDown`'s segments of segment `s`, where it gives them. -/
+def segDownPos (c : Desc.Ctx) (s : Seg) : List (Tgt × Int) :=
+  match Desc.segDown (Desc.down c Flock.Steps.FUEL) s with
+  | .ok segs => segsPos segs
+  | .error _ => []
+
 /-- The positions `nodeReads` reads argument `i` of node `k` at over `spans`. -/
 def readPos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) : List (Tgt × Int) :=
-  spans.toList.flatMap fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c)
+  spans.toList.flatMap fun x => ((c.arg k i).slice x.1 x.2).toList.flatMap (segDownPos c)
 
 /-- A loop that adds `D x`'s positions to its segments' for each element `x`, each segment it adds one `Q x` holds of. -/
 theorem forIn_pm {β : Type} (D : β → List (Tgt × Int)) (Q : β → Seg → Prop)
@@ -914,9 +912,9 @@ theorem forIn_pm {β : Type} (D : β → List (Tgt × Int)) (Q : β → Seg → 
       · exact Or.inr ⟨x, List.mem_cons_self, h⟩
     · exact Or.inr ⟨x', List.mem_cons_of_mem _ hx', hq⟩
 
-/-- A segment `down` gives a piece of argument `i` of node `k`. -/
+/-- A segment `segDown` gives a segment of argument `i` of node `k`. -/
 def FromDown (c : Desc.Ctx) (k i : Nat) (s : Seg) : Prop :=
-  ∃ lo hi, ∃ q ∈ (c.arg k i).pieces lo hi, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs
+  ∃ lo hi, ∃ g ∈ (c.arg k i).slice lo hi, ∃ segs, Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs ∧ s ∈ segs
 
 /-- A segment `down` gives a piece of argument `i` of node `k` that `Desc.memberRows` gives, all members at once. -/
 def FromRows (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (s : Seg) : Prop :=
@@ -946,31 +944,33 @@ theorem ok_bind_pure {α : Type} {x : Except String α} {y : α} (h : (x >>= fun
 /-- `nodeReads`' read of argument `i` over `spans`, from the segments `acc`. -/
 theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc out : Array Seg)
     (h : forIn spans acc (fun (x : Nat × Nat) __s => do
-        let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
-          let __do_lift ← Desc.down c Flock.Steps.FUEL q
+        let __s ← forIn ((c.arg k i).slice x.1 x.2) __s fun g __s => do
+          let __do_lift ← Desc.segDown (Desc.down c Flock.Steps.FUEL) g
           pure (ForInStep.yield (__s ++ __do_lift))
         pure (ForInStep.yield __s)) = .ok out) :
     segsPos out = segsPos acc ++ readPos c k i spans ∧ ∀ s ∈ out, s ∈ acc ∨ FromDown c k i s := by
   rw [← Array.forIn_toList] at h
-  obtain ⟨h1, h2⟩ := forIn_pm (fun x => ((c.arg k i).pieces x.1 x.2).toList.flatMap (downPos c))
-    (fun x s => ∃ q ∈ (c.arg k i).pieces x.1 x.2, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs) _
+  obtain ⟨h1, h2⟩ := forIn_pm (fun x => ((c.arg k i).slice x.1 x.2).toList.flatMap (segDownPos c))
+    (fun x s => ∃ g ∈ (c.arg k i).slice x.1 x.2, ∃ segs, Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs ∧
+      s ∈ segs) _
     (fun x r y hy => by
       obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
       simp only [pure, Except.pure, Except.ok.injEq] at hy
       refine ⟨r', hy.symm, ?_⟩
       rw [← Array.forIn_toList] at hr'
-      obtain ⟨g1, g2⟩ := forIn_pm (downPos c)
-        (fun q s => ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs ∧ s ∈ segs) _ (fun q r y hy => by
+      obtain ⟨g1, g2⟩ := forIn_pm (segDownPos c)
+        (fun g s => ∃ segs, Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs ∧ s ∈ segs) _
+        (fun g r y hy => by
           obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
           simp only [pure, Except.pure, Except.ok.injEq] at hy
-          refine ⟨r ++ segs, hy.symm, by rw [segsPos_append, downPos, hs], fun s h => ?_⟩
+          refine ⟨r ++ segs, hy.symm, by rw [segsPos_append, segDownPos, hs], fun s h => ?_⟩
           rcases mem_append_or h with h | h
           · exact Or.inl h
           · exact Or.inr ⟨segs, hs, h⟩) _ r r' hr'
       refine ⟨g1, fun s h => ?_⟩
-      rcases g2 s h with h | ⟨q, hq, h⟩
+      rcases g2 s h with h | ⟨g, hg, h⟩
       · exact Or.inl h
-      · exact Or.inr ⟨q, Array.mem_toList_iff.1 hq, h⟩) _ acc out h
+      · exact Or.inr ⟨g, Array.mem_toList_iff.1 hg, h⟩) _ acc out h
   refine ⟨h1, fun s hs => ?_⟩
   rcases h2 s hs with h | ⟨x, -, hx⟩
   · exact Or.inl h
@@ -979,8 +979,8 @@ theorem readLoop_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (ac
 /-- A read from no segments. -/
 theorem readBlock_pos (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (out : Array Seg)
     (h : ((forIn spans #[] fun (x : Nat × Nat) __s => do
-          let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
-            let __do_lift ← Desc.down c Flock.Steps.FUEL q
+          let __s ← forIn ((c.arg k i).slice x.1 x.2) __s fun g __s => do
+            let __do_lift ← Desc.segDown (Desc.down c Flock.Steps.FUEL) g
             pure (ForInStep.yield (__s ++ __do_lift))
           pure (ForInStep.yield __s)) >>= fun __s => pure __s) = .ok out) :
     segsPos out = readPos c k i spans ∧ ∀ s ∈ out, FromDown c k i s := by
@@ -1243,8 +1243,9 @@ theorem first_piece {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ q, s.p
     have he : s.ps = #[] := Array.eq_empty_of_size_eq_zero (by have := Array.getElem?_eq_none_iff.1 hq; omega)
     unfold segPos at h
     obtain ⟨m, -, hm⟩ := List.mem_flatMap.1 h
-    rw [copy_pos, he] at hm
-    simp [posAll] at hm
+    unfold Desc.Seg.copy at hm
+    rw [he] at hm
+    split at hm <;> simp [posAll, Desc.shiftGates] at hm
   · exact ⟨q, rfl⟩
 
 /-- `keep` keeps a segment whose first piece names gate `a0` exactly when `a0` is outside the node. -/
@@ -1653,7 +1654,7 @@ theorem den_prim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (q 
     have hpt : 0 ≤ ppt q t := by
       have := hq (q.tgt, ppt q t) (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, ht', rfl⟩)
       exact this
-    simp only [Function.comp, den, ppt, ht]
+    simp only [Function.comp, den, ppt, ht, rowOff_flat _ (rfl : ([] : List (Nat × Nat)) = [])]
     simp only [Int.mul_zero, Int.add_zero, Int.natCast_nonneg, not_lt.2, ite_false, Int.toNat_natCast]
     rw [if_neg (by unfold ppt at hpt; omega), hres]
 
@@ -1708,8 +1709,10 @@ theorem den_batchPrim (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d
       have := hq (q.tgt, ppt q t) (by rw [pos_eq_map]; exact List.mem_map.2 ⟨t, ht', rfl⟩)
       exact this
     simp only [Function.comp, den, ht]
+    have hro : ({ q with tgt := .gate w, base := (c.body.offsets[k]! : Int) + q.base } : Piece).rowOff (t / q.len) =
+        q.rowOff (t / q.len) := rfl
     unfold ppt at hpt ⊢
-    simp only
+    simp only [hro]
     rw [if_neg (by omega), if_neg (by omega), hres]
     congr 1
     omega
@@ -1739,33 +1742,51 @@ theorem down_count0 (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tg
 (`pos_flat`), and refuses a walk past `Desc.WALK`, which is no step where it goes on (`walkAtMost_bind`). -/
 
 theorem flat_cases (q : Piece) :
-    q.flat = q ∨
-      (q.len = 1 ∧ q.flat = { q with stride := q.rowStride, len := q.rows, rows := 1, rowStride := 0 }) ∨
-      (q.rowStride = (q.len : Int) * q.stride ∧ q.flat = { q with len := q.rows * q.len, rows := 1, rowStride := 0 }) := by
+    (q.flat = q ∧ (q.rows ≤ 1 → q.lv = [])) ∨
+      (q.rows ≤ 1 ∧ q.flat = { q.row 0 with rows := q.rows }) ∨
+      (q.lv = [] ∧ q.len = 1 ∧ q.flat = { q with stride := q.rowStride, len := q.rows, rows := 1, rowStride := 0 }) ∨
+      (q.lv = [] ∧ q.rowStride = (q.len : Int) * q.stride ∧
+        q.flat = { q with len := q.rows * q.len, rows := 1, rowStride := 0 }) := by
   unfold Desc.Piece.flat
-  by_cases h1 : q.rows ≤ 1
-  · left; rw [if_pos h1]
-  rw [if_neg h1]
-  by_cases h2 : q.len = 1
-  · right; left; rw [if_pos (by simp [h2])]; exact ⟨h2, rfl⟩
-  rw [if_neg (by simpa using h2)]
-  by_cases h3 : q.rowStride = (q.len : Int) * q.stride
-  · right; right; rw [if_pos (by simp [h3])]; exact ⟨h3, rfl⟩
-  · left; rw [if_neg (by simpa using h3)]
+  by_cases hl : q.lv = []
+  · rw [if_neg (by simp [hl])]
+    by_cases h1 : q.rows ≤ 1
+    · left; rw [if_pos (by simpa using h1)]; exact ⟨rfl, fun _ => hl⟩
+    rw [if_neg (by simpa using h1)]
+    by_cases h2 : q.len = 1
+    · right; right; left; rw [if_pos (by simp [h2])]; exact ⟨hl, h2, rfl⟩
+    rw [if_neg (by simpa using h2)]
+    by_cases h3 : q.rowStride = (q.len : Int) * q.stride
+    · right; right; right; rw [if_pos (by simp [h3])]; exact ⟨hl, h3, rfl⟩
+    · left; rw [if_neg (by simpa using h3)]; exact ⟨rfl, fun h => absurd h h1⟩
+  · rw [if_pos (by cases h : q.lv <;> simp_all)]
+    by_cases h1 : q.rows ≤ 1
+    · right; left; rw [if_pos (by simpa using h1)]; exact ⟨h1, rfl⟩
+    · left; rw [if_neg (by simpa using h1)]; exact ⟨rfl, fun h => absurd h h1⟩
 
 theorem flat_tgt (q : Piece) : q.flat.tgt = q.tgt := by
-  rcases flat_cases q with h | ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h]
+  rcases flat_cases q with ⟨h, -⟩ | ⟨-, h⟩ | ⟨-, -, h⟩ | ⟨-, -, h⟩ <;> rw [h] <;> rfl
 
 theorem flat_count (q : Piece) : q.flat.count = q.count := by
-  rcases flat_cases q with h | ⟨h1, h⟩ | ⟨-, h⟩ <;> rw [h]
+  rcases flat_cases q with ⟨h, -⟩ | ⟨-, h⟩ | ⟨-, h1, h⟩ | ⟨-, -, h⟩ <;> rw [h]
+  · rfl
   · simp [Desc.Piece.count, h1]
   · simp [Desc.Piece.count]
 
 theorem flat_flat (q : Piece) : q.flat.flat = q.flat := by
-  rcases flat_cases q with h | ⟨-, h⟩ | ⟨-, h⟩
+  rcases flat_cases q with ⟨h, -⟩ | ⟨h1, h⟩ | ⟨hl, -, h⟩ | ⟨hl, -, h⟩
   · rw [h, h]
-  · rw [h]; unfold Desc.Piece.flat; rw [if_pos (le_refl 1)]
-  · rw [h]; unfold Desc.Piece.flat; rw [if_pos (le_refl 1)]
+  · rw [h]; unfold Desc.Piece.flat; simp [Desc.Piece.row, h1]
+  · rw [h]; unfold Desc.Piece.flat; simp [hl]
+  · rw [h]; unfold Desc.Piece.flat; simp [hl]
+
+/-- A piece `down` reads, of at most one row, has no levels. -/
+theorem flat_lv {q : Piece} (hf : q.flat = q) (hr : q.rows ≤ 1) : q.lv = [] := by
+  rcases flat_cases q with ⟨-, h⟩ | ⟨-, h⟩ | ⟨hl, -⟩ | ⟨hl, -⟩
+  · exact h hr
+  · have := congrArg Desc.Piece.lv (h.symm.trans hf); simpa [Desc.Piece.row] using this.symm
+  · exact hl
+  · exact hl
 
 theorem pos_flat (q : Piece) : pos q.flat = pos q := by
   rw [pos_eq_map, pos_eq_map, flat_count, flat_tgt]
@@ -1773,18 +1794,28 @@ theorem pos_flat (q : Piece) : pos q.flat = pos q := by
   intro t ht
   rw [List.mem_range, ← flat_count] at ht
   congr 1
-  rcases flat_cases q with h | ⟨h1, h⟩ | ⟨h1, h⟩
+  rcases flat_cases q with ⟨h, -⟩ | ⟨h1, h⟩ | ⟨hlv, h1, h⟩ | ⟨hlv, h1, h⟩
   · rw [h]
+  · rw [h] at ht ⊢
+    have hl : t < q.len := by
+      have := Nat.mul_le_mul_right q.len h1
+      simp only [Desc.Piece.count] at ht
+      omega
+    unfold ppt
+    simp only [Desc.Piece.rowOff, Desc.Piece.row, List.isEmpty_nil, ↓reduceIte, Nat.div_eq_of_lt hl,
+      Nat.mod_eq_of_lt hl]
+    ring
   · rw [h] at ht ⊢
     simp only [Desc.Piece.count] at ht
     unfold ppt
-    simp only [h1, Nat.div_one, Nat.mod_one]
+    simp only [h1, Nat.div_one, Nat.mod_one, Desc.Piece.rowOff, hlv, List.isEmpty_nil, ↓reduceIte]
     rw [Nat.div_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)]
     push_cast; ring
   · rw [h] at ht ⊢
     simp only [Desc.Piece.count] at ht
     unfold ppt
     dsimp only at ht ⊢
+    simp only [Desc.Piece.rowOff, hlv, List.isEmpty_nil, ↓reduceIte]
     rw [Nat.div_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega), h1]
     have e := Nat.div_add_mod t q.len
     have e' : ((t : Nat) : Int) = ((q.len * (t / q.len) + t % q.len : Nat) : Int) := by rw [e]
@@ -2681,7 +2712,7 @@ theorem posAll_rowsOf (q : Piece) : posAll q.rowsOf = pos q := by
   rw [Array.toList_map, Array.toList_range, List.flatMap_map]
   apply flatMap_congr
   intro r _
-  simp [Desc.Piece.row]
+  simp [Desc.Piece.row, Desc.Piece.rowOff]
 
 theorem byRows_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : DownSpec c sc fuel) (q : Piece)
     (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) {segs : Array Seg} (h : byRows c fuel q = .ok segs) :
@@ -2704,16 +2735,18 @@ theorem rows_one {q : Piece} (h0 : q.count ≠ 0) (hr : ¬ q.rows > 1) : q.rows 
   · rw [show q.rows = 0 by omega, Nat.zero_mul] at h0; exact absurd rfl h0
   · omega
 
-theorem ppt_one {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.count) : ppt q t = q.at t := by
+theorem ppt_one {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.count) (hff : q.flat = q := by assumption) :
+    ppt q t = q.at t := by
   have hl : t < q.len := by unfold Desc.Piece.count at ht; rw [hr, Nat.one_mul] at ht; exact ht
   unfold ppt Desc.Piece.at
-  rw [Nat.div_eq_of_lt hl, Nat.mod_eq_of_lt hl]
+  rw [Nat.div_eq_of_lt hl, Nat.mod_eq_of_lt hl, rowOff_flat _ (flat_lv hff (by omega))]
   simp
 
 theorem count_one {q : Piece} (hr : q.rows = 1) : q.count = q.len := by
   unfold Desc.Piece.count; rw [hr, Nat.one_mul]
 
-theorem at_mem_pos {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.len) : (q.tgt, q.at t) ∈ pos q := by
+theorem at_mem_pos {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.len) (hff : q.flat = q := by assumption) :
+    (q.tgt, q.at t) ∈ pos q := by
   rw [pos_eq_map]
   have ht' : t < q.count := by rw [count_one hr]; exact ht
   exact List.mem_map.2 ⟨t, List.mem_range.2 ht', by rw [ppt_one hr ht']⟩
@@ -2721,7 +2754,8 @@ theorem at_mem_pos {q : Piece} (hr : q.rows = 1) {t : Nat} (ht : t < q.len) : (q
 /-- A piece of one row read position by position through `down`, from what `down` keeps at each position. -/
 theorem batchPts_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (hD : DownSpec c sc fuel) (q : Piece)
     (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x) {segs : Array Seg}
-    (h : batchPts c fuel q = .ok segs) : Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc)) := by
+    (h : batchPts c fuel q = .ok segs) (hff : q.flat = q := by assumption) :
+    Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc)) := by
   unfold batchPts at h
   have h := walkAtMost_bind _ _ _ h
   dsimp only at h
@@ -2729,7 +2763,7 @@ theorem batchPts_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (h
   rw [range'_size] at h
   have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
     intro t
-    simp [pos, h1]
+    simp [pos, h1, Desc.Piece.rowOff, flat_lv hff (by omega)]
   have hA := loop_agree (P := c.P) (sc := sc)
     (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 })
     (fun t => [den c.P sc (q.tgt, q.at t)])
