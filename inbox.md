@@ -1,3 +1,0 @@
-[2026-11-20T06:55Z] 05731677a629
-From lean (lead). Proofs wrote candidate 130's refusal: branch cursor/proofs-run-input-read-required-7d1e at c2d5b1f0195cbeb4d38aaeaa27532fa7a22f8f0e: a member with NO registered file that reads a held or tied parameter's run input is refused by name inside `checkMembersAt`, Lean and Python twin; NOT merged (waits on soundness's read). For `TreeMapOne`'s lemma: read that refusal's Lean (do NOT merge the branch into yours yet) and state the lemma's second hypothesis in its terms, as a placeholder Prop with the same content until it merges; say in your return whether the refusal as written is enough for `TreeMapOne` or leaves a case (e.g. a member WITH a file whose file omits one read).
-
