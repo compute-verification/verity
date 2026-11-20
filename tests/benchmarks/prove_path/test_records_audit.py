@@ -1656,9 +1656,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache``, ``--jobs`` and ``--mem-gb``, and
-    prints each template's row as it finishes. The audit warms first, ``--jobs`` at a time within ``--audit-mem-gb``, into
-    its ``--compose-cache``, or with none into its own, saying so at once, and keeps each row in its ``composed.jsonl``;
-    it hands a5 that cache. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's cards, `a5.devices`) too,
+    prints each template's row as it finishes. The audit composes nothing itself: it hands a5 its ``--compose-cache``, or
+    with none its own, and composes nothing before the coins. It hands a5 ``--archive-link`` and ``--gpus`` (its proof server's cards, `a5.devices`) too,
     each only where it is given."""
     import a5 as A5
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
@@ -1706,14 +1705,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want
-        said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
-        told = [] if extra[:1] == ["--compose-cache"] else [
-            "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
-        assert said[:-1] == told and said[-1].startswith("COMPOSED "), said
-        assert [json.loads(x)["template"] for x in (tmp_path / "out" / RA.COMPOSED).read_text().splitlines()] == [TID]
-    with pytest.raises(Opened):
-        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100", "--keep-circuits", "--min-free-gb", "50"])
-    assert (seen["jobs"], seen["mem"], seen["keep"], seen["free"]) == (4, 100.0, True, 50.0)
+        assert not [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
     with pytest.raises(SystemExit):
         RA.main([*args, "--gpus", "0,0"])
 
