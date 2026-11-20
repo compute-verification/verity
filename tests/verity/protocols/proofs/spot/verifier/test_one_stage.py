@@ -487,7 +487,9 @@ def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
 
 
 def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
-    """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
+    """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one;
+    no session root at all is no refusal of the record's: that every port is held is the members check's
+    (`OneStageZk.headerHeldAt`)."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -497,8 +499,8 @@ def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
     assert not r["accepted"] and r["checks"]["served"]["codes"] == ["served"] and r["profile"] is None
     r = audit.audit_record(*args, session_roots={**ROOTS, "x": "ef" * 64})
     assert not r["accepted"] and r["checks"]["roots"]["detail"]["ports"] == ["x"] and r["profile"] is None
-    for roots in ({}, {"y": ROOTS["x"]}):
-        assert not audit.audit_record(*args, session_roots=roots)["accepted"]
+    assert audit.audit_record(*args, session_roots={})["accepted"]
+    assert not audit.audit_record(*args, session_roots={"y": ROOTS["x"]})["accepted"]
 
 
 def test_a_record_over_an_explicit_partition_object():

@@ -38,7 +38,7 @@ def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × J
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
-  (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+  (∀ roots, e.sessionRoots = some roots →
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
   OpenedRegistered (opened.getD #[]) (Record.registeredRoots c.record)
 
