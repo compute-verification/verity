@@ -1367,6 +1367,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
+    members_negatives(out, result, rec, mine.program)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1592,6 +1593,85 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
         "python": {"accepted": python, "failed": failed}}}
     if not ok:
         result["accepted"] = False
+
+
+def member_negative_cases(case: dict) -> dict[str, tuple[dict, dict | None]]:
+    """The audit's own per-member case changed one way each, every change made to what was fixed before the draw: the
+    first sampled member's ports, each in turn, held by nothing (its registered read dropped, and no session root names
+    it), its run input's read at a root the registration does not hold, the evidence's
+    ``session_roots`` null, its ``served`` null, and a session root at the registration's first port other than its
+    root. Each with the parameters the per-member run's Python reads, where the change is the run's."""
+    params, ev = case["params"], json.loads(bytes.fromhex(case["evidence"]))
+    k = ev["proofs"]["statements"][0]["member"]
+    m = params["proofs"]["members"][k]
+    ports = m["registered"]["ports"]
+    inp = next(p for p, e in ports.items() if REG.is_fresh_value(e.get("value")))
+
+    def read(change: dict) -> tuple[dict, dict]:
+        p = {**params, "proofs": {**params["proofs"], "members": {
+            **params["proofs"]["members"], k: {**m, "registered": {**m["registered"], "ports": change}}}}}
+        return {**case, "params": p}, p
+
+    def evidence(e: dict) -> tuple[dict, None]:
+        return {**case, "evidence": json.dumps(e, sort_keys=True, separators=(",", ":")).encode().hex()}, None
+
+    cases = {f"n1-{q}-{e.get('value')}-held-by-nothing": read({p: f for p, f in ports.items() if p != q})
+             for q, e in ports.items()}
+    cases |= {f"n2-input-{inp}-read-at-another-root": read({**ports, inp: {**ports[inp], "root": "00" * 64}}),
+              "n3-session-roots-null": evidence({**ev, "session_roots": None}),
+              "n3-served-null": evidence({**ev, "served": None}),
+              "n4-session-root-not-registered": evidence(
+                  {**ev, "session_roots": {next(iter(params["ports"])): "00" * 64}})}
+    return cases
+
+
+def run_member_negatives(case: dict, rec: dict | None = None, program: Program | None = None,
+                         check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> dict[str, dict]:
+    """Lean's `checkMembersAt` on each of `member_negative_cases`, and the per-member run's Python beside it where the
+    change is the run's and the docket ``rec`` and ``program`` are given; ``refused`` whether Lean refused it."""
+    got = {}
+    ev = json.loads(bytes.fromhex(case["evidence"]))
+    k = ev["proofs"]["statements"][0]["member"]
+    print("MEMBERS-NEG-PORTS " + json.dumps({k: {p: {"value": e.get("value"), "root": e.get("root")} for p, e in
+                                                 case["params"]["proofs"]["members"][k]["registered"]["ports"].items()}},
+                                            sort_keys=True), flush=True)
+    for name, (c, p) in member_negative_cases(case).items():
+        try:
+            verdict, why = check(c)
+        except MB.LeanError as e:
+            verdict, why = "lean-not-run", str(e)
+        row = {"refused": verdict == "reject", "lean": {"verdict": verdict, "reason": why}}
+        if p is not None and rec is not None and program is not None:
+            try:
+                run, pwhy = MB.members_run(p, rec, ev, MB.blobs_of([Path(b) for b in c["blobs"]]), program=program,
+                                           verify=AC.lms_verify)
+                row["python"] = {"refused": run is None, "reason": pwhy}
+            except Exception as e:  # noqa: BLE001 - the row names what the twin does not decide
+                row["python"] = {"refused": None, "reason": f"{type(e).__name__}: {e}"}
+        got[name] = row
+        print("MEMBERS-NEG " + json.dumps({name: row}, sort_keys=True), flush=True)
+    return got
+
+
+def members_negatives(out: Path, result: dict, rec: dict, program: Program) -> None:
+    """`run_member_negatives` on the audit's own per-member case, under ``A5_MEMBERS_NEGATIVES=DIR`` and only in the
+    first audit that writes DIR: the case, its files copied under DIR and named there, is kept in DIR (``case.json``)
+    for `members_mutants.py`, and the rows are ``result["members_negatives"]``."""
+    keep = os.environ.get("A5_MEMBERS_NEGATIVES")
+    path = out / "case-v2.json"
+    if not keep or Path(keep).exists() or not path.is_file() \
+            or not (result.get("checks", {}).get("members_lean") or {}).get("ran"):
+        return
+    case = json.loads(path.read_text())
+    (Path(keep) / "blobs").mkdir(parents=True)
+    blobs = []
+    for i, b in enumerate(case["blobs"]):
+        to = Path(keep) / "blobs" / f"{i}-{Path(b).name}"
+        shutil.copyfile(b, to)
+        blobs.append(str(to))
+    (Path(keep) / "case.json").write_text(json.dumps({**case, "blobs": blobs}, sort_keys=True))
+    result["members_negatives"] = run_member_negatives(case, rec, program)
+    (Path(keep) / "negatives.json").write_text(json.dumps(result["members_negatives"], indent=1, sort_keys=True))
 
 
 #: why an audit with no per-member case has no `members_lean` verdict where `members_proof` gives no reason
