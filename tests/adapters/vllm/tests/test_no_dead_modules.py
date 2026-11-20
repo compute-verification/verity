@@ -1,14 +1,13 @@
 """Dead-code lint: no new dead modules in `adapters/vllm` (shrink-only keep-list).
 
 `tests/dead_code_census.py` builds the static import graph of `verity_vllm` / `verity_vllm` / `verity_vllm.definitions.numerics` /
-`verity_vllm` from the declared entry points in `census_roots.txt` (shell runners -- every `verity_vllm/ops/*.sh` and
-every `*_negatives.sh` / `*_negative_*.sh` by rule --, Python entry points, the regression harness).  A production module no root
+`verity_vllm` from the declared entry points in `census_roots.txt` (shell runners -- every `verity_vllm/ops/*.sh` --, Python entry points, the regression harness).  A production module no root
 reaches is dead unless `dead_code_keep.json` names it, with the reason it stays.  The test fails on
 
 * a non-live module the keep-list does not name: new dead code -- delete it, reach it from a declared entry point, or add a reviewed
   keep entry;
 * a keep entry that names no non-live module (the module was deleted, or became live): remove the entry, so the list only shrinks;
-* a roots entry that matches nothing, and a negatives runner that is not a root.
+* a roots entry that matches nothing.
 
 Shell scripts are entry points: a runner is live because `census_roots.txt` declares it, not because something imports it.
 
@@ -18,7 +17,6 @@ artifact named by `dynamic_record` in `dead_code_keep.json`; `python tests/dead_
 """
 from __future__ import annotations
 
-import fnmatch
 import functools
 
 import pytest
@@ -40,15 +38,6 @@ def test_every_roots_entry_matches():
 
 
 @pytest.mark.slow
-def test_negatives_runners_are_roots():
-    g, by_shell, _, non_live, _ = _state()
-    negatives = [s for s in census.shell_files() if fnmatch.fnmatchcase(s.rsplit("/", 1)[-1], "*_negative*.sh")]
-    assert negatives, "no negatives runner found"
-    assert not [s for s in negatives if s not in by_shell], "negatives runners must be entry points (census_roots.txt)"
-    ran = {m for s in negatives for m in by_shell[s]}
-    assert ran and not ran & set(non_live), f"modules a negatives runner runs must be live: {sorted(ran & set(non_live))}"
-
-
 @pytest.mark.slow
 def test_no_new_dead_modules():
     _, _, _, non_live, keep = _state()

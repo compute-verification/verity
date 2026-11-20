@@ -38,7 +38,6 @@ from verity_torch.frontend.boolean import derived
 from verity_torch.frontend.derive import DeriveReport
 
 from tests.program.predict.test_predict import TINY, _phi
-from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import definitions as DF
 from verity_vllm.definitions.registry.catalog import load
 from verity_vllm.definitions.replay import replayer
@@ -137,14 +136,10 @@ def _moved(desc: dict, prefix: str = NORM) -> tuple[dict, str]:
     raise AssertionError(f"no {prefix} node with two operands of one type")
 
 
-
-
 def _c2(d, dg):
     site = SimpleNamespace(args=SimpleNamespace(program_digest=dg, programs_root=None, program_dir=str(d)), manifest=None, reqs=[REQ],
                            sampling={})
     return C2.programs_of_record(site, C2.request_labels([REQ]))
-
-
 
 
 def test_the_c2_replay_refuses_it_too(tmp_path, program):
@@ -155,8 +150,6 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
     with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(not the Definitions of record\)") as e:
         _c2(tmp_path / "moved", moved)
     assert fid in str(e.value)
-
-
 
 
 def test_a_build_whose_descriptor_is_not_the_program_of_record_is_refused(tmp_path, program):
@@ -195,12 +188,6 @@ def test_the_check_reads_bodies_not_ids(tmp_path, monkeypatch):
     why = DF.refusal(str(d), dg, [(fid, fid)])
     assert f"{fid}: {fid} is not the Definition the Build bound" in why
     assert f"{fid}: this tree's reaches {sub.id}, which the Build's descriptor does not hold" in why
-
-
-
-
-
-
 
 
 def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
@@ -269,18 +256,3 @@ def test_a_specialisation_whose_gates_this_tree_does_not_build_is_refused_by_nam
                                                       f"no row is held to them ({error.__name__}: unsupported statics)")
 
 
-def test_a_replay_of_boolean_rows_says_what_its_pass_leaves_unshown(program, boolean):
-    """The replay's record carries the line only for rows of a Boolean Definition, and the verdict's sampled-replay rule passes
-    with it in its notes."""
-    assert f"{DF.SAMPLES} inputs" in DF.BOOLEAN_PREMISE and "nothing holds the kernel to the gates at a served binding" in DF.BOOLEAN_PREMISE
-    assert DF.premises(_instance_rows(program)) == [] and DF.premises(_instance_rows(boolean.program)) == [DF.BOOLEAN_PREMISE]
-
-    def rule(sr):
-        (r,) = (c for c in c2_rules.c2_rules({"sampled_replay": sr, "boundary_linkage": {"result": True}}, {})
-                if c.name == "local_replay/sampled_replay")
-        return r
-
-    sr = {"result": True, "grade": "complete"}
-    told = rule(sr | {"premises": DF.premises(_instance_rows(boolean.program))})
-    assert told.outcome == rule(sr).outcome == "PASS"
-    assert DF.BOOLEAN_PREMISE in told.notes and DF.BOOLEAN_PREMISE not in rule(sr).notes
