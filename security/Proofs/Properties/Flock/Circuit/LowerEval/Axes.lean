@@ -243,7 +243,8 @@ theorem sum_take_replicate (V : List ℕ) : ∀ (j k c : ℕ), j < k → c ≤ V
 removed `o` copies of `F`'s, and the axis' dimensions are `(n, F`'s leaves`)`. -/
 theorem removeAxis_blocks : ∀ (ax : ℕ) {t E : Ty} {n : ℕ}, t.removeAxis ax = some (n, E) →
     ∃ (o : ℕ) (F : Ty), t.widths.toList = (List.replicate o (List.replicate n F.widths.toList).flatten).flatten ∧
-      E.widths.toList = (List.replicate o F.widths.toList).flatten ∧ t.axisDims ax = some (n, F.leaves) := by
+      E.widths.toList = (List.replicate o F.widths.toList).flatten ∧ t.axisDims ax = some (n, F.leaves) ∧
+      (Ty.bitType t).axisDims ax = some (n, (Ty.bitType F).leaves) := by
   intro ax
   induction ax with
   | zero =>
@@ -252,7 +253,7 @@ theorem removeAxis_blocks : ∀ (ax : ℕ) {t E : Ty} {n : ℕ}, t.removeAxis ax
     | .array n' e, h =>
       simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl⟩ := h
-      exact ⟨1, e, by rw [widths_array_flat]; simp, by simp, rfl⟩
+      exact ⟨1, e, by rw [widths_array_flat]; simp, by simp, rfl, by simp [Ty.bitType, Ty.axisDims]⟩
     | .value _, h => simp [Ty.removeAxis] at h
     | .tuple _, h => simp [Ty.removeAxis] at h
     | .record _, h => simp [Ty.removeAxis] at h
@@ -262,8 +263,8 @@ theorem removeAxis_blocks : ∀ (ax : ℕ) {t E : Ty} {n : ℕ}, t.removeAxis ax
     | .array n0 e, h =>
       simp only [Ty.removeAxis, Option.map_eq_some_iff, Prod.exists, Prod.mk.injEq] at h
       obtain ⟨m, inner, he, rfl, rfl⟩ := h
-      obtain ⟨o, F, hw, hE, hd⟩ := ih he
-      refine ⟨n0 * o, F, ?_, ?_, by simpa [Ty.axisDims] using hd⟩
+      obtain ⟨o, F, hw, hE, hd, hbd⟩ := ih he
+      refine ⟨n0 * o, F, ?_, ?_, by simpa [Ty.axisDims] using hd, by simpa [Ty.bitType, Ty.axisDims] using hbd⟩
       · rw [widths_array_flat, hw, flatten_replicate_replicate]
       · rw [widths_array_flat, hE, flatten_replicate_replicate]
     | .value _, h => simp [Ty.removeAxis] at h
@@ -294,6 +295,41 @@ theorem member_bit (V : List ℕ) (o n a m c t : ℕ) (ha : a < o) (hm : m < n) 
     rw [Nat.add_assoc, Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hlt]
   rw [hd, hmd]
   ring
+
+theorem map_range_mul {β : Type} (f : ℕ → β) (K : ℕ) : ∀ o : ℕ,
+    (List.range (o * K)).map f = (List.range o).flatMap fun a => (List.range K).map fun c => f (a * K + c)
+  | 0 => by simp
+  | o + 1 => by
+    rw [show (o + 1) * K = o * K + K by ring, List.range_add, List.map_append, map_range_mul f K o, List.range_succ,
+      List.flatMap_append, List.flatMap_singleton, List.map_map]
+    rfl
+
+theorem block_index {K a c : ℕ} (n m : ℕ) (hc : c < K) :
+    (a * K + c) / K * n * K + (a * K + c) % K + m * K = c + (a * n + m) * K := by
+  have hK : 0 < K := by omega
+  rw [Nat.add_comm (a * K), Nat.add_mul_div_right _ _ hK, Nat.div_eq_of_lt hc, Nat.zero_add, Nat.add_mul_mod_self_right,
+    Nat.mod_eq_of_lt hc]
+  ring
+
+/-- **`block_bits` on any axis**: with the references' widths `o` blocks of `n` copies of `V`, member `m` reads, on bits,
+the bits of the words it reads, at the member's places `(t / K · n) · K + t % K + m · K`. -/
+theorem block_bits_ax {α β : Type} [Inhabited α] (refs : List α) (G : α → List α) (Vb : α → β) (Vw : α → List β)
+    (wid : α → ℕ) (V : List ℕ) (o n m : ℕ) (hm : m < n)
+    (hG : ∀ r ∈ refs, (G r).map Vb = Vw r ∧ (Vw r).length = wid r)
+    (hw : refs.map wid = (List.replicate o (List.replicate n V).flatten).flatten) :
+    (List.range (o * V.sum)).map (fun t =>
+        Vb ((refs.flatMap G).getD (t / V.sum * n * V.sum + t % V.sum + m * V.sum) default)) =
+      ((List.range (o * V.length)).map fun t =>
+        Vw (refs.getD (t / V.length * n * V.length + t % V.length + m * V.length) default)).flatten := by
+  rw [map_range_mul, map_range_mul, flatten_flatMap]
+  apply List.flatMap_congr
+  intro a ha
+  have hb := block_bits refs G Vb Vw wid V (o * n) (a * n + m)
+    (BodiesOk.lt_mul_of a o n m (List.mem_range.1 ha) hm) hG (by rw [hw, flatten_replicate_replicate])
+  refine (List.map_congr_left fun c hc => ?_).trans (hb.trans (congrArg List.flatten
+    (List.map_congr_left fun c hc => ?_)))
+  · rw [block_index n m (List.mem_range.1 hc)]
+  · rw [block_index n m (List.mem_range.1 hc)]
 
 end BatchAxes
 
