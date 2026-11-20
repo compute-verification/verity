@@ -126,6 +126,7 @@ public import Definitions.WeightSecurity.ToyFaulted
 public import Definitions.WeightSecurity.ToyServed
 public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
+public import Definitions.Flock.Recursive.Generic
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
 
