@@ -50,7 +50,6 @@ CALLERS: dict[str, str] = {
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py": "new-run",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py": "new-run",
     "verity/protocols/resource_accounting/network/verifier/service.py": "new-run",
-    "verity/protocols/resource_accounting/network/verifier/tie_service.py": "new-run",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py":
         "new-run",
 }

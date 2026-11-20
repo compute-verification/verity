@@ -77,12 +77,11 @@ _HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class GateOptions:
     """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
-    `serve_h1.sessions_of`, `serve_openai.scheme_settings`)."""
+    `serve_openai.listed`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
                                          help="with --protocols: the auditor device's challenger gate, its command as one string "
-                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
-                                              "each Pearl+ epoch a salt session (serve_openai.scheme_settings); "
+                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each Pearl+ epoch reserves "
+                                              "a salt session of its own there (serve_openai.listed); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
@@ -90,7 +89,7 @@ class GateOptions:
     challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
                                          help="with --challenger-gate under Pearl+: the lane whose gate key the gate's "
                                               "command holds, whose open period in the auditor's ledger each epoch's "
-                                              "salt session joins (serving.reserve_salt); PoUW H1's take none")
+                                              "salt session joins (serving.reserve_salt)")
 
 
 class ChallengerGate:
