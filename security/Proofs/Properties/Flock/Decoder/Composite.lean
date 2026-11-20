@@ -374,8 +374,8 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
        NodesOk (DecState.defs s1) outs (leavesOf params outs) st.1 ∧ OffsOk (DecState.defs s1) st.1 st.2 ∧
        NodesFwd st.1)
     (nodes0, offsets0) _ _ _
-    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k), ⟨rfl, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩,
-      fun k hk => absurd hk (Nat.not_lt_zero k)⟩
+    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k),
+      ⟨rfl, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩, fun k hk => absurd hk (Nat.not_lt_zero k)⟩
     ?step hloop
   case step =>
     rintro i hi ⟨nodes1, offsets1⟩ s1 t s2 ⟨hs1, hp1, hsz1, hn1, ho1, hf1⟩ h
