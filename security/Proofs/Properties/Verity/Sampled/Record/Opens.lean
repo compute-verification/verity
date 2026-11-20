@@ -373,7 +373,8 @@ theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : 
   obtain ⟨hun, huD⟩ := hpr d cs J D hdOk hJ hD u hud
   have hmPts : st.mPts = mPtsOf A.D.unroll.g (D.proved.size / nTab A.I) := by
     rw [nTab_one A hc1, Nat.div_one]
-    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat A.hD)
+    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_provedSt
+      ((FlockSoundness.Discharge.ZkExec.zkTags_typed A.I).trans A.ht) (Flock.Desc.parseStmt_stmt A.hD)
       (fun D' hD' => by rw [Except.ok.inj (hD'.symm.trans hD)]) hst
   obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.sampleSetupHP_of_setupHiddenI (I := inputsJ A.I 0)
     (own := none) (S := {(⟨u, hun⟩ : Fin A.n)}) (FlockSoundness.Discharge.Composed.typedJ A.ht 0) hstJ hf hD
