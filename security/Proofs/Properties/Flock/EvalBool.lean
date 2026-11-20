@@ -81,7 +81,7 @@ def wordAndBody (P : Program.Prog) (w : String) (x : List Bool) : Option (Nat ×
     | none => false
   | .error _ => false
 
-/-- `BlockEval`'s two sides for the block of `units` of `P`, its only block, on the trace `X g = g · 2654435761 + 40503`:
+/-- Two sides for the block of `units` of `P`, its only block, on the trace `X g = g · 2654435761 + 40503`:
 the block's Program (`Spot.Restrict.portedOf`) lifted to bits (`Flock.Lift.lift`) on the input ports' bits, and the
 block's local evaluation of C at the output ports; with the ports' widths. -/
 def blockSides (P : Program.Prog) (units : Array Nat) :
@@ -94,7 +94,7 @@ def blockSides (P : Program.Prog) (units : Array Nat) :
       Chain.portBits ((OfProgram.partOf P #[fr.ranges]).localEval X u) fr.outs)
   | _, _ => none
 
-/-- `BlockEval`'s two sides agree on block `units` of the format's descriptor vector, with these port widths, and are
+/-- `blockSides`'s two sides agree on block `units` of the format's descriptor vector, with these port widths, and are
 not all zero. -/
 def blockAgrees (units : Array Nat) (ins outs : List Nat) : Bool :=
   match Program.decode WORD_DESC.toUTF8 with
