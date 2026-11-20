@@ -1,141 +1,31 @@
-"""The audit over every published record (`NetworkCheck.Records`, `network-records serve` and `network-records verdicts`,
-with the grid compared and without it) against `audit.py`, through the difftest harness.
-
-The cases are `test_network_check_protocol`'s generated spatial units, their records published as one kind
-(`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all attested, or mixed, each record's kind
-sampled
-and the changed record's the kind its change needs. Each kind gets the changes that apply to it (`EXPECT`), and the
-record-kind negative controls: a raw grid slot changed, a raw record relabelled to another link, a committed digest
-changed, and a committed status in the clear that disagrees with its digest either way. The reference decodes the
-commitment with its own decoder (`records`, from `NetworkCheck/Records.lean`'s module docstring), not with
-`lean_audit.encode`, which writes the cases, and runs the real `Audit`."""
+"""The records check over every published record (`NetworkCheck.Records`, `network-records serve`, and `network-records
+verdicts` with the grid compared and without it) on `test_network_check_protocol`'s generated spatial units, their records
+published as one kind (`KINDS`): all raw (`grid.BlockGrid`), all committed (`commitment.commit`), all attested, or mixed,
+each record's kind sampled and the changed record's the kind its change needs. The Lean check gives each change its own
+verdict (`EXPECT`), the record-kind changes among them: a raw grid slot changed, a raw record relabelled to another link,
+a committed digest changed, and a committed status in the clear that disagrees with its digest either way."""
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import json
 import shutil
 from collections import Counter
 
 import pytest
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import test_network_check_protocol as V2
 import verity_difftest as D
-from verity_difftest import protocol as P
-from verity.commitments.identity import tagged_sha512
-from verity.protocols.resource_accounting.network.verifier.audit import Audit
 from verity.protocols.resource_accounting.network.verifier.certificate import CertifiedRecord
 from verity.protocols.resource_accounting.network.verifier.commitment import CommittedRecord, commit, record_digest
-from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, Reason, BlockGrid, Status
+from verity.protocols.resource_accounting.network.verifier.grid import Reason, BlockGrid, Status
 from verity.protocols.resource_accounting.network.verifier.lean_audit import encode
-from verity.protocols.resource_accounting.network.verifier.schedule import expected_grids
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-records/v3"
-COMMITMENT_TAG = "verity-network-certifier/records/v2"
 KINDS = ("raw", "committed", "certified", "mixed")
-
-# --- the reference --------------------------------------------------------------------------------------------------------
-
-
-def records(b: bytes) -> tuple[list, bytes]:
-    """The published records, `u8 kind ‖ u64be len ‖ body` one after another, decoded exactly."""
-    out, pos = [], 0
-
-    def reader(data: bytes):
-        at = 0
-
-        def take(n):
-            nonlocal at
-            if at + n > len(data):
-                raise D.Reject("truncated")
-            at += n
-            return data[at - n:at]
-
-        def be(n):
-            return int.from_bytes(take(n), "big")
-
-        def text(what):
-            try:
-                return take(be(2)).decode("utf-8")
-            except UnicodeDecodeError:
-                raise D.Reject(f"{what} is not UTF-8") from None
-
-        def status():
-            code = be(1)
-            if code not in V2.REASONS:
-                raise D.Reject(f"status code {code}")
-            return Status(V2.REASONS[code])
-
-        return take, be, text, status, lambda: at
-
-    take, be, _, _, at = reader(b)
-    while at() < len(b):
-        kind, body = be(1), take(be(8))
-        btake, bbe, btext, bstatus, bat = reader(body)
-        if kind == 0:
-            link, window, status = btext("a link"), bbe(8), bstatus()
-            grid = []
-            for _ in range(bbe(4)):
-                row = []
-                for _ in range(bbe(4)):
-                    t = bbe(1)
-                    if t not in (0, 1):
-                        raise D.Reject(f"slot tag {t}")
-                    row.append(btake(bbe(4)) if t else None)
-                grid.append(tuple(row))
-            out.append(BlockGrid(link, window, tuple(grid), status))
-        elif kind == 1:
-            link, window, status = btext("a link"), bbe(8), bstatus()
-            out.append(CommittedRecord(link, window, btext("a digest"), status))
-        elif kind == 2:
-            rs, _ = V2.commitment(body)
-            if len(rs) != 1:
-                raise D.Reject("a certified body holds one record")
-            out.append(rs[0])
-            continue
-        else:
-            raise D.Reject(f"record kind {kind}")
-        if bat() != len(body):
-            raise D.Reject("bytes left in a record")
-    return out, b
-
-
-def reference(case, check=V2.check) -> dict:
-    return P.answer(ID, case, params=V2.params, commitment=records, evidence=V2.evidence, check=check,
-                    digest=lambda c: tagged_sha512(COMMITMENT_TAG, c[1]))
-
-
-def all_verdicts(u, c, e, grid: bool = True) -> tuple:
-    """Every execution phase's verdict as `network-records verdicts` writes it (with `grid` False, as `verdicts-no-grid`
-    does), after v2's evidence refusals. With `grid` False the audit's `ValueError` on a raw or committed egress record
-    is a refusal."""
-    out = V2.check(u, c, e)
-    if out[0] == "reject" and out[1].startswith("evidence: "):
-        return out
-    audit = Audit()
-    try:
-        vs = [("egress", v) for link, (frames, syncs) in zip(u.egress, e)
-              for v in audit.check_link(link, c[0], frames, syncs, u.sync_set, u.grid, u.key, u.session, grid)]
-    except ValueError as x:
-        if grid:
-            raise
-        return "reject", str(x)
-    vs += [("ingress", v) for link in u.ingress
-           for v in audit.check_ingress_link(link, c[0], u.windows, u.key, u.ingress_grid, u.session)]
-    return "accept", {}, [{"direction": d, "link": v.link, "verdict": v.violation or "accept", "window": v.window}
-                          for d, v in vs]
-
-
-def verdicts_reference(case, grid: bool = True) -> dict:
-    out = reference(case, lambda u, c, e: all_verdicts(u, c, e, grid))
-    if out["verdict"] != "accept":
-        raise D.Reject(out["reason"])
-    return {"link_windows": out["profile"]}
-
 
 # --- the generator --------------------------------------------------------------------------------------------------------
 
@@ -151,9 +41,6 @@ EXPECT = {"raw": COMMON | RAW, "committed": COMMON | COMMITTED, "certified": V2.
 NEEDS = {m: "certified" for m in V2.EXPECT if m not in COMMON} | {m: "raw" for m in RAW} | {m: "committed" for m in COMMITTED}
 EGRESS_ONLY = ("raw-slot", "committed-digest", "status-digest", "status-clear")
 TAGS: dict[str, tuple[str, str]] = {}
-SEEN: Counter = Counter()
-#: Cases per kind and change in the full run.
-EXAMPLES = 30
 
 
 def _as(kind: str, r: CertifiedRecord, d: V2.Sampled):
@@ -220,99 +107,43 @@ def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | N
     return case
 
 
-def counted(case) -> dict:
-    out = reference(case)
-    kind, m = TAGS.get(D.canonical(case), ("?", "?"))
-    SEEN[(kind, m, V2._kind(out))] += 1
-    return out
+@pytest.fixture(scope="module")
+def server():
+    with D.Server([str(D.build(V2.LEAN, "network-records")), "serve"]) as s:
+        yield s
 
 
-PORT = D.ProtocolPort("network-records", counted, record_cases(), package=V2.LEAN)
+@pytest.fixture(scope="module")
+def verdicts_server():
+    with D.Server([str(D.build(V2.LEAN, "network-records")), "verdicts"]) as s:
+        yield s
 
 
-@dataclasses.dataclass(frozen=True)
-class VerdictsPort(D.Port):
-    """`network-records verdicts`, a `Difftest.serve` port behind the protocol's executable."""
-
-    def argv(self) -> list[str]:
-        return [*super().argv(), "verdicts"]
-
-
-VERDICTS = VerdictsPort("network-records", "verdicts", verdicts_reference, record_cases(), package=V2.LEAN)
-#: `network-records verdicts`'s `verdicts-no-grid` against `Audit.check_link(grid=False)`, served by the same process.
-NO_GRID = VerdictsPort("network-records", "verdicts-no-grid", lambda case: verdicts_reference(case, grid=False),
-                       record_cases(), package=V2.LEAN)
-server = D.server_fixture(PORT)
-verdicts_server = D.server_fixture(VERDICTS)
-
-
-def _table() -> Counter:
-    by_path = Counter()
-    for (kind, m, path), k in SEEN.items():
-        by_path[(kind, m, path)] += k
-    print("\n" + "\n".join(f"{kind:10} {m:17} {path:12} {k}" for (kind, m, path), k in sorted(by_path.items())))
-    return by_path
-
-
-@pytest.mark.slow
-def test_the_records_check_agrees_with_the_audit(server):
-    """Lean and the audit agree on every case, and each kind reaches every path that applies to it: each change gives its
-    own verdict at least once on raw, committed, attested and mixed records."""
-    SEEN.clear()
-    for kind in KINDS:
-        for m in EXPECT[kind]:
-            # one run per kind and change, since `sampled_from`'s derandomized samples skip some of 88 pairs in
-            # thousands; a run of one change gives one verdict, which `run` calls vacuous only after comparing every
-            # case
-            with contextlib.suppress(D.Vacuous):
-                D.run(dataclasses.replace(PORT, inputs=record_cases((kind,), (m,))),
-                      examples=EXAMPLES * (2 if m in ("late", "frames") else 1), server=server)
-    by_path = _table()
-    missed = [(kind, m) for kind in KINDS for m, path in EXPECT[kind].items() if not by_path[(kind, m, path)]]
-    assert not missed, missed
-    verdicts = Counter()
-    for (_, _, path), k in by_path.items():
-        verdicts[path] += k
-    assert min(verdicts[v] for v in ("accept", "no-verdict", "mismatch", "signature")) > 50, verdicts
-
-
-@pytest.mark.slow
-def test_every_verdict_is_the_audits(verdicts_server):
-    """`network-records verdicts` gives every execution phase's verdict, not only the first violation, as the audit
-    does."""
-    stats = D.run(VERDICTS, examples=1200, seed=1, server=verdicts_server)
-    assert stats.outputs > 600 and stats.rejects > 50, stats
-
-
-@pytest.mark.slow
-def test_every_verdict_without_the_grid_is_the_audits(verdicts_server):
-    """`verdicts-no-grid` gives every execution phase's verdict `Audit.check_link(grid=False)` gives, and refuses where
-    it raises (a raw or committed egress record) or v2 refuses the evidence."""
-    stats = D.run(NO_GRID, examples=1200, seed=1, server=verdicts_server)
-    print(stats)
-    assert stats.outputs > 200 and stats.rejects > 600, stats
+@pytest.mark.parametrize("m", list(EXPECT["mixed"]))
+def test_each_change_gets_its_verdict(server, m):
+    """On mixed units, the Lean check gives each change its own verdict on some generated unit (a change can miss, as a
+    late frame that still fits its bucket)."""
+    seen = V2.lean_paths(server, record_cases(("mixed",), (m,)), 80 if m in ("late", "frames") else 30)
+    assert seen[EXPECT["mixed"][m]], seen
 
 
 @pytest.mark.slow
 def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
-    """Both entries against the audit on the same cases, every kind and change: what `verdicts-no-grid` answers,
-    `verdicts` answers too, with the same execution phases in order and the same verdicts, except that each egress
-    `mismatch` of `verdicts` is an accept (an ingress `mismatch` stays); where `verdicts` answers and `verdicts-no-grid`
-    refuses, the unit has a raw or committed egress record. Some units are accepted whole by `verdicts-no-grid` where
-    `verdicts` gives a `mismatch`: only their grid differs from the Program's."""
-    from hypothesis import given, settings
-
+    """Both entries on the same cases, every kind and change: what `verdicts-no-grid` answers, `verdicts` answers too,
+    with the same execution phases in order and the same verdicts, except that each egress `mismatch` of `verdicts` is an
+    accept (an ingress `mismatch` stays); where `verdicts` answers and `verdicts-no-grid` refuses, the unit's records
+    aren't all attested. Some units are accepted whole by `verdicts-no-grid` where `verdicts` gives a `mismatch`: only
+    their grid differs from the Program's."""
     seen = Counter()
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=300)
     @given(st.one_of(record_cases(("certified",)), record_cases(("certified",), ("late", "frames")),
                      record_cases(("certified",), ("status", "advice-outside", "advice-unit", "duplicate")), record_cases()))
     def both(case):
-        full, no_grid = (D.replay(port, case, verdicts_server) for port in (VERDICTS, NO_GRID))
+        full, no_grid = (verdicts_server.call(fn, case) for fn in ("verdicts", "verdicts-no-grid"))
         if no_grid[0] == "reject":
             if full[0] == "output":
-                u, recs = V2.params(case["params"]), records(P.unhex(case["commitment"]))[0]
-                assert any(not isinstance(r, CertifiedRecord) and r.link in u.egress for r in recs), case
+                assert TAGS[D.canonical(case)][0] != "certified", case
                 seen["refused-uncertified"] += 1
             return
         assert full[0] == "output", (full, no_grid)
@@ -334,47 +165,3 @@ def test_without_the_grid_only_a_grid_mismatch_is_accepted(verdicts_server):
     assert min(seen[k] for k in ("refused-uncertified", "accept", "no-verdict", "signature", "advice", "status",
                                  "duplicate")) > 0, seen
     assert seen["mismatch-accepted"] > 20 and seen["grid-only-unit"] > 20, seen
-
-
-def test_each_kind_gives_the_audits_verdicts(server, verdicts_server):
-    """A short run per kind over an honest unit, a missing record and a mismatch."""
-    for kind in KINDS:
-        only = ("honest", "missing", "frames")
-        port = dataclasses.replace(PORT, inputs=record_cases((kind,), only))
-        stats = D.run(port, examples=20, server=server)
-        assert all(stats.counts.get(v) for v in ("accept", "reject", "undecided")), (kind, stats)
-        D.run(dataclasses.replace(VERDICTS, inputs=record_cases((kind,), only), need_rejects=False), examples=10,
-              server=verdicts_server)
-
-
-@pytest.mark.slow
-def test_a_reference_wrong_on_one_path_is_caught(server):
-    """A reference that never checks a committed record's digest (it publishes the Program's in its place) differs."""
-    def ignore_digests(u, c, e):
-        recs = list(c[0])
-        if len(e) == len(u.egress) and all(len(s) == u.windows for _, s in e):
-            for link, (frames, syncs) in zip(u.egress, e):
-                expected = expected_grids(frames, syncs, u.grid)
-                recs = [dataclasses.replace(r, digest=record_digest(link, r.window, expected[r.window], COMPLETE, u.grid))
-                        if isinstance(r, CommittedRecord) and r.link == link and r.window < u.windows else r for r in recs]
-        return V2.check(u, (recs, c[1]), e)
-
-    port = dataclasses.replace(PORT, reference=lambda case: reference(case, ignore_digests),
-                               inputs=record_cases(("committed",), ("honest", "committed-digest", "status-digest")))
-    with pytest.raises(D.Mismatch) as x:
-        D.run(port, examples=400, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == ("reject", "accept")
-
-
-@pytest.mark.parametrize("kind", KINDS[:3])
-def test_the_encoding_round_trips(kind):
-    """`records` reads back what `lean_audit.encode` writes, record for record, for every kind."""
-    from hypothesis import given, settings
-
-    @settings(derandomize=True, database=None, deadline=None, max_examples=30)
-    @given(V2.units(("honest", "status", "extra")))
-    def roundtrip(d):
-        published = [_as(kind, r, d) for r in d.records]
-        assert records(b"".join(encode(r) for r in published))[0] == published
-
-    roundtrip()

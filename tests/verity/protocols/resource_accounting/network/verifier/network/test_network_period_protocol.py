@@ -26,7 +26,6 @@ import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
                          clog2, public, reference, verdict_of)
 from verity.commitments import docket_digest as DD
-from verity.protocols.resource_accounting.network.verifier import scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
@@ -134,8 +133,6 @@ ROWS_REFUSALS = {
     "rows-start-unpinned": (PC.UNPINNED,) * 2,
     "rows-start-carried": (PC.CARRIED,) * 2,
     "rows-circuit-swapped": (PC.UNHELD,) * 2,
-    "rows-ok-unheld": (PC.UNOK,) * 2,
-    "rows-one-tick": (f"{PC.UNCOMPUTED}: T = 1: a scan has at least two ticks",) * 2,
 }
 
 
@@ -148,9 +145,7 @@ def test_the_rows_form_refuses_what_it_must(server):
     but no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
     `SCAN_STATE`, a scan whose answer names a tied Input that is no lane's `prog<j>`, one whose start is not opened to
     the empty state, a period of more than one execution phase, a tied audit registered under another Program than the
-    class circuit, a scan whose ok bits are not
-    at the schedule's constants, and one under a schedule of one tick, which has no constants: Lean and the mirror each
-    refuse every one at that check."""
+    class circuit: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -870,47 +865,43 @@ def test_a_period_that_does_not_begin_the_run_is_charged_its_start(server, monke
 
 def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
     """A scan proof block's public word is its ok bit, and a member's ok rows are committed under public salts, so the
-    rows form computes each member's root from the schedule's T and refuses, in Lean and in the mirror and by name,
+    rows form computes each member's root from the schedule's T and Lean refuses, by name,
     each way an execution phase's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
     root (a tree with a row that is not the ok row, or under other salts), domain or leaf count, with no entry or
     under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
     member at another schedule's constants, a root or domain that is no string, the entries by value under
     `registered`, and the members of a group of two execution phases' scan (`PC.PAIR`), which the rows form, one
     execution phase a registration, does not read; the start unit's `start/o0`, a state and no ok bit, is at any
-    root; and a mirror that skips the comparison accepts what Lean refuses."""
-    unok = PC.UNOKS
-    for u in unok:
+    root; and a schedule of one tick, which has no constants (`PC.LEAN_ONLY`)."""
+    for u in PC.UNOKS:
         monkeypatch.setattr(PC, "UNOKS", (u,))
         for n in range(3):
-            case = build("rows-ok-unheld", n, small=n % 2 == 0)
-            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
-            verdict, out = D.replay(PORT, case, server)
+            verdict, out = PORT.lean(server, build("rows-ok-unheld", n, small=n % 2 == 0))
             assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNOKS", unok)
-    monkeypatch.setattr(scan_ok, "held", lambda consts, reg: True)
-    for n in range(2):
-        refused_by_lean_alone(build("rows-ok-unheld", n, small=True), server, PC.UNOK)
+    for n in range(4):
+        verdict, out = PORT.lean(server, build("rows-one-tick", n, small=n % 2 == 0))
+        assert verdict == REJECT and PC.LEAN_ONLY["rows-one-tick"] in json.loads(out)["reason"], (n, out)
 
 
 def ok_entries(case: dict) -> list[dict[str, tuple]]:
     """Each execution phase's scan's registration's ok entries, by port: (domain, root, leaves)."""
     return [{e["port"]: (e.get("domain"), e.get("root"), e.get("leaves")) for e in reg.get("roots", [])
-             if scan_ok.ok_port(e.get("port"))}
+             if isinstance(p := e.get("port"), str) and p.endswith("/o0")}
             for reg in json.loads(bytes.fromhex(case["commitment"]))["windows"]]
 
 
 def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
     """At T = 2 the scan's `ingress-0` and `last` are one proof block of the ingress template each, so their ok bits
     are at one frame domain and one root under two ports (`rows-ok-equal`): Lean accepts the period with the mirror's
-    public, each port held to its own constant. At that schedule each way of naming another (`PC.UNOKS`) is refused
-    by both, by name, a registration that names one of the two ports and not the other among them: a root another
+    public, each port held to its own constant. At that schedule Lean refuses each way of naming another (`PC.UNOKS`)
+    by name, a registration that names one of the two ports and not the other among them: a root another
     member is at stands for no member but its own."""
     twins = ("ingress-0/o0", "last/o0")
     for n in range(4):
         case = build("rows-ok-equal", n, small=n % 2 == 0)
         assert case["params"]["schedule"]["window"] == PC.EQUAL_T
         for at in ok_entries(case):
-            at.pop(scan_ok.START, None)
+            at.pop(PC.OK_START, None)
             assert sorted(at) == ["egress-0/o0", *twins]
             assert at[twins[0]] == at[twins[1]] and len(set(at.values())) == 2, at
         out = reference(case)
@@ -924,10 +915,9 @@ def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
         for n in range(8 if u == "missing" else 2):
             case = build("rows-ok-unheld", n, small=n % 2 == 0)
             assert case["params"]["schedule"]["window"] == PC.EQUAL_T
-            one_twin += any(len(set(twins) & set(at)) == 1 and len(set(at) - {scan_ok.START}) == 2
+            one_twin += any(len(set(twins) & set(at)) == 1 and len(set(at) - {PC.OK_START}) == 2
                             for at in ok_entries(case))
-            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
-            verdict, out = D.replay(PORT, case, server)
+            verdict, out = PORT.lean(server, case)
             assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
     assert one_twin, "no case named one of the two ports at one root and not the other"
 

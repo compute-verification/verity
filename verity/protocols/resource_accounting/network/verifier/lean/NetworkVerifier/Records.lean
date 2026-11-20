@@ -6,7 +6,7 @@ public import Difftest
 /-!
 # The audit over every published record, a core protocol: `verity/network-records/v3`
 
-`audit.py`'s `Audit` over its whole domain, `Published = Record | CommittedRecord | CertifiedRecord`, mixed lists
+The records check over its whole domain, `Published = Record | CommittedRecord | CertifiedRecord`, mixed lists
 included: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link. A certified record
 is checked exactly as `verity/network-certificate/v4` checks it (`NetworkCheck.Check`'s `egressVerdict`, with the
 Program's grid from `expectedGrids`, and `ingressVerdict` on that one record); a raw or committed record carries no direction, so it is matched by link and window

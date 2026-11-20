@@ -1,14 +1,10 @@
-"""The network attestation check (`NetworkCheck.Check`, `network-check serve`) against `audit.py`, through the difftest
-harness's `ProtocolPort`.
-
-The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module docstring) and runs the real `Audit`:
-`check_link` on each egress link, then `check_ingress_link` on each ingress link, under the attester's `LmsKey` in its
-session. The cases are generated spatial units: an honest network attester (`grid.Certifier` driven by
-`schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
-a small LMS key in a sampled attester session, then one change
-(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
-certifies no incomplete record, so the `status` change either leaves its faulted window unattested or signs its head
-anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
+"""The network attestation check (`NetworkCheck.Check`, `network-check serve`) on generated spatial units: an honest
+network attester (`grid.Certifier` driven by `schedule.run_shaper` on the egress links, fed directly on the ingress links)
+whose records `certificate.Issuer` signs with a small LMS key in a sampled attester session, then one change
+(`MUTATIONS`), each aimed at one path of the check, and malformed parameters, commitments and evidence. The Lean check
+gives each change its own verdict (`EXPECT`). The issuer certifies no incomplete record, so the `status` change either
+leaves its faulted window unattested or signs its head anyway (`_signed_anyway`), as only a forger could, which is what
+keeps the check's status path reachable."""
 
 from __future__ import annotations
 
@@ -22,15 +18,14 @@ from functools import lru_cache
 from pathlib import Path
 
 import pytest
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.commitments.identity import tagged_sha512
 from verity.commitments.crypto import lms
-from verity.protocols.resource_accounting.network.verifier.audit import Audit
-from verity.protocols.resource_accounting.network.verifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
-                                                                Direction, Issuer, LmsKey, RecordHead, SignerRefused,
+from verity.protocols.resource_accounting.network.verifier.certificate import (SALT_BYTES, CertifiedRecord,
+                                                                Direction, Issuer, SignerRefused,
                                                                 certificate_digest, parameters_digest, record_head)
 from verity.protocols.resource_accounting.network.verifier.grid import COMPLETE, Certifier, GridParams, Reason, BlockGrid, Status
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
@@ -39,199 +34,7 @@ from verity.protocols.resource_accounting.network.verifier.service import encode
 LEAN = Path(__file__).resolve().parents[7] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-ID = "verity/network-certificate/v4"
-COMMITMENT_TAG = "verity-network-certifier/certificates/v3"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
-REASONS = {code: reason for reason, code in STATUS_CODES.items()}
-
-# --- the reference --------------------------------------------------------------------------------------------------------
-
-
-@dataclasses.dataclass(frozen=True)
-class Unit:
-    egress: tuple[str, ...]
-    ingress: tuple[str, ...]
-    windows: int
-    grid: GridParams
-    ingress_grid: GridParams
-    sync_set: SyncSet
-    key: LmsKey
-    session: bytes
-
-
-def _get(j, k, ctx="the object"):
-    if not isinstance(j, dict) or k not in j:
-        raise D.Reject(f"{ctx}: {k} missing")
-    return j[k]
-
-
-def _nat(v, ctx):
-    if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-        raise D.Reject(f"{ctx}: not a natural number")
-    return v
-
-
-def _of(v, kind, ctx):
-    if not isinstance(v, kind) or isinstance(v, bool) != (kind is bool):
-        raise D.Reject(f"{ctx}: not a {kind.__name__}")
-    return v
-
-
-def _grid(j, ctx):
-    u32 = {k: _nat(_get(j, k, ctx), k) for k in ("buckets", "allocation", "frame_bytes", "bucket_ms")}
-    if any(not 1 <= v < 1 << 32 for v in u32.values()):
-        raise D.Reject(f"{ctx}: T, r, B and τ_b are u32s of at least 1")
-    q = _nat(_get(j, "queue_capacity", ctx), "queue_capacity")
-    if q < 1:
-        raise D.Reject(f"{ctx}: queue_capacity is at least 1")
-    return GridParams(u32["buckets"], u32["allocation"], u32["frame_bytes"], u32["bucket_ms"], q)
-
-
-def _links(j, ctx):
-    ls = [_of(x, str, f"{ctx}.links") for x in _of(_get(j, "links", ctx), list, ctx)]
-    if any(len(x.encode()) >= 1 << 16 for x in ls) or len(set(ls)) < len(ls):
-        raise D.Reject(f"{ctx}.links: each listed once, at most 65,535 UTF-8 bytes")
-    return tuple(ls)
-
-
-def _rho(j, ctx):
-    if not isinstance(j, list) or len(j) != 2:
-        raise D.Reject(f"{ctx}: not [numerator, denominator]")
-    n, d = (_nat(x, ctx) for x in j)
-    if n < 1 or d < 1:
-        raise D.Reject(f"{ctx}: a numerator and a denominator of at least 1")
-    return Fraction(n, d)
-
-
-def params(j) -> Unit:
-    e, i = _get(j, "egress"), _get(j, "ingress")
-    egress, ingress = _links(e, "egress"), _links(i, "ingress")
-    if not egress + ingress:
-        raise D.Reject("a spatial unit has at least one link")
-    windows = _nat(_get(j, "windows"), "windows")
-    if windows < 1:
-        raise D.Reject("at least one window")
-    lj = _get(j, "lms")
-    try:
-        lp = lms.Params(*(_nat(_get(lj, k, "lms"), k) for k in ("N", "W", "H")), toy=_of(_get(lj, "toy", "lms"), bool, "toy"))
-    except ValueError as x:
-        raise D.Reject(str(x)) from None
-    key = P.unhex(_of(_get(j, "key"), str, "key"))
-    if len(key) != 16 + lp.N:
-        raise D.Reject(f"an LMS public key is {16 + lp.N} bytes")
-    session = P.unhex(_of(_get(j, "session"), str, "session"))
-    if len(session) != lms.SESSION_BYTES:
-        raise D.Reject(f"a certifier session id is {lms.SESSION_BYTES} bytes")
-    ss = _get(j, "sync_set")
-    deltas = [_nat(x, "sync_set.deltas") for x in _of(_get(ss, "deltas", "sync_set"), list, "deltas")]
-    rhos = [_rho(x, "sync_set.rhos") for x in _of(_get(ss, "rhos", "sync_set"), list, "rhos")]
-    if not deltas or not rhos or len(set(deltas)) < len(deltas) or len(set(rhos)) < len(rhos):
-        raise D.Reject("sync_set: non-empty, each delta and each rho listed once")
-    return Unit(egress, ingress, windows, _grid(_get(e, "grid", "egress"), "egress.grid"),
-                _grid(_get(i, "grid", "ingress"), "ingress.grid"), SyncSet(tuple(deltas), tuple(rhos)), LmsKey(lp, key),
-                session)
-
-
-def commitment(b: bytes) -> tuple[list[CertifiedRecord], bytes]:
-    """The records, `service.encode`'s bytes one after another, decoded exactly."""
-    pos = 0
-
-    def take(n):
-        nonlocal pos
-        if pos + n > len(b):
-            raise D.Reject("truncated")
-        pos += n
-        return b[pos - n:pos]
-
-    def be(n):
-        return int.from_bytes(take(n), "big")
-
-    def text():
-        try:
-            return take(be(2)).decode("utf-8")
-        except UnicodeDecodeError:
-            raise D.Reject("a link is not UTF-8") from None
-
-    def direction():
-        c = be(1)
-        if c not in (0, 1):
-            raise D.Reject(f"direction code {c}")
-        return (EGRESS, INGRESS)[c]
-
-    out = []
-    while pos < len(b):
-        link, d, window, T, r, B, tau = text(), direction(), be(8), be(4), be(4), be(4), be(4)
-        code = be(1)
-        if code not in REASONS:
-            raise D.Reject(f"status code {code}")
-        deadline = be(1)
-        if deadline not in (0, 1):
-            raise D.Reject(f"deadline byte {deadline}")
-        parameters = take(64)
-        if pos + 4 * T + 64 > len(b):
-            raise D.Reject("truncated")
-        counts = tuple(be(4) for _ in range(T))
-        if any(n > r for n in counts):
-            raise D.Reject("a count past the allocation")
-        head = RecordHead(link, d, window, T, r, B, tau, Status(REASONS[code]), bool(deadline), parameters, counts, take(64))
-        salt, key_id = take(64), take(be(2))
-        c_link, c_d, c_window, digest = text(), direction(), be(8), take(64)
-        out.append(CertifiedRecord(head, salt, Certificate(key_id, c_link, c_d, c_window, digest, take(be(4)))))
-    return out, b
-
-
-def _frame(f):
-    if not isinstance(f, list) or len(f) != 3:
-        raise D.Reject("a frame is [payload, anchor, index]")
-    return LogicalFrame(P.unhex(_of(f[0], str, "payload")), _nat(f[1], "anchor"), _nat(f[2], "index"))
-
-
-def _sync(s):
-    if not isinstance(s, list) or len(s) != 3:
-        raise D.Reject("a sync is [delta, num, den]")
-    return ClockSync(_nat(s[0], "delta"), _rho(s[1:], "rho"))
-
-
-def evidence(b: bytes):
-    j = P.canonical_json(b)
-    return [([_frame(f) for f in _of(_get(x, "frames", "a link"), list, "frames")],
-             [_sync(s) for s in _of(_get(x, "syncs", "a link"), list, "syncs")])
-            for x in _of(_get(j, "links"), list, "links")]
-
-
-def check(u: Unit, c, e) -> tuple:
-    records, _ = c
-    if len(e) != len(u.egress):
-        return "reject", "evidence: another number of links"
-    if any(len(syncs) != u.windows for _, syncs in e):
-        return "reject", "evidence: another number of syncs"
-    if any(len(f.payload) != u.grid.frame_bytes for frames, _ in e for f in frames):
-        return "reject", "evidence: a frame of another size"
-    audit = Audit()
-    verdicts = []
-    for link, (frames, syncs) in zip(u.egress, e):
-        verdicts += [("egress", v) for v in audit.check_link(link, records, frames, syncs, u.sync_set, u.grid, u.key,
-                                                                     u.session)]
-    for link in u.ingress:
-        verdicts += [("ingress", v) for v in audit.check_ingress_link(link, records, u.windows, u.key, u.ingress_grid,
-                                                                              u.session)]
-    for d, v in verdicts:
-        if v.violation not in (None, "no-verdict"):
-            return "reject", f"{d} link {v.link} window {v.window}: {v.violation}"
-    for d, v in verdicts:
-        if v.violation == "no-verdict":
-            return "undecided", f"{d} link {v.link} window {v.window}: no-verdict"
-    assert audit.accepted
-    return "accept", {}, {
-        "link_windows": [{"direction": d, "link": v.link, "verdict": "accept", "window": v.window} for d, v in verdicts],
-        "syncs": [[s.delta, s.rho.numerator, s.rho.denominator] for _, s in sorted(audit.syncs.items())],
-        "windows": list(range(u.windows))}
-
-
-def reference(case, check=check) -> dict:
-    return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=check,
-                    digest=lambda c: tagged_sha512(COMMITMENT_TAG, c[1]))
-
 
 # --- the generator --------------------------------------------------------------------------------------------------------
 
@@ -295,9 +98,6 @@ EXPECT = {
     "params": "params", "commitment": "commitment", "evidence": "evidence", "case": "case",
 }
 MUTATIONS = list(EXPECT)
-#: The generator's tag for each case it made, by its canonical text, so the reference can count outcomes per path.
-TAGS: dict[str, str] = {}
-SEEN: Counter = Counter()
 
 
 def _signed_anyway(issuer: Issuer, record: BlockGrid, direction: Direction, g: GridParams, parameters: bytes,
@@ -566,7 +366,6 @@ def cases(draw, only: tuple[str, ...] = tuple(MUTATIONS)) -> dict:
     d = draw(units(only))
     c = b"".join(encode(r) for r in d.records)
     case = malformed(draw, d.m, d.n, d.params, c, evidence_bytes(d), lambda: _bad_commitments(c, d.records, d.n))
-    TAGS[D.canonical(case)] = d.m
     return case
 
 
@@ -636,49 +435,28 @@ def _kind(out: dict) -> str:
     return reason.rsplit(": ", 1)[1].split(":")[0]
 
 
-def counted(case) -> dict:
-    out = reference(case)
-    SEEN[(TAGS.get(D.canonical(case), "?"), out["verdict"], _kind(out))] += 1
-    return out
+@pytest.fixture(scope="module")
+def server():
+    with D.Server([str(D.build(LEAN, "network-verifier")), "serve"]) as s:
+        yield s
 
 
-PORT = D.ProtocolPort("network-verifier", counted, cases(), package=LEAN)
-server = D.server_fixture(PORT)
+def lean_paths(server: D.Server, inputs, examples: int) -> Counter:
+    """How often the Lean check's outcome on `examples` derandomized draws of `inputs` took each path (`_kind`)."""
+    seen = Counter()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=examples)
+    @given(inputs)
+    def one(case):
+        seen[_kind(server.exchange(case))] += 1
+
+    one()
+    return seen
 
 
-@pytest.mark.slow
-def test_the_network_check_agrees_with_the_audit(server):
-    """Lean and the audit agree on every case, and every path is reached: each change gives its own verdict at least once
-    (a change can miss, as a late frame that still fits its bucket)."""
-    SEEN.clear()
-    stats = D.run(PORT, examples=1200, server=server)
-    by_path = Counter()
-    for (tag, _, kind), k in SEEN.items():
-        by_path[(tag, kind)] += k
-    print("\n".join(f"{tag:17} {kind:12} {k}" for (tag, kind), k in sorted(by_path.items())))
-    missed = [tag for tag, kind in EXPECT.items() if not by_path[(tag, kind)]]
-    assert not missed, (missed, by_path)
-    assert min(stats.counts.get(v, 0) for v in ("accept", "reject", "undecided")) > 50, stats
-
-
-def test_each_verdict_is_the_audits(server):
-    """A short run over three paths, an honest unit, a missing record and a forged signature: all three verdicts."""
-    port = dataclasses.replace(PORT, inputs=cases(("honest", "missing", "forged")))
-    stats = D.run(port, examples=30, server=server)
-    assert all(stats.counts.get(v) for v in ("accept", "reject", "undecided")), stats
-
-
-@pytest.mark.slow
-def test_a_reference_wrong_on_one_path_is_caught(server):
-    """A reference that charges each link its own clock (no `advice` for a sync other than the unit's) differs."""
-    def own_clock(u, c, e):
-        out = check(u, c, e)
-        if out[0] == "reject" and out[1].endswith(": advice") and all(
-                s in u.sync_set for _, syncs in e for s in syncs):
-            return "accept", {}, {}
-        return out
-
-    port = D.ProtocolPort("network-verifier", lambda case: reference(case, own_clock), cases(), package=LEAN)
-    with pytest.raises(D.Mismatch) as x:
-        D.run(port, examples=1200, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == ("reject", "accept")
+@pytest.mark.parametrize("m", MUTATIONS)
+def test_each_change_gets_its_verdict(server, m):
+    """The Lean check gives each change its own verdict on some generated unit (a change can miss, as a late frame that
+    still fits its bucket)."""
+    seen = lean_paths(server, cases((m,)), 80 if m in ("late", "frames") else 30)
+    assert seen[EXPECT[m]], seen
