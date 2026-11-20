@@ -3496,7 +3496,100 @@
    },
    "Claims.ZKmalRx": {
     "fails": "Claims.ZKmalRx_fails",
-    "meets": ["Claims.Sampling.masked_meets_zk"]
+    "meets": [
+     "Claims.Witness.Recursion.ZKStop_meets",
+     "Claims.Sampling.masked_meets_zk",
+     "Claims.Witness.Recursion.ZK_meets",
+     "Claims.Witness.Recursion.ZKPriv_meets"
+    ]
+   },
+   "Claims.Recursion.Bits": {
+    "fails": "Claims.Witness.Recursion.Bits_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.BitsFlock": {
+    "fails": "Claims.Witness.Recursion.BitsFlock_fails",
+    "meets": ["Claims.Witness.Recursion.BitsFlock_meets"]
+   },
+   "Claims.Recursion.Complete": {
+    "fails": "Claims.Witness.Recursion.Complete_fails",
+    "meets": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Complete_meets_deployed"]
+   },
+   "Claims.Recursion.Efficient": {
+    "fails": "Claims.Witness.Recursion.Efficient_fails",
+    "meets": ["Claims.Witness.Recursion.Efficient_meets"]
+   },
+   "Claims.Recursion.Inner.KS": {
+    "fails": "Claims.Witness.Recursion.Inner.KS_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets", "Claims.Witness.Recursion.Inner.KS_meets_trim"]
+   },
+   "Claims.Recursion.Inner.KSAbort": {
+    "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KS": {
+    "fails": "Claims.Witness.Recursion.KS_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSFlock": {
+    "fails": "Claims.Witness.Recursion.KSFlock_fails",
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets", "Claims.Witness.Recursion.KSFlock_meets_trim"]
+   },
+   "Claims.Recursion.KSPriv": {
+    "fails": "Claims.Witness.Recursion.KSPriv_fails",
+    "meets": ["Claims.Witness.Recursion.KSPriv_meets"]
+   },
+   "Claims.Recursion.Nontrivial": {
+    "fails": "Claims.Witness.Recursion.Nontrivial_fails",
+    "meets": ["Claims.Witness.Recursion.Nontrivial_meets"]
+   },
+   "Claims.Recursion.ScopeMatches": {
+    "fails": "Claims.Witness.Recursion.ScopeMatches_fails",
+    "meets": ["Claims.Witness.Recursion.ScopeMatches_meets"]
+   },
+   "Claims.Recursion.ZK": {
+    "fails": "Claims.Witness.Recursion.ZK_fails",
+    "meets": ["Claims.Witness.Recursion.ZK_meets"]
+   },
+   "Claims.Recursion.ZKPriv": {
+    "fails": "Claims.Witness.Recursion.ZKPriv_fails",
+    "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
+   },
+   "Claims.Recursion.KSBound": {
+    "fails": "Claims.Witness.Recursion.KSBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.KSPrivBound": {
+    "fails": "Claims.Witness.Recursion.KSPrivBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSPrivBound_meets"]
+   },
+   "Claims.Recursion.ZKStop": {
+    "fails": "Claims.Witness.Recursion.ZKStop_fails",
+    "meets": ["Claims.Witness.Recursion.ZKStop_meets", "Claims.Witness.Recursion.ZKStop_meets_ready"]
+   },
+   "Claims.Recursion.BitsLin": {
+    "fails": "Claims.Witness.Recursion.BitsLin_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.KSLin": {
+    "fails": "Claims.Witness.Recursion.KSLin_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSBoundLin": {
+    "fails": "Claims.Witness.Recursion.KSBoundLin_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.KSFlockLin": {
+    "fails": "Claims.Witness.Recursion.KSFlockLin_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KSLin2": {
+    "fails": "Claims.Witness.Recursion.KSLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.BitsLin2": {
+    "fails": "Claims.Witness.Recursion.BitsLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
    },
    "Pous.Claims.StreamedWipeMeetsReadsTight": {
     "fails": "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
@@ -8686,6 +8779,135 @@
     "reads": []
    },
    "type_hash": "52f5b47364f4690bdf9114529dc51477c6fd881636bb104e4f2d5233e46992ac"
+  },
+  "Claims.Witness.Recursion.BitsFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin2_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Bits_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Complete_meets_deployed": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Efficient_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KSAbort_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Inner.KS_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBoundLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBound_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlockLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSFlock_meets_trim": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSLin2_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPrivBound_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KS_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.Nontrivial_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ScopeMatches_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKPriv_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets_ready": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.ZK_meets": {
+   "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.capTwo_honest": {
    "owner": "@proofs",
@@ -25460,7 +25682,6 @@
    "ResourceAccounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "ResourceAccounting.SecurityProofs.TS.DuoFoldFanIn": "restatable: the fan-in floor of duo's run over Dataflow, whose earlier and reads fields are hypotheses; it fits restated over ResourceAccounting.Gates.ofLane, whose circuits carry no Prop field.",
    "ResourceAccounting.SecurityProofs.TS.FoldFanIn": "restatable: the fan-in floor of a fold of binding steps over Dataflow, whose earlier and reads fields are hypotheses; it fits restated over ResourceAccounting.Gates.ofLane, whose circuits carry no Prop field.",
    "ResourceAccounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over Dataflow, whose earlier and reads fields are hypotheses; it fits restated over ResourceAccounting.Gates.ofLane, whose circuits carry no Prop field.",
@@ -32051,12 +32272,6 @@
    "digest": "8308c2b05144bb16d31163c75b9e500e9e1669b46c92b7dc8a85665c5b68f230",
    "definitions": {
     "Flock.Guarantees.ClaimsStated": "6c468b871ca175cc22728d931ff14860bf3c671a333901b7659f80d63c7d9698"
-   }
-  },
-  "Definitions.Flock.Guarantees.RecursionClaims": {
-   "digest": "c199c85fa24c7b91f2e41db3eafcc9ee117261a2c413bdec0968db72e5863a19",
-   "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "4e79db28cf89e670d359e47ea661cdd6db5ef6c2e30501cae8739c3aa8e50587"
    }
   },
   "Definitions.Flock.Guarantees.SamplingClaims": {
