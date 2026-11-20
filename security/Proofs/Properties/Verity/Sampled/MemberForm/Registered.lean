@@ -97,7 +97,8 @@ def RegisteredHolds (V : Vocab d α) : Prop :=
 theorem mem_memberDigests {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p) (hms : p.members = some ms)
     {vm : _root_.Spot.OneStageZk.Member} (hvm : vm ∈ ms) :
-    digestOf vm.own.circuit ∈ memberDigests θ ∧ digestOf vm.own.pub ∈ memberDigests θ := by
+    vm.own.circuitFile.toOption.map (fun c => Verity.sha512 c.data.toList) ∈ memberDigests θ ∧
+      digestOf vm.own.pub ∈ memberDigests θ := by
   unfold memberDigests
   simp only [paramsOf_eq hp, Option.bind_some, hms]
   exact ⟨List.mem_flatMap.2 ⟨vm, Array.mem_toList_iff.2 hvm, List.mem_cons_self⟩,
@@ -111,8 +112,8 @@ theorem readsFiles_of_sent {V : Vocab d α} {o : Exchange} (hR : RegisteredHolds
     (hp : ParamsAt o.params p) (hms : p.members = some ms) {vm : _root_.Spot.OneStageZk.Member}
     (hvm : vm ∈ ms) :
     ReadsFiles (V.registered o.params) vm (_root_.Core.Blobs.ofArray o.sent.blobs) := by
-  obtain ⟨hc, hpb⟩ := mem_memberDigests hp hms hvm
-  exact ⟨fun _ hg => get_registered (hf _ hc) (hR _ _ hc) hg,
+  obtain ⟨-, hpb⟩ := mem_memberDigests hp hms hvm
+  exact ⟨fun _ hg => by simp [memberCircuit, hg, Except.toOption],
     fun _ hg => get_registered (hf _ hpb) (hR _ _ hpb) hg⟩
 
 end Verity.Sampled.MemberForm
