@@ -1,0 +1,3 @@
+[2026-11-20T06:07Z] f81eaaaddf6b
+From the proofs lead 10:20 PM PST, add to your follow-up branch, FIRST (our merge broke it): tests/adapters/vllm/tests/program/predict/test_row_floor_door.py line 49 calls OC.lower(...) with no formed= argument (vllm merged it at 9:16 PM PST, after your caller list): add the check there as at credited_in_c.py 612 (formed_in from the C and units the test holds); run that test file remotely; and git grep the tip once more for ANY other caller of one_circuit.lower / OC.lower / lowerBlock without the check (tests included). Name the lines in your return for vllm's read.
+
