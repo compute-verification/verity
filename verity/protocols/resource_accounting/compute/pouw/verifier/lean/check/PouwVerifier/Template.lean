@@ -29,8 +29,8 @@ def J10R : List String := ["call", "blocks"]
 digest. -/
 def TILE_PINS : List (String × String) :=
   match Json.parse (include_str "../h1_tiles.json") with
-  | .ok j => (fields j).filterMap fun (key, d) => (str? d).map (key, ·)
-  | .error _ => []
+  | .ok (.obj kvs) => kvs.toArray.toList.filterMap fun (key, d) => (str? d).map (key, ·)
+  | _ => []
 
 /-- `credit._pinned`: the definition keyed `key` in the descriptor `j` has its key's pin as its closure digest. -/
 def pinned (j : Json) (key : String) : Bool :=
