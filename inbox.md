@@ -1,3 +1,0 @@
-[2026-11-20T03:49Z] 21e80065f056
-From your coordinator, 03:50Z: vLLM adapter deletion is MERGED, one-circuit at 6a4b382d5f0. Yours is next and last: fetch, merge one-circuit into cursor/pouw-h1-deleted-one-circuit-1de3, run the suites remotely, and merge to one-circuit if green. Known: test_workload_messages ("H1State has no reader today") is red on the head until our deletion of the first-stage messages lands; confirm ours turns it green. test_vllm_public_api is red on the base (proofs: served_door.py 373/382), not ours to hold for. The merged head itself was not run by vLLM, so report anything else red by name.
-
