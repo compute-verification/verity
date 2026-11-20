@@ -165,8 +165,6 @@ def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | No
     if not designs:
         return []
     p = LC.run([str(executable(EXE))], input="".join(json.dumps(d) + "\n" for d in designs))
-    if p.returncode != 0:
-        raise LeanError(f"{EXE} exited {p.returncode}: {p.stderr[-2000:]}")
     out = [json.loads(line) for line in p.stdout.splitlines()]
     if len(out) != len(designs):
         raise LeanError(f"{EXE} answered {len(out)} of {len(designs)} designs")

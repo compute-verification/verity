@@ -349,9 +349,10 @@ def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
     assert said.startswith("1 sets: 48 of 48 sessions agree, 0 disagree; 0 accepted") and "NO SESSION IS ACCEPTED" in said
     both = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 3, "passed_every_check": 2}]
     said = CHECK.agreement_outcome(both)
-    assert "3 accepted by the Lean verifier and by upstream, 2 refused last" in said and "NO SESSION" not in said
+    assert ("3 accepted by the Lean verifier and by upstream, 2 pass every Lean check before the form's and are refused at it"
+            in said and "NO SESSION" not in said)
     split = [{"set": 0, "sessions": 50, "agree": 49, "disagree": ["s7"], "accepted": 3, "passed_every_check": 0}]
-    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 refused" in CHECK.agreement_outcome(split)
+    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 pass" in CHECK.agreement_outcome(split)
     assert "NO SESSION" not in CHECK.agreement_outcome([])
 
 

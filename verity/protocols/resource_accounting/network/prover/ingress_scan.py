@@ -268,6 +268,10 @@ class Class:
             raise ValueError(f"{self} doesn't serve the network attester at these parameters: set " + "; ".join(bad))
 
 
+#: the class of record, which the network attester at `network_attester.W63` serves; w63k4's is it at KO 4 and KI 32
+W63 = Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024)
+
+
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
     return (("live", 1), ("done", 1), ("q", 32), ("left", 32), ("cells", cls.CB), ("fields", 32), ("max_tokens", 32),
             ("seed", 32), ("temperature", RATIO_BITS), ("top_p", RATIO_BITS), ("admitted", 32), ("anchor", 32),

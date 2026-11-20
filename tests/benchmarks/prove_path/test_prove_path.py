@@ -1752,6 +1752,46 @@ def test_a_served_windows_negatives_are_each_refused_by_name(tmp_path, monkeypat
     assert not both["ok"] and both["codes"][-1] == "run_root" and both["detail"]["serve"]["published_root"] == s.root
 
 
+def test_a_served_windows_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused(tmp_path, monkeypatch):
+    """A served window's docket, binding the advice the server committed, as `window_of` holds it, with the receipt the stream
+    writes on receiving it: the order holds. The same advice committed again after the coins (a new root, a true commitment
+    of it, which the served road's `source_of` accepts with its opening, read by the served codec) is refused
+    ``after-the-draw``, as `rank_audit` refuses it."""
+    s = _served(tmp_path, monkeypatch)
+    compiler, _requests, bound, opening = PP.compiled(s.a)
+    assert bound == s.bound
+    w, mine, held = _single(s.root)
+    w, held = {**w, **bound}, {**held, **bound}
+    rec = {"format": "verity/registration/v1", "population": 8, "window": w}
+    assert PP.source_of(s.a)(w, mine, held)["ok"]
+    receipt = R.receipt(rec, A5.CHALLENGER, received="0")
+    assert PP.advice_before_draw(receipt, rec, bound)["ok"]
+    got = PP.advice_after_sample(compiler, receipt, rec, opening, mine, held, PP.source_of(s.a), PP.advice_codec(s.a))
+    assert got == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
+
+
+def test_a_served_windows_advice_negatives_are_each_refused_by_name(tmp_path, monkeypatch):
+    """`more_negatives` on a served window's docket: another compiler, another advice root, the window's own opening under
+    another salt, a docket binding no compiler and no advice, another cap ℓ, and each transfer-gate list the compiler doesn't
+    name, each refused by the served road's `source_of` with its code."""
+    s = _served(tmp_path, monkeypatch)
+    compiler, _requests, bound, opening = PP.compiled(s.a)
+    w, mine, held = _single(s.root)
+    w, held = {**w, **bound}, {**held, **bound}
+    d = tmp_path / "window"
+    d.mkdir()
+    (d / "registration.json").write_text(json.dumps({"window": w}))
+    got = {k: v["codes"] for k, v in PP.more_negatives(s.a, 0, 1, compiler, mine, held, d, opening).items()}
+    gates = {k: got.pop(k) for k in list(got) if "transfer-gates" in k or "less-the-gate" in k}
+    assert got == {"registration-naming-another-compiler (source)": ["compiler"],
+                   "registration-naming-another-advice (source)": ["advice"],
+                   "opening-under-another-salt (source)": ["advice"],
+                   "registration-binds-no-compiler-or-advice (source)": ["compiler", "advice"],
+                   "registration-names-another-cap (source)": ["compiler"]}
+    assert len(gates) == (len(compiler.transfer_gates) + 1 if compiler.transfer_gates else 0)
+    assert all(c == ["compiler"] for c in gates.values())
+
+
 def _wstep(*rows: tuple[int, int, int]) -> WA.StepAdvice:
     return WA.StepAdvice(tuple(WA.Row(r, "decode" if n == 1 and s >= 3 else "prefill", s, n, 0, False, ()) for r, s, n in rows))
 

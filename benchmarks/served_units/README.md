@@ -49,10 +49,6 @@ Files:
   census type's size may be `full` or `full/D` (the most instances a statement holds at the block's k_log, over D).
   `PT_STATEMENTS` proves statements staged elsewhere as they are. It times one prover on the device; K provers at once are
   `benchmarks/one_stage/server_rate.py`'s, which times them on the verifier's clock.
-- `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
-  window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
-  template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
-  `benchmarks/one_stage/server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
@@ -74,8 +70,7 @@ Files:
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
   `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
-  `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `stage_window.py`'s member choice and public-body
-  check, `job.sh`'s `stage_one` handing a census name with several statics to a stub stager as one argument, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
+  `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `job.sh`'s `stage_one` handing a census name with several statics to a stub stager as one argument, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
   each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
