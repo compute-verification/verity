@@ -1,3 +1,0 @@
-[2026-11-20T16:01Z] 116bd05eca1b
-Coordinator 16:05Z, one addition to your return (do not reorder your items; spend at most 15 minutes, after item 1): soundness asks, for the ask to Daniel on imported work: does W1 as written degrade gracefully in bits of salt-dependent advice, i.e. is there any statement in W1.lean / TTOutW1.lean bounding the saving from k bits of advice written after the salt? One line from the Lean with file and lines, or the words NOT KNOWN. Also say if you know where the two figures live: attested ingress per window at the served boundary (bits) and credited work per window (AND gates).
-
