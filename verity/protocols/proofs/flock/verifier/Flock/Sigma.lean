@@ -578,19 +578,22 @@ def check (PW PB : Prog) (link : Json) : Except Refusal Report :=
     | some e => .error e
     | none => .ok (report (Side.of PB))
 
-/-- `check` on two descriptors' bytes, the Boolean one's `word` field read from its JSON. -/
+/-- `check` on two descriptors' bytes, the Boolean one's `word` field read from its JSON and decoded without it (the link is
+no key of the format, `E_KEYS`). -/
 def checkBytes (word bits : ByteArray) : Except Refusal Report := do
   let PW ← match Program.decode word with
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"word descriptor: {e}" }
-  let PB ← match Program.decode bits with
+  let read := Program.readJson bits
+  let unlinked := read.map (·.map fun j => match j with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "word")).toList
+    | x => x)
+  let PB ← match Program.decodeOf unlinked with
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"Boolean descriptor: {e}" }
-  let link := match String.fromUTF8? bits with
-    | some t => match JsonParse.parse t with
-      | .ok j => (j.getObjVal? "word").toOption.getD Json.null
-      | .error _ => Json.null
-    | none => Json.null
+  let link := match read with
+    | some (.ok j) => (j.getObjVal? "word").toOption.getD Json.null
+    | _ => Json.null
   check PW PB link
 
 /-- `verity-verify-proof sigma-check WORD BITS`: one `SIGMACHECK` line, the report or the refusal; exit 0 when the lift holds. -/
