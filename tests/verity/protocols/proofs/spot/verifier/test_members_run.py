@@ -20,7 +20,7 @@ import pytest
 from verity.circuits import partition_object as PO, population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.types import Array, Value
+from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K, docket as DK, members as M, one_circuit as OC
@@ -400,6 +400,28 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
         assert str(e.value) == why
 
 
+def test_a_members_slice_that_names_a_port_twice_is_refused_whatever_its_roots(tmp_path):
+    """A record naming a member's port twice, at its true root and at another, gives a slice naming the port twice,
+    which the run and `slices` refuse by name before any session (`OneStageZk.Member.portsOnce`); the same roots with
+    the other under the other member, so each slice names the port once, pass. A root naming no port as a string
+    refuses by name."""
+    w = Window(tmp_path)
+    other = {**RECORD["roots"][0], "root": "33" * 64, "domain": "44" * 64}
+    twice = RECORD | {"roots": [*RECORD["roots"], other]}
+    assert w.run(never, record=twice) == (None, M.port_twice_why(A, "out"))
+    with pytest.raises(ValueError) as e:
+        slices(UNITS, twice)
+    assert str(e.value) == M.port_twice_why(A, "out")
+    once = slices(UNITS, RECORD | {"roots": [*RECORD["roots"], {**other, "port": f"{B}/out2"}]})
+    assert [r["port"] for r in once[A]["roots"]] == ["out", "o0"]
+    assert [r["port"] for r in once[B]["roots"]] == ["out", "out2", "o0"]
+    assert M.port_twice_why(A, "out") == (f"member {A}: its slice names port out twice: a member's slice holds one root "
+                                          "of each port, the one its public file's root there is held to")
+    with pytest.raises(M._Refused) as e:
+        M._ports_once({A: {}}, {A: [{"port": 1, "root": "aa"}]})
+    assert str(e.value) == M.slice_no_port_why(A)
+
+
 def test_a_members_own_output_port_reads_its_templates_field_tree():
     """A root ``<template>/<field>`` of a member's template is the window's tree of the field, no member's own: a
     member of the template with no root at that field has the tree in its slice under the field's port
@@ -599,6 +621,13 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="per-member form"):
         w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})
+
+
+def test_a_return_of_no_fields_has_no_field_tree():
+    """A return's fields count as Lean's `Circuits.Descriptor.fieldsOf` counts them: the empty tuple's none, a
+    tuple's each, any other type one."""
+    types = (Tuple(), Tuple(Value(8), Value(16)), Value(8), Array(2, Value(8)))
+    assert [M.return_fields(t) for t in types] == [0, 2, 1, 1]
 
 
 def _periods_interface_tests():

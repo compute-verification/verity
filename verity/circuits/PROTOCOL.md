@@ -355,7 +355,12 @@ its word's with each `Value<w>` an `Array<w, Value<1>>` (`Value<1>` stays a bit)
 - `E_BODY_MISSING`: a word primitive among `definitions` has no entry;
 - `E_BODY_KEY`: it names an id that is no word primitive among `definitions`;
 - `E_BODY_NOT_BOOLEAN`: taking the keys in order, an entry names no definition, or one that is not Boolean or not of its
-  word's bit signature.
+  word's bit signature, or an input primitive. An input body would make its word an input node wherever it is called
+  (§5.2), a value no claim registers: where a definition other than the root calls the word, the refusal names that
+  definition's first such node (the least such definition key), as §5.2's does; otherwise it names the body. A constant
+  bit stays a body: it is a gate. Nor is a body the root or a definition that reaches a call of the root, which would read
+  the root's input nodes (§5.2): no definition calls the root. Such a body is Boolean only where the root is, so the
+  decoder looks for one only then; otherwise the body is refused as not Boolean.
 
 A writer walks the bodies last (§4.6), after the root and `program_fn`'s functions, in key order, so what only they call
 enters `callees` and `types` after the rest. A key named twice keeps its last value, in either parser.
@@ -398,7 +403,8 @@ so `Input016_v1`, `Input0_v1`, `Input16_v2`, `Input16` and `Input16_v1\n` are no
 Each input primitive of width w has no parameters and returns `Value<w>`: a gate whose value is prescribed (asserted equal to
 the claimed input), not computed, and never held by the program. The decoder materializes it from the id, ahead of any
 registry entry. An input node appears only in the root's body: `Program` and the decoder (§4.6) refuse one in any other
-definition, where no parameter would bind it.
+definition, where no parameter would bind it, and the decoder refuses an input primitive, the root or a call of the root
+as or in a word primitive's Boolean body (§4.9).
 
 The Program's Calls (`partition_object.calls`, the proof blocks of `Q_word`) are the root body's nodes that are not input nodes, in
 body order.
@@ -532,7 +538,8 @@ So a storage round's index, its session's header and context, the setup's salt, 
 PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
 of input, with no case per scheme.
 
-**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (a mark's form is `supplied.mark_of`'s; a mark's
+function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`; no verifier checks a held output yet):
 
 - `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
 - `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a

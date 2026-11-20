@@ -208,7 +208,6 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     of the device's own client; a relay session's request asks for no number, its clients being the peer's, and
     nothing holds its requests to one."""
     import leak_bounds as LB
-    from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
     from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
     from verity.protocols.resource_accounting.network.verifier import network_attester as W
     weights = LB.WEIGHTS if weights is None else weights
@@ -266,7 +265,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
                       "cap_per_request": link.cap, "free": free, "faulty": 0,
-                      "jitter_per_block": link.jitter, "jitter_bound": SA.JITTER_BOUND, "jitter_term": LB.JITTER,
+                      "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
             "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),

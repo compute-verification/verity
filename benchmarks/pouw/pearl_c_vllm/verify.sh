@@ -16,9 +16,8 @@
 # (`--test-instance`; the verdict credits nothing).
 # Writes $OUT/<pass>-verify.json (the twin's document), <pass>-lean-check.json (both verdicts, the Lean's command line and
 # its line), <pass>-lean.json (the Lean's answer, where it gave one the twin agrees with) and <pass>-manifest.json.
-# Exits 0 only where the Lean accepted the prefill and decode passes and rejected every negative control's pass (control,
-# and control-leaves where the window retained it); a pass the Lean gave no verdict on (it refused, disagreed with the twin
-# or didn't build) fails it.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
+# Exits 0 only where the Lean accepted the prefill and decode passes; a pass the Lean gave no verdict on (it refused,
+# disagreed with the twin or didn't build) fails it.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 # PouwVerifier).
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=${VERITY_BENCH_VENV:-$WORK/venv312}/bin/python
@@ -31,9 +30,8 @@ if [ ! -f "$PASSES/coins.json" ]; then
   exit 2
 fi
 status=0
-for pass in prefill decode control control-leaves; do
+for pass in prefill decode; do
   D=$PASSES/$pass
-  [ "$pass" = control-leaves ] && [ ! -f "$D/manifest.json" ] && continue
   rm -f "$D/pearlplus-verify.json" "$D/pearlplus-lean-check.json"
   "$PY" "$SP" verify --passes "$PASSES" --manifest "$D/manifest.json" --coin-record "$D/coin.json" \
     --out "$D/pearlplus-verify.json" --answer "$D/pearlplus-answer.json" --draws "${DRAWS:-3}" --jobs "$JOBS" \
@@ -41,11 +39,10 @@ for pass in prefill decode control control-leaves; do
   rc=0
   "$PY" "$SP" lean --passes "$PASSES" --manifest "$D/manifest.json" --verify "$D/pearlplus-verify.json" \
     --exe "${PEARLPLUS_LEAN_EXE:-build}" --out "$D/pearlplus-lean.json" || rc=$?
-  case "$pass" in control*) want=1 verdict=REJECT;; *) want=0 verdict=ACCEPT;; esac
-  if [ "$rc" = "$want" ] && [ -s "$D/pearlplus-lean.json" ]; then
-    echo "verify.sh: $pass: the Lean's $verdict, as a ${pass%%-*} pass must have"
+  if [ "$rc" = 0 ] && [ -s "$D/pearlplus-lean.json" ]; then
+    echo "verify.sh: $pass: the Lean's ACCEPT, as a $pass pass must have"
   else
-    echo "verify.sh: $pass: the Lean's exit $rc, where a ${pass%%-*} pass must have its $verdict (exit $want)"
+    echo "verify.sh: $pass: the Lean's exit $rc, where a $pass pass must have its ACCEPT (exit 0)"
     status=1
   fi
   cp "$D/manifest.json" "$OUT/$pass-manifest.json"

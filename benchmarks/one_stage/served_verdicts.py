@@ -728,14 +728,22 @@ def publish(out: Path, private: Path) -> list[str]:
 PADDED = ("binding.advice.bits", "rows")
 
 
+def _no_digest(compiler: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: _no_digest(v) if isinstance(v, Mapping) else v for k, v in compiler.items() if k != "digest"}
+
+
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     """What the run publishes of a window's advice registration: its compiler's ``cap_bits`` in place of the advice's
     length (`PADDED`), the one length the class declares (its rows at ``row_bits`` each), which hides nothing while the
     advice is committed at its own row count; no count or refusal of its requests, no window's number (`public_json`),
-    and the rest as registered. ``padded`` names the fields replaced."""
+    no digest of its compiler, which is built from the description and so tells descriptions apart, and the rest as
+    registered. ``padded`` names the fields replaced."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
     out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
+    out["compiler"] = _no_digest(reg["compiler"])
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
+    if isinstance(reg["binding"].get("compiler"), dict):
+        out["binding"]["compiler"] = _no_digest(reg["binding"]["compiler"])
     out["rows"] = -(-cap // row_bits)
     return public_json({**out, "padded": list(PADDED)})
 
@@ -1897,7 +1905,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
     passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.commitments import randomness as RND
@@ -1932,7 +1940,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if period is None:
         return None, f"the live session joined no period of lane {lane}"
     name = period.get("period")
-    if h1 := [f for f in (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD) if f in period]:
+    if h1 := [f for f in (Wd.K_FIELD, Wd.ROWS_FIELD, Wd.LENGTH_FIELD) if f in period]:
         return None, (f"the live session joined period {name}, a non-Pearl-C one (its open commits {', '.join(h1)}): a Pearl-C salt "
                       "session is credited in a Pearl-C period alone")
     try:

@@ -82,7 +82,7 @@ INTEGRATION_SITES = _integration_sites()
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications", "input_datasets")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.
 DEPENDENCIES = {"numpy"}
@@ -1108,6 +1108,10 @@ SPOT_VERIFIER = ("verity.protocols.proofs.spot.verifier",)
 SPOT_VERIFIER_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+    # SamplingDesign and params_sampling_design from SPOT's verifier service: owner proofs, gone by Tue 24 Nov to a home
+    # the adapter may import (top's ruling, Fri 20 Nov 9:02 AM PST, TOP-447)
+    "adapters/vllm/verity_vllm/program/predict/serve.py",
+    "adapters/vllm/verity_vllm/program/predict/window_record.py",
 )
 
 

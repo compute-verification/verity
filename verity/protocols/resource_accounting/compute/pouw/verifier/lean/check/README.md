@@ -140,7 +140,7 @@ and to prove the circuit the credit period's open committed (its descriptor's SH
 `Spot.Challenger.creditedChallengePhase` over `pinnedChallengePhase`, the same bytes `layoutOf` reads) and credits it
 (`window`) sampled at the credit period's K, a refused one refusing
 the credit period. Every step that reads the challenger's session (`credited`, `roundsCheck`, `saltCheck`) reads it through
-`pinnedChallengePhase`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `credit.round_root`
+`pinnedChallengePhase`, the pins log (`pins`) and the first-parent list (`main`) given beside the ledger. `aLink`: each round's root (the one the challenger received before that round's coin) is `window.round_root`
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
 (`credit.cover`): round s's share of an execution phase's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
 of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
@@ -181,7 +181,7 @@ a coin opened twice, one opened before its round's root, a foreign execution pha
 layout's). `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
-verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
+verifier; no test holds that step on a pinned window yet), and its `credit`, `drawn`,
 `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
 `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, proof blocks the prover chose, a sampled proof block failed or

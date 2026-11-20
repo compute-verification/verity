@@ -620,6 +620,21 @@ def definition_digest(entry: dict, desc: dict | None = None) -> str:
     return hashlib.sha512(canonical_json(canonical_entry(entry, desc))).hexdigest()
 
 
+def closure_digest(desc: dict, key: str) -> str:
+    """Hex SHA-512 of the canonical JSON object mapping each definition `key` reaches in descriptor `desc` (itself, its
+    nodes' callees, theirs, …), by descriptor id, to its `definition_digest` (Lean's `Flock.DefinitionDigest.closureDigest`):
+    another body under `key`'s id, or under any id it reaches, has another digest.  KeyError, IndexError or TypeError on a
+    descriptor whose definitions or callees don't hold what `key` reaches."""
+    defs, callees, seen, todo = desc["definitions"], desc["callees"], {}, [key]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = definition_digest(defs[k], desc)
+            if defs[k]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(canonical_json(seen)).hexdigest()
+
+
 # ---------------------------------------------------------------------------------------------------------
 # Decoding: rebuild specializations with explicit bodies. Primitives are looked up in `registry` by id (their
 # evaluators are code, not data).
@@ -1028,13 +1043,63 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
-    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
+    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get, built))
 
 
-def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, FunctionDefinition]:
+def _input_body(desc: dict, built: dict[str, Any], fid: str, bid: str) -> str:
+    """§5.2 read through word ``fid``'s body ``bid``, an input primitive: an input node wherever ``fid`` is called, refused at
+    the node of the least non-root composite key decoded so far (``built``) that calls ``fid``, its first, else as the body
+    itself (`Descriptor.inputBody`)."""
+    ddefs, callees = desc["definitions"], desc["callees"]
+    for key in sorted(k for k in built if k != desc["root"] and ddefs[k]["form"] == "composite"):
+        for k, nd in enumerate(ddefs[key]["body"]["nodes"]):
+            if callees[nd["fn"]] == fid:
+                return f"definition {key!r} node {k}: an input node ({bid}, the Boolean body of {fid}) appears only in the root's body"
+    return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is an input primitive, a value no claim registers"
+
+
+def _root_in_body(root: Any, body: Any, rid: str, fid: str, bid: str) -> str | None:
+    """§5.2 read through word ``fid``'s body ``bid``: no definition calls the root, so a body is not the root and reaches no
+    call of it, else it would read the root's input nodes (`Descriptor.rootInBody`; the caller walks only where the root's
+    primitives are all Boolean, as there `reach` is)."""
+    if body is root:
+        return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is the root, which no Definition calls"
+    seen, stack = {id(body)}, [body]
+    while stack:
+        d = stack.pop()
+        if isinstance(d, PrimitiveDefinition):
+            continue
+        for n in d.body.nodes:
+            if n.fn is root:
+                return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} calls the root {rid}, which no Definition calls"
+            if id(n.fn) not in seen:
+                seen.add(id(n.fn))
+                stack.append(n.fn)
+    return None
+
+
+def _boolean_primitives(fn: Any) -> bool:
+    """Whether every primitive ``fn`` reaches is a gate, a constant bit or a 1-bit input (`Descriptor.extendReach`)."""
+    from .boolean import is_boolean
+    seen, stack = {id(fn)}, [fn]
+    while stack:
+        d = stack.pop()
+        if isinstance(d, PrimitiveDefinition):
+            if not is_boolean(d):
+                return False
+            continue
+        for n in d.body.nodes:
+            if id(n.fn) not in seen:
+                seen.add(id(n.fn))
+                stack.append(n.fn)
+    return True
+
+
+def _decode_boolean(desc: dict, get: Callable[[str], Any], built: dict[str, Any]) -> dict[str, FunctionDefinition]:
     """``desc``'s Boolean map, each body read from ``desc`` alone (PROTOCOL.md §4.9): its keys exactly the word primitives
-    among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them with the bit form of
-    its word's signature (`E_BODY_NOT_BOOLEAN`)."""
+    among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them, no input primitive
+    (`_input_body`), not the root and no call of it (`_root_in_body`), with the bit form of its word's signature
+    (`E_BODY_NOT_BOOLEAN`)."""
     from .boolean import bit_type, is_boolean
     bm = desc.get("boolean")
     if not isinstance(bm, dict) or not all(isinstance(v, str) for v in bm.values()):
@@ -1046,11 +1111,18 @@ def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, Function
     if extra := sorted(set(bm) - word):
         raise ValueError(f"E_BODY_KEY: `boolean` names {extra[:4]}, which are no word primitive among `definitions`")
     out: dict[str, FunctionDefinition] = {}
+    root, root_boolean = get(desc["root"]), None
     for fid in sorted(bm):
         bid = bm[fid]
         if bid not in ddefs:
             raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid!r} is no definition")
         body, (params, ret) = get(bid), get(fid).signature()
+        if is_input(body):
+            raise ValueError(_input_body(desc, built, fid, bid))
+        if root_boolean is None:
+            root_boolean = _boolean_primitives(root)
+        if root_boolean and (why := _root_in_body(root, body, desc["root"], fid, bid)):
+            raise ValueError(why)
         bparams, bret = body.signature()
         if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
             raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is not a Boolean Definition of its bit signature")

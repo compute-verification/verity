@@ -209,8 +209,8 @@ class Gate:
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof system's committed sample K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
-        ``length`` (``--length``, `credit.LENGTH_FIELD`) when
+        proof system's committed sample K, `window.K_FIELD`), ``rows`` (the table rows T, `window.ROWS_FIELD`) and
+        ``length`` (``--length``, `window.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused
         (`models.Refused`) for a root it has no entry of."""
@@ -354,11 +354,11 @@ class Ledger:
                     model: str | None = None, weights_root: str | None = None, circuit_files: dict | None = None,
                     length: dict | None = None, leaf: int | None = None) -> None:
         """Lane vllm's period `name`, holding the sessions reserved until its `period_close`, under `cap` and `circuit`,
-        with ``draw_k`` (`credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`), ``model`` (the gate's
+        with ``draw_k`` (`window.K_FIELD`), ``rows`` (the table rows T, `window.ROWS_FIELD`), ``model`` (the gate's
         ``--model``: `registry`'s registration's weights' root,
         signed with its ``model``) or ``weights_root`` (``--weights-root``, Refused unless a registration's),
         ``circuit_files`` (each K's circuit file's SHA-512, ``{k<K>: SHA-512}``) and ``length`` (the gate's ``--length``,
-        `credit.LENGTH_FIELD`) when given."""
+        `window.LENGTH_FIELD`) when given."""
         signed = self.registry.opened(circuit, model, weights_root)
         self._period, self._windows = name, []
         self.append("period-open", None, {"period": name, "lane": "vllm", "by": "vllm", "cap": cap, "circuit": circuit,

@@ -151,7 +151,6 @@ from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
@@ -163,7 +162,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the execution phase sample's key, from the execution phase's sampling coin (`draw_key`)
-DRAW_DOMAIN = CC.DRAW_DOMAIN
+DRAW_DOMAIN = Wd.DRAW_DOMAIN
 #: the execution phase root's port: the execution phase's entries
 PORT = "entries"
 #: an execution phase stream's failure budget: its first failure stops it
@@ -530,7 +529,7 @@ def path(levels, index: int) -> list[str]:
     return out
 
 
-verify_path = CC.verify_path
+verify_path = Wd.verify_path
 
 
 def side_leaves(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[bytes]:
@@ -756,13 +755,10 @@ LEAN_RUN = "lean-run"
 PUBLIC_HEADER = "public-header"
 
 
-def _header_sha512(pub: bytes) -> str | None:
+def _header_sha512(pub: bytes) -> str:
     """The SHA-512 of a public file's header as the Lean verifier names it (``public_header_sha512``: the canonical JSON
-    of its first line); None when that line is no JSON."""
-    try:
-        return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
-    except ValueError:
-        return None
+    of its first line). A first line that is no JSON raises ``ValueError``."""
+    return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
 
 
 def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
@@ -772,7 +768,8 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
     row's ``session`` record), in the verifier's environment through `lean_child` (`lean_verdict` of what it printed, and
     ``output_sha512`` the SHA-512 of its ``VERDICT`` lines as it printed them, the part of its output a replay
     reproduces byte for byte). ``public_headers`` is each ``VERDICT`` line's ``public_header_sha512``: one that names a
-    header other than the copy's, or an accepting line that names none, is refused by name (`PUBLIC_HEADER`), so the
+    header other than the copy's, or an accepting line that names none, or any verdict on a copy whose header is no
+    JSON, is refused by name (`PUBLIC_HEADER`), so the
     verdict is about the file the opening check reads. The session's digest rests on a host the prover does not
     control: the challenger's, which reads the delivered record itself (`deliver`). Refused by name (`LEAN_RUN`) where
     the run wrote a panic line or ended with a status `verify` does not document: its answer is not read."""
@@ -785,15 +782,18 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
         raise _refused(LEAN_RUN, {"unit": row["unit"], "why": str(e)}) from None
     printed = "".join(f"{x}\n" for x in p.stdout.splitlines() if x.startswith("VERDICT "))
     got = lean_verdict(p.stdout)
+    sha = hashlib.sha512(printed.encode()).hexdigest()
+    if got["accepted"] is None:
+        return {**got, "output_sha512": sha, "public_headers": []}
+    lines = [json.loads(x[8:]) for x in printed.splitlines()]
     try:
-        lines = [json.loads(x[8:]) for x in printed.splitlines()]
-    except ValueError:
-        lines = []
-    want = _header_sha512(pub.read_bytes())
+        want = _header_sha512(pub.read_bytes())
+    except ValueError as e:
+        raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "why": f"the copy's header is no JSON: {e}"}) from None
     named = [x.get("public_header_sha512") if isinstance(x, dict) else None for x in lines]
     if any(h != want and (h is not None or (isinstance(x, dict) and x.get("accepted"))) for x, h in zip(lines, named)):
         raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "copy": want, "named": named})
-    return {**got, "output_sha512": hashlib.sha512(printed.encode()).hexdigest(), "public_headers": named}
+    return {**got, "output_sha512": sha, "public_headers": named}
 
 
 def statement(stage: dict, pub: bytes) -> dict:
@@ -847,18 +847,18 @@ Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The execution phase sample's key: the execution phase's sampling coin, under the stream and the registration and receipt it was opened after."""
-    return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
+    return derive(coin, DRAW_DOMAIN, Wd.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
 def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
         raise _refused("law", f"the window's draw is a subset sampling design's, not {dict(sampling_design)}")
-    return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
+    return key.stream("draw", 2 * sampling_design["k"] * Wd.width(n) + 64)
 
 
 def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = CC.stream_subset(sampling_design["k"], n, src)
+    units = Wd.stream_subset(sampling_design["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -891,7 +891,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
                          "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
                          "(`Deployment.challenger_key`)")
     try:
-        trusted = Ch.trusted_commitment(path, key, CC.lms_verify)
+        trusted = Ch.trusted_commitment(path, key, Wd.lms_verify)
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
         same = Ch.ChallengerRecord.from_json(doc).commitment == trusted
     except (Ch.CoinError, OSError, ValueError) as e:
@@ -1089,17 +1089,16 @@ class Challenger:
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
         """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
-        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
-        runs them, each of record.  Raises `Refused`."""
+        (`VStar.Recursive.Caller.check`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record: the first two Lean's alone.  Raises `Refused`."""
         n = rec["population"]
         sampling_design = S.selection_sampling_design(st.spec.selection, n)
         prog = PN.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports_, list(st.log), self.params["delta"])
-        args = (rec, prog, q, sampling_design, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
-        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        codes = self._of_record(name, self.record.registration, params, dict(rec))
         if not codes:
-            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
+            codes = self._of_record(name, self.record.caller, params, dict(rec))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
@@ -1403,7 +1402,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if man.get("schema") not in (Wd.MANIFEST_SCHEMA, Wd.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1681,7 +1680,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": Wd.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

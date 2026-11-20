@@ -2,9 +2,9 @@
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
-* ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`,
-  `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
-  registers no values;
+* ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`), with the
+  fan-out and tied values its verdict publishes; a PoUW window registers no values;
+* ``caller``: the caller's codes (`spot-flock-caller caller`, `VStar.Recursive.Caller.check`);
 * ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
@@ -19,7 +19,7 @@ two agree when their outputs are the same canonical JSON (an `answer`'s reason i
 A disagreement raises `Disagree`, which the challenger turns into the refusal ``lean-python-disagree: <check>``; a failure
 is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
 or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
-undone.
+undone. ``registration`` and ``caller`` have no reference: their Lean is their only verifier and runs on either side.
 
 Verity imports neither Lean's executables nor the canonical JSON the two sides are compared in (`verity_difftest`): a
 `Record`'s `canonical` and `start` raise here, and `benchmarks/pouw/served_zk/of_record_lean.py`'s `Record` supplies
@@ -37,6 +37,7 @@ from typing import Any
 from verity.circuits import codec
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 
 REPO = Path(__file__).resolve().parents[8]
 POUW = REPO / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
@@ -79,20 +80,12 @@ def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str)
 
 def registration_params(program: Any, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
                         ports: Mapping[str, Any], log: list[dict], delta: str) -> dict:
-    """`spot-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
+    """`spot-difftest registration`'s parameters for a window `Stream.register` receives: no leaf layer,
     anchors, partition, work table or registered values, which a PoUW window registers none of."""
     return {"anchors": [], "delta": delta, "law": dict(sampling_design), "leaf_layer": None, "log": [dict(r) for r in log],
             "partition": None, "ports": {p: dict(v) for p, v in ports.items()},
             "program": json.loads(codec.canonical_json(codec.encode_program(program))), "query": dict(query),
             "registered": None, "scheme": scheme, "work_table": None}
-
-
-def registration_answer(v: Any) -> dict:
-    """The registration piece's answer of `registration.check`'s verdict `v`: its codes, with the fan-out F under a
-    template query that applies and the tied values R8 let through when any, as `Spot.Pieces.registration` writes them
-    (`Verdict.to_json`)."""
-    j = v.to_json()
-    return {"codes": j["codes"], **{k: j[k] for k in ("fanout", "rests_on_period_check") if k in j}}
 
 
 def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
@@ -107,7 +100,7 @@ def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] 
                    draw: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
     the float is it) and its sample."""
-    base = {"protocol": CC.ONE_STAGE, "commitment": registration}
+    base = {"protocol": Wd.ONE_STAGE, "commitment": registration}
     if accepted:
         d = profile["delta"]
         d = d if isinstance(d, str) else (delta if float(Fraction(delta)) == d else str(Fraction(d).limit_denominator(10**9)))
@@ -187,9 +180,16 @@ class Record:
             s.close()
         self._servers.clear()
 
-    def _note(self, check: str, py: Any, lean: Any, same: bool | None) -> None:
+    def _note(self, check: str, py: Any, lean: Any, same: bool | None, lean_only: bool = False) -> None:
         self.witness.append({"check": check, "python": py, "lean": lean, "same": same, "of_record": "lean" if self.lean
-                             else "python"})
+                             or lean_only else "python"})
+
+    def _lean_piece(self, check: str, exe: str, package: Path, fn: str, x: Any) -> Any:
+        """Lean's output on `x` (`{"refused": why}` for an input it refuses): the check's only verifier, run whichever
+        side `lean` names."""
+        lean = _value(self._server(exe, package).call(fn, x))
+        self._note(check, None, lean, None, lean_only=True)
+        return lean
 
     def _piece(self, check: str, exe: str, package: Path, fn: str, x: Any, reference: Callable[[Any], Any]) -> Any:
         """Lean's output on `x` (`{"refused": why}` for an input it refuses), once Python's agrees."""
@@ -208,18 +208,16 @@ class Record:
         """``{"reason"}`` (null when PoUW's rule holds), or ``{"refused"}`` for parameters or a registration it can't read."""
         return self._piece("registered", "pouw-verifier-difftest", POUW, "registered", x, py_registered)
 
-    def registration(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
-        """R1-R8's codes for `record` against `params` (`registration_params`); `python` is the reference's call, its
-        `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
-        out = self._piece("registration", "spot-difftest", PIECES, "registration",
-                          {"params": params, "record": record}, lambda _: registration_answer(python()))
+    def registration(self, params: dict, record: Any) -> list[str]:
+        """R1-R8's codes for `record` against `params` (`registration_params`), Lean's (`spot-difftest registration`,
+        with the fan-out and tied values its answer carries in the witness)."""
+        out = self._lean_piece("registration", "spot-difftest", PIECES, "registration", {"params": params, "record": record})
         return out.get("codes", ["registration"])
 
-    def caller(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
-        """The caller's codes (`VStar.Recursive.Caller.check`) for `record` against `params`, the registration's;
-        `python` is the reference's call (`caller.check`), its `Verdict`."""
-        out = self._piece("caller", "spot-flock-caller", CALLER, "caller", {"params": params, "record": record},
-                          lambda _: {"codes": list(python().codes)})
+    def caller(self, params: dict, record: Any) -> list[str]:
+        """The caller's codes (`VStar.Recursive.Caller.check`) for `record` against `params`, the registration's,
+        Lean's (`spot-flock-caller caller`)."""
+        out = self._lean_piece("caller", "spot-flock-caller", CALLER, "caller", {"params": params, "record": record})
         return out.get("codes", ["caller"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:

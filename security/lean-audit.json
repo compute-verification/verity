@@ -299,6 +299,10 @@
    "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
    "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
   },
+  "Pous.Guarantees.StreamedWipeResidual": {
+   "owner": "@memory-accounting",
+   "why": "restricts the wipe's row to wipes the streamed wipe's bound at the wipe residual is read at (RunReads), for N ≥ 1 labels of b bits, k ≥ 1 challenges and a residual below the fill N·b"
+  },
   "Pous.StreamedWipe.FillsSegment": {
    "owner": "@memory-accounting",
    "digest": "3b562ca902b009ae95b447de74d775431a0d94f6b6188602b1b89bac55769c8d",

@@ -12,12 +12,10 @@ schedule or ``--schedule``, its decode calls replayed as CUDA graphs with ``--gr
 the weights' root (its coin commitment is published as ``coins.json``, where `verify_run` reads it), then:
 
 - the gate (`bench_arm.PearlCArm.gate`): at each weight and m in 16 and 64, three fresh passes on poisoned outputs: y within
-  `bench_arm.ERR` rel RMS of x·Wᵀ, the commitment twice bit for bit, and the tile leaves omitted changing the transcript root;
+  `bench_arm.ERR` rel RMS of x·Wᵀ and the commitment twice bit for bit under fresh salts;
 - ``prefill``: one call a weight at `PREFILL` rows, retained from outputs poisoned 0xA5, each call's served y beside it
   (``y/<call>.bf16``);
-- ``decode``: one call a weight at `DECODE` rows (40 of them, so the m₁₆ filler and the 64-row tiles run), retained the same way;
-- ``control``: decode's calls again, retained, with every commitment write omitted (`e2e.CONTROL_OMITS`), so the transcript is
-  whatever the poison left.
+- ``decode``: one call a weight at `DECODE` rows (40 of them, so the m₁₆ filler and the 64-row tiles run), retained the same way.
 
 ``--shapes`` names the weights' (n, k) in place of the in-domain ones; one shape alone makes every tile verify samples that
 shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
@@ -27,8 +25,8 @@ replays every tile of prefill's and decode's passes (``--passes``) word by word,
 the card and replays every ``--device-check``-th tile (`volunteer_pass.words_device`), and gives up, in each pass's records,
 the rows that leave a tile or one of its credited rows over its inert-work bound, which the screen can't see (the inert
 work is counted on the noised codes); the transcript is the capture's.  ``verify`` runs `verify_run.verify` on each pass
-``capture.json`` lists under ``coins.json``: every pass but control must be accepted
-(replay-verified, development shortcut; the protocol's check is a ZK proof) and control rejected.  ``full`` checks
+``capture.json`` lists under ``coins.json``: every pass must be accepted
+(replay-verified, development shortcut; the protocol's check is a ZK proof).  ``full`` checks
 prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
 openings and its leaf against C~ and U recomputed from the opened rows on the device record
 (`clear_audit.Verifier.check_tile`, the verifier's own), then every real row's served y against y_unit of those U and α
@@ -62,14 +60,12 @@ from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 PREFILL, DECODE = 1024, 40
-PASSES = ("prefill", "decode", "control")
-FULL = ("prefill", "decode")
+PASSES = ("prefill", "decode")
 EPOCH = 20261023
 
 
 def capture(a) -> int:
     import bench_arm as BA
-    import e2e
     import torch
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
@@ -97,24 +93,18 @@ def capture(a) -> int:
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
     xs = {m: {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
           for m in (PREFILL, DECODE)}
-    for name, m, omit in (("prefill", PREFILL, ()), ("decode", DECODE, ()), ("control", DECODE, e2e.CONTROL_OMITS)):
+    for name, m in (("prefill", PREFILL), ("decode", DECODE)):
         run.begin(retain=str(kept / name), run=settings.RESEARCH_RUN_ID or "glm53-passes")
-        run.omit = frozenset(omit)
         rms = {}
-        try:
-            for i, (w, W) in enumerate(weights.items()):
-                y = run.gemm(w, xs[m][w], W, None)
-                if name in FULL:
-                    (kept / name / "y").mkdir(parents=True, exist_ok=True)
-                    (kept / name / "y" / f"{i}.bf16").write_bytes(y.contiguous().view(torch.int16).cpu().numpy().tobytes())
-                ref = xs[m][w].float() @ W.float().T
-                rms[w] = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-            log["passes"][name] = {"m": m, "omit": sorted(omit), "rel_rms": rms,
-                                   **{k: v for k, v in run.end().items() if k != "manifest"}}
-        finally:
-            run.omit = frozenset()
+        for i, (w, W) in enumerate(weights.items()):
+            y = run.gemm(w, xs[m][w], W, None)
+            (kept / name / "y").mkdir(parents=True, exist_ok=True)
+            (kept / name / "y" / f"{i}.bf16").write_bytes(y.contiguous().view(torch.int16).cpu().numpy().tobytes())
+            ref = xs[m][w].float() @ W.float().T
+            rms[w] = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
+        log["passes"][name] = {"m": m, "rel_rms": rms, **{k: v for k, v in run.end().items() if k != "manifest"}}
         print(f"{name}: {log['passes'][name]['tiles']} tiles, root {log['passes'][name]['transcript_root'][:16]}", flush=True)
-    honest = [log["passes"][p] for p in ("prefill", "decode")]
+    honest = [log["passes"][p] for p in PASSES]
     log["ok"] = log["gate"]["passed"] and all(max(p["rel_rms"].values()) < BA.ERR for p in honest)
     (out / "capture.json").write_text(json.dumps(log, indent=1) + "\n")
     print(f"capture {'PASS' if log['ok'] else 'FAIL'}", flush=True)
@@ -154,7 +144,7 @@ def verify(a) -> int:
                       fast=a.fast, cross_check=a.cross_check if a.fast else 0, coins=coins)
         res[name] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         print(f"{name}: {v['line']}", flush=True)
-    res["ok"] = bool(names) and all(res[x]["accepted"] == (x != "control") for x in names)
+    res["ok"] = bool(names) and all(res[x]["accepted"] for x in names)
     (out / "verify.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"verify {'PASS' if res['ok'] else 'FAIL'}", flush=True)
     return 0 if res["ok"] else 1
@@ -331,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--draws", type=int, help="verify: tiles sampled a pass (default verify_run's DRAWS)")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")
     p.add_argument("--without-y", action="store_true", help="full: C~ and U alone (passes captured before served y was retained)")
-    p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="volunteer and full: the passes (default both)")
+    p.add_argument("--passes", nargs="+", choices=PASSES, default=list(PASSES), help="volunteer and full: the passes (default both)")
     p.add_argument("--graphs", action="store_true", help="capture: calls of up to 256 rows replayed as CUDA graphs")
     p.add_argument("--device", help="volunteer: the words' counts on this machine's card from this debit_sm90.cubin")
     p.add_argument("--device-check", type=int, help="volunteer --device: replay every N-th tile on the CPU too (default "

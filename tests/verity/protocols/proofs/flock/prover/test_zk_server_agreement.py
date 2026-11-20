@@ -20,6 +20,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import verity_difftest as D
 from verity_flock import lean_child as LC, rec_live as RL
 
 from test_rec_live import (CAP0, CAP1, HELLO, PROVER_NONCE, SCHEDULE, TREE, _binding_round, _bytes, _content, _domain, _hdr,
@@ -215,7 +216,7 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
 def built():
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-zk-server"], cwd=LEAN, check=True, capture_output=True)
+    D.build(LEAN, "flock-zk-server")
     return BIN
 
 

@@ -86,12 +86,12 @@ class Audit:
     every tree's other rounds. The sample holds a unit of exactly the members of `sampled`: the challenger session is
     one whose coins give such a sample. With `setup`, `units` and `trees`, a window of that program's members, each
     its units, and its templates' field trees `<template>/o0`, each its leaves; `extra` are roots of members' own
-    beside `ports`."""
+    beside `ports`, and each port of `twice` is named by a second root, at another root."""
 
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, ...] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B),
                  setup: Setup | None = None, units: dict | None = None, trees: dict | None = None,
-                 extra: tuple[str, ...] = ()):
+                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = ()):
         rng = random.Random(seed)
         units = UNITS if units is None else units
         names = tuple(units)
@@ -101,6 +101,7 @@ class Audit:
         s.ports |= {f"{t}/o0": {"domain": rng.randbytes(64).hex(), "leaves": n} for t, n in trees.items()}
         s.ports |= {p: s.ports[ports[1]] for p in extra}
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
+        roots += [{**r, "root": rng.randbytes(64).hex()} for r in roots if r["port"] in twice]
         self.partition = PO.build(s.program, s.query, [[units[n][0] for n in names]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
@@ -138,7 +139,8 @@ class Audit:
         statements = [{"member": name, "sessions": [sessions[name]]} for name in names if name in sessions]
         self.evidence = {"coins": {k: v for k, v in ch.evidence(ch.segment.to_json()).items() if k != "key"},
                          "draw": sample, "instances": len(proved), "proved_units": proved,
-                         "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                         "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": sorted(sample["units"]),
+                         "session_roots": {r["port"]: r["root"] for r in self.rec["roots"]},
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
         members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
@@ -202,7 +204,7 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     member the parameters don't name, a second statement of one member, a statement of two sessions, a record or a proof
     file no blob holds, a proof file changed after its session's closing round (`NO_CLOSING`), a tree no statement's
     session records (`UNUSED_TREE`), members that are not the population laid range by range (`MEMBERS_LAID`), two
-    members reading one registered value at two roots. A member's circuit is C_S (`one_circuit.restrict`), read
+    members reading one registered value at two roots, a registered port stating positions. A member's circuit is C_S (`one_circuit.restrict`), read
     last."""
     a = Audit("members-twin")
     first, last = a.evidence["proofs"]["statements"]
@@ -237,6 +239,11 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
         return {"format": form, "ports": {"p": {**port, "root": root * 64}}}
     same("v1", f"member {A}: registered reads: not a verity/registered-reads/v2 file",
          params=a.members(A, registered=registered("aa", "verity/registered-reads/v1")))
+    placed = registered("aa")
+    placed["ports"]["p"]["reads"] = [0]
+    same("positions", f"member {A}: registered reads: port p: a verity/registered-reads/v2 port holds keys of [value, "
+                      "root, leaves, words, word_bits, domain, row_schema, known, param] and no other (no position: C "
+                      "and the partition give them)", params=a.members(A, registered=placed))
     two = a.members(A, registered=registered("aa"))
     two = two | {"proofs": {"members": two["proofs"]["members"] | {
         B: a.params["proofs"]["members"][B] | {"registered": registered("bb")}}}}
@@ -290,6 +297,17 @@ def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_r
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == ("proofs: roots: the registration's root zzz/out is no member's: a member's roots are named "
                    "<member>/<port>, and a window's tree of a template's field <template>/<field>")
+
+
+def test_a_members_slice_that_names_a_port_twice_is_refused_by_both(tmp_path):
+    """A docket naming the first member's port ``out`` twice, at its true root and at another: both refuse its slice by
+    name (`PORT_TWICE_WHY`), after the roots and before any member's file; with ``out`` named once, both end at the
+    first member's stand-in public file."""
+    why, (run, refused) = Audit("members-twin-port-twice", twice=(f"{A}/out",)).ask(tmp_path / "twice")
+    assert run is None and why == M.run_reason(run, refused) == f"proofs: {M.port_twice_why(A, 'out')}", (why, refused)
+    why, (run, refused) = Audit("members-twin-port-twice").ask(tmp_path / "once")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert why.startswith(f"proofs: member {A}: {M.UNREAD[1]}"), why
 
 
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp_path):

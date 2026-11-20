@@ -1838,7 +1838,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     """Print the report's verdict, each failure, each warning, each range rule a spot of which the run checked
     (`ranges.section`; a shard's report has none, since the rule's other spots may be in other shards) and a last line counting
     ``what`` (default: its targets); write the report to ``out``; and return the exit status.  A rule that doesn't hold fails
-    nothing itself: a failed spot is its own target's failure, and a run may check only some spots."""
+    nothing itself: a failed spot is its own target's failure, and a run may check only some spots; a rule with unchecked spots
+    and no failed one prints nothing here (the report's ``ranges`` keeps its ``missing``)."""
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
@@ -1849,10 +1850,11 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     if "shard" not in rep and (rs := RG.section(rep["targets"])):
         rep["ranges"] = rs
         for r in rs:
-            why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
+            if r["missing"] and not r["failed"]:
+                continue
             skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
             print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
-                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+                  + ("holds" if r["holds"] else f"does not hold ({len(r['failed'])} failed; --ranges checks them all)")
                   + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")

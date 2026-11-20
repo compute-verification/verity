@@ -356,7 +356,7 @@ def serve(args: argparse.Namespace) -> int:
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
-    attached = M.build().attach(scheme, own, process=H.ENGINE, **ctx)
+    attached = M.attach_listed(M.build(), [(scheme, own)], process=H.ENGINE, **ctx)[0]
     llm = LLM(preset.model, revision=preset.revision, **engine)
     core, walls = llm._engine.llm.llm_engine, []
     step = core.step

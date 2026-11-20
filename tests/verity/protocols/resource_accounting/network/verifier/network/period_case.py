@@ -606,9 +606,11 @@ def _walkable(j: dict) -> bool:
     return (acts + 1) * (depth + 2) <= FUEL // 2 and not empty
 
 
-def _topological(j: dict) -> bool:
-    """`Prog.orderViolation` is none: each argument of a body the root reaches names only the body's parameters and
-    its earlier nodes (an affine or strided part of no leaves names nothing; the returns aren't read)."""
+def _order_violation(j: dict) -> str | None:
+    """`Prog.orderViolation`'s first finding, as the refusal of the decoder, which Lean runs first: an argument of a body
+    the root reaches naming its own node or a later one (`codec.forward_refusal`), or a parameter the body lacks; None when
+    each names only the body's parameters and its earlier nodes (a part of no leaves names nothing; the returns aren't
+    read)."""
     defs, callees = j["definitions"], j["callees"]
     seen, todo = set(), [j["root"]]
     while todo:
@@ -622,10 +624,13 @@ def _topological(j: dict) -> bool:
                 for q in _parts(a["refs"], body["nodes"]):
                     r = q.get("affine") or q.get("strided")
                     names = [(s, i) for s, i, _ in q["explicit"]] if "explicit" in q else [r[:2]] if r[-1] else []
-                    if any(not i < (len(body["params"]) if s == "p" else k) for s, i in names):
-                        return False
+                    for s, i in names:
+                        if s != "p" and i >= k:
+                            return codec.forward_refusal(k, i)
+                        if s == "p" and i >= len(body["params"]):
+                            return f"node {k} names parameter {i}, past its body's {len(body['params'])}"
             todo.append(callees[x["fn"]])
-    return True
+    return None
 
 
 def slot_entry_digest(j: dict, key: str) -> str:
@@ -674,9 +679,8 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
     own input node of its slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
     pairwise distinct and none a lane's slot entries' (`argsApart`), each of those arguments all its node's leaves,
     each lane's slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program
-    topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
-    this module writes."""
+    topological (`_order_violation`, in the decoder's words, since Lean's decoder refuses it before any of these). It
+    reads the descriptor's nodes, signatures and returns."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
     if program_sha512(j) != program:
@@ -763,9 +767,8 @@ def _scan(j, program: str, s: NetworkAttesterParams) -> Scan:
                        f"its input node's leaves, a lane's slot entries' node of other leaves than its {nb} entries' "
                        "(each of at least a bit), or an input node that is neither's "
                        "(NetworkVerifier.Period.inputsRead)")
-    if not _topological(j):
-        raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
-                       "topological, so a gate's operands could be gates after it")
+    if (why := _order_violation(j)) is not None:
+        raise D.Reject(f"scan: {why}")
     return Scan(T, 0, bits_of(bi["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety),
                 bits_of(bs["params"][0][1]))
 
@@ -3272,7 +3275,7 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
             a["refs"] = moved(a["refs"])
     r["ret"] = moved(r["ret"])
     nodes.append(nodes.pop(kr))
-    out["topological"] = own(d), "a body names a later node"
+    out["topological"] = own(d), _order_violation(d)
     return out
 
 

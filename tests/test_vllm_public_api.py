@@ -140,6 +140,9 @@ PUBLIC = {
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values",
+    "verity_vllm.program.predict.window_record": "I7: a served window's record, which the serve's close and prove_path's "
+                                                 "window commit both make: its sampling design, its slots and its units "
+                                                 "committed under the window's key",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
@@ -249,8 +252,6 @@ PUBLIC = {
     "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
                                             "(step_roots, host_step, plan), which benchmarks/commitments times and "
                                             "benchmarks/serve_tax's plugin installs",
-    "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
-                                 "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
                                     "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
@@ -408,7 +409,6 @@ _SHARED_WORDS = "until the shared word primitives move below both adapters"
 KNOWN_SITES = {
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
-    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.tf32_twin"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,

@@ -60,14 +60,14 @@ s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows
   words, the header's five u32 little-endian), bound to the execution phase's session (its root, round 0's ``request_table``, is
   inside the open root, as ``ids@0``'s is);
 * port ``m`` reads ``<prefix>m@<s>`` (`M_ROWS`) at its known content (`m_table`): one row, m's two words, under
-  `core_check.public_row_salt` of the open root and s;
+  `window.public_row_salt` of the open root and s;
 * port ``s`` reads ``<prefix>round@<s>`` (`ROUND_ROWS`) at its known content (`round_table`): one row, s's two words,
-  under `core_check.public_row_salt` of the open root and s;
+  under `window.public_row_salt` of the open root and s;
 * port ``cap_<i>`` reads row i of the known ``<prefix>caps`` (`live_reads.caps_table`: T rows, each one u32's two words,
-  under `core_check.public_row_salt` of the open root and i), which credit builds from the credit period's committed
+  under `window.public_row_salt` of the open root and i), which credit builds from the credit period's committed
   max_tokens;
 * the output row ``o0`` (`OK_PORT`) reads row s of ``<prefix>live-ok`` (`OK_VALUE`) at its known content (`ok_table`):
-  S rows of `core_check.OK_ROW`, row s under `core_check.ok_salt` of the open root and s.
+  S rows of `window.OK_ROW`, row s under `window.ok_salt` of the open root and s.
 
 So a round's statement that proves ok = 1 at public m on the tables its round root and the open root commit fixes m as rule
 A's count, and one whose m isn't the round's served rows opens no row of ``live-ok``.

@@ -12,6 +12,7 @@ public import PouwVerifier.Json
 public import PouwVerifier.Opening
 public import PouwVerifier.Pass
 public import PouwVerifier.Rounds
+public import PouwVerifier.Template
 public import PouwWindow.Sample
 public import PouwWindow.Rounds
 public import Spot.ChallengerCoins
@@ -466,10 +467,6 @@ def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flo
 def SCHEMA : String := Flock.Program.SCHEMA
 def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
-def TILE_FN : String := "PouwH1WindowTile_v1"
-def SHARED : List String := ["zy", "salt", "position", "roots"]
-/-- `credit.SHARED_J10R`: a J10-R template's, its call's first position and its unit's blocks after `SHARED`. -/
-def J10R : List String := ["call", "blocks"]
 /-- An execution phase's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
 `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
 def TILE_K_STEP : Nat := 32
@@ -491,7 +488,8 @@ def noTemplate (k : Nat) : String :=
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows of K's n " ++
   "chunk rows each (n = weights.chunks(K), each row 8·K/n + 32 bits: K/n codes and the row's scale, h1zy.ROW), " ++
   "then " ++ ", ".intercalate SHARED ++ " (with J10-R's noise, then " ++ ", ".intercalate J10R ++
-  "), at the same R × C and in the same form at every K"
+  "), at the same R × C and in the same form at every K, and whose closure (its body and every Definition under it, " ++
+  "codec.closure_digest) is the registry's at an instance h1_tiles.json pins"
 
 /-- `credit.tile_k`: why `layoutOf` refuses the execution phase's tile at a K = `k` of at least one that its proof doesn't cover
 (`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
@@ -511,42 +509,6 @@ def loads? (text : String) : Option Json :=
     | .ok s => if s == text then some j else none
     | .error _ => none
   | .error _ => none
-
-/-- How deep `bitsOf` reads a type: deeper than Python's recursion limit reads. -/
-def TYPE_DEPTH : Nat := 1000
-
-/-- `credit._bits`: a type's bits, its leaves' widths: `Value<w>` w, an Array n of its element's, a Tuple or Record its
-fields'; zero past `fuel` levels. -/
-def bitsOf : Nat → Flock.Program.Ty → Nat
-  | 0, _ => 0
-  | _ + 1, .value w => w
-  | fuel + 1, .array n t => n * bitsOf fuel t
-  | fuel + 1, .tuple fs => fs.foldl (fun s t => s + bitsOf fuel t) 0
-  | fuel + 1, .record fs => fs.foldl (fun s t => s + bitsOf fuel t.2) 0
-
-/-- The definition the decoded Program `P` keys by `id`, if it has one. -/
-def defn? (P : Flock.Program.Prog) (id : String) : Option Flock.Program.Defn :=
-  P.index[id]?.bind (P.defs[·]?)
-
-/-- `credit._tile`: the R × C of K = `k`'s template `d` (its decoded definition) and whether it is J10-R's (its
-parameters end in `SHARED` then `J10R`), or none when it is not `h1window.template`'s: a composite `TILE_FN` keyed
-`TILE_FN{UNIT=…,K=k}` (its binding record, which the decoder holds to its bindings), whose A and B rows are n·R and n·C
-chunk rows of 8·K/n + 32 bits each, n = `chunks?` K. -/
-def tileOf (d : Flock.Program.Defn) (k : Nat) : Option (Nat × Nat × Bool) := do
-  let x ← chunks? k
-  guard (!d.prim && d.id == TILE_FN)
-  let [("UNIT", _), ("K", kb)] := (Flock.Program.recordPairs d.key).toList | none
-  guard (kb == toString k)
-  let names := d.params.toList.map (·.1)
-  let today := [s!"a_k{k}", s!"b_k{k}"] ++ SHARED
-  let j10r := names == today ++ J10R
-  guard (names == today || j10r)
-  let rows ← (d.params.toList.take 2).mapM fun (_, t) => (match t with
-    | .array n e => if 1 ≤ n && n % x == 0 && bitsOf TYPE_DEPTH e == 8 * (k / x) + 32 then some n else none
-    | _ => none)
-  match rows with
-  | [r, c] => some (r / x, c / x, j10r)
-  | _ => none
 
 /-- `credit._runs`: `(template, count)` pairs with adjacent ones of one template merged. -/
 def runs (xs : List (String × Nat)) : List (String × Nat) :=
@@ -574,8 +536,9 @@ function's record (`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template 
 whose A and B rows give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP`
 below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs are each call's (M/R)·(n/C)
 instances of its K's template, in the calls' order: a call one instance and a batch its members, as the template query
-counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. -/
-def layoutOf (P : Flock.Program.Prog) : R Json := do
+counts units. Its cost is the descriptor's bytes (`descriptor`, which `P` is decoded from), never the gates its nodes unroll to. -/
+def layoutOf (P : Flock.Program.Prog) (descriptor : ByteArray) : R Json := do
+  let some j := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let fn := P.programFn
   let pairs := if fn.startsWith (WINDOW_FN ++ "{") then Flock.Program.recordPairs fn else #[]
   unless pairs.toList.map (·.1) == RECORD do layoutRefuse NOT_WINDOW
@@ -596,7 +559,7 @@ def layoutOf (P : Flock.Program.Prog) : R Json := do
   let mut rc : Option (Nat × Nat × Bool) := none
   for (k, tid) in ts do
     if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
-    let some got := (defn? P tid).bind (tileOf · k) | layoutRefuse (noTemplate k)
+    let some got := (defn? P tid).bind (tileOf j · k) | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
     rc := some got
   let some (r, c, _) := rc | layoutRefuse NOT_WINDOW
@@ -634,7 +597,7 @@ def layoutOf (P : Flock.Program.Prog) : R Json := do
   unless runs got.toList == want do layoutRefuse BODY
   pure layout
 
-/-- `credit.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
+/-- `window.call_work`: each call's units and the work of each of them, `(size, work)` in call order, of a layout
 `strata` accepted. -/
 def callWork (layout : Json) : List (Nat × Nat) := Id.run do
   let num := fun j => (nat? j).getD 0
@@ -779,7 +742,7 @@ def Internal.outcome (coin stream registration receipt layout k proofs : Json) :
 /-- An A value's segments by name, each `(level, index, root)` in row order. -/
 abbrev Segments := List (String × List (Nat × Nat × ByteArray))
 
-/-- `credit.round_root`: the root the challenger receives for round `r`, over the serving process's own round root and,
+/-- `window.round_root`: the root the challenger receives for round `r`, over the serving process's own round root and,
 for each A value by name, its segments. -/
 def roundRoot (r : Nat) (inner : ByteArray) (segs : Segments) : ByteArray :=
   tagged ROUND_TAG ([.int r, .bytes inner] ++ (segs.mergeSort fun a b => a.1 ≤ b.1).flatMap fun (v, ss) =>
@@ -802,7 +765,7 @@ def segments? (a : Json) : Option Segments :=
     | _ => none
   else none
 
-/-- `credit._DIGITS`: a contraction K in a registered value's name, a canonical decimal (no leading zero). -/
+/-- `window._DIGITS`: a contraction K in a registered value's name, a canonical decimal (no leading zero). -/
 def canonicalK (k : String) : Bool := !k.isEmpty && k.all Char.isDigit && !k.startsWith "0"
 
 def digits (s : String) : Bool := !s.isEmpty && s.all Char.isDigit
@@ -869,7 +832,7 @@ def what (v : String) : String :=
   if isA (.str v) then "A value" else if (idsStep? (.str v)).isSome then "input-ids table"
   else if (slotsStep? (.str v)).isSome then "slot table" else "receipt table"
 
-/-- `credit.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
+/-- `window.is_held`: a value held across windows, the weights' rows (`…/b/<K>`, K a canonical decimal); every other
 value an execution phase registers is its own. -/
 def isHeld : Json → Bool
   | .str v => match (v.splitOn "/").reverse with
@@ -1056,33 +1019,33 @@ def PUB_PORT : String := "pub"
 def OK_PORT : String := "o1"
 /-- `credit.OK_VALUE`: the execution phase Program's output the ok rows are, after its prefix: row u unit u's. -/
 def OK_VALUE : String := "ok"
-/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
+/-- `window.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
 def OK_ROW : Array Nat := #[1]
-/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
+/-- `window.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0
 
-/-- `core_check.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+/-- `window.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
 `c < PouwCheck.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
 def okSalt (context : String) (position : Nat) : ByteArray :=
   let msg := (OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position
   (List.range (PouwVerifier.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
     ByteArray.empty
 
-/-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
+/-- `window.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
 def publicWords (salt : ByteArray) (position : Nat) (roots : ByteArray × ByteArray)
     (j10r : Option (Nat × Nat × Nat) := none) : Array Nat :=
   let x := PouwVerifier.publicRow salt position roots j10r
   (Array.range (x.size / 2)).map fun i => (x.get! (2 * i)).toNat + 256 * (x.get! (2 * i + 1)).toNat
 
-/-- `core_check.n_digits`: H1's digit count m at contraction `k`, the least m with 128 KS ≤ 128^m and
+/-- `window.n_digits`: H1's digit count m at contraction `k`, the least m with 128 KS ≤ 128^m and
 127 KS / 128^(m - 1) ≤ 127 (KS = k / 32), searched up to KS + 1, which always qualifies. -/
 def nDigits (k : Nat) : Nat :=
   let ks := k / 32
   ((List.range (ks + 1)).map (· + 1)).find? (fun m => 128 * ks ≤ 128 ^ m && 127 * ks / 128 ^ (m - 1) ≤ 127)
     |>.getD (ks + 1)
 
-/-- `core_check.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one
+/-- `window.j10r_blocks`: unit (I, J) = (`i`, `j`)'s first row block and first column block of its call's one
 stream at call scale, R I RB and M RB + C J CB, for a call of slot `m`, an R × C `tile` and K = `k`: RB =
 ⌈(K + 32 (m_K - 1)) / 512⌉ and CB = ⌈(K + 256) / 512⌉. -/
 def j10rBlocks (m k : Nat) (tile : Nat × Nat) (i j : Nat) : Nat × Nat :=
@@ -2016,7 +1979,7 @@ def descriptorDrawn (executionPhase draw descriptor k : Json) : R (Array Nat) :=
   let some d := (match descriptor with
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
-  executionPhaseDrawn executionPhase draw k (← strata (← layoutOf (← programOf d)))
+  executionPhaseDrawn executionPhase draw k (← strata (← layoutOf (← programOf d) d))
 
 /-- `credit._window`: `executionPhase`'s credited calls (a call with m_s = 0 served rows is none), the layout it read from
 the descriptor and its calls' served rows (`Internal.servedRows`, at most the period's T table rows `rows`, whose
@@ -2034,7 +1997,7 @@ def executionPhaseLayout
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let P ← programOf d
-  let layout ← layoutOf P
+  let layout ← layoutOf P d
   let some t := (nat? rows).filter (1 ≤ ·) | layoutRefuse ROWS_FORM
   let r := (match get layout "tile" with
     | .arr a => (nat? (a.getD 0 .null)).getD 0
