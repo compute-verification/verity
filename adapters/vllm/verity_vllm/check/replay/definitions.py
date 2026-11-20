@@ -14,8 +14,7 @@ before any row is graded, `kernel_refusal` runs core `self_check` of each graded
 reference, which evaluates through the primitives' evaluators (`kernel_registry.check`, once a family per process).  That is a
 sample, the limit of what this module holds: 6 seeded instances of each of the kernel's check specialisations, small statics the
 reference evaluates, not the served ones.  A kernel that is its Definition there but not on a committed row's operands, or not at
-the served statics, grades that row by the kernel; what holds it there is the kernel's own tests, not this check.  A delegate's
-family (`delegate.DELEGATES`) has no row kernel and is not self-checked here: its protocol answers for it.
+the served statics, grades that row by the kernel; what holds it there is the kernel's own tests, not this check.
 
 A Boolean Build's row names two Definitions (`build_instances._word_rows`): ``spec``, the word Definition whose family's row
 kernel grades it, and ``bits``, the Boolean Definition the Program Calls, the one of the two the Build's descriptor holds.
@@ -62,14 +61,12 @@ _UNBUILT = (AssertionError, AttributeError, LookupError, NotImplementedError, Ty
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     """The specializations of the rows the replay evaluates, each ``(spec, bound)``: ``spec`` is the row's word Definition, of a
-    family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
+    family with a row kernel (`rows.ROWS`), and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
-    from verity_vllm.check.replay.delegate import DELEGATES
     from verity_vllm.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
-    return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows
-                   if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
+    return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows if spec_family(str(r["spec"])) in ROWS})
 
 
 def premises(rows: Iterable[dict[str, Any]]) -> list[str]:
