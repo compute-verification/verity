@@ -1506,8 +1506,7 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM. It is
 #: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
 #: never a slot a candidate waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml),
-#: or spills to a CPU node's pool where it starts sooner (research.auto). Not node 1, whose CPUs candidates' checks and lanes' direct runs
-#: already oversubscribe (top, 02:53Z).
+#: or spills to a CPU node's pool where it starts sooner (research.auto).
 AUTO_KIND = "agent-test"
 #: AUTO_KIND's shape and time where the run gives none (cluster.kinds' cpu-test phase, kinds/infra.toml's max_wall_min): what a
 #: pool slot must give for the run to spill there

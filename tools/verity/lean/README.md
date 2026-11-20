@@ -160,8 +160,9 @@ Each section, with the function of `check.py` whose docstring has its rule. A li
 keeps or drops from and never adds to.
 
 - `roots`: the modules the audit imports; every module under them is audited. `exempt`: the module prefixes nothing
-  imports, each with the reason; every other `.lean` file of the package is imported by a root, and an entry that
-  matches no file fails (`judge`).
+  imports, each with the reason, or, for a file left out of the roots until its issue ends, {why, owner, issue, due}
+  (`exempt_owed`); every other `.lean` file of the package is imported by a root, and an entry that matches no file, or
+  in neither form, fails (`judge`).
 - `proved_in` (optional): the packages, as paths relative to this one, that prove its guarantees (below).
 - `runs`: the package's tests, compiled evaluation that no proof reads (a bulk conformance check over more vectors
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
@@ -193,6 +194,8 @@ keeps or drops from and never adds to.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `scope`: {listed guarantee not deployed: one sentence saying what sessions or forms it covers where that is narrower
+  than what is served}, which only a person writes; the report counts them beside the gap (`scope_failures`, `scope_counts`).
   `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
   (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
   definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
