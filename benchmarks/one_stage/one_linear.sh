@@ -8,10 +8,11 @@
 # kind (SUBSET_ONLY). The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
 # No accept is printed unless C's template rows hold against its evaluator (`door_walls.py census`, one unit a block)
 # and C has neither of the two word shapes (`word_shape_scan.py`), both read from the one C.json whose sha256 is printed.
-# bash benchmarks/one_stage/one_linear.sh
+# DELTA=0.5 bash benchmarks/one_stage/one_linear.sh
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 4h -- bash benchmarks/one_stage/one_linear.sh
 set -uo pipefail
 RULE=${RULE:-rate:1/72}
+[ -n "${DELTA:-}" ] || { echo "REFUSED one_linear.sh takes no default δ: pass DELTA (the audit's --delta), the δ of record"; exit 2; }
 B=${OUT:-${RESEARCH_RUN_DIR:-/tmp/one-linear}/out}; mkdir -p $B
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 echo "SCOPE one template, no wired port between units; activations computed, not served; challenger local; the weight is the prover's committed value; nothing ties it to the model"
@@ -32,7 +33,7 @@ print(s["shape"] + s["unaligned"])' $B/scan.log 2>/dev/null)
 ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/one_linear.py levels ) > $B/levels.txt 2>&1
 LV=$?; cat $B/levels.txt
 audit() {  # name, rule, window flags, audit flags
-  OUT=$B/$1 AUDIT_RULE=$2 WINDOW_ARGS="benchmarks/one_stage/one_linear.py window --rule $2 $3" AUDIT_FLAGS="$4" \
+  OUT=$B/$1 AUDIT_RULE=$2 WINDOW_ARGS="benchmarks/one_stage/one_linear.py window --rule $2 $3" AUDIT_FLAGS="--delta $DELTA $4" \
     bash benchmarks/one_stage/served_door_prove.sh > $B/$1.log 2>&1
   local r=$?; echo "$1 rc $r"; grep -h '^audit rc\|^STEP\|^VERDICT\|^DRAW\|^A5\|^REFUSED\|^UNLOWERED' $B/$1.log | cut -c1-2000
   python3 - "$B/$1/summary.json" <<'EOF'
@@ -67,12 +68,12 @@ def walk(x):
             yield from walk(v)
 print(json.dumps(next(walk(json.load(open(sys.argv[1]))), "")))' "$B/honest/summary.json" 2>/dev/null)
 [ "${RP:-\"\"}" = '""' ] || echo "REFUSED the accept rests on a period check that is not run: rests_on_period_check $RP"
-DELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("delta"))' "$B/honest/summary.json" 2>/dev/null)
+SDELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("delta"))' "$B/honest/summary.json" 2>/dev/null)
 OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && [ "$ML" = ok ] \
-  && [ "${RP:-\"\"}" = '""' ] && OK=0
+  && [ "${RP:-\"\"}" = '""' ] && python3 -c 'import sys; sys.exit(float(sys.argv[1]) != float(sys.argv[2]))' "$SDELTA" "$DELTA" 2>/dev/null && OK=0
 if [ $OK = 0 ]; then
   echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; Lean's members check ran and accepted the members' files and sessions (members_lean ran true, ok true)"
-  echo "ACCEPT Lean accepted the members at the δ it was handed: δ = $DELTA, the honest audit's summary.json delta, set by a5.py's --delta (its default; served_door_prove.sh passes none)"
+  echo "ACCEPT Lean accepted the members at the δ it was handed: δ = $DELTA, passed by the benchmark's command, not yet chosen for the gate (the honest audit's summary.json delta: $SDELTA)"
   echo "ACCEPT the members' files and sessions were checked by Lean against a registration and coins the Python audit handed it; not a statement about a served run"
   echo "ACCEPT the proofs are about the block circuits Lean's lowering derives from the registered circuit; each block is single-range (no block spans two root nodes)"
   echo "ACCEPT no proved statement is about the file the door writes; every accept at the door rests on the lift preserving evaluation, by reading and by the fuzzer"
