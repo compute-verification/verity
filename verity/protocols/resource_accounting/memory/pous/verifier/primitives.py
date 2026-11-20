@@ -21,7 +21,7 @@ A node with `j` parents costs `j + 1` calls of `Π₂`.  A chaining value `h_j` 
 parent, since walking back needs the dropped `r_j`; anything that reveals a parent and also finishes the row is a whole
 call state of `2m + 512` bits, more than the two labels it yields.
 
-**Broken modes, kept to replay their attacks** (`tests/test_pous_two_for_one.py`): `XorSponge`, the sponge of the
+**Broken modes, kept for the GPU twin's mode check and the primitives' tests:** `XorSponge`, the sponge of the
 first instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
 `Π⁻¹` recovers an absorbed parent (`lean/submissions/sponge-dense`, `dense_two_labels_from_one_state`); and
 `MiyaguchiPreneel` (`s_j = Π(x_j) ⊕ x_j`, `x_j = s_{j−1} ⊕ (B_j ‖ 0)`), whose pre-image `x_j` is a checkpoint that is
