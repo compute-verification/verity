@@ -853,6 +853,30 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     assert v.ok and v.rests_on_period_check == ()
 
 
+def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
+    """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
+    member whose units meet a range reading it and that carries no registered file is refused by name; with every
+    reader's file it passes; a member reading only its own run Input, no file, passes."""
+    from verity.protocols.proofs.spot.verifier.one_stage import members as M
+
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        (k,) = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
+        n = P.units(shared, q)
+        ms = {f"m{u}": {"units": [(u, u + 1)], "registered": None if u == n - 1 else []} for u in range(n)}
+        with pytest.raises(M._Refused) as e:
+            M._held_read(ms, {"query": q, "tied": ["t"]}, shared)
+        assert str(e.value) == M.held_read_why(f"m{n - 1}", k)
+        M._held_read({u: {**m, "registered": []} for u, m in ms.items()}, {"query": q, "tied": ["t"]}, shared)
+    prog, q, _ = _registration(6)
+    own = {f"m{u}": {"units": [(u, u + 1)], "registered": None} for u in range(6)}
+    M._held_read(own, {"query": q}, prog)
+    (k,) = [k for k, node in enumerate(prog.root.body.nodes) if is_input(node.fn)]
+    with pytest.raises(M._Refused) as e:
+        M._held_read({"m0": {"units": [(0, 6)], "registered": None}}, {"query": q, "registered": {"x": 12}}, prog)
+    assert str(e.value) == M.held_read_why("m0", k)
+
+
 def test_registration_check_refuses_a_query_core_does_not_digest():
     prog, q, rec = _registration(6)
     v = R.check(rec, prog, {**q, "width_rule": None}, SAMPLING_DESIGN, SCHEME, _ports(prog, q, 6), leaf_layer="ee" * 64)
