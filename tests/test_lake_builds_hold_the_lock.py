@@ -41,8 +41,7 @@ ALLOWED: dict[str, str] = {
         "test_lean_verify_members.py", "test_lean_width_refusals.py", "test_lean_zk_mask.py",
         "test_lean_zk.py", "test_pouw_rows.py", "test_read_tmpl.py", "test_read_tmpl_stager.py", "test_rec_algebra.py",
         "test_stream_zk_server.py",
-        "test_universal_same_shape.py", "test_wired_links.py", "test_zk_server_agreement.py", "test_zk_server_contract.py",
-        "test_zk_server_frame.py")},
+        "test_universal_same_shape.py", "test_zk_server_contract.py", "test_zk_server_frame.py")},
 }
 
 
