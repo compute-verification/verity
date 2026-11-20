@@ -11,12 +11,11 @@ import json
 from typing import Any
 
 import pytest
-
-from tests.check import test_weights_of_record as TW
-from tests.check.test_absent_commit_fields import ABSENT, put
-from tests.check.test_absent_link_fields import left_out
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.program import model as analytic
+
+from tests.check import test_weights_of_record as TW
+from tests.check.test_absent_commit_fields import ABSENT, left_out, put
 
 checkpoint = TW.checkpoint      # the tiny checkpoint and its manifest, as a fixture of this module too
 

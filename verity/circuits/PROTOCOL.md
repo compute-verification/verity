@@ -204,8 +204,10 @@ Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x
 
 A node has exactly the keys of its form. Its argument sequences are body-scoped (§3): `p` names the body's parameters and `n`
 the body's nodes. Writers name only nodes before the reading node (`defs.Builder` cannot do otherwise), and the canonical layout
-relies on it (§6). A descriptor whose node names itself or a later node still decodes, so that checkers can name the defect;
-every partition query refuses it (`partition_object.order_violation`, §8). The body's `ret` may name any node.
+relies on it (§6). The decoder refuses a node's argument naming the node itself or a later one, after the argument's
+reference count, by the text `forward-reference: node K reads node I, which is not before it; a node reads the body's
+parameters and earlier nodes only` (`codec.forward_refusal`, the Lean decoder's `forwardRefusal`); every partition query
+refuses such a body too (`partition_object.order_violation`, §8). The body's `ret` may name any node.
 
 - **primitive**: the callee is a primitive; the arguments are its parameters, in order; `out` is its return type.
 - **call**: the callee is a composite; likewise, with `out` its `ret_type`.
@@ -220,8 +222,8 @@ Every leaf a node's argument or the body's `ret` names has the width its type gi
 width it was committed with. A sequence typed `Array<32, Value<8>>` whose references name an s32 word (a `Value<32>`) is a
 silent reinterpretation, a limb split no gate computes, and is refused (`E_REINTERPRET`, `defs.Builder.finish`). A runtime
 word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12). The check
-reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node): a node that names itself
-or a later node is the order violation above, which decodes whatever the widths, so that its checkers name it.
+reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node), which are all a decoded
+node's arguments name (the order refusal above).
 
 An input node (§5.2) of N leaves of width W is the one exception: a position of width w, where w divides W, reads it
 *recut*, with q = W / w. Its references index the node's N·q leaves of width w, and leaf j of them is bits
@@ -654,8 +656,8 @@ changing any of them is a new version of the query.
 `WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/verity/circuits/qword_vectors.json`, with vectors for every step of the algorithm, every
 refusal and a seeded random corpus.
 
-Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39, and `evaluate` refuses it; a
-Call whose gate reads a later gate of the Call decodes, and `evaluate` and the `CallGraph` backstop refuse it); `qword_vectors.json`
+Vectors: `forward_reference` (the decoder's refusal of a root node reading a later node and of a Call's node reading a later
+node of the Call); `qword_vectors.json`
 → `order_refusals` for `verify`; `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
 beside the same Call over a 4-leaf primitive (the narrow Call has the recompute pair `[2, 1]` and 5 inputs; the wide one has
 none and 1).
