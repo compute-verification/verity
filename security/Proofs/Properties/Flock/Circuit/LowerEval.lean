@@ -1386,8 +1386,9 @@ theorem prefix_sums (l : List ℕ) : ∀ (acc : Array ℕ), 0 < acc.size →
 theorem bitAtSpec : BitAtSpec := by
   intro t j hj
   unfold Flock.Lift.bitAt
-  split
-  · rename_i w hw
+  cases hw : Widths.homo t with
+  | some w =>
+    simp only [hw]
     have hall := widths_homo_all hw
     have hjw : t.widths[j]! = w := by
       rw [getElem!_pos t.widths j hj]
@@ -1398,7 +1399,9 @@ theorem bitAtSpec : BitAtSpec := by
       have : ∀ x ∈ l.take j, x = w := fun x hx => hl x (List.mem_of_mem_take hx)
       rw [List.sum_eq_card_nsmul _ w this, smul_eq_mul]
     rw [hs _ hall, List.length_take, Array.length_toList, Nat.min_eq_left (Nat.le_of_lt hj)]
-  · have hp := prefix_sums t.widths.toList #[0] (by simp)
+  | none =>
+    simp only [hw]
+    have hp := prefix_sums t.widths.toList #[0] (by simp)
     rw [Array.foldl_toList] at hp
     congr 1
     rw [getElem!_def, ← Array.getElem?_toList, hp]
@@ -1406,7 +1409,7 @@ theorem bitAtSpec : BitAtSpec := by
     | zero => simp
     | succ j =>
       have hj' : j < t.widths.toList.length := by simp; omega
-      simp [List.getElem?_append_right, hj']
+      simp [List.getElem?_append_right, hj', Array.back!]
 
 end Flock.Chain
 
