@@ -1025,9 +1025,10 @@ structure Cl where
   deriving Inhabited
 
 /-- One segment of `freshWidth`'s: none when it is no segment of copies or names no gate, its copies' intervals when
-copies may overlap or go backwards, else one frame. -/
+it is rowed or copies may overlap or go backwards, else one frame. -/
 def copiesStep (acc : Array (Nat × Nat × Nat) × Array Cl) (s : Seg) : Array (Nat × Nat × Nat) × Array Cl :=
   if s.reps ≤ 1 then acc else
+  if s.rowed then (acc.1 ++ (Array.range s.reps).flatMap fun m => gateIvs (s.copy m), acc.2) else
   let r := gateIvs s.ps
   if r.isEmpty then acc else
   let lo := r.foldl (fun m x => min m x.1) r[0]!.1
