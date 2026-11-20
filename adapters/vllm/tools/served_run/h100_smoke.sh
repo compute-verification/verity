@@ -4,7 +4,7 @@
 #   window's close planning its class circuit and leaving the card's part of its record (the acquired units' strings,
 #   made where they are committed, under the window's key: close_record.Record.handoff) and, with RECORD_IN_LEASE=1, the
 #   record too (RECORD=0: the plan alone); then, the lease released, on this host's processors: opens the sealed bundle
-#   against its record, makes the window's record from the handoff (close_record's finish: the record, the close with the
+#   against its record, makes the window's record from the handoff (verity-vllm close-record: the record, the close with the
 #   card's strings, the write), and commits the fixed load's window as its class circuit's units
 #   (`benchmarks/one_stage/window_commit.py window-commit`, as served_verdicts.sh's window_commit() calls it).
 # Does NOT show: an audit, a proof, or a traced Build on the H100.
@@ -104,7 +104,7 @@ SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT"
   --protocols-config "$ADMIT")
 LEASE=(gpu-lease 1 --wait --max-min "$LEASE_MIN" --mem-gb "$LEASE_MEM_GB" -- bash "$TREE/$SELF" card)
 WREG=$D/weights_registration.json DREG=$D/deployment-registration.json VW=$SR/window
-FIN=(-m verity_vllm.program.predict.close_record --class "$CLASS" --sampling-design "$LAW" --checkpoint-dir "$SNAP")
+FIN=(-m verity_vllm.pipeline.cli close-record --class "$CLASS" --sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "$DEVELOPMENT_DESIGN" != 1 ] || FIN+=(--development-design)
 window_commit_of() {  # WC: window $1's commit as its class circuit's units, served_verdicts.sh's window_commit() command
   WC=(benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" --window "$1" --row-dir "$D/windows/w$1"
@@ -131,7 +131,7 @@ r = p.get("record") or {"error": "no record"}
 if "pending" in r:
     r = json.loads(fin.read_text()) if fin.is_file() and fin.stat().st_size else {"error": f"not made after the lease ({fin} absent)"}
 print("WHERE: the serve, the plan and the card's strings on the card under the lease; the record, the close and the write "
-      + ("at the serve's close, under the lease" if in_lease else "after the lease, on this host's processors (close_record's finish)"))
+      + ("at the serve's close, under the lease" if in_lease else "after the lease, on this host's processors (verity-vllm close-record)"))
 if "error" in r:
     print(f"WINDOW-STRINGS window {k}: none\nWINDOW-RECORD window {k}: none, {str(r['error'])[:200]}")
     sys.exit(0)
@@ -148,8 +148,8 @@ vs = "no window-commit to compare" if wc is None else (
 print(f"WINDOW-RECORD window {k} at the serve's close: members {r['members']}, population {r['population']} ({vs}); "
       f"seconds {json.dumps(r['seconds'])}")
 if d := r.get("design", {}).get("development"):
-    print(f"a development sampling design is registered: an accept of it establishes at most {d['incorrect_at_most']} incorrect "
-          f"of the window's {d['of']} proof blocks at δ {d['delta']} (ε {d['epsilon']:.3g}), not the rate of record")
+    print(f"a development sampling design is registered: {d['draws']} draws of the window's {d['of']} proof blocks, "
+          f"not the rate of record")
 EOF
 }
 # SR holds the keys and salts, and $OUT/window the circuit's description, which is the auditor's secret, with the

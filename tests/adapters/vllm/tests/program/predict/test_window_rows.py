@@ -893,7 +893,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
             t = ins[0].view("<u4").reshape(-1)
             for u in range(n):
                 path = np.ascontiguousarray(ins[5][u]).view("<u8").astype(">u8").tobytes()
-                h, ok = E.reference(256, int(t[u]), *(np.ascontiguousarray(ins[g][u]).view("<u8").astype(">u8").tobytes()
+                h, ok = E.reference_opening(256, int(t[u]), *(np.ascontiguousarray(ins[g][u]).view("<u8").astype(">u8").tobytes()
                                                       for g in (1, 2)), ins[3][u].tolist(),
                                     np.ascontiguousarray(ins[4][u]).view("<u8").astype(">u8").tobytes(),
                                     [path[k:k + 64] for k in range(0, len(path), 64)])

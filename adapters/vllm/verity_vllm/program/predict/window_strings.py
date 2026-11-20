@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import os
-import random
 import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -15,6 +14,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
+from verity.commitments import randomness as RND
 from verity.commitments.cuda.salt_stream.engine import LEAF_BYTES, fill
 from verity.commitments.rowleaf import (
     SCHEMA_HM96_SHA512_ROW_V2,
@@ -30,6 +30,12 @@ __all__ = ["HANDOFF", "Device", "HostTwin", "acquired", "block_of", "card_ports"
 INST = hm96.SHA512
 KEY = INST.default_key
 BC_BYTES = 128
+#: the twin's sample of ports, under a key drawn from the OS for the one comparison
+TWIN_SAMPLE_DOMAIN = "verity/vllm/twin-sample/v1"
+
+
+def _sample[T](items: Sequence[T], k: int) -> list[T]:
+    return [items[i] for i in RND.derive(os.urandom(64), TWIN_SAMPLE_DOMAIN, {}).subset(min(k, len(items)), len(items))]
 
 
 def _stride(lb: int) -> int:
@@ -186,7 +192,7 @@ def strings_of(win: Any, key: Any, hasher: Any, plan: Any = None, block: Callabl
     got = {"ports": len(strings), "where": type(hasher).__name__, **got}
     if twin is not None and sample:
         fed = sorted(k for k in staged if k in lrs)
-        pick = random.Random(os.urandom(16)).sample(fed, min(sample, len(fed)))
+        pick = _sample(fed, sample)
         t0 = time.perf_counter()
         host = {k: {u: hasher.host(r) for u, r in staged[k].items()} for k in pick}
         again, _ = leaf_strings({k: lrs[k] for k in pick}, key, twin, host)
@@ -299,7 +305,7 @@ def handed_strings(win: Any, key: Any, twin: HostTwin, card: Mapping, *, sample:
         got["acquired"], got["host"] = got["acquired"] + len(at), got["host"] + len(rest)
         out[k] = (ys.tobytes(), bc.tobytes())
     fed = sorted(k for k in card if k in lrs)
-    pick = random.Random(os.urandom(16)).sample(fed, min(sample, len(fed)))
+    pick = _sample(fed, sample)
     t0 = time.perf_counter()
     for k in pick:
         (t, p, lb), units, rows, bc = card[k]
