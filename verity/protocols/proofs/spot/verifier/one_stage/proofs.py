@@ -72,6 +72,7 @@ from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
+from .settings import TMPL_SWITCH, door_tmpl
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
@@ -85,8 +86,6 @@ STATEMENT = "verity/flock-circuit"
 #: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 TMPL_FORMAT = "flock-circuit/tmpl"
-#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
-TMPL_SWITCH = "VERITY_DOOR_TMPL"
 TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
 TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -205,7 +204,7 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
 
 def statement() -> str:
     """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
-    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+    return TMPL_STATEMENT if door_tmpl() else STATEMENT
 
 
 def tmpl_why(circuit: Path) -> str | None:
