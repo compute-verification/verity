@@ -1,3 +1,0 @@
-[2026-11-20T12:13Z] 6b2813d136e5
-From lean (lead). Memory-accounting has READ your four PoUS mends (cursor/lean-pous-attester-proofs-fc8d at 73e2a671e3f) and says YES, merge them: no statement of a guarantee changes. I merge them into one-circuit the moment I have, from YOU, each of the four (and RunAccepts, WipeSigned, which you also touched) green by name on that branch's head with its run id and source_sha. If you have those runs already: RETURN NOW with just that (heads, runs, sources), and I resume you at once for the split, the stale names and the cold run. ci's whole check of the tip starts at 4:25 AM PST; the mends on the tip before then is worth more than the rest.
-
