@@ -533,6 +533,21 @@ def test_a_branchs_commit_is_published_under_its_own_prefix_and_only_when_on_tha
         C.prefix_of("../main")
 
 
+def test_a_branch_fetched_under_main_s_name_is_published_with_the_ref_named(s3, tmp_path):
+    """`vy-lean-sandbox checkout --main refs/heads/one-circuit` fetches the branch into `refs/remotes/origin/main`, the ref
+    `run_daily.py` passes as `--main`."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    stage(tmp_path)
+    exes(tmp_path)
+    args = (r, rev, tmp_path / "out", ["pkg"], client(url), lambda m: None)
+    with pytest.raises(C.CacheError, match="not on origin/one-circuit"):
+        C.publish(*args, plat=PLAT, branch="one-circuit")
+    assert C.publish(*args, main="refs/remotes/origin/main", plat=PLAT, branch="one-circuit") == 0
+    assert C.record_key(C.identity(r, "pkg", PLAT), rev, C.prefix_of("one-circuit")) in b.objects
+    assert not [k for k in b.objects if k.startswith(C.TOP)]
+
+
 def published(url: str, r: Path, tmp: Path, rev: str, prefix: str = C.TOP, files: dict[str, bytes] | None = None,
               pkg: str = "pkg") -> str:
     """The key of ``pkg``'s record of ``rev`` under ``prefix``, published with `stage`'s files and the executables
