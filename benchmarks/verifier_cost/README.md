@@ -175,22 +175,6 @@ research run --as proofs --project verity --on auto --source . --cwd clone --mem
   bash benchmarks/verifier_cost/members_files.sh 1 16 150
 ~~~
 
-`flock_tmpl.sh K...` is the H1 tile proof block in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py`
-builds the 4×8 tile's statement circuit at each contraction K (`h1unit.Shape`), `python -m verity_flock.tmpl` writes its proof block's templated form (Definitions read off the flat proof block's
-repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
-against the circuit's flat proof block byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),
-unit-K.tmpl, read-K.jsonl and diff-K.jsonl (the PHASE lines) and each step's `/usr/bin/time -v`.
-
-~~~sh
-research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
-  bash benchmarks/verifier_cost/flock_tmpl.sh 256 4096
-~~~
-
-`flock_unroll.sh K...` times what the templated statement's read costs against the flat one's on the same proof block: `Tmpl.unrollAt` at
-`MODE` (default `iv/hybrid/4`) whole and a stage at a time (`rows`, `posMap`, `Net.ofRows`, `invOf`, `posOk`, `placed`,
-`Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat proof block. Per K, `$OUT` gets unit-K.tmpl,
-unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
-
 `flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
 members in turn (`verify-members`, which reads the run's program once and hands each member the circuit file the member
 before it read) against a process a member (`verify`). Per spec, `one_stage/m1_unit.py` stages, proves and verifies one
