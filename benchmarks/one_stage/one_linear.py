@@ -7,12 +7,15 @@ and every output the circuit's own evaluator's (`evaluate_batch`, ``reference``)
 
     one_linear.py window --out DIR --rule RULE [--forge all|U] [--weights registered|committed] [--cache DIR]
     one_linear.py levels
+    one_linear.py c --out DIR
 
 ``window``: the window committed and written for ``records_audit.py audit`` (as `served_door.py window` writes the staged
 one), its sampling design the one ``RULE`` names over its proof blocks; ``--forge all`` changes one output word of every
 block's first unit before the commitment (so every drawn block holds a forged unit), ``--forge U`` of unit U alone;
 ``--weights committed``: ``w`` a run input each unit commits, not the registered read.
-``levels``: the door's refusal of this circuit's partition at two levels, before any coin (`one_circuit.block`)."""
+``levels``: the door's refusal of this circuit's partition at two levels, before any coin (`one_circuit.block`).
+``c``: the window's C (``--weights committed``'s) as ``DIR/C.json``, its descriptor bytes, and ``DIR/query.json``, its
+template query (`door_walls.py census --circuit DIR`, `word_shape_scan.py DIR/C.json`)."""
 from __future__ import annotations
 
 import argparse
@@ -26,7 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
-MODEL, REVISION = "HuggingFaceTB/SmolLM2-135M", "main"
+MODEL, REVISION = "HuggingFaceTB/SmolLM2-135M", "93efa2f097d58c2a74874c7e644dbc9b0cee75a2"
 WEIGHT, EMBED, NORM, EPS = ("model.layers.0.self_attn.q_proj.weight", "model.embed_tokens.weight",
                             "model.layers.0.input_layernorm.weight", 1e-5)
 TOKENS = (504, 3575, 282, 4649)
@@ -47,14 +50,15 @@ def gemm():
 
 def circuit(registered: bool = True):
     """The registered circuit: ``UNITS`` units of one template in (token, slice) order, ``x`` external, ``w`` the registered
-    weight's rows, unit (t, j) reading words [j·N·K, (j + 1)·N·K); with ``registered`` false, ``w`` external too."""
+    weight's rows, unit (t, j) reading words [j·N·K, (j + 1)·N·K); with ``registered`` false, ``w`` external too, and
+    ``x`` and ``w`` each committed once, in its run input node's tree (`interface.run_input_reads`)."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.periods import interface as I
 
     g = gemm()
     gid = descriptor_id(g)
     if not registered:
-        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"))
+        return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x", f"{gid}/w"), run_inputs=True)
     reg = I.Registered({"weights": E * K}, reads=(I.Read(gid, "w", "weights", 0, (len(TOKENS), SLICES), 0, (0, N * K)),))
     return I.Circuit("one_linear", ((g, UNITS),), external=(f"{gid}/x",), registered=reg)
 
@@ -186,6 +190,19 @@ def levels(_a: argparse.Namespace) -> int:
     return 1
 
 
+def c(a: argparse.Namespace) -> int:
+    from verity.circuits.codec import descriptor_chunks, program_digest
+
+    program, query = circuit(registered=False).program()
+    desc, out = b"".join(descriptor_chunks(program)), Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "C.json").write_bytes(desc)
+    (out / "query.json").write_text(json.dumps(query))
+    print("C " + json.dumps({"sha256": hashlib.sha256(desc).hexdigest(), "bytes": len(desc),
+                             "program_sha512": program_digest(program)}), flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -196,8 +213,9 @@ def main() -> int:
     w.add_argument("--weights", choices=("registered", "committed"), default="registered")
     w.add_argument("--cache", default=str(Path.home() / ".cache/verity-one-linear"))
     sub.add_parser("levels")
+    sub.add_parser("c").add_argument("--out", required=True)
     a = ap.parse_args()
-    return {"window": window, "levels": levels}[a.cmd](a)
+    return {"window": window, "levels": levels, "c": c}[a.cmd](a)
 
 
 if __name__ == "__main__":

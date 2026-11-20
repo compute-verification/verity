@@ -414,12 +414,13 @@ class Week:
                                                         DR.derive(S.program, S.query, DESIGN, None), S.population))
                 proved = DR.proved(d)
                 e = {"draw": d, "instances": len(proved), "proved_units": proved,
-                     "receipt": R.receipt(rec, "v", received=RECEIVED), "statement": {}}
+                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": sorted(d["units"]),
+                     "session_roots": {r["port"]: r["root"] for r in rec["roots"]}, "statement": {}}
             else:
                 logged(family, lambda: coins(rng.randint(1, 64)))
-                e = {"draw": {}, "instances": 0, "proved_units": [], "receipt": {}, "statement": {"stub": stub}}
-            e.update(coins={"segment": segment.to_json()}, proofs={"sessions": []}, served=None, session_roots=None,
-                     sessions=[])
+                e = {"draw": {}, "instances": 0, "proved_units": [], "receipt": {}, "served": None,
+                     "session_roots": None, "statement": {"stub": stub}}
+            e.update(coins={"segment": segment.to_json()}, proofs={"sessions": []}, sessions=[])
             public = _shared(_public_of(rec)) if name == "shared-rows" else _public_of(rec)
             if name == "no-public":
                 public += b", in no blob"

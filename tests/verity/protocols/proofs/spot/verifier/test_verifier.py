@@ -185,7 +185,7 @@ def test_the_per_member_forms_link_points_are_held_by_both():
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
     the Lean compiles on a hash map of the docket's roots, against the Python's whole: the sessions' roots all
-    right, one wrong, one at a port the docket doesn't name, and a port registered twice, read at its last root;
+    right, none (no refusal of the record's), one wrong, one at a port the docket doesn't name, and a port registered twice, read at its last root;
     and verdicts reporting reads of the docket's own port and of a value it doesn't name, of which the value's is
     dropped and the port's taken at that port's root (`Record.lessOwnReads`) and kept, refused, at another."""
     _, reg, draw = _drawn()
@@ -196,7 +196,7 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
     reads = lambda root: _lean(registered={"0": {"value": x, "root": root},  # noqa: E731
                                            "1": {"value": "elsewhere", "root": "00" * 64}})
     for docket, given, verdicts, failed in (
-            (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
+            (rec, roots, _lean(), []), (rec, {}, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
             (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
             (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
             (rec, roots, reads(roots[x]), []), (rec, roots, reads("77" * 64), ["registered"])):
