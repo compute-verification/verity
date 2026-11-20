@@ -1043,7 +1043,7 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
 
 
 def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any]) -> dict:
-    """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
+    """That the advice was fixed before the coins, checked rather than assumed, as `pouw.window.draw_root` checks the credit bits:
     the digest of the docket the verifier holds the opening to (`registration.digest`, which covers the window's
     ``compiler`` and ``advice`` root) must be the one the sample's receipt names, the receipt the stream wrote when it received the
     docket and before its select read any coin (the challenger's coins are committed to that digest before any is

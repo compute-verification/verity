@@ -381,7 +381,7 @@ def test_the_v2_live_program_is_one_unit_a_round_that_reads_the_caps(T, S):
 
 def test_a_v2_rounds_live_file_reads_the_known_public_caps():
     """With max_tokens, ``live@<s>`` also reads row i of the known ``<prefix>caps`` at each ``cap_<i>``: T rows, leaf q the
-    public max_tokens of request q and 0 past them, under `core_check.public_row_salt` of the open root and q; other
+    public max_tokens of request q and 0 past them, under `window.public_row_salt` of the open root and q; other
     max_tokens give another root."""
     T, S, s = 4, 3, 1
     prog, window, session, regs = _window(T, S, random.Random(6))
