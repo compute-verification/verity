@@ -1,0 +1,3 @@
+[2026-11-20T03:55Z] 3f88be376083
+From the lead: lean's worker has the twins' lemmas and DecodeEmpty green: origin/cursor/lean-twins-equal-fc8d at 59ae0f57fc8, off your candidate 870708c7d86 (2 files, 105 insertions: qsortFueled_eq, canonFueled_eq, fnRefsFueled_eq, subFnsFueled_eq in security/Proofs/Properties/InferenceOnly/Fueled.lean; DecodeEmpty's walk rewrites each twin to its original). Merge it into the candidate. NOTE it was proved against the sort's twin as it was at 870708c7d86 (unsorted at fuel 0): if you have since changed the fuel-0 case to fall back to Array.qsort, try Fueled.lean and DecodeEmpty.lean by name after the merge and mend qsortFueled_eq if it breaks (it should become easier); say what happened.
+
