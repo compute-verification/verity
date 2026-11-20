@@ -250,6 +250,8 @@ if [ "${1:-}" = card ]; then  # under the lease: the wipe where the application 
     sleep 5
   done
   [ "$listened" = 1 ] || { say "SMOKE FAILED serve: the server did not listen on port $PORT within 10 minutes (tail $SR/serve.log)"; exit 1; }
+  "$PY" adapters/vllm/tools/served_run/inputs.py tokenize --port "$PORT" --dataset "$DATASET" > "$SR/tokenize.log" 2>&1 \
+    || echo "TOKENIZE FAILED ($SR/tokenize.log): $(tail -1 "$SR/tokenize.log")" >> "$SR/tokenize.log"
   "$PY" "${LOAD[@]}" > "$SR/load.log" 2>&1 || { say "SMOKE FAILED request ($SR/load.log)"; exit 1; }
   kill -INT "$SERVER"; s=0; wait "$SERVER" || s=$?; SERVER=
   [ "$s" = 0 ] || { say "SMOKE FAILED stop: the server's exit ($SR/serve.log)"; exit 1; }
@@ -317,5 +319,6 @@ open(f"{sr}/registration.digest", "w").write(DD.digest(json.load(open(reg))) + "
 EOF
 )" || { say "$said; SMOKE FAILED counts: no WINDOW-ROWS line or registration ($SR/window-commit.err)"; exit 1; }
 said+=$'\n'"$(plan_lines)"
+said+=$'\n'"$(grep '^TOKENIZE' "$SR/tokenize.log" | tail -1)"
 said+=$'\n'"SMOKE DONE window $K: served, planned, its strings made on the card and its record written, its circuit registered by the prover; no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε; the circuit digest is kept private and NO public value fixes it before the coins"
 say "$said"
