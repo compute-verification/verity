@@ -1579,6 +1579,88 @@ theorem unit_gate_at {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.root
   obtain ⟨rfl, rfl, rfl⟩ := h
   exact ⟨rfl, rfl, hops⟩
 
+/-- A step of resolution to another reference keeps the gate it resolves to. -/
+theorem resolve_step_up {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {sc sc' : Scope} {r r' : Ref}
+    {g : ℕ} (hs : resolveStep P (sc, r) = .ok (.inr (sc', r'))) (h : resolve P sc r = .ok g) :
+    resolve P sc' r' = .ok g := by
+  rw [Flock.Program.resolve_eq hrc] at h ⊢
+  obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 := ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
+  rw [hn, Flock.Steps.run.eq_2] at h
+  rw [hn]
+  simp only [hs, bind, Except.bind] at h
+  exact Flock.Steps.run_succ h
+
+/-- A step of resolution that ends at a gate is the resolution. -/
+theorem resolve_step_done {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {sc : Scope} {r : Ref} {g : ℕ}
+    (hs : resolveStep P (sc, r) = .ok (.inl g)) : resolve P sc r = .ok g := by
+  rw [Flock.Program.resolve_eq hrc]
+  obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 := ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
+  rw [hn, Flock.Steps.run.eq_2]
+  simp only [hs, bind, Except.bind]
+  rfl
+
+/-- **A unit's parameter leaf** resolves to what its root node's argument reference does: leaf `j` of argument `i` of
+member `m`, the member's reference for a batch and the sequence's for a call. -/
+theorem unit_param_resolve {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {k m i j g : ℕ}
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    (h : resolve P (P.child P.rootScope k m) ⟨true, i, j⟩ = .ok g) :
+    resolve P P.rootScope (OperandWidths.refOf ((P.defs[P.root]!).body.nodes[k]!) m i j) = .ok g := by
+  refine resolve_step_up hrc ?_ h
+  rcases hf with hf | hf
+  · have hb : (((P.defs[P.root]!).body.nodes[k]!).form == .batch) = false := by rw [hf]; rfl
+    simp only [OperandWidths.refOf, hb, Bool.false_eq_true, ite_false]
+    exact Resolve.rs_up P P.rootScope _ _ k m i j (Or.inr hf)
+  · have hb : (((P.defs[P.root]!).body.nodes[k]!).form == .batch) = true := by rw [hf]; rfl
+    simp only [OperandWidths.refOf, hb, ite_true]
+    exact Resolve.rs_up_batch P P.rootScope _ _ k m i j hf
+
+/-- A leaf of a primitive node resolves to the node's gate. -/
+theorem resolve_prim_node {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) {k j : ℕ}
+    (hf : ((P.defs[sc.d]!).body.nodes[k]!).form = .prim) :
+    resolve P sc ⟨false, k, j⟩ = .ok (sc.off + (P.defs[sc.d]!).body.offsets[k]!) :=
+  resolve_step_done hrc (Resolve.rs_prim P sc k j hf)
+
+/-- Leaf `j` of a batch node of a primitive of one return leaf resolves to the gate of member `j`. -/
+theorem resolve_batch_prim {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) (sc : Scope) {k j : ℕ}
+    (hf : ((P.defs[sc.d]!).body.nodes[k]!).form = .batch)
+    (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
+    (h1 : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).outLeaves = 1) :
+    resolve P sc ⟨false, k, j⟩ = .ok (sc.off + (P.defs[sc.d]!).body.offsets[k]! + j) := by
+  refine resolve_step_done hrc ?_
+  rw [Resolve.rs_batch P sc k j hf]
+  simp only [hp, h1, Nat.div_one, ite_true]
+
+/-- **A unit's return leaf** resolves to what leaf `l` of its Definition's return does in the unit's activation. -/
+theorem unit_ret_resolve {P : Prog} (hrc : (P.defs[P.root]!).body.recut = #[]) {k m l q : ℕ}
+    (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    (hf : (((P.defs[P.root]!).body.nodes[k]!).form = .call ∧ m = 0) ∨
+      ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    (hl : l < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves)
+    (h : resolve P P.rootScope
+      ⟨false, k, m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l⟩ = .ok q) :
+    resolve P (P.child P.rootScope k m) ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).body.ret.get l) =
+      .ok q := by
+  refine resolve_step_up hrc ?_ h
+  rcases hf with ⟨hf, rfl⟩ | hf
+  · rw [Resolve.rs_call P P.rootScope k _ hf, Nat.zero_mul, Nat.zero_add]
+    simp only [Flock.Program.Prog.child, Nat.zero_mul, Nat.add_zero]
+    try rfl
+  · have hdiv : (m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l) /
+        (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves = m := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hl, Nat.zero_add]
+    have hmod : (m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l) %
+        (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves = l := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hl]
+    have hc' : (P.defs[((P.defs[P.rootScope.d]!).body.nodes[k]!).fn]!).prim = false := hc
+    have hdiv' : (m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l) /
+        (P.defs[((P.defs[P.rootScope.d]!).body.nodes[k]!).fn]!).outLeaves = m := hdiv
+    have hmod' : (m * (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).outLeaves + l) %
+        (P.defs[((P.defs[P.rootScope.d]!).body.nodes[k]!).fn]!).outLeaves = l := hmod
+    rw [Resolve.rs_batch P P.rootScope k _ hf]
+    simp only [hc', Bool.false_eq_true, ite_false]
+    rw [hdiv', hmod']
+    rfl
+
 end UnitWidthsProof
 
 /-- **`UnitWidths`** holds. -/
