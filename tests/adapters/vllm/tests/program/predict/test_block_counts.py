@@ -44,7 +44,7 @@ REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/workload_cla
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"
-ON_DEMAND = "LEnable_v1"
+ON_DEMAND = "GatherBf16x64_v1"
 ALONE = """
 import json, sys
 from verity_vllm.program.predict import block_counts as BC

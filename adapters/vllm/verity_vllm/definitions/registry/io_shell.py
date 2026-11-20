@@ -43,14 +43,14 @@ class's whatever the prompt's length. It carries the slot from position to posit
 first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot[0] − 1`` (mod 2^32) is non-negative, which is
 ``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
 carry chain is the test. Each outputs its token and the next position's slot. A window's slots take their first position's
-from the scan state row (`boolean_io_shell.ScanSlots_v4`), so a window places only the later positions'.
+from the scan state row (`boolean_io_shell.ScanSlots_v5`), so a window places only the later positions'.
 
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
 is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
 
 The network attester's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
-outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v4{NS, NP, IDB, K0, K, OCC, LP, MAX,
+outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v5{NS, NP, IDB, K0, K, OCC, LP, MAX,
 IDS}` is one lane's read (``OCC``, ``LP``, ``MAX`` and ``IDS`` the bit offsets of its occupancy word, its prompt's length,
 its ``max_tokens`` and its ids; prompt position p's id the IDB bits at ``IDS + IDB·position(p)`` zero-extended,
 `position`: K0 ids in a request's first cell, K in each later one): its first position's token and the slot it carries
@@ -449,7 +449,7 @@ def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC: i
 
 def scan_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC: int, LP: int, MAX: int,
                    IDS: int) -> tuple[int, list[int], int, list[int]]:
-    """`boolean_io_shell.ScanSlots_v4`'s function on the row's u16 words: the lane's (token, slot, occupancy word, head),
+    """`boolean_io_shell.ScanSlots_v5`'s function on the row's u16 words: the lane's (token, slot, occupancy word, head),
     its first position's `TokenFeed_v1` on its row (`slots_reference`), as i32 encodings."""
     row, head = slots_reference(state, NP, IDB, K0, K, OCC, LP, MAX, IDS)
     tok, slot = feed_reference(row[1:], None, NP)

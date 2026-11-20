@@ -5,6 +5,7 @@ public import Proofs.Flock.RecGeneric.Plans
 public import Proofs.Flock.RecGeneric.Outer
 public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.Recursive.KSStatement
+public import Definitions.Flock.Recursive.Generic
 
 /-!
 # Flock as the instance: the server, the inner protocol and the outer extraction

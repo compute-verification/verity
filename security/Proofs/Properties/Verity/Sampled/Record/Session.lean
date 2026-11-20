@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Flock.Claims.DeployReads
 public import Proofs.Properties.Verity.Sampled.Record.PartSame
 public import Proofs.Flock.Claims.Deploy
 
@@ -34,7 +34,7 @@ open Lean (Json)
 open Flock (V SessionSpec Stmt Setup)
 open Flock.PartCong (PartSame)
 open FlockDeploy (Coin Final Ins)
-open Verity.Recursive.BaseSetup (bind_ok forIn_mem body_ok body_yield noIdentifier_of_check)
+open FlockDeploy.BaseSetup (bind_ok forIn_mem body_ok body_yield noIdentifier_of_check)
 
 private theorem ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
