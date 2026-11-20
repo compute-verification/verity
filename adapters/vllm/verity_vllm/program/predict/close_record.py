@@ -133,12 +133,7 @@ class Record:
                                 SR.standin_rows(cls, [(row, m) for _u, row, m in placed]), window=run)
         words = self.words(registered)
         lap("weights_read")
-
-        def weights(label: str, lo: int, hi: int) -> Any:
-            if label not in words:
-                raise ValueError(f"weight {label}: the checkpoint of record composes no such field")
-            return words[label][lo:hi]
-
+        weights = weight_elements(words)
         slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
         slots = [WRS.Slot(P.fn, cls, placed[slot_of[(P.anchor, P.lane)]][1], weights, s) for P, s in zip(low.programs, served)]
         values = {**WW.weight_values(registered, words, out / REGISTRATION, keep_rows=True), SS.SCAN_STATE: state}
@@ -166,6 +161,18 @@ class Record:
         return {"run": run, "out": str(to), "members": len(win.window.members), "population": sum(filled.n.values()),
                 "design": {"rule": self.rule, "from": "the serve's --sampling-design"}, "cap": self.cap,
                 "scan_state": "stand-in", "weights": "checkpoint of record", "strings": cost, "seconds": seconds}
+
+
+def weight_elements(words: dict[str, Any]) -> Any:
+    """`window_rows.Weights` over ``words`` (`window_weights.record_words`, each field in its checkpoint shape): a field's
+    elements [lo, hi) of its row-major flattening."""
+
+    def weights(label: str, lo: int, hi: int) -> Any:
+        if label not in words:
+            raise ValueError(f"weight {label}: the checkpoint of record composes no such field")
+        return words[label].reshape(-1)[lo:hi]
+
+    return weights
 
 
 def arch() -> str:

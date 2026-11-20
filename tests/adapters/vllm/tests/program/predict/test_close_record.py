@@ -29,7 +29,7 @@ from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_strings as WS
 from verity_vllm.program.predict import window_weights as WW
-from verity_vllm.program.predict.close_record import Record
+from verity_vllm.program.predict.close_record import Record, weight_elements
 
 
 def _committer(held):
@@ -68,6 +68,18 @@ def _close(tmp_path, monkeypatch):
     binding = SimpleNamespace(rc=SimpleNamespace(run_root=bytes.fromhex(RUN)), com=_committer(held))
     compiled = SimpleNamespace(requests=[SimpleNamespace(id=i) for i in ids])
     return low, units, served, plan, binding, compiled
+
+
+def test_the_records_weights_read_a_fields_flat_elements_in_its_checkpoint_shape():
+    """The checkpoint's words come in each field's shape (an embedding table V x H); a weights read is a flat element range of
+    it, so a table row at token t is elements [t*H, (t+1)*H). The close's stand-in fields are flat, where a slice of rows and
+    one of elements agree."""
+    table = np.arange(6 * 4, dtype=np.uint16).reshape(6, 4)
+    read = weight_elements({"embed": table})
+    assert read("embed", 5 * 4, 6 * 4).tolist() == table[5].tolist()
+    assert read("embed", 3, 7).tolist() == [3, 4, 5, 6]
+    with pytest.raises(ValueError, match="weight other: the checkpoint of record composes no such field"):
+        read("other", 0, 1)
 
 
 @pytest.mark.slow
