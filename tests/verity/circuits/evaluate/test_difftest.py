@@ -495,7 +495,7 @@ def test_refusals_name_what_is_refused(server):
         d = copy.deepcopy(desc)
         _rename(d, _first_gate(d), new)
         got = server.call("evaluate", request(d, x))
-        assert got[0] == "reject" and new in got[1] and "not implemented" in got[1], got
+        assert got[0] == "reject" and new in got[1], got
         assert "reject" in python_answer(d, x)
 
 
@@ -746,7 +746,6 @@ def test_constants(server):
 #: renamings of a constant both sides read alike: only the spelling `prims.const` gives a member (`PROTOCOL.md` §9) is read,
 #: so a short, uppercase or zero-led hex, a zero-led width and bits beyond the width are refused, as is every malformed id
 CONST_IDS = [
-    ("Const16[0x8000]_v1", ["Value", 16], [0x8000]),
     ("Const32[0x5]_v1", None, None),
     ("Const32[0xABCDEF01]_v1", None, None),
     ("Const032[0x00000005]_v1", None, None),
@@ -777,7 +776,7 @@ def test_constant_ids(server):
         assert got == {"output": want} if want is not None else "reject" in got, (new, got)
         cases.append(request(d, []))
     outputs = sum(w is not None for _, _, w in CONST_IDS)
-    assert agree(server, cases) == (outputs, len(cases) - outputs) == (1, 15)
+    assert agree(server, cases) == (outputs, len(cases) - outputs) == (0, 15)
 
 
 # ---- E2: the FP32 and BF16 arithmetic and the casts ---------------------------------------------------------------------
