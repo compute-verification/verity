@@ -1781,12 +1781,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "RecDeploy.HonestFixture": {
-   "owner": "@proofs",
-   "digest": "9f236d7208c7c6c8365525dd5495834b574960c4715df32cee79b9da2a47bb9c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "ResourceAccounting.Additive": {
    "owner": "@memory-accounting",
    "digest": "f5bf2fd7347bddfa91dc2c8fe80e5999b6efba1e073e109e084e31b4bf59a6d7",
@@ -47489,13 +47483,6 @@
    "digest": "2177b0b538bec0f730f17282492af9fa909831c89a625b515846410a1b9e3daa",
    "definitions": {
     "Claims.Flock.Numbers.innerUp": "8e2feb107494dd001ab2b3f72158295a5fcd7ff112b4035abd45c1fafd7a4f7e"
-   }
-  },
-  "Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture": {
-   "digest": "bbd03da4d31ec1fc6c802dd6ad5b7dd2c61af44f0babe49aa27331d8c6616de8",
-   "definitions": {
-    "RecDeploy.HonestFixture": "9f236d7208c7c6c8365525dd5495834b574960c4715df32cee79b9da2a47bb9c",
-    "RecDeploy.TopsAt": "e0bc47598164dd14e1ae4b658dbdc8ab7a76f6d30eebefa826b7241f561e9aa5"
    }
   },
   "Proofs.Flock.Claims.Recursion.Assumptions.KSFixture": {
