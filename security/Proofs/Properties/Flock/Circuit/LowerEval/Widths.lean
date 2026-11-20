@@ -918,7 +918,7 @@ def InUnit (P : Prog) (k m h : ℕ) : Prop :=
   (P.child P.rootScope k m).off ≤ h ∧
     h < (P.child P.rootScope k m).off + (((P.defs[(P.child P.rootScope k m).d]?).map (·.gates)).getD 0)
 
-/-- **`FrontUnitRanges`** (open): each unit of a block `front` accepts is located (`unitAt`), and its gates are in the
+/-- **`FrontUnitRanges`**: each unit of a block `front` accepts is located (`unitAt`), and its gates are in the
 front's ranges. -/
 def FrontUnitRanges : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front), Spot.BlockFront.front P units = .ok fr →

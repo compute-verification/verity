@@ -916,12 +916,13 @@ def Batch0 (P : Prog) (d : ℕ) : Prop :=
       (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
     isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **`LiftCalls`** (open): the lift to bits of a template of word-primitive nodes keeps `S`'s Definitions and Boolean
-Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node calling its primitive's
-Boolean Definition, where every value of `S`'s Boolean map is a key of its index. -/
+/-- **`LiftCalls`** (open): the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
+Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node
+calling its primitive's Boolean Definition, where every value of `S`'s Boolean map is a key of its index. A template of
+no node reaches no word primitive, so `Flock.Lift.closure` lifts nothing and `lift` returns `d` itself. -/
 def LiftCalls : Prop :=
   ∀ (S L : Prog) (d e : ℕ), (∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true) →
-    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → PrimNodes S d →
+    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → PrimNodes S d → 0 < (S.defs[d]!).body.nodes.size →
     S.defs.size ≤ e ∧ (∀ i < S.defs.size, L.defs[i]? = S.defs[i]?) ∧ (∀ k, L.bodyOf? k = S.bodyOf? k) ∧
     ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
       ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
@@ -1239,14 +1240,15 @@ theorem axisBits {D : Defn} {x : List (List Bool)} (hx : x.map List.length = lea
 theorem mapM_some_map {α β : Type} (g : α → β) (l : List α) : l.mapM (fun a => some (g a)) = some (l.map g) :=
   mapM_some _ g l (fun _ _ => rfl)
 
-/-- **`LiftWordEval` for a template of word-primitive calls and axis-0 batches**, on `LiftCalls` and `Batch0Typed`. -/
+/-- **`LiftWordEval` for a template of word-primitive calls and axis-0 batches**, at least one node, on `LiftCalls` and
+`Batch0Typed`. -/
 theorem liftWordEval_batch0 (hLC : LiftCalls) (hT : Batch0Typed) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → Batch0 P d → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → Batch0 P d → 0 < (P.defs[d]!).body.nodes.size → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten := by
-  intro bytes P units S d L e h hr hs hd hco hl x hx
+  intro bytes P units S d L e h hr hs hd hco hne hl x hx
   obtain ⟨hle, hpre, hbool, hidx, -⟩ := restrictShape P units S hs
   obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
   have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
@@ -1270,7 +1272,7 @@ theorem liftWordEval_batch0 (hLC : LiftCalls) (hT : Batch0Typed) :
     have hb' : P.index[v]? = some b := hbo
     rw [Std.HashMap.contains_eq_isSome_getElem?, hidx v b hb']
     rfl
-  obtain ⟨heS, hLpre, hLbody, fnOf, primOf, gatesOf, hLe, hfn⟩ := hLC S L d e hcont hl (by omega) hcoS
+  obtain ⟨heS, hLpre, hLbody, fnOf, primOf, gatesOf, hLe, hfn⟩ := hLC S L d e hcont hl (by omega) hcoS (by rw [hSd]; exact hne)
   rw [hSd] at hLe hfn
   have heL : e < L.defs.size := (Array.getElem?_eq_some_iff.1 hLe).1
   have hLP : ∀ i < P.defs.size, L.defs[i]? = P.defs[i]? := fun i hi => by
@@ -1444,13 +1446,14 @@ theorem liftWordEval_batch0 (hLC : LiftCalls) (hT : Batch0Typed) :
 theorem batch0_of_calls {P : Prog} {d : ℕ} (h : CallsOnly P d) : Batch0 P d :=
   ⟨h.1, fun nd hnd => ⟨(h.2 nd hnd).1.elim Or.inl (fun h' => Or.inr (Or.inl h')), (h.2 nd hnd).2⟩⟩
 
-/-- **`LiftWordEval` for a template of word-primitive calls**, on `LiftCalls` and `Batch0Typed`. -/
+/-- **`LiftWordEval` for a template of word-primitive calls**, at least one node, on `LiftCalls` and `Batch0Typed`. -/
 theorem liftWordEval_calls (hLC : LiftCalls) (hT : Batch0Typed) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → CallsOnly P d → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → CallsOnly P d → 0 < (P.defs[d]!).body.nodes.size → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
-  fun bytes P units S d L e h hr hs hd hco => liftWordEval_batch0 hLC hT bytes P units S d L e h hr hs hd (batch0_of_calls hco)
+  fun bytes P units S d L e h hr hs hd hco =>
+    liftWordEval_batch0 hLC hT bytes P units S d L e h hr hs hd (batch0_of_calls hco)
 
 end Flock.Chain
