@@ -64,6 +64,7 @@ fi
 part=${*: -1}
 echo "piece $part ${CUDA_VISIBLE_DEVICES-unset}" >> "$FAKE_LOG"
 printf '%s\\n' "$@" > "$FAKE_ARGV$part"
+echo "${LEAN_ABORT_ON_PANIC-unset}" > "$FAKE_ARGV$part.panic"
 prev=
 for a in "$@"; do
   [ "$prev" != --lean-root ] || find "$a" -path '*/.lake/build/bin/*' -type f -perm -u+x | sort | sed "s|^|$part |" >> "$FAKE_BUILT"
@@ -394,3 +395,14 @@ def test_pous_args_are_split_as_shell_words_and_never_evaluated(node, tmp_path):
     argv = _argv(node)
     assert not ran.exists() and _option(argv, "--rounds") == "9" and _option(argv, "--challenger-command") == "ssh -i k host"
     assert "$(touch" in argv and "`touch" in argv
+
+
+def test_the_piece_runs_its_python_with_the_lean_panic_switch_whatever_the_caller_holds(node, tmp_path):
+    """The Python that runs the two Leans (`served_piece.py`, which asks `pous-run-protocol` and `poub-p2-protocol`) is
+    started with `LEAN_ABORT_ON_PANIC` set, for its sessions and for its answers, where the caller's environment says 0 or
+    nothing."""
+    for given in ({"LEAN_ABORT_ON_PANIC": "0"}, {}):
+        d = tmp_path / ("pieces-" + str(len(given))) / "pous"
+        r = _piece(node | given, d)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert [Path(node["FAKE_ARGV"] + part + ".panic").read_text() for part in ("--sessions", "--answers")] == ["1\n"] * 2

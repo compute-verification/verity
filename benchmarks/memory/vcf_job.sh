@@ -33,6 +33,7 @@ LEAN_PKG=verity/protocols/resource_accounting/memory/poub/verifier/lean
 CU_PKGS=("nvidia-cuda-nvcc==13.0.88" "nvidia-cuda-runtime==13.0.96" "nvidia-cuda-crt==13.0.88" "nvidia-nvvm==13.0.88"
          "nvidia-cuda-cccl==13.0.85" ninja)
 export UV_CACHE_DIR=$KEEP/uv-cache UV_PYTHON_INSTALL_DIR=$KEEP/python PATH=$KEEP/bin:$PATH
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 last() { echo "vcf_job $STAGE: reached ${REACHED}${WHY:+; refused: $WHY}"; }
 trap last EXIT
 left() { echo $(( DEADLINE - $(date +%s) > 30 ? DEADLINE - $(date +%s) : 30 )); }

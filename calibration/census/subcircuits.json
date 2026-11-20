@@ -447,7 +447,7 @@
               "max": "NB*BN - 1"
             }
           },
-          "source": "verity_vllm.check.replay.population._stratum_spec: a VU's stratum carries NB = ceil(T / BN) and last = full when T % BN == 0, else partial, in place of T"
+          "source": "the sampled replay's stratum rule: a VU's stratum carries NB = ceil(T / BN) and last = full when T % BN == 0, else partial, in place of T"
         }
       }
     },

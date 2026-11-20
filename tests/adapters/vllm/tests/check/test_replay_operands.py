@@ -8,15 +8,10 @@ from __future__ import annotations
 
 import copy
 
-import numpy as np
 
 from tests.check import test_sampled_replay as T
 from tests.query import test_glm53_moe_planes as GP
-from verity_vllm.check.replay import driver as DR
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay.opening import CommittedStore
 
 moe_block = GP.instances
 
@@ -54,33 +49,6 @@ def _pick() -> tuple[_Index, dict]:
         1: {"family": "Gemm_v1", "members": [("out", 8, "bf16")]}, 2: {"family": "Gemm_v1", "members": []},
         3: {"family": "X_v1", "members": []}, 4: {"family": "Gemm_v1", "members": [("a", 4, "bf16"), ("b", 4, "bf16")]}}
     return _Index(rows, described), rows[0]
-
-
-def test_the_prewarm_reads_each_weight_field_once_and_descends_only_into_an_interior_producer_the_replay_evaluates():
-    index, pick = _pick()
-    read: list[tuple] = []
-    DR._prewarm_weights({"r0": index}, [{"request_id": "r0", "i": pick["i"]}], lambda field, lo, hi: read.append((field, lo, hi)))
-    assert read == [("w0", 0, 4), ("w2", 0, 4)]
-
-
-def test_the_population_names_the_interior_producer_without_an_evaluator_and_no_other_row_the_pick_reads():
-    index, pick = _pick()
-    assert POP._interior_feeders_without_evaluator(index, pick) == {"X_v1 (no registered evaluator)"}
-
-
-def test_an_operand_slice_no_committed_member_holds_is_unresolved_by_its_row():
-    """A Gemm of the sampled replay's CPU-served world (`tests.check.test_sampled_replay`), its operand widened one word past
-    its producer's one member."""
-    inst, woff = T._program()
-    world = T.Honest(inst, woff, T._bf16(np.random.default_rng(7), max(hi for _lo, hi in woff.values()), 0.5), {"r0": [1, 2], "r1": [5, 3]})
-    store, weights = CommittedStore(*world.bmap_and_reader()), T._weights(world)
-    row = copy.deepcopy(next(r for r in world.pi.rows if r["spec"].startswith("Gemm_v1")))
-    ((kind, producer, lo, hi),) = row["args"][0]
-    outputs, why = EV.evaluated(world.pi, store, weights, row, "r0", 0, [])
-    assert outputs is not None and why is None and world.pi.member_at(producer, lo, hi) is not None
-    row["args"][0] = [[kind, producer, lo, hi + 1]]
-    assert EV.evaluated(world.pi, store, weights, row, "r0", 0, []) == (
-        None, f"arg slice ['n', {producer}, {lo}, {hi + 1}) is not inside one committed member of row {producer}")
 
 
 def test_the_embedding_s_path_is_that_of_the_first_row_reading_a_prompt_id_whatever_parameter_an_earlier_row_reads():

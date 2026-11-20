@@ -10,9 +10,11 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import replace
+from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
-from verity.circuits.defs import bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Affine, coll_concat, concat, runs
 from verity.circuits.types import Array, Value
 
@@ -25,6 +27,8 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_cut as WK
 from verity_vllm.program.predict import window_lowering as WL
 from verity_vllm.program.predict.build import Unexpressible
+from verity_vllm.program.predict import window_rows as WR
+from verity_vllm.program.predict.by_body import registered_composites
 from verity_vllm.program.predict.steps import RequestUnit, request_program
 from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_circuit import Grain, class_circuit
@@ -52,6 +56,30 @@ def _program(low, fn=None, tables=None, cut=None) -> WL._Program:
 
 def _refused(why: str):
     return pytest.raises(Unexpressible, match=re.escape(why))
+
+
+def _named(fn, name: str, body=None):
+    """``fn``'s Definition under ``name`` with ``body`` (its own by default), bound at its statics."""
+    d = fn.defn
+    return bind(CompositeDefinition(name, d.version, d.statics, d.signature, body or d.body, register=False, ports=d.ports),
+                **fn.bindings)
+
+
+def _calling(fn):
+    """A body other than ``fn``'s that computes its outputs: one call of ``fn``."""
+    return lambda B, S, *args: B.call(fn, *args)
+
+
+def _int8_quant():
+    return bind(next(d for d in registered_composites(("Int8RowQuant",)) if d.version == 1), K=64)
+
+
+def _mixed(fn, family: str, why: str):
+    """``fn``, a registered unit of ``family``, under another name and as another body under ``family``'s name, each with
+    the refusal it gets."""
+    return ((other := _named(fn, family, _calling(fn)),
+             f"{other.id}: a unit named as {family} whose body is no registered {family}'s at its statics is refused: {why}"),
+            (renamed := _named(fn, "Other"), f"{renamed.id}: a registered {family}'s body under another name is refused: {why}"))
 
 
 def test_a_program_takes_a_cuts_layout_with_pearls_tables_and_only_with_them(low):
@@ -129,6 +157,26 @@ def test_a_node_the_lowering_doesnt_take_is_refused_by_name(low):
         p.lower(n, chunk)
     with _refused(f"{NAME}: node 1 ({nodes[1].fn.id}) comes before its first position's embedding"):
         _program(low).lower(1, nodes[1])
+
+
+def test_an_embedding_an_int8_quant_and_a_select_take_their_name_and_a_registered_body(low):
+    """The lowering, and the rows' positions, take a unit's family only where it has the family's name and a registered body
+    of it: a name over another body, or a registered body under another name, is refused by name."""
+    why = "the window lowers a unit by its family's name"
+    nodes = low.fn.body.nodes
+    assert WR.positions(low.fn) == list(np.cumsum([n.fn.name == "Embedding" for n in nodes]) - 1)
+    for family, fn in (("Embedding", _node(low, "Embedding")[1].fn), ("TokenSelect", _node(low, "TokenSelect")[1].fn),
+                       ("Int8RowQuant", _int8_quant())):
+        assert WL.node_family(fn) == family
+        j = next(k for k, n in enumerate(nodes) if n.fn.name == (family if family != "Int8RowQuant" else "Gemm"))
+        for mixed, refusal in _mixed(fn, family, why):
+            with _refused(refusal):
+                _program(low).lower(j, NS(form="call", fn=mixed, args=nodes[j].args))
+            if family == "Embedding":
+                swapped = NS(id=low.fn.id, body=NS(nodes=[NS(fn=mixed if k == j else n.fn, args=n.args)
+                                                         for k, n in enumerate(nodes)]))
+                with _refused(refusal):
+                    WR.positions(swapped)
 
 
 def test_a_position_past_the_first_that_reads_the_prompt_is_refused(low):
