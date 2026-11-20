@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SASS_GATE = Path(__file__).resolve().parents[2] / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
+SASS_GATE = Path(__file__).resolve().parents[2] / "verity/protocols/accounting/compute/pouw/prover/sass_gate.py"
 MAPPED = re.compile(r"file=(\S+) \[\d+\];  generating link map")
 
 

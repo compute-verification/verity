@@ -17,18 +17,18 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # cache_vectors.py runs network attestation's CacheStep_v1 (`cache_step`, through the circuits it imports)
 # and writes network attestation's difftest vectors, which a test reads back; test_arith_vectors holds
 # network attestation's arith_encode vectors to what this directory's coders code now.
-inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py", "verity/__init__.py", "verity/errors.py", 
-          "verity/protocols/resource_accounting/network", 
-          "verity/protocols/resource_accounting/network/prover", "verity/circuits", "verity/commitments",
+inputs = ["verity/lean_process.py", "verity/protocols/proof/spot/verifier/one_stage/lean_child.py", "verity/__init__.py", "verity/errors.py", 
+          "verity/protocols/accounting/network", 
+          "verity/protocols/accounting/network/prover", "verity/circuits", "verity/commitments",
           "verity/commitments/crypto",
           # test_v1 runs network attestation's replay chain (`replay_chain`) over v1's windows, which imports
           # SPOT's produced and registered row helpers
-          "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
-          "verity/protocols/proofs/spot/prover/produced.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
+          "verity/protocols/proof/spot/verifier/__init__.py",
+          "verity/protocols/proof/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/proof/spot/verifier/one_stage/partition.py",
+          "verity/protocols/proof/spot/verifier/one_stage/produced.py",
+          "verity/protocols/proof/spot/prover/produced.py",
+          "verity/protocols/proof/spot/verifier/one_stage/registered.py",
           "adapters/vllm/verity_vllm/errors.py",
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
@@ -41,20 +41,20 @@ inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_s
           "adapters/vllm/verity_vllm/engine/admission.py", "adapters/vllm/verity_vllm/engine/engine_driver.py",
           "adapters/vllm/verity_vllm/engine/runner_step.py", "adapters/vllm/verity_vllm/engine/scheduler_step.py",
           "adapters/vllm/verity_vllm/messages.py", "adapters/vllm/verity_vllm/settings.py", "verity/channel.py", "verity/release.py", "verity/hooks.py", "verity/protocol.py",
-          "verity/protocols/resource_accounting/scheme.py", "verity/protocols/compose/__init__.py",
-          "verity/protocols/compose/schemes.py", "verity/protocols/proofs/spot/prover/__init__.py",
-          "verity/protocols/proofs/spot/prover/workload.py",
-          # the registry of schemes (`compose.schemes`) loads every declared scheme, the sampled proofs' among them, whose
+          "verity/protocols/accounting/scheme.py", "verity/protocols/run/__init__.py",
+          "verity/protocols/run/schemes.py", "verity/protocols/proof/spot/prover/__init__.py",
+          "verity/protocols/proof/spot/prover/workload.py",
+          # the registry of schemes (`run.schemes`) loads every declared scheme, the sampled proofs' among them, whose
           # declaration reads SPOT's parties, its challenger and its one-stage docket, and the configuration's types
-          "verity/config.py", "verity/party.py", "verity/protocols/proofs/spot/verifier/parties.py",
-          "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
-          "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
-          "verity/protocols/proofs/spot/verifier/challenger/coins.py",
-          "verity/protocols/proofs/spot/verifier/challenger/remote.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
+          "verity/config.py", "verity/party.py", "verity/protocols/proof/spot/verifier/parties.py",
+          "verity/protocols/proof/spot/verifier/challenger/__init__.py",
+          "verity/protocols/proof/spot/verifier/challenger/challenger.py",
+          "verity/protocols/proof/spot/verifier/challenger/coins.py",
+          "verity/protocols/proof/spot/verifier/challenger/remote.py",
+          "verity/protocols/proof/spot/verifier/one_stage/docket.py",
+          "verity/protocols/proof/spot/verifier/one_stage/draw.py",
+          "verity/protocols/proof/spot/verifier/one_stage/link_points.py",
+          "verity/protocols/proof/spot/verifier/one_stage/verdict.py",
           # test_served_window compiles the served run's windows against the compile slice's fixtures
           "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json",
           "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json",
@@ -68,7 +68,7 @@ inputs = ["verity/lean_process.py", "verity/protocols/proofs/spot/verifier/one_s
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           # the compile slice and its pieces, the vLLM integration's compiler, which the cache and replay vectors and their tests import
           "adapters/vllm/verity_vllm/compiler",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/proof/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/proof/spot/__init__.py",
           "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py",
           # the census (`census.BooleanWork`): the advice code's codec imports it (`window_code`, network
           # attestation's `window_charge`, `arith_encode`):

@@ -116,7 +116,7 @@ import subprocess  # noqa: E402
 
 import pytest  # noqa: E402
 import verity_torch.pouw  # noqa: E402,F401 - hands PoUW's serving code its tensors and H1's device, as the adapter's import does
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (  # noqa: E402
+from verity.protocols.accounting.compute.pouw.prover.serving import (  # noqa: E402
     use_int8_arm,
 )
 

@@ -1,7 +1,7 @@
 # sampling_plan
 
 SPOT's cost model for one served workload under Flock: each file plans a workload's sample with SPOT's planner
-(`verity/protocols/proofs/spot/prover/optimize.py`, `candidates.py`, `costfit.py`), from the measured inputs in this directory
+(`verity/protocols/proof/spot/prover/optimize.py`, `candidates.py`, `costfit.py`), from the measured inputs in this directory
 (`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
 `served_window.py` read), each with its source and status, measured or
 assumed. `benchmarks/prove_path/`'s `window_cost.py` and `class_rows.py` price the class-of-record window's commit.

@@ -6,8 +6,8 @@ reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build
 A row refuses a set it cannot run before any stage starts, and the Commit before its engine exists, both by
 `commit_context`.  Each protocol has one adapter module here (`config.PROTOCOLS`, `interface`), imported only when it is enabled; PoUB, which
 serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`), and PoUS
-attaches by its scheme's name on the build's exchange (`verity.protocols.compose.schemes`, `verity_vllm.messages`), not here.  The
-protocol logic is its package's (`verity.protocols.proofs.spot.verifier`), never this package's.
+attaches by its scheme's name on the build's exchange (`verity.protocols.run.schemes`, `verity_vllm.messages`), not here.  The
+protocol logic is its package's (`verity.protocols.proof.spot.verifier`), never this package's.
 
 **Order.**  Adapters install in `config.PROTOCOLS` order, innermost first, and uninstall in reverse; ``sampled-proofs``
 is outermost: the Commit's committer and taps commit the values the model produced.

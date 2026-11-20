@@ -1,6 +1,6 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity.protocols.resource_accounting.memory.poub.prover.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
-PoUB's prover's `serving.StoreBackend` (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`) proves that store to a
+with `verity.protocols.accounting.memory.poub.prover.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
+PoUB's prover's `serving.StoreBackend` (`verity.protocols.accounting.memory.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
 reads every live block at it (`prover.py`'s serve modes: ``serve``, or ``servedrop:K``, which withholds the first K
@@ -51,7 +51,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(ROOT), str(ROOT / "adapters" / "vllm")]
 
-from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 64, "num_hidden_layers": 2, "vocab_size": 256,
@@ -117,7 +117,7 @@ def fit(steps: int | None, pass_ms: int, windows: int | None = None, window_ms: 
 def row_steps(path: Path) -> int:
     """The engine steps of the row file ``path``'s run, its ``expected_engine_steps``; `Refused` for a file that
     states none, or whose target does not declare synchronous scheduling, which a Commit's session refuses once its
-    engine is about to be built (`verity.protocols.resource_accounting.memory.poub.prover.commit_session.CommitSession.target`)."""
+    engine is about to be built (`verity.protocols.accounting.memory.poub.prover.commit_session.CommitSession.target`)."""
     try:
         row = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
@@ -263,7 +263,7 @@ def engine(work: Path):
 def provers():
     """PoUB's prover's serving loop, which proves by the store PoUB's attach makes (the binder's ``store``); none of it
     the adapter's, vLLM's or a GPU's."""
-    from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+    from verity.protocols.accounting.memory.poub.prover.node_store import serving
     return serving
 
 
@@ -292,7 +292,7 @@ def backend_class(serving):
 def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) -> None:
     import sheets
 
-    from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier
+    from verity.protocols.accounting.memory.poub.verifier.session import verifier
 
     sock, _ = lsock.accept()
     lsock.close()
@@ -412,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from verity_vllm import messages
     from verity_vllm.engine.build import hooked
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     serving = provers()
     binder = messages.current().attach(schemes.get("poub"), {"passes": False})

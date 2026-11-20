@@ -29,10 +29,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from verity.protocols.resource_accounting.memory.pous.verifier import band as band_codec  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.verifier import dense as dense_codec  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.verifier.labels import salt_value, tag  # noqa: E402
-from verity.protocols.resource_accounting.memory.pous.verifier.primitives import (  # noqa: E402
+from verity.protocols.accounting.memory.pous.verifier import band as band_codec  # noqa: E402
+from verity.protocols.accounting.memory.pous.verifier import dense as dense_codec  # noqa: E402
+from verity.protocols.accounting.memory.pous.verifier.labels import salt_value, tag  # noqa: E402
+from verity.protocols.accounting.memory.pous.verifier.primitives import (  # noqa: E402
     CAPACITY_BITS,
     KECCAK_F_NS,
     PI_DOMAIN,

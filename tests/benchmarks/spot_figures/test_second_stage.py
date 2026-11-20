@@ -5,9 +5,9 @@ from fractions import Fraction
 
 import pytest
 import second_stage as s2
-from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
-from verity.protocols.proofs.spot.prover.optimize import Cell
-from verity.protocols.proofs.spot.verifier import service
+from verity.protocols.proof.spot.verifier.challenger.challenger import COIN_BYTES, MAX_COINS
+from verity.protocols.proof.spot.prover.optimize import Cell
+from verity.protocols.proof.spot.verifier import service
 
 
 def test_the_first_read_is_the_bytes_the_second_stage_takes():

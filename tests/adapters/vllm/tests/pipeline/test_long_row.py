@@ -27,7 +27,7 @@ from verity.commitments.gates.embedding import read
 from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
 from verity_vllm.pipeline import long_row as LR
-from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proof.spot.verifier import second_stage as SS
 from verity.circuits import replay_links as RL
 
 RUN = "0" * 128

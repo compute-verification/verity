@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from verity.protocols.compose import schemes
+from verity.protocols.run import schemes
 
 
 def built(scheme: str, target: str, root: Path | str) -> Path:

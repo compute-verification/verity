@@ -8,7 +8,7 @@ It says whether the run was whole, whether its parts passed, and whether Lean co
 statement and accepted it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
-`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/proofs/flock/prover/pod/88-rec-c3-inner.sh`; this runner doesn't
+`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/proof/flock/prover/pod/88-rec-c3-inner.sh`; this runner doesn't
 time it yet.
 
 ## Try it

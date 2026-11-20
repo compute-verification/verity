@@ -35,10 +35,10 @@ from verity.circuits.refs import Concat, Explicit, Grid, runs
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import wiring as WI
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.accounting.network.prover import ingress_scan as IS
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S

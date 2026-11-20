@@ -91,7 +91,7 @@ if has stage; then
   command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none >> "$OUT/lean-build.log" 2>&1
   t=$(date +%s)
-  (cd verity/protocols/proofs/flock/verifier && lake build flock-read-tmpl) >> "$OUT/lean-build.log" 2>&1 \
+  (cd verity/protocols/proof/flock/verifier && lake build flock-read-tmpl) >> "$OUT/lean-build.log" 2>&1 \
     || { tail -20 "$OUT/lean-build.log" | tee -a "$L"; say "flock-read-tmpl BUILD FAILED: a table read can't stage"; exit 4; }
   say "flock-read-tmpl built in $(( $(date +%s) - t )) s"
 
@@ -191,7 +191,7 @@ if [ "$LEAN" = 1 ]; then
   ok=0; bad=0
   if [ ${#proved[@]} -gt 0 ]; then
     . benchmarks/served_units/lean_check.sh
-    LEAN_PY=(uv run --no-sync python); LEAN_TMP=$S; V=verity/protocols/proofs/flock/verifier
+    LEAN_PY=(uv run --no-sync python); LEAN_TMP=$S; V=verity/protocols/proof/flock/verifier
     mkdir -p "$OUT/lean"; printf 'name\tsession\taccepted\tlabel\twall_s\tpeak_gib\tcircuit_bytes\n' > "$OUT/lean.tsv"
     exe=$(lean_exes "$V" 2>> "$OUT/lean-build.log" | cut -d' ' -f1)
     if [ -z "$exe" ] || ! (cd "$V" && lake build "$exe") >> "$OUT/lean-build.log" 2>&1; then

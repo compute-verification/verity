@@ -190,8 +190,8 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots, why_not_pearl  # noqa: E402, F401
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU  # noqa: E402
+from verity.protocols.proof.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import audit as AU  # noqa: E402
 from verity.circuits import partition_query as PQ  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.periods import interface as IF, rows as RW  # noqa: E402
@@ -342,8 +342,8 @@ def ran_with(challenger: str, key_record: Mapping[str, Any] | None = None) -> st
     development session: its parameters read ``development`` whatever its key's W and H, which a key record adds as detail,
     so no reader of the line takes its coins for a deployed challenger's."""
     from verity.commitments.crypto import lms
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     dep = lms.DEPLOYED
     if challenger == "local":
@@ -373,7 +373,7 @@ def served_forged_partition(honest: Mapping[str, Any], forged: Mapping[str, Any]
     partition's templates and scope, every unit sampled (``DESIGN:1/1``), at steps the honest run already holds to the window.
     A given one whose steps fall outside the honest partition's is refused here, before any build, rather than by its commit
     after the honest arm ran."""
-    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
+    from verity.protocols.proof.spot.verifier.one_stage.verdict_record import DESIGN
 
     if forged is None:
         return {"templates": list(honest["templates"]), DESIGN: f"{design}:1/1",
@@ -1196,8 +1196,8 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 
 def audit(a: argparse.Namespace) -> int:
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     world, ranks = ranks_of(a)
     if a.port is None:
@@ -1471,7 +1471,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     (`KeptIngress`): the caller passes it, since SPOT reads the attester's record as a certified input and imports
     neither the attester nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
     doesn't give the window's scan or the caller passed no reader."""
-    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
+    from verity.protocols.accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
 
     if kept_ingress is None:
         raise ValueError("a window's scan reads the network attester run its serve kept, or that it kept none, by the "
@@ -1564,11 +1564,11 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
-    from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
+    from verity.protocols.accounting.network.prover import scan_state_rows as SR
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.verifier import service as S
     from verity.circuits.codec import program_digest
 
     seconds: dict[str, float] = {}

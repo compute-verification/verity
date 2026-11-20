@@ -25,19 +25,19 @@ install -d -m 0700 -o auditor -g auditor "$H"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py benchmarks/one_stage/served_composite.sh \
-           verity/protocols/proofs/spot_flock_recursion/verifier/lean/lakefile.toml uv.lock; do
+  for f in verity/protocols/accounting/memory/poub/attester/live_verifier/host.py benchmarks/one_stage/served_composite.sh \
+           verity/protocols/proof/spot_flock_recursion/verifier/lean/lakefile.toml uv.lock; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-builds=("vstar-recursive verity/protocols/proofs/spot_flock_recursion/verifier/lean"
-        "spot-one-stage verity/protocols/proofs/spot/verifier/lean"
-        "inference-only verity/protocols/workload_classification/training_detection/inference_only/verifier/lean"
-        "remote verity/protocols/compose/verifier/remote" "remote-v1 verity/protocols/compose/verifier/remote"
-        "onsite verity/protocols/compose/verifier/onsite")
+builds=("vstar-recursive verity/protocols/proof/spot_flock_recursion/verifier/lean"
+        "spot-one-stage verity/protocols/proof/spot/verifier/lean"
+        "inference-only verity/protocols/policy/training_detection/inference_only/verifier/lean"
+        "remote verity/protocols/run/verifier/remote" "remote-v1 verity/protocols/run/verifier/remote"
+        "onsite verity/protocols/run/verifier/onsite")
 for b in "${builds[@]}"; do
   tc=$(tr -d '[:space:]' < "$T/${b#* }/lean-toolchain")
   [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$T/${b#* }/lean-toolchain: $tc"
@@ -68,7 +68,7 @@ if [ "${3:-}" = --prepare ]; then
   echo "prepared (not pinned): $T built; pins.jsonl and $O/current unchanged"
   exit 0
 fi
-/usr/bin/python3 -I "$T/verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py" pinned "$c" "$br"
+/usr/bin/python3 -I "$T/verity/protocols/accounting/memory/poub/attester/live_verifier/host.py" pinned "$c" "$br"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"
 echo "pinned: $O/current -> $c ($br)"

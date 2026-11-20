@@ -7,14 +7,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = ["verity/__init__.py", "verity/errors.py",
-          # resource_accounting/scheme.py (and PoUW's scheme.py) import verity.hooks, and verity.protocol
-          "verity/hooks.py", "verity/protocol.py", "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py",
-          "verity/protocols/resource_accounting/scheme.py",
+          # accounting/scheme.py (and PoUW's scheme.py) import verity.hooks, and verity.protocol
+          "verity/hooks.py", "verity/protocol.py", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/compute/__init__.py",
+          "verity/protocols/accounting/scheme.py",
           "verity/protocols/experimental/__init__.py",
-          "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/resource_accounting/compute/pouw",
+          "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/accounting/compute/pouw",
           # h1zy loads PoUW's leaf_lanes and weights, which load SPOT's one-stage verifier and its challenger
-          "verity/channel.py", "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/spot/__init__.py",
-          "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
-          "verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
-          "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/experimental/dither"]
+          "verity/channel.py", "verity/protocols/proof/__init__.py", "verity/protocols/proof/spot/__init__.py",
+          "verity/protocols/proof/spot/verifier/challenger/__init__.py", "verity/protocols/proof/spot/verifier/challenger/challenger.py",
+          "verity/protocols/proof/spot/verifier/challenger/coins.py", "verity/protocols/proof/spot/verifier/challenger/remote.py",
+          "verity/protocols/proof/spot/verifier/__init__.py", "verity/protocols/proof/spot/verifier/profile.py",
+          "verity/protocols/proof/spot/verifier/one_stage", "verity/protocols/experimental/dither"]

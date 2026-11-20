@@ -46,7 +46,7 @@ from verity.commitments.frame_v3 import Port as FPort
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import row_leaf
-from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.protocols.proof.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
 
 CASES = {"coef": ("L0", "coef"), "dirs": ("L0", "dirs"), "message": ("alg-p0", "m0")}

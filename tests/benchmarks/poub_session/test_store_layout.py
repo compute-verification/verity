@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "poub_session"))
-sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/memory/poub/prover/poub_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
@@ -22,11 +22,11 @@ import engine  # noqa: E402
 import store_layout as sl  # noqa: E402
 from test_session import run  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier.session import verifier  # noqa: E402
 
-FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/memory/poub/figures.json"
 FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))
 
 ROLE = "synthetic-bf16"

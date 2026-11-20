@@ -87,7 +87,7 @@ case "$O/" in "$SCRATCH"/*) echo "smoke_h100.sh: the output $O is under the scra
 [ "$OWN_SCRATCH" = 1 ] && trap 'rm -rf "$SCRATCH"' EXIT
 
 PY=${PY:-$ROOT/.venv/bin/python}
-POUW=$ROOT/verity/protocols/resource_accounting/compute/pouw/prover
+POUW=$ROOT/verity/protocols/accounting/compute/pouw/prover
 PEARL=$POUW/kernels/pearl_c_sm90
 CG=$ROOT/verity/commitments/cuda/commit_gpu
 TAG=a0r0l
