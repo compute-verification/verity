@@ -25,7 +25,6 @@ verity-exact-kit = { workspace = true }
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "test_ffill.py",
     "test_pearl_c_hash_decode.py",
     "test_pearl_c_hash_host.py",
     "test_pearl_c_hash_wide.py",
@@ -66,7 +65,7 @@ untraced = [
 # test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean
 # and the H100's record of it in Proofs/Pouw/PearlC/Records.lean.
 # test_pearl_c_sm90_grouped imports verity_torch.pouw's packages and its Pearl-C device run (run_device, lanes_device,
-# served_y_device); Pearl-C4's tests import verity.protocols.experimental's package files above the modules named below.
+# served_y_device); hidden_zk's stage.py imports verity.protocols.experimental's package files above the modules named below.
 # test_salt_bind's served window reads vLLM's registered Definitions (verity_vllm.definitions) whole.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
@@ -86,23 +85,11 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
           "adapters/vllm/verity_vllm/protocols/interface.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/commit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/handoff.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/model_key.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/records.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py",
           "adapters/torch/verity_torch/pouw/credit_gate_device.py",
           "adapters/torch/verity_torch/pouw/row_table_device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_program.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py",
           "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
@@ -126,12 +113,6 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/kept.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/live.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_files.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/nodes.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/public_rows.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_program.py",
           "adapters/vllm/verity_vllm/commit", "adapters/vllm/verity_vllm/records",
           "adapters/vllm/verity_vllm/query/__init__.py", "adapters/vllm/verity_vllm/query/manifest",
           "adapters/vllm/verity_vllm/program/__init__.py", "adapters/vllm/verity_vllm/program/frontend/__init__.py",
@@ -149,10 +130,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
           "calibration/machine_model", "benchmarks/pouw/README.md",
-          # ../../../benchmarks/pouw/pearl_c4/replay.py, ../../../benchmarks/pouw/hidden_zk/stage.py and test_pearl_c4_replay load Pearl-C4's scheme, circuit and vectors
+          # ../../../benchmarks/pouw/hidden_zk/stage.py loads Pearl-C4's scheme and circuit
           "verity/protocols/experimental/pearl_c4", "verity/protocols/experimental/__init__.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/words.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/datacenter/datacenter",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
@@ -199,14 +179,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["test_dc.py"]
-paths = ["calibration/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
-tests = [
-    "test_pearl_c4_real.py",
-    "test_pearl_c_sm90_glm53.py",
-]
+tests = ["test_pearl_c_sm90_glm53.py"]
 paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
 
 [[tool.verity.tests.reads]]
@@ -216,24 +189,6 @@ paths = ["security/Definitions/Pouw", "security/Proofs/Pouw", "security/Proofs/P
 [[tool.verity.tests.reads]]
 tests = ["test_facet_break.py"]
 paths = ["calibration/machine_model/verity_machine_model", "calibration/pouw/opcode_probe"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ffill.py"]
-paths = ["verity/circuits/ops"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_h1_prove_live.py"]
-paths = [
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
-    "verity/protocols/proofs/spot/verifier/one_stage",
-    "verity/circuits",
-    "verity/commitments/frame_v3",
-    "verity/protocols/proofs/flock/prover/python/verity_flock",
-]
-
-[[tool.verity.tests.reads]]
-tests = ["test_hidden_zk_summarize_rows.py"]
-paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_pearl_c_sm120.py", "test_pearl_c_sm90.py"]

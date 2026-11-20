@@ -10,6 +10,7 @@
 #                                                     selftests with records (the card's own gpu_proofs_match_cpu case), the Lean verdicts
 # SM is the target's architecture as a compute capability, 90 for sm_90 (H100), 120 for sm_120 (RTX PRO 6000); GPU=0: CPU only.
 set -uo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 STEP=${1:?usage: 62-circuit-gpu-smoke.sh prepare|run}
 : "${OUT:?OUT: the output directory of the research run}"
 GPU=${GPU:-1}; [ "$GPU" = 1 ] && : "${SM:?SM: the architecture as a compute capability, as in the usage}"

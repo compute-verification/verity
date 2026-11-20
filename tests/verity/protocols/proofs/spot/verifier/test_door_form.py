@@ -1,5 +1,5 @@
 """The door's one form: `one_circuit.admitted` is `Spot.OneStageZk.admitted`, case by case. Every `#guard refusedBy` of
-`Spot/OneStageZkStatement.lean` is replayed here on its own descriptor, query and cuts, and the Python refuses it by the
+`Spot/Admitted.lean` is replayed here on its own descriptor, query and cuts, and the Python refuses it by the
 same clause with the same text; the descriptor Lean admits is admitted with the same rows and fields; and Friday's
 benchmark template is admitted."""
 
@@ -19,8 +19,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.program import input_id
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 
-LEAN = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "OneStageZkStatement.lean")
-GUARD = re.compile(r'^#guard refusedBy \((admitE|lowerE|admitIn) (.*)\) "([a-z-]+)" "(.*)"$', re.M)
+LEAN = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean")
+GUARD = re.compile(r'^#guard refusedBy \((admitE|lowerE|admitIn|lowerIn|formedIn) (.*)\) "([a-z-]+)" "(.*)"$', re.M)
 STR = r'"((?:[^"\\]|\\.)*)"'
 
 
@@ -63,10 +63,20 @@ def _args_in(s: str) -> tuple[str, list[str], list[int]]:
     return descriptor(name), re.findall(STR, ts), [int(u) for u in us.split(",")]
 
 
+#: the guards on the block's form in C (`admittedBlock`), each a descriptor, a template, units and C's root changed or not
+FORMED = ("lowerIn", "formedIn")
+
+
+def _args_formed(s: str) -> tuple[str, tuple[str, bool], list[int]]:
+    """`lowerIn`'s and `formedIn`'s arguments: a descriptor, the template, the units, and whether C's root is `recut0`'s."""
+    name, t, us, f = re.fullmatch(r'(\w+) "(.*)" #\[(.*)\]( recut0)?', s.strip()).groups()
+    return descriptor(name), (t, bool(f)), [int(u) for u in us.split(",")]
+
+
 def guards() -> list[tuple[str, str, Any, list, str, str]]:
     out = []
     for m in GUARD.finditer(lean_text()):
-        d, t, cs = _args_in(m.group(2)) if m.group(1) == "admitIn" else _args(m.group(2))
+        d, t, cs = (_args_in if m.group(1) == "admitIn" else _args_formed if m.group(1) in FORMED else _args)(m.group(2))
         out.append((m.group(1), d, t, cs, m.group(3), _unescape(m.group(4))))
     return out
 
@@ -91,9 +101,26 @@ def _admit_in(d: str, ts: list[str], us: list[int]):
     return OC.admitted(D, {"query": q}, None)
 
 
+def _formed_in(how: str, d: str, t: tuple[str, bool], us: list[int]) -> None:
+    """`lowerIn` (the door's `lower` of C_S with `formed`, refused before any executable runs) or `formedIn` (`formed`
+    alone) on the units ``us`` of descriptor ``d`` at template ``t[0]``, C's root read recut where ``t[1]``."""
+    c, (key, recut) = d.encode(), t
+    D = R.program(c)
+    if recut:
+        D.root.body.recut[0] = 16
+    q = PO.template_instances_query(sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None}))
+    units = [(u, u + 1) for u in us]
+    if how == "formedIn":
+        return OC.admitted_block(D, {"query": q}, units, key)
+    ranges = [(min(us), max(us) + 1)]
+    part = PO.build(json.loads(d), PO.template_instance_query(key), [ranges])
+    OC.lower(OC.restrict(c, part, ranges), part, lambda: "/nonexistent", formed=OC.formed_in(c, part, ranges))
+
+
 def test_every_lean_guard_is_read():
     assert len(guards()) == lean_text().count("#guard refusedBy")
-    assert {g[4] for g in guards()} >= {"one-template", "listed", "port-names", "on-bits", "cut-rows", "whole-words"}
+    assert {g[4] for g in guards()} >= {"one-template", "listed", "port-names", "on-bits", "cut-rows", "whole-words",
+                                        "no-recut", "disjoint-ranges", "one-callee", "operands-outside"}
 
 
 def test_the_prefix_is_leans():
@@ -104,13 +131,86 @@ def test_the_prefix_is_leans():
 def test_python_refuses_what_lean_refuses_with_its_text(case):
     how, d, t, cs, clause, detail = case
     with pytest.raises(OC.Refused) as e:
-        _admit_in(d, t, cs) if how == "admitIn" else _admit(d, t, cs)
+        _admit_in(d, t, cs) if how == "admitIn" else _formed_in(how, d, t, cs) if how in FORMED else _admit(d, t, cs)
     assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, {clause}: {detail}"
+
+
+def test_python_forms_what_lean_forms():
+    """Lean's guard: `AB16`'s unit 0 alone, and `AA16`'s unit 1 alone, whose operand is outside its block."""
+    assert _formed_in("formedIn", descriptor("AB16"), ("A_v0", False), [0]) is None
+    assert _formed_in("formedIn", descriptor("AA16"), ("A_v0", False), [1]) is None
 
 
 def test_python_admits_what_lean_admits():
     """`E16`, which Lean's guard admits with rows x, y and fields o0, o1 of one word each."""
     assert _admit(descriptor("E16"), "E_v1", []) == ("E_v1", [("x", 16), ("y", 16)], [("o0", 16), ("o1", 16)])
+
+
+UNDECODED = re.compile(r'^#guard undecoded (\w+) "(.*)"$', re.M)
+
+
+@pytest.mark.parametrize("name,why", UNDECODED.findall(lean_text()))
+def test_what_lean_does_not_decode_python_does_not(name, why):
+    """A template wide on its return alone, and one whose lift to bits would refuse, are no descriptors: the decoders
+    refuse them before `admitted` reads them, Python by the same code."""
+    with pytest.raises(R.Refused) as e:
+        R.program(descriptor(name).encode())
+    code = re.search(r"\bE_[A-Z_]+", why).group(0)
+    assert code in str(e.value)
+    if name == "R16":
+        assert str(e.value) == f"E_DESCRIPTOR: {_unescape(why)}"
+
+
+def test_a_template_wide_on_its_return_alone_is_wide():
+    """Lean's guard on `C32`'s `C_v1` kept to its bit parameter: the lift leaves it wide on its return."""
+    from verity.circuits.codec import lift_shape
+    desc = json.loads(descriptor("C32"))
+    body = desc["definitions"]["C_v1"]["body"]
+    body["params"] = [p for p in body["params"] if p[1] == ["Value", 1]]
+    assert len(body["params"]) == 1 and lift_shape(desc, "C_v1")[1] == ["C_v1"]
+
+
+def _e16_s():
+    """C_S of `E16`'s unit 0, decoded, as `Spot/Test/Admitted.lean`'s `admitS` takes it."""
+    d = descriptor("E16")
+    part = PO.build(json.loads(d), PO.template_instance_query("E_v1"), [[(0, 1)]])
+    return R.program(OC.restrict(d.encode(), part, [(0, 1)]))
+
+
+def test_a_partition_of_no_template_query_is_not_derived():
+    """Lean's guard: `admitted` under a query that lists no template is not derived, before C_S is read."""
+    with pytest.raises(OC.NotDerived) as e:
+        OC.admitted(_e16_s(), {"query": {"name": "Q_all"}})
+    assert str(e.value) == OC.PREFIX + OC.LOWER
+
+
+def test_a_template_with_no_definition_is_refused_by_listed():
+    """Lean's guard on C_S's index naming a Definition past its Definitions: `listed`, with Lean's text."""
+    with pytest.raises(OC.Refused) as e:
+        OC.template_form(_e16_s(), "Gone_v1", {})
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, listed: C_S's template Gone_v1 is no Definition of C_S"
+
+
+def test_a_template_returning_no_field_is_refused_by_whole_words(monkeypatch):
+    """Lean's guard on `E16`'s `E_v1` returning the empty tuple: `whole-words`, with Lean's text."""
+    from verity.circuits.types import Tuple
+    D = _e16_s()
+    fn = D.defs["E_v1"]
+    params, _ret = fn.signature()
+    monkeypatch.setattr(fn, "signature", lambda: (params, Tuple()))
+    with pytest.raises(OC.Refused) as e:
+        OC.template_form(D, "E_v1", {})
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, whole-words: C_S's template E_v1 returns no field"
+
+
+def test_two_units_holding_gates_in_common_are_refused_by_disjoint_ranges():
+    """Lean's guard on `AB16` with unit 1's node placed at gate 40, inside unit 0's gates [32, 48)."""
+    D = R.program(descriptor("AB16").encode())
+    D.root.body.offsets[3] = 40
+    q = PO.template_instances_query(["A_v0", "B_v0"])
+    with pytest.raises(OC.Refused) as e:
+        OC.admitted_block(D, {"query": q}, [(0, 2)], "A_v0")
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, disjoint-ranges: units 0 and 1 of the block hold gates in common"
 
 
 def test_a_refused_block_reaches_no_executable():
@@ -121,7 +221,7 @@ def test_a_refused_block_reaches_no_executable():
     c, desc = d.encode(), json.loads(d)
     part = PO.build(desc, PO.template_instance_query("E_v1"), [[(0, 1)]])
     with pytest.raises(OC.Refused, match=re.escape(f"{OC.NOT_ADMITTED}, whole-words: ")):
-        OC.lower(OC.restrict(c, part, [(0, 1)]), part, never)
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, never, formed=OC.formed_in(c, part, [(0, 1)]))
 
 
 @pytest.mark.slow

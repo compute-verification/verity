@@ -67,7 +67,7 @@ SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resourc
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
 #: {file: the scheme names that are another word there}: a rounding mode or a design called dither, a card's memory bandwidth
 NOT_SCHEMES = {"benchmarks/ppl/steps.py": {"dither"}, "calibration/pouw/theory/checked_strip.py": {"dither"},
-               "benchmarks/hash/dither/dbw.py": {"dither"}, "verity/device.py": {"bandwidth"}}
+               "verity/device.py": {"bandwidth"}}
 #: {ratchet: {file: why it stays}}: a second path kept by a ruling. It is still held from growing, and ``--report`` counts
 #: it apart, so nobody finds it again as a table to remove.
 KEPT = {"scheme_name_tables": {
@@ -107,8 +107,6 @@ KEPT = {"scheme_name_tables": {
     "benchmarks/pouw/pearl_c_vllm/served_profile.sh": "the variants' registered names (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_vllm/window.sh": "the variants' registered names (top, 18 Nov)",
     "benchmarks/pouw/pearl_c_vllm/served_step.sh": "a refusal quoting a scheme's registered id (top, 18 Nov)",
-    "benchmarks/pouw/pearl_c4/ship.sh":
-        "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
     "benchmarks/pouw/harness/native/build.sh":
         "the NVFP4 units and the CUTLASS baselines stating their one target, the block-scaled `mma.sync`, which no "
         "architecture file states (top, 18 Nov)",

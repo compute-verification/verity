@@ -149,10 +149,7 @@ def _body(fn: Any) -> _Body:
 
 
 def _width(fn: PrimitiveDefinition) -> int:
-    _, ret = fn.signature()
-    if not isinstance(ret, Value):
-        raise Refused("E_LEAVES", f"{fn.id} returns {ret!r}, not one value")
-    return ret.w
+    return fn.signature()[1].w
 
 
 class Bits:

@@ -646,8 +646,9 @@ def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
     `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
     block. ``decoded``: C decoded once for every member."""
     decoded = decoded or OC.Decoded(c)
-    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k, decoded), decoded), part, lambda: lower,
-                    cut=OC.cuts(c, part, decoded))
+    units = OC.block(c, part, k, decoded)
+    text = OC.lower(OC.restrict(c, part, units, decoded), part, lambda: lower, cut=OC.cuts(c, part, decoded),
+                    formed=OC.formed_in(decoded, part, units))
     circuit = st_dir / "circuit.txt"
     circuit.write_bytes(text)
     circ = FI.flock_circuit(text)
@@ -821,7 +822,8 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                         program=mine.program, query=mine.query)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
@@ -904,6 +906,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
+        tmpl: dict = {}
         if door:
             try:
                 circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
@@ -911,6 +914,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
                 print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
                 continue
+            # the door lowers a block to a templated circuit, whose unit rows both sides read
+            tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl",
+                                getattr(a, "tmpl_unit_bin", None))
         elif m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
@@ -972,7 +978,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "make": makes.get(m.template),
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json",
-                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
+                               "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin"), **tmpl},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0}
@@ -1322,6 +1328,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
+    members_lean(out, result, pm)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1397,6 +1404,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
+    summary["audit"]["members_lean"] = result["checks"]["members_lean"]
     if "registered_reads" in result:
         summary["audit"]["registered_reads"] = result["registered_reads"]["ok"]
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
@@ -1515,6 +1523,44 @@ def case_written(out: Path) -> dict:
         return {"written": True}
     said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
     return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
+
+
+def members_lean(out: Path, result: dict, pm: dict | str | None,
+                 check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+    """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
+    verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
+    where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
+    detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
+    verdict and says why under ``reason``; one whose case Lean could not read is refused."""
+    checks = result.setdefault("checks", {})
+    if not isinstance(pm, dict):
+        checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
+        return
+    case = out / "case-v2.json"
+    try:
+        if not case.is_file():
+            raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
+        verdict, why = check(json.loads(case.read_text()))
+    except MB.LeanError as e:
+        checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
+        result["accepted"] = False
+        return
+    failed = sorted(k for k, c in checks.items() if isinstance(c, dict) and not c.get("ok", True))
+    python = bool(result.get("accepted"))
+    ok = verdict == "accept"
+    codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
+    checks["members_lean"] = {"ok": ok and python, "ran": True, "codes": codes, "detail": {
+        "lean": {"verdict": verdict, "reason": why},
+        "python": {"accepted": python, "failed": failed}}}
+    if not ok:
+        result["accepted"] = False
+
+
+#: why an audit with no per-member case has no `members_lean` verdict where `members_proof` gives no reason
+ONE_MEMBER = ("a window of one member: its case is the one-statement form's (`v2_proof`), which Lean decides by "
+              "checkAt, not checkMembersAt")
+#: the code of an audit whose Python verdict and Lean's `checkMembersAt` on its per-member case differ
+MEMBERS_DISAGREE = "members-lean-python-disagree"
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, public: str, registered: dict | None,

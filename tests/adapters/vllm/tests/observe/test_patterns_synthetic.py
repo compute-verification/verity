@@ -1,6 +1,6 @@
 """Synthetic raw-observation events for one decode step of one SmolLM2 layer (plus the sample phase), resolved
 against the pinned profile.  The op names / schemas / argument orders are those of vLLM `d9105ea80` as far as they are
-known from the design and the previous adapter; `test_resolve_m1.py` checks the same patterns against the real M1 log."""
+known from the design and the previous adapter."""
 
 from __future__ import annotations
 

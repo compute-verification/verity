@@ -1151,7 +1151,7 @@ def session_jobs() -> int:
     return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
-#: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
+#: the agreement's memory floor: the GEMM set's upstream replay (m = 26) alone takes more than 15 GB
 AGREEMENT_MIN_GB = 24
 
 
@@ -1160,10 +1160,11 @@ def _version(v: str) -> tuple[int, ...]:
 
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
-    """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
-    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
-    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
+    """One real replay per upstream binary that `vectors.json` gives a stored honest session or a selftest record (a set
+    without lookup tables): (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the
+    unpacked build and inputs in ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended
+    divergence (`agree.py`): Lean refuses it for completeness, upstream accepts it. A selftest record's case is one upstream
+    accepted live (its `case.json`)."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -1178,16 +1179,27 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     out: dict[str, tuple] = {}
     for s in json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]:
         st = s.get("statement", {})
-        if s["pr83"] in out or not s.get("sessions") or "tables" in st:
+        if s["pr83"] in out or "tables" in st:
             continue
-        honest = fetch(s["sessions"][0]["dir"])
+        if s.get("sessions"):
+            honest = fetch(s["sessions"][0]["dir"])
+            e = s["sessions"][0]["expect"]
+            expect = {"accepted": e.get("upstream_accepted", e["accepted"])}
+        elif s.get("selftest"):
+            d = w / "smoke" / s["pr83"]
+            subprocess.run([sys.executable, str(FLOCK_VERIFIER / "selftest_records.py"), str(fetch(s["selftest"][0])), str(d)],
+                           check=True, capture_output=True)
+            live = [p for p in sorted(d.iterdir()) if json.loads((p / "case.json").read_text())["live"]["accepted"]]
+            if not live:
+                continue
+            honest, expect = live[0], {"accepted": True}
+        else:
+            continue
         a = argparse.Namespace(upstream=str(w / "upstream" / f"upstream-{s['pr83']}"), statement=s["lean_statement"],
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        e = s["sessions"][0]["expect"]
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
-                          {"accepted": e.get("upstream_accepted", e["accepted"])})
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], expect)
     return list(out.values())
 
 
@@ -1197,7 +1209,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
     Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
-        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
+        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (the GEMM set's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
@@ -1300,9 +1312,29 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
     print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
           flush=True)
-    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+    rc = subprocess.run(argv, cwd=ROOT).returncode
+    try:
+        print(f"check: lean-agreement: {agreement_outcome(json.loads((w / 'ci' / 'sets.json').read_text())['sets'])}",
+              flush=True)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"check: lean-agreement: no outcome: ci.py's sets.json can't be read ({type(e).__name__}: {e})", flush=True)
+    if rc:
         print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
     return rc
+
+
+def agreement_outcome(sets: list[dict]) -> str:
+    """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
+    the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept."""
+    ran = [r for r in sets if "skipped" not in r]
+    n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
+    disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
+    last = sum(r.get("passed_every_check", 0) for r in ran)
+    line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
+            f"{' and by upstream' if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            "are refused at it")
+    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted else "")
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall

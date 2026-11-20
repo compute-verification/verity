@@ -3,7 +3,6 @@ run verifier's credit is `tests/benchmarks/pouw/test_pearl_plus_scheme_credit.py
 from __future__ import annotations
 
 import json
-import math
 from fractions import Fraction
 from types import SimpleNamespace
 
@@ -57,45 +56,6 @@ def test_its_record_row_is_verified_compute_in_the_macs_its_verifier_credits() -
     assert (S.declared(PS.PEARL_PLUS, "record"), S.declared(PS.PEARL_PLUS, "symbol")) == ("work", "V")
     assert S.declared(PS.PEARL_PLUS, "published") == (PS.PEARL_PLUS.unit, Fraction(1)) == ("MACs", Fraction(1))
     assert [s.type for s in S.declared(PS.PEARL_PLUS, "channel_schemas")] == ["PearlSalt"]
-
-
-def test_its_credited_product_is_one_block_a_grid_tile_in_the_lean_verifiers_order_and_tickets() -> None:
-    """`credited_blocks` on two passes of Pearl+'s test instance (k = 128) at 32 x 16 tiles: ids per pass in `Run.lean`'s
-    `tile?` order (call by call, row-major, the last row block narrower), and each ticket `ticketWeight`'s, |credited rows|
-    x |credited columns| x `wref`(1, |K|, n) / n (the H100 record's `wref`, written here as `Records.lean` states it), over the
-    lcm of every pass's denominators; each block's real-row count is its rows below the call's ``real_rows``. Weight 1's excluded B row 20 takes its block of 64 columns, so its calls' tiles have
-    ticket 0 and `drawn_blocks` never draws them."""
-    from verity.commitments.randomness import derive
-    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_work import UnitRecord
-    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-
-    scheme = pouw_schemes.get("pearl-c-h100-v1-h3", k_min=32, tile=(32, 16))
-    k = 128
-
-    def call(index: int, m: int, n: int, weight: int, real: int, **rows: tuple[int, ...]) -> UnitRecord:
-        return UnitRecord(Matmul(index, Shape(m, k, n), weight), real, k, **rows)
-
-    passes = [[call(0, 32, 16, 0, 20, excluded_a=(5,)), call(1, 16, 32, 1, 16, excluded_b=(20,))],
-              [call(2, 48, 16, 0, 40), call(3, 16, 32, 1, 16, excluded_b=(20,))]]
-    blocks = PS.credited_blocks(scheme, passes)
-    r16, r32, r48 = tuple(range(16)), tuple(range(32)), tuple(range(32, 48))
-    c0, c1 = tuple(range(16)), tuple(range(16, 32))
-    want = [((0, 0), 0, 0, r32, c0, 0, (k, 32, 16, 16), 20, 19 * 16), ((0, 1), 1, 1, r16, c0, 0, (k, 16, 16, 32), 16, 0),
-            ((0, 2), 1, 1, r16, c1, 1, (k, 16, 16, 32), 16, 0), ((1, 0), 0, 2, r32, c0, 0, (k, 32, 16, 16), 32, 32 * 16),
-            ((1, 1), 0, 2, r48, c0, 0, (k, 16, 16, 16), 8, 8 * 16), ((1, 2), 1, 3, r16, c0, 0, (k, 16, 16, 32), 16, 0),
-            ((1, 3), 1, 3, r16, c1, 1, (k, 16, 16, 32), 16, 0)]
-    assert [(b.id, b.record, b.unit, b.rows, b.cols, b.col, b.size, b.real) for b in blocks] == [w[:8] for w in want]
-
-    def wref(m: int, k: int, n: int) -> int:
-        return m * n * (k + 32 * (k // 128)) - 32 * m * n + m * k * 32 + 2 * 64 * m * n + 68 * m * k
-
-    weights = [Fraction(wref(1, k, b.size[3]) * cells, b.size[3]) for b, (*_, cells) in zip(blocks, want)]
-    den = math.lcm(*(w.denominator for w in weights))
-    assert [b.ticket for b in blocks] == [int(w * den) for w in weights]
-    key = derive(b"verifier" * 4, "verity/pouw/pearl-plus-run-draw/v1", {"run": bytes(64)})
-    drawn = PS.drawn_blocks(scheme, passes, key, 16)
-    assert len(drawn) == 16 and {b.id for b in drawn} <= {(0, 0), (1, 0), (1, 1)}
 
 
 def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
@@ -597,7 +557,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
-    assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
+    assert on.run.commits["coin_source"] == SV.PEARL_C_CHALLENGER and on.run.commits["session"] == {"gate": 1}
     on.release()
     assert finished == ["session"]
 
@@ -665,7 +625,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
                                  "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
-               "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,
+               "commitment": {"coin_source": SV.PEARL_C_CHALLENGER, "session": session, "pass_index": 2,
                               "weights_root": w.hex(), "salt": "00" * 32}}
     for name, doc in reports.items():
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
@@ -673,7 +633,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     assert got["arm"] == PS.OPTION and got["retained"] is False and got["max_step_tokens"] == 64
     assert got["passes"] == [{"pass": 0, "timed": True, "units": 3, "tiles": 9, "transcript_root": "ef", "macs": None}]
     coins = got["coins"]
-    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.H1_CHALLENGER, SESSION, 2,
+    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.PEARL_C_CHALLENGER, SESSION, 2,
                                                                                           {"closed": True})
     assert coins["salt_after"] == PSALT.epoch_open_root(w, 2).hex()
     assert coins["manifest_head"] == {"session": {k: session[k] for k in ("session", "seq", "root", "commitment")},

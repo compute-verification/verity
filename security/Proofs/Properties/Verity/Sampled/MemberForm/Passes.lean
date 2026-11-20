@@ -14,7 +14,7 @@ reads off the blobs, and at it the scope check, the files' ports and roots and t
 setup asks, of each of its members, that its files pass the files check (`FilesPass`). This module carries the first
 to the second, at the window's member that is the parameters' member on the registered files (`MemberOn`):
 
-* **The circuit the checks read** (`circuitOf_flat`, `circuitOf_back`): an untyped statement's circuit file that
+* **The circuit the checks read** (`circuitOf_back`, over `Sampled.circuitOf_flat`): an untyped statement's circuit file that
   parses with some lookup tables is the circuit `Flock.ProvedScope.circuitOf` reads with them, and with tables that
   find by name whatever they find.
 * **What the statement's checks are** (`statementOf_checks`, `statement_checks`): the files' check of a member's
@@ -43,35 +43,6 @@ open FlockSoundness.Refine (ebind_ok TablesExtend parse_okLe parseCommit_okLe)
 variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The circuit the checks read -/
-
-/-- An untyped statement's circuit file that `HmOut.parse` reads is what `HmOut.parseCommit` and `HmRow.parse`
-read. -/
-theorem parse_both {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
-    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
-    Flock.HmOut.parseCommit tags cf T = .ok c ∧ Flock.HmRow.parse tags cf T = .ok c := by
-  have hi := Flock.HmOut.parse_isTmpl hp
-  refine ⟨?_, ?_⟩
-  · rw [Flock.HmOut.parseCommit, ite_eq_right (by simp [hi])]
-    exact hp
-  · unfold Flock.HmOut.parse at hp
-    rw [ite_eq_right (by simp [hi])] at hp
-    dsimp only at hp
-    rw [ite_eq_left (by simp [ht])] at hp
-    obtain ⟨c', hc', hp⟩ := ebind_ok hp
-    obtain ⟨_, -, hp⟩ := ebind_ok hp
-    cases hp
-    exact hc'
-
-/-- **The circuit the checks read is the one the file parses to**: an untyped statement's circuit file that
-`HmOut.parse` reads as `c` with the tables `T` is the circuit `ProvedScope.circuitOf` reads with them. -/
-theorem circuitOf_flat {tags : Flock.Tags} {cf : ByteArray} {T : List (String × ByteArray)} {c : Flock.Circuit}
-    (ht : tags.typed = false) (hp : Flock.HmOut.parse tags cf T = .ok c) :
-    Flock.ProvedScope.circuitOf tags cf T = .ok c := by
-  obtain ⟨hpc, hr⟩ := parse_both ht hp
-  unfold Flock.ProvedScope.circuitOf
-  split
-  · exact hpc
-  · exact hr
 
 /-- **More lookup tables read the same circuit**: where `T'` finds by name whatever `T` finds and the circuit file
 parses with `T`, `ProvedScope.circuitOf` reads with `T'` the circuit it parses to. -/
@@ -137,11 +108,13 @@ as parsed. -/
 theorem headerHeldAt_instances {reads : Array (String × String)} {held : Array _root_.Flock.Registered.Port}
     {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeldAt reads held rec hd = .ok ()) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.OneStageZk.headerHeldAt at h
-  split at h
-  · cases h
-  · rename_i hc
-    simpa using hc
+  cases hj : _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population")
+  · unfold _root_.Spot.OneStageZk.headerHeldAt at h
+    simp only [hj, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
+    first
+      | (simp only [bind, Except.bind, reduceCtorEq] at h; done)
+      | cases h
+  · rfl
 
 /-- A member's population check that passes read the public file's header, whose `instances` it held to the slice's
 population. -/

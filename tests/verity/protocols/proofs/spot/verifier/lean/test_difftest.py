@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib.util
 import json
 import random
 import re
@@ -57,8 +58,6 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
-import settings
-import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
@@ -77,6 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     hidden_sample as HD,
     link_points as LP,
     members as M,
+    one_circuit as OC,
     partition as P,
     produced as PD,
     proofs as PF,
@@ -99,8 +99,23 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+
+
+def _by_path(name: str, path: Path):
+    """The module at `path`, loaded once as `name`: this file is imported by path from other suites, where a bare
+    `import settings` finds their own registry and `stand_in` is on no path."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with_name("settings.py"))
+stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -564,7 +579,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts", "window_values", "coins", "released")
+                               "certified", "verdicts", "window_values", "coins", "commitments", "released")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -627,7 +642,7 @@ def decode_params(j) -> dict:
             raise D.Reject(str(e)) from None
     try:
         G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
-                      j.get("released"), len(j["log"]))
+                      j.get("commitments"), j.get("released"), len(j["log"]))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "pinned" in j:
@@ -749,7 +764,7 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
                    compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
-                   coins=p.get("coins"), released=p.get("released"))
+                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -762,7 +777,8 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
                    pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
-                   verdicts=p.get("verdicts"), coins=p.get("coins"), released=p.get("released"))
+                   verdicts=p.get("verdicts"), coins=p.get("coins"), commitments=p.get("commitments"),
+                   released=p.get("released"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -1318,9 +1334,22 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
+NO_BLOCKS = "restrict: the partition object has no blocks"
+
+
+@functools.cache
+def _blocked_lookups() -> list[str]:
+    """The lookups of the circuit file `Own.circuitFile` derives for `BLOCKED`'s block at unit 0, as the door lowers it."""
+    c, part, units = b"".join(codec.descriptor_chunks(BLOCKED.program)), BLOCKED.partition, [(0, 1)]
+    text = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=OC.cuts(c, part),
+                    formed=OC.formed_in(c, part, units))
+    return PF.lookups_of(json.loads(text.split(b"\n")[1].decode()[len("META "):]))
+
+
 def _tables_case(j):
-    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of a circuit whose META
-    is ``{"lookups": lookups}`` (`proofs.lookups_of`; ``{}`` without ``lookups``), or the ValueError they read with."""
+    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of the circuit file the
+    verifier derives from the case's C and partition (`BLOCKED`'s, `_blocked_lookups`), or the ValueError it refuses
+    with where the case names no partition; the case's own ``lookups`` reach no circuit the verifier reads."""
     j = _json(j)
     ds = j.get("digests") if isinstance(j, dict) else None
     if not isinstance(ds, list):
@@ -1329,10 +1358,11 @@ def _tables_case(j):
         raise D.Reject("digests is not a list of hex strings")
     if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
         raise D.Reject("not lowercase hex")
-    try:
-        return ds, PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
-    except ValueError as e:
-        return ds, e
+    if j.get("partition") is None:
+        return ds, ValueError(NO_BLOCKS)
+    if (j["partition"], j.get("program")) != (_json(BLOCKED.partition), BLOCKED.desc):
+        raise RuntimeError("the strategy drew a C and partition other than BLOCKED's")
+    return ds, _blocked_lookups()
 
 
 def tables_held(j):
@@ -3288,8 +3318,9 @@ def fanout(j):
     if not P.is_template_query(query):
         raise D.Reject("not a template query")
     try:
-        return {"fanout": P.fanout(PROGRAMS[sha], query),
-                "shared": P.shared_inputs(PROGRAMS[sha], query, [range(f, f + n) for f, n in held])}
+        gates = [range(f, f + n) for f, n in held]
+        return {"fanout": P.fanout(PROGRAMS[sha], query), "shared": P.shared_inputs(PROGRAMS[sha], query, gates),
+                "reads": [[r.start, len(r), i] for r, i in P.held_reads(PROGRAMS[sha], query, gates)]}
     except (P.QueryRefused, ValueError) as e:
         raise D.Reject(str(e)) from None
 
@@ -6577,8 +6608,10 @@ def test_r8_reads_the_readers_python_does(pieces):
     registered (`held`), is no run Input."""
     for s, f, shared in zip(READER_SETUPS, (1, 1, 4), ([0], [0], [])):
         case = {"program": s.desc, "query": _json(s.query)}
-        assert fanout(case) == {"fanout": f, "shared": shared}
+        assert fanout(case) == {"fanout": f, "shared": shared, "reads": []}
         assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
+        held = {**case, "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
+        assert fanout(held)["reads"] and D.replay(FANOUT, held, pieces) == ("output", D.canonical(fanout(held)))
         named, expanded = service.params_sampling_design("rate:1/2", s.program, s.query, None)
         rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
         given = {"params": {"anchors": [], "delta": "1/1000", "law": "rate:1/2", "leaf_layer": LEAF, "log": [],
@@ -6595,10 +6628,10 @@ def test_r8_reads_the_readers_python_does(pieces):
             assert D.replay(REGISTRATION, tied_given, pieces) == ("output", D.canonical(want))
     program = _readers(2, (("call", 2, _X0 + _X00),) * 2, True)
     case = {"program": _json(codec.encode_program(program)), "query": _json(P.template_instance_query(PAIR.id))}
-    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": []}))
+    assert D.replay(FANOUT, case, pieces) == ("output", D.canonical({"fanout": 1, "shared": [], "reads": []}))
     s = READER_SETUPS[0]
     case = {"program": s.desc, "query": _json(s.query), "held": [[g.start, len(g)] for g in G.held_gates(s.program, ["x"])]}
-    assert case["held"] and fanout(case) == {"fanout": 1, "shared": []}
+    assert case["held"] and fanout(case) == {"fanout": 1, "shared": [], "reads": [[0, 1, 0], [1, 1, 0]]}
     assert D.replay(FANOUT, case, pieces) == ("output", D.canonical(fanout(case)))
 
 

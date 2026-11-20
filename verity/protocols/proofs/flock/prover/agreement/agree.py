@@ -36,6 +36,8 @@ misses an expectation.
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 #: `verity.commitments.domains.FLOCK_NETLIST`, as bytes: the agreement scripts import the standard library alone
 #: (`test_domains.STDLIB_COPIES` holds the two equal)
@@ -87,8 +89,9 @@ def archived(a, path):
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
 
 
-#: the Lean verifier's refusal of upstream's plain proof files (`FlockVerify.UPSTREAM_PLAIN`): `verify` refuses every such
-#: session with it, and `agree` reports it for a session no other refusal meets once every check has passed
+#: the Lean verifier's refusal of upstream's plain proof files (`UPSTREAM_PLAIN`, `Flock/CircuitRead.lean`): `verify`
+#: refuses every such session with it, and `agree` reports it for a session no other refusal meets once every check has
+#: passed
 UPSTREAM_PLAIN = ("refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; "
                   "verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts")
 
@@ -181,15 +184,21 @@ def verdicts(a, slots=None):
             if drawn(s):
                 tasks.append(("upstream", upstream_cmd(a, public, ["--drawn-only"]), [s]))
 
+    a.lean_refused = []
+
     def run(t):
         # `slots` (ci.py): one budget of verifier processes shared by every set running at once
         if slots is not None:
             slots.acquire()
         try:
-            p = subprocess.run(t[1] + t[2], capture_output=True, text=True)
+            p = subprocess.run(t[1] + t[2], capture_output=True, text=True, env=LR.lean_env())
         finally:
             if slots is not None:
                 slots.release()
+        if t[0] == "lean" and (why := LR.why(p, LR.VERIFY_EXITS)) is not None:
+            # its answer is not read: its sessions have no Lean verdict to agree, and `main` fails the step
+            a.lean_refused.append(why)
+            return "", f"{p.stderr}{why}\n"
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
@@ -311,7 +320,9 @@ def main(argv=None, slots=None, quiet=False):
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))
-    return 1 if bad else 0
+    for why in a.lean_refused:
+        print(f"agree: FAILED: {why}", file=sys.stderr)
+    return 1 if bad or a.lean_refused else 0
 
 
 if __name__ == "__main__":

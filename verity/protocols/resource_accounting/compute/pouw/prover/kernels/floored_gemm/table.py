@@ -16,7 +16,6 @@ import sys
 from functools import partial
 from pathlib import Path
 
-#: what tb_table.py imports
 __all__ = ["LINEAR", "ncu_tensor"]
 
 ARMS = [("lt", "(a) cuBLASLt"), ("plain", "mine, plain"), ("b", "(b) noised"), ("c", "(c) duo /32"), ("d", "(d) duo /64"),

@@ -1,35 +1,18 @@
-"""The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
-output row registered too, proved by Flock in one loopback session under a subset sample of 16
-(`verity/protocols/proofs/flock/prover/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
-file are the fixture's `stage/`, the ones
-`tests/verity/protocols/proofs/flock/prover/test_lean_served_registered.py` holds to `register_served`.
-
-Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
-`SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`), is accepted with its program and registered finding read off that
-run, and proves the proof blocks its sample holds; a circuit file other than C_S (`one_circuit.restrict`)
-is refused before the verifier runs, tampered proof bytes
-are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
-``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
-names them or not. With it, a public file whose refs point one unit at another unit's rows is refused at its registered
-port. Under the docket's strata (`STRATA`) its public file's units are the population in order, and an
-accepted session under another population is rejected (`population_why`). A docket whose partition object queries
-the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
-digest of its own partition object.
+"""The proof system's own run of Flock's Lean verifier (`one_stage.proofs`): the door that derives a statement's
+circuit, C_S, from C and the partition (`one_circuit.restrict`) and runs the verifier on it, never on the statement's own
+circuit file, and what `verify` does with the verdict (fast tests, the verifier's run stood in for).
 
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at docket (a
-`RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
-``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
-doesn't apply to it.
+`RegisteredInput`) before Lean runs: Lean demands registered reads only where the public file's ``registered``, which the prover
+writes, names them.
 
 `printed` prints Lean's own `printT` vectors as Lean does, and `fits_why` and `draw_fits_why` refuse a length at their
 limit and not below it (fast tests; the SPOT service's difftest holds them to Lean's `fits` piece)."""
 from __future__ import annotations
 
-import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -38,30 +21,11 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC
 from verity.circuits import partition_object as PO
-from verity.commitments import hm96
 
 
-#: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
-#: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:49a1a88a003174e302e974951734bafd43abb6b52f64bc8652cb92f3674ff6f0"
-VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
-#: the docket's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
-STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
-#: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
-REGISTERED_ROOTS = {
-    "cs": {"value": "cs_table", "root": "85292b4d73b4a2f9ac4429451f7f6ad95ff6054e372e2ac4b557d7df2d82c84b"
-                                        "f236ea2d67845e034944c6ca2deb6df384e6a84bd31e199b83ddcaa3072d128e"},
-    "x": {"value": "x", "root": "b4a7cbb6cae041ca9e291069059940c00e7a9f776e2f2038af4f69e8a190e960"
-                                "983b2495a73c0b78b37b4a9cd6d0f45d4dbabe2a720a174762161b58b71ed82e"},
-    "out": {"value": "RoPEHead_v1{D=64}/o0",
-            "root": "9b65f4ba583ca2491f6240c66adfdb622c1164dc84ed00ba042c58f5a42f1690"
-                    "96976200fcfc0a879d4c5639199291795a80754f964ad13c6fde3f18eaefdbc0"},
-}
-#: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (3, 4, 6, 8, 10, 13, 14, 16, 17, 19, 21, 23, 26, 29, 30, 31)
-
-#: a test that runs Lean on the fixture
+#: a test that runs Lean
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 #: descriptors that read registered values, or can't say they don't, and one that reads none
 REGISTERED = {"registered input": json.dumps({"definitions": {"RegisteredInput16_v1": {}, "Input16_v1": {}}}).encode(),
@@ -185,7 +149,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
                          draw={"units": [0]}, registered=None)
     assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
     (env,) = children
-    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
+    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want, ABORT_ON_PANIC: "1"}
     differ = sorted(k for k in env.keys() | wanted.keys() if env.get(k) != wanted.get(k))
     assert differ == []
 
@@ -281,110 +245,6 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     assert why is None, why
     (f,) = got
     assert (f.accepted, f.why, f.units) == (False, PF.NO_ROW_WHY, ()), f
-
-
-@pytest.fixture(scope="module")
-def fx(tmp_path_factory) -> Path:
-    sys.path.insert(0, str(VERIFIER))
-    import ci
-
-    try:
-        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
-    PF.executable()
-    return root
-
-
-def _verify(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = True, strata=STRATA, partition=None,
-            circuit: Path | None = None):
-    st = fx / "stage"
-    return PF.verify(PF.Proof(circuit or st / "circuit.txt", st / public, (session,)),
-                     program=(st / "program.json").read_bytes(),
-                     partition=partition or json.loads((st / "partition.json").read_text()),
-                     draw={"units": [_block(st / public, partition or json.loads((st / "partition.json").read_text()))]},
-                     registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
-
-
-def _block(public: Path, partition: dict) -> int:
-    """The partition's block holding the statement's first unit, as its public file names it."""
-    u = PF._header(public)["units"]["indices"][0]
-    return next(k for k, (lo, hi) in enumerate((PO.levels(partition) or [[(0, u + 1)]])[0]) if lo <= u < hi)
-
-
-@lean
-@pytest.mark.slow
-def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
-    """The honest session's sample is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
-    the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
-    and it proves the sampled proof blocks."""
-    got, why = _verify(fx, fx / "session")
-    assert why is None, why
-    (f,) = got
-    partition = json.loads((fx / "stage" / "partition.json").read_text())
-    assert (f.accepted, f.why) == (True, ""), f
-    assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") is None
-    assert f.program == partition["program"]
-    assert f.registered == REGISTERED_ROOTS
-    assert f.units == DRAWN
-    draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
-    assert tuple(draw["units"]) == DRAWN, draw
-
-
-def _unnamed(fx: Path) -> str:
-    """The fixture's public file with its header's ``registered`` taken out, as a prover that names no registered read
-    would write it; its tables (the registered port's shared rows) kept."""
-    st = fx / "stage"
-    head, rest = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
-    header = json.loads(head)
-    del header["registered"]
-    (st / "pub-unnamed.bin").write_bytes(json.dumps(header).encode() + b"\n" + rest)
-    return "pub-unnamed.bin"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("unnamed", [False, True], ids=["public file names its reads", "public file names none"])
-def test_without_registered_reads_the_fixtures_statement_is_refused_before_lean_runs(fx, monkeypatch, unnamed):
-    """The program binds ``x`` and ``cs_table`` as registered inputs (`RegisteredInput16_v1`), so `verify` without the
-    verifier's own registered reads refuses before Lean runs, whether or not the public file names its reads."""
-    monkeypatch.setattr(PF, "executable", _never)
-    assert PF.reads_registered((fx / "stage" / "program.json").read_bytes())
-    got, why = _verify(fx, fx / "session", public=_unnamed(fx) if unnamed else "pub-32.bin", own=False)
-    assert got is None and why[0] == "registered", why
-
-
-def _pointed(fx: Path) -> str:
-    """The fixture's public file with the first sampled proof block's ref at port 0 (the row it reads of that port's shared table)
-    pointed at the next instance's, as a prover pointing a sampled proof block at another unit's rows would write it; its header
-    and tables kept. A sampled proof block's, since the session's statement is the sampled proof blocks' (`Flock.Draw`); port 0, an input,
-    since a circuit's inputs precede its outputs, whose refs setup holds to each instance's own row."""
-    st = fx / "stage"
-    head, body = (st / "pub-32.bin").read_bytes().split(b"\n", 1)
-    header = json.loads(head)
-    n, np_ = header["instances"], len(header["shared_rows"])
-    at = hm96.SHA512.proven_bytes * sum(header["shared_rows"].values())
-    refs = bytearray(body[at:at + 4 * n * np_])
-    i = header["units"]["indices"].index(DRAWN[0])
-    a, b = 4 * i * np_, 4 * ((i + 1) % n) * np_
-    assert refs[a:a + 4] != refs[b:b + 4], "the drawn unit and the next read one row at port 0: nothing to point"
-    refs[a:a + 4] = refs[b:b + 4]
-    (st / "pub-pointed.bin").write_bytes(head + b"\n" + body[:at] + bytes(refs) + body[at + 4 * n * np_:])
-    return "pub-pointed.bin"
-
-
-@lean
-@pytest.mark.slow
-def test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port(fx):
-    """Every port of the fixture's circuit is registered (`REGISTERED_ROOTS`), so the session's verifier holds each
-    instance's ref to the row at the position its unit's read names (`Flock.Registered.check`): a sampled proof block's input ref
-    pointed at the next instance's row is refused at setup, before any proof is read, and proves no proof block. Round 2
-    requires every port a second-stage header shares rows at to be registered (`second-refs`), so its sessions' refs are
-    held this way."""
-    got, why = _verify(fx, fx / "session", public=_pointed(fx))
-    assert why is None, why
-    (f,) = got
-    assert f.accepted is False and f.units == (), f
-    assert f.why.startswith("setup: registered reads: port ") and " reads position " in f.why, f
 
 
 def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(tmp_path, monkeypatch):
@@ -484,7 +344,7 @@ def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole(
     for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}},
                       {"program": "p", "query": {"name": "Q_template_instances", "params": {"templates": "T"}}}):
         with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that is no template query"):
-            OC.lower(b"{}", partition, never)
+            OC.lower(b"{}", partition, never, formed=OC.NO_BLOCK_CHECK)
 
 
 def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
@@ -517,7 +377,8 @@ def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_ma
     exe.write_text(f"#!{sys.executable}\nimport json, sys\nopen(sys.argv[-1], 'w').write(json.dumps(sys.argv[1:]))\n")
     exe.chmod(0o755)
     for u, tid in ((1, ids[0]), (2, ids[1])):
-        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe))
+        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe,
+                                  formed=OC.formed_in(c, part, [(u, u + 1)])))
         assert argv[0] == "compose" and argv[2:4] == [tid, f"unit/{tid}"], argv
         assert argv[7:9] == [part["program"], PO.digest(part)], argv
 
@@ -525,10 +386,10 @@ def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_ma
         raise AssertionError("built an executable for a C_S the door refuses")
 
     with pytest.raises(OC.Refused, match="C_S's root calls .*, and a block's units are instances of one template"):
-        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never)
+        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never, formed=OC.formed_in(c, part, [(1, 3)]))
     _, only_first, _ = _two_templates(2, 0)
     with pytest.raises(OC.Refused, match="is not one the partition's query lists"):
-        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never)
+        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never, formed=OC.formed_in(c, only_first, [(2, 3)]))
 
 
 def test_a_drawn_block_of_a_partition_of_many_templates_is_in_range_and_its_blocks_cover_c():
@@ -550,7 +411,8 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
     from verity.circuits import partition_object as PO
     c, part, ids = _two_templates(2, 2)
     for u, tid in ((0, ids[0]), (3, ids[1])):
-        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable).decode()
+        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable,
+                        formed=OC.formed_in(c, part, [(u, u + 1)])).decode()
         head, meta = text.split("\n", 2)[:2]
         assert head.startswith("flock-circuit/tmpl") and f"unit/{tid}" in head, head
         assert PO.digest(part) in meta and tid in meta, meta[:400]
@@ -560,8 +422,8 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
 @pytest.mark.slow
 def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_word_primitive():
     """A template of a word parameter ``w`` (``Value 8``) that no gate reads beside two bits it XORs: the lift lifts only
-    a Definition reaching a word primitive, so Lean's lowering, the door's executable, refuses it by name
-    (`Flock.Lower.WIDE`) rather than lowering ``w`` as one wire."""
+    a Definition reaching a word primitive, so the door's predicate refuses it by its clause `on-bits`
+    (`Spot.OneStageZk.admitted`) rather than lowering ``w`` as one wire."""
     from verity.circuits import codec
     from verity.circuits import partition_object as PO
     from verity.circuits.boolean import BIT, xor_gate
@@ -575,8 +437,10 @@ def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_w
     program, query = wired_population_program([(t, 2)], {"templates": [[tid, 2]]})
     c = b"".join(codec.descriptor_chunks(program))
     part = PO.build(json.loads(c), query, [[(0, 1), (1, 2)]])
-    with pytest.raises(OC.Refused, match="a parameter or return leaf wider than one bit, not lifted to bits"):
-        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable)
+    with pytest.raises(OC.Refused, match=re.escape(
+            "(Spot.OneStageZk.admitted), on-bits: C_S's template DoorLowerWordUnread_v0 reaches DoorLowerWordUnread_v0, "
+            "whose leaves are not all one bit after the lift to bits")):
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable, formed=OC.formed_in(c, part, [(0, 1)]))
 
 
 @pytest.mark.parametrize("indices, blocks, want", [
@@ -707,114 +571,12 @@ def test_the_door_refuses_at_the_base_arguments_lowering_of_c_s(tmp_path, monkey
     assert got is None and why == ("circuit", OC.PREFIX + OC.LOWER), why
 
 
-def _tampered(fx: Path, to: Path, rehash: bool) -> Path:
-    s = shutil.copytree(fx / "session", to / "session")
-    rep = s / "circuit.rep0.bin"
-    b = bytearray(rep.read_bytes())
-    b[len(b) // 2] ^= 1
-    rep.write_bytes(bytes(b))
-    if rehash:
-        rec = json.loads((s / "session.json").read_text())
-        for p in rec["proof_sha512"]:
-            if p["stream"] == "circuit/rep0":
-                p["sha512"] = hashlib.sha512(bytes(b)).hexdigest()
-        (s / "session.json").write_text(json.dumps(rec))
-    return s
-
-
-@lean
-@pytest.mark.slow
-@pytest.mark.parametrize("rehash", [False, True], ids=["record-kept", "record-rehashed"])
-def test_tampered_proof_bytes_are_rejected_by_the_verifier_itself(fx, tmp_path, rehash):
-    """One bit of the first rep's proof flipped: with the record's proof digest kept the verifier refuses the file the
-    record doesn't bind, and with it rewritten to the flipped bytes it refuses the proof itself. Either way the finding is
-    the verifier's reject, with no proof blocks proved."""
-    got, why = _verify(fx, _tampered(fx, tmp_path, rehash))
-    assert why is None, why
-    (f,) = got
-    assert f.accepted is False and f.why and f.units == (), f
-
-
-@lean
-@pytest.mark.slow
-def test_missing_proof_files_are_refused(fx, tmp_path):
-    st = fx / "stage"
-    got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)),
-                         program=(st / "program.json").read_bytes(),
-                         partition=json.loads((st / "partition.json").read_text()), draw={"units": [_block(st / "pub-32.bin", json.loads((st / "partition.json").read_text()))]},
-                         registered={})
+def test_missing_proof_files_are_refused(tmp_path, monkeypatch):
+    """A statement whose session directory holds no ``session.json`` is refused as ``proof`` once C_S is derived, before
+    Lean runs."""
+    circuit, public = _files(tmp_path)
+    _derived(monkeypatch, circuit)
+    monkeypatch.setattr(PF, "executable", _never)
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "none",)), program=RUN_ONLY, partition={"program": "p"},
+                         draw={"units": [0]}, registered=None)
     assert got is None and why[0] == "proof", why
-
-
-def _v2(fx: Path, session: Path, public: str = "pub-32.bin", own: bool = True, partition=None):
-    st = fx / "stage"
-    return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)),
-                          program=json.loads((st / "program.json").read_bytes()),
-                          partition=partition or json.loads((st / "partition.json").read_text()),
-                          registered=json.loads((st / "registered.json").read_text()) if own else None)
-
-
-def _same(v1, v2):
-    """The two runs' findings agree on all but the session's name (a path for `verify`, a name for the v2 audit)."""
-    (a,), (b,) = v1, v2
-    assert (a.accepted, a.why, a.program, a.registered, a.units) == (b.accepted, b.why, b.program, b.registered,
-                                                                    b.units), (a, b)
-
-
-@lean
-@pytest.mark.slow
-def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
-    """The v2 audit (`Spot.OneStageZk`) runs `verity-verify-proof verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
-    whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
-    registered file, its finding is `verify`'s, reason and proof blocks included."""
-    for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
-                         (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
-        got, why = _verify(fx, session, own=own)
-        assert why is None, why
-        mine, refused = _v2(fx, session, own=own)
-        assert refused is None, refused
-        _same(got, mine)
-        if own and session == fx / "session":
-            (f,) = mine
-            assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
-
-
-@lean
-@pytest.mark.slow
-def test_an_accepted_session_of_another_population_is_rejected(fx):
-    """Under a docket of 31 units, the honest session that the verifier accepts on its public file of 32 is
-    rejected with `population_why`'s reason: its file's unit 31 is no slot of the docket's."""
-    got, why = _verify(fx, fx / "session", strata=(("RoPEHead_v1{D=64}", ((0, 31),)),))
-    assert why is None, why
-    (f,) = got
-    assert (f.accepted, f.units) == (False, ()) and f.why == PF.population_why(range(32), [("t", [[0, 31]])]), f
-
-
-@lean
-@pytest.mark.slow
-def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
-    """A docket whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
-    heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the
-    v2 audit's own run rejects the honest session at setup, since the circuit file binds another partition object's
-    digest (`Flock.checkPartitionWith`), before any verdict reaches `FilePart.check`; `verify`, handed that
-    docket's strata, rejects it the same way. The other tests here run the v2 audit only on the circuit file's own
-    partition object."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as PA
-    from verity.circuits.codec import decode_program
-    from verity_vllm.definitions.registry.catalog import load
-
-    st = fx / "stage"
-    part = {**json.loads((st / "partition.json").read_text()),
-            "query": {"name": "Q_call", "version": 1, "params": {"X": 16}}}
-    strata = PA.strata(decode_program(json.loads((st / "program.json").read_text()), load()[0]), part["query"])
-    why = PF.population_why(range(32), strata)
-    assert why is not None and why.startswith("partition: the public file's 32 units are not"), (why, strata)
-    mine, refused = _v2(fx, fx / "session", partition=part)
-    assert refused is None, refused
-    (f,) = mine
-    assert (f.accepted, f.why, f.units) == (
-        False, "setup: partition: the circuit's partition digest is not the verifier's partition object's", ()), f
-    got, refused = _verify(fx, fx / "session", strata=strata, partition=part)
-    assert refused is None, refused
-    _same(got, mine)

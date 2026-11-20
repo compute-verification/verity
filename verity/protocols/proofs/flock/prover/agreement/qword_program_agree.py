@@ -21,12 +21,14 @@ the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.
   can't hold here, checked by Lean only).
 Writes DIR/result.json; exits 1 unless everything agrees.
 """
-import argparse, gc, gzip, hashlib, importlib, json, subprocess, sys
+import argparse, gc, gzip, hashlib, importlib, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 
 def lean(a, path, *extra):
-    p = subprocess.run([a.lean, "qword-program", str(path), *extra], capture_output=True, text=True)
+    p = LR.run([a.lean, "qword-program", str(path), *extra], ok_statuses=LR.REFUSES)
     line = next((l for l in p.stdout.splitlines() if l.startswith("QWORDPROGRAM ")), None)
     if line is None:
         raise RuntimeError(p.stdout + p.stderr)

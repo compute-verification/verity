@@ -1,5 +1,4 @@
-"""bench/run_config.py: --dry-run prints the exact stage commands.  The cheap CPU stages on the local m1 capture are
-`test_run_config_dry_run_of_record`."""
+"""bench/run_config.py: --dry-run prints the exact stage commands."""
 
 from __future__ import annotations
 

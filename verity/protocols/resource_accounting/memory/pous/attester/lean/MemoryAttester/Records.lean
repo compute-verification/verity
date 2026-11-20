@@ -3,6 +3,7 @@ module
 public import Flock.HmRow
 public import Randomness
 public import Flock.FV3
+public import Commitments.SessionCoins
 
 /-!
 # The memory challenger's records and coins
@@ -11,7 +12,8 @@ public import Flock.FV3
 (`coinDigest`, `coinLeaf`, `CoinTree.make`, `CoinTree.draw`, `CoinTree.opening`, `verifyCoin`), the session commitment
 and its header, the round record (`Round.value`), the records digest, the signed message, and `blockDigest`. A Python
 exception is an `Except.error` here, and where the Python's caller reads an exception as "no" (`verify_coin`), so does the
-Lean. Integers are big-endian.
+Lean. Integers are big-endian. The coin's digest and leaf, the opening's check (`verifyCoin`), the tags and the signed header
+are `Flock.SessionCoins`'s (the commitments' package), which a supplied function's body reads too; the names here are its.
 -/
 
 @[expose] public section
@@ -21,62 +23,39 @@ set_option backward.privateInPublic.warn false
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA)
 
 abbrev E := Except String
 
-def PROTOCOL : String := "verity-pous/memory-challenger/v2"
 def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
-def COIN_TREE : String := "verity-pous/coin-tree/hm96-sha512/v1"
-def RECORDS : String := "sha512/row/v2"
-def COIN_TAG : ByteArray := "verity-pous/memory-challenger/coin/v1".toUTF8.push 0
-def COIN_BINDING : ByteArray := "verity-pous/memory-challenger/coin-tree/v1".toUTF8.push 0
 def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v1".toUTF8.push 0
-def COIN_SCHEMA : String := "pous/coin/hm96-sha512/v1"
 def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
-def COMPLETE : String := "complete"
-def LATE : String := "late"
-def CLOCK : String := "CLOCK_MONOTONIC ns"
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
 A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
 2^-64. -/
 def DRAW_BYTES : Nat := 4096
 
-/-- `x.to_bytes(n, "big")`, refused at `2^(8n)` and above, as Python's `OverflowError`. -/
-def beN (n x : Nat) (what : String) : E ByteArray :=
-  if x < 2 ^ (8 * n) then pure ⟨(Array.range n).map fun i => (x >>> (8 * (n - 1 - i))).toUInt8⟩
-  else throw s!"{what} = {x} does not fit in {n} bytes"
+def beN (n x : Nat) (what : String) : E ByteArray := SessionCoins.beN n x what
 
 /-- `block_digest`: the block's `sha512/row/v2` digest, `SHA-512(P(8N) ‖ block)`. -/
 def blockDigest (block : ByteArray) : ByteArray := Sha512.hash (HmRow.rowPrefixV2 (8 * block.size) ++ block)
 
-/-- `_domain(tag, session, count)`: binding the first 32 bytes of `SHA-512(tag ‖ session)`, owner −1 (the boundary). -/
-def domain (tag session : ByteArray) (count : Nat) : FV3.Sha512.Domain :=
-  .make ((Sha512.hash (tag ++ session)).extract 0 32) (-1) 0 count
+def domain (tag session : ByteArray) (count : Nat) : FV3.Sha512.Domain := SessionCoins.domain tag session count
 
 /-! ## Coins -/
 
-def HM96 : Hm96 := Hm96.sha512
+def HM96 : Hm96 := SessionCoins.HM96
 
-/-- `HM96.check_key`: 256 bytes, bit 2047 (bit 7 of the last byte) zero. -/
-def checkKey (key : ByteArray) : E Unit :=
-  if key.size == HM96.keyBytes && key.get! (HM96.keyBytes - 1) &&& 0x80 == 0 then pure ()
-  else throw s!"an {HM96.name} key is {HM96.keyBytes} bytes with bit {HM96.keyBits} and above zero"
+def checkKey (key : ByteArray) : E Unit := SessionCoins.checkKey key
 
-def checkSalt (salt : ByteArray) : E Unit :=
-  if salt.size == HM96.saltBytes then pure () else throw s!"an {HM96.name} salt is {HM96.saltBytes} bytes"
+def checkSalt (salt : ByteArray) : E Unit := SessionCoins.checkSalt salt
 
-/-- `coin_digest`: `x_j = SHA-512(COIN_TAG ‖ session ‖ u32 j ‖ u64 index)`. -/
-def coinDigest (session : ByteArray) (j index : Nat) : E ByteArray := do
-  pure (Sha512.hash (COIN_TAG ++ session ++ (← beN 4 j "j") ++ (← beN 8 index "index")))
+def coinDigest (session : ByteArray) (j index : Nat) : E ByteArray := SessionCoins.coinDigest session j index
 
-/-- `coin_leaf`: `HM96.tree_leaf(key, HM96.commit_string(key, x_j, salt))`. -/
-def coinLeaf (key session : ByteArray) (j index : Nat) (salt : ByteArray) : E ByteArray := do
-  let x ← coinDigest session j index
-  checkKey key
-  checkSalt salt
-  pure (HM96.treeLeaf key (HM96.commitString key x salt))
+def coinLeaf (key session : ByteArray) (j index : Nat) (salt : ByteArray) : E ByteArray :=
+  SessionCoins.coinLeaf key session j index salt
 
 structure CoinOpening where
   j : Nat
@@ -145,10 +124,7 @@ structure ChallengePhaseCommitment where
 
 /-- `verify_coin`: the opening opens round `j`'s coin under the commitment's coin tree, to a block index. -/
 def verifyCoin (c : ChallengePhaseCommitment) (o : CoinOpening) : Bool :=
-  o.j < c.k && o.index < c.blocks &&
-    match coinLeaf c.coinKey c.session o.j o.index o.salt with
-    | .error _ => false
-    | .ok leaf => (domain COIN_BINDING c.session c.k).verifyOpening c.coinRoot c.k o.j leaf COIN_SCHEMA o.path
+  SessionCoins.verify c.session c.coinRoot c.coinKey c.blocks c.k o.j o.index o.salt o.path
 
 /-- One round's record. -/
 structure Round where
@@ -176,41 +152,11 @@ def recordsStream (rounds : Array Round) : E ByteArray := do
 def recordsDigest (rounds : Array Round) : E ByteArray := do
   pure (blockDigest (← recordsStream rounds))
 
-private def hex4 (n : Nat) : String :=
-  let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
-  String.ofList [d 3, d 2, d 1, d 0]
+def pyJsonStr (s : String) : String := SessionCoins.pyJsonStr s
 
-/-- A string as Python's `json.dumps` writes it (`ensure_ascii`): `"` and `\` escaped, `\b \f \n \r \t` short, every
-other character outside `' '…'~'` as `\uXXXX` (above U+FFFF a surrogate pair), lowercase. -/
-def pyJsonStr (s : String) : String := Id.run do
-  let mut out := "\""
-  for c in s.toList do
-    let n := c.toNat
-    out := match c with
-      | '"' => out ++ "\\\""
-      | '\\' => out ++ "\\\\"
-      | '\n' => out ++ "\\n"
-      | '\r' => out ++ "\\r"
-      | '\t' => out ++ "\\t"
-      | c => if n == 8 then out ++ "\\b" else if n == 12 then out ++ "\\f"
-             else if 0x20 ≤ n && n ≤ 0x7e then out.push c
-             else if n < 0x10000 then out ++ "\\u" ++ hex4 n
-             else let m := n - 0x10000; out ++ "\\u" ++ hex4 (0xd800 + (m >>> 10)) ++ "\\u" ++ hex4 (0xdc00 + (m &&& 0x3ff))
-  return out ++ "\""
-
-/-- The header's fields, in key order, as `ChallengePhaseCommitment.header()` and `message` write them. -/
-def ChallengePhaseCommitment.headerFields (c : ChallengePhaseCommitment) : List (String × String) :=
-  [("binding", pyJsonStr (hexOf c.binding)), ("block_bytes", toString c.blockBytes), ("blocks", toString c.blocks),
-   ("clock", pyJsonStr CLOCK), ("coin_key_sha512", pyJsonStr (hexOf (Sha512.hash c.coinKey))),
-   ("coin_root", pyJsonStr (hexOf c.coinRoot)), ("coin_tree", pyJsonStr COIN_TREE), ("k", toString c.k),
-   ("limit_ns", toString c.limitNs), ("protocol", pyJsonStr PROTOCOL), ("records", pyJsonStr RECORDS),
-   ("session", pyJsonStr (hexOf c.session))]
-
-/-- The signed header: the commitment's header with how the session ended and its number of rounds, as
-`json.dumps(sort_keys=True, separators=(",", ":"))`. -/
+/-- The signed header: the commitment's header with how the session ended and its number of rounds. -/
 def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
-  let fields := (c.headerFields ++ [("ended", pyJsonStr ended), ("rounds", toString rounds)]).toArray.qsort (·.1 < ·.1)
-  "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
+  SessionCoins.header c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
 def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do

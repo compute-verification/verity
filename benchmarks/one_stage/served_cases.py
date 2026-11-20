@@ -129,7 +129,7 @@ from typing import Any
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier import levels as LV
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
@@ -163,7 +163,7 @@ PEARL_PLUS_PIECE = Path("private/pearlplus/case")
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
 #: The docket records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
-#: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
+#: record W and each window's record R as its audit wrote it. The compose hand-off
 #: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
 #: can name
 RECORDS = ("pearlplus/w*/registration.json", "v3c-w*/audit/window/registration.json")
@@ -620,8 +620,8 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
-                           capture_output=True, text=True)
+        p = LC.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
+                   ok_statuses=LC.CHECK_EXITS)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])

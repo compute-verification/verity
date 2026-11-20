@@ -30,12 +30,14 @@ def named (s : String) : Array (String × Nat) :=
 
 /-- `compose DESC KEY NAME INS OUTS LAYOUT PROGRAM PARTITION DIGESTS FILE`: Definition `KEY` lowered with one 16-bit port a
 row word, and the block's file written: input rows `INS` (`name:bits`), output ports `OUTS` (`name:words`), META's
-`program_digests` the JSON object `DIGESTS`. -/
+`program_digests` the JSON object `DIGESTS`. Its output is no verdict of the door: the door's lowering is
+`Spot.OneStageZk.lowerBlock`, under `admitted` and `admittedBlock`, and nothing cites this executable's acceptance of a
+block as the door's. -/
 def composeMain : List String → IO UInt32
   | [desc, key, name, ins, outs, layout, prog, part, digests, file] => do
     let ins := named ins
     let outs := named outs
-    let some (.obj ds) := (Lean.Json.parse digests).toOption | do IO.eprintln "flock-lower-check compose: DIGESTS is not a JSON object"; return 2
+    let some (.obj ds) := (JsonParse.parse digests).toOption | do IO.eprintln "flock-lower-check compose: DIGESTS is not a JSON object"; return 2
     let programDigests := ds.toList.filterMap fun (k, v) => match v with | .str s => some (k, s) | _ => none
     let P ← match Program.decode (← IO.FS.readBinFile desc) with
       | .ok p => pure p
