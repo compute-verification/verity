@@ -23,7 +23,7 @@ open Flock (V)
 open Spot.Test.Docket (V3 QE ROOT program)
 
 /-- The refusal `r` gives, `ok` when it gives none. -/
-def why? (r : V α) : String := match r with
+def why? {α : Type} (r : V α) : String := match r with
   | .ok _ => "ok"
   | .error e => e
 
