@@ -44,7 +44,7 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
 
 
 def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
-    """A `verity lean try --on vy-nebius-1` without `--pool` is refused naming the pools to add, not only slot.py by hand."""
+    """A `verity lean try --on vy-nebius-2` without `--pool` is refused naming the pools to add, not only slot.py by hand."""
     (tmp_path / "proofs").write_text("p0 0-15\n")
     why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
     assert "add `--pool proofs` to `research run` or `verity lean try`" in why
@@ -406,7 +406,7 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
             if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows
     cpu = {n for n in manifest["nodes"] if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
-    assert set(row["nodes"]) == cpu | {"vy-nebius-1", "vy-nebius-2"} and len(row["nodes"]) == len(set(row["nodes"]))
+    assert set(row["nodes"]) == cpu | {"vy-nebius-2"} and len(row["nodes"]) == len(set(row["nodes"]))
     assert row["no_restart"] and "run" not in row and "hold" not in row
     spec = importlib.util.spec_from_file_location("check_slot_for_its_copy", REPO / S.SLOT_PATHS[0])
     slot = importlib.util.module_from_spec(spec)
@@ -469,7 +469,7 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
 
 
 def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
-    """On node 1 lanes' direct runs must not take the cores the candidates' checks need. `--renice 19` stops nothing: it renices every
+    """On cpu-4 to cpu-6 lanes' direct runs must not take the cores the candidates' checks need. `--renice 19` stops nothing: it renices every
     process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
     gate = _run(runs, "r-gate", "running", ["python3", "tools/check/slot.py", "--", "true"], pgid=10, runner=9)

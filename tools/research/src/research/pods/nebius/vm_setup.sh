@@ -114,7 +114,7 @@ done
 echo 'd /run/gpu-lease 1777 root root -' > /etc/tmpfiles.d/gpu-lease.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/gpu-lease.conf
 # gpu-lease hands out this VM's GPUs: a `research run --on` here sees none unless it asks with --gpus N (research.remote).
-# The cluster's nodes say otherwise in /etc/vy/direct-gpus (cluster_up.sh), which the runner reads first.
+# A node that says otherwise in /etc/vy/direct-gpus (`cluster policy apply`) is read first by the runner.
 # vy-gpu-adopt holds the lease of a GPU some process uses without one, until it exits, and logs it (gpu_adopt.py).
 install -d -m 755 /etc/vy
 if nvidia-smi -L 2> /dev/null | grep -q '^GPU ' && [ ! -e /etc/vy/direct-gpus ]; then
