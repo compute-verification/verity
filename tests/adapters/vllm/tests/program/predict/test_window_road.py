@@ -16,12 +16,15 @@ from verity_cli import served_table as ST
 
 from tests.program.predict.test_close_record import _close
 from tests.program.predict.test_window_rows import RUN as RUN_ROOT
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.predict.close_record import Record
 
 ROOT = Path(__file__).parents[6]
 COMPILER = {"name": "c", "digest": "cd" * 64}
-#: what a card's serve writes in serve.json of the application's checkpoint (remote's REPO, REV and PRECISION)
-SERVED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "precision": "bfloat16"}
+#: what a card's serve writes in serve.json of the application's checkpoint (remote's REPO, REV and PRECISION) and of its
+#: device (`serve_seal.target_of`), the default profile standing in for the card's
+SERVED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "precision": "bfloat16",
+          "execution": "bi-eager"}
 PROGRAM, WORKLOAD = "ab" * 64, "12" * 64
 
 
@@ -36,7 +39,7 @@ def _serve_dir(tmp_path, monkeypatch):
     got = rec.make(plan, 0, compiled, low, units, served, SimpleNamespace(rc=binding.rc, com=None), handoff=Path(h["out"]))
     line = {"window": 0, "advice": "ef" * 64, "handoff": {"out": h["out"]}, "record": {"pending": "made after the lease"}}
     (d / "plans.jsonl").write_text(json.dumps(line) + "\n")
-    (d / "serve.json").write_text(json.dumps({"scheme": "rows-sha512", **SERVED}))
+    (d / "serve.json").write_text(json.dumps({"scheme": "rows-sha512", **SERVED, "target": TargetProfile.default().to_json()}))
     (d / "seals.jsonl").write_text(json.dumps({"window": 0, "run_root": RUN_ROOT}) + "\n")
     commit = d / "windows" / "w0" / "commit"
     commit.mkdir(parents=True)
@@ -88,7 +91,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     on a real window's record. Slow (minutes) for the close."""
     d = _serve_dir(tmp_path, monkeypatch)
     (tmp_path / "run").mkdir()
-    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"))
+    path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
+    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
     assert "PREFLIGHT" not in log and "ROW" not in log.replace("no ROW read", ""), log
     assert "SEAL: the window's seal" in log and ": PASS" in log.split("SEAL: ")[1].splitlines()[0], log
     assert "COMPILER: the record's registered compiler is predict row's: PASS" in log, log
