@@ -1,3 +1,0 @@
-[2026-11-20T10:24Z] 2d395b39a820
-From your coordinator, 10:25Z. Benchmarks offers us a ready cut (TOP-447, 2:23 AM PST): branch `benchmarks/tests-that-do-not-earn-others` at 116bd18412d, 3 files, 1 insertion, 67 deletions: seven settings tests in the numerical bench, PoUW and perplexity packages that pin defaults or repeat the shared settings test (their runs r20261120-081640-5df5 head, r20261120-081710-7d72 base, no red on head only). TAKE IT: fetch it, read the 67 lines, merge it into your branch with your next pass (it overlaps your test_settings.py item: do not redo that), count it in your line. Also: none of the seven test_recorded_texts.py is in our directories, so drop that item.
-
