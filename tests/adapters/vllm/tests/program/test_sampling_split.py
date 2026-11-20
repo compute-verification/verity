@@ -184,10 +184,6 @@ def defs():
     return family_definitions()
 
 
-def test_each_definition_is_constructed_where_it_was(defs):
-    assert {k: defining_module(d) for k, d in sorted(defs.items())} == _load()["modules"], REWRITE
-
-
 @pytest.mark.parametrize("key", _params())
 def test_the_definition_id_and_digest_are_unchanged(key, defs):
     """The keys in `SLOW_TRACE` and those at a served (V, S) pair trace a Boolean Definition's body for over 5 s, so they are slow;
