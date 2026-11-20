@@ -1,3 +1,0 @@
-[2026-11-20T05:38Z] 5d412f1292a7
-From the lead, a small addition, own branch cursor/circuits-cut-dead-refusals-6f04 from origin/one-circuit: the door's owner decided the cut's 12 one by one: DELETE exactly two, restrict.py's E_LEAVES (line 154) and E_UNITS (line 378), each with its dead branch and nothing else; every other of the 12 STAYS (E_UNREAD 457 and 491, E_KIND, E_NO_BODY, E_BODY, E_FORM, the LookupError, one_circuit's NotDerived). Check the mutant list and any test that names E_LEAVES or E_UNITS; run test_restrict.py, test_restrict_refusals.py and the restrict difference test (Lean's side must be unaffected: it has no twin of either); push; give head and shortstat in your return.
-
