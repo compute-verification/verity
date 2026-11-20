@@ -158,16 +158,13 @@ def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
         assert [list(r) for r in rows] == IS.window_state(scan, states, w * T, T)
 
 
-def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serve_dir, tmp_path, monkeypatch):
+def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serve_dir, tmp_path):
     """window-commit's `SCAN_STATE` (`window_rows.state_value` of the kept scan's rows, on NumPy, the reference)
     opened whole, prover only (`prove_path.scan_state_opening`), is the tree ``scan_zk.py --v3c`` reads as its state:
     `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's, its salts
     read from the file alone: a second commit of the same rows, under other fresh salts and another root, is held as
     well. Another execution phase's rows are refused by name."""
     from verity_vllm.program.predict import window_rows as WRS
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as H1R
-
-    monkeypatch.setattr(H1R, "MODE", "numpy")
     from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run, program = "ab" * 64, "cd" * 64
