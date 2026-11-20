@@ -113,6 +113,17 @@ makes it today. -/
 def ClaimCoversConversion (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ) : Prop :=
   ∀ r, P.accepts r → ∀ i, P.kind r i = true → cap r i - b r i + tol ≤ P.claimedFree r i
 
+/-- **The committed free claims cover the conversion's bound, pooled** (open, compute-accounting with lean): in an
+accepted run, the server-day blocks' committed free-capacity claims summed are at least the server-day blocks' compute
+capacities summed less PoUW's use bounds summed, plus the tolerance `tol` once (all gates at `π`). It gives
+`FreeClaimHoldsPooled` (`freeClaimHoldsPooled_of_conversion`); `ClaimCoversConversion` gives it on every accepted run with
+a server-day block (`claimCovers_pooled`), and `pooled_counts_tol_once` shows it holding where `ClaimCoversConversion`
+does not. Nobody compares it today, for the reasons `ClaimCoversConversion` gives. -/
+def ClaimCoversConversionPooled (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ) : Prop :=
+  ∀ r, P.accepts r →
+    (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap r i) - (∑ i ∈ univ.filter (fun i => P.kind r i = true), b r i) +
+        tol ≤ ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i
+
 /-! ## PoUS and PoUB
 
 PoUW, PoUS and PoUB are the three instances of `UseAtLeast`, over the three capacities of the hardware graph (compute

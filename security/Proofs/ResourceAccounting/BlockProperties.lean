@@ -10,7 +10,10 @@ import Mathlib.Tactic
 `freeBlockAtMost` proves `FreeBlockAtMost`. `sizeAdds` proves that the blocks directly inside a server-day block have
 sizes adding to at most it, and `sizeExclusive` that a server-day block's free and inference children's work do not
 double-count. `conversion_le` is the conversion for size as one inequality, `freeClaimHolds_of_conversion` gives
-`FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `listed_gate_in_serverDay` puts every
+`FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `conversion_pooled_le` is the same
+conversion summed over a run's server-day blocks with the tolerance counted once, `freeClaimHoldsPooled_of_conversion`
+gives `FreeClaimHoldsPooled` from it, and `pooled_counts_tol_once` shows the pooled bound below the per-block bounds
+summed, on a run with two server-day blocks. `listed_gate_in_serverDay` puts every
 computed gate at a listed location in a server-day block, `hidden_work_le` bounds hidden hardware's work by the work at
 unlisted locations, and `capacityAtMost_compute` gives the compute capacity from `ComputeRate` over the listed
 locations. `chain` proves `Chain`.
@@ -293,6 +296,107 @@ theorem conversion_excludes (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) �
       P.sizeOut r i ≤ cap ∧ ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) := by
   rintro ⟨huse, hcap, htol⟩
   have := conversion_le P salt r M i hki b cap tol huse hcap htol
+  omega
+
+/-! ## The conversion, pooled over the run -/
+
+/-- `M`'s inference blocks inside the blocks of any set `S` of `outer`'s blocks have committed size claims summing to at
+most `M`'s: each unit of `inner` has one parent, so no unit is counted in two of them. -/
+theorem tolChildren_sum_le (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))) (S : Finset (Fin (P.nOut r))) :
+    ∑ i ∈ S, ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ M, claimedSize (P.claimsIn r u) := by
+  rw [← Finset.sum_biUnion]
+  · refine Finset.sum_le_sum_of_subset fun u hu => ?_
+    obtain ⟨i, -, hu⟩ := Finset.mem_biUnion.mp hu
+    exact (Finset.mem_filter.mp hu).2
+  · intro i _ j _ hij
+    rw [Function.onFun, Finset.disjoint_left]
+    intro u hi hj
+    simp only [Runs.infChildren, Finset.mem_filter, Finset.mem_univ, true_and] at hi hj
+    exact hij (hi.1.1.symm.trans hj.1.1)
+
+/-- **The conversion, pooled over the run.** In one run, for a set `M` of `inner`'s units: from PoUW's conclusion for `M`
+in every server-day block (`huse`), every server-day block's size at most its `cap` (`hcap`) and `M`'s committed size
+claims at most `tol` (`htol`), the sum over the server-day blocks of the free blocks' work, `M`'s inference blocks' work
+and `b` is at most the server-day blocks' `cap` summed plus `tol`, once. All in gates at the run's pricing. -/
+theorem conversion_pooled_le (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (b cap : Fin (P.nOut r) → ℕ) (tol : ℕ)
+    (huse : ∀ i, P.kind r i = true → b i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : ∀ i, P.kind r i = true → P.sizeOut r i ≤ cap i)
+    (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) :
+    ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) + b i)
+      ≤ (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap i) + tol := by
+  have hper : ∀ i ∈ univ.filter (fun i => P.kind r i = true),
+      (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) + b i ≤
+        cap i + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) := by
+    intro i hi
+    have hki := (Finset.mem_filter.mp hi).2
+    have hex := sizeExclusive_run P salt r M i hki
+    have h1 := huse i hki
+    have h2 := hcap i hki
+    omega
+  calc _ ≤ ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        (cap i + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u)) := Finset.sum_le_sum hper
+    _ = (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap i) +
+        ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+          ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) := Finset.sum_add_distrib
+    _ ≤ _ := Nat.add_le_add_left ((tolChildren_sum_le P r M _).trans htol) _
+
+/-- **The pooled conversion in the form a pooled claim reads**: the server-day blocks' free blocks' work and `M`'s
+inference blocks' work, summed over the run, are at most the server-day blocks' `cap` summed less their `b` summed, plus
+`tol` (gates). No side condition: over the naturals `C + tol − B ≤ (C − B) + tol`. -/
+theorem conversion_pooled_le_sub (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (b cap : Fin (P.nOut r) → ℕ) (tol : ℕ)
+    (huse : ∀ i, P.kind r i = true → b i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : ∀ i, P.kind r i = true → P.sizeOut r i ≤ cap i)
+    (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol) :
+    ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
+      ≤ (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap i) -
+          (∑ i ∈ univ.filter (fun i => P.kind r i = true), b i) + tol := by
+  have h := conversion_pooled_le P salt r M b cap tol huse hcap htol
+  rw [Finset.sum_add_distrib] at h
+  omega
+
+/-- The per-block free claim gives the pooled one. -/
+theorem freeClaimHolds_pooled (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))) (h : P.FreeClaimHolds r M) :
+    P.FreeClaimHoldsPooled r M :=
+  Finset.sum_le_sum fun i hi => h i (Finset.mem_filter.mp hi).2
+
+/-- **The pooled free claim holds from the pooled conversion**: in one run, PoUW's conclusion for `M` in every
+server-day block, every server-day block's size at most `cap`, `M`'s committed size claims at most `tol`, and the
+committed free claims summed at least the `cap`s summed less the `b`s summed plus `tol` give `FreeClaimHoldsPooled r M`. -/
+theorem freeClaimHoldsPooled_of_conversion (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (r : P.Run)
+    (M : Finset (Fin (P.nIn r))) (b cap : Fin (P.nOut r) → ℕ) (tol : ℕ)
+    (huse : ∀ i, P.kind r i = true → b i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
+      ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ M), P.sizeIn r u)
+    (hcap : ∀ i, P.kind r i = true → P.sizeOut r i ≤ cap i)
+    (htol : ∑ u ∈ M, claimedSize (P.claimsIn r u) ≤ tol)
+    (hclaim : (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap i) -
+        (∑ i ∈ univ.filter (fun i => P.kind r i = true), b i) + tol ≤
+      ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i) : P.FreeClaimHoldsPooled r M :=
+  (conversion_pooled_le_sub P salt r M b cap tol huse hcap htol).trans hclaim
+
+/-- **The per-block cover gives the pooled one** on every accepted run with a server-day block: each block's
+`cap − b + tol` summed is at least the `cap`s summed less the `b`s summed plus `tol` once. -/
+theorem claimCovers_pooled (P : Runs L) (cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (tol : ℕ)
+    (h : P.ClaimCoversConversion cap b tol) (r : P.Run) (ha : P.accepts r)
+    (hne : (univ.filter (fun i => P.kind r i = true)).Nonempty) :
+    (∑ i ∈ univ.filter (fun i => P.kind r i = true), cap r i) -
+        (∑ i ∈ univ.filter (fun i => P.kind r i = true), b r i) + tol ≤
+      ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i := by
+  set S := univ.filter (fun i => P.kind r i = true)
+  have hsum : ∑ i ∈ S, (cap r i - b r i + tol) ≤ ∑ i ∈ S, P.claimedFree r i :=
+    Finset.sum_le_sum fun i hi => h r ha i (Finset.mem_filter.mp hi).2
+  have hsplit : ∑ i ∈ S, cap r i ≤ ∑ i ∈ S, (cap r i - b r i) + ∑ i ∈ S, b r i := by
+    rw [← Finset.sum_add_distrib]; exact Finset.sum_le_sum fun i _ => by omega
+  have htol : tol ≤ ∑ _i ∈ S, tol := by
+    obtain ⟨i, hi⟩ := hne
+    exact Finset.single_le_sum (f := fun _ => tol) (fun _ _ => Nat.zero_le _) hi
+  rw [Finset.sum_add_distrib] at hsum
   omega
 
 /-! ## The chain -/
@@ -765,6 +869,103 @@ theorem conversion_bites :
     by decide, by decide⟩
   rw [demo_freeChildren_empty, Finset.sum_empty, zero_add]
   decide
+
+/-- `line 2` in two units: gate 1 in unit 0, gate 2 in unit 1. -/
+def cutTwo : Partition (placed 2).toCircuit 2 where
+  unit g := if g.val = 0 then none else if g.val = 1 then some 0 else some 1
+  input_iff g := by
+    simp only [placed, line]
+    split_ifs with h0 h1 <;> simp [h0]
+
+/-- Unit `i` of `cutTwo` holds gate `i + 1` alone. -/
+theorem cutTwo_gate (i : Fin 2) (g : Fin (placed 2).N) (hg : cutTwo.unit g = some i) : g.val = i.val + 1 := by
+  have hlt := g.isLt
+  simp only [placed, line] at hlt
+  simp only [cutTwo] at hg
+  split_ifs at hg with h0 h1
+  · obtain rfl := Option.some_injective _ hg
+    simp [h1]
+  · obtain rfl := Option.some_injective _ hg
+    have : (1 : Fin 2).val = 1 := rfl
+    omega
+
+/-- One run of the circuit `placed 2` at a free-block capacity `fc`, cut at one location into two server-day blocks, gate
+1 during tick 1 and gate 2 during tick 2, each holding its gate as one inference block claimed of size at most 1 gate and
+0 bits of fresh input, each server-day block claiming size at most 1 gate and 0 bits of input from its own past and from
+the outside world, and each committing the free-capacity claim `fc`. -/
+noncomputable def demoCut (fc : ℕ) : Runs Unit where
+  Run := Unit
+  pr _ := 0
+  mono _ _ _ := le_refl 0
+  union _ _ := by simp
+  accepts _ := True
+  actual _ := placed 2
+  π _ _ := 1
+  θ _ := ∅
+  registered := 0
+  nOut _ := 2
+  outer _ := cutTwo
+  kind _ _ := true
+  locOut _ _ := {()}
+  listed := {{()}}
+  kindIff _ _ := by simp
+  hiddenUnlisted _ _ h := absurd h (by decide)
+  winOut _ i := ⟨i.val + 1, 1⟩
+  claimsOut _ _ := [.sizeAtMost 1, .inputAtMost [.past] 0, .inputAtMost [.world] 0]
+  claimedFree _ _ := fc
+  nIn _ := 2
+  inner _ := cutTwo
+  ref _ := { parent := id, sub := fun g => by simp }
+  cls _ _ := Class.inference
+  locIn _ _ := {()}
+  winIn _ u := ⟨u.val + 1, 1⟩
+  claimsIn _ _ := [.sizeAtMost 1, .inputAtMost [.past, .block, .world] 0]
+  hiddenIff _ _ := by simp
+  insideOut := fun _ i g hg => by
+    rw [Partition.gates, mem_filter] at hg
+    have h := cutTwo_gate i g hg.2
+    simp only [Placed.region, Circuit.computed, Finset.mem_filter, mem_univ, true_and,
+      Finset.mem_coe, Window.ticks, Finset.mem_Ico]
+    refine ⟨?_, by simp [placed], ?_, ?_⟩
+    · simp only [placed, line, decide_eq_false_iff_not]; omega
+    · simp only [placed]; omega
+    · simp only [placed]; omega
+  insideIn := fun _ u g hg => by
+    rw [Partition.gates, mem_filter] at hg
+    have h := cutTwo_gate u g hg.2
+    simp only [Placed.region, Circuit.computed, Finset.mem_filter, mem_univ, true_and,
+      Finset.mem_coe, Window.ticks, Finset.mem_Ico]
+    refine ⟨?_, by simp [placed], ?_, ?_⟩
+    · simp only [placed, line, decide_eq_false_iff_not]; omega
+    · simp only [placed]; omega
+    · simp only [placed]; omega
+
+/-- **The pooled bound counts the tolerance once**: the run `demoCut 1`, two server-day blocks of capacity 1 gate each,
+PoUW's bound `b = 1` gate in each, both inference blocks (committed size claim 1 gate, work 1 gate each) in the tolerance
+set `M = univ`, salt at tick 0 and tolerance `tol = 2` gates. PoUW's conclusion, the capacity and the tolerance hold in
+each block; the free and `M`'s work summed over the run is 2 gates, exactly the pooled bound (`2 − 2 + 2`), while the
+per-block bounds summed are 4 gates (`(1 − 1 + 2)` twice). The committed claims `1` gate each hold, pooled and per
+block, and cover the pooled bound (`ClaimCoversConversionPooled`'s comparison), not the per-block one
+(`ClaimCoversConversion`'s, which asks 2 gates of each). -/
+theorem pooled_counts_tol_once :
+    let P := demoCut 1
+    let S := univ.filter (fun i => P.kind () i = true)
+    (∀ i, P.kind () i = true →
+        1 - ∑ u ∈ (P.infChildren () i).filter (· ∈ univ), claimedSize (P.claimsIn () u) ≤
+          ∑ u ∈ (P.infChildren () i).filter (fun u => 0 ≤ (P.winIn () u).start ∧ u ∉ univ), P.sizeIn () u) ∧
+      (∀ i, P.kind () i = true → P.sizeOut () i ≤ 1) ∧ ∑ u ∈ univ, claimedSize (P.claimsIn () u) ≤ 2 ∧
+      ∑ i ∈ S, ((∑ u ∈ P.freeChildren () i, P.sizeIn () u) +
+          ∑ u ∈ (P.infChildren () i).filter (· ∈ univ), P.sizeIn () u) = (∑ _i ∈ S, 1) - (∑ _i ∈ S, 1) + 2 ∧
+      ∑ _i ∈ S, (1 - 1 + 2) = 4 ∧
+      P.FreeClaimHolds () univ ∧ P.FreeClaimHoldsPooled () univ ∧
+      (∑ _i ∈ S, 1) - (∑ _i ∈ S, 1) + 2 ≤ ∑ i ∈ S, P.claimedFree () i ∧
+      ¬ ∀ i, P.kind () i = true → 1 - 1 + 2 ≤ P.claimedFree () i := by
+  intro P S
+  refine ⟨by decide, by decide, by decide, by decide, by decide, ?_, ?_, by decide, by decide⟩
+  · intro i _
+    fin_cases i <;> decide
+  · show _ ≤ _
+    decide
 
 /-- **No top block is in no class**: `kind` is total, so the degenerate case of a top block in neither the server-day nor
 the hidden class cannot be stated. Nothing sits inside an inference block, the finest scale here, so neither can a block

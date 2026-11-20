@@ -279,6 +279,18 @@ def FreeClaimHolds (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
     (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
       ≤ P.claimedFree r i
 
+/-- **The committed free-capacity claims hold, pooled over the run**: summed over the run's server-day blocks, the free
+blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most the server-day blocks' committed
+claims `claimedFree` summed (gates). A new definition beside `FreeClaimHolds`, which implies it
+(`freeClaimHolds_pooled`): the pooled conversion (`conversion_pooled_le`) counts the tolerance once over the run, where
+the per-block one counts it in every server-day block. Which of the two the policy's limit should read is not decided
+here: it is for the policy's own theorem (`InferenceOnly.InferenceOnlyTheorem`, open) to say whether the free work it
+allows is bounded per server-day block or over the run. -/
+def FreeClaimHoldsPooled (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
+  ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+      ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
+    ≤ ∑ i ∈ univ.filter (fun i => P.kind r i = true), P.claimedFree r i
+
 /-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
 def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
 
