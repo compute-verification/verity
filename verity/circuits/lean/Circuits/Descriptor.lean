@@ -1664,6 +1664,25 @@ private def recutRefusal (e rootId : String) (r : Except String (Nat × DecState
         else none
     input.getD e
 
+/-- The first port of definition `fid`'s `ports` rows (§12) that is not a non-empty object of a port's keys
+(`ports._port_from_json`): a parameter's or an input node's from `bound`, `kind`, `receipt`, `word`, `certified`, the return's
+from `interval`, `sink`, `word`, `certified`. -/
+def portKeysError (fid : String) (d : Json) : Option String := Id.run do
+  let ports := (d.getObjVal? "ports").toOption.getD .null
+  for (arr, keys, part) in [("params", ["bound", "kind", "receipt", "word", "certified"], "parameter"),
+      ("ret", ["interval", "sink", "word", "certified"], "return"),
+      ("inputs", ["bound", "kind", "receipt", "word", "certified"], "input node")] do
+    let .ok (.arr rows) := ports.getObjVal? arr | continue
+    for r in rows do
+      let .arr xs := r | continue
+      let some p := xs.back? | continue
+      let ks := match p with
+        | .obj kvs => kvs.keysArray
+        | _ => #[]
+      if ks.isEmpty || ks.any (!keys.contains ·) then
+        return some s!"E_PORT_DECL: {fid} {part}: a port is a non-empty object with keys from {keys}, not {p.compress}"
+  return none
+
 /-- The decoded Definitions and the root's place: the plain walk's, every body read at its own widths, where it accepts; where
 it refuses, the walk that reads an input node at a width dividing its own (§4.4) where that one accepts with its root reading
 one (`Body.recut`), else the codec's refusal (`recutRefusal`). So a decoded Program is the plain walk's or has a recut root. -/
@@ -1723,6 +1742,7 @@ def decode (bytes : ByteArray) : V Prog := do
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
+    if let some e := portKeysError fid d then throw e
   -- the free-form parts (`codec._free_form`): every top-level field but definitions and annotations, and each definition's key,
   -- id, bindings, params, ret, and its body's params and ret_type
   let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
@@ -1776,6 +1796,7 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
+    if let some e := portKeysError fid d then throw e
   -- the free-form parts (`codec._free_form`): every top-level field but definitions and annotations, and each definition's key,
   -- id, bindings, params, ret, and its body's params and ret_type
   let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
@@ -1832,6 +1853,7 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
+    if let some e := portKeysError fid d then throw e
   let freeDefs := dkv.toArray.map fun (fid, d) => (fid, match d with
     | .obj kvs => Json.mkObj ((kvs.toArray.filter (·.1 != "body")).toList ++
         ((d.getObjVal? "body").toOption.map (fun b => ["params", "ret_type"].filterMap fun k =>
