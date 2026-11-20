@@ -24,7 +24,7 @@ SMOKE = Path("adapters/vllm/tools/served_run/h100_smoke.sh")
 VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
 #: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
 #: library and the adapter from the tree as on a node, whatever the test's environment installs
-PATH_PARTS = ("verity", "tools/verity/cli", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "input_datasets",
+PATH_PARTS = ("verity", "tools/verity/cli", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "library/datasets",
               "applications", "adapters/vllm/tools/served_run/inputs.py")
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
