@@ -138,14 +138,14 @@ theorem spec_forIn (l : List β) (g : β → PUnit → StateT σ CountV (ForInSt
 
 section
 
-variable (h : ByteArray → ByteArray) (ddefs : Std.HashMap String Json) (callees types : Array Json)
-  (bm : Std.HashMap String String)
+variable (h : ByteArray → ByteArray) (ddefs : Std.TreeMap String Json) (callees types : Array Json)
+  (bm : Std.TreeMap String String)
 
 set_option hygiene false in
 local notation "free " m:max =>
-  ((Std.HashMap.keys ddefs).toFinset.filter (fun x => Std.HashMap.contains m x = false)).card
+  ((Std.TreeMap.keys ddefs).toFinset.filter (fun x => Std.TreeMap.contains m x = false)).card
 
-theorem free_mono {m m' : Std.HashMap String String} (hmono : ∀ x, m.contains x = true → m'.contains x = true) :
+theorem free_mono {m m' : Std.TreeMap String String} (hmono : ∀ x, m.contains x = true → m'.contains x = true) :
     free m' ≤ free m := by
   apply Finset.card_le_card
   intro x hx
@@ -157,17 +157,17 @@ theorem free_mono {m m' : Std.HashMap String String} (hmono : ∀ x, m.contains 
     rw [hmono x hc] at this
     exact absurd this (by simp)
 
-theorem free_insert {m : Std.HashMap String String} {fid v : String} (hd : ddefs.contains fid = true)
+theorem free_insert {m : Std.TreeMap String String} {fid v : String} (hd : ddefs.contains fid = true)
     (hm : m.contains fid = false) : free (m.insert fid v) + 1 ≤ free m := by
   have hmem : fid ∈ (ddefs.keys.toFinset.filter (fun x => m.contains x = false)) := by
-    rw [Finset.mem_filter, List.mem_toFinset, Std.HashMap.mem_keys]
-    exact ⟨Std.HashMap.contains_iff_mem.mp hd, hm⟩
+    rw [Finset.mem_filter, List.mem_toFinset, Std.TreeMap.mem_keys]
+    exact ⟨Std.TreeMap.contains_iff_mem.mp hd, hm⟩
   have hsub : (ddefs.keys.toFinset.filter (fun x => (m.insert fid v).contains x = false)) ⊆
       (ddefs.keys.toFinset.filter (fun x => m.contains x = false)).erase fid := by
     intro x hx
-    rw [Finset.mem_filter, Std.HashMap.contains_insert, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hx
+    rw [Finset.mem_filter, Std.TreeMap.contains_insert, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hx
     rw [Finset.mem_erase, Finset.mem_filter]
-    exact ⟨fun e => hx.2.1 e.symm, hx.1, hx.2.2⟩
+    exact ⟨fun e => hx.2.1 (compare_eq_iff_eq.mpr e.symm), hx.1, hx.2.2⟩
   have := Finset.card_le_card hsub
   rw [Finset.card_erase_of_mem hmem] at this
   have hpos := Finset.card_pos.mpr ⟨fid, hmem⟩
@@ -176,7 +176,7 @@ theorem free_insert {m : Std.HashMap String String} {fid v : String} (hd : ddefs
 /-- **`digestGo`'s calls**: from a memo `m` that holds no key of the stack `S` of calls in progress, each of which has a
 ref on the stack or the called key `fid`, a run adds at most as many calls as the memo gains entries of `ddefs`; on
 success `fid` is not on the stack, and the memo grows and still holds no key of it. -/
-theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std.HashMap String String) (k : Nat),
+theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std.TreeMap String String) (k : Nat),
     (∀ s ∈ S, m.contains s = false) →
     (∀ s ∈ S, ∃ b raw e, ddefs[s]? = some raw ∧ Program.canonEntry callees types raw = .ok e ∧
       b ∈ Program.entryRefs callees e ++ (bm[s]?).toArray ∧ (b ∈ S ∨ b = fid)) →
@@ -198,14 +198,14 @@ theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std
     try dsimp only
     rcases hmf : m[fid]? with _ | x
     · have hmc : m.contains fid = false := by
-        rw [Std.HashMap.contains_eq_isSome_getElem?, hmf]
+        rw [← Std.TreeMap.isSome_getElem?_eq_contains, hmf]
         rfl
       try dsimp only
       rcases hd : ddefs[fid]? with _ | raw
       · dsimp only
         exact spec_throw (by omega)
       · have hdc : ddefs.contains fid = true := by
-          rw [Std.HashMap.contains_eq_isSome_getElem?, hd]
+          rw [← Std.TreeMap.isSome_getElem?_eq_contains, hd]
           rfl
         try dsimp only
         apply spec_bind
@@ -261,24 +261,24 @@ theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std
               (h4.elim (List.mem_cons_of_mem _) (fun hb => hb ▸ List.mem_cons_self))
           refine ⟨hfS, fun s hs => ?_, fun x hx => ?_, ?_⟩
           · have hne : fid ≠ s := fun he => hfS (he ▸ hs)
-            rw [Std.HashMap.contains_insert, hS1 s (List.mem_cons_of_mem _ hs), Bool.or_false,
+            rw [Std.TreeMap.contains_insert, hS1 s (List.mem_cons_of_mem _ hs), Bool.or_false,
               beq_eq_false_iff_ne]
-            exact hne
-          · rw [Std.HashMap.contains_insert, hmono1 x hx, Bool.or_true]
+            exact fun e => hne (compare_eq_iff_eq.mp e)
+          · rw [Std.TreeMap.contains_insert, hmono1 x hx, Bool.or_true]
           · have := free_insert ddefs (v := hexOf (h t.toUTF8)) hdc (hS1 fid List.mem_cons_self)
             omega
     · dsimp only
       apply spec_pure
       refine ⟨fun hf => ?_, hS, fun _ hx => hx, le_refl _⟩
       have := hS fid hf
-      rw [Std.HashMap.contains_eq_isSome_getElem?, hmf] at this
+      rw [← Std.TreeMap.isSome_getElem?_eq_contains, hmf] at this
       exact absurd this (by simp)
 
 end
 
-theorem size_foldl_insert (l : List (String × Json)) (f : Std.HashMap String Json → String × Json → Std.HashMap String Json)
+theorem size_foldl_insert (l : List (String × Json)) (f : Std.TreeMap String Json → String × Json → Std.TreeMap String Json)
     (hf : ∀ m x, (f m x).size ≤ m.size + 1) :
-    ∀ init : Std.HashMap String Json, (l.foldl f init).size ≤ init.size + l.length := by
+    ∀ init : Std.TreeMap String Json, (l.foldl f init).size ≤ init.size + l.length := by
   induction l with
   | nil => intro init; simp
   | cons x l ih =>
@@ -315,20 +315,20 @@ theorem definitionDigests_calls (h : ByteArray → ByteArray) (j : Json) (D : Na
     refine (size_foldl_insert _ _ ?_ _).trans ?_
     · intro m x
       rcases x with ⟨a, b⟩
-      exact Std.HashMap.size_insert_le
+      exact Std.TreeMap.size_insert_le
     · simp
-  have h1 : ((Std.HashMap.keys ddefs).toFinset.filter
-      (fun x => Std.HashMap.contains (∅ : Std.HashMap String String) x = false)).card ≤ D := by
-    refine (Finset.card_filter_le _ _).trans ((List.toFinset_card_le (Std.HashMap.keys ddefs)).trans ?_)
-    rw [Std.HashMap.length_keys]
+  have h1 : ((Std.TreeMap.keys ddefs).toFinset.filter
+      (fun x => Std.TreeMap.contains (∅ : Std.TreeMap String String) x = false)).card ≤ D := by
+    refine (Finset.card_filter_le _ _).trans ((List.toFinset_card_le (Std.TreeMap.keys ddefs)).trans ?_)
+    rw [Std.TreeMap.length_keys]
     exact h2.trans h3
   apply run_calls _ (fun p k' => by rcases p with ⟨⟨⟩, d⟩; rfl)
   simp only [go]
   rw [← Array.forIn_toList]
   apply spec_bind
   refine spec_mono (spec_forIn _ _ (fun _ => True)
-    (fun (m1 : Std.HashMap String String) =>
-      ((Std.HashMap.keys ddefs).toFinset.filter (fun x => Std.HashMap.contains m1 x = false)).card)
+    (fun (m1 : Std.TreeMap String String) =>
+      ((Std.TreeMap.keys ddefs).toFinset.filter (fun x => Std.TreeMap.contains m1 x = false)).card)
     (fun _ => False) ?_ ∅ k trivial)
     (fun _ _ k1 hk1 => spec_pure (show k1 ≤ k + D by have := hk1.2.2; omega)) (fun k1 hk1 => by omega)
   intro kv _ m1 k1 _

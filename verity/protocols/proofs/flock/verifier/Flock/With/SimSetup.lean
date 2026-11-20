@@ -104,8 +104,8 @@ theorem Sim.st_mapConst (S : Sim M N) {σ α β : Type} (b : β) {x : StateT σ 
   fun s => S.bind (h s) fun p => S.pure (b, p.2)
 
 theorem digestGo_sim (S : Sim M N) {h : ByteArray → M ByteArray}
-    {h' : ByteArray → N ByteArray} (hh : ∀ b, S.R (h b) (h' b)) (ddefs : Std.HashMap String Json)
-    (callees types : Array Json) (bm : Std.HashMap String String) :
+    {h' : ByteArray → N ByteArray} (hh : ∀ b, S.R (h b) (h' b)) (ddefs : Std.TreeMap String Json)
+    (callees types : Array Json) (bm : Std.TreeMap String String) :
     ∀ n fid, (S.st _).R (Program.digestGo h ddefs callees types bm n fid) (Program.digestGo h' ddefs callees types bm n fid)
   | 0, fid => by
     unfold Program.digestGo

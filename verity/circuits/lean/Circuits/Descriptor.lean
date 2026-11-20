@@ -21,6 +21,7 @@ public import Circuits.Steps
 public import Circuits.Types
 public import Lean.Data.Json.FromToJson.Basic
 public import Std.Data.HashMap
+public import Std.Data.TreeMap
 meta import Base.Canon
 meta import Base.Hash
 meta import Base.JsonParse
@@ -1649,10 +1650,11 @@ def composeEntry (d : String → Option String) (e : Json) (body : Option String
   return out
 
 /-- Definition `fid`'s digest (§4.8), every definition it references first, each once (`memo`), the hash by `h`. A chain of
-references longer than `fuel` is refused, so a cycle ends. -/
+references longer than `fuel` is refused, so a cycle ends. Its tables are tree maps, not hash maps: the kernel reduces
+`compare` on strings and not the opaque `String.hash`, so a proof can evaluate a digest by `decide`. -/
 def digestGo {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (h : ByteArray → M ByteArray)
-    (ddefs : Std.HashMap String Json) (callees types : Array Json) (bm : Std.HashMap String String) :
-    Nat → String → StateT (Std.HashMap String String) M String
+    (ddefs : Std.TreeMap String Json) (callees types : Array Json) (bm : Std.TreeMap String String) :
+    Nat → String → StateT (Std.TreeMap String String) M String
   | 0, fid => throw s!"program: {fid}: definitions reference each other deeper than this descriptor holds definitions"
   | n + 1, fid => do
     if let some x := (← get)[fid]? then return x
@@ -1668,24 +1670,24 @@ def digestGo {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT 
 
 /-- Every definition's digest (§4.8, `codec.definition_digests`) of descriptor `j`, by descriptor id, the hash by `h`. -/
 def definitionDigestsWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
-    (h : ByteArray → M ByteArray) (j : Json) : M (Std.HashMap String String) := do
+    (h : ByteArray → M ByteArray) (j : Json) : M (Std.TreeMap String String) := do
   let defs := match j.getObjValD "definitions" with
     | .obj kvs => kvs.toArray
     | _ => #[]
   let tab := fun (k : String) => match j.getObjValD k with
     | .arr xs => xs
     | _ => #[]
-  let bm : Std.HashMap String String := match j.getObjValD "boolean" with
+  let bm : Std.TreeMap String String := match j.getObjValD "boolean" with
     | .obj kvs => kvs.toArray.foldl (fun m (k, v) => match v with | .str s => m.insert k s | _ => m) {}
     | _ => {}
-  let ddefs : Std.HashMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
-  let go : StateT (Std.HashMap String String) M Unit := do
+  let ddefs : Std.TreeMap String Json := defs.foldl (fun m (k, v) => m.insert k v) {}
+  let go : StateT (Std.TreeMap String String) M Unit := do
     for (k, _) in defs do discard (digestGo h ddefs (tab "callees") (tab "types") bm (defs.size + 1) k)
   let ((), d) ← go.run {}
   return d
 
 /-- `definitionDigestsWith` by SHA-512. -/
-def definitionDigests (j : Json) : V (Std.HashMap String String) := definitionDigestsWith (fun b => pure (Sha512.hash b)) j
+def definitionDigests (j : Json) : V (Std.TreeMap String String) := definitionDigestsWith (fun b => pure (Sha512.hash b)) j
 
 /-- The program digest (§1, `codec.program_digest`) of descriptor `j`, the hash by `h`: the hash of the canonical JSON of
 its schema, `program_fn`, `inputs`, its root's digest, the digests of the functions `program_fn`'s record names, and the
