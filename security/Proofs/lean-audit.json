@@ -328,13 +328,13 @@
   "Proofs.Properties.Verity.Recursive.Assumptions",
   "Proofs.Properties.Verity.Recursive.Compiled",
   "Proofs.Properties.Verity.Recursive.PartVerdict",
-  "Proofs.Properties.Verity.Recursive.ScheduleRun"
+  "Proofs.Properties.Verity.Recursive.ScheduleRun",
+  "Proofs.Properties.Verity.Recursive.ScheduleInner",
+  "Proofs.Properties.Verity.Recursive.ScheduleSession"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
-  "Proofs.Properties.Verity.Recursive.ScheduleInner": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
-  "Proofs.Properties.Verity.Recursive.ScheduleSession": "a proof about V*'s concrete checks, out of the build with the recursion's guarantees, which left the lock; kept as what V*'s rebuild on the door's forms starts from",
   "Proofs.Flock.Claims.KS.PlainAccPrR": "a plain or recursive session's KS at the recursive verifier's forms, out of the build with the old recursion (A), which leaves the root (PRF-643)",
   "Proofs.Flock.Claims.KS.PlainKSLinR": "a plain or recursive session's KS at the recursive verifier's forms, out of the build with the old recursion (A), which leaves the root (PRF-643)",
   "Proofs.Flock.Claims.KS.PlainR": "a plain or recursive session's KS at the recursive verifier's forms, out of the build with the old recursion (A), which leaves the root (PRF-643)",
