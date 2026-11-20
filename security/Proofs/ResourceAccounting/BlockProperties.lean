@@ -504,13 +504,13 @@ theorem serverInput_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Ru
 
 /-- **The check bites, on the path the chain reads**: under a run that passes the inference-only check and realizes its
 claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with the work at unlisted locations at most
-`lim.hidden` (assumed), the whole circuit's work is at most, for each server-day block, the smaller of the server-day size limit
-`lim.cS` (its committed size claim, which the check caps at `lim.cS`) and the count of its inference blocks **outside**
-`M` at the size cap `lim.c` (each block's committed size claim, which the check caps at `lim.c`) plus the free-block limit
-`lim.freeSize`. The bound is in the limits alone: the free blocks' and `M`'s inference blocks' work is at most capacity −
-credited use + tolerance (the hypothesis `FreeWorkAtMost`), which the check caps at `lim.freeSize`. The tolerance `M` is
-a bounded term here, not an unbounded quantifier: `M`'s blocks are counted inside the free limit, not as inference
-credit. -/
+`lim.hidden` (assumed), the whole circuit's work is at most, for each server-day block, the smaller of the server-day
+size limit `lim.cS` (its committed size claim, which the check caps at `lim.cS`) and the count of its inference blocks
+**outside** `M` at the size cap `lim.c` (each block's committed size claim, which the check caps at `lim.c`) plus the
+free work limit `lim.freeSize`. The bound is in the limits alone: the free blocks' and `M`'s inference blocks' work is
+at most capacity − credited use + tolerance (the hypothesis `FreeWorkAtMost`), which the check caps at `lim.freeSize`.
+The tolerance `M` is a bounded term here, not an unbounded quantifier: `M`'s blocks are counted inside the free limit,
+not as inference credit. -/
 theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
@@ -565,8 +565,9 @@ theorem feasible_work_le_total (lim : InferenceOnly.Limits) (P : Runs L) (r : P.
 
 /-- **A run has at most the listed locations times the days of server-day blocks**: each server-day block is a listed
 location (`kindIff`) and a day (`dayOf`), and no two share both (`oneBlock`). `Ls` is any finite family holding every
-listed location; listed locations that overlap each count. The count is servers times days only where the listed locations are pairwise disjoint, which belongs to the hardware
-description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with it. -/
+listed location; listed locations that overlap each count. The count is servers times days only where the listed
+locations are pairwise disjoint, which belongs to the hardware description (`Hardware.units` in
+`Registration/Physical.lean`); no statement here changes with it. -/
 theorem serverDay_count_le (P : Runs L) (r : P.Run) (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
     (univ.filter (fun i => P.kind r i = true)).card ≤ Ls.card * P.nDays := by
   calc (univ.filter (fun i => P.kind r i = true)).card ≤ (Ls ×ˢ (univ : Finset (Fin P.nDays))).card := by
@@ -580,9 +581,10 @@ theorem serverDay_count_le (P : Runs L) (r : P.Run) (Ls : Finset (Finset L)) (hL
     _ = Ls.card * P.nDays := by rw [Finset.card_product, Finset.card_univ, Fintype.card_fin]
 
 /-- **The run's input from the server-day blocks' own past and the outside world, in the limits and the count**: under
-the check and `RealizesExcept`, summed over the server-day blocks it is at most the listed locations times the days times
-`lim.kS` bits. The count is servers times days only where the listed locations are pairwise disjoint, which belongs to the hardware
-description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with it. -/
+the check and `RealizesExcept`, summed over the server-day blocks it is at most the listed locations times the days
+times `lim.kS` bits. The count is servers times days only where the listed locations are pairwise disjoint, which
+belongs to the hardware description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with
+it. -/
 theorem serverInput_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
@@ -596,8 +598,9 @@ theorem serverInput_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Ru
 
 /-- **The run's free and tolerance work, in the limits and the count**: under the check and `FreeWorkAtMost`, the
 server-day blocks' free blocks' work and `M`'s inference blocks' work, summed over the run, are at most the listed
-locations times the days times `lim.freeSize` gates. The count is servers times days only where the listed locations are pairwise disjoint, which belongs to the hardware
-description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with it. -/
+locations times the days times `lim.freeSize` gates. The count is servers times days only where the listed locations are
+pairwise disjoint, which belongs to the hardware description (`Hardware.units` in `Registration/Physical.lean`); no
+statement here changes with it. -/
 theorem freeWork_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hfree : P.FreeWorkAtMost r M)
     (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
@@ -615,8 +618,9 @@ theorem freeWork_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) 
 
 /-- **The check bites, in the limits and the count**: `feasible_work_le_total`'s sum has at most the listed locations
 times the days terms, each at most `lim.cS` gates, so the whole circuit's work is at most that product times `lim.cS`
-plus `lim.hidden` (assumed). The count is servers times days only where the listed locations are pairwise disjoint, which belongs to the hardware
-description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with it. -/
+plus `lim.hidden` (assumed). The count is servers times days only where the listed locations are pairwise disjoint,
+which belongs to the hardware description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes
+with it. -/
 theorem feasible_work_le_count (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
@@ -903,11 +907,6 @@ theorem freeBound_binds :
       simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
   · intro u _; simp [demoRuns]
-  · intro i _
-    rw [demo_freeChildren_empty, Finset.sum_empty, zero_add,
-      Finset.filter_true_of_mem (fun u _ => Finset.mem_univ u)]
-    fin_cases i
-    decide
 
 /-- `demoRuns 1 1 0` with its server-day block's committed input claim from the outside world at `kw` bits. -/
 noncomputable def demoRunsInput (kw : ℕ) : Runs Unit :=

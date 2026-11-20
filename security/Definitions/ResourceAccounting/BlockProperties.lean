@@ -339,8 +339,9 @@ def UseAtLeast (what : Capacity) (use b : (r : P.Run) → Finset (Fin (P.nIn r))
 /-- **The hardware description** for `what`: the number the hardware graph gives for a server-day block's capacity of
 `what` at its location or link (`ComputeRate`'s `Φ`, `Memory`'s `M`, `Links`' `β` in `Registration/Physical.lean`),
 `enclosing r i ≤ cap r i`. For `computeRate` the figure is not a premise of its own: `capacityAtMost_compute` derives it
-for every server-day block from `ComputeRate` over the listed locations, a server-day block's location being listed. It stays here for `memorySize` and `linkCapacity`, what the hardware
-graph gives, an assumption nothing in Verity tests (owner none: the hardware description). -/
+for every server-day block from `ComputeRate` over the listed locations, a server-day block's location being listed. It
+stays here for `memorySize` and `linkCapacity`, what the hardware graph gives, an assumption nothing in Verity tests
+(owner none: the hardware description). -/
 def CapacityAtMost (what : Capacity) (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, ∀ i, P.kind r i = true → enclosing r i ≤ cap r i
 
