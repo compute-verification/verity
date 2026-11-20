@@ -134,9 +134,6 @@ theorem wf_drop {j : Json} (hj : Wf j) (q : String) : Wf (Json.mkObj ((entries j
   rw [← this]
   exact wf_getD hj _
 
-theorem setObjVal_eq_setKey (m : Std.TreeMap.Raw String Json compare) (k : String) (v : Json) :
-    (Json.obj m).setObjVal! k v = SecondStage.setKey (.obj m) k v := rfl
-
 theorem getD_setKey_ne {j v : Json} (hj : Wf j) {k k' : String} (hk : k ≠ k') :
     getD (SecondStage.setKey j k v) k' = getD j k' := by
   unfold getD; rw [SpotFlock.ReadsJson.field?_setKey_ne hj hk]
@@ -254,36 +251,42 @@ theorem hinv_mono {R0 Dom0 : Json} {D D' : List String} {hc : Json} (hD : ∀ k,
     (h : HInv R0 Dom0 D hc) : HInv R0 Dom0 D' hc :=
   ⟨h.1, h.2.1, h.2.2.1, fun k hk => h.2.2.2.1 k (hD k hk), fun k hk => h.2.2.2.2 k (hD k hk)⟩
 
+theorem setKey_obj (m : Std.TreeMap.Raw String Json compare) (k : String) (v : Json) :
+    SecondStage.setKey (.obj m) k v = .obj (m.insert k v) := by
+  simp only [SecondStage.setKey, SpotFlock.RunsAs.setObjVal_obj]
+
+theorem wf_insert {m : Std.TreeMap.Raw String Json compare} (hw : Wf (.obj m)) {k : String} {v : Json} (hv : Wf v) :
+    Wf (.obj (m.insert k v)) := by
+  rw [← setKey_obj]; exact SpotFlock.ReadsJson.wf_setKey hw hv k
+
+theorem getD_insert_self {m : Std.TreeMap.Raw String Json compare} (hw : Wf (.obj m)) (k : String) (v : Json) :
+    getD (.obj (m.insert k v)) k = v := by
+  rw [← setKey_obj]; exact getD_setKey_self hw k v
+
+theorem getD_insert_ne {m : Std.TreeMap.Raw String Json compare} (hw : Wf (.obj m)) {k k' : String} (h : k ≠ k')
+    (v : Json) : getD (.obj (m.insert k v)) k' = getD (.obj m) k' := by
+  rw [← setKey_obj]; exact getD_setKey_ne hw h
+
 theorem hinv_step {R0 Dom0 : Json} {D : List String} {rc hc : Json} (q : String) (h : HInv R0 Dom0 D hc) :
     HInv R0 Dom0 (q :: D) (OneStageZk.dropPort rc hc q).2 := by
   obtain ⟨hw, ⟨m, rfl⟩, ⟨mf, hmf⟩, hR, hDm⟩ := h
-  have hfv : Wf (.obj mf) := hmf ▸ wf_getD hw "frame_v3"
+  have hfv : Wf (.obj mf) := by rw [← hmf]; exact wf_getD hw _
   have hRw : Wf (getD (.obj mf) "roots") := wf_getD hfv _
   have hDw : Wf (getD (.obj mf) "domain_ids") := wf_getD hfv _
   unfold OneStageZk.dropPort
   dsimp only
-  rw [hmf]
-  show HInv R0 Dom0 (q :: D) (SecondStage.setKey (.obj m) "frame_v3"
-    (SecondStage.setKey (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList))) "domain_ids"
-      (Json.mkObj ((entries (getD (.obj mf) "domain_ids")).filter (·.1 != q)).toList)))
-  have hfv1 : Wf (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList))) :=
-    SpotFlock.ReadsJson.wf_setKey hfv (wf_drop hRw q) "roots"
-  have hfv2 := SpotFlock.ReadsJson.wf_setKey hfv1 (wf_drop hDw q) "domain_ids"
-  have hself := getD_setKey_self hw "frame_v3"
-    (SecondStage.setKey (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList)))
-      "domain_ids" (Json.mkObj ((entries (getD (.obj mf) "domain_ids")).filter (·.1 != q)).toList))
-  refine ⟨SpotFlock.ReadsJson.wf_setKey hw hfv2 _, ⟨_, rfl⟩, ⟨_, ?_⟩, fun k hk => ?_, fun k hk => ?_⟩
-  · rw [hself]; rfl
+  rw [hmf, SpotFlock.RunsAs.setObjVal_obj mf, SpotFlock.RunsAs.setObjVal_obj (mf.insert _ _),
+    SpotFlock.RunsAs.setObjVal_obj m]
+  have hfv1 := wf_insert (k := "roots") hfv (wf_drop hRw q)
+  have hfv2 := wf_insert (k := "domain_ids") hfv1 (wf_drop hDw q)
+  refine ⟨wf_insert hw hfv2, ⟨_, rfl⟩, ⟨_, getD_insert_self hw _ _⟩, fun k hk => ?_, fun k hk => ?_⟩
   · have hkq : k ≠ q := fun e => hk (e ▸ List.mem_cons_self)
     have hkD : k ∉ D := fun e => hk (List.mem_cons_of_mem _ e)
-    rw [hself, getD_setKey_ne hfv1 (by decide : "domain_ids" ≠ "roots")]
-    have h1 : getD (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList)))
-        "roots" = Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList :=
-      getD_setKey_self hfv "roots" _
-    rw [h1, field?_drop hRw hkq, ← hR k hkD, hmf]
+    rw [getD_insert_self hw, getD_insert_ne hfv1 (by simp : "domain_ids" ≠ "roots"), getD_insert_self hfv,
+      field?_drop hRw hkq, ← hR k hkD, hmf]
   · have hkq : k ≠ q := fun e => hk (e ▸ List.mem_cons_self)
     have hkD : k ∉ D := fun e => hk (List.mem_cons_of_mem _ e)
-    rw [hself, getD_setKey_self hfv1, getD_drop hDw hkq, ← hDm k hkD, hmf]
+    rw [getD_insert_self hw, getD_insert_self hfv1, getD_drop hDw hkq, ← hDm k hkD, hmf]
 
 theorem rinv_step {S : Json} {rc hc : Json} (q : String) (h : RInv S rc) :
     RInv S (OneStageZk.dropPort rc hc q).1 := by
