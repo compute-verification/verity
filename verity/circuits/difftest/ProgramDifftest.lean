@@ -46,6 +46,15 @@ def decode : Difftest.Fn := fun j => do
     | .ok _, none => Json.mkObj [("ok", false), ("error", Json.null)]
     | .error e, _ => Json.mkObj [("ok", false), ("error", match code? e with | some c => Json.str c | none => Json.null)]
 
-def table : String → Option Difftest.Fn := Difftest.table [("decode", decode)]
+/-- `decode`'s refusal text, for the cases that hold it: `{"ok": true}` or `{"ok": false, "message": TEXT}`. -/
+def decodeText : Difftest.Fn := fun j => do
+  let text ← match j.getObjValAs? String "descriptor" with
+    | .ok s => pure s
+    | .error _ => throw "descriptor: not a string"
+  return match Flock.Program.decode text.toUTF8 with
+    | .ok _ => Json.mkObj [("ok", true)]
+    | .error e => Json.mkObj [("ok", false), ("message", Json.str e)]
+
+def table : String → Option Difftest.Fn := Difftest.table [("decode", decode), ("decode_text", decodeText)]
 
 end ProgramDifftest

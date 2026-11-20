@@ -13,7 +13,8 @@ The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `regi
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
 in both decoders' parsers), `chain()`, a GEMM chain whose word primitives' bodies are the catalog's, and
 `recut_vectors.reads()`, reads of an input node at another width, `supplied_cases()`, a supplied input's mark (§5.4)
-as a program and a block carry it and each of its refusals, and `test_codec_refusals.DECODER`'s descriptors."""
+as a program and a block carry it and each of its refusals, `test_codec_refusals.DECODER`'s descriptors, and
+`decode_refusals.CASES`, the refusals of the Lean decoder no other case reaches."""
 from __future__ import annotations
 
 import argparse
@@ -22,6 +23,7 @@ import json
 import re
 from pathlib import Path
 
+import decode_refusals
 import recut_vectors
 import test_supplied_block as SB
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
@@ -88,6 +90,7 @@ def cases() -> list[tuple[str, str, object]]:
     out += [(name, text, spec.REG) for name, text in recut_vectors.reads()]
     out += [(name, text, REGISTRY) for name, text in supplied_cases()]
     out += refusal_cases()
+    out += decode_refusals.cases()
     return out
 
 

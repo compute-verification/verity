@@ -1,6 +1,7 @@
 module
 
 public import Flock.ZkServer
+public import Commitments.SessionCoins
 public import Spot.Registered
 
 /-!
@@ -27,6 +28,14 @@ holds before the sample, so the prover never chooses it.
   `pack`; hm96-sha512 under the default key, the frame-v3-sha512 tree under the value's domain, its leaves framed by the
   format) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over `verity/one-stage/supplied-salt/v1`,
   the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them.
+
+**Scope.** Nothing reads the storage session's three bodies (`pous.session.round_coin/v1`, `.header/v1`, `.context/v1`)
+through the door yet: they are definitions with their refusals, held to the Python's by `spot-difftest`. The verifier holds
+a function's value as a coin (`coins`: what a coin is released as) or as a released commitment (`commitments`: registered
+before any coin: the order rule, `order`, counts `coins` alone as coins, and holds the `place` each held commitment carries
+before the place of every coin read beside it). A round's coin is held to the coin root of the
+commitment the verifier holds, never to one the coin carries, and a session that did not end complete with all its rounds has
+no statement.
 -/
 
 @[expose] public section
@@ -316,14 +325,143 @@ private def coin (coins : Array (String × ByteArray)) (v : String) (m : Mark) :
   let some (_, c) := coins.find? (·.1 == m.fn) | throw s!"supplied input {v}: no statement: the verifier holds no coin for {m.fn}"
   return c
 
+private def noStatement (v f why : String) : String := s!"supplied input {v}: no statement: {f}'s {why}"
+
+private def hexOpt : Json → Option ByteArray
+  | .str s => (Flock.unhex s).toOption
+  | _ => none
+
+private def numberOk (t : Array UInt8) : Bool :=
+  t == #[48] || (t.size > 0 && 49 ≤ t[0]!.toNat && t[0]!.toNat ≤ 57 && t.all fun c => 48 ≤ c.toNat && c.toNat ≤ 57)
+
+/-- `registered.canonical_numbers`: every number in the JSON text `b` (read as JSON already) is `0` or digits with no
+leading zero: no sign, fraction or exponent, which Lean's reader takes as an integer where Python's reads a float or reads
+`-0` as 0. A number is a run of `0-9 + - . e E` that starts outside a string at one of `0-9 + - .`. -/
+private def canonicalNumbers (b : ByteArray) : Bool := Id.run do
+  let mut inStr := false
+  let mut esc := false
+  let mut tok : Array UInt8 := #[]
+  for c in b.toList do
+    if inStr then
+      if esc then esc := false
+      else if c == 92 then esc := true
+      else if c == 34 then inStr := false
+    else
+      let start := (48 ≤ c.toNat && c.toNat ≤ 57) || c == 43 || c == 45 || c == 46
+      if tok.size > 0 && (start || c == 101 || c == 69) then tok := tok.push c
+      else
+        if tok.size > 0 then
+          if !numberOk tok then return false
+          tok := #[]
+        if c == 34 then inStr := true
+        else if start then tok := #[c]
+  return tok.isEmpty || numberOk tok
+
+/-- What the verifier holds under function `f` in `tbl` (`kind`, `"commitment"` or `"coin"`), as a JSON object of
+canonical numbers; "no statement" for what it holds none of, or that is no such object. -/
+private def heldObject (tbl : Array (String × ByteArray)) (kind v f : String) : V Json := do
+  let some (_, c) := tbl.find? (·.1 == f) | throw s!"supplied input {v}: no statement: the verifier holds no {kind} for {f}"
+  let some s := String.fromUTF8? c | throw (noStatement v f s!"{kind} is no JSON")
+  let .ok j := Flock.JsonParse.parse s | throw (noStatement v f s!"{kind} is no JSON")
+  if !canonicalNumbers c then throw (noStatement v f s!"{kind} holds a number that is no canonical natural")
+  let .obj _ := j | throw (noStatement v f s!"{kind} is no object")
+  return j
+
+/-- The held commitment's fields `hexes` (lowercase hex of whole bytes) and `nats` (naturals below `2 ^ bits`), in that
+order of refusal. -/
+private def sessionFields (v f : String) (rel : Json) (hexes : List String) (nats : List (String × Nat)) :
+    V (Array (String × ByteArray) × Array (String × Nat)) := do
+  let .obj c := getD rel "commitment" | throw (noStatement v f "commitment holds no commitment object")
+  let cj := Json.obj c
+  let hs ← hexes.toArray.mapM fun k => match hexOpt (getD cj k) with
+    | some b => pure (k, b)
+    | none => throw (noStatement v f s!"commitment's {k} is no lowercase hex")
+  let ns ← nats.toArray.mapM fun (k, bits) => match nat? (getD cj k) with
+    | some n => if n < 2 ^ bits then pure (k, n) else throw (noStatement v f s!"commitment's {k} is no u{bits}")
+    | none => throw (noStatement v f s!"commitment's {k} is no u{bits}")
+  return (hs, ns)
+
+private def hexIn (xs : Array (String × ByteArray)) (k : String) : ByteArray := (xs.find? (·.1 == k)).elim ByteArray.empty (·.2)
+private def natIn (xs : Array (String × Nat)) (k : String) : Nat := (xs.find? (·.1 == k)).elim 0 (·.2)
+
+/-- The storage session's round coin: round `round`'s index, the last opening of the round the coin holds, opened under the
+coin root of the commitment the verifier holds (never one the coin carries). -/
+private def roundCoin (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+    V (Array (String × String) × Nat) := do
+  let f := m.fn
+  let j ← argNat v m "round"
+  let rel ← heldObject commitments "commitment" v f
+  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key"] [("blocks", 64), ("k", 32)]
+  let k := natIn ns "k"
+  let blocks := natIn ns "blocks"
+  if j ≥ 2 ^ 32 then throw (noStatement v f s!"round {j} is no u32")
+  if j ≥ k then throw (noStatement v f s!"round {j} is no round of the session's {k}")
+  let coin ← heldObject coins "coin" v f
+  if (entries coin).any (·.1 != "openings") then
+    throw (noStatement v f "coin holds more than its openings: the coin root is the verifier's own")
+  let .arr ops := getD coin "openings" | throw (noStatement v f "coin holds no openings list")
+  let some o := ops.findRev? (fun o => nat? (getD o "j") == some j)
+    | throw (noStatement v f s!"coin holds no opening of round {j}")
+  let bad := noStatement v f s!"opening of round {j} is malformed"
+  let some index := nat? (getD o "index") | throw bad
+  let some salt := hexOpt (getD o "salt") | throw bad
+  let .arr pj := getD o "path" | throw bad
+  let some path := pj.mapM hexOpt | throw bad
+  if index ≥ 2 ^ 64 then throw (noStatement v f s!"round {j}'s index {index} is no u64")
+  if index ≥ blocks then throw (noStatement v f s!"round {j}'s index {index} is no block of the session's {blocks}")
+  if !Flock.SessionCoins.verify (hexIn hs "session") (hexIn hs "coin_root") (hexIn hs "coin_key") blocks k j index salt path then
+    throw (noStatement v f s!"round {j}'s index {index} is not its committed coin")
+  return (#[("bytes", Flock.hexOf (Flock.be32 j.toUInt32 ++ Flock.be64 index.toUInt64))], 12)
+
+/-- The storage session's signed header: the held commitment's fields with `"ended": "complete"` and `"rounds": k`, which
+the commitment's own `ended` and `rounds` are compared with, so a late or short session has no statement. -/
+private def header (commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+    V (Array (String × String) × Nat) := do
+  let f := m.fn
+  let want ← argNat v m "head"
+  let rel ← heldObject commitments "commitment" v f
+  let (hs, ns) ← sessionFields v f rel ["session", "coin_root", "coin_key", "binding"]
+    [("blocks", 64), ("k", 32), ("limit_ns", 64), ("block_bytes", 64)]
+  let k := natIn ns "k"
+  let .str ended := getD rel "ended" | throw (noStatement v f "commitment holds no ended string")
+  let some rounds := nat? (getD rel "rounds") | throw (noStatement v f "commitment's rounds is no u32")
+  if rounds ≥ 2 ^ 32 then throw (noStatement v f "commitment's rounds is no u32")
+  if ended != Flock.SessionCoins.COMPLETE then throw (noStatement v f "session did not end complete")
+  if rounds != k then throw (noStatement v f s!"session has {rounds} rounds, not its {k}")
+  let head := (Flock.SessionCoins.header (hexIn hs "session") (hexIn hs "coin_root") (hexIn hs "coin_key")
+    (hexIn hs "binding") (natIn ns "blocks") k (natIn ns "limit_ns") (natIn ns "block_bytes")
+    Flock.SessionCoins.COMPLETE k).toUTF8
+  if head.size != want then throw (noStatement v f s!"header is {head.size} bytes, not {want}")
+  let row := if head.size % 2 == 1 then head.push 0 else head
+  return (#[("bytes", Flock.hexOf row)], row.size)
+
+/-- The storage session's signed context: the held commitment's session id and the first 16 bytes of the held key. -/
+private def context (commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+    V (Array (String × String) × Nat) := do
+  let f := m.fn
+  if !m.args.isEmpty then throw s!"supplied input {v}: {f} takes no args"
+  let rel ← heldObject commitments "commitment" v f
+  let some key := hexOpt (getD rel "key") | throw (noStatement v f "commitment's key is no lowercase hex")
+  let (hs, _) ← sessionFields v f rel ["session"] []
+  let session := hexIn hs "session"
+  let ident := key.extract 0 16
+  if ident.size != 16 then throw (noStatement v f s!"key is {ident.size} bytes, not an LMS identifier's 16")
+  if session.size != 32 then throw (noStatement v f s!"session is {session.size} bytes, not 32")
+  let ctx := Flock.SessionCoins.signedContext ident session
+  return (#[("bytes", Flock.hexOf ctx)], ctx.size)
+
 /-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.uint/v1`'s `value` as a
 little-endian word of its `bits` (a multiple of 8, up to 64); `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
 drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
 `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
 `registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
-`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). "no statement" for any other
-function, whose body isn't written. -/
-def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
+`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's three functions read what the
+memory attester released after the session, the JSON `{commitment, openings, key}` held under the function's name:
+`pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` (12 bytes) of the round's last opening, which opens its
+committed coin below the commitment's blocks; `pous.session.header/v1` the header of a session that ended complete with
+all its rounds, in `head` bytes (whole u16 words: a zero byte after an odd one); `pous.session.context/v1` the 106 bytes
+the signature's message hashes before the record. "no statement" for any other function, whose body isn't written. -/
+def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
   match m.fn with
   | "const.uint/v1" =>
     if (m.args.map (·.1)).qsort (· < ·) != #["bits", "value"] then
@@ -350,15 +488,25 @@ def body (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V (Arra
   | "log.base/v1" =>
     if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
     return (#[("position", "0")], 8)
+  | "pous.session.round_coin/v1" => roundCoin coins commitments v m
+  | "pous.session.header/v1" => header commitments v m
+  | "pous.session.context/v1" => context commitments v m
   | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
 
 /-- A supplied input's one row of sources (`Rows`): its body's, led by `(LE, "")` where its layout is `le`, its value's
 length the mark's bits. -/
-def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Rows := do
-  let (ss, n) ← body coins v m
+def ofMark (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) : V Rows := do
+  let (ss, n) ← body coins commitments v m
   if 8 * n != m.bits then
     throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
   return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
+
+/-- The place a held commitment was registered at: its JSON's `place`, a natural; none for a text that is no JSON object of
+one. -/
+private def commitmentPlace (b : ByteArray) : Option Nat := do
+  let s ← String.fromUTF8? b
+  let .ok j := Flock.JsonParse.parse s | none
+  nat? (getD j "place")
 
 /-- A Python list of strings' repr, as `supplied.check_order` names the late commitments. -/
 private def pyNames (xs : List String) : String := "[" ++ ", ".intercalate (xs.map fun x => "'" ++ x ++ "'") ++ "]"
@@ -368,8 +516,11 @@ coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin whe
 verifier holds (`coins`), at its place in `released` (`{function: n}`: the coin was released after n records, this one
 the `records`-th, its commitments before any coin it reads); its rows' sources read the commitments: a `value`'s or
 `port`'s root this record's, at place `records`, and `position` the log's, at `records - 1`. Refused where `released`
-is not an object of a place by supplied function, or names no place of a coin read beside a commitment. -/
-def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coins : Array (String × ByteArray))
+is not an object of a place by supplied function, or names no place of a coin read beside a commitment. A held commitment
+(`commitments`) is no coin, but a coin follows it: the `place` its JSON carries (where the verifier registered it) is
+before the place of every coin a mark reads, `E_SUPPLIED_ORDER` naming the commitments at or after it, and refused where a
+commitment has no place or the coin has none in `released`. -/
+def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coins commitments : Array (String × ByteArray))
     (released : Json) (records : Nat) : V Unit := do
   let places ← match released with
     | .null => pure #[]
@@ -389,6 +540,19 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
         | none => acc.push (name, place)) acc) acc) (#[] : Array (String × Nat))
   let fns := (marked.foldl (fun l (_, m) => if coins.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
     ([] : List String)).mergeSort (· ≤ ·)
+  let cms := (marked.foldl (fun l (_, m) => if commitments.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
+    ([] : List String)).mergeSort (· ≤ ·)
+  if !cms.isEmpty && !fns.isEmpty then
+    let placed ← cms.mapM fun c => do
+      let some p := (commitments.find? (·.1 == c)).bind (commitmentPlace ·.2)
+        | throw s!"released: the verifier names no place of {c}'s commitment, which a coin it holds follows"
+      pure (c, p)
+    for f in fns do
+      let some (_, coinAt) := places.find? (·.1 == f)
+        | throw s!"released: the verifier names no place of {f}'s coin, which follows a commitment it holds"
+      let late := (placed.filter (·.2 ≥ coinAt)).map fun (c, _) => "commitment " ++ c
+      unless late.isEmpty do
+        throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
   for f in fns do
     if reads.isEmpty then return
     let some (_, coinAt) := places.find? (·.1 == f)
@@ -397,7 +561,9 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
     unless late.isEmpty do
       throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
 
-/-- The difftest's `supplied_marks`: on `{program, coins, widths, record, log, binding}` (`coins`: `{function: hex}`;
+/-- The difftest's `supplied_marks`: on `{program, coins, commitments, widths, record, log, binding}` (`coins` and
+`commitments`: `{function: hex}`, what the verifier holds of each function as a coin and as a released commitment, which
+the order rule counts the first of alone;
 `widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
 (`marks`, `ofMark`, held to the order rule at `released`, `order`, then `rows`' reading), cut where `cuts` names it
 (`{input: [n, k]}`, `cut`), or the refusal. -/
@@ -408,6 +574,12 @@ def piece (j : Json) : Except String Json := do
       | .str s => do pure (f, ← Flock.unhex s)
       | _ => throw "coins: a coin is not hex"
     | _ => throw "coins is not an object"
+  let commitments ← match getD j "commitments" with
+    | .null => pure #[]
+    | .obj kvs => kvs.toArray.mapM fun (f, h) => match h with
+      | .str s => do pure (f, ← Flock.unhex s)
+      | _ => throw "commitments: a commitment is not hex"
+    | _ => throw "commitments is not an object"
   let widths := getD j "widths"
   let .obj _ := widths | throw "widths is not an object"
   let .arr log := getD j "log" | throw "log is not a list"
@@ -417,11 +589,11 @@ def piece (j : Json) : Except String Json := do
       | .str s, .str p => pure (some (s, p))
       | _, _ => throw "binding is not {stream, prover}"
   let rec_ := getD j "record"
-  let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins v m)
-  order ms rows coins (getD j "released") log.size
+  let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins commitments v m)
+  order ms rows coins commitments (getD j "released") log.size
   let out ← ms.mapM fun (v, m) => do
     let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
-    let rs ← ofMark coins v m
+    let rs ← ofMark coins commitments v m
     let ls ← rs.mapM fun r => do
       let le := r[0]?.map (·.1) == some LE
       let data ← (if le then r.extract 1 r.size else r).foldlM

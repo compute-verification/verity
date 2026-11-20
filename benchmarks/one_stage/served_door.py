@@ -367,10 +367,10 @@ def window(a) -> int:
     tree, out = Path(a.tree), Path(a.out)
     sys.path.insert(0, str(tree / "tests/adapters/vllm"))
     from tests.program.predict import test_window_rows as TW
+    from verity.circuits.codec import program_digest
     from verity.commitments import docket_digest as DD
     from verity.commitments.periods import interface as IF
     from verity.protocols.proofs.spot.prover import docket as DK
-    from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_rows as WR
     t = time.perf_counter()
@@ -379,7 +379,7 @@ def window(a) -> int:
     fields = TW._weights(low.fn, a.seed)
     bits = [[w >> k & 1 for w in row for k in range(16)] for row in TW.STATE]
     values = {**TW.WW.weight_values(reg, fields, None, TW.GRAIN, keep_rows=True),
-              SS.SCAN_STATE: WR.state_value(IB.program_digest(low.circuit), TW.CLASS, bits, window=TW.RUN)}
+              SS.SCAN_STATE: WR.state_value(program_digest(low.circuit.program()[0]), TW.CLASS, bits, window=TW.RUN)}
     rows = WR.Rows(low, TW.unserved_slots(low, TW.STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
     win = IF.Window(low.circuit, TW.RUN, TW.DESIGN, 64, registered=values, forms=WR.FORMS)
     win.supply()

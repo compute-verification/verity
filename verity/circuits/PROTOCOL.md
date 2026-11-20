@@ -530,6 +530,18 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.uint/v1` | constant | supplied | `value`, `bits` (a multiple of 8, up to 64; `value` < 2^bits) | `bits` |
 
+The storage session's three functions read what the memory attester released after the session, which the verifier holds
+by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key}`, the session commitment,
+how the session ended and its rounds, the registered LMS public key's hex) and, for the round coin, as a coin (`coins`: JSON
+`{openings}`). A commitment is registered before any coin, so the order rule counts `coins` alone. `pous.session.round_coin/v1`
+is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
+commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused);
+`pous.session.header/v1` is the header of a session that ended complete with all `k` rounds, which the commitment's `ended`
+and `rounds` are compared with, so a late or short session has no statement; `pous.session.context/v1` is the 106 bytes the
+signature's message hashes before the record. Each number they read is a canonical natural (no sign, fraction, exponent or
+leading zero) within its field's width. Each refuses, by the name "no statement", what the held commitment or coin lacks or the
+arguments don't fit. Nothing reads these bodies through the door yet.
+
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
 value and computes its own row, from the value and its index, a constant of the unit in C; or one unit of the block reads

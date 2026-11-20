@@ -163,7 +163,7 @@ PEARL_PLUS_PIECE = Path("private/pearlplus/case")
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
 #: The docket records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
-#: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
+#: record W and each window's record R as its audit wrote it. The compose hand-off
 #: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
 #: can name
 RECORDS = ("pearlplus/w*/registration.json", "v3c-w*/audit/window/registration.json")
