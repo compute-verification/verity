@@ -1521,6 +1521,21 @@ private def inputOutsideRoot (defs : Array Defn) (rootKey : String) (lo : Nat) :
         return some s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
   return none
 
+/-- §5.2 read through word `w`'s body `b` at place `bi`: a body that is an input primitive is an input node wherever `w` is
+called, refused at the node of the least non-root composite key that calls `w`, its first, else as the body itself. -/
+private def inputBody (defs : Array Defn) (rootKey : String) (w b : String) (bi : Nat) : Option String := Id.run do
+  let bd := defs[bi]!
+  if !(bd.prim && isInputId bd.key) then return none
+  let mut at_ : Option (String × Nat) := none
+  for d in defs do
+    if d.prim || d.key == rootKey then continue
+    match (List.range d.body.nodes.size).find? fun k => let c := defs[d.body.nodes[k]!.fn]!; c.prim && c.key == w with
+    | some k => if at_.all (fun p => d.key < p.1) then at_ := some (d.key, k)
+    | none => pure ()
+  return some <| match at_ with
+    | some (key, k) => s!"definition '{key}' node {k}: an input node ({b}, the Boolean body of {w}) appears only in the root's body"
+    | none => s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} is an input primitive, a value no claim registers"
+
 /-- `reach` extended to every Definition of `defs`: whether each primitive it reaches through node callees is a gate, a
 constant bit or a 1-bit input (§9). A callee has a smaller place than its callers, so one pass in order suffices. -/
 private def extendReach (defs : Array Defn) (reach : Array Bool) : Array Bool := Id.run do
@@ -1570,11 +1585,11 @@ def booleanKeys (defs : Array Defn) (index : Std.HashMap String Nat) (prims : Ar
     throw s!"E_BODY_KEY: `boolean` names {extra.toList.take 4}, which are no word primitive among `definitions`"
   return pairs
 
-/-- `E_BODY_NOT_BOOLEAN` for the body of word `w` at place `bi`, just decoded: no input node from place `lo` on (§5.2),
-Boolean (`reach`, its primitives gates, constant bits or 1-bit inputs) and of its word's bit signature. -/
+/-- `E_BODY_NOT_BOOLEAN` for the body of word `w` at place `bi`, just decoded: no input node from place `lo` on, and no
+input primitive as the body (§5.2, `inputBody`), Boolean (`reach`, its primitives gates, constant bits or 1-bit inputs) and of its word's bit signature. -/
 def checkBody (defs : Array Defn) (index : Std.HashMap String Nat) (rootKey : String) (lo : Nat) (reach : Array Bool)
     (w b : String) (bi : Nat) : V Unit := do
-  if let some e := inputOutsideRoot defs rootKey lo then throw e
+  if let some e := inputOutsideRoot defs rootKey lo <|> inputBody defs rootKey w b bi then throw e
   let bd := defs[bi]!
   let wd := defs[index[w]?.getD 0]!
   let boolean := if bd.prim then isBooleanPrim bd.key

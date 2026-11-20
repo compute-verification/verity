@@ -10,7 +10,9 @@ import pytest
 
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
 import test_format_spec as spec
+from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import program as PG
 from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
@@ -98,6 +100,32 @@ def _grid_past_leaves(d: dict) -> None:
 
 def _ret_past_leaves(d: dict) -> None:
     _root(d)["ret"] = {"affine": ["n", 2, 5, 1]}
+
+
+TBit = PrimitiveDefinition("TBit1", 1, (), Value(1), lambda: 0, register=False)
+TBIT_REG = DefinitionTable()
+TBIT_REG.add(TBit)
+_TBitUser = CompositeDefinition("TBitUser", 1, (), lambda S: ((("a", Value(1)),), Value(1)), lambda B, S, a: B.call(TBit),
+                                register=False)
+
+
+@functools.cache
+def _bit_word(body: str, inside: bool) -> str:
+    """A Program whose root calls the parameterless 1-bit word primitive `TBit1_v1`, directly or (``inside``) through a
+    composite, encoded with `TBit1_v1`'s Boolean body the 1-bit primitive ``body`` (an input or a constant bit)."""
+    lookup = PG._BODY_LOOKUP[0]
+    PG.register_boolean_bodies(lambda p: {"input": PG.input_prim(1), "const": BL.CONSTANTS[1]}[body] if p.id == TBit.id else lookup(p))
+    try:
+        root = CompositeDefinition(f"TBitRoot{body.capitalize()}{'Inside' if inside else ''}", 1, (), lambda S: ((), Value(1)),
+                                   (lambda B, S: B.call(bind(_TBitUser), B.call(PG.input_prim(1)))) if inside else
+                                   (lambda B, S: B.call(TBit)), register=False)
+        return spec._canon(codec.encode_program(Program(bind(root))))
+    finally:
+        PG.register_boolean_bodies(lookup)
+
+
+def bit_word(body: str = "input", inside: bool = False) -> tuple[dict, DefinitionTable]:
+    return json.loads(_bit_word(body, inside)), TBIT_REG
 
 
 V1, V8 = Value(1), Value(8)
@@ -231,7 +259,20 @@ DECODER = [
      "E_BODY_NOT_BOOLEAN: TAdd32_v1's body 'Absent_v1' is no definition"),
     ("a Boolean body that is a word Definition", tiny, lambda d: d["boolean"].__setitem__("TAdd32_v1", ROOT),
      f"E_BODY_NOT_BOOLEAN: TAdd32_v1's body {ROOT} is not a Boolean Definition"),
+    ("a Boolean body that is an input primitive", bit_word, lambda d: None,
+     "E_BODY_NOT_BOOLEAN: TBit1_v1's body Input1_v1 is an input primitive, a value no claim registers"),
+    ("an input primitive as the Boolean body of a word a Definition calls", functools.partial(bit_word, inside=True),
+     lambda d: None,
+     "definition 'TBitUser_v1' node 0: an input node (Input1_v1, the Boolean body of TBit1_v1) appears only in the root's body"),
 ]
+
+
+def test_a_constant_bit_body_is_kept():
+    """The input-body refusals refuse exactly an input primitive: a parameterless 1-bit word whose Boolean body is a constant
+    bit, a gate the evaluator gives a value, decodes, called at the root or inside a Definition."""
+    for inside in (False, True):
+        d, registry = bit_word("const", inside)
+        assert {k: v.id for k, v in codec.decode_program(d, registry).boolean.items()} == {"TBit1_v1": "Const1[0x1]_v1"}
 
 
 @pytest.mark.parametrize("make,edit,text", [c[1:] for c in DECODER], ids=[c[0] for c in DECODER])

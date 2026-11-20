@@ -54,6 +54,8 @@ def cases() -> list[tuple[str, str, object]]:
     first = json.loads(base)["boolean"]["TSum2_v1"]
     out.append(("a boolean key named twice, the last kept", base.replace('"boolean":{', f'"boolean":{{"TAdd32_v1":"{first}",', 1), spec.REG))
     out.append(("chain", chain(), REGISTRY))
+    out += [(f"a constant bit as a word's Boolean body{', inside' if inside else ''}", json.dumps(d, separators=(",", ":")), reg)
+            for inside in (False, True) for d, reg in [refusals.bit_word("const", inside)]]
     out += [(name, text, spec.REG) for name, text in recut_vectors.reads()]
     out += refusal_cases()
     out += decode_refusals.cases()

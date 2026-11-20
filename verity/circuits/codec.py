@@ -1028,13 +1028,25 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
-    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
+    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get, built))
 
 
-def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, FunctionDefinition]:
+def _input_body(desc: dict, built: dict[str, Any], fid: str, bid: str) -> str:
+    """§5.2 read through word ``fid``'s body ``bid``, an input primitive: an input node wherever ``fid`` is called, refused at
+    the node of the least non-root composite key decoded so far (``built``) that calls ``fid``, its first, else as the body
+    itself (`Descriptor.inputBody`)."""
+    ddefs, callees = desc["definitions"], desc["callees"]
+    for key in sorted(k for k in built if k != desc["root"] and ddefs[k]["form"] == "composite"):
+        for k, nd in enumerate(ddefs[key]["body"]["nodes"]):
+            if callees[nd["fn"]] == fid:
+                return f"definition {key!r} node {k}: an input node ({bid}, the Boolean body of {fid}) appears only in the root's body"
+    return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is an input primitive, a value no claim registers"
+
+
+def _decode_boolean(desc: dict, get: Callable[[str], Any], built: dict[str, Any]) -> dict[str, FunctionDefinition]:
     """``desc``'s Boolean map, each body read from ``desc`` alone (PROTOCOL.md §4.9): its keys exactly the word primitives
-    among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them with the bit form of
-    its word's signature (`E_BODY_NOT_BOOLEAN`)."""
+    among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them, no input primitive
+    (`_input_body`), with the bit form of its word's signature (`E_BODY_NOT_BOOLEAN`)."""
     from .boolean import bit_type, is_boolean
     bm = desc.get("boolean")
     if not isinstance(bm, dict) or not all(isinstance(v, str) for v in bm.values()):
@@ -1051,6 +1063,8 @@ def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, Function
         if bid not in ddefs:
             raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid!r} is no definition")
         body, (params, ret) = get(bid), get(fid).signature()
+        if is_input(body):
+            raise ValueError(_input_body(desc, built, fid, bid))
         bparams, bret = body.signature()
         if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
             raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is not a Boolean Definition of its bit signature")
