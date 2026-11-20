@@ -99,6 +99,7 @@
     "PouwVerifier.Opening",
     "PouwVerifier.Pass",
     "PouwVerifier.Rounds",
+    "PouwVerifier.Template",
     "PouwWindow.Sample",
     "PouwWindow.Rounds",
     "Spot.ChallengerCoins",
@@ -108,6 +109,11 @@
     "Identity.Domains.Pouw",
     "Flock.FV3"
    ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
+  "PouwVerifier.Template": {
+   "imports": ["Circuits.DefinitionDigest", "Flock.Program", "PouwVerifier.Chunks", "PouwVerifier.Json"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
