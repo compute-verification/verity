@@ -46,7 +46,8 @@ def door_verdicts(circuit) -> dict[str, str | None]:
     got = {}
     for t, u in first.items():
         try:
-            OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe, cut=cut)
+            OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe, cut=cut,
+                     formed=OC.formed_in(c, part, [(u, u + 1)]))
             got[t] = None
         except OC.Refused as e:
             got[t] = str(e)

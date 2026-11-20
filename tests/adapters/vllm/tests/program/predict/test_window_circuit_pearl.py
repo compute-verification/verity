@@ -195,26 +195,6 @@ def test_each_tables_readers_are_members_whose_registered_read_names_it(low):
     assert {v for v, _row in got.values()} == set(c.registered.values) - {SS.SCAN_STATE}
 
 
-def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
-    """`census` is a row a round's call: its round and call, K, N and W, the round's rows and its multiply-adds, its A rows'
-    value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit
-    description's own, each `LinearARow_v3` member's K times the N of the `LinearOut_v3` reading its call's y, and an uncut
-    circuit has no census."""
-    cen = WK.census(low)
-    assert [(r["round"], r["call"], r["k"], r["n"], r["w"], r["rows"]) for r in cen] == [
-        (s, ci, K, N, 16, M[s]) for s in M for ci, (K, N) in enumerate(CALLS)]
-    for r in cen:
-        s, ci, m = r["round"], r["call"], r["rows"]
-        assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WK.UNTIED)
-        assert (r["a"], r["y"]) == ({"value": PEARL.a(s, ci), "rows": 16}, {"value": PEARL.y(s, ci), "rows": m})
-    fns = {IF.descriptor_id(fn): fn for fn, _ in low.circuit.templates}
-    reads = [(v.split("/", 1), fns[tid]) for (tid, _p, _u), (v, _r) in _value_rows(low.circuit).items()]
-    n = {call: fn.bindings["N"] for (table, call), fn in reads if table == "pearl-y"}
-    assert sum(r["macs"] for r in cen) == sum(fn.bindings["K"] * n[call] for (table, call), fn in reads
-                                              if table == "pearl-a") == 737280
-    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN)) == []
-
-
 def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_refused():
     """The fixed load's window (both prompts of 4 at step 0, each decoded at step 1) is the cut class circuit;
     `test_window_circuit`'s WINDOW (a prompt of 3 chunked across two steps) is refused by name, since its rows aren't the

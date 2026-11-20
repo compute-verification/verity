@@ -4190,7 +4190,7 @@ FAKE_GATE = ('case "$1" in\n'
              "*) exit 2 ;;\nesac")
 
 
-@pytest.mark.parametrize("live, tie", [(True, False), (True, True), (False, False)])
+@pytest.mark.parametrize("live, tie", [(True, False), (False, False)])
 def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins_are_live(tmp_path, live, tie):
     """Under POUW=pearlplus the run checks the gate Pearl+'s serve reserves its session through, PEARLC_CHALLENGER_GATE
     (a lane with a period open would be refused), and the COINS line says Pearl+'s epoch's salt coin is a live session's
@@ -4491,48 +4491,12 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
 
-@pytest.mark.parametrize("extra, line", [
-    ({}, "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation "
-         "period check needs it before: set CERTIFIER_CMD instead"),
-    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "LOAD": "varied"},
-     "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window "
-     "is one full window of fixed length: LOAD=fixed (not varied) and WINDOW_STEPS the class's outputs, 4 (not 4)"),
-    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "WINDOW_STEPS": "16"},
-     "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window "
-     "is one full window of fixed length: LOAD=fixed (not fixed) and WINDOW_STEPS the class's outputs, 4 (not 16)"),
-    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "PROMPTS": "16:24"},
-     "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its "
-     "slots' requests of its prompt's ids each: SLOTS 8 (not 8) and PROMPTS 32:32 (not 16:24)"),
-    ({"CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None, "SLOTS": "4"},
-     "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its "
-     "slots' requests of its prompt's ids each: SLOTS 8 (not 4) and PROMPTS 32:32 (not 32:32)"),
-])
-def test_the_preflight_refuses_pearlplus_tie_beside_the_split_or_off_one_fixed_window(
-        tmp_path, extra, line):
-    """PEARLPLUS_TIE ties the window to the W Pearl+'s piece writes, so it needs V3c after step 4 (not the split network attester's, before it), and one fixed window whose s-th step is the class's s-th
-    output at the class's load: each refused before anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIES, **extra})
-    assert (rc, lines, order) == (3, [line], [])
-
-
 #: PEARLPLUS_TIE with V3c after step 4, the network attester unsplit, on the BF16 row
 PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
               "ROW_ID": "llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"}
 NO_PEARL_RULE = ("PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many "
                  "proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: "
                  "stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN")
-
-
-@pytest.mark.parametrize("args", [(), ("v3c",)])
-def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_than_a_stratified_rate(tmp_path, args):
-    """The window tied to Pearl+'s W is cut at Pearl+'s linears, so the rate that samples one proof block of each of its
-    templates is not the class window's: V3C_LAW has no default there, and a launch that states none is refused with what
-    to state, as is a rule that leaves a value of W with no sampled reader, in the serve's run and in
-    `served_verdicts.sh v3c` alike, before anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, args, **{**PEARL_TIED, "V3C_LAW": None})
-    assert (rc, lines, order) == (3, [NO_PEARL_RULE], [])
-    rc, lines, order, _limits = _v3c(tmp_path / "rate", args, **{**PEARL_TIED, "V3C_LAW": RULE})
-    assert (rc, lines, order) == (3, [_no_reader(RULE)], [])
 
 
 def _toy_cut(tmp_path: Path, text: str) -> None:
@@ -4546,18 +4510,6 @@ BY_SHAPE = ("PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of 
             "table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers "
             "is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its "
             "weaker tie")
-
-
-@pytest.mark.parametrize("args", [(), ("v3c",)])
-@pytest.mark.parametrize("uniform", [None, "1"])
-def test_the_preflight_refuses_pearlplus_tie_at_a_stratified_rate_where_the_cut_reads_a_template_a_shape(
-        tmp_path, args, uniform):
-    """Where the tree's cut reads every call of a linear shape with one template, a stratified rate's stratum is a shape,
-    so under PEARLPLUS_TIE it is refused before anything runs, the opt-in or not, naming the uniform opt-in and the
-    missing rule that samples by table."""
-    _toy_cut(tmp_path, CUT_BY_SHAPE)
-    rc, lines, order, _limits = _v3c(tmp_path, args, **{**PEARL_TIED, "PEARLPLUS_TIE_UNIFORM": uniform})
-    assert (rc, lines, order) == (3, [BY_SHAPE], [])
 
 
 def test_an_untied_launch_goes_on_where_the_cut_reads_a_template_a_shape(tmp_path):
@@ -4643,44 +4595,6 @@ def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, lis
     return run.returncode, run.stdout.splitlines(), run.stderr
 
 
-@pytest.mark.parametrize("extra, line", [
-    ({"PRECISION": "verity_int8"}, "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint's linears as Pearl+'s FP8 product, "
-                                   "and PRECISION is verity_int8: set it bfloat16"),
-    ({"ROW_ID": None}, "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint, and ROW_ID row is no BF16 row's (its id names "
-                       "__bf16__): set ROW to the BF16 row's dir"),
-    ({"ROW_ID": "llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager"}, "PREFLIGHT: under PEARLPLUS_TIE the served compare holds the serve to ROW_ID "
-     "llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager's Build of record, which this file pins none of: pin its "
-     "PROGRAM_DIGEST:MANIFEST_DIGEST in the tied block's case, or give BUILD_OF_RECORD"),
-    ({"CLASSES": "4,32,4"}, f"PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS {W63K4}, whose window circuit "
-                            "CLASSES (4,32,4) doesn't count: add it"),
-    ({"SERVE_ARGS": "--prefix-caching"}, "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its "
-     "prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on "
-     "(--prefix-caching): drop it"),
-    ({"WINDOW": "1"}, "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, "
-     "and WINDOW names one by number: unset it"),
-])
-def test_the_preflight_refuses_pearlplus_tie_off_the_bf16_row_its_class_uncounted_with_the_prefix_cache_or_a_window(
-        tmp_path, extra, line):
-    """PEARLPLUS_TIE serves the BF16 checkpoint, whose linears Pearl+'s FP8 product reads, and V3c's commit is held to
-    V3C_CLASS's window circuit; the cut circuit reads Pearl+'s tables at every row of the class's fixed load. So another
-    PRECISION or row, a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (a hit leaves a prompt's rows uncomputed) and
-    a window named by number (the window of record is the fixed load's, named by its requests) are each refused before
-    anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, **extra})
-    assert (rc, lines, order) == (3, [line], [])
-
-
-def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file(tmp_path):
-    """Under PEARLPLUS_TIE with a live Pearl+ gate the piece holds the gate's pin to main's first-parent line, which
-    MAIN_SHA's (by default the tree's own HEAD) need not hold: without MAIN_FILE the run is refused before anything runs,
-    naming where the line comes from."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIED, "PEARLC_CHALLENGER_GATE": GATE, "MAIN_FILE": None})
-    assert (rc, lines, order) == (3, [
-        "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this "
-        "tree's HEAD) need not hold: set MAIN_FILE to `git rev-list --first-parent origin/main` of a fresh fetch, sent "
-        "with the run"], [])
-
-
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
 #: the preflight's refusal of a serve dir short of inodes: ``{short}`` short of ``{inodes}``, ``{held}`` what holds them
@@ -4697,8 +4611,6 @@ SHORT_INODES = SHORT_OF_INODES.format(short=772288, inodes=772388, held=NONE_KEP
     (PEARL_TIED, "2000000 100 /workspace", SHORT_INODES),
     (PEARL_TIED, "- - /workspace", "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES (772388): df "
                                    "says - free of - on {at}"),
-    (PEARL_TIED, "2000000 772388 /workspace", None),
-    (PEARL_TIED, "0 0 /workspace", None),
     ({"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": ""}, "2000000 100 /workspace", None),
     ({}, "2000000 100 /workspace", None),
 ])
@@ -4935,7 +4847,6 @@ CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve di
 
 
 @pytest.mark.parametrize("change, extra, said", [
-    ("values/a.bin", {}, [V3C_ENTRY, FOLLOW_FAIL]),
     (None, {"K": "8"}, [f"{CLASH} K: unset it"]),
     (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, [f"{CLASH} PRODUCT COMPOSITE: unset it"]),
     (None, {"NODE_MEM_GB": "196"}, [f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"]),
@@ -4999,7 +4910,7 @@ def test_a_deferral_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_a
     assert (got["ALPHA"], got["GAMMA"]) == ("3/7", "14")
 
 
-@pytest.mark.parametrize("change", ["edited", "rehashed", "clash", "old-tree"])
+@pytest.mark.parametrize("change", ["clash", "old-tree"])
 def test_a_follow_on_under_day_refuses_a_day_log_unlike_the_one_the_serve_declared_in(tmp_path, change):
     """The follow-on audits no day the serve didn't declare: an edited copy of the day's log fails the served node's
     sums before anything runs; one rehashed to pass them, declaring the day another program, fails DAY-HELD, the
@@ -5068,10 +4979,6 @@ SHORT_REMOTE = {**PEARL_TIED, "NODE_MEM_GB": "196", "PRODUCT": "remote"}
     ({}, f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF}"),
     ({"COMPOSE_OFF_NODE": "0"}, "512 GB: the serve's lease 60 min, capped at 128 GB"),
     ({"LEASE_MIN": "150", "LEASE_MEM_GB": "64"}, f"512 GB: the serve's lease 150 min, capped at 64 GB; {OFF}"),
-    (SHORT_REMOTE, f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, {DEFERS}; {OFF}"),
-    ({**SHORT_REMOTE, "COMPOSE_OFF_NODE": "0", "COMPOSITE": None},
-     f"196 GB: the serve's lease 60 min, capped at 128 GB; {SHORT}, so step 6 defers V3c's audit and the composite to a "
-     "follow-on"),
     ({"COMPOSITE": None, "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
      f"512 GB: the serve's lease 60 min, capped at 128 GB; {OFF.replace('record', 'record and the composite')}"),
 ])
@@ -5162,15 +5069,6 @@ def test_a_composite_made_on_the_served_node_is_the_records_verdict_unless_place
         assert [json.loads(f.read_text())["product"] for f in (tmp_path / "out" / "composite").glob("*/composite.json")
                 ] == [product]
     assert any(x.startswith("HANDOFF") for x in lines) is (env.get("COMPOSE_OFF_NODE") == "1")
-
-
-def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
-    """A follow-on under PREFLIGHT_ONLY passes its own preflight (the deferral's settings, the audit's memory, the served
-    node's tree) and stops before its copy's check or V3c's audit."""
-    assert _deferred(tmp_path).returncode == 0
-    rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of the served node's (SERVED_NODE) deferral, its "
-                                      f"compose hand-off for COMPOSE_NODE. {ONLY}"], [])
 
 
 #: a5's v2 case's blobs in `_handed`'s serve dir: its circuit, public file, lookup table, and a session's record and proof
@@ -5712,7 +5610,6 @@ TIED_NOT_PEARLPLUS = "PREFLIGHT: POUW is pearlplus, not other"
 
 @pytest.mark.parametrize("handed, forged, composed", [
     ({}, {}, "pearlplus"),
-    ({}, {"PEARLPLUS_TIE": "1"}, "pearlplus"),
     ({}, {"POUW": "other", "PEARLPLUS_TIE": "1"}, None),
 ])
 def test_the_compose_follow_on_composes_at_the_hand_offs_pouw_and_refuses_a_tied_one_under_another(tmp_path, handed,
@@ -5767,54 +5664,6 @@ def test_a_compose_follow_on_refuses_a_copy_holding_a_link(tmp_path):
 #: `pearlplus_of_record` reads, each challenger session's public key at its path
 PEARLPLUS_HANDED = ("coin.json", "development.json", "ledger.jsonl", "pearlplus-answer.json", "pearlplus-lean.json",
                     "piece.json", f"session/{SID}/out/key.json", f"session/{DSID}/out/key.json")
-
-
-def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follow_on_composes_as_pouws_verdict(
-        tmp_path, monkeypatch, capsys, live):
-    """Pearl+'s piece goes with the compose hand-off with what `pearlplus_of_record` reads: the auditor's ledger, the coin
-    record, Pearl+'s answer, the Lean verdict and each challenger session's public key, and no other file of the piece or
-    its sessions, none a witness. The compose follow-on's record, from the hand-off alone with the window tied to W, its
-    argv the follow-on's, composes accept with PoUW's W_cert the Lean's work; from a piece's files alone (no session key)
-    it composes pending, naming the challenger key it can't read."""
-    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
-    monkeypatch.setattr(S, "lean_sampled_row", lambda *_a, **_k: _accepted())
-    pieces, tie, pin, lane = _pearlplus_piece(tmp_path / "pp", monkeypatch, live)
-    for f in ("piece.log", "verify.json", "session.tgz", f"session/{SID}/request.json", f"session/{SID}/out/record.json"):
-        (pieces / "pouw" / f).write_text("{}")
-    shutil.copytree(tie, tmp_path / "serve" / "pearlplus" / "w7" / "tie")
-    run = _handed(tmp_path, piece=pieces / "pouw", POUW="pearlplus", PEARLPLUS_TIE="1", H1_TIE=None)
-    assert run.returncode == 0, run.stderr
-    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
-    handed = dc / "pieces" / "pouw"
-    assert sorted(p.relative_to(handed).as_posix() for p in handed.rglob("*") if p.is_file()) == sorted(PEARLPLUS_HANDED)
-    listed = (dc / "inputs.txt").read_text().splitlines()
-    tied = [f"pearlplus/w7/tie/{f}" for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY, S.CIRCUIT_RECORD)]
-    assert set(listed) >= {*tied, *(f"private/compose/pieces/pouw/{f}" for f in PEARLPLUS_HANDED)}
-    assert S.witness(listed) == []
-    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin, VERITY_HOLD_PLACEMENT=None)  # pin: the test's own key
-    assert rc == 2 and order == ["composite", "record"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
-    argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[argv.index("--window-tie") + 1] == str(d / "pearlplus" / "w7" / "tie")
-    assert (argv[argv.index("--key-sha512") + 1], argv[argv.index("--lane") + 1]) == (pin, lane)
-    argv[argv.index("--out") + 1] = str(tmp_path / "record")
-    assert S.main(argv) == 2
-    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
-    assert (line["composed"], line["record_missing"], line["verdicts"]["PoUW"], line["check"]) == ("pending", [], "accept", {})
-    assert line["composed_on"]["from"] == S.HANDED_FROM
-    assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
-    alone = tmp_path / "alone" / "pouw"
-    alone.mkdir(parents=True)
-    for f in ("answer.json", "development.json", "piece.json", "refused.txt", "served.json", "runs.json"):
-        if (handed / f).exists():
-            shutil.copy2(handed / f, alone / f)
-    argv[argv.index("--pieces") + 1], argv[argv.index("--out") + 1] = str(alone.parent), str(tmp_path / "alone-record")
-    S.main(argv)
-    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    assert (line["composed"], line["verdicts"]["PoUW"]) == ("pending", S.DEV_VERDICT)
-    assert "the live session's challenger key is not the compose's pin: no challenger key at " in line["missing"]["PoUW"]
 
 
 def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
@@ -7619,3 +7468,12 @@ def test_the_commands_of_h1s_piece_are_refused_by_name(capsys, command):
     (`H1_DELETED`), exit 2, whatever its arguments."""
     assert S.main([command, "x"]) == 2
     assert capsys.readouterr().err.strip() == f"served_verdicts.py {command}: refused: {S.H1_DELETED[command]}"
+
+
+@pytest.mark.parametrize("extra", [PEARL_TIES, {"PEARLPLUS_TIE_UNIFORM": "1"}], ids=["PEARLPLUS_TIE", "PEARLPLUS_TIE_UNIFORM"])
+def test_a_setting_that_only_named_the_deleted_tied_leg_is_refused_by_name(tmp_path, extra):
+    """The window commit tied to Pearl+'s W is gone (window-commit takes no tie flags), so PEARLPLUS_TIE and its
+    PEARLPLUS_TIE_UNIFORM are refused with one sentence, before anything runs."""
+    name = "PEARLPLUS_TIE_UNIFORM" if "PEARLPLUS_TIE_UNIFORM" in extra else "PEARLPLUS_TIE"
+    rc, lines, order, _limits = _v3c(tmp_path, (), **extra)
+    assert (rc, lines, order) == (3, [f"PREFLIGHT: {name} is refused: the tied leg is deleted: no window is tied to a W"], [])
