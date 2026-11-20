@@ -1388,7 +1388,7 @@ theorem bitAtSpec : BitAtSpec := by
   unfold Flock.Lift.bitAt
   cases hw : Widths.homo t with
   | some w =>
-    simp only [hw]
+    simp only
     have hall := widths_homo_all hw
     have hjw : t.widths[j]! = w := by
       rw [getElem!_pos t.widths j hj]
@@ -1400,7 +1400,7 @@ theorem bitAtSpec : BitAtSpec := by
       rw [List.sum_eq_card_nsmul _ w this, smul_eq_mul]
     rw [hs _ hall, List.length_take, Array.length_toList, Nat.min_eq_left (Nat.le_of_lt hj)]
   | none =>
-    simp only [hw]
+    simp only
     have hp := prefix_sums t.widths.toList #[0] (by simp)
     rw [Array.foldl_toList] at hp
     congr 1
@@ -1409,7 +1409,7 @@ theorem bitAtSpec : BitAtSpec := by
     | zero => simp
     | succ j =>
       have hj' : j < t.widths.toList.length := by simp; omega
-      simp [List.getElem?_append_right, hj', Array.back!]
+      simp [Array.back!, List.getElem?_range, show j < t.widths.size by omega]
 
 end Flock.Chain
 
