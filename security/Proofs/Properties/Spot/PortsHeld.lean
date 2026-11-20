@@ -25,7 +25,10 @@ theorem forIn_drops {α : Type} (P : String → Prop) (f : α → Json × Json �
     : ∀ (xs : List α), (∀ a ∈ xs, ∀ s s', f a s = .ok s' →
         s' = .yield s ∨ ∃ q, P q ∧ s' = .yield (OneStageZk.dropPort s.1 s.2 q)) →
       ∀ {s0 s : Json × Json}, forIn xs s0 f = .ok s → ∃ D, (∀ q ∈ D, P q) ∧ s = dropAll s0 D
-  | [], _, s0, s, h => ⟨[], by simp, by simp [forIn, List.forIn, List.forIn', pure, Except.pure] at h; simpa [dropAll] using h.symm⟩
+  | [], _, s0, s, h => by
+    rw [List.forIn_nil] at h
+    have e : s0 = s := by simpa [pure, Except.pure] using h
+    exact ⟨[], by simp, by rw [← e]; rfl⟩
   | a :: as, hf, s0, s, h => by
     rw [List.forIn_cons] at h
     cases hfa : f a s0 with
@@ -36,9 +39,18 @@ theorem forIn_drops {α : Type} (P : String → Prop) (f : α → Json × Json �
       · obtain ⟨D, hD, rfl⟩ := forIn_drops P f as (fun b hb => hf b (List.mem_cons_of_mem _ hb)) h
         exact ⟨D, hD, rfl⟩
       · obtain ⟨D, hD, rfl⟩ := forIn_drops P f as (fun b hb => hf b (List.mem_cons_of_mem _ hb)) h
-        exact ⟨q :: D, by simp [hq, hD], rfl⟩
+        refine ⟨q :: D, fun x hx => ?_, rfl⟩
+        rcases List.mem_cons.1 hx with rfl | hx
+        · exact hq
+        · exact hD x hx
 
-set_option pp.proofs false in
-#print Spot.OneStageZk.headerHeldAt
+/-- `forIn_drops` over an array. -/
+theorem forIn_drops_arr {α : Type} (P : String → Prop)
+    (f : α → Json × Json → Except String (ForInStep (Json × Json))) (xs : Array α)
+    (hf : ∀ a ∈ xs, ∀ s s', f a s = .ok s' →
+      s' = .yield s ∨ ∃ q, P q ∧ s' = .yield (OneStageZk.dropPort s.1 s.2 q))
+    {s0 s : Json × Json} (h : forIn xs s0 f = .ok s) : ∃ D, (∀ q ∈ D, P q) ∧ s = dropAll s0 D := by
+  rw [← Array.forIn_toList] at h
+  exact forIn_drops P f xs.toList (fun a ha => hf a (Array.mem_def.2 ha)) h
 
 end Properties.Spot.PortsHeldProof
