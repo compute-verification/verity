@@ -446,9 +446,33 @@ theorem isObj_of_mem {j : Json} {k : String} {v : Json} (h : (k, v) ∈ entries 
   | obj m => exact ⟨m, rfl⟩
   | _ => simp [entries] at h
 
+theorem eq_of_nodup_filterMap {α β : Type} {f : α → Option β} (l : List α) (h : (l.filterMap f).Nodup)
+    {a b : α} {y : β} (ha : a ∈ l) (hb : b ∈ l) (hfa : f a = some y) (hfb : f b = some y) : a = b := by
+  induction l with
+  | nil => exact absurd ha List.not_mem_nil
+  | cons c l ih =>
+    cases hc : f c with
+    | none =>
+      simp only [List.filterMap_cons, hc] at h
+      rcases List.mem_cons.1 ha with rfl | ha
+      · rw [hc] at hfa; cases hfa
+      rcases List.mem_cons.1 hb with rfl | hb
+      · rw [hc] at hfb; cases hfb
+      exact ih h ha hb
+    | some y' =>
+      simp only [List.filterMap_cons, hc, List.nodup_cons] at h
+      obtain ⟨hy', h⟩ := h
+      rcases List.mem_cons.1 ha with rfl | ha <;> rcases List.mem_cons.1 hb with rfl | hb
+      · rfl
+      · rw [hc] at hfa; cases hfa
+        exact absurd (List.mem_filterMap.2 ⟨b, hb, hfb⟩) hy'
+      · rw [hc] at hfb; cases hfb
+        exact absurd (List.mem_filterMap.2 ⟨a, ha, hfa⟩) hy'
+      · exact ih h ha hb
+
 theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Array Flock.Registered.Port}
     {slice hd : Json} (hw : Wf hd) (hs : ∃ m : Std.TreeMap.Raw String Json compare, slice = .obj m ∧ m.WF)
-    (hh : OneStageZk.headerHeldAt reads held slice hd = .ok ()) : PortsHeld reads held slice hd := by
+    (hnd : (slicePortsOf slice).Nodup) (hh : OneStageZk.headerHeldAt reads held slice hd = .ok ()) : PortsHeld reads held slice hd := by
   obtain ⟨D, hD, hfin⟩ := headerHeldAt_drops hh
   intro ⟨p, x⟩ hpr
   by_cases hpD : p ∈ D
@@ -496,9 +520,12 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   have hgood := byPort_good rec' pr' hpr'
   rw [← hd1, hrp', hfind'] at hgood
   cases hgood
-  refine ⟨r.2, rI.2 _ hmem, by rw [hport, hrp'], he2, ?_⟩
-  rw [hrp', hDom' p hpD] at hd2
-  exact hd2
+  refine ⟨r.2, rI.2 _ hmem, by rw [hport, hrp'], fun r' hr' hp' => ?_, he2, ?_⟩
+  · rw [slicePortsOf, Array.toList_filterMap] at hnd
+    exact eq_of_nodup_filterMap _ hnd (Array.mem_toList_iff.2 hr') (Array.mem_toList_iff.2 (rI.2 _ hmem))
+      (by simp only [hp']) (by simp only [hport, hrp'])
+  · rw [hrp', hDom' p hpD] at hd2
+    exact hd2
 
 theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok hd) : Wf hd := by
   unfold FilePart.header at h
@@ -511,7 +538,7 @@ theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok
       exact FlockDeploy.wf_norm j
   · first | cases h | (simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
 
-theorem membersPortsHeld : MembersPortsHeld := by
+theorem membersPortsHeld (once : MembersPortsOnce) : MembersPortsHeld := by
   intro p ms c ξ e sts bs pub prof h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
   obtain ⟨roots, hroots, hfiles⟩ := OneStageZk.membersRun_files hr
@@ -526,6 +553,7 @@ theorem membersPortsHeld : MembersPortsHeld := by
   obtain ⟨rd, hrd, hpop⟩ := ebind_ok hpop
   obtain ⟨hl, hhl, hpop⟩ := ebind_ok hpop
   exact ⟨a, hd, rd, hl, ha, hh, hrd, hhl,
-    portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ hpop⟩
+    portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (once p ms c.record roots hroots m hm)
+      hpop⟩
 
 end Properties.Spot.PortsHeldProof
