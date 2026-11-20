@@ -272,9 +272,9 @@ def run_tests(w: Path, tests: list[str], timeout: float, extra_env: dict | None 
     """('pass'|'fail'|'timeout', seconds, tail) running ``tests`` (grouped by suite, one pytest each) in worker ``w``."""
     t0 = time.monotonic()
     py = str(ROOT / ".venv" / "bin" / "python")
-    args = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not slow", "--no-header", "-rfE", "-W", "ignore"]
-    if os.environ.get("MUT_SLOW"):
-        args[args.index("-m"):args.index("-m") + 2] = []
+    args = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--no-header", "-rfE", "-W", "ignore"]
+    if not os.environ.get("MUT_SLOW"):
+        args += ["-m", "not slow"]
     if maxfail:
         args.append("-x")
     extra = dict(extra_env or {})
@@ -377,6 +377,32 @@ def run(spec: dict, outdir: Path, jobs: int, base: Path, step: str | None) -> No
         if os.environ.get("MUT_SLOW"):
             ts += [t for t in steps[m["step"]].get("slow", []) if t not in ts]
         return sorted(ts, key=lambda t: reach_map.get(t, {"secs": 1e9})["secs"])
+
+    if os.environ.get("MUT_SLOW"):
+        files = sorted({t for m in muts for t in tests_for(m)})
+
+        def base(i_f):
+            i, f = i_f
+            w = workers[i % len(workers)]
+            st, dt, tail = run_tests(w, [f], timeout=3600, maxfail=False)
+            bad = [ln.split(" ", 1)[1].split(" - ", 1)[0].strip() for ln in tail.splitlines()
+                   if ln.startswith(("FAILED ", "ERROR "))] if st == "fail" else []
+            if bad:
+                st, dt2, tail = run_tests(w, [f], timeout=3600, maxfail=False, deselect={f: bad})
+            ent = reach_map.setdefault(f, {"reached": [], "secs": dt})
+            ent["deselect"] = sorted(set(ent.get("deselect", [])) | set(bad))
+            ent["status2"] = st
+            print(f"baseline2 {f}: {st} {dt:.0f}s deselect={bad}" + ("" if st == "pass" else "\n" + tail[-1500:]),
+                  flush=True)
+
+        with ThreadPoolExecutor(min(len(workers), max(1, len(files)))) as ex:
+            list(ex.map(base, enumerate(files)))
+        (outdir / "baseline2.json").write_text(json.dumps({f: reach_map[f] for f in files}, indent=1))
+        bad_files = {f for f in files if reach_map[f].get("status2") != "pass"}
+        _tf = tests_for
+
+        def tests_for(m):  # noqa: F811
+            return [t for t in _tf(m) if t not in bad_files]
 
     def one(m):
         with lock:
