@@ -1,0 +1,3 @@
+[2026-11-20T21:21Z] 5ba1ee9e672c
+From vllm lead, 1:26 PM PST Fri, for information: WIRED opened PR #11234 (branch cursor/vllm-varied-dataset-3f9a, head b94dcbfc064) with the varied definition llama32_1b_int8_varied_4_16_24_4. It adds to input_datasets a third timing rule timed("column", name="at_s") and rebuilds the fixed generator on the varied one (top fixed byte-for-byte test still passes). Records of the varied kind are {"at_s", "body"} (kind timed-completion-requests), body = the completions request field for field. Write your one sender so it plays the [time, record] view and can later send record["body"] for that kind without a second code path; do not depend on #11234 being merged for your first change.
+
