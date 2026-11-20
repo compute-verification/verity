@@ -2,7 +2,6 @@ module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
 public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
-public import Proofs.Properties.Flock.Circuit.LowerEval.Axes
 public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
@@ -1257,9 +1256,7 @@ theorem outWidths_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) (hgb : GateBodies P d) {k : ℕ}
     (hk : k < (P.defs[d]!).body.nodes.size)
     (hform : ((P.defs[d]!).body.nodes[k]).form = .prim ∨ ((P.defs[d]!).body.nodes[k]).form = .call ∨
-      (((P.defs[d]!).body.nodes[k]).form = .batch ∧ ∀ i < ((P.defs[d]!).body.nodes[k]).args.size,
-        ((P.defs[d]!).body.nodes[k]).axes[i]? = some (some 0) ∨
-          ∀ ax, ((P.defs[d]!).body.nodes[k]).axes[i]? ≠ some (some ax)))
+      ((P.defs[d]!).body.nodes[k]).form = .batch)
     (hwp : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
       (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).key = true)
     (ys : List (List Bool)) (hys : ys.length = ((P.defs[d]!).body.nodes[k]).members) :
@@ -1284,7 +1281,7 @@ theorem outWidths_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
     rw [List.map_congr_left (fun y _ => hlen y), List.map_const']
   rw [hmap', hys]
   have hsh := hno.2.2.2.2.1
-  rcases hform with hf | hf | ⟨hf, -⟩
+  rcases hform with hf | hf | hf
   · rw [hf] at hsh
     obtain ⟨ho, -⟩ := hsh
     rw [ho, hwv, show (Ty.value w).widths.toList = [w] by simp [Ty.widths]]
@@ -1303,7 +1300,7 @@ theorem outWidths_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
 
 /-- **`Batch0OutWidths`** holds. -/
 theorem batch0OutWidths : Batch0OutWidths := fun _ _ h hr _ hd hb hgb _ hk ys hys =>
-  outWidths_word h hr hd hgb hk (hb.2 _ (Array.getElem_mem hk)).1 (hb.2 _ (Array.getElem_mem hk)).2 ys hys
+  outWidths_word h hr hd hgb hk (Or.imp_right (Or.imp_right And.left) (hb.2 _ (Array.getElem_mem hk)).1) (hb.2 _ (Array.getElem_mem hk)).2 ys hys
 
 /-- A composite's return's references name leaves of its return type's widths. -/
 theorem ret_widths {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
@@ -1324,9 +1321,7 @@ theorem outWidths_comp {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) {k : ℕ}
     (hk : k < (P.defs[d]!).body.nodes.size) (hpc : (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim = false)
     (hform : ((P.defs[d]!).body.nodes[k]).form = .prim ∨ ((P.defs[d]!).body.nodes[k]).form = .call ∨
-      (((P.defs[d]!).body.nodes[k]).form = .batch ∧ ∀ i < ((P.defs[d]!).body.nodes[k]).args.size,
-        ((P.defs[d]!).body.nodes[k]).axes[i]? = some (some 0) ∨
-          ∀ ax, ((P.defs[d]!).body.nodes[k]).axes[i]? ≠ some (some ax))) :
+      ((P.defs[d]!).body.nodes[k]).form = .batch) :
     ((P.defs[d]!).body.nodes[k]).out.widths.toList =
       (List.replicate ((P.defs[d]!).body.nodes[k]).members
         (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).ret.widths.toList).flatten := by
@@ -1336,7 +1331,7 @@ theorem outWidths_comp {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
   rw [getElem!_pos _ k hk] at hno
   generalize (P.defs[d]!).body.nodes[k] = X at hno hform hpc ⊢
   have hsh := hno.2.2.2.2.1
-  rcases hform with hf | hf | ⟨hf, -⟩
+  rcases hform with hf | hf | hf
   · rw [hno.2.2.1 hf] at hpc; cases hpc
   · rw [hf] at hsh
     rw [hsh.1, members_one (Or.inr hf)]
@@ -1422,7 +1417,8 @@ theorem nestedTyped : NestedTyped := by
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   refine ⟨(refs_comp h hr hd hp).1, (refs_comp h hr hd hp).2, ret_widths h hr hd hp, fun nd hnd => ?_,
     fun k hk hpt ys hys => ?_, fun k hk hpc => outWidths_comp h hr hd hk hpc (hform _ (Array.getElem_mem hk)),
-    axes_comp h hr hd hp, fun k hk _ hf => callArgs_widths h hr hd hp hk hf,
+    fun k hk hb i hi => ⟨axes_comp_ax h hr hd hp k hk hb i hi, (axes_comp h hr hd hp k hk hb i hi).2⟩,
+    fun k hk _ hf => callArgs_widths h hr hd hp hk hf,
     fun k hk _ hb => batchArgs_widths h hr hd hp hk hb⟩
   · obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hnd
     rw [← getElem!_pos _ k hk]

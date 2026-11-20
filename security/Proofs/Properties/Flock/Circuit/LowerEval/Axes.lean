@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
+public import Proofs.Properties.Flock.Circuit.LowerEval.PlacesAll
 
 /-! The class of templates whose batches map on any axis (`BatchNested`), and how removing a batch axis acts on types:
 on the bit-level type, on the axis' dimensions, and on a member's leaf widths. -/
@@ -11,6 +11,13 @@ namespace Flock.Chain
 
 open Flock Flock.Lower Flock.Tmpl Flock.TmplValue Flock.Chain.LowerDef
 open Flock.Program hiding Form
+
+theorem replicate_flatten_getElem? {α : Type} (ew : List α) {n m t : ℕ} (hm : m < n) (ht : t < ew.length) :
+    (List.replicate n ew).flatten[t + m * ew.length]? = ew[t]? := by
+  obtain ⟨k, hk⟩ : ∃ k, n - m = k + 1 := ⟨n - m - 1, by omega⟩
+  rw [replicate_flatten_split ew (Nat.le_of_lt hm), hk, List.replicate_succ, List.flatten_cons,
+    List.getElem?_append_right (by rw [length_replicate_flatten]; omega), length_replicate_flatten,
+    show t + m * ew.length - m * ew.length = t by omega, List.getElem?_append_left ht]
 
 theorem foldl_append_copies (w : Array ℕ) : ∀ (l : List ℕ) (acc : Array ℕ),
     (l.foldl (fun a _ => a ++ w) acc).toList = acc.toList ++ (List.replicate l.length w.toList).flatten
@@ -189,6 +196,23 @@ theorem removeAxis_widths : ∀ (ax : ℕ) {t E : Ty} {n L : ℕ}, t.removeAxis 
           replicate_flatten_getElem? _ hq (by rw [hle]; exact hin), replicate_flatten_getElem? _ hq (by rw [hli]; exact hr)]
         exact ih he hde m hm r hr
     | _ => simp [Ty.removeAxis] at h
+
+/-- A batch argument's facts on any axis, read at axis 0: its type an array of the parameter's type. -/
+theorem axis0_of_ax {a : Arg} {n i : ℕ} {ps : Array (String × Ty)} {o : Option (Option ℕ)} {ws : List ℕ}
+    (h : ∀ ax, o = some (some ax) → a.ty.removeAxis ax = some (n, (ps.getD i default).2) ∧
+      a.dims = a.ty.axisDims ax ∧ i < ps.size ∧ ws = a.ty.widths.toList) :
+    o = some (some 0) → ∃ E : Ty, a.ty = .array n E ∧ a.dims = some (n, E.leaves) ∧ i < ps.size ∧
+      (ps.getD i default).2 = E ∧ ws = (List.replicate n E.widths.toList).flatten := by
+  intro h0
+  obtain ⟨hrm, hdm, hi, hw⟩ := h 0 h0
+  match hty : a.ty, hrm with
+  | .array n' e, hrm =>
+    simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at hrm
+    obtain ⟨rfl, he⟩ := hrm
+    exact ⟨e, rfl, by rw [hdm, hty]; rfl, hi, he.symm, by rw [hw, hty, widths_array_flat]⟩
+  | .value _, hrm => simp [Ty.removeAxis] at hrm
+  | .tuple _, hrm => simp [Ty.removeAxis] at hrm
+  | .record _, hrm => simp [Ty.removeAxis] at hrm
 
 theorem flatten_replicate_replicate {α : Type} (X : List α) (a b : ℕ) :
     (List.replicate a (List.replicate b X).flatten).flatten = (List.replicate (a * b) X).flatten := by
