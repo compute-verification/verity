@@ -45,7 +45,19 @@ def _families() -> tuple:
             (re.compile(r"^DsaTopKSlot(\d+)x(\d+)_v1$"), lambda m: BDM.slot(int(m[1]), int(m[2]))),
             (re.compile(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$"), lambda m: BDM.long_row_check(int(m[1]), int(m[2]))),
             (re.compile(r"^DsaTopK(Counted)?Threshold(Key|Index)(\d+)x(\d+)_v1$"),
-             lambda m: BDM.threshold(int(m[3]), int(m[4]), bool(m[1]))[m[2] == "Index"]))
+             lambda m: BDM.threshold(int(m[3]), int(m[4]), bool(m[1]))[m[2] == "Index"]),
+            (re.compile(r"^TableRead(\d+)x(\d+)_v1$"), _table_read))
+
+
+def _table_read(m: re.Match) -> object:
+    """`TableRead{IB}x{EW}_v1`'s Boolean form (`verity.circuits.boolean.table`), for a table of at most `MAX_WORDS` words; none
+    past it (`gelu_tanh_bf16`, `tanh_rn`)."""
+    from verity.circuits.boolean import table as BT
+
+    from verity_vllm.definitions.registry import tables
+
+    ib, ew = int(m[1]), int(m[2])
+    return BT.table_read(tables.table_read(ib, ew), ib) if ew << ib <= BT.MAX_WORDS else None
 
 
 catalog_loader(_load_registry, _families)
