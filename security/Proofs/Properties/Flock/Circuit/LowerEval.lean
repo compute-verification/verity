@@ -783,7 +783,9 @@ theorem qsort_ascending {units : Array ℕ} (h : units.toList.Pairwise (· < ·)
   refine Verity.QSort.qsort_sorted units _ fun i hi j hj => ?_
   have hp := List.pairwise_iff_getElem.1 h
   rcases Nat.lt_trichotomy i j with hij | rfl | hij
-  · simpa [hij] using hp i j (by simpa using hi) (by simpa using hj) hij
+  · have := hp i j (by simpa using hi) (by simpa using hj) hij
+    simp only [Array.getElem_toList] at this
+    simp [hij, this]
   · simp
   · have := hp j i (by simpa using hj) (by simpa using hi) hij
     simp only [Array.getElem_toList] at this
