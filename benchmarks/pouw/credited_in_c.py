@@ -904,9 +904,11 @@ def window(a) -> int:
     its own: each root unit of the laid C a unit of its template, in C's order (``order``); each port C feeds from other
     units a wire (`interface.Wire`) of each of its rows from one writer's output field, whole, cut into those rows where
     there are several (``cuts``); each port C feeds from its parameters a run input the unit commits (``external``),
-    the public row among them. ``--forge writers``: every Seed, Line and Gram row unit's first output word with its
-    lowest bit flipped before the commitment, so every sampled writer holds a forged output. Refused by name where a
-    port reads part of an output field or both a parameter and a unit (``WINDOW-PORT``)."""
+    the public row among them. C is without the reader (`linear`'s ``reader``): y is its output, since the residual add
+    is a proof block Flock's composer refuses below 56 columns (`provable`). ``--forge writers``: every Seed, Line and
+    Gram row unit's first output word with its lowest bit flipped before the commitment, so every sampled writer holds a
+    forged output. Refused by name where a port reads part of an output field or both a parameter and a unit
+    (``WINDOW-PORT``)."""
     k, tm, tn, n, m = map(int, a.size.split(","))
     from verity.circuits import laying as LY
     from verity.circuits.codec import descriptor_id
@@ -919,7 +921,7 @@ def window(a) -> int:
     from verity.protocols.proofs.spot.verifier import service as S
 
     t0, out = time.perf_counter(), Path(a.out)
-    ln = linear(k, m, n, (tm, tn), a.reader)
+    ln = linear(k, m, n, (tm, tn), reader=False)
     program = LY.lay(ln.program, fits)
     params = [v for v, _ in program.fn.signature()[0]]
     supplied = tuple(v for v in params if v not in PRIVATE)
@@ -1042,7 +1044,6 @@ def main() -> int:
     wn.add_argument("--out", type=Path, required=True)
     wn.add_argument("--rule", required=True, help="the sampling design over the window's proof blocks")
     wn.add_argument("--forge", choices=("writers",), default=None)
-    wn.add_argument("--no-reader", dest="reader", action="store_false")
     st = sub.add_parser("stage")
     st.add_argument("--size", default="256,1,1,1,2", help="K,TM,TN,N,M")
     st.add_argument("--lower", required=True, help="flock-lower-check, Lean's lowering")
