@@ -210,7 +210,8 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
   let named := units.qsort (· < ·)
   for i in [1:named.size] do
     if named[i - 1]! == named[i]! then notAdmitted "disjoint-ranges" s!"unit {named[i]!} is named twice in the block"
-  -- `unitAt`'s node is one of the root's (`Prog.calls`), and the member's scope is its callee's (`Prog.child`)
+  -- `unitAt`'s node is one of the root's (`Prog.calls`), so "no node of C's root" is unreachable by construction; the
+  -- member's scope is its node's callee (`Prog.child`)
   let us ← units.mapM fun u => do
     let (k, m) ← Spot.BlockFront.unitAt P u
     let some x := root.body.nodes[k]? | notAdmitted "one-callee" s!"unit {u} is no node of C's root"
