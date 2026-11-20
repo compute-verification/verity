@@ -23,9 +23,10 @@ holds.
 
 **Budgets** (`counts`, `budgets`). Every block has exactly ``c`` gates (each template's `Definition.gates` times its units
 in the block) and ``k`` fresh-input bits, |in(I) ∖ θ|, θ the weights (`window_builder.WEIGHTS`' parameters) held at their
-registered roots: the rows its units read from registered parameters outside θ, the scan state among them. Those reads are
-all of the circuit's fresh input (`interface.input_count`'s ``free`` and ``ingress`` with only the weights held), or the
-counts are refused; so are blocks that differ in either.
+registered roots: the rows its units read from registered parameters outside θ, the scan state among them, and the rows
+they read by wire from the units of no request. The registered reads are all of the circuit's fresh input
+(`interface.input_count`'s ``free`` and ``ingress`` with only the weights held), or the counts are refused; so are a wire
+joining two requests' blocks and blocks that differ in either.
 
 **Table** (private; `rows`, `decode`). `ROW_BYTES`-byte rows, integers little-endian: row 0 the header (`MAGIC`, the
 SHA-512 of the circuit's Program, m, the entry count), then one row an entry: its template (`partition_v2.id_digest`,
@@ -118,23 +119,35 @@ def decode(rs: Sequence[bytes]) -> tuple[str, int, list[tuple[str, int, tuple[in
 
 def counts(circuit: IF.Circuit) -> tuple[list[int], list[int], int, int]:
     """Each slot's block's gates and fresh-input bits, then the units of no request's, which are in no slot's block: a
-    template's `Definition.gates` a unit, and the bits of the rows a unit reads from registered parameters outside θ.
-    Refused where those reads are not all of the circuit's fresh input (`interface.input_count`'s ``free`` and
-    ``ingress`` with only the weights held)."""
+    template's `Definition.gates` a unit, and the bits of the rows a unit reads from registered parameters outside θ or,
+    by wire, from units outside its block, each wired read counted. Refused where the registered reads are not all of the
+    circuit's fresh input (`interface.input_count`'s ``free`` and ``ingress`` with only the weights held), and where a
+    wire joins two requests' blocks."""
     b = _blocks(circuit)
     gates, none = b.per_slot({t: circuit.template(t).gates for t in circuit.units})
     slots = {t: b.slots_steps(t, 0, n)[0] + 1 for t, n in circuit.units.items()}
     lays, fresh = circuit.layouts, np.zeros(b.slots + 1, dtype=np.int64)
+
+    def bits(reader: str, port: str) -> int:
+        return 16 * dict(lays[reader][0].rows)[port] // int(circuit.cuts.get(reader, {}).get(port, 1))
+
     for r in (circuit.registered.reads if circuit.registered is not None else ()):
         if r.param.split("/", 1)[0] != WEIGHTS and r.port in dict(lays[r.reader][0].rows):
-            bits = 16 * dict(lays[r.reader][0].rows)[r.port] // int(circuit.cuts.get(r.reader, {}).get(r.port, 1))
-            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]], minlength=b.slots + 1) * bits
+            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]], minlength=b.slots + 1) * bits(
+                r.reader, r.port)
+    registered = int(fresh.sum())
+    for w in circuit.wires:
+        i = np.arange(w.units, dtype=np.int64)
+        mine, theirs = slots[w.reader][w.at + i // w.cut[1]], slots[w.writer][w.source(i)]
+        if ((mine != theirs) & (mine > 0) & (theirs > 0)).any():
+            raise ValueError(f"{circuit.name}: wire {w.doc()} joins two requests' blocks")
+        fresh += np.bincount(mine[mine != theirs], minlength=b.slots + 1) * bits(w.reader, w.port)
     theta = {p: _ROOT for p in (circuit.registered.params if circuit.registered is not None else {})
              if p.split("/", 1)[0] == WEIGHTS}
     count = IF.input_count(circuit.description(), pins=theta, roots=theta)
-    if int(fresh.sum()) != count["free"] + count["ingress"]:
+    if registered != count["free"] + count["ingress"]:
         raise ValueError(f"{circuit.name}: {count['free'] + count['ingress']} fresh input bits, of which the registered reads "
-                         f"outside θ give blocks {int(fresh.sum())}: the rest is in no block")
+                         f"outside θ give blocks {registered}: the rest is in no block")
     return gates, [int(f) for f in fresh[1:]], none, int(fresh[0])
 
 

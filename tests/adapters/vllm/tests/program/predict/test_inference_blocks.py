@@ -52,22 +52,28 @@ def _slots(circuit, rs) -> dict[str, np.ndarray]:
 
 
 def _unrolled(circuit, slots: dict[str, np.ndarray]) -> tuple[list[int], list[int]]:
-    """Each block's gates and fresh-input bits, unit by unit: a template's gates for each of its units in the block, and
-    the rows its units read from registered parameters outside θ (the scan state), every wire within one block and every
-    other input row wired or θ's."""
+    """Each request's block's gates and fresh-input bits, unit by unit: a template's gates for each of its units in the
+    block, and the rows its units read from registered parameters outside θ (the scan state) or by wire from the units of
+    no request (slot -1), no wire joining two requests' blocks and every other input row wired or θ's."""
     m = circuit.blocks.slots
+    lays, fresh = circuit.layouts, np.zeros(m + 1, dtype=np.int64)
+
+    def bits(reader, port):
+        return 16 * dict(lays[reader][0].rows)[port] // int(circuit.cuts.get(reader, {}).get(port, 1))
+
     for w in circuit.wires:
         i = np.arange(w.units, dtype=np.int64)
-        assert (slots[w.reader][w.at + i // w.cut[1]] == slots[w.writer][w.source(i)]).all(), w.doc()
-    gates = sum(np.bincount(slots[t], minlength=m) * circuit.template(t).gates for t in circuit.ids)
-    lays, fresh = circuit.layouts, np.zeros(m, dtype=np.int64)
+        mine, theirs = slots[w.reader][w.at + i // w.cut[1]] + 1, slots[w.writer][w.source(i)] + 1
+        assert not ((mine != theirs) & (mine > 0) & (theirs > 0)).any(), w.doc()
+        fresh += np.bincount(mine[mine != theirs], minlength=m + 1) * bits(w.reader, w.port)
+    gates = sum(np.bincount(slots[t] + 1, minlength=m + 1) * circuit.template(t).gates for t in circuit.ids)
     for r in circuit.registered.reads:
         if r.param.split("/", 1)[0] != WEIGHTS and r.port in dict(lays[r.reader][0].rows):
-            bits = 16 * dict(lays[r.reader][0].rows)[r.port] // int(circuit.cuts.get(r.reader, {}).get(r.port, 1))
-            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]], minlength=m) * bits
+            fresh += np.bincount(slots[r.reader][r.at + np.arange(r.units) // r.cut[1]] + 1, minlength=m + 1) * bits(
+                r.reader, r.port)
     assert not circuit.ingress and all(t.param.split("/", 1)[0] == WEIGHTS for t in circuit.registered.tables)
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
-    return [int(g) for g in gates], [int(f) for f in fresh]
+    return [int(g) for g in gates[1:]], [int(f) for f in fresh[1:]]
 
 
 def test_the_table_is_the_windows_entries_one_block_a_slot(window):
@@ -104,7 +110,7 @@ def full():
 
 def test_a_served_window_of_equal_requests_has_blocks_of_equal_gates_and_fresh_bits_and_no_wire_across_them(full):
     """FULL, two requests of one length, served: by its record's blocks (`Blocks.slots_steps`), unrolled unit by unit,
-    no wire crosses blocks and its two blocks have the same gates and fresh-input bits."""
+    no wire joins its two blocks and they have the same gates and fresh-input bits."""
     gates, fresh = _unrolled(full, {t: full.blocks.slots_steps(t, 0, n)[0] for t, n in full.units.items()})
     assert gates[0] == gates[1] and fresh[0] == fresh[1], (gates, fresh)
 
