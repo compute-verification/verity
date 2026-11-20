@@ -14,7 +14,6 @@ import functools
 import hashlib
 import importlib.util
 import json
-import os
 import socket
 import subprocess
 import sys
@@ -28,6 +27,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+import settings
 from verity.circuits import restrict as R
 from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.layout import resolve
@@ -241,7 +241,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     meta = FC.meta_of(text)
     if [p[0] for p in meta["ports"]] != [*rows, *outs]:
         raise Stop(f"prove: the door's statement's ports {[p[0] for p in meta['ports']]} are not C_S's unit's {[*rows, *outs]}")
-    binary = os.environ.get("FLOCK_CIRCUIT", "")
+    binary = settings.flock_circuit()
     if not (binary and Path(binary).is_file()):
         raise Stop(f"prove: the door's statement for {rec}; FLOCK_CIRCUIT names no flock-circuit build")
     with tempfile.TemporaryDirectory() as d:
