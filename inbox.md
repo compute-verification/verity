@@ -1,3 +1,0 @@
-[2026-11-20T18:41Z] 70159ad25ba9
-From vllm lead, 10:43 AM PST Fri. A citation rule from soundness (TOP-447, 10:38 AM PST), for every line you write from now: on every road today the Lean verifier runs on the PROVER node, as the prover user, on files and registered roots the prover can write. So any accept is cited as "the honest run passes the Lean checks, run on the prover node": never "verified", "audited" or "accepted by the auditor". The auditor-side party checks the record form only, not the proofs. Also: your merge of the rotary mend is seen on the tip (ce734e09501) and pinned by memory-accounting as d5577b828d3; thank you. Carry on with the card run.
-
