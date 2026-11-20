@@ -132,7 +132,8 @@ would read more than its prompt and the weights (a stochastic request's seed, a 
 peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose
 leaves aren't whole u16 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port
 read at two row counts or as rows that aren't its outer elements cut that many ways and a unit of more than ``grain.rows``
-rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering. The circuit is completeness only:
+rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering; a served window's,
+which the door proves, `check_served`'s. The circuit is completeness only:
 that it computes what serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -146,7 +147,7 @@ No pin holds them, so `interface.input_count` counts them free.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Any, NamedTuple
 
 from verity.circuits.codec import descriptor_id
@@ -159,7 +160,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, advice_of, compile_steps, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, check_served, inference
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
@@ -197,8 +198,8 @@ class Lowered:
     function, each slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
     the window's requests (`window_class.takes`), none in a class circuit's; each empty slot of a served window,
-    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`); and
-    each `ScanSlots_v4` unit, ``(anchor, lane, unit)``."""
+    ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`);
+    each `ScanSlots_v4` unit, ``(anchor, lane, unit)``; and in a served window's, the templates `check_served` names."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
@@ -206,6 +207,7 @@ class Lowered:
     requests: tuple[int, ...] | None = None
     empty: tuple[tuple[int, int, tuple[str, int], tuple[str, int]], ...] = ()
     scans: tuple[tuple[int, int, tuple[str, int]], ...] = ()
+    unprovable: dict[str, str] = field(default_factory=dict)
 
     @property
     def cut(self) -> frozenset[int]:
@@ -407,13 +409,12 @@ def served_lowering(registered: Any, cls: WindowClass, advice: Any, ingress: Any
                     placed: Sequence[tuple[int, int | None]] | None = None, named: bool = False) -> tuple[Any, Lowered]:
     """A served window compiled and its circuit lowered, the one call the serve's close and the window commit make: I2's
     Programs of ``advice`` over the bodies ``ingress`` brought (`steps.compile_steps`, with each Program's names under
-    ``named``), their requests within ``cls`` (`takes`), the circuit (`lower`), refused (`Unexpressible`) where Flock's
-    composer wouldn't prove a unit (`check_provable`). -> the compile (its requests' ids and arrivals, which place the
-    slots) and the lowering."""
+    ``named``), their requests within ``cls`` (`takes`), the circuit (`lower`), refused (`Unexpressible`) where the door
+    wouldn't take a template, and with the templates under the prover's floor named in ``unprovable`` (`check_served`). ->
+    the compile (its requests' ids and arrivals, which place the slots) and the lowering."""
     compiled = compile_steps(registered, advice, ingress, named=named)
     low = lower(registered, cls, None, grain, requests=takes(compiled, cls, placed))
-    check_provable(low.circuit)
-    return compiled, low
+    return compiled, replace(low, unprovable=check_served(low.circuit))
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
@@ -434,6 +435,6 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of",
-           "served_lowering", "stop_ids",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower",
+           "requests_of", "served_lowering", "stop_ids",
            "takes", "window_circuit"]

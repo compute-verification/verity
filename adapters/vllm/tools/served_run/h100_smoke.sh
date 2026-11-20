@@ -90,7 +90,8 @@ f, k, wc = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
 got = [p for p in (json.loads(b) for b in (M.lines(f, "Run") if f.is_file() else [])) if p.get("window") == k]
 p = got[-1] if got else {"error": "no plan line"}
 why = p.get("refused") or p.get("error") or p.get("pending")
-print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}, seconds {json.dumps(p.get('seconds'))}"))
+print(f"WINDOW-PLAN window {k}: " + (f"none, {str(why)[:160]}" if why else f"units {p.get('units')}, feeds {p.get('feeds')}, fed rows {p.get('fed_rows')}, seconds {json.dumps(p.get('seconds'))}, "
+      f"unprovable alone {len(p.get('unprovable_alone') or [])}: {' '.join(p.get('unprovable_alone') or [])}"))
 r = p.get("record") or {"error": "no record"}
 if "error" in r:
     print(f"WINDOW-STRINGS window {k}: none\nWINDOW-RECORD window {k}: none, {str(r['error'])[:200]}")

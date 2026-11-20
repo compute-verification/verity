@@ -26,8 +26,9 @@ class ClosePlan:
     advice trace (`StepTrace.drain`) before it is read. Given the binding map the window's close built (`serve_seal.binding_of`:
     ``bmap`` and ``aliases``), each slot's `window_rows.Served` locates its request's committed members, from a Build of its
     Program written beside the window's seal (`naming.write_build`, under `steps.trace_dir`'s name); without it the outcome
-    names the circuit's templates and units alone. A window whose advice is pending or refused, or that the class doesn't take,
-    has no circuit and says why."""
+    names the circuit's templates and units alone. Either names, in ``unprovable_alone``, the templates `check_served` finds
+    under the prover's floor, which stay in the circuit and its sample. A window whose advice is pending or refused, or that
+    the class doesn't take, has no circuit and says why."""
 
     def __init__(self, out: Path, cls: Any, *, registered: Any = None, compiler: Any = None, grain: Any = None,
                  flush: Callable[[], Any] | None = None, registered_roots: dict[str, str] | None = None,
@@ -72,6 +73,7 @@ class ClosePlan:
                                                named=binding is not None)
         except (Unexpressible, ValueError) as e:
             return {**got, "refused": f"{type(e).__name__}: {e}"[:500]}
+        got["unprovable_alone"] = sorted(low.unprovable)
         lowered = time.perf_counter()
         if binding is None:
             self.held[window] = (compiled, low, None)

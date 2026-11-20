@@ -1943,7 +1943,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
     monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
-    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "check_served", lambda *a, **k: {})
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
@@ -2050,7 +2050,7 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
 
     monkeypatch.setattr(WC, "lower", lowered)
     monkeypatch.setattr(WC, "takes", lambda compiled, c: requests)
-    monkeypatch.setattr(WC, "check_provable", lambda circuit: None)
+    monkeypatch.setattr(WC, "check_served", lambda circuit: {})
     monkeypatch.setattr(WW, "weight_values", lambda r, s, _reg, keep_rows=False: weight_values(r, s, None, grain, keep_rows=keep_rows))
     monkeypatch.setattr(ST, "compile_steps", lambda *a, **k: SimpleNamespace(requests=[SimpleNamespace(id=i) for i in served]))
     p = SimpleNamespace(progs={i: i for i in served}, dirs={i: str(tmp_path) for i in served}, arrivals={i: 0 for i in served})

@@ -693,7 +693,7 @@ def test_triage_takes_a_valid_custody_marker_where_the_catalog_cannot_say(tmp_pa
 def test_the_custody_temp_file_a_killed_publish_leaves_is_no_file_of_the_run(tmp_path, monkeypatch):
     """A custody Job stopped at its deadline (its bash exits on SIGTERM, and the kernel SIGKILLs research) can leave the
     `.custody.tmp.<pid>` write_json_atomic writes before its rename. Counted as a run file, verify found it not in the run record,
-    and n1_custody.sh would hold the run as changed after its record, telling a person to waive logs the record holds."""
+    and custody would hold the run as changed after its record, telling a person to waive logs the record holds."""
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))

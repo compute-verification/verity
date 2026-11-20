@@ -1252,17 +1252,18 @@ def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
 
 def test_a_served_windows_compile_and_lowering_is_one_call():
     """`served_lowering` is the compile, the requests within the class and the lowering `window_circuit` makes, held to
-    `check_provable`: its refusal is the check's on that circuit, at `PROVABLE`'s two prompts of 27 ids of one output each
-    (whose collectors have no row Flock's composer takes) as at TINY's."""
+    `check_served` and not the older composer's floor: at `PROVABLE`'s two prompts of 27 ids of one output each (whose
+    collectors have no row Flock's composer takes) as at TINY's, the composer refuses the circuit and the served lowering
+    takes it, naming what `check_served` names on it."""
     one = {**S.GREEDY, "max_tokens": 1}
     for reg, cls, (sizes, sched), grain in [(S._registered(PROVABLE), PROVABLE_CLASS, ([(27, 1, one)] * 2, [[(0, 0, 27), (1, 0, 27)]]),
                                              PROVABLE_GRAIN), (S._registered(), CLASS, WHOLE, GRAIN)]:
         advice, ingress = S._session(sizes, sched)
-        with pytest.raises(Unexpressible, match="Flock's composer wouldn't prove") as want:
-            check_provable(window_circuit(reg, S.compile_steps(reg, advice, ingress), cls, grain))
-        with pytest.raises(Unexpressible) as got:
-            WC.served_lowering(reg, cls, advice, ingress, grain)
-        assert str(got.value) == str(want.value)
+        circuit = window_circuit(reg, S.compile_steps(reg, advice, ingress), cls, grain)
+        with pytest.raises(Unexpressible, match="Flock's composer wouldn't prove"):
+            check_provable(circuit)
+        _compiled, low = WC.served_lowering(reg, cls, advice, ingress, grain)
+        assert low.circuit.templates == circuit.templates and low.unprovable == WC.check_served(circuit)
 
 
 def test_a_token_select_is_its_function_at_the_grains_units_of_groups():
