@@ -11,7 +11,9 @@ module
 public import Flock.Registered
 public import Flock.JsonKeys
 public import Flock.JsonParse
+public import Flock.PortRoots
 meta import Flock.Registered
+meta import Flock.PortRoots
 meta import Flock.JsonKeys
 meta import Flock.JsonParse
 
@@ -135,5 +137,85 @@ def twicePorts : Json :=
 #guard (Registered.portsOf twicePorts).toOption.map (·.size) == some 2
 #guard (match Registered.ofJson twicePorts with | .error e => e | .ok _ => "") ==
   "registered reads: port a0 twice: a verdict reports one port per name, and each check reads a name's port"
+
+/-! A shared tree: one template's output field `T/o0` of four rows of value `1`, member A's rows 0 and 1 and member B's
+rows 2 and 3. Member B's public file states its table at port `o0`, its units 2 and 3 reading table rows 0 and 1, with a
+position and a path per table row and a `frame_v3` root over its table; `Registered.check` holds the table to the shared
+tree and `HmOut.checkPublic` holds it to the header, both reading the one `digests`. -/
+
+def oPort : Port := aPort "o0"
+
+def oCircuit : Circuit := { (default : Circuit) with ports := #[oPort] }
+
+/-- `oCircuit` with its pinned dummy `b ‖ c` its padding row's under a zero salt, as a circuit file's is. -/
+def oPinned : Circuit := { oCircuit with dummyDigests := #[HmOut.rowBcZeroSalt oPort (HmOut.dummyRow oCircuit 0)] }
+
+def oId : ByteArray := ByteArray.mk (Array.replicate 64 7)
+
+/-- A member's rows `rows` (of value `tag`) as a table at `o0`, its header's `frame_v3` over `hdr`'s rows of value `htag`
+(default: the table's) and its `registered` entry stating `ps` with `paths`'s paths. -/
+def shared (rows ps : List Nat) (tag : Nat := 1) (paths : List Nat := ps) (hdr : List Nat := rows) (htag : Nat := tag) :
+    Public :=
+  let tab (rs : List Nat) (t : Nat) : Public :=
+    { header := Json.mkObj [("frame_v3", Json.mkObj [("domain_ids", Json.mkObj [("o0", Json.str (hexOf oId))])])],
+      n := 2, digests := (rs.map (bc t)).toArray, outputs := #[], sha := .empty,
+      tables := some { counts := #[rs.length], starts := #[0], refs := #[0, 1] } }
+  let fv3 := Json.mkObj [("frame", Json.str "frame-v3-sha512"),
+    ("row_key_sha512", Json.str (hexOf (Sha512.hash Hm96.Default512.key))),
+    ("domain_ids", Json.mkObj [("o0", Json.str (hexOf oId))]),
+    ("schemas", Json.mkObj [("o0", Json.str (PortRoots.schemaOf oCircuit 0))]),
+    ("roots", Json.mkObj [("o0", Json.str (hexOf (PortRoots.pubRoot oCircuit (tab hdr htag) 0)))])]
+  let entry := Json.mkObj [("value", Json.str "T/o0"), ("positions", Lean.toJson ps),
+    ("paths", Json.arr (paths.map fun p => Json.str (hexOf (path 1 p))).toArray)]
+  { tab rows tag with header := Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson [2, 3])]),
+      ("registered", Json.mkObj [("o0", entry)]), ("frame_v3", fv3)] }
+
+/-- The verifier's port `o0` of `T/o0`, from the registration, and the reads it derives from C: units 2 and 3, member
+B's, read leaves 2 and 3. -/
+def oReads : Array Registered.Port :=
+  match Registered.ofJson (Json.mkObj [("format", Json.str Registered.FORMAT), ("ports", Json.mkObj [("o0",
+      Json.mkObj [("value", Json.str "T/o0"), ("root", Json.str (hexOf (root 1))), ("leaves", Lean.toJson (4 : Nat)),
+        ("words", Lean.toJson (32 : Nat)), ("domain", Json.str (hexOf dom)), ("row_schema", Json.str v2)])])]) with
+  | .ok ps => ps.map fun q => { q with readsFrom := 2, readsRel := #[some 2, some 3] }
+  | .error _ => #[]
+
+def readsWhy (p : Public) : String :=
+  match Registered.check oCircuit p (some oReads) true with
+  | .error e => e
+  | .ok () => ""
+
+def headWhy (p : Public) : String := (PortRoots.headerWhy oPinned p).getD ""
+
+-- member B's own rows at its own leaves pass both
+#guard oReads.size == 1
+#guard readsWhy (shared [2, 3] [2, 3]) == "" && headWhy (shared [2, 3] [2, 3]) == ""
+
+-- the header's rows are not the rows opened at the shared tree, each set valid on its own: the rows the reads open
+-- under a header root over other rows (valid over those rows), and those other rows under their own header (valid at
+-- the header) opening nothing at the shared tree; either way one check reads the `digests` the other does
+#guard readsWhy (shared [2, 3] [2, 3] (hdr := [0, 1]) (htag := 2)) == ""
+#guard headWhy (shared [2, 3] [2, 3] (hdr := [0, 1]) (htag := 2)) ==
+  s!"{PortRoots.HEADER_WHY} (row o0: the rows' b || c do not hash to the header's frame-v3-sha512 root)"
+#guard headWhy (shared [0, 1] [2, 3] (tag := 2)) == ""
+#guard readsWhy (shared [0, 1] [2, 3] (tag := 2)) ==
+  "registered reads: port o0: table row 0 does not open T/o0's registered root at position 2"
+#guard (List.range 2).all fun r =>
+  match (shared [2, 3] [2, 3]).tables with
+  | some t => Registered.tableRow (shared [2, 3] [2, 3]) t 0 r == (shared [2, 3] [2, 3]).digests[r]!
+  | none => false
+
+-- reads registered for all of the table's rows but one
+#guard readsWhy (shared [2, 3] [2]) == "registered reads: port o0: one position and one path per table row"
+#guard readsWhy (shared [2, 3] [2, 3] (paths := [2])) ==
+  "registered reads: port o0: one position and one path per table row"
+
+-- the member's own rows stated at another member's positions open nothing there; another member's rows at their own
+-- positions open the tree, read where the verifier's program reads member B's leaves
+#guard readsWhy (shared [2, 3] [0, 1] (paths := [2, 3])) ==
+  "registered reads: port o0: table row 0 does not open T/o0's registered root at position 0"
+#guard readsWhy (shared [2, 3] [0, 1]) ==
+  "registered reads: port o0: table row 0 does not open T/o0's registered root at position 0"
+#guard readsWhy (shared [0, 1] [0, 1]) ==
+  "registered reads: port o0: unit 2 reads position 0, and the verifier's program reads 2"
 
 end Flock.Test.RegRows

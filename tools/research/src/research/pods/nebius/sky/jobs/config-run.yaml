@@ -351,7 +351,7 @@ run: |
   # (commit/replay_slim_p<pair>/, cpu_replay.keep: the leaves a later CPU replay reads): slim.json made from this bundle's
   # MANIFEST.json, its dump_sha256 the digest of its files, each of them there with that size and sha256. Without one (a tree
   # before keep-leaves) the bundle is the row's only copy of its leaves and stays, and row.log says why; a failed replay keeps it
-  # for a retry. n2_commit.sh's replay runs the same check
+  # for a retry.
   if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then
     python3 - "$SWEEP_DIR/$ROW" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$SWEEP_DIR/$ROW/row.log" || true
   import glob, hashlib, json, os, re, shutil, sys, time

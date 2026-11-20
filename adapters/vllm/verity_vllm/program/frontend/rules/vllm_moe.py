@@ -869,8 +869,7 @@ class PaddedMoeSumRule(InPlaceRule):
         ctx.rebind(out, from_rows(outs, (M,)), self, what="output")
         w13, w2 = ctx.weight_of(up.w13_node), ctx.weight_of(dn.w2_node)
         ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
-                                "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None,
-                                "lift_of_record": "LMoeFfnL_v1 (hand-authored; registry.lifted.register_hand_lift)"},
+                                "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None},
                    emitted=f"{fn.id} x{M}")
 
 

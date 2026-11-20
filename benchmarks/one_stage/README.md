@@ -17,24 +17,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`verity/protocols/proofs/spot/prover/audit/README.md`).
 - `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as
   `compose_circuit.py` does.
-- `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
-  (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 workload on one H200 under `gpu-lease`: its Build and
-  Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
-  (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
-  a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
-  `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
-  workload's files the run's record holds only the ones `adapters/vllm/tools/served_run/published.sh` lists, each with the reason it holds nothing
-  of a request, and no file of the workload's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
-  Its work directory is made once on the node by `(cd adapters/vllm && WORK=DIR bash verity_vllm/ops/pod_bootstrap.sh --cases
-  LLAMA32_1B_INT8)`, and the script then runs with the same `WORK` (default `/workspace`). The bootstrap makes all the script reads
-  under `WORK`: vLLM's environment (`venv312`), the int8 checkpoint (`hf`) and the sm_90 taps (`cp`: the guarded FA3 build and the
-  norm tap). Before any build, the script refuses each one it doesn't find, naming that command. Under `gpu-lease` it leases one card
-  (`A5_CARD=N` names it, else any free one) for its Match capture and its Commit's engine only, and every lease names the
-  cores `A5_CORES=CPUS` gives (`--cores`; CPUS the cores the machine's map gives the lane, e.g. `40-59`), since a lease
-  without them holds every other lane out; without `A5_CORES` the script refuses before any build. Its builds, replay and
-  audit run on the cores the job is given (`nproc`). With no `gpu-lease` it takes card `A5_CARD` (default 0) directly. The row dir,
-  the window and the audit's private files are under `WORK/a5-llama1b/RUN` (`A5_ROOT`). They are removed at exit, success or
-  failure, unless `A5_KEEP=1`. M0's Flock build (`A5_FLOCK_WORK`, default `WORK/a5-llama1b/flock-work`) is kept for the next run.
 - `a5_tp.sh` (`STANDIN=ENTRY ...`, required): A5 over the stand-in windows below, one entry a stand-in script, on a CPU machine.
   Each session's `circuit.txt` files and lookup tables go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive`
   layout) through `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each
@@ -105,7 +87,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_piece.py collect-bandwidth`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
+  run, credits nothing). `POUW` names PoUW's scheme and the one left is `pearlplus`: `POUW=h1`, an unset `POUW` and H1's settings are refused by name. `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), each δ of the block record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside it (the block record's `named_terms`). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   attester's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
@@ -123,7 +105,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   tokens and span, which `publish` holds in the serve dir's private/out. It holds there too what Pearl+'s documents say
   of its exclusion tiles, their count and every replayed tile's id, which the retained values decide, and the exact
   credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
-  class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
+  class's structural credit less the give-up padded up to the window grid (`verify_run.grid_work`). And the give-up
   before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
   given up, the tiles over the inert-work bound before and left after, those replayed on the CPU) and the same counts in
   `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
@@ -149,13 +131,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
-- `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
-  the window's one-stage docket and the proof system's answer to it) or onsite's `verity/pouw/period/v1`
-  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
-  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
-  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
-  `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
-  proof blocks' proof outcomes.
 - `v2_case.py`: SPOT v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
@@ -163,11 +138,6 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   leaving only `missing.json`; a window keeping none gets the kept file's own digest, so its case shows only that the
   kept files verify. `case.json` says which under `files`, and whether the audit staged the file before the sample or
   after one its caller handed it (the window's `summary.json`), or that the window cannot tell.
-- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
-  `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
-  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the sampled and live runs'
-  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
-  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 proof blocks, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
