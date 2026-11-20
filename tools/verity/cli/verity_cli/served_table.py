@@ -1099,13 +1099,17 @@ class ServedWorkload(NamedTuple):
 
 
 def public(cfg: Mapping[str, Any]) -> period.PublicParameters:
-    """`run`'s public parameters as the application file states them: the window's length its engine steps
-    (``[workload.params] window-steps``) and the sampling design its ``[service] law``. No key states the hardware or the
-    policy's limits. Refused by name (``params``) where the file states either key not."""
-    window, law = cfg.get("workload", {}).get("params", {}).get("window-steps"), cfg.get("service", {}).get("law")
-    if window is None or law is None:
-        raise Refused("params", "the application file states no " + " and no ".join(
-            k for k, v in (("[workload.params] window-steps", window), ("[service] law", law)) if v is None))
+    """`run`'s public parameters as the application file states them: the window its class as the adapter states it
+    for the file's input dataset (`verity_vllm.inputs.serves.served`), and the sampling design its ``[service] law``.
+    No key states the hardware or the policy's limits, nor the class of a window an application names no dataset for.
+    Refused by name (``params``) where the file states no law."""
+    w = cfg["workload"]["params"]
+    if (law := cfg.get("service", {}).get("law")) is None:
+        raise Refused("params", "the application file states no [service] law")
+    window = None
+    if "dataset" in w:
+        from verity_vllm.inputs import serves
+        window = serves.served(w["model"], w["revision"], w["precision"], w["slots"], w["window-steps"]).window_class
     return period.PublicParameters(hardware=None, limits=None, window=window, sampling_design=law)
 
 

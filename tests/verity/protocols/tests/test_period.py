@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from verity.protocols.compose import period as P
 
-PUBLIC = P.PublicParameters(hardware=None, limits=None, window=2, sampling_design="rate:1/4")
+PUBLIC = P.PublicParameters(hardware=None, limits=None, window="4,27,2", sampling_design="rate:1/4")
 
 
 def test_the_wipe_then_one_registration_then_each_window_accounting_with_compilation_first_then_policy_then_the_result():

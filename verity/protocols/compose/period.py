@@ -16,12 +16,12 @@ WIPE_BY_LAUNCHER = "the wipe is started by the adapter's launcher today"
 
 @dataclass(frozen=True)
 class PublicParameters:
-    """`run`'s public parameters, read from the application file once. ``None`` where no key of the file states one
-    (the hardware, the policy's limits): no default stands in for it."""
+    """`run`'s public parameters, read from the application file once, the window as its class ``S,P,O``. ``None``
+    where nothing the file names states one (the hardware, the policy's limits): no default stands in for it."""
 
     hardware: Any
     limits: Any
-    window: int
+    window: str | None
     sampling_design: str
 
 
