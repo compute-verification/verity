@@ -550,8 +550,9 @@ def field_trees_why(what: str) -> str:
 
 
 def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any]) -> list[tuple[str, int]]:
-    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' order, ``<template>/o<j>`` for each
-    return field of the one Definition the partition's ranges over C give its members' units, its leaves that
+    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' name order (Lean's `membersOf` reads
+    them from a JSON object, whose keys it holds sorted), ``<template>/o<j>`` for each return field
+    (`return_fields`) of the one Definition the partition's ranges over C give its members' units, its leaves that
     Definition's units."""
     try:
         ranges = P._template(program, query, "the members' partition").ranges
@@ -577,9 +578,14 @@ def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping
     out: list[tuple[str, int]] = []
     for t, tid in tids.items():
         n = sum(c for _k, r, _a, c in ranges if r == tid)
-        ret = fns[tid].signature()[1]
-        out += [(f"{t}/o{j}", n) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+        out += [(f"{t}/o{j}", n) for j in range(return_fields(fns[tid].signature()[1]))]
     return out
+
+
+def return_fields(ret: Any) -> int:
+    """`Circuits.Descriptor.fieldsOf`'s length: a tuple's fields, none for the empty tuple; any other type one."""
+    fields = getattr(ret, "fields", None)
+    return 1 if fields is None else len(fields)
 
 
 def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Mapping[str, Any]) -> None:
@@ -974,4 +980,5 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]
+           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "return_fields", "run_reason", "shared_unread",
+           "unwired_why", "wired_tree_why"]
