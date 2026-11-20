@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
+public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
 
@@ -776,5 +777,22 @@ theorem restrict_front {P S : Prog} {units : Array ℕ} (h : Spot.Restrict.restr
   cases hf : Spot.BlockFront.front P (units.qsort (· < ·)) with
   | error e => rw [hf] at h; exact absurd h (by intro h; cases h)
   | ok fr => exact ⟨fr, rfl⟩
+
+/-- Units in increasing order are their own sort. -/
+theorem qsort_ascending {units : Array ℕ} (h : units.toList.Pairwise (· < ·)) : units.qsort (· < ·) = units := by
+  refine Verity.QSort.qsort_sorted units _ fun i hi j hj => ?_
+  have hp := List.pairwise_iff_getElem.1 h
+  rcases Nat.lt_trichotomy i j with hij | rfl | hij
+  · simpa [hij] using hp i j (by simpa using hi) (by simpa using hj) hij
+  · simp
+  · have := hp j i (by simpa using hj) (by simpa using hi) hij
+    simp only [Array.getElem_toList] at this
+    simp [Nat.not_lt.2 (Nat.le_of_lt hij), Nat.not_lt.2 (Nat.le_of_lt this)]
+
+/-- `front` returns at a block's units, given in increasing order, wherever `restrict` returns. -/
+theorem restrict_front_ascending {P S : Prog} {units : Array ℕ} (h : Spot.Restrict.restrict P units = .ok S)
+    (ha : units.toList.Pairwise (· < ·)) : ∃ fr, Spot.BlockFront.front P units = .ok fr := by
+  have := restrict_front h
+  rwa [qsort_ascending ha] at this
 
 end Flock.Chain
