@@ -56,6 +56,6 @@ def test_each_owed_exempt_entry_has_its_allowance_and_each_such_allowance_its_en
     stale = sorted(i for i in allow if i.startswith(prefix) and i not in entries)
     assert not stale, f"allowances of `exempt` entries no lock has: remove them from tools/check/policy.toml: {stale}"
     wrong = {i: (allow[i]["owner"], allow[i]["expires"]) for i, e in entries.items()
-             if (allow[i]["owner"], allow[i]["expires"]) != (e["owner"], expiry(e["due"]))}
-    assert not wrong, (f"allowances whose owner or expiry is not their `exempt` entry's (its owner; the end of its due day, "
-                       f"{{due + 1 day}}T08:00:00Z): {wrong}")
+             if (allow[i]["owner"], allow[i]["expires"]) != (e["owner"].removeprefix("@"), expiry(e["due"]))}
+    assert not wrong, (f"allowances whose owner or expiry is not their `exempt` entry's (its owner's handle without the `@`, "
+                       f"as the policy writes one; the end of its due day, {{due + 1 day}}T08:00:00Z): {wrong}")
