@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
 public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
+public import Proofs.Properties.Flock.Circuit.LowerEval.Axes
 public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
@@ -93,19 +94,6 @@ theorem batch0Callees : Batch0Callees := by
   obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hnd
   rw [← getElem!_pos _ k hk]
   exact ((hok d hd).2.1 k hk).1
-
-theorem foldl_append_copies (w : Array ℕ) : ∀ (l : List ℕ) (acc : Array ℕ),
-    (l.foldl (fun a _ => a ++ w) acc).toList = acc.toList ++ (List.replicate l.length w.toList).flatten
-  | [], acc => by simp
-  | _ :: l, acc => by
-    rw [List.foldl_cons, foldl_append_copies w l, List.length_cons, List.replicate_succ, List.flatten_cons]
-    simp [List.append_assoc]
-
-theorem widths_array_flat (n : ℕ) (e : Ty) :
-    (Ty.array n e).widths.toList = (List.replicate n e.widths.toList).flatten := by
-  simp only [Ty.widths]
-  rw [← Array.foldl_toList, Array.toList_range, foldl_append_copies, List.length_range]
-  simp
 
 /-- A decoded argument's references, read in `D`'s body before node `k`, name leaves of its type's widths, in order. -/
 theorem arg_widths {D : Defn} {k : ℕ} {a : Arg} {ps : Array Part} (hpar : D.body.params = D.params)
@@ -430,15 +418,6 @@ theorem unit_node_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.ro
     rw [hflat]; exact List.mem_flatten.2 ⟨L[i], List.getElem_mem _, List.getElem_mem _⟩
   rw [hps, ofParts_getD ps (by rw [← hps]; exact ht), ← hps]
   exact (hv i hi t ht _ hr (hlt' _ hmem)).symm
-
-theorem flatten_getElem?_sum {α : Type} : ∀ (L : List (List α)) {i j : ℕ} (hi : i < L.length)
-    (hj : j < L[i].length), L.flatten[((L.take i).map List.length).sum + j]? = some L[i][j]
-  | [], _, _, hi, _ => by simp at hi
-  | a :: L, 0, j, _, hj => by simp [List.getElem?_append_left (show j < a.length from hj)]
-  | a :: L, i + 1, j, hi, hj => by
-    simp only [List.take_succ_cons, List.map_cons, List.sum_cons, List.flatten_cons, List.getElem_cons_succ]
-    rw [Nat.add_assoc, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left]
-    exact flatten_getElem?_sum L (by simpa using hi) (by simpa using hj)
 
 /-- **A unit's parameter leaf's word**: leaf `j` of parameter `i` of unit `g`'s callee, resolving to gate `q` of C, is
 the word at `q` in the unit's arguments (`argWords`), at the leaf's place among the parameters' leaves. -/
