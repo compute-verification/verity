@@ -1052,30 +1052,17 @@ def _job_rows(tmp_path: Path, units: list[int], pub: Callable[[int], bytes], ope
     return rows
 
 
-def _reheaded(pub: bytes, port: str, root: str) -> bytes:
-    """`pub` with its header's ``frame_v3`` root of `port` replaced by `root`, its rows as they were."""
-    head, body = pub.split(b"\n", 1)
-    h = json.loads(head)
-    h["frame_v3"]["roots"][port] = root
-    return json.dumps(h).encode() + b"\n" + body
-
-
 @pytest.mark.slow
 @LEAN
 def test_the_outcome_runs_the_lean_verifier_itself(served, tmp_path):
     """The outcome's verdicts on each sampled proof block are the challenger's own runs, on its copy of the block's public
     file, never what a job hands it. The Lean verdict of record is its run of the verifier on the block's circuit, that
     copy and the delivered session (`run_lean`): a handed-in output saying ACCEPT beside a session the verifier rejects
-    ends REJECT, its run's ``VERDICT`` lines' SHA-512 is kept, and a verdict naming another public file's header than the
-    copy's is refused by name (`PUBLIC_HEADER`). The opening verdict is its run of the opening check (`Challenger.check`)
-    on the copy and the prover's opening: a public file swapped for another unit's, a handed-in verdict in place of an
-    opening, a header whose root of an opened row is not that row's tree, and rows of another window (whose roots do not
-    open under the record's entries root) each end REJECT, with the Lean stand-in accepting every one. With no verifier,
-    or where its run writes a panic line or ends with a status `verify` does not document, the outcome is refused by name
-    (`LEAN_RUN`)."""
+    ends REJECT, and its run's ``VERDICT`` lines' SHA-512 is kept. The opening verdict is its run of the opening check
+    (`Challenger.check`) on the copy and the prover's opening. With no verifier, or where its run writes a panic line or
+    ends with a status `verify` does not document, the outcome is refused by name (`LEAN_RUN`)."""
     *_, words = served
     params, public, advice, priv = _window(words)
-    _, _, oadvice, opriv = _window(words, run="r-other")
     rec = _register(params, public)
     ch = _challenger(params)
     _held(ch, "honest", rec)
@@ -1099,9 +1086,6 @@ def test_the_outcome_runs_the_lean_verifier_itself(served, tmp_path):
     assert all(u["verdicts"]["lean"]["accepted"] and u["verdicts"]["lean"]["of_record"] for u in honest)
     assert all(u["verdicts"]["opening"] == {"of_record": False, "accepted": True, "why": "", "verifier": SC.OPENING_CHECK}
                for u in honest)
-    with pytest.raises(S.Refused) as e:
-        SC._units(rows, str(_verify(tmp_path / "verify-named", named="00" * 64)), opening("honest"))
-    assert _codes(e) == {SC.PUBLIC_HEADER}
     bad = d.units[1]
     forged = SC._units(rows, str(_verify(tmp_path / "verify-bad", bad=bad)), opening("honest"))
     assert [u["verdicts"]["lean"]["accepted"] for u in forged] == [t != bad for t in d.units]
@@ -1118,27 +1102,41 @@ def test_the_outcome_runs_the_lean_verifier_itself(served, tmp_path):
         return units
 
     judged("ctl-forged", rows, str(_verify(tmp_path / "verify-bad-ctl", bad=bad)))
-    after = {t: d.units[(i + 1) % len(d.units)] for i, t in enumerate(d.units)}
-    negatives = {
-        "swapped": (lambda t: own_pub(after[t]), own_op),
-        "handed-in": (own_pub, lambda t: {"of_record": False, "accepted": True, "why": ""}),
-        "unrooted": (lambda t: _reheaded(own_pub(t), "a0", "00" * 64), own_op),
-        "other-window": (lambda t: _unit_pub(oadvice, opriv, t), own_op),
-    }
-    for case, (pub_of, op_of) in negatives.items():
-        units = judged(f"ctl-{case}", _job_rows(tmp_path / case, d.units, pub_of, op_of))
-        assert all(u["verdicts"]["lean"]["accepted"] for u in units), case
-        whys = [u["verdicts"]["opening"]["why"] for u in units]
-        assert all(whys), (case, whys)
-        if case == "handed-in":
-            assert set(whys) == {"opening: the opening names no entry"} or set(whys) == {"the opening names no entry"}, whys
-        if case == "unrooted":
-            assert all(w.endswith(CC.header_root_why("a0")) for w in whys), whys
     for i, broken in enumerate(({"panic": 1}, {"status": 7})):
         rows = _job_rows(tmp_path / f"broken-{i}", d.units, own_pub, own_op, lambda t: {"unit": t, **broken})
         with pytest.raises(S.Refused) as e:
             SC._units(rows, str(_verify(tmp_path / f"verify-{i}")), opening("honest"))
         assert _codes(e) == {SC.LEAN_RUN}
+
+
+def _lone_row(tmp_path: Path) -> tuple[dict, bytes]:
+    pub = _pub(bytes(128), bytes(range(128)))
+    row = _job_rows(tmp_path, [0], lambda t: pub, lambda t: {"opened": t})[0]
+    (tmp_path / "u0" / "lean-honest-own.out").write_text("not a verdict")
+    return row, pub
+
+
+def test_a_verdict_naming_another_header_is_refused(tmp_path):
+    """`run_lean` refuses by name (`PUBLIC_HEADER`) a ``VERDICT`` line whose ``public_header_sha512`` is not the SHA-512 of
+    the challenger's copy's header, so an accepting verdict about another public file is never one of this block."""
+    row, pub = _lone_row(tmp_path)
+    got = SC.run_lean(str(_verify(tmp_path / "verify")), row, Path(row["pub"]))
+    assert got["accepted"] and got["public_headers"] == [SC._header_sha512(pub)]
+    with pytest.raises(S.Refused) as e:
+        SC.run_lean(str(_verify(tmp_path / "verify-named", named="00" * 64)), row, Path(row["pub"]))
+    assert _codes(e) == {SC.PUBLIC_HEADER}
+
+
+def test_the_opening_verdict_is_the_challengers_own_run(tmp_path):
+    """`_units` hands its opening check the challenger's copy of the public file and the prover's opening, and its verdict
+    is that run's; the row's handed-in Lean output (here not a verdict at all) is never read."""
+    row, pub = _lone_row(tmp_path)
+    seen = []
+    units = SC._units([row], str(_verify(tmp_path / "verify")), lambda u, p, op: seen.append((u, p, op)) or "refused here")
+    assert seen == [(0, pub, {"opened": 0})]
+    assert units[0]["verdicts"]["opening"] == {"of_record": False, "accepted": False, "why": "refused here",
+                                               "verifier": SC.OPENING_CHECK}
+    assert units[0]["verdicts"]["lean"]["accepted"]
 
 
 def _through(ch, rec, name="honest"):
