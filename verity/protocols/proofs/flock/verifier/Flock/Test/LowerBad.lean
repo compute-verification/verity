@@ -43,6 +43,14 @@ def prog (b : Defn) : Prog := { defs := #[notDef, b], index := {}, root := 1, pr
 #guard match Lower.lower (prog (bad 1 (.affine true 0 0 1) (.affine false 0 0 1))) 1 #[16] #[16] with
   | .ok t => (List.range 2).all fun x => (outputs t 1 (bits x 1)).toOption == some #[x == 0]
   | .error _ => false
+-- the same Definition reading an input primitive, the one primitive the lift passes that is no gate (`gateOf?`)
+#guard
+  let b := bad 1 (.affine true 0 0 1) (.affine false 0 0 1)
+  let input := { notDef with key := "Input1_v1", id := "Input1_v1", params := #[], gates := 0, paramLeaves := 0 }
+  let b := { b with body := { b.body with nodes := #[{ node (.affine true 0 0 1) with args := #[] }] } }
+  match Lower.lower { prog b with defs := #[input, b] } 1 #[16] #[16] with
+  | .error e => e == "Input1_v1: not a Boolean gate (PROTOCOL.md §9)"
+  | .ok _ => false
 
 /-! ## Two scans `Work.scan` refuses
 

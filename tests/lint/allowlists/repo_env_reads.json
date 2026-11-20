@@ -151,7 +151,6 @@
     {"file": "verity/protocols/compose/verifier/live_challenger/auditor.py", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/agreement/ci.py", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/cuda_chunk_patch.py", "count": 2},
-    {"file": "verity/protocols/proofs/flock/prover/pod/rec_reprice.py", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py", "count": 4},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py", "count": 23},
     {"file": "verity/protocols/proofs/flock/prover/python/verity_flock/rec_circuits.py", "count": 1},

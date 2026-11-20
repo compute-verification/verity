@@ -15,11 +15,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.commit import scheme
-
 __all__ = ["ROW_GUARD_FIELD", "SRC_BITS", "StreamLayout"]
 
-VERSION = scheme.FA2H_VERSION
+VERSION = 7
 KBLOCK_N = 128
 #: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `hidden_source.TAP_ROW3`): one f32
 #: per (slab, row, key block), the `max * scale` that block's exp2 FMAs read.  Without it the layout, digest and bytes are the six classes'.

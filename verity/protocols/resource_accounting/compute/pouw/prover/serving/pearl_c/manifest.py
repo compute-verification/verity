@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 from typing import cast
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, salt_of, weights_root
@@ -84,30 +83,30 @@ def session_head(commits: dict) -> dict:
 
 
 def manifest_schema(man: dict, recorded: bool = False) -> str:
-    """`man`'s schema, if a verifier reads it: `core_check.MANIFEST_SCHEMA`, or `core_check.MANIFEST_RECORDED` only as a
+    """`man`'s schema, if a verifier reads it: `window.MANIFEST_SCHEMA`, or `window.MANIFEST_RECORDED` only as a
     replay of a recorded pass (`recorded`).  Raises `DomainError` otherwise."""
     schema = man.get("schema")
-    if schema == CC.MANIFEST_RECORDED and not recorded:
+    if schema == Wd.MANIFEST_RECORDED and not recorded:
         raise DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded pass "
                           "reads it")
-    if schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
-        raise DomainError(f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}" + (f" or {CC.MANIFEST_RECORDED}" if recorded else ""))
+    if schema not in (Wd.MANIFEST_SCHEMA, Wd.MANIFEST_RECORDED):
+        raise DomainError(f"schema {schema!r}, not {Wd.MANIFEST_SCHEMA}" + (f" or {Wd.MANIFEST_RECORDED}" if recorded else ""))
     return cast(str, schema)
 
 
 def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, recorded: bool = False) -> tuple[Epoch, str]:
-    """A retained pass's execution phase, as its verifier re-starts it, and how its salt was had.  A `core_check.MANIFEST_SCHEMA` pass
+    """A retained pass's execution phase, as its verifier re-starts it, and how its salt was had.  A `window.MANIFEST_SCHEMA` pass
     carries the execution phase's coin commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger
     published (the verifier's copy, not the pass's; a live session's when the pass's coins are `LIVE_SCHEME`'s), and the
     opening the salt coin's against it, opened after every weight's root (`epoch_of`; a live session's after the execution phase root
     of the weights' root and the manifest's ``pass_index``).  A pass recorded before the execution phase's coins
-    (`core_check.MANIFEST_RECORDED`) carries a beacon instead, which only a replay of a recorded pass reads (`recorded`:
+    (`window.MANIFEST_RECORDED`) carries a beacon instead, which only a replay of a recorded pass reads (`recorded`:
     `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt must be the execution phase's.  Raises `DomainError`
     naming what doesn't hold."""
     schema = manifest_schema(man, recorded)
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     roots = {int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()}
-    if schema == CC.MANIFEST_SCHEMA:
+    if schema == Wd.MANIFEST_SCHEMA:
         if "salt_opening" not in man:
             raise DomainError("the pass has no salt coin")
         if coins is None:
