@@ -622,6 +622,22 @@ def template_of(c_s: bytes, key: str, n_in: int, n_out: int, exe: Callable[[], P
         return T.parse((d / "t.tmpl").read_text()), p.stdout + p.stderr
 
 
+def _written(t: Any) -> set[int]:
+    """The columns some row of the template writes (`tmpl.unroll`'s placement): every other column past the inputs is
+    unconstrained (`TmplEval.SatAt` holds only the rows written), whatever its flat row reads as."""
+    out: set[int] = set()
+
+    def place(d: int, o: int) -> None:
+        df = t.defs[d]
+        out.update(o + col for col, _a, _b in df.rows)
+        for c in df.calls:
+            for j in range(c.count):
+                place(c.e, o + c.base + j * c.stride)
+
+    place(t.root, 0)
+    return out
+
+
 @dataclass
 class Rows:
     """A template unrolled: its input columns, its constant, each written column's two XOR sums, its unconstrained
@@ -639,12 +655,13 @@ class Rows:
         from verity_flock import tmpl as T
         f = T.unroll(t)
         n_in = T._ports(t)[0]
+        written = _written(t)
         a, b, free = [], [], []
         for col in range(f.useful):
             x, y = f.row(col)
             a.append(tuple(x))
             b.append(tuple(y))
-            if col >= n_in and col != f.const and not (x and y):
+            if col >= n_in and col != f.const and col not in written:
                 free.append(col)
         ins, outs = _parts(t.groups)
         return cls(n_in, f.const, a, b, free, ins, outs)
