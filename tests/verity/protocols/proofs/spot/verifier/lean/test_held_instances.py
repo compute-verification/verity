@@ -11,9 +11,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_members_twin import A, B, Audit, M, _json, lms_verify, _never
+from test_difftest import PAIR16, TRIPLE16, Setup
 from verity_difftest import canonical
 
 from verity.circuits import partition_object as PO
+from verity.circuits import population as PN
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 pytestmark = pytest.mark.slow
 
@@ -91,3 +94,53 @@ def test_the_instances_through_the_per_member_check(tmp_path):
     for k, v in out.items():
         if k != "other-ports-untied" and "fixture" not in v:
             assert v["lean_verdict"] == "reject", (k, v)
+
+
+A16, B16, C16 = f"{PAIR16.id}/c0", f"{TRIPLE16.id}/c0", f"{PAIR16.id}/c1"
+
+
+def _audit16(seed: str, units: dict | None = None, opened=(A16, B16), sampled=(A16, B16), extra=()) -> Audit:
+    """A window of `PAIR16` and `TRIPLE16` members, whose template returns whole u16 words: C_S passes the door's
+    lowering (`OneStageZk.admitted`), so a case ends past it."""
+    units = units or {A16: [[0, 2]], B16: [[2, 5]]}
+    ports = (f"{A16}/out", f"{B16}/out")
+    setup = Setup(PN.mixed_population_program([(PAIR16, 2), (TRIPLE16, 3)]),
+                  P.template_instances_query([PAIR16.id, TRIPLE16.id]), names=ports)
+    return Audit(seed, ports=ports, opened=opened, closed=opened, sampled=sampled, setup=setup, units=units,
+                 trees={PAIR16.id: 2, TRIPLE16.id: 3}, extra=extra)
+
+
+def test_the_instances_reach_the_read_on_a_window_the_door_lowers(tmp_path):
+    """The instances on a window whose C_S the door lowers: the untied control passes the lowering, and a member reading
+    a tied parameter with a file naming other ports, sampled or not, is answered where the members check reads it."""
+    lowered = _audit16("held16")
+    unsampled = _audit16("held16-unsampled", opened=(B16,), sampled=(B16,))
+    rooted = _audit16("held16-rooted", extra=("input/n0", "input/n1"))
+    shared = {A16: [[0, 1]], C16: [[1, 2]], B16: [[2, 5]]}
+    cases = {
+        "control-untied": (lambda: lowered, None),
+        "no-files": (lambda: lowered, {}),
+        "empty-A": (lambda: lowered, {A16: {}, B16: OTHER}),
+        "other-ports-sampled": (lambda: lowered, {A16: OTHER, B16: OTHER}),
+        "other-ports-unsampled": (lambda: unsampled, {A16: OTHER, B16: OTHER}),
+        "other-ports-rooted": (lambda: rooted, {A16: OTHER, B16: OTHER}),
+        "shared-files": (lambda: _audit16("held16-shared", units=shared), {A16: OTHER, C16: OTHER, B16: OTHER}),
+        "shared-files-rooted": (lambda: _audit16("held16-shared-rooted", units=shared, extra=("input/n0", "input/n1")),
+                                {A16: OTHER, C16: OTHER, B16: OTHER}),
+    }
+    out = {}
+    for k, (make, files) in cases.items():
+        try:
+            a = make()
+        except (ValueError, KeyError, TypeError, AssertionError) as e:
+            out[k] = {"fixture": f"{type(e).__name__}: {e}"}
+            continue
+        names = [n for n, _ in a.s.program.fn.signature()[0]]
+        if files is None:
+            params = a.params | {"proofs": {"members": {n: m | {"registered": OTHER}
+                                                        for n, m in a.params["proofs"]["members"].items()}}}
+        else:
+            params = _tied(a, **files) | {"tied": names}
+        out[k] = dict(zip(("lean_verdict", "lean", "python"), _both(a, tmp_path / k, params)))
+    print("HELD16-INSTANCES " + json.dumps(out, indent=1))
+    assert "fixture" not in out["control-untied"] and "admitted" not in out["control-untied"]["lean"], out
