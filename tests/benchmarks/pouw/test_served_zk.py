@@ -1272,10 +1272,10 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     def verdict(r: dict) -> dict:
         lean = record.public(OR.public_params(spec, r, S.SCHEME))
         try:
-            python = record.canonical(S.check_public(spec, json.loads(json.dumps(r))).to_json())
-        except (ValueError, TypeError, KeyError):
-            python = None
-        assert "refused" in lean if python is None else record.canonical(lean) == python, (r, lean, python)
+            python: str | Exception = record.canonical(S.check_public(spec, json.loads(json.dumps(r))).to_json())
+        except (ValueError, TypeError, KeyError) as e:
+            python = e
+        assert "refused" in lean if isinstance(python, Exception) else record.canonical(lean) == python, (r, lean, python)
         return lean
 
     assert verdict(rec) == {"ok": True, "codes": [], "detail": {}}
