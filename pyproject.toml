@@ -110,7 +110,6 @@ untraced = [
     "tests/test_provider_names.py",
     "tests/test_pythonpath_entries.py",
     "tests/test_repository.py",
-    "tests/test_retired_terms.py",
     "tests/test_seed_ports.py",
     "tests/test_tree.py",
     "tests/test_verifier_cost.py",
