@@ -1474,21 +1474,30 @@ def dropPort (rec h : Json) (p : String) : Json × Json :=
   let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
   (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
 
-/-- A registered value's name: no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field
-tree (`fieldTreeName`), the values `treePortOf` opens no tree of. -/
-def registeredValue (v : String) : Bool :=
-  !v.startsWith COMMITTED && !Flock.Registered.isFreshValue v && !fieldTreeName v
+/-- Port `p` reads `v` as a registered value of the verifier's: its registered file's ports `held` hold `p` at `v`,
+a value that names no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field tree
+(`fieldTreeName`), the trees `treePortOf` opens. -/
+def registeredAt (held : Array Flock.Registered.Port) (p v : String) : Bool :=
+  !v.startsWith COMMITTED && !Flock.Registered.isFreshValue v && !fieldTreeName v &&
+    held.any fun q => q.name == p && q.value == v
+
+/-- The refusal of a member's public file whose port `p`, which the slice holds no root of, is read at `v`, which the
+verifier's registered file holds at `p` as no registered value (`headerHeldAt`). -/
+def UNREGISTERED_WHY (p v : String) : String :=
+  s!"public file: port {p} reads {v}, and the verifier's registered file holds no registered value {v} at {p}: a " ++
+    "port the registration holds no root of is held only at a registered value's root"
 
 /-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
 template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
 (`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
 root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
 whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
-root of that `reads` names at a registered value (`registeredValue`) is held by those reads too: `checkPort` opens
-every row of it under the root of the verifier's registered file at the position C gives, and `OneCircuit.pos` reads
-such a value only at an input port whose units read a registered or supplied input node (`regNode`), so it is not
-compared either. Every other port is `headerHeld`'s. -/
-def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := do
+root of that `reads` names and the header names is held by those reads too where the verifier's registered file's
+ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
+that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
+read a registered or supplied input node (`regNode`), so it is not compared either; at any other value it refuses by
+name (`UNREGISTERED_WHY`). Every other port is `headerHeld`'s. -/
+def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Registered.Port) (rec h : Json) : V Unit := do
   if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
   let fv := getD h "frame_v3"
   let shared := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
@@ -1503,7 +1512,8 @@ def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := d
         && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
       throw (SHARED_UNREAD p t)
   for (p, v) in reads do
-    if registeredValue v && !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
+    if !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
+      if !registeredAt held p v then throw (UNREGISTERED_WHY p v)
       cur := dropPort cur.1 cur.2 p
   headerHeld cur.1 cur.2
 
@@ -1512,6 +1522,13 @@ def Member.reads (m : Member) : V (Array (String × String)) :=
   match m.own.registered with
   | none => pure #[]
   | some j => ((Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")).map (·.map fun q => (q.name, q.value))
+
+/-- The member's registered file's ports (none without one): the verifier's registered values `headerHeldAt` holds a
+port at. -/
+def Member.held (m : Member) : V (Array Flock.Registered.Port) :=
+  match m.own.registered with
+  | none => pure #[]
+  | some j => (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
 
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
@@ -1523,7 +1540,7 @@ def Member.population (m : Member) (slice : Json) (pubB : ByteArray) : V Unit :=
   let strata ← Partition.strata (← Program.parse m.own.program) (getD m.own.partition "query")
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeldAt (← m.reads) slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- A member's circuit held to the parameters' units a proof block, at the units a proof block `g` its circuit file
 parses with: a circuit file that parses with another `vus_per_block` refuses. One that does not parse (`none`) passes
@@ -1834,7 +1851,7 @@ def Member.populationOn (m : Member) (strata : V (Array (String × Array (Nat ×
   let strata ← strata
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeldAt (← m.reads) slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- `Member.population` is `Member.populationOn` at the strata of the member's partition's query over its program's
 parse. -/

@@ -1,6 +1,7 @@
-"""A member's header held to its slice at its registered reads (`Spot.HeaderHeldAt.piece`, `OneStageZk.headerHeldAt`),
-held to the Python mirror (`one_stage.members.population_why` past its units): a port the slice holds no root of that
-the reads name at a registered value is not compared, and every other port is, as before."""
+"""A member's header held to its slice at its registered reads and the verifier's registered file
+(`Spot.HeaderHeldAt.piece`, `OneStageZk.headerHeldAt`), held to the Python mirror (`one_stage.members.population_why`
+past its units): a port the slice holds no root of that the reads name at a value the file holds there as a registered
+value is not compared, one read at any other value is refused by name, and every other port is held as before."""
 
 from __future__ import annotations
 
@@ -30,15 +31,31 @@ def header(n: int, roots: dict[str, str]) -> dict:
             "scheme": SCHEME}
 
 
+def registered(ports: dict[str, str] | None) -> dict | None:
+    """The verifier's `verity/registered-reads/v2` file of the ports given, each its name and value; None for none."""
+    if ports is None:
+        return None
+    return {"format": "verity/registered-reads/v2",
+            "ports": {p: {"domain": "dd" * 64, "leaves": 2, "root": "aa" * 64, "value": v} for p, v in ports.items()}}
+
+
 def reference(j):
     reads = {(p, v) for p, v in j["reads"]}
     n = j["slice"]["population"]
     h = j["header"] | {"units": {"indices": list(range(n))}}
-    return M.population_why([[0, n]], [("t", [[0, n]])], h, j["slice"], reads) or ""
+    held = j["registered"]["ports"] if j["registered"] is not None else None
+    return M.population_why([[0, n]], [("t", [[0, n]])], h, j["slice"], reads, held) or ""
 
 
-INPUTS = st.builds(lambda reads, roots, n: {"reads": reads, "slice": SLICE, "header": header(n, roots)},
-                   st.lists(st.sampled_from(READS), max_size=3),
+def case(reads, ports, roots, n) -> dict:
+    """A piece's input: ``reads`` sorted, the order `population_why` reads its set in."""
+    return {"reads": sorted(reads), "registered": registered(ports), "slice": SLICE, "header": header(n, roots)}
+
+
+INPUTS = st.builds(case,
+                   st.lists(st.sampled_from(READS), max_size=3, unique_by=tuple),
+                   st.one_of(st.none(), st.dictionaries(st.sampled_from(["w", "v", "x"]),
+                                                        st.sampled_from(["h/w", "h/z", "t/o0", "committed/w"]))),
                    st.dictionaries(st.sampled_from(["x", "o0", "w", "v"]), st.sampled_from(["aa", "ee", "77", "ab"]),
                                    min_size=1),
                    st.sampled_from([2, 5]))
@@ -47,24 +64,29 @@ HELD = D.Port(PIECES, "header_held_at", reference, INPUTS, package=PACKAGE, of_r
 pieces = D.server_fixture(HELD)
 
 HONEST = {"x": "aa", "o0": "ee"}
+W = HONEST | {"w": "77"}
 CASES = [
-    ([["w", "h/w"]], HONEST | {"w": "77"}, 2, ""),
-    ([], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["v", "h/w"]], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["w", "t/o0"]], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["w", "u/o1"]], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["w", "input/n3"]], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["w", "committed/w"]], HONEST | {"w": "77"}, 2, M.unwired_why("w")),
-    ([["x", "h/w"]], {"x": "ab", "o0": "ee"}, 2, "public file: not the registration's: roots, domains"),
-    ([["w", "h/w"]], {"x": "ab", "o0": "ee", "w": "77"}, 2, "public file: not the registration's: roots, domains"),
-    ([["w", "h/w"]], HONEST | {"w": "77"}, 5, M.POPULATION_WHY),
+    ([["w", "h/w"]], {"w": "h/w"}, W, 2, ""),
+    ([["w", "h/z"]], {"w": "h/w"}, W, 2, M.unregistered_why("w", "h/z")),
+    ([["w", "h/w"]], {"v": "h/w"}, W, 2, M.unregistered_why("w", "h/w")),
+    ([["w", "h/w"]], None, W, 2, M.unregistered_why("w", "h/w")),
+    ([["w", "t/o0"]], {"w": "t/o0"}, W, 2, M.unregistered_why("w", "t/o0")),
+    ([["w", "u/o1"]], {"w": "u/o1"}, W, 2, M.unregistered_why("w", "u/o1")),
+    ([["w", "input/n3"]], {"w": "input/n3"}, W, 2, M.unregistered_why("w", "input/n3")),
+    ([["w", "committed/w"]], {"w": "committed/w"}, W, 2, M.unregistered_why("w", "committed/w")),
+    ([], {"w": "h/w"}, W, 2, M.unwired_why("w")),
+    ([["v", "h/w"]], {"v": "h/w"}, W, 2, M.unwired_why("w")),
+    ([["x", "h/w"]], {"x": "h/w"}, {"x": "ab", "o0": "ee"}, 2, "public file: not the registration's: roots, domains"),
+    ([["w", "h/w"]], {"w": "h/w"}, {"x": "ab", "o0": "ee", "w": "77"}, 2,
+     "public file: not the registration's: roots, domains"),
+    ([["w", "h/w"]], {"w": "h/w"}, W, 5, M.POPULATION_WHY),
 ]
 
 
 @needs_lake
-@pytest.mark.parametrize("reads, roots, n, want", CASES)
-def test_a_port_read_at_a_registered_value_is_held_by_the_reads_and_no_other(reads, roots, n, want, pieces):
-    j = {"reads": reads, "slice": SLICE, "header": header(n, roots)}
+@pytest.mark.parametrize("reads, ports, roots, n, want", CASES)
+def test_a_port_is_held_by_the_reads_only_at_a_registered_value_the_file_holds(reads, ports, roots, n, want, pieces):
+    j = case(reads, ports, roots, n)
     assert reference(j) == want
     assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
 
