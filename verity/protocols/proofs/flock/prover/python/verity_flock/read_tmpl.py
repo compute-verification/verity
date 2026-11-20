@@ -12,11 +12,10 @@ from __future__ import annotations
 import functools
 import hashlib
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
-from . import tmpl as TM
+from . import lean_child as LC, tmpl as TM
 
 #: the read's Definition, `verity.commitments.gates.embedding.EmbeddingRead_v2{V, H}`, by its base id
 READ = "EmbeddingRead_v2"
@@ -49,7 +48,7 @@ def is_read(definition: Any) -> bool:
 def template(V: int, H: int) -> TM.Tmpl:
     """The read of a table of V rows of H 16-bit words, as ``flock-read-tmpl V H`` writes it."""
     exe = executable()
-    r = subprocess.run([exe, str(V), str(H)], capture_output=True, text=True, check=False)
+    r = LC.run([exe, str(V), str(H)], check=False)
     if r.returncode:
         raise ValueError(f"{exe} {V} {H}: {r.stderr.strip() or f'exit {r.returncode}'}")
     return TM.parse(r.stdout)
@@ -61,7 +60,7 @@ def check(V: int, H: int, circuit: Path) -> str | None:
     whose outputs are its unit's; else its reason, the first of those that fails. A usage error or an unreadable file
     raises."""
     exe = executable()
-    r = subprocess.run([exe, "check", str(V), str(H), str(circuit)], capture_output=True, text=True, check=False)
+    r = LC.run([exe, "check", str(V), str(H), str(circuit)], check=False)
     if r.returncode == 0:
         return None
     why = r.stderr.strip() or f"exit {r.returncode}"

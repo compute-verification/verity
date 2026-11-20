@@ -50,6 +50,7 @@ statement is accepted only where both are true.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -204,8 +205,12 @@ def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool | None, str]:
     except (OSError, ValueError) as e:
         return None, f"no interactive-run record from rec-run.jsonl ({e})"
     links = ["--rec-links", (d / "rec-links.txt").read_text().strip()] if (d / "rec-links.txt").is_file() else []
+    # verity_flock.lean_child's ABORT_ON_PANIC: this step runs under plain python3
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
+                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False,
+                       env={**os.environ, "LEAN_ABORT_ON_PANIC": "1"})
+    if (panic := next((x for x in r.stderr.splitlines() if x.startswith(("PANIC", "INTERNAL PANIC"))), None)) is not None:
+        return None, f"lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}"
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     if line is None:
         return None, f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"
