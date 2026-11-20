@@ -1,4 +1,4 @@
-// The SHA-512 noise as separate passes (sha_noise.cuh's generator), shared by sgemm.cu and pvgemm.cu; included after
+// The SHA-512 noise as separate passes (sha_noise.cuh's generator), used by lpgemm.cu; included after
 // mgemm.cu. sigma is fresh for every instance, from the seed.
 #pragma once
 
@@ -55,7 +55,7 @@ __global__ void __launch_bounds__(256) sha_gen(uint32_t* __restrict__ G, uint32_
                 [&](int c, const uint32_t(&n)[4]) { x ^= __funnelshift_l(n[0] ^ n[1] ^ n[2] ^ n[3], n[0] ^ n[1] ^ n[2] ^ n[3], c); });
   G[i] = x;
 }
-// the noise itself into a rows x (128 KB) buffer of int8 (side 0, A's tag): the shared E of pvgemm.cu
+// the noise itself into a rows x (128 KB) buffer of int8 (side 0, A's tag): a shared E
 template <int NS>
 __global__ void __launch_bounds__(256) sha_fill(uint8_t* __restrict__ E, uint32_t patches, uint32_t KB, const __grid_constant__ Sig sg) {
   const uint32_t p = blockIdx.x * blockDim.x + threadIdx.x;

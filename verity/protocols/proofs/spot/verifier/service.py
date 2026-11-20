@@ -1068,6 +1068,8 @@ class _Entry:
     seed_salt: str | None = None
     history: Mapping[str, Any] | None = None
     certified: Mapping[str, Mapping[str, Any]] | None = None
+    #: the window's partition object `register` held the record's digest to (None: the blockless one)
+    partition: Mapping[str, Any] | None = None
     read: bytes | None = None
     #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
     family: str | None = None
@@ -2071,7 +2073,8 @@ class Stream:
         program, sampling_design = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, sampling_design, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt, history, certified))
+                                     window_root, held, outputs), seed_salt, history, certified,
+                                    None if partition is None else dict(partition)))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2558,7 +2561,7 @@ class Stream:
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
                       history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main,
-                      certified=e.certified)
+                      certified=e.certified, partition=e.partition)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2642,7 +2645,7 @@ class Stream:
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
                       tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
-                      main=self.main, certified=e.certified,
+                      main=self.main, certified=e.certified, partition=e.partition,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,

@@ -619,7 +619,8 @@ def _held_object(tbl: Mapping[str, bytes], kind: str, name: str, f: str) -> Mapp
 
 def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[str],
                     nats: Sequence[tuple[str, int]]) -> dict[str, Any]:
-    """The held commitment's fields ``hexes`` (lowercase hex of whole bytes) and ``nats`` (naturals below ``2 ** bits``)."""
+    """The held commitment's fields ``hexes`` (lowercase hex of whole bytes, the session id 32 bytes) and ``nats`` (naturals
+    below ``2 ** bits``)."""
     c = rel.get("commitment")
     if not isinstance(c, dict):
         raise _no_statement(name, f, "commitment holds no commitment object")
@@ -629,6 +630,8 @@ def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[s
         if not (isinstance(v, str) and _EVEN_HEX.fullmatch(v)):
             raise _no_statement(name, f, f"commitment's {k} is no lowercase hex")
         out[k] = bytes.fromhex(v)
+        if k == "session" and len(out[k]) != 32:
+            raise _no_statement(name, f, f"commitment's session is {len(out[k])} bytes, not 32")
     for k, bits in nats:
         v = c.get(k)
         if type(v) is not int or not 0 <= v < 1 << bits:
@@ -640,18 +643,25 @@ def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[s
 def _round_coin(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str,
                 m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
     """Round ``round``'s index, the last opening of the round that the coin holds, opened under the coin root of the
-    commitment the verifier holds (never one the coin carries)."""
+    commitment the verifier holds (never one the coin carries) with the coin key the coin releases, which hashes to the
+    commitment's ``coin_key_sha512``."""
     f = m["supplied"]
     j = _arg(name, m, "round", int)
     rel = _held_object(commitments, "commitment", name, f)
-    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key"), (("blocks", 64), ("k", 32)))
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key_sha512"), (("blocks", 64), ("k", 32)))
     if j >= 1 << 32:
         raise _no_statement(name, f, f"round {j} is no u32")
     if j >= c["k"]:
         raise _no_statement(name, f, f"round {j} is no round of the session's {c['k']}")
     coin = _held_object(coins, "coin", name, f)
-    if set(coin) - {"openings"}:
-        raise _no_statement(name, f, "coin holds more than its openings: the coin root is the verifier's own")
+    if set(coin) - {"openings", "coin_key"}:
+        raise _no_statement(name, f, "coin holds more than its openings and its key: the coin root is the verifier's own")
+    key = coin.get("coin_key")
+    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
+        raise _no_statement(name, f, "coin's coin_key is no lowercase hex")
+    key = bytes.fromhex(key)
+    if hashlib.sha512(key).digest() != c["coin_key_sha512"]:
+        raise _no_statement(name, f, "coin's key is not the one the commitment holds the hash of")
     ops = coin.get("openings")
     if not isinstance(ops, list):
         raise _no_statement(name, f, "coin holds no openings list")
@@ -666,30 +676,33 @@ def _round_coin(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], na
         raise _no_statement(name, f, f"round {j}'s index {index} is no u64")
     if index >= c["blocks"]:
         raise _no_statement(name, f, f"round {j}'s index {index} is no block of the session's {c['blocks']}")
-    if not SC.verify(c["session"], c["coin_root"], c["coin_key"], c["blocks"], c["k"], j, index, bytes.fromhex(salt),
+    if not SC.verify(c["session"], c["coin_root"], key, c["blocks"], c["k"], j, index, bytes.fromhex(salt),
                      [bytes.fromhex(p) for p in path]):
         raise _no_statement(name, f, f"round {j}'s index {index} is not its committed coin")
     return [("bytes", (j.to_bytes(4, "big") + index.to_bytes(8, "big")).hex())], 12
 
 
-def _header(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
-    """The held commitment's signed header with ``"ended": "complete"`` and ``"rounds": k``, which the commitment's own
-    ``ended`` and ``rounds`` are compared with, so a late or short session has no statement."""
+def _header(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str,
+            m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's signed header (the coin key by its hash) with ``"ended": "complete"`` and ``"rounds": k``, which
+    the ``ended`` and ``rounds`` the session's release holds (the coin held under the function) are compared with, so a late
+    or short session has no statement."""
     f = m["supplied"]
     want = _arg(name, m, "head", int)
     rel = _held_object(commitments, "commitment", name, f)
-    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key", "binding"),
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key_sha512", "binding"),
                         (("blocks", 64), ("k", 32), ("limit_ns", 64), ("block_bytes", 64)))
-    ended, rounds = rel.get("ended"), rel.get("rounds")
+    released = _held_object(coins, "coin", name, f)
+    ended, rounds = released.get("ended"), released.get("rounds")
     if not isinstance(ended, str):
-        raise _no_statement(name, f, "commitment holds no ended string")
+        raise _no_statement(name, f, "coin holds no ended string")
     if type(rounds) is not int or not 0 <= rounds < 1 << 32:
-        raise _no_statement(name, f, "commitment's rounds is no u32")
+        raise _no_statement(name, f, "coin's rounds is no u32")
     if ended != SC.COMPLETE:
         raise _no_statement(name, f, "session did not end complete")
     if rounds != c["k"]:
         raise _no_statement(name, f, f"session has {rounds} rounds, not its {c['k']}")
-    head = SC.header(c["session"], c["coin_root"], c["coin_key"], c["binding"], c["blocks"], c["k"], c["limit_ns"],
+    head = SC.header(c["session"], c["coin_root"], c["coin_key_sha512"], c["binding"], c["blocks"], c["k"], c["limit_ns"],
                      c["block_bytes"], SC.COMPLETE, c["k"])
     if len(head) != want:
         raise _no_statement(name, f, f"header is {len(head)} bytes, not {want}")
@@ -710,8 +723,6 @@ def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) 
     ident = bytes.fromhex(key)[:16]
     if len(ident) != 16:
         raise _no_statement(name, f, f"key is {len(ident)} bytes, not an LMS identifier's 16")
-    if len(session) != 32:
-        raise _no_statement(name, f, f"session is {len(session)} bytes, not 32")
     ctx = SC.signed_context(ident, session)
     return [("bytes", ctx.hex())], len(ctx)
 
@@ -719,18 +730,21 @@ def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) 
 def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
     """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
     statement" where the verifier can't compute it. ``coins`` and ``commitments`` are what the verifier holds of each function
-    as a coin and as a released commitment, by function name. The storage session's three functions read the commitment, a
-    JSON object `{commitment, ended, rounds, key}` (`SessionCommitment.to_json`, how the session ended and its rounds, the
-    registered LMS public key's hex), and `pous.session.round_coin/v1` the coin, `{openings}` (`CoinOpening.to_json`):
-    `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin below the commitment's blocks;
-    `pous.session.header/v1` the header of a session that ended complete with all its rounds in `head` bytes, padded to whole
-    u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the record. Each number they read
-    is canonical (`_canonical_numbers`) and within its field's width."""
+    as a coin and as a commitment, by function name. The storage session's three functions read the session in two entries by
+    when each of its parts exists. The commitment, held before the first coin, is a JSON object `{commitment, key, place}`:
+    the header's fields (`SessionCommitment.header`: the session id, the coin root, the hash of the coin key, the blocks, `k`,
+    the limit, the answer's size, the binding), the registered LMS public key's hex and the place it was registered at. The
+    coin, released after the session, is `{openings, coin_key}` for `pous.session.round_coin/v1` (`CoinOpening.to_json` and
+    the coin key itself, which hashes to the commitment's) and `{ended, rounds}` for `pous.session.header/v1`.
+    `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin
+    below the commitment's blocks; `pous.session.header/v1` the header of a session that ended complete with all its rounds in
+    `head` bytes, padded to whole u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the
+    record. Each number they read is canonical (`_canonical_numbers`) and within its field's width."""
     f = m["supplied"]
     if f == "pous.session.round_coin/v1":
         return _round_coin(coins, commitments, name, m)
     if f == "pous.session.header/v1":
-        return _header(commitments, name, m)
+        return _header(coins, commitments, name, m)
     if f == "pous.session.context/v1":
         return _context(commitments, name, m)
     if f == "const.u16/v1":
@@ -820,14 +834,17 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
     return out
 
 
-def _commitment_place(b: bytes) -> int | None:
-    """The place a held commitment was registered at: its JSON's ``place``, a natural; None for a text that is no JSON object
-    of one (`Supplied.commitmentPlace`)."""
+def _commitment_place(c: str, b: bytes) -> int:
+    """The place `c`'s held commitment `b` was registered at: its JSON's ``place``, a natural; ValueError for a text that is
+    no JSON object of one (`Supplied.commitmentPlace`)."""
+    why = f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows"
     try:
         doc = json.loads(b.decode("utf-8"))
-    except ValueError:
-        return None
-    return _nat(doc.get("place")) if isinstance(doc, dict) else None
+    except ValueError as e:
+        raise ValueError(why) from e
+    if (p := _nat(doc.get("place")) if isinstance(doc, dict) else None) is None:
+        raise ValueError(why)
+    return p
 
 
 def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
@@ -856,9 +873,7 @@ def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[
     if cms and cos:
         placed = {}
         for c in cms:
-            if (p := _commitment_place(commit[c])) is None:
-                raise ValueError(f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows")
-            placed[f"commitment {c}"] = p
+            placed[f"commitment {c}"] = _commitment_place(c, commit[c])
         for f in cos:
             if f not in (released or {}):
                 raise ValueError(f"released: the verifier names no place of {f}'s coin, which follows a commitment it holds")

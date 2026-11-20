@@ -119,14 +119,6 @@ def _wiring(fn: PrimitiveDefinition) -> int | None:
     return int(m[2]) if m else -1 if WORD_OF_ID.fullmatch(fn.id) else None
 
 
-def _boolean_body(fn: PrimitiveDefinition) -> Any:
-    from verity.circuits.program import boolean_body
-    try:
-        return boolean_body(fn)
-    except LookupError:
-        return None
-
-
 def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
     """A run of gate nodes, (kind, out, a, b) each, as groups of equal depth and kind (depth counted within the run)."""
     depth = np.zeros(size, dtype=np.int64)
@@ -218,7 +210,12 @@ def compile(target: Any, words: bool = False) -> Compiled:  # shadows `builtins.
             gk = BL.gate_kind(fn)
             wire = None if gk is not None or not words else _wiring(fn)
             if gk is None and wire is None:
-                fn = _boolean_body(fn) if words else None
+                if words:
+                    from verity.circuits.program import boolean_body
+                    try:
+                        fn = boolean_body(fn)
+                    except LookupError as e:
+                        raise TypeError(f"{spec.id} node {q}: {nd.fn.id} is a word primitive with no Boolean body: {e}") from e
                 if not isinstance(fn, SpecializedDefinition):
                     raise TypeError(f"{spec.id} node {q}: {nd.fn.id} is not a Boolean gate, constant bit, wiring primitive "
                                     "or word primitive with a Boolean body")

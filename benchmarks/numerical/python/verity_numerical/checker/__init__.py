@@ -27,8 +27,8 @@ then produces a W-bit magnitude and scales it back up exactly (``norm_up``), sin
 the scale-up and no longer fold into one floor division.  ``Bf16Decode`` (alias ``OperandDecode``) admits the
 E4M3 rule (the all-ones exponent is finite unless the fraction is all ones: 448 is a value, ``0x7F``/``0xFF`` are the
 NaNs) through one extra range check.  ``tests/checker/test_fp8.py`` compares the reference and the gadget relation
-with ``model.step`` on ``HOPPER_E4M3_K32`` and ``ADA_E4M3_M16N8K32``.  The z3 group-step search and the v2
-arithmetisation are BF16-only and say so.
+with ``model.step`` on ``HOPPER_E4M3_K32`` and ``ADA_E4M3_M16N8K32``.  The z3 group-step search is BF16-only and
+says so.
 
 Predicates.  Every gadget is written with five predicates only, so that a backend can read off what it must
 provide:  ``rng(x, lo, hi)`` a range check on an expression; ``eq(a, b)`` an identity; ``boolean(b)``;

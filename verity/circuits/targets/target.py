@@ -32,8 +32,8 @@ multiple of 16.
   word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
-* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``,
-  ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``) whose family digest is :data:`FAMILY_DIGEST`.
+* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose family digest is
+  :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
@@ -63,7 +63,7 @@ Outside FIRST
 =============
 
 * **Hardware NaN word.** The served epilogue's ``cvt.rn.bf16.f32`` produces ``0x7FFF`` for NaN, not ``0x7FC0``;
-  that is version ``@2`` of :data:`TC_AMPERE_BF16_NAME` (vector ``accept--tc-store-cast-nan-hw``).  The two agree on
+  that is version ``@2`` of :data:`TC_AMPERE_BF16_NAME`.  The two agree on
   every non-NaN word, and NaN is outside the finite domain, so the choice is immaterial for this target.
 * **Total semantics.** :mod:`verity.circuits.silicon.total` defines the step on every encoding -- NaN, infinities,
   saturation -- as measured on A100/RTX 4090; no registered gate family binds it, and declaring it, under a fresh id,
@@ -72,8 +72,9 @@ Outside FIRST
   (:data:`verity.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend binding question; ``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0``'s
-  K = 1536 input is one captured case where it did.
+  chain is a frontend binding question; the K = 1536 conformance vector
+  (``tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json``, a fetched
+  fixture) is one captured case where it did.
 
 Draft targets
 =============

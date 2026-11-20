@@ -22,12 +22,8 @@ python3 tools/move/rename.py --help
 | `stage.py` | Stages a move on a base: one certified commit per map, on a branch, for its pull request. |
 | `layout.py` | Moves the paths a layout map names and rewrites every reference to them. |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose. |
-| `layout_maps.py` | Writes the layout as one map from the tree, and fails on a tracked file with no destination. |
-| `tests_root.py` | Writes the maps that move every test under the root's `tests/`, mirrored by path. |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move on it. |
 | `resolve_renames.py`, `stale_names.py` | After a plain merge of `main`: resolve the conflicts that are only a move's renames, and list the lines still in old names. |
-| `flock_base.py` | Follows the Flock modules that moved to the base Lean packages. |
-
 Each tool's `--help` gives its usage.
 
 ## Staging and landing a move

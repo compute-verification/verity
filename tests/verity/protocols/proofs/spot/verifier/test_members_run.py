@@ -49,6 +49,11 @@ RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)] +
                    [{"domain": d, "leaves": n, "port": t, "root": r} for t, n, r, d in TREES.values()]}
 SAMPLED = {A: [1], B: [0, 2]}
+
+
+def slices(units: dict, record: dict) -> dict:
+    """`members.slices` under the window's program and query."""
+    return M.slices(units, record, program=PROGRAM, query=QUERY)
 DESCRIPTOR = json.dumps(json.loads(json.dumps(codec.encode_program(PROGRAM))), sort_keys=True,
                         separators=(",", ":")).encode()
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -87,7 +92,7 @@ class Window:
     file is its block's C_S lowered (`lowered`), among the files once it is derived."""
 
     def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
-        self.at, self.files = at, []
+        self.at, self.files, self.underived = at, [], {}
         program = json.loads(DESCRIPTOR)
         self.descriptor = DESCRIPTOR
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
@@ -97,8 +102,8 @@ class Window:
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
             try:
                 self.put(lowered(name))
-            except (OC.NotDerived, OC.Refused):
-                pass
+            except (OC.NotDerived, OC.Refused) as e:
+                self.underived[name] = str(e)
             members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 1}
             if name not in sessions:
                 continue
@@ -374,7 +379,7 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
     under a member that its header does not is refused there (a port wired to another member's tree, named under its
     reader, is in the reader's slice and so must be in its header); and where the run refuses the record, so does it,
     with the run's reason."""
-    got = M.slices(UNITS, RECORD)
+    got = slices(UNITS, RECORD)
     assert got == {m: {"population": n, "scheme": SCHEME,
                        "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": "out", "root": ROOTS[m][0]},
                                  tree_entry(m)]}
@@ -382,7 +387,7 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
     strata = P.strata(PROGRAM, QUERY)
     assert all(M.population_why(UNITS[m], strata, header(m), got[m]) is None for m in (A, B))
     wired = RECORD | {"roots": [*RECORD["roots"], {**RECORD["roots"][0], "port": f"{B}/x"}]}
-    both = M.slices(UNITS, wired)
+    both = slices(UNITS, wired)
     assert [r["port"] for r in both[B]["roots"]] == ["out", "x", "o0"] and both[A] == got[A]
     assert M.population_why(UNITS[B], strata, header(B), both[B]) == "public file: not the registration's: roots, domains"
     named = header(B, frame_v3=frame(B, x=ROOTS[A]))
@@ -391,7 +396,7 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
                         (RECORD | {"population": 6}, M.MEMBERS_LAID),
                         (RECORD | {"roots": {}}, "roots: the registration's roots are not a list")):
         with pytest.raises(ValueError) as e:
-            M.slices(UNITS, record)
+            slices(UNITS, record)
         assert str(e.value) == why
 
 
@@ -402,12 +407,12 @@ def test_a_members_own_output_port_reads_its_templates_field_tree():
     has the tree of is refused, in either order of the two roots (`OneStageZk.ownFieldsHeld`), in `slices` and in the
     one statement's ports (`public_ports`): a wire from the field would read the window's tree, the member its own."""
     tree = {"domain": "cc" * 64, "leaves": 3, "port": "b/o0", "root": "33" * 64}
-    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})
+    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})
     assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 3, "port": "o0", "root": "33" * 64, "tree": "b/o0"}
-    assert got[A] == M.slices(UNITS, RECORD)[A]
+    assert got[A] == slices(UNITS, RECORD)[A]
     for roots in ([*RECORD["roots"], {**tree, "port": "a/out"}], [{**tree, "port": "a/out"}, *RECORD["roots"]]):
         with pytest.raises(ValueError) as e:
-            M.slices(UNITS, RECORD | {"roots": roots})
+            slices(UNITS, RECORD | {"roots": roots})
         assert str(e.value) == DK.own_field(A, "out")
     with pytest.raises(ValueError) as e:
         DK.public_ports({"roots": [RECORD["roots"][0], {**tree, "port": "a/out"}]})
@@ -425,7 +430,7 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
     of ``o0`` at another tree, a header root not the registration's is refused by name (`shared_unread`), and one that
     is the registration's still holds."""
     tree = {"domain": "cc" * 64, "leaves": 3, "port": "b/o0", "root": "33" * 64}
-    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})[B]
+    got = slices(UNITS, RECORD | {"roots": [*RECORD["roots"][:3], tree]})[B]
     strata = P.strata(PROGRAM, QUERY)
 
     def own(o0: str, out: str = ROOTS[B][0]) -> dict:
@@ -454,7 +459,7 @@ def test_a_members_port_is_held_by_its_registered_reads_only_at_a_registered_val
     as `_files` reads it (`registered_reads`) and with the reads and the file apart; with no read of it, as before
     (`unwired_why`); a port the slice holds is compared whatever the reads name."""
     strata = P.strata(PROGRAM, QUERY)
-    got = M.slices(UNITS, RECORD)[B]
+    got = slices(UNITS, RECORD)[B]
 
     def own(out: str = ROOTS[B][0]) -> dict:
         return header(B, frame_v3=frame(B, (out, ROOTS[B][1]), w=("77" * 64, "dd" * 64)))
@@ -479,7 +484,7 @@ def test_a_member_named_as_another_members_template_is_refused():
     ``out`` at once, so the window is refused by name in either order of the members (`OneStageZk.NAME_TEMPLATE`)."""
     for units in ({"a": [[0, 2]], A: [[2, 5]]}, {A: [[0, 2]], "a": [[2, 5]]}):
         with pytest.raises(ValueError) as e:
-            M.slices(units, RECORD | {"roots": [{**RECORD["roots"][0], "port": "a/out"}]})
+            slices(units, RECORD | {"roots": [{**RECORD["roots"][0], "port": "a/out"}]})
         assert str(e.value) == DK.name_template("a")
 
 
@@ -558,7 +563,7 @@ def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
         members = {A: ms[A] | {"registered": a}, B: ms[B] | {"registered": b if b is not None else reg()}}
         return w.run(record=record, params=w.params | {"proofs": {"members": members}})[1]
     assert "input/n3" not in (why() or "")
-    assert M.slices(UNITS, record) == M.slices(UNITS, RECORD)
+    assert slices(UNITS, record) == slices(UNITS, RECORD)
     assert set(DK.public_ports({"roots": [RECORD["roots"][0], tree]})) == {"out"}
     assert why(b=reg(root="44" * 64)) == (
         f"registered: member {B}'s port x opens the committed tree input/n3 at another root than the registration's: a "
@@ -569,7 +574,7 @@ def test_a_fresh_input_opens_the_windows_one_root_of_its_node(tmp_path):
     assert why(reg(root="44" * 64), reg()).startswith(
         f"registered: members {A} and {B} read the registered value input/n3 as two (root")
     with pytest.raises(ValueError) as e:
-        M.slices({"input": [[0, 2]], B: [[2, 5]]}, RECORD)
+        slices({"input": [[0, 2]], B: [[2, 5]]}, RECORD)
     assert str(e.value) == M.INPUT_MEMBER
 
 

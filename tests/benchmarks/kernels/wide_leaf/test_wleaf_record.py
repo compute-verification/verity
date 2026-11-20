@@ -56,11 +56,6 @@ def test_passed_steps_record_both_ratios_under_the_model_and_card(wleaf: types.M
     assert (size["own_proof_bytes"], size["wide_proof_bytes"]) == (2_400_000, 8_800_000)
 
 
-def test_the_member_takes_the_card_records_short(wleaf: types.ModuleType, tmp_path: Path) -> None:
-    wleaf.record(tmp_path, STEPS, {**HOST, "card": "NVIDIA H100 80GB HBM3"}, STAGE, "llama-3.2-1b")
-    assert [m["member"] for m in _result(tmp_path)["measurements"]] == ["llama-3.2-1b-h100"] * 2
-
-
 def test_a_card_off_the_run_cpus_numa_node_is_refused_before_any_lease(
         wleaf: types.ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     import verity_bench

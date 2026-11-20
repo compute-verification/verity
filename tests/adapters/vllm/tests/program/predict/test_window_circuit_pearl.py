@@ -8,6 +8,8 @@ position's cut linears are, of each of TINY's 2 layers, q/k/v (K = 64, N = 128),
 """
 from __future__ import annotations
 
+import re
+from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
@@ -117,6 +119,41 @@ def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(l
         WK.linears(low.fn, 16, 1)
 
 
+def test_a_linear_takes_its_name_and_body_and_an_lm_head_its_selects_name_or_body(low):
+    """A linear is cut only where it has `Gemm`'s name and a registered `Gemm`'s body: either without the other is refused by
+    name. A GEMM a token select reads stays computed whether the select is known by its name or by its body, and a select's
+    name over another body is refused."""
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.ops import prims as P
+    from verity.circuits.ops.gemm import Gemm
+    from verity.circuits.refs import Coll, concat
+
+    nodes, honest = low.fn.body.nodes, WK.linears(low.fn, 16, 256)
+
+    def swapped(j, fn):
+        return NS(id=low.fn.id, body=NS(nodes=[NS(fn=fn if i == j else n.fn, args=n.args) for i, n in enumerate(nodes)]))
+
+    def like(d, name, version, body):
+        return CompositeDefinition(name, version, d.statics, d.signature, body, register=False, ports=d.ports)
+
+    def zeros(B, S, *_):
+        return Coll(Gemm.signature(S)[1], concat([B.call(P.const(16, 0)).refs] * S.N))
+
+    g = next(j for j, n in enumerate(nodes) if n.fn.name == "Gemm" and j not in honest.heads)
+    s = next(j for j, n in enumerate(nodes) if n.fn.name == "TokenSelect")
+    gb, sb, sel = nodes[g].fn.bindings, nodes[s].fn.bindings, nodes[s].fn.defn
+    assert WK.linears(swapped(s, bind(like(sel, "LogitArgmax", 1, sel.body), **sb)), 16, 256) == honest
+    for fn, why in ((bind(like(Gemm, "Gemm", 2, zeros), **gb), "a unit named as the linear Gemm whose body is no registered "
+                                                                 "Gemm's at its statics is refused"),
+                    (bind(like(Gemm, "Matmul", 1, Gemm.body), **gb), "a registered Gemm's body under another name is refused")):
+        with pytest.raises(Unexpressible, match=re.escape(f"{fn.id}: {why}")):
+            WK.linears(swapped(g, fn), 16, 256)
+    other = bind(like(sel, "TokenSelect", sel.version, lambda B, S, *_: B.call(P.const(32, 0))), **sb)
+    with pytest.raises(ValueError, match=re.escape(f"{other.id}: a unit named as the token select TokenSelect whose body is "
+                                                   "no registered select's at its statics is refused")):
+        WK.linears(swapped(s, other), 16, 256)
+
+
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):
     """Each linear is one `LinearARow_v3{K, R}` unit, its x its writers' R rows (q/k/v's and gate/up's the norm's one, o's
     the attention's 4 heads', down's SiluMul's one), and one `LinearOut_v3{N, 16}` unit, a template each shape with every
@@ -193,26 +230,6 @@ def test_each_tables_readers_are_members_whose_registered_read_names_it(low):
         read.setdefault(tid, set()).add(u)
     assert read == {t: set(range(n)) for t, n in lin.items()}
     assert {v for v, _row in got.values()} == set(c.registered.values) - {SS.SCAN_STATE}
-
-
-def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
-    """`census` is a row a round's call: its round and call, K, N and W, the round's rows and its multiply-adds, its A rows'
-    value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit
-    description's own, each `LinearARow_v3` member's K times the N of the `LinearOut_v3` reading its call's y, and an uncut
-    circuit has no census."""
-    cen = WK.census(low)
-    assert [(r["round"], r["call"], r["k"], r["n"], r["w"], r["rows"]) for r in cen] == [
-        (s, ci, K, N, 16, M[s]) for s in M for ci, (K, N) in enumerate(CALLS)]
-    for r in cen:
-        s, ci, m = r["round"], r["call"], r["rows"]
-        assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WK.UNTIED)
-        assert (r["a"], r["y"]) == ({"value": PEARL.a(s, ci), "rows": 16}, {"value": PEARL.y(s, ci), "rows": m})
-    fns = {IF.descriptor_id(fn): fn for fn, _ in low.circuit.templates}
-    reads = [(v.split("/", 1), fns[tid]) for (tid, _p, _u), (v, _r) in _value_rows(low.circuit).items()]
-    n = {call: fn.bindings["N"] for (table, call), fn in reads if table == "pearl-y"}
-    assert sum(r["macs"] for r in cen) == sum(fn.bindings["K"] * n[call] for (table, call), fn in reads
-                                              if table == "pearl-a") == 737280
-    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN)) == []
 
 
 def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_refused():
