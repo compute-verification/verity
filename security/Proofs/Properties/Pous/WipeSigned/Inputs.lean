@@ -165,8 +165,8 @@ theorem tag_size : 12 < SESSION_TAG.size := by decide +kernel
 theorem wipe_tag_size : 12 < StreamedWipe.SESSION_TAG.size := by decide +kernel
 
 /-- **PoUS's session input is never the wipe's**: their tags differ at byte 12 (`memory` against `streamed`). -/
-theorem tags_differ (a b c a' b' c' : ByteArray) :
-    SESSION_TAG ++ a ++ b ++ c ≠ StreamedWipe.SESSION_TAG ++ a' ++ b' ++ c' := by
+theorem tags_differ (s a b c a' b' c' : ByteArray) :
+    SESSION_TAG ++ s ++ a ++ b ++ c ≠ StreamedWipe.SESSION_TAG ++ a' ++ b' ++ c' := by
   intro e
   have e := congrArg (fun x => (bs x)[12]?) e
   simp only [bs_append, List.append_assoc] at e

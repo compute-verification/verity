@@ -109,8 +109,14 @@ theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
 /-- The `CoinTree` of a one-round session over one block: its one challenge is block 0. -/
 def oneCoins : CoinTree := ⟨.empty, 1, #[0], .empty, #[.empty], #[], .empty⟩
 
+/-- A record salt of `RECORD_SALT_BYTES` zero bytes. -/
+def oneSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+theorem oneSalt_size : oneSalt.size = RECORD_SALT_BYTES := by simp [oneSalt, ByteArray.size]
+
 /-- A session of one round over one-byte answers, whose device signs every message with the empty signature. -/
-def oneRound : Params Unit := ⟨fun _ => oneCoins, 0, 1, .empty, "", fun _ => .empty, fun _ _ _ => .empty⟩
+def oneRound : Params Unit :=
+  ⟨fun _ => oneCoins, fun _ => oneSalt, 0, 1, .empty, "", fun _ => .empty, fun _ _ _ => .empty⟩
 
 /-- The round `oneRound`'s device records of an answer whose `blockDigest` is `d`: round 0, on block 0, both readings
 at 0. -/
@@ -123,20 +129,20 @@ theorem round_one (b : ByteArray) (hb : b.size = 1) :
   rw [h]
   rfl
 
-theorem message_one (c : ChallengePhaseCommitment) (e : String) {d : ByteArray} (hd : d.size = 64) :
-    ∃ m, message c e #[oneRecord d] = .ok m := by
-  simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
+theorem message_one (c : ChallengePhaseCommitment) {salt : ByteArray} (hs : salt.size = RECORD_SALT_BYTES) (e : String)
+    {d : ByteArray} (hd : d.size = 64) : ∃ m, message c salt e #[oneRecord d] = .ok m := by
+  simp [message, hs, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
     Except.pure]
 
 /-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/
 def oneReport (d : ByteArray) : Msg :=
-  .report ⟨oneRound.commitment (), COMPLETE, #[oneRecord d], "", .empty, .empty⟩ (oneRound.commitment ())
+  .report ⟨oneRound.commitment (), oneSalt, COMPLETE, #[oneRecord d], "", .empty, .empty⟩ (oneRound.commitment ())
     (#[oneRecord d].map fun r => oneCoins.opening r.j)
 
 theorem messages_one (b : ByteArray) (hb : b.size = 1) :
     (code oneRound).messages () [.round ⟨0, 0, b⟩] =
       [(Ch.challenge, Msg.index 0), (Ch.challenge, Msg.done), (Ch.report, oneReport (blockDigest b))] := by
-  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) COMPLETE (d := blockDigest b)
+  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) oneSalt_size COMPLETE (d := blockDigest b)
     (MemoryAttester.Properties.SecurityProofs.Tree.hash_size _)
   show (Ch.challenge, Msg.index (oneCoins.indices[0]!)) ::
       oneRound.closing () (Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩) ++ [] = _

@@ -300,7 +300,7 @@ theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun}
 
 theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
+    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment r.salt e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
   simpa only [he] using hx
 
@@ -321,12 +321,12 @@ theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wip
   obtain ⟨hI, rfl⟩ := Inputs.signedMessage_ok hM
   rcases hsig with ⟨r, hr, ended, rec, hend, hmsg, hmcm⟩ | ⟨r, hr, ended, rec, hend, hmsg, hmcm⟩
   · exfalso
-    obtain ⟨root', hroot', rfl⟩ := Inputs.message_ok hmsg
+    obtain ⟨-, root', hroot', rfl⟩ := Inputs.message_ok hmsg
     obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
     have e1 := cf _ (own_mem (signed_mem hm' hI)) _ (pous_mem hr hend (Device.signed_mem hmsg hI)) hMM
     have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
     have e3 := cf _ (own_mem (signedWipe_mem hroot)) _ (pous_mem hr hend (Device.challengePhase_mem hroot')) e2
-    exact WipeInputs.tags_differ _ _ _ _ _ _ e3.symm
+    exact WipeInputs.tags_differ _ _ _ _ _ _ _ e3.symm
   · have hmsg' : StreamedWipe.message r.commitment ended r.startMark r.fillStartNs r.fillEndNs r.recorded.batches =
         .ok rec := hmsg
     obtain ⟨root', hroot', rfl⟩ := WipeInputs.message_ok hmsg'

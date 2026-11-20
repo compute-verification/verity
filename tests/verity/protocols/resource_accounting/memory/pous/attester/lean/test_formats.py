@@ -171,13 +171,18 @@ def test_header(server):
     assert stats.outputs > 100, stats
 
 
+#: a session record's salt: its 64 bytes, else one short or long, which both sides refuse
+RECORD_SALT = hexed(mostly(st.binary(min_size=64, max_size=64), st.sampled_from([b"", bytes(63), bytes(65)]), 9))
+
+
 def message(v) -> str:
-    return mc.message(M.commitment_of(M._get(v, "commitment")), M._str(v, "ended"),
+    return mc.message(M.commitment_of(M._get(v, "commitment")), M.hex_(v, "salt"), M._str(v, "ended"),
                       [M.round_of(r) for r in M.list_(v, "rounds")]).hex()
 
 
 def test_message(server):
-    inputs = with_malformed(st.fixed_dictionaries({"commitment": COMMITMENT, "ended": ENDED, "rounds": ROUNDS}))
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": COMMITMENT, "salt": RECORD_SALT, "ended": ENDED,
+                                                   "rounds": ROUNDS}))
     stats = D.run(port("message", message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
 

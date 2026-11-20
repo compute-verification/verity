@@ -178,7 +178,7 @@ def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List Byte
         signedWipeStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
       | none => []) ++
     (dev.device.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment r.salt e r.recorded.rounds
       | none => []
 
 /-! ### The break's two adversaries -/

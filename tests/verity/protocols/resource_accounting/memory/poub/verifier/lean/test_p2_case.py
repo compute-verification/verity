@@ -265,7 +265,7 @@ def test_a_coin_that_is_not_the_challengers_whole_coin_is_refused_by_name(lean, 
 
 def _pous_record() -> bytes:
     c = mc.SessionCommitment(SESSION_ID, b"\x01" * 64, b"\x02" * 32, 9, 2, 10 ** 6, 8224, b"\x03" * 64)
-    return mc.message(c, "complete", [mc.Round(0, 3, 0, 10, b"\x04" * 64)])
+    return mc.message(c, b"\x06" * mc.RECORD_SALT_BYTES, "complete", [mc.Round(0, 3, 0, 10, b"\x04" * 64)])
 
 
 def _wipe_record() -> bytes:

@@ -14,10 +14,12 @@ A session has four steps:
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
    retried, and no index is resampled.
-3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
-   the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
-   records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
-   clear.
+3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ salt ‖ header ‖ records digest)`: the salt
+   is 64 bytes the device draws from the OS for the session (`RECORD_SALT_BYTES`), the header is the commitment's fields
+   and how the session ended, and the records digest is the `sha512/row/v2` digest of the round records as one stream.
+   The records and the salt are witness: the device hands them to the prover with the signature, the prover proves
+   things about them, and neither reaches the auditor on the proofs' path, which reads the signed digest and the
+   signature in the clear.
 4. **Release.** Once the session is signed the memory attester releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
    `SessionCommitment`) and opens every coin it revealed (`openings`).  Both refuse before the signature.
@@ -106,7 +108,9 @@ COIN_TREE = SC.COIN_TREE
 RECORDS = SC.RECORDS
 COIN_TAG = SC.COIN_TAG
 COIN_BINDING = SC.COIN_BINDING
-SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SESSION_TAG = b"verity-pous/memory-challenger/session/v2\0"
+#: the session record's salt, the device's own draw a session: the signed digest hides the rows it covers
+RECORD_SALT_BYTES = 64
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
@@ -267,11 +271,14 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
     return block_digest(b"".join(r.value() for r in rounds))
 
 
-def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
+def message(commitment: SessionCommitment, salt: bytes, ended: str, rounds: Sequence[Round]) -> bytes:
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records digest)`, the
+    salt `RECORD_SALT_BYTES` bytes, so it ends where the tag says and the header's length begins."""
+    if len(salt) != RECORD_SALT_BYTES:
+        raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
     head = SC.header(commitment.session, commitment.coin_root, commitment.coin_key, commitment.binding, commitment.blocks,
                      commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
+    return _sha512(SESSION_TAG, salt, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 
 class Signer(Protocol):
@@ -447,9 +454,11 @@ def holds(where: Mapping[str, Any]) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SignedSession:
-    """A closed session: its commitment, how it ended, its round records, and the one signature over them."""
+    """A closed session: its commitment, its record's salt, how it ended, its round records, and the one signature over
+    them."""
 
     commitment: SessionCommitment
+    salt: bytes
     ended: str
     rounds: tuple[Round, ...]
     scheme: str
@@ -457,15 +466,15 @@ class SignedSession:
     signature: bytes
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.rounds)
+        return message(self.commitment, self.salt, self.ended, self.rounds)
 
     def to_json(self) -> dict[str, Any]:
-        return {"commitment": self.commitment.to_json(), "ended": self.ended, "rounds": [r.to_json() for r in self.rounds],
+        return {"commitment": self.commitment.to_json(), "salt": self.salt.hex(), "ended": self.ended, "rounds": [r.to_json() for r in self.rounds],
                 "scheme": self.scheme, "public_key": self.public_key.hex(), "signature": self.signature.hex()}
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
-        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
+        return cls(SessionCommitment.from_json(doc["commitment"]), bytes.fromhex(doc["salt"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
@@ -739,7 +748,8 @@ class MemoryAttester:
     ends the session; `close()` signs it once, and only then are `commitment` and `openings()` released."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
-                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
+                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
+                 salt: bytes | None = None) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
         if len(binding) != DIGEST_BYTES:
@@ -748,8 +758,11 @@ class MemoryAttester:
             resolution_ns = resolution_of(clock)
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
+        if salt is not None and len(salt) != RECORD_SALT_BYTES:
+            raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
         log.claim(coins.session)
         self.coins, self.signer, self.clock = coins, signer, clock
+        self._salt = os.urandom(RECORD_SALT_BYTES) if salt is None else salt
         self._commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
                                              block_bytes, binding)
         self.rounds: list[Round] = []
@@ -811,9 +824,9 @@ class MemoryAttester:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
             rounds = tuple(self.rounds)
-            sig = self.signer.sign(self._commitment.session, message(self._commitment, self.ended, rounds))
-            self.signed = SignedSession(self._commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key,
-                                        sig)
+            sig = self.signer.sign(self._commitment.session, message(self._commitment, self._salt, self.ended, rounds))
+            self.signed = SignedSession(self._commitment, self._salt, self.ended, rounds, self.signer.scheme,
+                                        self.signer.public_key, sig)
         return self.signed
 
     def openings(self) -> tuple[CoinOpening, ...]:
@@ -896,7 +909,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
            "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
-           "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "RECORDS", "RECORD_BYTES", "RECORD_SALT_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryAttester", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",

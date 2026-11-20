@@ -119,7 +119,7 @@ noncomputable def certifiedRecordMessage : ByteArray :=
     (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) certifiedDigests_le)
 
 theorem certifiedRecordMessage_spec :
-    MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
+    MemoryAttester.message (honestCommitment certifiedPublic.root) honestSalt MemoryAttester.COMPLETE
       (honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
         .ok certifiedRecordMessage :=
   Classical.choose_spec (message_honest certifiedPublic.root
@@ -141,7 +141,7 @@ theorem certifiedSignature_spec :
     certifiedPrivateKey_spec certifiedLmsMessage)
 
 noncomputable def certifiedRecord : PousVerifier.Run.ChallengePhaseRecord :=
-  ⟨⟨honestCommitment certifiedPublic.root, MemoryAttester.COMPLETE,
+  ⟨⟨honestCommitment certifiedPublic.root, honestSalt, MemoryAttester.COMPLETE,
       honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
       MemoryAttester.LMS, certifiedPrivateKey.publicKey, certifiedSignature.encode⟩,
     honestCommitment certifiedPublic.root, honestOpenings⟩
@@ -154,7 +154,7 @@ def honestCoins : MemoryAttester.CoinTree :=
 /-- The memory challenger's honest run: `honestCoins`, the deployed limit and block size, bound to `root`, observing
 `block` sent and received at time 0 in each of 105 rounds. -/
 def honestChallengerRun (root block : ByteArray) : MemoryAttester.Properties.Run :=
-  ⟨honestCoins, PousVerifier.Run.DEPLOYED.limitNs, PousVerifier.P2.Params.deployed.blockBytes, root,
+  ⟨honestCoins, honestSalt, PousVerifier.Run.DEPLOYED.limitNs, PousVerifier.P2.Params.deployed.blockBytes, root,
     List.replicate 105 ⟨0, 0, block⟩⟩
 
 noncomputable def certifiedStoreBlock : ByteArray := (flat certifiedStore)[0]!
@@ -245,11 +245,11 @@ theorem runCheck_honestRecord (pub : SetupProtocol.Public) (digests : ByteArray)
     (m : ByteArray) (σ : Lms.Signature) (hb : pub.blocks = P2.Params.deployed.blocks)
     (hs : pub.salt.size = PousVerifier.Run.SALT) (hd : digests.size = P2.Params.deployed.blocks * Merkle.DIGEST)
     (hr : (Merkle.root (PousVerifier.Run.rowLeaves P2.Params.deployed pub.salt digests) == some pub.root) = true)
-    (hm : MemoryAttester.message (honestCommitment pub.root) MemoryAttester.COMPLETE (honestRounds digests) =
-      .ok m)
+    (hm : MemoryAttester.message (honestCommitment pub.root) honestSalt MemoryAttester.COMPLETE
+      (honestRounds digests) = .ok m)
     (hv : MemoryAttester.lmsVerify Lms.deployed k.publicKey honestSid m σ.encode = .ok true) :
     PousVerifier.Run.check [k.publicKey] pub digests
-      ⟨⟨honestCommitment pub.root, MemoryAttester.COMPLETE, honestRounds digests, MemoryAttester.LMS,
+      ⟨⟨honestCommitment pub.root, honestSalt, MemoryAttester.COMPLETE, honestRounds digests, MemoryAttester.LMS,
         k.publicKey, σ.encode⟩, honestCommitment pub.root, honestOpenings⟩ honestSid = .ok () := by
   unfold PousVerifier.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
@@ -414,13 +414,13 @@ theorem certified_signed
   · simp [certifiedAudit, run]
   · simpa [run] using congrArg MemoryAttester.Properties.Recorded.ended (honestChallengerRun_recorded hk)
   · have hr := honestChallengerRun_recorded hk
-    change MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
+    change MemoryAttester.message (honestCommitment certifiedPublic.root) honestSalt MemoryAttester.COMPLETE
       run.recorded.rounds = .ok certifiedRecordMessage
     rw [show run.recorded = ⟨honestRounds
       (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
         some MemoryAttester.COMPLETE⟩ from hr]
     exact certifiedRecordMessage_spec
-  · change ((MemoryAttester.message (honestCommitment certifiedPublic.root) MemoryAttester.COMPLETE
+  · change ((MemoryAttester.message (honestCommitment certifiedPublic.root) honestSalt MemoryAttester.COMPLETE
       (honestRounds (PousVerifier.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) >>=
         MemoryAttester.memoryAttesterMessage (certifiedPrivateKey.publicKey.extract 0 16) honestSid).toOption) =
       some m at hm

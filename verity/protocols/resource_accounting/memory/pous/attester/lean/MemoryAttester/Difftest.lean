@@ -74,7 +74,8 @@ def headerFn (j : Json) : V Json := do
     (← J.nat j "rounds" "input")))
 
 def messageFn (j : Json) : V Json := do
-  pure (hexJ (← message (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input") (← rounds j)))
+  pure (hexJ (← message (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← hex j "salt")
+    (← J.str j "ended" "input") (← rounds j)))
 
 def blockDigestFn (j : Json) : V Json := do pure (hexJ (blockDigest (← hex j "block")))
 

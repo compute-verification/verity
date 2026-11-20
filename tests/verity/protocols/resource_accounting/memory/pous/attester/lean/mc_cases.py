@@ -118,7 +118,7 @@ def opening_of(j: Any) -> mc.CoinOpening:
 
 
 def signed_of(j: Any) -> mc.SignedSession:
-    return mc.SignedSession(commitment_of(_get(j, "commitment")), _str(j, "ended"), tuple(round_of(r) for r in list_(j, "rounds")),
+    return mc.SignedSession(commitment_of(_get(j, "commitment")), hex_(j, "salt"), _str(j, "ended"), tuple(round_of(r) for r in list_(j, "rounds")),
                             _str(j, "scheme"), hex_(j, "public_key"), hex_(j, "signature"))
 
 

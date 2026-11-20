@@ -32,7 +32,9 @@ abbrev COIN_TREE : String := SessionCoins.COIN_TREE
 abbrev RECORDS : String := SessionCoins.RECORDS
 abbrev COIN_TAG : ByteArray := SessionCoins.COIN_TAG
 abbrev COIN_BINDING : ByteArray := SessionCoins.COIN_BINDING
-def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v1".toUTF8.push 0
+def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v2".toUTF8.push 0
+/-- The session record's salt, the device's own draw a session: the signed digest hides the rows it covers. -/
+def RECORD_SALT_BYTES : Nat := 64
 abbrev COIN_SCHEMA : String := SessionCoins.COIN_SCHEMA
 def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
@@ -166,10 +168,12 @@ def pyJsonStr (s : String) : String := SessionCoins.pyJsonStr s
 def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
   SessionCoins.header c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
 
-/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
-def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
+/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records digest)`,
+the salt `RECORD_SALT_BYTES` bytes, so it ends where the tag says and the header's length begins. -/
+def message (c : ChallengePhaseCommitment) (salt : ByteArray) (ended : String) (rounds : Array Round) : E ByteArray := do
+  if salt.size ≠ RECORD_SALT_BYTES then throw s!"a session record's salt is {RECORD_SALT_BYTES} bytes"
   let head := (header c ended rounds.size).toUTF8
   let digest ← recordsDigest rounds
-  pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ digest))
+  pure (Sha512.hash (SESSION_TAG ++ salt ++ be64 head.size.toUInt64 ++ head ++ digest))
 
 end MemoryAttester
