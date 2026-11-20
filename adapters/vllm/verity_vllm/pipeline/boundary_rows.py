@@ -102,7 +102,7 @@ import numpy as np
 
 from verity.circuits import population as PN
 from verity.circuits import replay_links as RL
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind

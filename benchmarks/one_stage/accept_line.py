@@ -15,7 +15,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from one_linear_arms import refusal
-from verity.protocols.proofs.spot.verifier.one_stage.verifier import REGISTRATION_DELTA
+from verity.protocols.proof.spot.verifier.one_stage.verifier import REGISTRATION_DELTA
 
 def lines(summary: dict, c: bytes | None, delta: str | None) -> list[str]:
     if (why := refusal(summary)) is not None:

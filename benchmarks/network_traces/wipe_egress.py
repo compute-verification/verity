@@ -39,10 +39,10 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.resource_accounting.network.verifier import record_files as RF
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.network.verifier import record_files as RF
+from verity.protocols.accounting.network.verifier.certificate import Direction
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
 #: how far the wipe challenger host's clock and the network attester host's may disagree

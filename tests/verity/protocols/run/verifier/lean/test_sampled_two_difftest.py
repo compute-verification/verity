@@ -1,0 +1,347 @@
+"""SPOT's Lean at two levels (`vstar-recursive sampled serve`, `VStar.Recursive.Sampled.protocol`, which hands two
+levels to `VStar.Recursive.SampledTwo`) against its Python twin (`reference.spot`, two levels' parse `sampled_two.py`)
+on parameters each refused at one step of the parse: the levels' and the form's own steps, whose reasons must agree
+word for word, and the decoders it hands its parts to, whose outcomes must agree but for the reason. The parameters are
+the one-stage difftest's two-stage run's (`_two_stage_case`) at two levels, both registrations naming one challenger
+key, each case one change to them. The twin decides no case past the interior's template circuits, so the verdict on
+an audit that passes every step is the Lean's, not this test's."""
+
+from __future__ import annotations
+
+import copy
+import functools
+import hashlib
+import json
+import random
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import pytest
+from hypothesis import strategies as st
+
+import reference as R
+import sampled_two as T
+import verity_difftest as D
+from verity.circuits import codec
+from verity.circuits.program import boolean_map
+from verity.circuits.restrict import _declared
+from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
+from verity_difftest import canonical
+
+pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+OS = R.ONE_STAGE
+PORT = D.ProtocolPort("vstar-recursive", R.spot, st.nothing(), serve=("sampled", "serve"),
+                      package=R.ROOT / "verity/protocols/proof/spot_flock_recursion/verifier/lean")
+server = D.server_fixture(PORT)
+DROP = object()
+
+
+@functools.cache
+def _key(seed: int) -> dict:
+    """The challenger key of `seed`, at the ledger's parameters."""
+    return sys.modules["test_challenger_difftest"]._ledger_session(random.Random(f"two-stage-form/{seed}"), seed=seed).key.to_json()
+
+
+def _challenged(p: dict, label: str, seed: int = 0) -> dict:
+    return {**p, "challenger": {"key": _key(seed), "label": label}}
+
+
+@functools.cache
+def _base_text() -> str:
+    c = OS._two_stage_case(0)
+    it = c["interior"]
+    return canonical({
+        "levels": 2, "boundary": _challenged(c["params"], "draw/0"), "challenger": c["challenger"],
+        "delta": c["delta"],
+        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second/0"), "replay": it["replay"],
+                     "values": it["values"]},
+        "outputs": [], "public": c["public"], "rule": c["rule"], "values": c["values"]})
+
+
+def base() -> dict:
+    """Two levels' parameters on the two-stage run, which the twin parses through the template circuits."""
+    return json.loads(_base_text())
+
+
+def _set(p: dict, path: tuple, v) -> dict:
+    p = copy.deepcopy(p)
+    *up, last = path
+    at = p
+    for k in up:
+        at = at[k]
+    if v is DROP:
+        del at[last]
+    else:
+        at[last] = v
+    return p
+
+
+def _two_strata() -> dict:
+    """A boundary over a setup whose proof blocks under its query are more than one stratum."""
+    s = next(s for s in OS.SETUPS if len(OS.DR.strata_sizes(s.program, s.query)) > 1)
+    b = base()["boundary"]
+    return {**b, "law": {"k": 1, "law": "subset"}, "ports": s.ports, "program": s.desc, "query": s.query}
+
+
+#: Each case's change to the base parameters.
+CHANGES = {
+    "not-an-object": lambda p: [],
+    "no-levels": lambda p: _set(p, ("levels",), DROP),
+    "levels-one": lambda p: _set(p, ("levels",), 1),
+    "levels-zero": lambda p: _set(p, ("levels",), 0),
+    "levels-three": lambda p: _set(p, ("levels",), 3),
+    "levels-a-string": lambda p: _set(p, ("levels",), "2"),
+    "shape-no-interior": lambda p: _set(p, ("interior",), DROP),
+    "levels-one-shape-one": lambda p: {k: v for k, v in _set(p, ("levels",), 1).items()
+                                       if k not in ("boundary", "interior", "rule")},
+    "a-key-missing": lambda p: _set(p, ("delta",), DROP),
+    "a-key-more": lambda p: _set(p, ("more",), 1),
+    "outputs-not-a-list": lambda p: _set(p, ("outputs",), "credited"),
+    "outputs": lambda p: _set(p, ("outputs",), ["credited"]),
+    "rule-all": lambda p: _set(p, ("rule",), {"rule": "all"}),
+    "rule-sampling-design": lambda p: _set(p, ("rule",), {"law": "rate:1/2", "rule": "law"}),
+    **{f"rule-odd-{n}": (lambda r: lambda p: _set(p, ("rule",), r))(r) for n, r in enumerate(OS.ODD_RULES)},
+    "challenger-not-a-string": lambda p: _set(p, ("challenger",), 3),
+    "public-not-a-list": lambda p: _set(p, ("public",), "x"),
+    "public-item": lambda p: _set(p, ("public",), [1]),
+    "boundary-empty": lambda p: _set(p, ("boundary",), {}),
+    "boundary-no-window": lambda p: _set(p, ("boundary", "window_root"), DROP),
+    "boundary-two-strata": lambda p: _set(p, ("boundary",), _two_strata()),
+    "interior-not-an-object": lambda p: _set(p, ("interior",), "x"),
+    "interior-a-key-missing": lambda p: _set(p, ("interior", "replay"), DROP),
+    "boundary-no-challenger": lambda p: _set(p, ("boundary", "challenger"), DROP),
+    "interior-no-challenger": lambda p: _set(p, ("interior", "params", "challenger"), DROP),
+    "interior-other-key": lambda p: _set(p, ("interior", "params", "challenger", "key"), _key(1)),
+    "interior-params-empty": lambda p: _set(p, ("interior", "params"), {"challenger": p["interior"]["params"]["challenger"]}),
+    "interior-no-window": lambda p: _set(p, ("interior", "params", "window_root"), DROP),
+    "interior-proofs": lambda p: _set(p, ("interior", "params", "proofs"), {"templates": "x"}),
+}
+
+
+def case(params) -> dict:
+    return {"commitment": "7b7d", "evidence": "7b7d", "params": params}
+
+
+def refusal(params) -> Exception:
+    """What the twin's parse of the parameters raises: its own refusal, a delegated decoder's (`sampled_two.Delegated`),
+    or the `ValueError` at the mirror's end."""
+    try:
+        R._form_params(params)
+    except (D.Reject, ValueError) as e:
+        return e
+    raise AssertionError("the parse returned: every case's parameters are refused before the evidence")
+
+
+def test_base_parses_through_the_mirror() -> None:
+    with pytest.raises(ValueError, match="outside the mirror"):
+        R._form_params(base())
+
+
+def test_the_own_refusals_are_reached() -> None:
+    """Every refusal the levels and the form make themselves is some case's: a case list that missed one would hold
+    nothing of it."""
+    refusals = [refusal(change(base())) for change in CHANGES.values()]
+    assert all(isinstance(e, D.Reject) for e in refusals), refusals
+    reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
+    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage",
+                f"the parameters name no proofs: {R.V1_REFUSED}"):
+        assert own in reasons
+    for code in ("levels-params-mismatch", "levels-not-positive", "levels-not-built", "levels-not-integer",
+                 "levels-shape"):
+        assert any(r.startswith(code) for r in reasons), code
+
+
+@pytest.mark.parametrize("name", list(CHANGES))
+def test_refusal(server, name: str) -> None:
+    c = case(CHANGES[name](base()))
+    lean, py = PORT.lean(server, c), PORT.python(c)
+    assert py[0] == "reject", py
+    if not isinstance(refusal(c["params"]), T.Delegated):
+        assert lean == py
+    else:
+        assert PORT.key(lean) == PORT.key(py)
+
+
+def test_two_definitions_are_refused_by_name(server) -> None:
+    """A boundary population of replay blocks under two Definitions is refused by `ONE_DEFINITION`, in the Lean and the
+    twin alike: the theorem counts replay blocks, a share by weight only where they are one Definition's."""
+    c = case(CHANGES["boundary-two-strata"](base()))
+    lean, py = PORT.lean(server, c), PORT.python(c)
+    assert lean[0] == py[0] == "reject", (lean, py)
+    assert json.loads(lean[1])["reason"] == json.loads(py[1])["reason"], (lean, py)
+    assert T.ONE_DEFINITION in json.loads(lean[1])["reason"], lean
+
+
+def test_two_levels_that_parse_are_refused_by_name(monkeypatch) -> None:
+    """By design, the twin refuses two levels' parameters by name (`TWO_LEVELS_REFUSED`) where the two-stage form's
+    parse returns, and only there: its parse's own refusals keep their reasons."""
+    monkeypatch.setattr(T, "params_of_json", lambda j: {})
+    with pytest.raises(D.Reject) as refused:
+        R._form_params(base())
+    assert str(refused.value) == R.TWO_LEVELS_REFUSED
+    assert R.TWO_LEVELS_REFUSED.startswith("levels-not-proved: ")
+
+
+def test_the_base_is_refused(server) -> None:
+    """Past the mirror the Lean still refuses: the members are none."""
+    assert PORT.lean(server, case(base()))[0] == "reject"
+
+
+#: One honest two-stage play's case (params.json, commitment.json, evidence.json and blobs/, the play's circuit, public
+#: file and session's files). Its files are past what git holds, so `artifacts.json` registers the directory and
+#: `suites.py` fetches it.
+CASE = Path(__file__).resolve().parent / "fixtures" / "sampled-two-case"
+#: No command makes a two-level play while two levels are refused, so the kept case is not remade: the check must
+#: refuse it by name before it reads what an honest play would change.
+AFRESH = ("the kept two-level case is refused by another name than levels.TWO_LEVELS_REFUSED: the refusal must come "
+          "before the check reads the case's evidence, which no command remakes while two levels are refused")
+
+
+def _case_dir() -> Path:
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
+    assert (d / "params.json").is_file(), (
+        f"{d} is not fetched: `uv run research data fetch-fixtures "
+        "tests/verity/protocols/run/verifier/lean/fixtures/sampled-two-case`")
+    return d
+
+
+def _at_two_levels(j: dict) -> dict:
+    """A kept case's params or evidence at two levels: a case kept before ``levels`` named the two-stage form by
+    ``form``, which the levels replace."""
+    return {**{k: v for k, v in j.items() if k != "form"}, "levels": 2}
+
+
+def _v2(desc: dict) -> dict:
+    """A kept program descriptor at the schema the verifier reads: the case was kept at v1, which holds no Boolean
+    bodies, and no command remakes it while two levels are refused."""
+    if desc.get("schema") == codec.SCHEMA:
+        return desc
+    d = {**desc, "schema": codec.SCHEMA}
+    get = codec.definition_decoder(d, _declared(d))
+    p = codec.DecodedProgram(get(d["root"]), {}, d,
+                             tuple(get(f) for f in codec._record_function_ids(d["program_fn"]) if f in d["definitions"]))
+    p.boolean = boolean_map(p)
+    return codec.encode_program(p)
+
+
+def _reads_v2(r: dict | None) -> dict | None:
+    """Registered reads at `verity/registered-reads/v2`, which hold no positions: C and the partition give them."""
+    if r is None:
+        return None
+    return {"format": "verity/registered-reads/v2",
+            "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "reads_from")} for k, e in r["ports"].items()}}
+
+
+def _circuit_sha(program: dict, partition: dict, first: int) -> str:
+    """The SHA-512 of the circuit file Lean derives for the block starting at unit `first` (`spot-one-stage-zk
+    restrict`), the one a member's statement reads."""
+    with tempfile.TemporaryDirectory() as d:
+        cp, pp, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "circuit.txt")
+        cp.write_text(canonical(program))
+        pp.write_text(canonical(partition))
+        exe = D.build(R.ROOT / "verity/protocols/proof/spot/verifier/lean", "spot-one-stage-zk")
+        p = subprocess.run([str(exe), "restrict", str(cp), str(pp), str(first), str(out)],
+                           capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stdout + p.stderr
+        return hashlib.sha512(out.read_bytes()).hexdigest()
+
+
+def _kept_params(j: dict) -> dict:
+    """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
+    program and its members' units as its blocks, each member naming its block rather than handing its units, and each
+    template's circuit the one Lean derives for its member's block. That digest is the verifier's own `restrict` output,
+    so the tests on these params do not check it independently: they check the refusal by name, and that it comes
+    before the evidence is read."""
+    j = copy.deepcopy(j)
+    for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
+        at[k] = _v2(at[k])
+    ip, members = j["interior"]["params"], j["interior"]["members"]
+    blocks = sorted(tuple(u) for m in members.values() for u in m["units"])
+    ip["partition"] = {**ip["partition"], "program": codec.program_digest(ip["program"]),
+                       "blocks": [[list(b) for b in blocks]]}
+    j["interior"]["members"] = {
+        name: {"block": blocks.index(tuple(m["units"][0])), "public": m["public"],
+               "registered": _reads_v2(m["registered"]), "vus_per_block": m["vus_per_block"]}
+        for name, m in members.items()}
+    firsts = {name: m["units"][0][0] for name, m in members.items()}
+    for t in ip["proofs"]["templates"]:
+        if t["template"] in firsts:
+            t["circuit"] = _circuit_sha(ip["program"], ip["partition"], firsts[t["template"]])
+    return j
+
+
+def _params() -> dict:
+    return _kept_params(json.loads((_case_dir() / "params.json").read_text()))
+
+
+def _check(tmp_path: Path, params: dict | None = None, evidence: dict | None = None) -> subprocess.CompletedProcess:
+    """`vstar-recursive sampled check` on the kept play, at two levels, its params or evidence replaced where given."""
+    d = _case_dir()
+    files = []
+    for name, given in (("params.json", params if params is not None else _params()), ("evidence.json", evidence)):
+        f = tmp_path / name
+        f.write_text(canonical(_at_two_levels(given if given is not None else json.loads((d / name).read_text()))))
+        files.append(f)
+    argv = [str(files[0]), str(d / "commitment.json"), str(files[1]), *map(str, sorted((d / "blobs").iterdir()))]
+    return subprocess.run([str(D.build(PORT.package, PORT.exe)), "sampled", "check", *argv],
+                          capture_output=True, text=True, check=False)
+
+
+def _profile(j) -> dict | None:
+    if isinstance(j, dict):
+        if isinstance(j.get("profile"), dict):
+            return j["profile"]
+        return next((p for v in j.values() if (p := _profile(v)) is not None), None)
+    return None
+
+
+@pytest.mark.slow
+def test_two_levels_are_refused_by_name_on_an_honest_play(tmp_path) -> None:
+    """By design, SPOT refuses two levels by name at registration: one honest two-stage run's case (`CASE`, or the
+    directory ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``), whose parameters parse at two levels to the
+    end, is refused by `vstar-recursive sampled check` with `TWO_LEVELS_REFUSED` and no accept, as the twin refuses
+    it. It catches a change after which two levels accept a play that no soundness theorem covers."""
+    on = _check(tmp_path)
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
+    assert _profile(json.loads(on.stdout)) is None, on.stdout[-4000:]
+
+
+#: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)
+ONE_WINDOW = "the interior audit's window is the boundary registration's"
+
+
+@pytest.mark.slow
+def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
+    """Two levels read an audit on two windows only: the kept honest play (`CASE`) with its interior audit's window
+    root set to the boundary registration's is refused at its parameters and by name (`ONE_WINDOW`). The parameters
+    still parse to the end, where the refusal is, which no refusal case above reaches: their interior names no
+    members."""
+    params = _params()
+    assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
+    params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
+    on = _check(tmp_path, params=params)
+    assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]
+
+
+def _evidence() -> dict:
+    """The kept honest play's evidence, with its second-stage statements fetched."""
+    return json.loads((_case_dir() / "evidence.json").read_text())
+
+
+@pytest.mark.slow
+def test_two_levels_are_refused_by_name_before_their_evidence_is_read(tmp_path) -> None:
+    """By design, two levels' parameters are refused by name before their evidence is read: the kept honest play
+    (`CASE`) with one second-stage statement dropped, which the twin's reference refuses by `STMT_COUNT` when it reads
+    the statements, is refused by `TWO_LEVELS_REFUSED` instead."""
+    ev = _evidence()
+    own = ev["statements"]
+    assert len(own) >= 1, ev
+    short = own[:-1]
+    assert T.stmts_sessions(own, short) == T.STMT_COUNT
+    on = _check(tmp_path, evidence={**ev, "statements": short})
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:]
+    assert T.STMT_COUNT not in on.stdout, on.stdout[-4000:]

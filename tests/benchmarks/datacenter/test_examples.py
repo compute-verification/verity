@@ -6,12 +6,12 @@ from collections import Counter
 
 import json
 import pytest
-from verity.protocols.resource_accounting.memory.poub.verifier import ledger, timing
+from verity.protocols.accounting.memory.poub.verifier import ledger, timing
 
 from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
-FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[3] / "tests/verity/protocols/accounting/memory/poub/figures.json").read_text()))
 
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():

@@ -45,14 +45,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/resource_accounting/memory/poub/prover/word_codec/paged.py").parent))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/memory/poub/prover/word_codec/paged.py").parent))
 sys.path.insert(0, str(HERE.parents[1]))
 
 import paged as P  # noqa: E402
 from paged import KB, K  # noqa: E402
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as RC  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import vectors as RV  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import codec as RC  # noqa: E402
+from verity.protocols.accounting.memory.poub.verifier import vectors as RV  # noqa: E402
 
 BLOCKS, BS, LAYERS = 96, 16, 2
 SB = 77

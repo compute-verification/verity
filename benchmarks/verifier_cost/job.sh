@@ -11,8 +11,8 @@ O=${OUT:?run under research run, which sets OUT}
 cmd=${1:?usage: job.sh measure|partition [ARGS...]}
 shift
 case $cmd in
-  measure) pkg=verity/protocols/workload_classification/training_detection/inference_only/verifier/lean exe=inference-only-verifier ;;
-  partition) pkg=verity/protocols/proofs/spot/verifier/lean exe=spot-difftest ;;
+  measure) pkg=verity/protocols/policy/training_detection/inference_only/verifier/lean exe=inference-only-verifier ;;
+  partition) pkg=verity/protocols/proof/spot/verifier/lean exe=spot-difftest ;;
   *) echo "job.sh: COMMAND is measure or partition, not $cmd" >&2; exit 2 ;;
 esac
 uv sync -q --all-packages --extra torch-cpu

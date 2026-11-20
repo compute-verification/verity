@@ -42,8 +42,8 @@ got=$(sha256sum "$kf" 2>/dev/null | cut -d' ' -f1)
 mkdir -p "$S/kit" && tar -xzf "$kf" -C "$S/kit" && rm -rf "$S/kitdl" || { log "kit not unpacked"; exit 2; }
 REPO=$(ls -d "$S"/kit/*/ | head -1); REPO=${REPO%/}; cd "$REPO" || exit 2
 log "kit $KIT_ART, sha256 ${got:0:16}, unpacked as $(basename "$REPO")"
-# Flock is under verity/protocols/proofs/flock in a kit of main, under verity/protocols/flock in a kit from before that move
-F=$REPO/verity/protocols/proofs/flock; [ -d "$F" ] || F=$REPO/verity/protocols/flock; L=$F/verifier
+# Flock is under verity/protocols/proof/flock in a kit of main, under verity/protocols/flock in a kit from before that move
+F=$REPO/verity/protocols/proof/flock; [ -d "$F" ] || F=$REPO/verity/protocols/flock; L=$F/verifier
 IFS=';' read -r -a recs <<< "${RECORDS:?}"
 for rr in "${recs[@]}"; do rs data fetch "${rr#*=}" --list --json > "$S/list-${rr%%=*}.json" 2>> "$O/fetch.log" || { log "record ${rr#*=} (${rr%%=*}) not listed"; exit 2; }; done
 printf 'name\trun\trecord\tfiles\tbytes\tvs_record\n' > "$O/kept.tsv"

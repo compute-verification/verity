@@ -91,7 +91,7 @@ sys.path[:0] = [str(HERE)]
 sys.path.append(str(TREE))  # for benchmarks.network_traces
 import served_session as SS  # noqa: E402
 
-from verity.protocols.compose import schemes  # noqa: E402
+from verity.protocols.run import schemes  # noqa: E402
 
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
@@ -442,7 +442,7 @@ def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]]
     (`network_attester_chain.io`) and its attested ingress, each execution phase's number and rows (`network_attester_rows.window_rows`);
     None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
     from benchmarks.network_traces import network_attester_chain as WC
-    from verity.protocols.resource_accounting.network.verifier import relay_check as RC, network_attester_rows as WRW
+    from verity.protocols.accounting.network.verifier import relay_check as RC, network_attester_rows as WRW
 
     if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
         return None

@@ -25,17 +25,17 @@ import pytest
 HERE = ((Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces"))
 sys.path.insert(0, str(HERE))
 from verity.commitments import docket_digest as DD
-from verity.protocols.resource_accounting.network.attester import connection_rows_run as CR  # noqa: E402
+from verity.protocols.accounting.network.attester import connection_rows_run as CR  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import stop_verdicts as SV  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.prover.verdict_records import (  # noqa: E402
+from verity.protocols.accounting.network.prover import stop_verdicts as SV  # noqa: E402
+from tests.verity.protocols.accounting.network.prover.verdict_records import (  # noqa: E402
     TIE, FORMATS, UNDER, checked, names_under, SERVED, OTHERS, REGISTERED, COUNTS, streams, with_streams, four,
     the_controls, under, Store, jsonl, OTHER, ROWS)
-from verity.protocols.resource_accounting.network.verifier import class_charge as CC  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import connection_rows as C  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import content_rows as CT  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams  # noqa: E402
+from verity.protocols.accounting.network.verifier import class_charge as CC  # noqa: E402
+from verity.protocols.accounting.network.verifier import connection_rows as C  # noqa: E402
+from verity.protocols.accounting.network.verifier import content_rows as CT  # noqa: E402
+from verity.protocols.accounting.network.verifier.certificate import Certificate, Direction  # noqa: E402
+from verity.protocols.accounting.network.verifier.network_attester import NetworkAttesterParams  # noqa: E402
 
 LINK = "responses"
 ZEROS = bytes(64)

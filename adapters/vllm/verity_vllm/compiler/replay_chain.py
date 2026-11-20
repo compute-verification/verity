@@ -111,7 +111,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.proofs.spot.prover import produced as PP
+from verity.protocols.proof.spot.prover import produced as PP
 from verity.commitments import registered_value as RV
 
 from verity_vllm.compiler import tick_step as TK

@@ -16,7 +16,7 @@ from verity.circuits.population import wired_population_program
 from verity.circuits.program import Program, input_id
 from verity.circuits.refs import Affine, Strided, array_of, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
 
 A4 = Array(4, BL.BIT)
 PAIR = Tuple(A4, A4)

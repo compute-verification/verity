@@ -23,11 +23,11 @@ from pathlib import Path
 import pous_reference as REF
 import pytest
 
-from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
-from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_period as W
+from verity.protocols.accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.accounting.memory.pous.prover import wipe_run
+from verity.protocols.accounting.memory.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.memory.pous.verifier import wipe_party
+from verity.protocols.accounting.memory.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")
@@ -47,7 +47,7 @@ SC = _load("pous_served_case", ROOT / "benchmarks" / "pous" / "served_case.py")
 ts, served, served_bf16 = SPT.ts, SPT.served, SPT.served_bf16
 WIPE_ID = mc.TEST_PREFIX + W.PROTOCOL
 SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
-ATTESTER = ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "attester" / "lean"
+ATTESTER = ROOT / "verity" / "protocols" / "accounting" / "memory" / "pous" / "attester" / "lean"
 
 
 @pytest.fixture(scope="module")

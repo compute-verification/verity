@@ -18,9 +18,9 @@ import numpy as np
 import pytest
 
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as S
+from verity.protocols.proof.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
@@ -31,7 +31,7 @@ from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "proof" / "spot" / "verifier"))
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402

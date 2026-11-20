@@ -100,7 +100,7 @@ theorem finS_tapeOK : finS.TapeOK :=
 
 /-- **`L` with Rust's checks passing**: Rust's own checks beside the Lean frame (`LeanRelease.cross`) accept every round.
 The guarantees hold at every `cross`, since Rust's checks only fail a round more. That they pass the honest worker's
-rounds is completeness, which `verity/protocols/proofs/flock/prover/agreement/zk_server_controls.sh` checks under `FC_ZK_SERVER=1`. -/
+rounds is completeness, which `verity/protocols/proof/flock/prover/agreement/zk_server_controls.sh` checks under `FC_ZK_SERVER=1`. -/
 def acceptCross (L : LeanRelease Flock.Wit Tp) : LeanRelease Flock.Wit Tp :=
   { L with cross := fun _ _ _ _ _ _ => true }
 

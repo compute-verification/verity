@@ -15,7 +15,7 @@ export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
 export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 2
-export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm
+export D=verity/protocols/accounting/compute/pouw/prover/kernels/edited_gemm
 export BIN=$(mktemp -d /tmp/cgemm.XXXXXX)
 trap 'rm -rf "$BIN"' EXIT
 PY=${CG_PYTHON:-python3}
@@ -26,7 +26,7 @@ nvcc -O3 -std=c++17 --no-compress -gencode "$GENCODE" -Xptxas -v -o "$BIN/cgemm"
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
 [ "$rc" = 0 ] || { tail -40 "$O/build.log"; exit 4; }
-$PY verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py --cuda-bin "$CUDA_HOME/bin" "$BIN/cgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/accounting/compute/pouw/prover/sass_gate.py --cuda-bin "$CUDA_HOME/bin" "$BIN/cgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" | tee -a "$O/sass_gate.txt"
 # The binary holds egemm.cu's kernels and so fgemm.cu's, mgemm.cu's and lpgemm.cu's, some never launched; the gate refuses
 # an integer-division seed in some of those, and passes only if every flagged instruction is in one of them (run.sh's set)

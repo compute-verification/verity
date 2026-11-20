@@ -1,6 +1,6 @@
 """The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at six
 levels: the root, `applications/`, `verity/`, `verity/protocols/`, each group's directory there (a directory of
-`verity/protocols/` that holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
+`verity/protocols/` that holds protocols: `proof/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
 is in the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its
 owner and its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
 fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never

@@ -10,8 +10,8 @@
 # An ARMS entry ID+VAR=VALUE[+VAR=VALUE] runs arm ID with those variables set, in its own directory (ID_VAR_VALUE): A/B
 # rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0; @IN@ in a value is the run's inputs, so
 # pouw-pearl-c-whole+PEARLC_CUBIN=@IN@/before.cubin runs another sent cubin.
-# PEARLC_KERNEL: the kernel directory (default verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120, on an RTX PRO 6000;
-# verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 on an H100 or H200, its cubin sent as pearl_c_sm90.cubin, and
+# PEARLC_KERNEL: the kernel directory (default verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120, on an RTX PRO 6000;
+# verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90 on an H100 or H200, its cubin sent as pearl_c_sm90.cubin, and
 # ARMS' default stock-fp8@compiled,pouw-pearl-c-whole); the leased GPU must be its. On an RTX PRO 6000 ARMS' default is
 # stock FP8 alone: no declared scheme serves Pearl-C there, and served_step.py refuses that protocol arm by name.
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served on an H100 or
@@ -29,7 +29,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}; mkdir -p "$OUT"; export OUT
 . benchmarks/harness/env.sh
 IN=${RESEARCH_RUN_DIR:-.}/inputs
-KERNEL=$(cd "${PEARLC_KERNEL:-verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120}" && pwd); K=$(basename "$KERNEL")
+KERNEL=$(cd "${PEARLC_KERNEL:-verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120}" && pwd); K=$(basename "$KERNEL")
 export PEARLC_KERNEL=$KERNEL PEARLC_CUBIN=${PEARLC_CUBIN:-$IN/$K.cubin}
 case $K in
   pearl_c_sm90)
@@ -67,7 +67,7 @@ if [ "${1:-}" != gpu ]; then
   [ -f "$PEARLC_CUBIN" ] || { echo "served_step: no cubin at $PEARLC_CUBIN" >&2; exit 2; }
   # scratch (Inductor's per-process caches, nsys's temporaries) in one directory, removed when the run ends
   TMPDIR=$(mktemp -d); export TMPDIR; trap 'rm -rf "$TMPDIR"' EXIT
-  SHARED=(); [ "$K" = pearl_c_sm120 ] || SHARED=(verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/*.cuh)
+  SHARED=(); [ "$K" = pearl_c_sm120 ] || SHARED=(verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/*.cuh)
   sha256sum "$PEARLC_CUBIN" "$KERNEL/$K.cu" "$KERNEL"/*.cuh "${SHARED[@]}" "$KERNEL/run.py" > "$OUT/cubin.sha256"
   NUMABIND=${NUMABIND:-$IN/numabind.py}
   BIND=(); [ -f "$NUMABIND" ] && BIND=("$VENV/bin/python" "$NUMABIND" "$OUT/numa.json")
