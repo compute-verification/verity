@@ -69,24 +69,25 @@ def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 /-! ## The declared blocks run -/
 
 /-- **The declared blocks run** (open, compute-accounting with soundness): every inference block `u` whose window starts
-at or after its epoch's challenge tick `salt u`, outside a set `M` whose declared use `decl M` is at most the tolerance
-`tol`, implements its declared block `f u`, at size at most `c u` gates (the declared size times a stated overhead) and
-input at most `k u` bits from its own past, another block and the outside world, except with probability at most `ε`.
-Nothing in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it.
-An inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is
-the tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M`
-pass into correct ones (the injected information) is the `.block` source of the inference blocks' input here. `decl` is to
-be the sum over `M` of the declared size the run carries (the same quantity the free block is charged), not an arbitrary
-free function of the set: with `decl ≡ 0` every `M` would be within any tolerance and the row would say nothing. The
-tolerance binds the actual work through `RealizesExcept`'s free-capacity term (`freeCap`, soundness Break 1): `M`'s
-inference blocks sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives
-`.function`, `.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is
-owed where the rows become the chain's hypotheses by name (`rows_chain`). -/
+at or after its epoch's challenge tick `salt u`, outside a set `M` whose declared size summed over its blocks
+(`∑ u ∈ M, dsize u`) is at most the tolerance `tol`, implements its declared block `f u`, at size at most `c u` gates (the
+declared size times a stated overhead) and input at most `k u` bits from its own past, another block and the outside
+world, except with probability at most `ε`. `dsize u` is the declared size the run carries for block `u` (the same
+quantity the free block is charged), per block, not a free function of the set: compute-accounting asked for the sum in
+the statement, so a set's tolerance is `∑ u ∈ M, dsize u` and no `decl ≡ 0` makes every `M` within any tolerance. Nothing
+in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it. An
+inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is the
+tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M` pass
+into correct ones (the injected information) is the `.block` source of the inference blocks' input here. The tolerance
+binds the actual work through the committed free-capacity claim (`claimedFree`, the clause `FreeClaimHolds`): `M`'s
+inference blocks sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives `.function`,
+`.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is owed where the
+rows become the chain's hypotheses by name (`rows_chain`). -/
 def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
-    (c k : (r : P.Run) → Fin (P.nIn r) → ℕ)
-    (decl : (r : P.Run) → Finset (Fin (P.nIn r)) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
+    (c k dsize : (r : P.Run) → Fin (P.nIn r) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
   ExceptWith P.pr P.accepts
-    (fun r => ∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start), decl r M ≤ tol ∧
+    (fun r => ∃ M ⊆ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start),
+      (∑ u ∈ M, dsize r u) ≤ tol ∧
       ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference ∧ salt r u ≤ (P.winIn r u).start) \ M,
         P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (c r u)) ∧
           P.HoldsIn r u (.inputAtMost [.past, .block, .world] (k r u))) ε
@@ -248,10 +249,11 @@ def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) 
 
 /-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check and realize their
 claims outside a tolerance set `M` of inference blocks (`RealizesExcept`, the tolerance path the reviews found missing)
-has a compliant actual circuit. The quantifier over `M` is not vacuous: `RealizesExcept` binds `M` as a term, not a free
-quantifier — `M` holds only inference blocks and its actual work sits inside each server-day block's free capacity
-(`freeCap`), so taking `M` all the inference blocks forces their total work under the capacity rather than excusing it
-(soundness Break 1). Its declared use is counted in the free block and the injected information it passes into correct
+has a compliant actual circuit. The quantifier over `M` is not vacuous: the tolerance binds `M` as a term, not a free
+quantifier — `M`'s actual work sits inside each server-day block's committed free-capacity claim (`claimedFree`, which
+`check` caps at `lim.freeSize`; the clause is `FreeClaimHolds`, established by the conversion), so taking `M` all the
+inference blocks forces their total work under the limit rather than excusing it (the universal witness `excluded_run`).
+Its declared use is counted in the free block and the injected information it passes into correct
 blocks is a term of their input, so compliance follows all the same.
 The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an
 unregistered input, so placing the free block's input from its own past (PoUS) and from memory (PoUB) adds terms to the

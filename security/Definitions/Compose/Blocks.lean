@@ -36,13 +36,6 @@ def isInputClaim : Property → Bool
   | .inputAtMost _ _ => true
   | _ => false
 
-/-- **The claimed size** of a block: its first size claim's bound (`0` if none). The check reads this per free block and
-sums it over a server-day block's free children, the quantity the conversion `FreeBlockAtMost` bounds. -/
-def claimedSize : List Property → ℕ
-  | [] => 0
-  | (.sizeAtMost k) :: _ => k
-  | _ :: t => claimedSize t
-
 /-- **The inference-only policy's limits**, public parameters: the inference blocks' count `n`, size `c` (gates) and
 input `k` (bits); the free blocks' count `m` and size `freeSize` (gates); the assumed hidden hardware size `hidden`
 (gates); and in the theorem's bound the free blocks' share `share` and the allowance inside inference blocks
@@ -58,9 +51,9 @@ structure Limits where
   allowance : ℝ
 
 /-- **The inference-only check on a run's committed blocks**: at most `n` inference blocks, each claimed of size at most
-`c` gates and input at most `k` bits; at most `m` free blocks, each claimed of some size; the free blocks' claimed sizes
-summed over each server-day block's free children at most `freeSize` gates (the sum the conversion `FreeBlockAtMost`
-bounds, read here, not a size per free block); every server-day block claimed of some size (the second cap on the
+`c` gates and input at most `k` bits; at most `m` free blocks; every server-day block's **committed free-capacity claim**
+at most `freeSize` gates (`P.claimedFree r i ≤ lim.freeSize`, the limit on the committed number the check reads — the free
+blocks' and the tolerance's work together are at most that claim, `FreeClaimHolds`); every server-day block claimed of some size (the second cap on the
 same gates, read in the theorem as `min`); and every server-day block claimed of some input, the bound the wipe's and
 network attestation's rows establish, so the policy side reads a server-day block's input. Coverage, disjointness and the
 nesting are the partitions' own, so the check states none of them. -/
@@ -69,8 +62,7 @@ def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
     decide (∀ u, P.cls r u = Class.inference →
       (P.claimsIn r u).any (sizeAtMost lim.c) = true ∧ (P.claimsIn r u).any (freshAtMost lim.k) = true) &&
     decide ((univ.filter fun u => P.cls r u = Class.free).card ≤ lim.m) &&
-    decide (∀ u, P.cls r u = Class.free → (P.claimsIn r u).any isSize = true) &&
-    decide (∀ i, P.kind r i = true → ∑ u ∈ P.freeChildren r i, claimedSize (P.claimsIn r u) ≤ lim.freeSize) &&
+    decide (∀ i, P.kind r i = true → P.claimedFree r i ≤ lim.freeSize) &&
     decide (∀ i, P.kind r i = true → (P.claimsOut r i).any isSize = true) &&
     decide (∀ i, P.kind r i = true → (P.claimsOut r i).any isInputClaim = true)
 

@@ -150,11 +150,13 @@ structure Runs (L : Type*) where
   locOut : (r : Run) → Fin (nOut r) → Finset L
   winOut : (r : Run) → Fin (nOut r) → Window
   claimsOut : (r : Run) → Fin (nOut r) → List Property
-  /-- **The free-block capacity** the conversion yields for each server-day block (`cap − b`, the compute rate over the
-  window minus the use PoUW credits to the inference blocks outside the tolerance). It bounds the free quantity, which is
-  the free blocks' work and the tolerance set's actual work together, so the tolerance is a term, not an unbounded
-  quantifier (`RealizesExcept`). -/
-  freeCap : (r : Run) → Fin (nOut r) → ℕ
+  /-- **The claimed free-block capacity**: the number the prover commits for each server-day block, committed data the
+  check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a hidden field of the model. It is a claim, like
+  the size and input claims in `claimsOut`: it does not carry M or the block's children, which a per-block `Placed.Holds`
+  `Property` cannot see, so it is a committed claim field rather than a `Property` (a verifier sees only what is committed).
+  What establishes it (that it is at most `cap − b`, the compute rate over the window minus the use credited outside the
+  tolerance) is the open conversion step (`FreeClaimHolds`, `rows_chain`'s named hypothesis), not given here. -/
+  claimedFree : (r : Run) → Fin (nOut r) → ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
   ref : (r : Run) → (inner r).Refines (outer r)
@@ -217,26 +219,32 @@ noncomputable def Realizes (r : P.Run) : Prop :=
     (∀ u, ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧ (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
 
 /-- **The run realizes its claims outside a tolerance set** `M` of inference blocks (the feasible-set membership with a
-tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, and every
-inference block outside `M` holds its claims. The sampled proofs and `DeclaredBlocksRun` give the inference claims only
-outside such an `M`, so the chain reads this, not `Realizes`. **The tolerance is a term, not an unbounded quantifier**:
-`M` holds only inference blocks (`M_inf`), and inside every server-day block its actual work — the free blocks' sizes and
-`M`'s inference blocks' sizes together — is at most the free-block capacity the conversion yields (`M_bound`), so the use
-PoUW credits is over the inference blocks outside `M` and `sizeExclusive` splits over that. Without this clause taking
-`M = all inference blocks` asks compliance of a run whose inference blocks are bound by nothing (the witness
-`tolerance_unbounded_without_term`). Whoever establishes `M_bound` is `DeclaredBlocksRun` plus PoUW through the
-conversion; that an incorrect block's actual size matches its declared use is the open part. `Realizes` implies
-`RealizesExcept ∅` only when the free quantity fits the capacity (`realizes_realizesExcept`). -/
+tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, every
+inference block outside `M` holds its claims, and `M` holds only inference blocks. The sampled proofs and
+`DeclaredBlocksRun` give the inference claims only outside such an `M`, so the chain reads this, not `Realizes`. **The
+tolerance is a term, not an unbounded quantifier**: what caps `M`'s actual work is not here but in `FreeClaimHolds` (the
+free blocks' sizes and `M`'s inference blocks' sizes at most the committed claim `claimedFree`) which the check caps at
+`lim.freeSize`; taking `M = all inference blocks` then forces their total work under `lim.freeSize`, not nothing (the
+witness `excluded_run`). `FreeClaimHolds` is deliberately not folded in here: who establishes it (the conversion gives the
+claim) is an open step named on its own, not given by membership in the feasible set. `Realizes` implies `RealizesExcept
+∅` (`realizes_realizesExcept`). -/
 noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
     (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
     (∀ u, P.cls r u = Class.inference → u ∉ M → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
     (∀ u, P.cls r u ≠ Class.inference → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
     (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p) ∧
-    (∀ u ∈ M, P.cls r u = Class.inference) ∧
-    (∀ i, P.kind r i = true →
-      (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
-        ≤ P.freeCap r i)
+    (∀ u ∈ M, P.cls r u = Class.inference)
+
+/-- **The committed free-capacity claim holds** (the clause the free field used to carry, now its own named def): inside
+every server-day block `i`, the free blocks' sizes and the tolerance set `M`'s inference blocks' sizes together are at most
+the claimed value `claimedFree r i` the prover committed. This is what `check` relies on through its claim conjunct
+(`claimedFree ≤ lim.freeSize`); establishing it is the open conversion step (capacity minus the use credited outside `M`,
+`FreeBlockAtMost` over `computeRate`), named as `rows_chain`'s own hypothesis, never given by `RealizesExcept`. -/
+def FreeClaimHolds (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
+  ∀ i, P.kind r i = true →
+    (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
+      ≤ P.claimedFree r i
 
 /-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
 def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
