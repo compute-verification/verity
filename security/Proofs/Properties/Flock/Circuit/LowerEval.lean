@@ -943,7 +943,7 @@ def UnitComputes : Prop :=
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Flock.Lift.lift S a.d = .ok (L, e) →
+    Spot.OneStageZk.admittedBlock P units a.key = .ok () → Flock.Lift.lift S a.d = .ok (L, e) →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d →
     ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
@@ -1182,6 +1182,87 @@ theorem admitCallee : AdmitCallee := by
   rw [show R.body.nodes[k]! = x by simp [getElem!_def, h1]]
   exact (Option.some.inj hS).symm
 
+/-- Port `q`'s bits in `X`, as `portBits` lays it. -/
+def portWord {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (q : Spot.BlockFront.Port) : List Bool :=
+  portBits X #[q]
+
+/-- Unit `g`'s arguments in `X`, one word per parameter leaf. -/
+def argWords {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (g : ℕ) : List (List Bool) :=
+  (unitArgs P g).toList.map (portWord X)
+
+/-- Unit `g`'s return leaves in `X`, one word each. -/
+def outWords {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (g : ℕ) : List (List Bool) :=
+  (unitOuts P g).toList.map (portWord X)
+
+theorem flatMap_eq_flatten_single {α β : Type} (f : α → List β) (l : List α) :
+    l.flatMap f = (l.map fun a => [a].flatMap f).flatten := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => simp [List.flatMap_cons, ih]
+
+theorem portBits_eq {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (ports : Array Spot.BlockFront.Port) :
+    portBits X ports = (ports.toList.map (portWord X)).flatten :=
+  flatMap_eq_flatten_single _ _
+
+/-- A Definition's parameter leaves' widths, in order. -/
+def leafWidths (d : Defn) : List ℕ := d.params.toList.flatMap fun p => p.2.widths.toList
+
+/-- The walk's wires as words: a leaf's bits, a §9 gate on its operands' first bits. -/
+def wordWires : Flock.Program.Wires Option (List Bool) :=
+  ⟨fun g xs => some [Flock.Program.gateVal g (xs.map (·.headD false))], fun o => o⟩
+
+/-- Definition `d` of `P` on the words `x`, one per parameter leaf, at most `fuel` calls deep: a primitive's one
+return leaf is `Prog.evalBool` of it on `x`'s bits, a composite the walk (`walkStep`) on words. -/
+def wordDef? (P : Prog) : ℕ → ℕ → List (List Bool) → Option (List (List Bool))
+  | 0, _, _ => none
+  | fuel + 1, d, x => do
+    let defn ← P.defs[d]?
+    if defn.prim then some [Prog.evalBool P d x.flatten]
+    else Flock.Program.walkStep wordWires P (wordDef? P fuel) d x
+
+/-- **Definition `d`'s value on words** `x`, one per parameter leaf: its return leaves' words, `[]` where the walk
+fails. -/
+def wordEval (P : Prog) (d : ℕ) (x : List (List Bool)) : List (List Bool) :=
+  (wordDef? P (2 * P.defs.size + 2) d x).getD []
+
+/-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
+`g`'s arguments' words have its callee's parameter leaf widths, and its return leaves' words are its callee's value on
+its arguments' words (`wordEval`). -/
+def UnitWordComputes : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
+      (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+        Y h = (Flock.OfProgram.ofProgram P).op h Y) →
+        (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
+          outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g)
+
+/-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of a Definition `d` of C, taken in the block's
+Program, evaluated on bits (`Prog.evalBool`), is C's value of `d` on words (`wordEval`), bit for bit, on words of `d`'s
+parameter leaf widths. -/
+def LiftWordEval : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
+    decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → d < P.defs.size →
+    Flock.Lift.lift S d = .ok (L, e) → ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
+      Prog.evalBool L e x.flatten = (wordEval P d x).flatten
+
+/-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
+theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
+  intro bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu hda Y hY
+  obtain ⟨hw, ho⟩ := hW bytes P hd hr g k m hu Y hY
+  obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
+  have hdx : (P.child P.rootScope k m).d = x.fn := by
+    rw [child_d]
+    generalize P.defs[P.root]! = R at h1 ⊢
+    simp [getElem!_def, h1]
+  have hlt : a.d < P.defs.size := by
+    rw [← hda, hdx]
+    exact (Array.getElem?_eq_some_iff.1 h2).1
+  rw [hda] at hw ho
+  unfold outBits argBits
+  rw [portBits_eq, portBits_eq]
+  change (outWords Y g).flatten = Prog.evalBool L e (argWords Y g).flatten
+  rw [ho, hL bytes P units S a.d L e hd hs hlt hl _ hw]
+
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
   intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl blocks u hB X g hg Y
@@ -1189,7 +1270,7 @@ theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (hU bytes P partition cuts units S a L e hd hr hs ha hl g hg k m hu
+  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 end Flock.Chain
