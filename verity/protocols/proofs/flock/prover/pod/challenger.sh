@@ -21,6 +21,7 @@
 # env: CHALLENGER_REPO (default the working directory: a verity tree), CHALLENGER_PY (default python3, with the tree's
 #      Python importable), CHALLENGER_WORK (default `mktemp -d`: the key and the secret), CHALLENGER_PARAMS (the LMS key's
 #      height and Winternitz parameter, default 4,3: a test key)
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 CHALLENGER_REPO=${CHALLENGER_REPO:-$PWD}
 CHALLENGER_PY=${CHALLENGER_PY:-python3}
 CHALLENGER_WORK=${CHALLENGER_WORK:-$(mktemp -d)}

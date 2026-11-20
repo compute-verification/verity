@@ -64,6 +64,9 @@ from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+
 #: the audit's three programs by role, which names each one's wrapper and its stamps, whatever its binary is called:
 #: the prover, Lean's verifier and the ZK server's Lean loop
 PROGRAMS = PROVER, VERIFIER, LOOP = ("prover", "verifier", "loop")
@@ -306,14 +309,14 @@ def sizes(audit: Path, k: int) -> dict:
 
 def timed(cmd: list[str], stdin: str | None = None) -> tuple[float, subprocess.CompletedProcess]:
     t = clock()
-    p = subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=3600)
+    p = LC.run(cmd, input=stdin, timeout=3600)
     return clock() - t, p
 
 
 def listening(cmd: list[str]) -> float:
     """Seconds from the Lean loop's start to its ``LISTENING`` line; it ends when its standard input closes."""
     t = clock()
-    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=LC.lean_env())
     try:
         line = p.stdout.readline()
         s = clock() - t

@@ -148,7 +148,7 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open",
-         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "meaning", "escapes",
+         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "scope", "meaning", "escapes",
          "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked",
          "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
@@ -1381,7 +1381,7 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
 #: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
 #: witnesses); and `format`, which `dump` writes and only the merge driver reads
 JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
-                    "witnesses", "witnesses_assumed", "ids", "format"})
+                    "witnesses", "scope", "witnesses_assumed", "ids", "format"})
 
 
 def build_inputs(policy: dict) -> dict:
@@ -1587,12 +1587,12 @@ MAIN = ("refs/remotes/origin/main", "refs/heads/main")
 #: the maps keyed by a guarantee, theorem or premise that `renamed_witnesses` re-keys, beside `deployed`, `trust`,
 #: `shape.inline` and `claims.witnesses`
 RE_KEYED = ("guarantees", "deployed", "ids", "trust_gap", "witnesses_assumed", "witnesses", "unwitnessed", "open", "domain",
-            "assumptions", "four_names_except")
+            "assumptions", "four_names_except", "scope")
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
     """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap`, `ids`, `open`,
-    `domain`, `assumptions`, `four_names_except` and `claims.witnesses` with every guarantee, theorem and premise they name
+    `domain`, `assumptions`, `four_names_except`, `scope` and `claims.witnesses` with every guarantee, theorem and premise they name
     `renamed` by ``moved`` (or mapped by it, a function), each entry's other fields kept."""
     rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
@@ -1626,6 +1626,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]
                                     for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
         out["unwitnessed"] = {rn(g): h for g, h in allow.items()}
+    if isinstance(scope := policy.get("scope"), dict):
+        out["scope"] = {rn(g): s for g, s in scope.items()}
     if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
         out["shape"] = spec | {"inline": {rn(g): h for g, h in spec["inline"].items()}}
     return out
@@ -2314,7 +2316,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     if update and isinstance(policy.get("trust_gap"), dict):
         out["trust_gap"] = trust_gap_kept(out)
-    fails += trust_failures(out) + deployed_witness_failures(out)
+    fails += trust_failures(out) + deployed_witness_failures(out) + scope_failures(out)
     if update and isinstance(policy.get("ids"), dict):
         out["ids"] = ids_kept(out)
     fails += id_failures(out, {getattr(f, "entry", None) for f in fails})
@@ -3811,6 +3813,7 @@ BOOKKEEPING = Codes({
     "witnesses.unwitnessed-unlisted",                                                  # dropped from `unwitnessed`
     "guarantees.no-owner", "assumptions.no-owner", "open.no-owner", "domain.no-owner",               # owned
     "trust.gap-gone", "trust.gap-stale",                                               # dropped from `trust_gap`
+    "scope.stale",                                                                     # dropped from `scope`
 })
 #: the days from the lock run to the due date of a premise `--bookkeeping warn` lists under `open`
 BOOKKEEPING_DAYS = 7
@@ -3842,7 +3845,7 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     `witnesses.unwitnessed-changed` re-keyed to its statement's hashes as built (one failing `witnesses.missing`, which
     has no entry, gets none, so the audit fails on it by name), each entry of no guarantee
     (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`; an `unwitnessed` one,
-    `witnesses.unwitnessed-unlisted`, as the update drops it) dropped, and `trust_gap` as an update keeps it
+    `witnesses.unwitnessed-unlisted`, as the update drops it; `scope.stale`) dropped, and `trust_gap` as an update keeps it
     (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
     out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
@@ -3850,7 +3853,8 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     out.pop("open_seed", None)
     allow, shape_ = dict(out.get("unwitnessed") or {}), dict(out.get("shape") or {})
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
-             "shape.properties-stale": ("shape", "properties"), "shape.frozen-stale": ("shape", "frozen")}
+             "shape.properties-stale": ("shape", "properties"), "shape.frozen-stale": ("shape", "frozen"),
+             "scope.stale": ("scope",)}
     for f in fails:
         if (c := code_of(f)) == "witnesses.unwitnessed-changed" and (pin := facts["pins"].get(f.entry)):
             was = (policy.get("unwitnessed") or {}).get(f.entry)
@@ -4019,6 +4023,40 @@ def trust_failures(lock: dict) -> list[str]:
         fails.append(Failure("trust.gap-stale", g, f"trust: `trust_gap` lists {g}, which `deployed` doesn't: drop the "
                              "entry (`check.py --update` does)"))
     return fails
+
+
+#: a `scope` entry: one sentence on one line, ending at its only full stop
+SENTENCE = re.compile(r"[^\s.!?][^\n.!?]*(?:[.!?]\S[^\n.!?]*)*\.")
+
+
+def scope_failures(lock: dict) -> list[str]:
+    """`scope` ({listed guarantee: one sentence}) says what sessions or forms a guarantee is about where that is narrower
+    than what is served, so the lock doesn't read as coverage.  An entry of no listed guarantee is bookkeeping
+    (`scope.stale`); a malformed one, or one of a deployed guarantee, which is about what is served, fails.  Only a person
+    writes an entry: `--update` neither adds nor drops one."""
+    scope = lock.get("scope", {})
+    if not isinstance(scope, dict):
+        return [Failure("scope.form", None, "scope: `scope` is {guarantee: one sentence saying what sessions or forms it is "
+                        "about}")]
+    fails, listed, deployed = [], lock.get("guarantees") or {}, set(name_list(lock.get("deployed")))
+    for g, s in sorted(scope.items()):
+        if not (isinstance(s, str) and SENTENCE.fullmatch(s)):
+            fails.append(Failure("scope.form", g, f"scope: scope[{g}] is {json.dumps(s)}: write one sentence on one line, "
+                                 "ending at its only full stop, saying what sessions or forms the guarantee is about"))
+        if g not in listed:
+            fails.append(Failure("scope.stale", g, f"scope: `scope` lists {g}, which `guarantees` doesn't: drop the entry, "
+                                 "or list the guarantee"))
+        elif g in deployed:
+            fails.append(Failure("scope.deployed", g, f"scope: {g} is deployed, so it is about what is served and has no "
+                                 "scope: drop it from `deployed`, or drop its `scope` entry once it covers what is served"))
+    return fails
+
+
+def scope_counts(lock: dict) -> dict[str, int]:
+    """How many listed guarantees have a `scope` entry (`with`) and how many don't (`without`)."""
+    listed, scope = lock.get("guarantees") or {}, lock.get("scope")
+    held = sum(g in listed for g in scope) if isinstance(scope, dict) else 0
+    return {"with": held, "without": len(listed) - held}
 
 
 def deployed_witnesses(lock: dict) -> dict[str, int]:
@@ -7187,6 +7225,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
         rep["deployed_witnesses"] = deployed_witnesses(new)
+    rep["scope"] = scope_counts(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7429,6 +7468,7 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
         rep["deployed_witnesses"] = deployed_witnesses(new)
+    rep["scope"] = scope_counts(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7962,6 +8002,8 @@ def main(argv: list[str]) -> int:
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)
                 for g, gap in gaps.items():
                     print(f"    {g}: {len(gap)}" + (f" ({', '.join(gap)})" if gap else ""), flush=True)
+            if sc := rep.get("scope"):
+                print(f"  scope: {sc['with']} listed guarantees with a scope, {sc['without']} without", flush=True)
             if dw := rep.get("deployed_witnesses"):
                 print(f"  deployed: {dw['witnessed']} witnessed, {dw['unwitnessed']} unwitnessed (must be 0); "
                       f"`unwitnessed` allows {dw['allowed_deployed']} deployed and {dw['allowed']} not deployed",
