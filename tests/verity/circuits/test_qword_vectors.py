@@ -22,7 +22,7 @@ import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when r
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import refs_from_json, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.circuits.ops.prims import Bf16ToF32, F32ToBf16Rn, const
 from verity.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
@@ -449,10 +449,16 @@ def test_verify_refuses(live, n):
     assert not VECTORS["verify_refusals"][n][4]["ok"]
 
 
+def forward_sentence(descriptors: dict, name: str, key: str | None, node: int, refs: dict) -> str:
+    """The decoder's whole refusal of an `ORDER` edit: the Definition and node, then `codec.forward_refusal`."""
+    fid = key or json.loads(descriptors[name])["root"]
+    return f"definition '{fid}' node {node}: " + codec.forward_refusal(node, codec._forward(refs_from_json(refs), node))
+
+
 def test_the_decoder_refuses_a_program_that_is_not_topological(live):
     assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
-    for _l, _n, _k, node, _a, _r, v in VECTORS["order_refusals"]:
-        assert f"node {node}: forward-reference: node {node} reads node " in v["refused"]
+    for _l, name, key, node, _a, refs, v in VECTORS["order_refusals"]:
+        assert v["refused"] == forward_sentence(VECTORS["descriptors"], name, key, node, refs)
     reg = registry()
     for name, text in VECTORS["descriptors"].items():                   # every pinned program is topological
         assert PO.order_violation(codec.decode_program(json.loads(text), reg)) is None, name

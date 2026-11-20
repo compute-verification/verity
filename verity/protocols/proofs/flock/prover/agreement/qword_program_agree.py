@@ -85,13 +85,13 @@ def check_format(a, out, bad):
     d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}
     (out / "forward.desc").write_text(json.dumps(d))
     got = lean(a, out / "forward.desc")
-    if got["ok"] or fr["call_refused"] not in got.get("error", ""):
+    if got["ok"] or got.get("error") != fr["call_refused"]:
         bad.append(("forward_reference", got.get("error")))
     d = json.loads(f["descriptor"])
     _root_body(d)["nodes"][3]["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}
     (out / "forward-root.desc").write_text(json.dumps(d))
     got = lean(a, out / "forward-root.desc")
-    if got["ok"] or fr["root_refused"] not in got.get("error", ""):
+    if got["ok"] or got.get("error") != fr["root_refused"]:
         bad.append(("forward_reference root", got.get("error")))
     refused = 0
     for label, edit, _why in spec.REJECT:
@@ -172,7 +172,7 @@ def check_qword_vectors(a, out, bad):
         (out / "order.desc").write_text(json.dumps(d))
         got = lean(a, out / "order.desc")
         orders += 1
-        if got["ok"] or want["refused"] not in got.get("error", ""):
+        if got["ok"] or got.get("error") != want["refused"]:
             bad.append(("order_refusals", label, got.get("error")))
     inapplicable = 0
     cut_refusals = 0

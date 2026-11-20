@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, registry as _qword_registry
+from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, forward_sentence, registry as _qword_registry
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import boolean as BL
 from verity.circuits import codec, cut, partition_object as PO
@@ -395,8 +395,8 @@ def test_verify_refuses(live):
 
 def test_the_decoder_refuses_a_program_that_is_not_topological(live):
     assert live["order_refusals"] == VECTORS["order_refusals"], REWRITE
-    for _l, _n, _k, node, _a, _r, v in VECTORS["order_refusals"]:
-        assert f"node {node}: forward-reference: node {node} reads node " in v["refused"]
+    for _l, name, key, node, _a, refs, v in VECTORS["order_refusals"]:
+        assert v["refused"] == forward_sentence(VECTORS["descriptors"], name, key, node, refs)
 
 
 def test_served(live):
