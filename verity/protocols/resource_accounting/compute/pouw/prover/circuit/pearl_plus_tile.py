@@ -6,14 +6,14 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
-    PearlPlusTileSeed_v2{K,TN}                          on 16-bit words
+    PearlPlusTileSeed_v3{K,TN}                          on 16-bit words
         (salt: u16[16], root: u16[32], col: u32)
         -> (key: u16[16], eb_0 … eb_{TN-1}: Array<1, u16[2]>, f_0 … f_7: Array<K/8, u16[2]>)
         key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices: eb's col·TN + j one a field, F's
         t in `F_ROWS` = 8 fields of K/8 (the σ of its unregistered word body behind `WordBits` and `BitsWord{16}`)
-    PearlPlusTileLine_v3{SIDE,FACTOR,G}                 on 16-bit words: the σ of one line's word body on each index
+    PearlPlusTileLine_v4{SIDE,FACTOR,G}                 on 16-bit words: the σ of one line's word body on each index
         (key: u16[16], index: Array<G, u16[2]>) -> Array<G, u16[16]>   `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
-    PearlPlusGramRow_v4{K,DEV,P}                        on 16-bit words: the σ of one Gram row's word body
+    PearlPlusGramRow_v5{K,DEV,P}                        on 16-bit words: the σ of one Gram row's word body
         (fb, fa: Array<K, u16[16]>) -> Array<32, u16[2]>       row P of `PearlCGram_v1`, for F_B's column P
 
 Each port and each output of these units is in 16-bit words, the width C commits a value in: a byte string two bytes a
@@ -97,8 +97,8 @@ from . import tile_units as U
 from . import leaves as L
 from verity.circuits.ops import words as W
 
-__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV4", "PearlPlusSaltDead",
-           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV3", "PearlPlusTileSeed", "core", "gram_row", "line",
+__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV5", "PearlPlusSaltDead",
+           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV4", "PearlPlusTileSeed", "core", "gram_row", "line",
            "noise", "reference", "seed", "served"]
 
 F32, U32, BIT, I32, BF16, E4M3, W16 = Value(32), Value(32), Value(1), Value(32), Value(16), Value(8), Value(16)
@@ -323,10 +323,18 @@ def _unpack(B, x, t):
     return Coll(t, B.batch(bind(WordBits, W=16), Coll(Array(t.leaves // 16, W16), x.refs), axes=(0,)).refs)
 
 
+_PACK = CompositeDefinition(
+    "PearlPlusPackWords", 1, ("N",), lambda S: ((("bits", Array(S.N, Array(16, BIT))),), Array(S.N, W16)),
+    lambda B, S, bits: B.batch(bind(BitsWord, W=16), bits, axes=(0,)), register=False,
+    doc="N 16-bit words from their N·16 bits, low bit first: `BitsWord{16}` mapped over the parameter, 16 bits a word")
+
+
 def _pack(B, x, t):
-    """Bits ``x`` as the 16-bit words of type ``t``, low bit first (`BitsWord{16}`)."""
+    """Bits ``x`` as the 16-bit words of type ``t``, low bit first (`BitsWord{16}`), by one Call of `_PACK` on them
+    whole: Lean lowers a map whose argument steps through a parameter's leaves, and refuses one that steps through the
+    copies of an earlier node other than by whole copies, so the words are packed in a Definition of their own."""
     n = x.type.leaves // 16
-    return Coll(t, B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, BIT)), x.refs), axes=(0,)).refs)
+    return Coll(t, B.call(bind(_PACK, N=n), Coll(Array(n, Array(16, BIT)), x.refs)).refs)
 
 
 def _seed_params(S) -> tuple:
@@ -352,7 +360,7 @@ def _seed_on_words(B, S, salt, root, col):
 
 
 PearlPlusTileSeed = CompositeDefinition(
-    "PearlPlusTileSeed", 2, ("K", "TN"), lambda S: (_seed_params(S), _seed_ret(S)),
+    "PearlPlusTileSeed", 3, ("K", "TN"), lambda S: (_seed_params(S), _seed_ret(S)),
     _seed_on_words, refuse=_refuse_slices, conformance=_NOISE_CONF,
     doc="`PearlPlusTileKey_v1` on 16-bit words: the salt's and the root's words and col's bits (`WordBits`), its σ "
         "(`PearlPlusTileKey_v2`), and the key and the lines' indices back in 16-bit words (`BitsWord{16}`), one field "
@@ -426,8 +434,8 @@ def _refuse_lines(b: dict) -> str | None:
     return _refuse_line(b) or (None if isinstance(g, int) and g >= 1 else f"G is a count of lines, G >= 1: {g!r}")
 
 
-PearlPlusTileLineV3 = CompositeDefinition(
-    "PearlPlusTileLine", 3, ("SIDE", "FACTOR", "G"), _lines_signature, _lines_body, refuse=_refuse_lines,
+PearlPlusTileLineV4 = CompositeDefinition(
+    "PearlPlusTileLine", 4, ("SIDE", "FACTOR", "G"), _lines_signature, _lines_body, refuse=_refuse_lines,
     conformance=_NOISE_CONF,
     doc="G of a -h3 tile's noise lines on 16-bit words: the key's words and each of the G indices' words their bits, "
         "`PearlPlusTileLine_v2` (σ of `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)) on each index, and each "
@@ -449,8 +457,8 @@ _GRAM_ROW = CompositeDefinition(
         "`PearlCChain_v1`{K, the device's atom, its window (0: none)} of F_B's column P and each of F_A's 32 columns, "
         "`PearlCGram_v1`'s row P")
 _GRAM_ROW_BITS = _on_bits(_GRAM_ROW, 3, register=False)
-PearlPlusGramRowV4 = _on_words16(
-    _GRAM_ROW_BITS, 4, "Row P of a -h3 tile's Gram matrix on 16-bit words: F_B's and F_A's lines' words their bits, "
+PearlPlusGramRowV5 = _on_words16(
+    _GRAM_ROW_BITS, 5, "Row P of a -h3 tile's Gram matrix on 16-bit words: F_B's and F_A's lines' words their bits, "
                        "`PearlPlusGramRow_v3` (σ of row P of `PearlCGram_v1`, F_B's column P against each of F_A's 32), "
                        "and the row's 32 FP32 words back in 16-bit words, two each, low half first")
 
@@ -465,11 +473,11 @@ LINES = {"eb": (1, 0), "fa": (0, 1), "fb": (1, 1)}
 
 def line(kind: str, g: int) -> SpecializedDefinition:
     side, factor = LINES[kind]
-    return bind(PearlPlusTileLineV3, SIDE=side, FACTOR=factor, G=g)
+    return bind(PearlPlusTileLineV4, SIDE=side, FACTOR=factor, G=g)
 
 
 def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
-    return bind(PearlPlusGramRowV4, K=k, DEV=dev, P=p)
+    return bind(PearlPlusGramRowV5, K=k, DEV=dev, P=p)
 
 
 def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:

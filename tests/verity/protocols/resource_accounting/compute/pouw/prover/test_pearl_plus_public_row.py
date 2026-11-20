@@ -1,6 +1,6 @@
 """The vectors of the noise a credited unit derives inside from its public row (the eb, fa, fb and g of
-`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v2`, `PearlPlusTileLine_v3` and
-`PearlPlusGramRow_v4`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
+`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v3`, `PearlPlusTileLine_v4` and
+`PearlPlusGramRow_v5`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
 (`pearl_plus_credited.row_eb` …) and compared byte for byte, and the units, on their words and on bits, held to them.
 
 Each case gives its inputs (salt, root_B, k, col, tn, dev), seed_B, and each value's SHA-512 digest; at k ≤ 64 it also gives

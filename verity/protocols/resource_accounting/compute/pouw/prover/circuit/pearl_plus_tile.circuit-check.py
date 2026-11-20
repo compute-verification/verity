@@ -9,8 +9,8 @@ def _pouw_roots() -> list[Any]:
     """Pearl+'s -h3 tile core and its pieces at the smallest bound instance, a 1 × 1 tile of a one-column linear at K = 256
     (two promotion windows, `inert_bound._promoted`) on the H100's record, forming v1 under -h3: a row's admission
     (`PearlPlusAdmit_v1`) and A's salt-dead counts (`PearlPlusSaltDead_v1`) on words and on bits, the core
-    (`PearlPlusTileCore_v3`, the σ of its unregistered word body) and the tile's noise units (`PearlPlusTileSeed_v2`, each
-    `PearlPlusTileLine_v3` (eb's one line a unit, F's K/8) and `PearlPlusGramRow_v4`, on 16-bit words over the σ of
+    (`PearlPlusTileCore_v3`, the σ of its unregistered word body) and the tile's noise units (`PearlPlusTileSeed_v3`, each
+    `PearlPlusTileLine_v4` (eb's one line a unit, F's K/8) and `PearlPlusGramRow_v5`, on 16-bit words over the σ of
     theirs), there and at K = 32 for two columns of the unpromoted sm_120 chain (G = 0); and the core of a 2 × 1 tile
     whose second row is filler (TR = 1), the smallest with both halves of the real-row rule.  The core is over circuit-check's
     whole-lowering budget, so it keeps a circuit digest, not an AND count; its σ Calls are the pinned units
