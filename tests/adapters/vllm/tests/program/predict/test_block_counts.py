@@ -19,19 +19,26 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.circuits import codec
-from verity.circuits import partition_v2 as PV2
-from verity.circuits import count as K
-from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.circuits.ops import gemm as GEMM_OPS
-from verity.circuits.population import BitsWord, WordBits, wired_population_program
-from verity.circuits.program import NoBooleanBody, Program
-from verity.commitments.periods import interface as IF
-
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
+
+from verity.circuits import codec
+from verity.circuits import count as K
+from verity.circuits import partition_v2 as PV2
+from verity.circuits import program as PG
+from verity.circuits.defs import (
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
+from verity.circuits.ops import gemm as GEMM_OPS
+from verity.circuits.ops.boolean import versions as V
+from verity.circuits.population import BitsWord, WordBits, wired_population_program
+from verity.circuits.program import NoBooleanBody, Program
+from verity.circuits.types import Value
+from verity.commitments.periods import interface as IF
 
 REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/inference_only_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
@@ -189,13 +196,15 @@ def test_the_gate_table_prices_bit_at_by_its_body():
     assert not miss and g == sum(table.values()) > 147
 
 
-def test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_leaves_it_unpriced():
-    """`F32TanhRn_v1` has no Boolean body: a circuit reaching it is refused by name, and a block counted by a table that lacks
-    it lists its activations apart, its gates not guessed."""
-    tanh = REGISTRY["F32TanhRn_v1"]
-    with pytest.raises(NoBooleanBody, match="F32TanhRn_v1"):
-        _calling(tanh)
-    assert BC.gates(tanh, {}) == (0, {"F32TanhRn_v1": 1})
+def test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_leaves_it_unpriced(monkeypatch):
+    """A word primitive no Boolean Definition names as its word is refused by name when a circuit reaches it (under the
+    catalog's lookup alone: the suite's conftest gives a test's own primitive a stand-in body), and a block counted by a table
+    that lacks it lists its activations apart, its gates not guessed."""
+    monkeypatch.setattr(PG, "_BODY_LOOKUP", [V.boolean_version])
+    lonely = PrimitiveDefinition("BlockCountsLonelyWord", 1, (("x", Value(32)),), Value(32), lambda x: x, register=False)
+    with pytest.raises(NoBooleanBody, match="BlockCountsLonelyWord_v1"):
+        _calling(lonely)
+    assert BC.gates(lonely, {}) == (0, {"BlockCountsLonelyWord_v1": 1})
 
 
 def test_the_wiring_between_leaf_widths_is_priced_at_no_gate():
@@ -225,11 +234,12 @@ def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
 def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     """TINY's fixed load at its class (2 slots, the class circuit): two blocks a window, each of the session's gates, and fresh bits B's k with the
     weights held (the scan state its lanes' units read)."""
-    from tests.program.predict import test_steps as S
-    from tests.program.predict.test_window_circuit import CLASS, GRAIN
     from verity_vllm.program.predict import inference_blocks as IB
     from verity_vllm.program.predict.window_builder import WEIGHTS
     from verity_vllm.program.predict.window_circuit import class_circuit
+
+    from tests.program.predict import test_steps as S
+    from tests.program.predict.test_window_circuit import CLASS, GRAIN
 
     circuit = class_circuit(S._registered(), CLASS, None, GRAIN)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
