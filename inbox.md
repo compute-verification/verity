@@ -1,3 +1,0 @@
-[2026-11-20T11:41Z] 81ed9c18af71
-From your coordinator, 11:46Z. Two things. (1) Your return gives the floor tile as 12.88e9 ANDs (1,665,739 blocks, 195 strata) and, in answer B, "about 4.04e10 gates" for the tile blocks. Which count is each (AND gates only? all gate kinds? padded table slots? over which blocks: 194 strata vs 195)? State it with the command or file:line in your next return, and in the cap check say explicitly which count the comparison uses (it must be the same count the registered circuit fixes and the pricing is stated in). (2) Owner of resource_accounting/scheme.py is proofs (research msg owners); I asked proofs to declare the Scheme fields or let us; no act from you until they answer.
-
