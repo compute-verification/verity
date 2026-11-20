@@ -2818,8 +2818,18 @@ theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn :
         unfold nodePos
         rw [if_neg hpr, if_neg hm]
 
-/-- A read of one copy that `Seg.split` makes is one piece of the segment. -/
-theorem split_one {s g : Seg} (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤ 1) : ∃ q, g = Seg.one q := by
+/-- A read of one copy that `Seg.split` makes is one piece of a row at least: a piece of the segment, or a lane's rows
+of its copies. -/
+theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hc : ∀ q ∈ s.ps.toList, 0 < q.count) (hg : g ∈ (Seg.split s).toList)
+    (h1 : g.reps ≤ 1) : ∃ q, g = Seg.one q ∧ 1 ≤ q.rows := by
+  have har : s.alike.reps ≠ 0 := by
+    unfold Desc.Seg.alike
+    split
+    · simp
+    · exact hr
+  have hap : s.alike.ps = s.ps := by
+    unfold Desc.Seg.alike
+    split <;> rfl
   revert hg
   unfold Desc.Seg.split
   dsimp only
@@ -2827,12 +2837,19 @@ theorem split_one {s g : Seg} (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤
   · intro hg
     simp only [Array.toList_map, List.mem_map] at hg
     obtain ⟨q, -, rfl⟩ := hg
-    exact ⟨_, rfl⟩
+    refine ⟨_, rfl, ?_⟩
+    rw [(rowsFrom_spec q 0 _).2.2.2.1]
+    omega
   split
   · intro hg
     simp only [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, -, rfl⟩ := hg
-    exact ⟨_, rfl⟩
+    obtain ⟨q, hq, rfl⟩ := hg
+    refine ⟨q, rfl, ?_⟩
+    have := hc q (by rwa [hap] at hq)
+    unfold Desc.Piece.count at this
+    rcases Nat.eq_zero_or_pos q.rows with h0 | h0
+    · rw [h0, Nat.zero_mul] at this; omega
+    · exact h0
   · rename_i hne
     intro hg
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
@@ -2870,8 +2887,8 @@ theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.
   have hgo := hsub g hg
   rw [Array.toList_flatMap, List.mem_flatMap] at hgo
   obtain ⟨s0, hs0, hgs⟩ := hgo
-  obtain ⟨hnn, -, -⟩ := hout k hk _ hn s0 (hfrom s0 (Array.mem_toList_iff.1 hs0))
-  obtain ⟨q0, rfl⟩ := split_one hgs hg1
+  obtain ⟨hnn, hr0, hcnt⟩ := hout k hk _ hn s0 (hfrom s0 (Array.mem_toList_iff.1 hs0))
+  obtain ⟨q0, rfl, hrow⟩ := split_one hr0 hcnt hgs hg1
   have e : q = q0 := by simpa [Seg.one] using hq
   subst e
   have hsub' : ∀ y ∈ pos q, y ∈ segPos s0 := fun y hy =>
