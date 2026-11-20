@@ -307,9 +307,9 @@ def sizes(audit: Path, k: int) -> dict:
     return {name: f.stat().st_size for name, f in files.items() if f.is_file()}
 
 
-def timed(cmd: list[str], stdin: str | None = None) -> tuple[float, subprocess.CompletedProcess]:
+def timed(cmd: list[str], stdin: str | None = None, ok_statuses=LC.OK) -> tuple[float, subprocess.CompletedProcess]:
     t = clock()
-    p = LC.run(cmd, input=stdin, timeout=3600)
+    p = LC.run(cmd, input=stdin, timeout=3600, ok_statuses=ok_statuses)
     return clock() - t, p
 
 
@@ -409,7 +409,7 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
         want, split = [x for x in log.splitlines() if x.startswith("VERDICT ")], []
 
         def alone_verify() -> float:
-            sec, p = timed([real[VERIFIER], *verify["argv"]])
+            sec, p = timed([real[VERIFIER], *verify["argv"]], ok_statuses=LC.VERIFY_EXITS)
             if [x for x in p.stdout.splitlines() if x.startswith("VERDICT ")] != want:
                 raise RuntimeError(f"verify alone (exit {p.returncode}) printed another verdict than the audit has for this "
                                    f"member: {p.stdout[:300]} {p.stderr[-300:]}")
