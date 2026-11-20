@@ -275,7 +275,7 @@ def admitE (d : String) (t : String := "E_v1") (cs : List (String × Nat) := [])
 
 /-- `lowerBlock` on unit 0 of the descriptor `d`, its template `E_v1`. -/
 def lowerE (d : String) : V ByteArray := do
-  let CJ ← Json.parse d
+  let CJ ← Flock.JsonParse.parse d
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
   lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0]) (admittedBlock P #[0])
@@ -365,7 +365,7 @@ def AA16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_
 def lowerIn (d t : String) (us : Array Nat) : V ByteArray := do
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", t)])]
-  lowerBlock (← Json.parse d) (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us) (admittedBlock P us)
+  lowerBlock (← Flock.JsonParse.parse d) (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us) (admittedBlock P us)
 
 /-- C's root `d` reading its input node 0 recut by 16. -/
 def recut0 (d : Flock.Program.Defn) : Flock.Program.Defn := { d with body := { d.body with recut := #[(0, 16)] } }
