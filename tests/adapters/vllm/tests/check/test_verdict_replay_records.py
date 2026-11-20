@@ -17,6 +17,7 @@ import pytest
 from tests.check.test_verdict import _base, _row_dir
 from verity_vllm.check import verdict as V
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import verdict_record as VR
 
 REPLAY_CHECK = "local_replay/sampled_replay"
 
@@ -94,11 +95,11 @@ def test_a_row_with_no_runs_cites_no_replay_record(tmp_path):
 
 
 def test_the_verdict_the_row_keeps_cites_the_same_records(tmp_path, capsys):
-    """`verity-vllm verdict from-record`, as the row's Commit stage runs it: the `verdict.json` it writes cites the pair's record and
+    """`cli.run(verdict_record) from-record`, as the row's Commit stage runs it: the `verdict.json` it writes cites the pair's record and
     not the earlier Commit's."""
     d = row_of(tmp_path, [0])
     written = replay_records(d, ["sampled_replay_p0.json", "sampled_replay_p1.json"])
-    assert cli.main(["verdict", "from-record", str(d), "--rc", "0"]) == 0 and capsys.readouterr().out.startswith(f"PASS {d / 'verdict.json'} [")
+    assert cli.run(VR, ["from-record", str(d), "--rc", "0"]) == 0 and capsys.readouterr().out.startswith(f"PASS {d / 'verdict.json'} [")
     kept = json.loads((d / "verdict.json").read_text())
     assert cited(kept["inputs"]) == {"commit/sampled_replay_p0.json": written["commit/sampled_replay_p0.json"]}
     assert kept["outcome"] == V.PASS and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS

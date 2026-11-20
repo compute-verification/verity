@@ -530,3 +530,75 @@ def test_a_joined_order_against_a_ranks_own_rise_is_refused_alike(pieces):
     assert reference(j) == refusal("order", 0)
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(refusal("order", 0))), fn
+
+
+# --- the pair by pair overlap check against the sorted sweep ---------------------------------------------------------
+
+
+def _rect(w):
+    c0, c = w.get("cut", [0, 1])
+    units = 1
+    for r in w["radix"]:
+        units *= r
+    return w["reader"], w["port"], w["at"], units // c, c0, c
+
+
+def disjoint_reference(j):
+    """Every pair of wires disjoint: different reader or port, or reader units or cut rows apart, pair by pair."""
+    rs = [_rect(w) for w in j["wires"]]
+    ok = all(a[0] != b[0] or a[1] != b[1] or a[2] + a[3] <= b[2] or b[2] + b[3] <= a[2] or a[4] + a[5] <= b[4] or b[4] + b[5] <= a[4]
+             for i, a in enumerate(rs) for b in rs[i + 1:])
+    return {"pairwise": ok, "fast": ok}
+
+
+@st.composite
+def wire_lists(draw):
+    """Up to twelve wires of two readers and two ports, starting and ending on few units so that most lists overlap, touch,
+    nest or repeat, some cut into rows."""
+    wires = []
+    for _ in range(draw(st.integers(0, 12))):
+        radix = draw(st.lists(st.integers(1, 3), min_size=1, max_size=2))
+        w = {"reader": draw(st.sampled_from(["A", "B"])), "port": draw(st.sampled_from(["x", "y"])), "writer": "G", "out": "o",
+             "at": draw(st.integers(0, 6)), "radix": radix, "base": 0, "step": [0] * len(radix)}
+        if draw(st.booleans()):
+            c = draw(st.integers(1, 2))
+            w["cut"] = [draw(st.integers(0, 3)), c]
+        wires.append(w)
+    return {"wires": wires}
+
+
+DISJOINT = D.Port(PIECES, "wires_disjoint", disjoint_reference, wire_lists(), package=PACKAGE, of_record="lean", need_rejects=False)
+
+
+def test_the_sweep_and_the_pair_by_pair_check_agree_with_the_reference(pieces):
+    stats = D.run(DISJOINT, examples=3000, server=pieces)
+    assert stats.outputs > 2000, stats
+
+#: (reader, port, first unit, reader units, first row, rows) each, and whether every pair is disjoint: empty, touching, nested,
+#: equal, cut apart, of two groups, and where a wire overlaps a nonadjacent one by start
+FIXTURES = [
+    ([], True),
+    ([('A', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 2, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 4, 4, 0, 1)], True),
+    ([('A', 'x', 4, 4, 0, 1), ('A', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 10, 0, 1), ('A', 'x', 3, 2, 0, 1)], False),
+    ([('A', 'x', 3, 2, 0, 1), ('A', 'x', 0, 10, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('B', 'x', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'y', 0, 4, 0, 1)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('B', 'x', 0, 4, 0, 1), ('A', 'x', 2, 4, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 2), ('A', 'x', 0, 4, 2, 2)], True),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 2, 1, 0, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 2, 1, 1, 1)], False),
+    ([('A', 'x', 0, 4, 0, 1), ('A', 'x', 0, 4, 1, 1), ('A', 'x', 4, 1, 0, 1)], True),
+    ([('B', 'y', 6, 2, 0, 1), ('A', 'x', 0, 4, 0, 1), ('B', 'y', 0, 6, 0, 1), ('A', 'x', 4, 4, 0, 1), ('B', 'y', 7, 1, 0, 1)], False),
+    ([('B', 'y', 6, 2, 0, 1), ('A', 'x', 0, 4, 0, 1), ('B', 'y', 0, 6, 0, 1), ('A', 'x', 4, 4, 0, 1), ('B', 'y', 8, 1, 0, 1)], True),
+]
+
+
+@pytest.mark.parametrize("rects, ok", FIXTURES, ids=range(len(FIXTURES)))
+def test_the_sweep_and_the_pair_by_pair_check_on_fixtures(pieces, rects, ok):
+    wires = [{"reader": r, "port": p, "writer": "G", "out": "o", "at": at, "radix": [u, c], "base": 0, "step": [0, 0],
+              "cut": [c0, c]} for r, p, at, u, c0, c in rects]
+    assert pieces.call("wires_disjoint", {"wires": wires}) == ("output", D.canonical({"pairwise": ok, "fast": ok}))

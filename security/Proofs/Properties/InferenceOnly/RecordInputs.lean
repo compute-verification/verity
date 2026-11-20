@@ -260,7 +260,7 @@ theorem inputsOf_decls {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x 
                             · cases h
                             · rename_i hdis
                               cases h
-                              exact ⟨of_not_not hdis, b4⟩
+                              exact ⟨by rw [← Spot.Wires.pairwiseDisjointFast_eq]; exact of_not_not hdis, b4⟩
                         · cases h
                     · cases h
                 · cases h

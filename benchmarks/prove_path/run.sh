@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
-# advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
+# Prove path (prove_path.py) on a CPU machine: a served window committed over its compiler's Programs for the run's
+# advice, the window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
 # commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
 # and verified by Lean, the advice's root then held to the docket the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which the audit must reject with
 # the ZK server releasing no proof of it (with PP_PLAIN=1, which has no ZK server, with Lean refusing the proof it reads).
 # M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch.
-#   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
-#     (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
-#     from adapters/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
-#     stratified-rate:4/678); the forged one SiluMul_v2{I=1536} at step 16, all 3 units sampled (rate:3/3), on ranks
-#     PP_FORGED_RANKS (default 0).
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), the one
 #     single-GPU (TP1) arm: its advice, requests and engine from the run dir, its Commit from the window's sealed row dir
 #     (commit/replay_bundle_p0, and the Builds of I2's Programs with programs.json, which advice_compile.py RUN --window K
@@ -44,15 +39,12 @@
 #     passes on the Lean verifier refusing a session at setup on a row of such a read, its proofs free to leave.
 #     weights-tie-forged: the same with those digests forged to X's, so those units aren't their Definition's (--forged):
 #     it passes on the ZK server releasing no proof of a false member. Each must be refused, and pin nothing.
-#   The stand-in (no PP_TP, no PP_SERVE_RUN): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},
-#     8 units a rank: honest rate:1/2 (4 of them sampled), forged rate:1/1 (every unit sampled); with PP_PLAIN=1,
-#     stratified-rate:1/2 and stratified-rate:1/1.
 #   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     sample, until multi-table coverage lands, so each partition's rule must be a stratified rate over a window of one member.
 #   Which arms pass the rule check: a stream's rule is a rate (service.SamplingDesign: rate:NUM/DEN, stratified-rate:NUM/DEN or
 #     work-rate:NUM/DEN), and each audit states its partition file's text as the rule: prove_path.py audit, and with
 #     PP_RECORDS=1 records_audit.py, which takes the window's sampling design to be the one that rate names over the window's
-#     own proof blocks. The stand-in states rates, and so does each arm's default partition above (PP_TP and PP_SERVE_RUN),
+#     own proof blocks. Each arm's default partition above (PP_SERVE_RUN) states a rate,
 #     each the rate that samples its window as its text reads at the proof blocks its scope has under
 #     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION or PP_FORGED_PARTITION that still
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
@@ -97,7 +89,10 @@ for v in PP_SERVE_RUN PP_SERVE_ROWS; do
   case "${!v:-}" in art:*) echo "$v=${!v}: a published row dir or serve run holds request values; give $v the serve" \
     "directory on this node (a DIR)"; exit 2;; esac
 done
-if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}" ]; then
+[ -z "${PP_TP:-}" ] || { echo "PP_TP=$PP_TP: refused: the deferred TP Commit is deleted; give PP_SERVE_RUN and PP_SERVE_ROWS"; exit 2; }
+[ -n "${PP_SERVE_RUN:-}${PP_WEIGHTS_TIE:-}" ] || { echo "refused: the CPU stand-in TP Commit (tests/pipeline/served_tp) is deleted; give" \
+  "PP_SERVE_RUN and PP_SERVE_ROWS, or PP_WEIGHTS_TIE"; exit 2; }
+if [ -n "${PP_SERVE_RUN:-}" ]; then
   [ -d "$PP_SERVE_RUN" ] || { echo "PP_SERVE_RUN=$PP_SERVE_RUN: no serve-openai run directory on this node"; exit 8; }
   [ -d "${PP_SERVE_ROWS:-}" ] || { echo "PP_SERVE_ROWS=${PP_SERVE_ROWS:-}: no sealed window row dir on this node (the serve run's" \
     "windows/w<K>)"; exit 8; }
@@ -130,7 +125,7 @@ uv sync --all-packages --extra torch-cpu > $K/sync.log 2>&1 || { tail -20 $K/syn
 PY=$REPO/.venv/bin/python
 PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 STEP1=benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json
-if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}" ] && [ "${PP_ONLY:-}" != honest ]; then
+if [ -n "${PP_SERVE_RUN:-}" ] && [ "${PP_ONLY:-}" != honest ]; then
   # the served arm's forged partition, derived from the honest one or held to its steps, before any build
   $PY benchmarks/prove_path/prove_path.py forged-partition --honest ${PP_PARTITION:-$STEP1} --design $SAMPLING_DESIGN \
     ${PP_FORGED_PARTITION:+--forged $PP_FORGED_PARTITION} > $O/forged-partition.json || exit 8
@@ -268,13 +263,7 @@ print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["w
 
 rc=0
 FORGE=${PP_FORGE:-0:1}
-if [ -n "${PP_TP:-}" ]; then
-  $PP advice --workload adapters/vllm/workloads/$ROW.json --out $W/advice.bin | tee $K/advice.log || exit 8
-  GLM="--tp-commit $PP_TP/commit --build-root $PP_TP/build"
-  run glm "$GLM" $W/advice.bin ${PP_PARTITION:-benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json} "${PP_RANKS:-}" || rc=1
-  run glm-forged "$GLM" $W/advice.bin benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json "${PP_FORGED_RANKS:-0}" \
-    --forge $FORGE || rc=1
-elif [ -n "${PP_SERVE_RUN:-}" ]; then
+if [ -n "${PP_SERVE_RUN:-}" ]; then
   D=$PP_SERVE_ROWS
   served() {  # NAME SERVE_RUN K: the served window's honest and forged audits, its registration's public form and its compiler
               # kept; serve.json and windows.jsonl stay in SERVE_RUN, where records() reads them
@@ -336,16 +325,6 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   tie weights-tie || rc=1
   [ "${PP_ONLY:-}" = honest ] || tie weights-tie-other --served || rc=1
   [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
-else
-  S=$W/served
-  (cd tests/adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
-    > $O/standin.json 2> $K/standin.err || { tail -20 $K/standin.err; exit 8; }
-  mkdir -p $O/standin && (cd $S/commit && find . -maxdepth 1 -type f -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp {} $O/standin/)
-  $PP advice --workload $S/workload.json --out $W/advice.bin | tee $K/advice.log || exit 8
-  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$SAMPLING_DESIGN:1/1\"}" > $W/all.json
-  SI="--tp-commit $S/commit --build-root $S/build"
-  run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1
-  run standin-forged "$SI" $W/advice.bin $W/all.json "${PP_FORGED_RANKS:-0}" --forge $FORGE || rc=1
 fi
 cat $O/ran_with.txt
 exit $rc

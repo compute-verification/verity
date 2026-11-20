@@ -3,7 +3,7 @@
 A map's shapes and layer sets are expressions over its symbols (`symbols`: `config.json` keys and the tensor-parallel size).
 `identities` gives the canonical value id (`verity_vllm.commit.identity`) of every tap a step captures on its routes, and
 `committer_names` the tensor name each bound tap is committed under (`commit.name`), which is what the committer's sources
-check a step against (`acquire.sources.route_source`).  A tap whose leading dimension is a row count (`row_counts`: the tokens
+check a step against (a route source).  A tap whose leading dimension is a row count (`row_counts`: the tokens
 whose position + 1 is a multiple of a ratio) writes no row on a step where the count is 0, and the step commits nothing under its
 name, and on every other step commits exactly the count's rows under it.  From the step's committed positions `empty_names`
 recomputes those names and `rows_differ` the names whose committed rows are not the count, for the committer's identity check and
@@ -169,7 +169,7 @@ def at_layer(pattern: str, layer: int | None) -> str:
 
 
 def route_sites(cmap: dict[str, Any]) -> list[dict[str, Any]]:
-    """The calls that decide a step's routes (`acquire.sources.route_source`): `route_site` itself, or each of its `sites`."""
+    """The calls that decide a step's routes: `route_site` itself, or each of its `sites`."""
     site = cmap.get("route_site")
     if not site:
         return []
@@ -256,7 +256,7 @@ def row_counts(cmap: dict[str, Any], env: dict[str, int], positions) -> dict[str
 def empty_names(cmap: dict[str, Any], env: dict[str, int], positions, names: dict[str, tuple[dict[str, Any], int | None]]) -> set[str]:
     """Of a step's `names` (`committer_names`), the ones it writes no row for: those whose tap's leading dimension is a row count
     (`row_count_of`) that is 0 at its `positions` (`row_counts`).  The committer commits no empty tensor, so the step commits none
-    of them and every other name: the committer's identity check (`acquire.sources.route_source`) and a reader of a commit
+    of them and every other name: the committer's identity check and a reader of a commit
     (`bind_names`) hold a step to that."""
     zero = {s for s, n in row_counts(cmap, env, positions).items() if n == 0}
     return {n for n, (tap, _layer) in names.items() if row_count_of(cmap, tap) in zero} if zero else set()

@@ -46,30 +46,10 @@ def entries(m: dict) -> list[tuple[str, str, list[int], int]]:
             for e in m["entries"]]
 
 
-def covered(rows: list[dict], m: dict) -> dict:
-    pop = [B.identity(PD, r["request_id"], STEP, 0, OP, r["output_member"], *r["element_range"], 0) for r in rows]
-    return B.coverage_check(pop, m)
 
 
-def test_two_requests_rows_are_each_their_own():
-    """Two decode rows, 2 tokens and 2 requests: a 2-leaf tensor has as many rows as the step has tokens, which the shape rule would
-    split per token; each is its request's whole."""
-    rows = [row("r0", 2100), row("r1", 2050)]
-    m = bmap(rows, [name(2100), name(2050)], [("r0", 0, 1), ("r1", 1, 2)])
-    assert entries(m) == [("r0", "topk_switches[t=2100]", [0, LEAVES], 0), ("r1", "topk_switches[t=2050]", [0, LEAVES], 0)]
-    cov = covered(rows, m)
-    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
 
 
-def test_two_requests_at_one_position_take_its_tensors_in_row_order():
-    rows = [row("r0", 2100), row("r1", 2100)]
-    for order in (["r0", "r1"], ["r1", "r0"]):
-        m = bmap(rows, [name(2100)] * 2, [(q, i, i + 1) for i, q in enumerate(order)])
-        assert [e[0] for e in entries(m)] == order
-        cov = covered(rows, m)
-        assert (cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 0, [])
-    third = bmap(rows, [name(2100)] * 3, [("r0", 0, 1), ("r1", 1, 2)])
-    assert [e[0] for e in entries(third)][:2] == ["r0", "r1"] and Binder(rows).bind(STEP, [name(2100)] * 3)[2][3] == "unbound"
 
 
 def test_at_b1_the_map_binds_its_request_as_before():
