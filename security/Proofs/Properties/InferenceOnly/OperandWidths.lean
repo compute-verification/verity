@@ -230,6 +230,119 @@ theorem gate_of_gateAt {P : Prog} {g p : ℕ} {ops : Array ℕ} (h : gateAt P g 
     obtain ⟨rfl, rfl⟩ := h
     exact ⟨sc', rfl⟩
 
+/-- **A member's operands are, one by one, as wide as its callee's parameter leaves**, at a node that is no scan in an
+activation resolution reaches: each operand `Prog.gate` locates calls a primitive returning one value of that width. -/
+theorem node_operand_widths (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ LeafWidths.BodyWide (P.defs[d]!).body)
+    (sc : Scope) (hsc : Resolve.Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size) (m : ℕ)
+    (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members) (hns : ((P.defs[sc.d]!).body.nodes[k]!).form ≠ .scan)
+    (ops : Array ℕ) (hops : operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops) :
+    List.Forall₂ (fun g w => ∀ p o s, P.gate g = .ok (p, o, s) → (P.defs[p]!).ret = .value w) ops.toList
+      ((P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).params.toList.flatMap fun q => q.2.widths.toList) := by
+  obtain ⟨p, hfn⟩ : ∃ p, ((P.defs[sc.d]!).body.nodes[k]!).fn = p := ⟨_, rfl⟩
+  rw [hfn]
+  obtain ⟨L, hlen, hflat, hLi⟩ := operands_lists P sc _ m ops hops
+  obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB sc hsc
+  obtain ⟨-, hnd, -⟩ := (hD sc.d hd).2.1 k hk
+  obtain ⟨hsz, hcnt, hpr, -, hshape, -⟩ := hnd
+  obtain ⟨hfnlt, -, hup, -, hop⟩ := (hB sc hsc).1 k hk
+  rw [hfn] at hsz hpr hshape hop hup hfnlt
+  have hform : ((P.defs[sc.d]!).body.nodes[k]!).form = .prim ∨ ((P.defs[sc.d]!).body.nodes[k]!).form = .call ∨
+      ((P.defs[sc.d]!).body.nodes[k]!).form = .batch := by
+    rcases hf : ((P.defs[sc.d]!).body.nodes[k]!).form
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl rfl)
+    · exact Or.inr (Or.inr rfl)
+    · exact absurd hf hns
+  -- each argument resolves as many references as its parameter has leaves
+  have hcntL : ∀ i < ((P.defs[sc.d]!).body.nodes[k]!).args.size,
+      cntOf P ((P.defs[sc.d]!).body.nodes[k]!) i = ((P.defs[p]!).params[i]!).2.leaves := by
+    intro i hi
+    unfold cntOf
+    rw [hfn]
+    split
+    · rfl
+    · rename_i hnb
+      rw [hcnt i hi]
+      rcases hform with hf | hf | hf
+      · simp only [hf, BodiesOk.Shape] at hshape
+        rw [hshape.2 i hi]
+      · simp only [hf, BodiesOk.Shape] at hshape
+        rw [hshape.2 i hi]
+      · simp only [hf, BodiesOk.Shape] at hshape
+        rcases hshape.2 i hi with ⟨-, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
+        · rw [hty]
+        · obtain ⟨L', hax, -⟩ := BodiesOk.axis_spec ax _ _ mt hrem
+          exact (hnb (by rw [hf, hdims, hax]; rfl)).elim
+  rw [hflat]
+  show List.Forall₂ _ L.flatten ((P.defs[p]!).params.toList.map fun q => q.2.widths.toList).flatten
+  refine forall₂_flatten _ _ (by simp [hlen, hsz]) fun i ha hb => ?_
+  have hia : i < ((P.defs[sc.d]!).body.nodes[k]!).args.size := by rw [← hlen]; exact ha
+  have hip : i < (P.defs[p]!).params.size := by rw [← hsz]; exact hia
+  obtain ⟨hlc, hres⟩ := hLi i ha
+  simp only [List.getElem_map, Array.getElem_toList]
+  refine forall₂_of_get _ _ ?_ fun t ht ht' => ?_
+  · rw [hlc, hcntL i hia, Flock.Sigma.widths_length, getElem!_pos _ i hip]
+  simp only [Array.getElem_toList]
+  have hres := hres t ht
+  have htc : t < ((P.defs[p]!).params[i]!).2.leaves := by rw [← hcntL i hia, ← hlc]; exact ht
+  -- the reference is one of the node's, in range
+  have hidx : ∃ u, refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t =
+      (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.get u ∧
+        u < (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.count := by
+    by_cases hpp : (P.defs[p]!).prim = true
+    · have htc' : t < cntOf P ((P.defs[sc.d]!).body.nodes[k]!) i := hlc ▸ ht
+      unfold cntOf at htc'
+      rw [hfn] at htc'
+      have hu := hop hpp i hia m hm t htc'
+      unfold refOf
+      by_cases hb : (((P.defs[sc.d]!).body.nodes[k]!).form == Form.batch) = true
+      · rw [if_pos hb] at hu ⊢
+        exact ⟨_, Resolve.memberRef_eq _ _ _, hu⟩
+      · rw [if_neg hb] at hu ⊢
+        exact ⟨t, rfl, hu⟩
+    · have hbp := ((hD p hfnlt).1.2 (by simpa using hpp)).1
+      have hu := hup i (by rw [hbp]; exact hip) t (by rw [hbp]; exact htc) m hm
+      unfold refOf
+      rcases hform with hf | hf | hf
+      · exact absurd (hpr hf) hpp
+      · simp only [hf] at hu
+        rw [if_neg (by rw [hf]; decide)]
+        exact ⟨t, rfl, hu⟩
+      · simp only [hf] at hu
+        rw [if_pos (by rw [hf]; rfl)]
+        exact ⟨_, Resolve.memberRef_eq _ _ _, hu⟩
+  obtain ⟨u, hu, hul⟩ := hidx
+  have href0 := ((hB sc hsc).1 k hk).2.1 i u hul
+  have href : Resolve.RefOk P sc.d (P.defs[sc.d]!).body.nodes.size
+      ((((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.get u) :=
+    ⟨href0.1, fun h => ⟨Nat.lt_trans (href0.2 h).1 hk, (href0.2 h).2⟩⟩
+  rw [← hu] at href
+  -- the leaf it names is as wide as the parameter's
+  have harg : Widths.wAt (LeafWidths.tyOf P sc (refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t))
+      (refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t).j = Widths.wAt ((P.defs[p]!).params[i]!).2 t := by
+    have hw := LeafWidths.arg_wide P hroot hB hD hW sc hsc k hk m hm i (by rw [hfn]; exact hip) t
+      (by rw [hfn]; exact htc)
+    rw [hfn] at hw
+    unfold refOf
+    rcases hform with hf | hf | hf
+    · rw [if_neg (by rw [hf]; decide)]
+      exact hw.1 (Or.inl hf)
+    · rw [if_neg (by rw [hf]; decide)]
+      exact hw.1 (Or.inr hf)
+    · rw [if_pos (by rw [hf]; rfl), Resolve.memberRef_eq]
+      exact hw.2 hf
+  intro p' o s' hgo'
+  rw [LeafWidths.resolve_wide P hroot hB hL hD hW sc hsc _ href _ hres p' o s' hgo', harg,
+    LeafWidths.wAt_widths _ _ htc, getElem!_pos (P.defs[p]!).params i hip]
+  have htw : t < ((P.defs[p]!).params[i]).2.widths.size := by
+    rw [← Array.length_toList, Flock.Sigma.widths_length, ← getElem!_pos (P.defs[p]!).params i hip]
+    exact htc
+  rw [getElem!_pos _ t htw]
+
 /-- **A gate's operands are, one by one, at most as wide as its primitive's parameter leaves**, in a decoded Program
 whose root reads no input node recut and whose nodes read only earlier nodes: an operand `Prog.gate` locates is exactly
 as wide, one it doesn't is of width 0. -/
@@ -251,95 +364,21 @@ theorem gate_operand_widths (bytes : ByteArray) (P : Prog) (h : decode bytes = .
   have hW := LeafWidths.decoded_wide bytes P h hr
   obtain ⟨sc, hgo⟩ := gate_of_gateAt hg
   obtain ⟨k, m, hsc, hk, hfn, hpp, hm, hops⟩ := gate_loc P hroot hB hL hgo
-  obtain ⟨L, hlen, hflat, hLi⟩ := operands_lists P sc _ m ops hops
   obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB sc hsc
-  obtain ⟨-, hnd, -⟩ := (hD sc.d hd).2.1 k hk
-  obtain ⟨hsz, hcnt, -, hcomp, hshape, -⟩ := hnd
-  obtain ⟨-, -, -, -, hop⟩ := (hB sc hsc).1 k hk
-  rw [hfn] at hsz hcomp hshape hop
-  have hop := hop hpp
-  have hform : ((P.defs[sc.d]!).body.nodes[k]!).form = .prim ∨ ((P.defs[sc.d]!).body.nodes[k]!).form = .batch := by
-    rcases hf : ((P.defs[sc.d]!).body.nodes[k]!).form
-    · exact Or.inl rfl
-    · exact absurd (hcomp (Or.inl hf)) (by rw [hpp]; decide)
-    · exact Or.inr rfl
-    · exact absurd (hcomp (Or.inr hf)) (by rw [hpp]; decide)
-  -- each argument resolves as many references as its parameter has leaves
-  have hcntL : ∀ i < ((P.defs[sc.d]!).body.nodes[k]!).args.size,
-      cntOf P ((P.defs[sc.d]!).body.nodes[k]!) i = ((P.defs[p]!).params[i]!).2.leaves := by
-    intro i hi
-    unfold cntOf
-    rw [hfn]
-    split
-    · rfl
-    · rename_i hnb
-      rw [hcnt i hi]
-      rcases hform with hf | hf
-      · simp only [hf, BodiesOk.Shape] at hshape
-        rw [hshape.2 i hi]
-      · simp only [hf, BodiesOk.Shape] at hshape
-        rcases hshape.2 i hi with ⟨-, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
-        · rw [hty]
-        · obtain ⟨L', hax, -⟩ := BodiesOk.axis_spec ax _ _ mt hrem
-          exact (hnb (by rw [hf, hdims, hax]; rfl)).elim
-  rw [hflat, List.map_flatten]
-  show List.Forall₂ _ (L.map (List.map (widthAt P))).flatten
-    ((P.defs[p]!).params.toList.map fun q => q.2.widths.toList).flatten
-  refine forall₂_flatten _ _ (by simp [hlen, hsz]) fun i ha hb => ?_
-  simp only [List.length_map] at ha
-  have hia : i < ((P.defs[sc.d]!).body.nodes[k]!).args.size := by rw [← hlen]; exact ha
-  have hip : i < (P.defs[p]!).params.size := by rw [← hsz]; exact hia
-  obtain ⟨hlc, hres⟩ := hLi i ha
-  simp only [List.getElem_map, Array.getElem_toList]
-  refine forall₂_of_get _ _ ?_ fun t ht ht' => ?_
-  · rw [List.length_map, hlc, hcntL i hia, Flock.Sigma.widths_length, getElem!_pos _ i hip]
-  simp only [List.length_map] at ht
-  simp only [List.getElem_map, Array.getElem_toList]
-  have hres := hres t ht
-  have htc : t < ((P.defs[p]!).params[i]!).2.leaves := by rw [← hcntL i hia, ← hlc]; exact ht
-  -- the reference is one of the node's, in range
-  have hidx : ∃ u, refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t =
-      (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.get u ∧
-        u < (((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.count := by
-    have htc' : t < cntOf P ((P.defs[sc.d]!).body.nodes[k]!) i := hlc ▸ ht
-    unfold cntOf at htc'
-    rw [hfn] at htc'
-    have hu := hop i hia m hm t htc'
-    unfold refOf
-    by_cases hb : (((P.defs[sc.d]!).body.nodes[k]!).form == Form.batch) = true
-    · rw [if_pos hb] at hu ⊢
-      exact ⟨_, Resolve.memberRef_eq _ _ _, hu⟩
-    · rw [if_neg hb] at hu ⊢
-      exact ⟨t, rfl, hu⟩
-  obtain ⟨u, hu, hul⟩ := hidx
-  have href0 := ((hB sc hsc).1 k hk).2.1 i u hul
-  have href : Resolve.RefOk P sc.d (P.defs[sc.d]!).body.nodes.size
-      ((((P.defs[sc.d]!).body.nodes[k]!).args[i]!).seq.get u) :=
-    ⟨href0.1, fun h => ⟨Nat.lt_trans (href0.2 h).1 hk, (href0.2 h).2⟩⟩
-  rw [← hu] at href
-  -- the leaf it names is as wide as the parameter's
-  have harg : Widths.wAt (LeafWidths.tyOf P sc (refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t))
-      (refOf ((P.defs[sc.d]!).body.nodes[k]!) m i t).j = Widths.wAt ((P.defs[p]!).params[i]!).2 t := by
-    have hw := LeafWidths.arg_wide P hroot hB hD hW sc hsc k hk m hm i (by rw [hfn]; exact hip) t
-      (by rw [hfn]; exact htc)
-    rw [hfn] at hw
-    unfold refOf
-    rcases hform with hf | hf
-    · rw [if_neg (by rw [hf]; decide)]
-      exact hw.1 (Or.inl hf)
-    · rw [if_pos (by rw [hf]; rfl), Resolve.memberRef_eq]
-      exact hw.2 hf
-  rcases hga : gateAt P L[i][t] with _ | ⟨p', ops'⟩
+  obtain ⟨-, ⟨-, -, -, hcomp, -⟩, -⟩ := (hD sc.d hd).2.1 k hk
+  have hns : ((P.defs[sc.d]!).body.nodes[k]!).form ≠ .scan := fun hf => by
+    have := hcomp (Or.inr hf)
+    rw [hfn, hpp] at this
+    cases this
+  have hw := node_operand_widths P hroot hB hL hD hW sc hsc k hk m hm hns ops hops
+  rw [hfn] at hw
+  rw [List.forall₂_map_left_iff]
+  refine hw.imp fun {a b} hab => ?_
+  rcases hga : gateAt P a with _ | ⟨p', ops'⟩
   · simp only [widthAt, hga]
     exact Nat.zero_le _
   obtain ⟨sc', hgo'⟩ := gate_of_gateAt hga
-  have hret := LeafWidths.resolve_wide P hroot hB hL hD hW sc hsc _ href _ hres p' ops' sc' hgo'
-  simp only [widthAt, hga, hret]
-  rw [harg, LeafWidths.wAt_widths _ _ htc, getElem!_pos (P.defs[p]!).params i hip]
-  have htw : t < ((P.defs[p]!).params[i]).2.widths.size := by
-    rw [← Array.length_toList, Flock.Sigma.widths_length, ← getElem!_pos (P.defs[p]!).params i hip]
-    exact htc
-  rw [getElem!_pos _ t htw]
+  simp only [widthAt, hga, hab p' ops' sc' hgo', le_refl]
 
 /-- **A gate's operands are at most as many bits as its primitive's parameters.** -/
 theorem gate_operand_bits (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
