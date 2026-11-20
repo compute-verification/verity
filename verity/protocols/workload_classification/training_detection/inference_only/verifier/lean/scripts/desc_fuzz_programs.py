@@ -235,7 +235,7 @@ class Body:
         cs = self.colls(bias)
         if not cs:
             return None
-        if self.P.grids and rng.random() < 0.5:
+        if self.P.grids and rng.random() < 0.8:
             g = self.grid(L, cs)
             if g is not None:
                 return g
@@ -283,7 +283,8 @@ class Body:
                 continue
             P, rads = L // (g * run), []
             while P > 1 and len(rads) < 3:
-                r = rng.choice([d for d in range(2, P + 1) if P % d == 0])
+                ds = [d for d in range(2, P) if P % d == 0]
+                r = rng.choice(ds) if ds and rng.random() < 0.8 else P
                 rads.append(r)
                 P //= r
             if P > 1 or not rads or (g == 1 and len(rads) < 2):
@@ -453,7 +454,7 @@ def composite(P: Program, budget: int, scale: int = 1) -> None:
 
 def program(seed: int, scale: int = 1, grids: bool = False) -> str:
     """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`); with
-    `grids`, half its references grid parts where one fits and every leaf 8 bits, so no reference reads a leaf at
+    `grids`, most of its references grid parts where one fits and every leaf 8 bits, so no reference reads a leaf at
     another width (`GRID`)."""
     rng = random.Random(seed)
     P = Program(rng)
@@ -1015,8 +1016,8 @@ def v2(text: str) -> str:
 
 
 #: Programs reading grid parts, apart from `programs()` and the data the audit pins.
-GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 600), 0.3, 1),
-        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 60), 0.3, 1))
+GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 2000), 0.3, 1),
+        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 200), 0.3, 1))
 
 
 def grid_programs():
