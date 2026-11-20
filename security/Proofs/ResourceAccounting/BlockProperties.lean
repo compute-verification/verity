@@ -174,17 +174,21 @@ theorem listed_gate_in_period (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
   obtain ⟨-, -, hlo, hhi⟩ := hreg
   obtain ⟨hs, hl⟩ := P.winDay r i hki
   simp only [TickSpan.Cut.part] at hs hl
-  have h0 := P.days.mono (Fin.zero_le (P.dayOf r i).castSucc)
-  have h1 := P.days.mono (Fin.le_last (P.dayOf r i).succ)
   have hm := P.days.mono (Fin.castSucc_lt_succ (i := P.dayOf r i)).le
-  rw [P.days.first] at h0
-  rw [P.days.last] at h1
-  omega
+  refine ⟨?_, ?_⟩
+  · calc P.period.start = P.days.boundary 0 := P.days.first.symm
+      _ ≤ P.days.boundary (P.dayOf r i).castSucc := P.days.mono (Fin.zero_le _)
+      _ = (P.winOut r i).start := hs.symm
+      _ ≤ (P.actual r).t g := hlo
+  · calc (P.actual r).t g < (P.winOut r i).start + (P.winOut r i).len := hhi
+      _ = P.days.boundary (P.dayOf r i).succ := by rw [hs, hl]; exact Nat.add_sub_of_le hm
+      _ ≤ P.days.boundary (Fin.last _) := P.days.mono (Fin.le_last _)
+      _ = P.period.stop := P.days.last
 
+open Classical in
 /-- **No computed gate escapes both the server-day bounds and the hidden bound**: every computed gate lies in a
 server-day block, which `ServerDayBounds` reads, or is at a leaf no listed location holds (`hiddenGates`, whose work
 `lim.hidden` bounds, assumed). -/
-open Classical in
 theorem gate_serverDay_or_unlisted (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
     (hg : g ∈ (P.actual r).computed) :
     (∃ i, P.kind r i = true ∧ g ∈ (P.outer r).gates i) ∨ g ∈ P.hiddenGates r := by
