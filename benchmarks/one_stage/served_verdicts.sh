@@ -1916,9 +1916,10 @@ if "circuit" in win and win["circuit"] != hashlib.sha512((w / "record" / "circui
 compiler, p = win.get("compiler") if isinstance(win.get("compiler"), dict) else {}, predicted.get("compiler")
 same = bool(compiler) and compiler.get("digest") == (p.get("digest") if isinstance(p, dict) else p)
 print(f"SEAL: the window's seal, run root {str(v.get('run_root'))[:16]}…, and its record: {'PASS' if not why else 'FAIL (' + '; '.join(why) + ')'}")
-print(f"COMPILER: the record's registered compiler is predict row's: {'PASS' if same else 'FAIL'}")
+print(f"COMPILER: the record's compiler digest and predict row's are equal strings: {'PASS' if same else 'FAIL'}; it is a "
+      "digest of code files and the serve's configuration, which no verifier checks (candidate 135)")
 print("BOUND-PROGRAM: the commit's bound Program digest and the predicted workload digest are kept side by side and "
-      "compared by nothing, so the seal does not tie the proved circuit to the served one")
+      "compared by nothing, so the seal does not tie the window's circuit to the served one")
 (d / "private").mkdir(mode=0o700, exist_ok=True)
 with open(d / "private" / "verdicts.txt", "a") as kept:
     kept.write(f"COMPILER: the record's {compiler.get('name')} {compiler.get('digest')}, predict row's {p}\n"
@@ -1991,7 +1992,7 @@ window_road() {  # in TREE: the runner's steps in its order, each from the windo
   mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
     || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
   KN=$K CLASSES=$WINDOW_CLASS
-  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took"
+  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took; its circuit registered by the prover, which no challenger holds before any coin on this road"
   RAN+=(window)
   say "$("$PY" - "$D/serve.json" "$WINDOW_CLASS" <<'EOF'
 import json, math, sys
@@ -2005,7 +2006,7 @@ EOF
 )"
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
     || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
-  say "ADVICE: the close's registration (D/advice/wK), compiled at the close"
+  say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
   RAN+=(advice)
   if inference_policy window; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
   if circuits; then RAN+=(circuits); else FAILED+=(circuits); fi

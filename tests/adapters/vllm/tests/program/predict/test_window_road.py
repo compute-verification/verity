@@ -117,6 +117,10 @@ def _end(log):
     return next(x for x in log.splitlines() if x.startswith("ROAD END"))
 
 
+#: what no public line says of the window's advice or its compiler, which nothing checks (candidate 135)
+UNSAID = ("compiled by the registered compiler", "charged", "bounded by", "capped at")
+
+
 @pytest.mark.slow
 def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
@@ -134,7 +138,11 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     log += f"\n(the window circuit's log, which stays on the node:)\n{err}"
     assert "PREFLIGHT" not in log and "ROW" not in log.replace("no ROW read", ""), log
     assert "SEAL: the window's seal" in log and ": PASS" in log.split("SEAL: ")[1].splitlines()[0], log
-    assert "COMPILER: the record's registered compiler is predict row's: PASS" in log, log
+    assert "COMPILER: the record's compiler digest and predict row's are equal strings: PASS" in log, log
+    assert ("ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler "
+            "(candidate 135)") in log and "its circuit registered by the prover" in log, log
+    published = lines + "".join(text for _, text in _published(out))
+    assert not [p for p in UNSAID if p in published.lower()], [p for p in UNSAID if p in published.lower()]
     assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
             "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
