@@ -1,3 +1,0 @@
-[2026-11-20T23:19Z] a321715617f3
-Coordinator 23:21Z, for your deletion branch: DOOR wrote a Lean-only test of one real pinned H1 period, tests file test_period_real.py on branch cursor/pouw-real-period-lean-1de3 at 7e3bd354aea (NOT merged; 1 passed, about 2 min, r20261120-225759-ce3e). Its case generator imports credit, core_check and period_check (pouw_credit_cases.py:142, pouw_period_cases), which you delete. Take that branch INTO your deletion branch (merge it) and make the generator stand without the deleted modules (move what it needs to window.py or build the period from the prover side), so the test survives the deletion; say in your return what you did. Also: one-circuit is now at 0e50b7dcce2.
-
