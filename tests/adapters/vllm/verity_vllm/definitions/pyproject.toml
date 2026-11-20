@@ -6,7 +6,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["test_cublas_train.py"]
+untraced = ["test_cublas_train.py", "test_tp_allreduce_size_cap.py"]
 # The catalog's test loads every registry module, which reads `verity.ml`.
 # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
 # `verity_vllm/__init__.py`, which importing this package opens
@@ -15,7 +15,11 @@ inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/conf
           "calibration/hardware/cards",
           # the cards' directory, `CARD_FILES`, which `tp_allreduce` and `fa2_train_bwd` take from verity-torch's kit
           "adapters/torch/verity_torch/__init__.py", "adapters/torch/verity_torch/pouw/__init__.py",
-          "adapters/torch/verity_torch/pouw/row_table_device.py"]
+          "adapters/torch/verity_torch/pouw/row_table_device.py",
+          # test_tp_allreduce_size_cap.py loads the spot difftest by its path and runs its Lean pieces
+          "tools/difftest", "tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py",
+          "tests/verity/protocols/proofs/spot/verifier/lean/settings.py",
+          "tests/verity/protocols/proofs/spot/verifier/lean/test_challenger_difftest.py", "tests/verity/circuits/stand_in.py"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 worker_gb = 6
