@@ -57,7 +57,7 @@ Open premises (`open`):
 ## Interface
 
 - **Python**: `verity.protocols.resource_accounting.network.verifier`. Code outside this directory imports every module but `pacer`. Its importers: the prover side, `verity/protocols/resource_accounting/network/prover`; `../attester`'s vector
-  scripts; `adapters/vllm` (`advice`, `arith_encode`, `blocks`, `charge_chain`, `head_check`, `id_form`, `io_tie`,
+  scripts; `adapters/vllm` (`advice`, `arith_encode`, `blocks`, `charge_chain`, `id_form`, `io_tie`,
   `link_frame`, `network_attester`, `release`);
   `verity/protocols/compose/verifier/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
   `../../compute/pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `prove_path`,
@@ -116,15 +116,8 @@ A spec-level reference for network attestation's timing channel:
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   attestations (`certificate`: the network attester's signature over the record's SHA-512 digest hidden under a
   fresh salt, with the execution phase's frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
-- one execution phase's attestations through the proof system (`service`): the network `Spec`, a salted root over the
-  attested records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
-  its fields, and its record digest under the network attester's salt against the digest its attestation signs). A link is
-  the network attester's (`service.NetworkAttesterProfile`), and its claim is the heads' only: on every execution phase both
-  are the network attester's, on its grid under its parameters digest, so the link's timing is its schedule's.
-  Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
-  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every execution phase of the
-  link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order one
-  rejects the link;
+- a link's attestations' check on their public fields (`service.TransferBlocks.certified`), the link being the network
+  attester's (`service.NetworkAttesterProfile`);
 - one vLLM v1 scheduler step, in vLLM's compiler (`verity_vllm.compiler.replay_step`): `ReplayStep_v1`, a Boolean
   Definition with `reference` its spec, takes the committed queue state, the attested arrivals and the committed
   decision bits to the step's rows (request, kind, start, n) and the next state, under sync or async scheduling and with
@@ -372,58 +365,16 @@ audit.check_link("responses", records, frames, syncs, sync_set, params)
 assert audit.accepted
 ~~~
 
-## Zero knowledge: what N2's verdict reads, and what's open
+## Zero knowledge: N2's verdict
 
-Every protocol is to be zero-knowledge. The network audit's claim is the heads' only: N2 holds both heads of every
-execution phase to the network attester's grid and parameters digest, so each execution phase's per-bucket counts are its
-schedule's, beside the proved timing bound (provisional).
-
-N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
-block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock's Lean
-verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
-output row's verdict and deadline bits are 1, and the attestations verify on their public fields (`TransferBlocks.certified`).
-It reads no head, salt or sibling. No prover of the tree proves it. The
-in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
-- **The attestations aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
-  device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
-  commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) has no outcome of record, so `TransferBlocks.network_verdict`
-  rejects its link, every window it didn't prove refused.
-
-`TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
-(`verity/protocols/resource_accounting/network/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
-`service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
-they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
-`lean` under the friction skill's switching ruling, on these grounds:
-- the gap list is empty for the Lean's plain and served forms, which no Python link takes now. Everything the Python checks, the Lean checks: the findings prove
-  the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
-  domain, link, execution phase, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
-  openings and the word 0b11, both attestations under the LMS key in the network attester's session, and the sync in Σ_sync. Both
-  take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
-  sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
-  reads an LMS key only, and rejects any other.
-- on a network attester's link (`service.NetworkAttesterProfile`) the gap list is empty too: the Lean's form for it (`Kind.networkAttester`) is the
-  plain proof block's public row with both ends' grids at the network attester's parameters digest, which both take as
-  an input (the network attester's deployment publishes it), and no sync read, as in the Python; it refuses a network
-  attester case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
-- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
-  controls included.
-- the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `security/Properties/Certifier/Check/TransferBlocks.lean`
-  (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
-  word 0b11, attested on both ends and synced within Σ_sync (a network attester link's syncs are not asked of), and
-  its public outputs are verdict 1 and deadline 1.
-
-A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
-(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the
-pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof that names any
-other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
+N2's verdict on one execution phase is the Lean's, `NetworkCheck.TransferBlocks` (the `link-window` function of
+`network-records verdicts`), with its property in `security/Properties/Certifier/Check/TransferBlocks.lean`
+(`Properties.Certifier.TransferBlocksAcceptMeans`). No Python sends it a case, and no proof of N2's head checks runs.
 
 The attestation signs no hash of witness. The network attester signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the network attester samples fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the developer with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the attestation's public fields and D.
-Each end's head check holds R to the head it opens and D to R under `salt_c`, so the attestations' check reads nothing
-of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
+The attestations' check reads nothing of the heads; `CertifiedRecord.verify` checks R and D over the opening.
 
 Tests: `uv run tools/check/suites.py verity/protocols/resource_accounting/network`.
