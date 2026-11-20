@@ -24,9 +24,9 @@ existing one): its definition on the actual circuit is open. What the existing s
   (`ServingSizes`); `ServerDayBlocksServing` (open) is the server-day blocks' size and input read as those.
 * `InferenceOnlyTheorem` (open) is the policy's theorem.
 
-`Chain` is the composition: every claim of the statement holding except with its probability, a statement that passes
-the check, and the policy's theorem give that an accepted run's actual circuit is policy-compliant except with the
-claims' probabilities summed. Proved by `ResourceAccounting.SecurityProofs.BlockProperties.chain`.
+`Chain` is the composition: accounting statements that between them establish every claim of a statement that passes
+the check, and the policy's theorem, give that an accepted run's actual circuit is policy-compliant except with the
+statements' probabilities summed. Proved by `ResourceAccounting.SecurityProofs.BlockProperties.chain`.
 -/
 
 @[expose] public section
