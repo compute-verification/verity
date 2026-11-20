@@ -266,9 +266,15 @@ theorem size_le_of_table {digests : ByteArray}
     | decide
     | simp [PousVerifier.P2.Params.deployed, PousVerifier.Merkle.DIGEST]
 
+/-- The honest session's record salt: `RECORD_SALT_BYTES` zero bytes. -/
+def honestRecordSalt : ByteArray := PousVerifier.Prim.zeros RECORD_SALT_BYTES
+
+theorem honestSalt_size : honestRecordSalt.size = RECORD_SALT_BYTES := by
+  simp [honestRecordSalt, PousVerifier.Prim.zeros, ByteArray.size]
+
 /-- The honest rounds' message exists when `digests` holds row 0 whole: `Round.value` takes only a 64-byte digest. -/
 theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
-    ∃ m, message (honestCommitment root) COMPLETE (honestRounds digests) = .ok m := by
+    ∃ m, message (honestCommitment root) honestRecordSalt COMPLETE (honestRounds digests) = .ok m := by
   have h64 : (PousVerifier.Run.row digests 0).size = 64 := by
     simp only [PousVerifier.Run.row, ByteArray.size_extract, PousVerifier.Merkle.DIGEST]
     omega
@@ -282,7 +288,7 @@ theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
       simp [beN, Flock.SessionCoins.beN, honestRound, h32, h64, bind, Except.bind, pure, Except.pure]
     exact ⟨bs.toArray, by rw [hbs]; rfl⟩
   unfold message recordsDigest recordsStream
-  simp only [hvs, bind, Except.bind, pure, Except.pure]
+  simp only [honestSalt_size, ne_eq, not_true_eq_false, ↓reduceIte, hvs, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
 /-! ## The composed check -/
@@ -329,7 +335,7 @@ theorem runCheck_acceptsSid (pub : PousVerifier.SetupProtocol.Public) (digests :
     simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
     exact hσv
   refine ⟨k.publicKey,
-    ⟨⟨honestCommitment pub.root, COMPLETE, honestRounds digests, LMS, k.publicKey, σ.encode⟩,
+    ⟨⟨honestCommitment pub.root, honestRecordSalt, COMPLETE, honestRounds digests, LMS, k.publicKey, σ.encode⟩,
       honestCommitment pub.root, honestOpenings⟩, ?_⟩
   unfold PousVerifier.Run.check
   refine checkAt_of (by rw [hb]; exact beq_self_eq_true _) (by simp [hs])
