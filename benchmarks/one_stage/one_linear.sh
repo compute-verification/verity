@@ -68,12 +68,13 @@ def walk(x):
             yield from walk(v)
 print(json.dumps(next(walk(json.load(open(sys.argv[1]))), "")))' "$B/honest/summary.json" 2>/dev/null)
 [ "${RP:-\"\"}" = '""' ] || echo "REFUSED the accept rests on a period check that is not run: rests_on_period_check $RP"
-SDELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("delta"))' "$B/honest/summary.json" 2>/dev/null)
+# the δ the verifier's audit record states it bounded at (`Record.record`'s `wrong_units.delta`), not this script's
+SDELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["audit"]["wrong_units"]["delta"])' "$B/honest/summary.json" 2>/dev/null)
 OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && [ "$ML" = ok ] \
-  && [ "${RP:-\"\"}" = '""' ] && python3 -c 'import sys; sys.exit(float(sys.argv[1]) != float(sys.argv[2]))' "$SDELTA" "$DELTA" 2>/dev/null && OK=0
+  && [ "${RP:-\"\"}" = '""' ] && python3 -c 'import sys; from fractions import Fraction as F; sys.exit(F(sys.argv[1]) != F(sys.argv[2]))' "$SDELTA" "$DELTA" 2>/dev/null && OK=0
 if [ $OK = 0 ]; then
   echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; Lean's members check ran and accepted the members' files and sessions (members_lean ran true, ok true)"
-  echo "ACCEPT Lean accepted the members at the δ it was handed: δ = $DELTA, passed by the benchmark's command, not yet chosen for the gate (the honest audit's summary.json delta: $SDELTA)"
+  echo "ACCEPT the verifier's audit record bounds at δ = $SDELTA (its wrong_units.delta), the δ the command passed ($DELTA), not yet chosen for the gate"
   echo "ACCEPT the members' files and sessions were checked by Lean against a registration and coins the Python audit handed it; not a statement about a served run"
   echo "ACCEPT the proofs are about the block circuits Lean's lowering derives from the registered circuit; each block is single-range (no block spans two root nodes)"
   echo "ACCEPT no proved statement is about the file the door writes; every accept at the door rests on the lift preserving evaluation, by reading and by the fuzzer"
