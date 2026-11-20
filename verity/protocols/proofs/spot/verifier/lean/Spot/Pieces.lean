@@ -294,7 +294,7 @@ def runInputRoots (j : Json) : V Json := do
         | _ => throw "a member's units are [first, end]"
       pure (unitsMember name units)
     | _ => throw "a member is [name, [[first, end], ...]]"
-  let roots ← OneStageZk.runInputRoots p.prog ms (Json.mkObj [("roots", getD j "roots")]) {}
+  let roots ← OneStageZk.runInputRoots p.prog rs ms (Json.mkObj [("roots", getD j "roots")]) {}
   let why := match OneStageZk.heldRootsHeld (Partition.heldReads p.prog rs held) ms roots with
     | .ok () => Json.null
     | .error e => .str e

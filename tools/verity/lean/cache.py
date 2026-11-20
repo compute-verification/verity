@@ -15,7 +15,7 @@ machine's own `python3`, which may be older than the workspace's 3.12, so it kee
     python tools/verity/lean/cache.py build PKG OUT      (integration, inside the build's sandbox) `lake build` PKG writing Lake's
                                                   cache under OUT, and stage what it built in OUT/stage and its executables
                                                   in OUT/bin
-    python tools/verity/lean/cache.py publish --tree DIR --rev SHA --out DIR [--branch NAME] PKG...
+    python tools/verity/lean/cache.py publish --tree DIR --rev SHA --out DIR [--branch NAME] [--main REF] PKG...
                                                   (integration, as root outside the sandbox) hash each package's
                                                   `out_dir(OUT, PKG)`/stage and /bin and upload them with the key in
                                                   /etc/verity/lean-cache.env
@@ -34,7 +34,8 @@ own prefix:
 - `blobs/<sha256>`: each of those files under its own hash, shared across that prefix's commits.
 
 `main/` holds only commits on `origin/main`, and `branch/<name>/` only commits on `origin/<name>`, with its own blobs and its
-own prune. `get` reads a branch only when told to (`--branch`), and then takes the newest ancestor of `HEAD` across both
+own prune; `publish --main REF` names the ref instead where the line was fetched under another name, as the sandbox's
+checkout fetches it into `refs/remotes/origin/main`. `get` reads a branch only when told to (`--branch`), and then takes the newest ancestor of `HEAD` across both
 prefixes, main's on a tie: main holds records of the branch's old ancestors, and an executable of one is another verifier.
 With `--bin` a record that lists no executables is passed over, and what was fetched says which commit it is of.
 
@@ -968,13 +969,14 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
     return "published"
 
 
-def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str = "origin/main",
+def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str | None = None,
             plat: str | None = None, branch: str | None = None) -> int:
-    """`publish`: each package in ``pkgs`` from `out_dir(out, pkg)`/stage and /bin, under main's prefix, or under ``branch``'s
-    for a commit on `origin/<branch>`. 0 when each was published (or already was), 1 when any was refused. ``out`` is a
-    directory root made; run it only once no process of the build's user is left."""
+    """`publish`: each package in ``pkgs`` from `out_dir(out, pkg)`/stage and /bin, under main's prefix, or under ``branch``'s,
+    for a commit on ``main`` (by default `origin/main`, or `origin/<branch>` with ``branch``). 0 when each was published
+    (or already was), 1 when any was refused. ``out`` is a directory root made; run it only once no process of the build's
+    user is left."""
     prefix = prefix_of(branch)
-    merged(tree, rev, f"origin/{branch}" if branch else main)
+    merged(tree, rev, main or (f"origin/{branch}" if branch else "origin/main"))
     status = 0
     for pkg in pkgs:
         try:
@@ -1051,7 +1053,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rev", required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--key-file", default=KEY_FILE)
-    p.add_argument("--main", default="origin/main")
+    p.add_argument("--main", help="the ref the commit must be on (default `origin/main`, or `origin/<name>` with "
+                                  "--branch); `vy-lean-sandbox checkout` fetches the line it builds into "
+                                  "`refs/remotes/origin/main`, whichever branch that is")
     p.add_argument("--branch", help="publish a commit of `origin/<name>` under `branch/<name>/` (not main's prefix)")
     p.add_argument("--platform", help="the toolchain's target triple, so root never runs elan (default: `lean --version`)")
     r = sub.add_parser("prune", help="(integration) delete what the last N published commits don't need")

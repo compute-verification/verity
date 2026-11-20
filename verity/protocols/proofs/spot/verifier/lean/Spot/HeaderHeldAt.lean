@@ -39,8 +39,9 @@ open Flock.Test.WiredPorts (runP regP)
 
 def n0 : Json := Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "input/n0"), ("root", "ee")]
 def runRec : Json := Json.mkObj [("roots", Json.arr #[n0])]
+def runRs : Array Flock.TemplateQuery.TRange := #[⟨1, "T", 0, 2⟩, ⟨2, "T", 2, 1⟩]
 def runAt (P : Flock.Program.Prog) (own : Array Json) (rec : Json := runRec) : Except String (Array Json) :=
-  OneStageZk.runInputRootsAt P "T/c0" 0 own (OneStageZk.rootsByPort rec)
+  OneStageZk.runInputRootsAt P runRs "T/c0" 0 own (OneStageZk.rootsByPort rec)
 def wRun : Json :=
   Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "w"), ("root", "ee"), ("tree", "input/n0")]
 
@@ -54,6 +55,13 @@ def wRun : Json :=
   | .ok _ => false
 #guard OneStageZk.RUN_OWN_ROOT_WHY "T/c0" "w" 0 == "member T/c0: port w reads C's run input node 0, and the " ++
   "registration holds a root of its own for it: a run input node's rows are committed once, in input/n0"
+
+-- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the unit's root
+-- node of C and its row there (`OneCircuit.regRow`)
+#guard (runAt runP #[]).toOption.map (·.map (getD · "tree")) == some #[Json.str (Flock.Registered.freshValue 0)]
+#guard (Flock.OneCircuit.pos runP #[0, 1] Flock.Test.WiredPorts.fresh).toOption.isSome
+#guard (Flock.OneCircuit.pos runP #[0, 1]
+  { Flock.Test.WiredPorts.fresh with value := Flock.Registered.freshValue 1 }).toOption.isNone
 
 def runSlice : Json := Json.mkObj [("population", (2 : Nat)), ("roots", Json.arr #[wRun]), ("scheme", "s")]
 def runHeader : Json := Json.mkObj [("instances", (2 : Nat)), ("scheme", "s"),
