@@ -164,6 +164,7 @@ end Verity.Recursive.BaseSetup
 
 namespace Verity.Recursive
 
+set_option maxHeartbeats 1000000 in
 open BaseSetup in
 /-- **A V\* part's base setup.** Let `tags0` be the part's statement tags, and `coins` and `tags` the coin tree
 and tags `partVerdict` sets its session up on. Suppose the compiled `buildSessionOf` sets the part's circuit `circuitB`
