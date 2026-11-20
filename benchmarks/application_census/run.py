@@ -2,7 +2,7 @@
 """Where each application stops: `verity run NAME` for every file in `applications/`, on the machines the file names
 (no `--on`), each in its own state directory under a scratch directory outside the tree, with a time limit of MINUTES
 minutes (default 12; the first run builds the Lean verifier, about 5 minutes). Prints one table: application, the
-furthest step the runner's own lines reached, the file:line its output names, the last refusal's or error's text, the
+furthest step the runner's own lines reached, the file:line its error output names, the first refusal's or error's text, the
 kind (accept, refused NAME, error, time limit) and the seconds. The exit code is 0 only if every application ended in
 the verifier's accept (`verity run`'s exit code 0). With `$OUT` set, each application's stdout and stderr and the
 table are kept there.
@@ -12,6 +12,7 @@ table are kept there.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -33,9 +34,12 @@ def step(out: str) -> str:
     last = ""
     for line in out.splitlines():
         what, _, body = line.partition(" ")
-        if what.isupper() and what.isalpha():
-            party = re.search(r'"party": "([^"]+)"', body)
-            last = f"{what} {party.group(1)}" if party else what
+        if what in ("STARTED", "PARTY", "VERDICT"):
+            got = json.loads(body)
+            note = [f"{k} {got[k]}" for k in ("exit", "refused", "verdict") if got.get(k) is not None]
+            last = " ".join([what, got.get("party", ""), *note]).replace("  ", " ")
+        elif what == "RUN" and not last:
+            last = "RUN"
     return last or "before RUN"
 
 
@@ -50,7 +54,7 @@ def place(text: str) -> str:
 def say(out: str, err: str) -> str:
     lines = [x for x in err.splitlines() if x.strip()]
     said = [x for x in lines if REFUSED.search(x)] or [x for x in lines if x.startswith("verity run:")] or lines[-1:]
-    return (said or [x for x in out.splitlines() if x.strip()][-1:] or [""])[-1].strip()
+    return (said or [x for x in out.splitlines() if x.strip()][-1:] or [""])[0].strip()
 
 
 def one(name: str, scratch: Path, seconds: float, keep: Path | None) -> list[str]:
@@ -77,7 +81,7 @@ def one(name: str, scratch: Path, seconds: float, keep: Path | None) -> list[str
         kind = f"refused {m.group(1)}"
     else:
         kind = "error"
-    return [name, step(out), place(err + out), text, kind, str(took)]
+    return [name, step(out), place(err), text, kind, str(took)]
 
 
 def table(rows: list[list[str]]) -> str:
