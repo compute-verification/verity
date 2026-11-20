@@ -134,8 +134,8 @@ theorem statement_checks {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs
 
 /-- A header `headerHeldAt` passes names the record's population as its `instances`: its first check, on the header
 as parsed. -/
-theorem headerHeldAt_instances {reads : Array (String × String)} {rec hd : Json}
-    (h : _root_.Spot.OneStageZk.headerHeldAt reads rec hd = .ok ()) :
+theorem headerHeldAt_instances {reads : Array (String × String)} {held : Array _root_.Flock.Registered.Port}
+    {rec hd : Json} (h : _root_.Spot.OneStageZk.headerHeldAt reads held rec hd = .ok ()) :
     _root_.Spot.jeq (_root_.Spot.getD hd "instances") (_root_.Spot.getD rec "population") = true := by
   unfold _root_.Spot.OneStageZk.headerHeldAt at h
   split at h
@@ -155,6 +155,7 @@ theorem population_header {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {p
   obtain ⟨hd, hh, h⟩ := ebind_ok h
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   obtain ⟨rd, -, h⟩ := ebind_ok h
+  obtain ⟨hl, -, h⟩ := ebind_ok h
   exact ⟨hd, hh, headerHeldAt_instances h⟩
 
 /-- A member's slice of the registration names the member's units' count as its population. -/
