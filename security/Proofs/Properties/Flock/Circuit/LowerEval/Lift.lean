@@ -16,13 +16,20 @@ open Flock.Program hiding Form
 theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
   ⟨unitArgs_widths hd hr hov hG hu hR, unitOuts_widths hd hr hov hG hu hR⟩
 
-/-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
-theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
-  intro bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu hda Y hY
-  have ho := hW bytes P hd hr hov hG g k m hu (hRs g hg) Y hY
-  have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
-    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
-    simp [argWords, Function.comp_def, portWord_length]
+/-- **`LowerGateBodies`** (open): where the block's lowering (`blockTmpl`) succeeds, each Boolean Definition a node of the
+template `admitted` gives leads to evaluates through gates alone. `gateBodies_batch0` proves it for a template of
+word-primitive calls and axis-0 batches. -/
+def LowerGateBodies : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl),
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) → Spot.OneStageZk.blockTmpl S a = .ok t →
+    GateBodies P a.d
+
+/-- **`UnitComputes`**, on `UnitWordComputes`, `LiftWordEval` and `LowerGateBodies`. -/
+theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) (hLG : LowerGateBodies) : UnitComputes := by
+  intro bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs g hg k m hu hda Y hY
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]
@@ -31,20 +38,25 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComput
   have hlt : a.d < P.defs.size := by
     rw [← hda, hdx]
     exact (Array.getElem?_eq_some_iff.1 h2).1
+  have hgb := hLG bytes P partition cuts units S a L e t hd hr hs ha hlt hl hbt
+  have ho := hW bytes P hd hr hov hG g k m hu (hRs g hg) (by rw [hda]; exact hgb) Y hY
+  have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
+    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
+    simp [argWords, Function.comp_def, portWord_length]
   rw [hda] at hw ho
   unfold outBits argBits
   rw [portBits_eq, portBits_eq]
   change (outWords Y g).flatten = Prog.evalBool L e (argWords Y g).flatten
-  rw [ho, hL bytes P partition cuts units S a L e hd hs ha hlt hl _ hw]
+  rw [ho, hL bytes P partition cuts units S a L e hd hs ha hlt hl hgb _ hw]
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf _ hl hov hG hRs blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e t hd hr hs ha hab hf _ hl hbt hov hG hRs blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu
+  exact (hU bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 /-- **`DoorLengths`** holds. -/
@@ -964,17 +976,18 @@ def Batch0Callees : Prop :=
 batches, each node's output is its members' words of its callee's value's width. -/
 def Batch0OutWidths : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ d < P.defs.size, Batch0 P d →
+    ∀ d < P.defs.size, Batch0 P d → GateBodies P d →
       (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ ys : List (List Bool),
         ys.length = ((P.defs[d]!).body.nodes[k]).members →
         ((P.defs[d]!).body.nodes[k]).out.widths.toList =
           ys.map fun y => (Prog.evalBool P ((P.defs[d]!).body.nodes[k]).fn y).length)
 
 /-- **`Batch0BoolEval`**: in a C `decode` accepts whose root has no recut, in a template of word-primitive calls and axis-0
-batches, each Boolean Definition of the template's primitives evaluates on every input. -/
+batches whose primitives' Boolean Definitions evaluate through gates alone (`GateBodies`), each of them evaluates on
+every input. -/
 def Batch0BoolEval : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ d < P.defs.size, Batch0 P d →
+    ∀ d < P.defs.size, Batch0 P d → GateBodies P d →
       (∀ nd ∈ (P.defs[d]!).body.nodes, ∀ b, P.bodyOf? (P.defs[nd.fn]!).key = some b →
         ∀ y, (Flock.Program.evalDef? P (b + 1) b y).isSome = true)
 
@@ -1000,7 +1013,7 @@ def Batch0Axes : Prop :=
 /-- **`Batch0Calls`**: `Batch0Typed` but for its references (`Batch0Refs`). -/
 def Batch0Calls : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ d < P.defs.size, Batch0 P d →
+    ∀ d < P.defs.size, Batch0 P d → GateBodies P d →
       (∀ nd ∈ (P.defs[d]!).body.nodes, nd.fn < d) ∧
       (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ ys : List (List Bool),
         ys.length = ((P.defs[d]!).body.nodes[k]).members →
@@ -1023,8 +1036,8 @@ def Batch0Calls : Prop :=
 
 /-- **`Batch0Calls`**, on its four clauses. -/
 theorem batch0Calls_of (h1 : Batch0Callees) (h2 : Batch0OutWidths) (h3 : Batch0BoolEval) (h4 : Batch0Axes) :
-    Batch0Calls := fun bytes P h hr d hd hb =>
-  ⟨h1 bytes P h hr d hd hb, h2 bytes P h hr d hd hb, h3 bytes P h hr d hd hb, h4 bytes P h hr d hd hb⟩
+    Batch0Calls := fun bytes P h hr d hd hb hgb =>
+  ⟨h1 bytes P h hr d hd hb, h2 bytes P h hr d hd hb hgb, h3 bytes P h hr d hd hb hgb, h4 bytes P h hr d hd hb⟩
 
 /-- **`Batch0Typed`**: in a C `decode` accepts whose root has no recut, a template of word-primitive calls and
 axis-0 batches reads each of its parameters' and earlier nodes' leaves that exist, in sequences whose count is their
@@ -1034,7 +1047,7 @@ its primitive's parameter, its references of that parameter's leaf widths repeat
 batched. -/
 def Batch0Typed : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ d < P.defs.size, Batch0 P d →
+    ∀ d < P.defs.size, Batch0 P d → GateBodies P d →
       (∀ k (hk : k < (P.defs[d]!).body.nodes.size), ∀ a ∈ ((P.defs[d]!).body.nodes[k]).args.toList,
         a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn (P.defs[d]!) k r) ∧
       ((P.defs[d]!).body.ret.count = (P.defs[d]!).body.ret.toArray.size ∧
@@ -1060,8 +1073,13 @@ def Batch0Typed : Prop :=
             (((P.defs[d]!).body.nodes[k]).args.getD i default).dims = none))
 
 /-- **`Batch0Typed`**, on `Batch0Refs` and `Batch0Calls`. -/
-theorem batch0Typed_of (hR : Batch0Refs) (hC : Batch0Calls) : Batch0Typed := fun bytes P h hr d hd hb =>
-  ⟨(hR bytes P h hr d hd hb).1, (hR bytes P h hr d hd hb).2, hC bytes P h hr d hd hb⟩
+theorem batch0Typed_of (hR : Batch0Refs) (hC : Batch0Calls) : Batch0Typed := fun bytes P h hr d hd hb hgb =>
+  ⟨(hR bytes P h hr d hd hb).1, (hR bytes P h hr d hd hb).2, hC bytes P h hr d hd hb hgb⟩
+
+/-- **`Batch0BoolEval`** holds. -/
+theorem batch0BoolEval : Batch0BoolEval := fun bytes P h hr _ _ _ hgb nd hn b hb y => by
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  exact gateDef_total P b (body_lt ⟨hmap, hkeys⟩ hb) (hgb nd hn b hb) y
 
 theorem boolCall {bytes : ByteArray} {P L : Prog} (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
     (hle : P.defs.size ≤ L.defs.size) (hpre : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]!)
@@ -1348,15 +1366,16 @@ theorem mapM_some_map {α β : Type} (g : α → β) (l : List α) : l.mapM (fun
 theorem liftWordEval_batch0 (hLC : LiftCalls) (hT : Batch0Typed) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → Batch0 P d → 0 < (P.defs[d]!).body.nodes.size → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → Batch0 P d → GateBodies P d → 0 < (P.defs[d]!).body.nodes.size →
+      Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten := by
-  intro bytes P units S d L e h hr hs hd hco hne hl x hx
+  intro bytes P units S d L e h hr hs hd hco hgb hne hl x hx
   obtain ⟨hle, hpre, hbool, hidx, -⟩ := restrictShape P units S hs
   obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
   have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
   have hbodyS := bodyOf_eq hm hbool hidx
-  obtain ⟨hargs, hret, hord, hout, hsome, hbat⟩ := hT bytes P h hr d hd hco
+  obtain ⟨hargs, hret, hord, hout, hsome, hbat⟩ := hT bytes P h hr d hd hco hgb
   have hSd : S.defs[d]! = P.defs[d]! := hpre d hd
   have hcoS : PrimNodes S d := by
     refine ⟨by rw [hSd]; exact hco.1, fun nd hnd => ?_⟩
@@ -1553,7 +1572,8 @@ theorem batch0_of_calls {P : Prog} {d : ℕ} (h : CallsOnly P d) : Batch0 P d :=
 theorem liftWordEval_calls (hLC : LiftCalls) (hT : Batch0Typed) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → CallsOnly P d → 0 < (P.defs[d]!).body.nodes.size → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → CallsOnly P d → GateBodies P d → 0 < (P.defs[d]!).body.nodes.size →
+      Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
   fun bytes P units S d L e h hr hs hd hco =>
