@@ -356,7 +356,10 @@ def run(spec: dict, outdir: Path, jobs: int, base: Path, step: str | None) -> No
     steps = {s["name"]: s for s in spec["steps"]}
     if step:
         muts = [m for m in muts if m["step"] in step.split(",")]
-    done_path = outdir / "results.jsonl"
+    if os.environ.get("MUT_IDS"):
+        ids = set(Path(os.environ["MUT_IDS"]).read_text().split())
+        muts = [m for m in muts if m["id"] in ids]
+    done_path = outdir / os.environ.get("MUT_RESULTS", "results.jsonl")
     done = {json.loads(x)["id"] for x in done_path.read_text().splitlines()} if done_path.exists() else set()
     muts = [m for m in muts if m["id"] not in done]
     workers = [make_worker(base, i) for i in range(jobs)]
@@ -371,7 +374,9 @@ def run(spec: dict, outdir: Path, jobs: int, base: Path, step: str | None) -> No
             r = reach_map.get(t)
             if r and r["status"] == "pass" and any(f == m["file"] and _qual_match(m["func"], q) for f, q in r["reached"]):
                 ts.append(t)
-        return sorted(ts, key=lambda t: reach_map[t]["secs"])
+        if os.environ.get("MUT_SLOW"):
+            ts += [t for t in steps[m["step"]].get("slow", []) if t not in ts]
+        return sorted(ts, key=lambda t: reach_map.get(t, {"secs": 1e9})["secs"])
 
     def one(m):
         with lock:
@@ -401,9 +406,10 @@ def run(spec: dict, outdir: Path, jobs: int, base: Path, step: str | None) -> No
                 if not ts:
                     rec.update(status="SURVIVED", why="no test file reaches this function", secs=0)
                     return rec
-                budget = 3 * sum(reach_map[t]["secs"] for t in ts) + 120
+                budget = float(os.environ["MUT_BUDGET"]) if os.environ.get("MUT_BUDGET") else \
+                    3 * sum(reach_map[t]["secs"] for t in ts) + 120
                 st, dt, tail = run_tests(w, ts, timeout=budget,
-                                         deselect={t: reach_map[t].get("deselect", []) for t in ts})
+                                         deselect={t: reach_map.get(t, {}).get("deselect", []) for t in ts})
                 rec.update(status={"pass": "SURVIVED", "fail": "KILLED", "timeout": "KILLED"}[st],
                            how=st, secs=round(dt, 1), tail=tail[-500:] if st == "fail" else "")
                 return rec

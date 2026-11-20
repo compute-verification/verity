@@ -49,6 +49,10 @@
     "tests/adapters/vllm/flock/test_rolled_lowering.py",
     "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
    ]
   },
   {
@@ -88,6 +92,10 @@
     "tests/tools/verity/circuit_check/test_structural.py",
     "tests/adapters/vllm/flock/test_tmpl_statement.py",
     "tests/adapters/vllm/flock/test_rolled_lowering.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
    ]
   },
   {
@@ -126,6 +134,10 @@
     "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
     "tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py",
     "tests/tools/verity/circuit_check/test_units.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
     "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
    ]
   },
@@ -169,6 +181,12 @@
     "tests/verity/protocols/proofs/spot/verifier/lean/test_edges_difftest.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_members_twin.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
    ]
   },
   {
@@ -190,6 +208,10 @@
     "tests/verity/protocols/proofs/flock/prover/test_read_slots.py",
     "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
    ]
   },
   {
@@ -230,6 +252,12 @@
     "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_difftest.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
    ]
   }
  ]
