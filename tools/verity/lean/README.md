@@ -21,9 +21,10 @@ bash tools/verity/lean/setup.sh PKG
   elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when Mathlib is a dependency, and main's cached
   build of PKG (`cache.py`)
 python tools/verity/lean/cache.py get [PKG...] [--branch NAME]
-  main's cached build of each package, every file sha256-checked (a branch's where main has none)
-python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME]
-  each package's built executables (its Lean verifiers among them) in DIR/<package>/, sha256-checked, with no Lean here:
+  main's cached build of each package, every file sha256-checked (with --branch, the newer of main's and the branch's)
+python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME] [--exact]
+  each package's built executables (its Lean verifiers among them) in DIR/<package>/ (the path quoted), sha256-checked,
+  with no Lean here, and the commit they were built at in DIR/<package>.json (--exact: HEAD's own build or nothing):
   for the prover and development, not for a verdict of record
 python tools/verity/lean/check.py [--build] PKG...
   audit these packages (--build: setup.sh and lake build first)

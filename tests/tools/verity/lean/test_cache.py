@@ -454,7 +454,7 @@ def test_a_tampered_executable_is_written_nowhere(s3, tmp_path):
     b.objects[blob] = (b"\x7fELF tooL", b.objects[blob][1])
     with pytest.raises(C.CacheError, match="not the file its record names"):
         C.fetch_bin(r, "pkg", client(url, READ), [rev], [], tmp_path / "bin", lambda m: None, PLAT)
-    assert not [p for p in (tmp_path / "bin" / "pkg").rglob("*") if p.is_file()]
+    assert not list((tmp_path / "bin").iterdir())
 
 
 def test_get_bin_refuses_a_record_published_before_records_held_executables_and_a_bad_entry(s3, tmp_path):
@@ -533,21 +533,109 @@ def test_a_branchs_commit_is_published_under_its_own_prefix_and_only_when_on_tha
         C.prefix_of("../main")
 
 
-def test_get_reads_main_first_and_a_branch_only_when_told(s3, tmp_path, lake):
+def published(url: str, r: Path, tmp: Path, rev: str, prefix: str = C.TOP, files: dict[str, bytes] | None = None,
+              pkg: str = "pkg") -> str:
+    """The key of ``pkg``'s record of ``rev`` under ``prefix``, published with `stage`'s files and the executables
+    ``files`` (`exes`'s two by default)."""
+    out = tmp / "out"
+    shutil.rmtree(out, ignore_errors=True)
+    stage(tmp)
+    exes(tmp, files)
+    if pkg != "pkg":
+        os.rename(out / "pkg", C.out_dir(out, pkg))
+    assert C.publish_one(r, rev, pkg, out, client(url), plat=PLAT, log=lambda m: None, prefix=prefix) == "published"
+    return C.record_key(C.identity(r, pkg, PLAT), rev, prefix)
+
+
+def without_bin(b, key: str) -> None:
+    """The record at ``key`` as one published before records held executables."""
+    rec = json.loads(b.objects[key][0])
+    b.objects[key] = (json.dumps({k: v for k, v in rec.items() if k != C.BIN}).encode(), b.objects[key][1])
+
+
+def test_with_a_branch_get_takes_the_newest_build_across_both_prefixes_and_mains_on_a_tie(s3, tmp_path, lake):
+    """Main holds builds of a branch's old ancestors (its fork point and before): they must not hide the branch's newer
+    build, whose executable is another verifier."""
     b, url = s3
-    r, rev = branch_repo(tmp_path)
-    stage(tmp_path)
-    exes(tmp_path)
-    C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), lambda m: None, plat=PLAT, branch="one-circuit")
-    lines, args = [], (client(url, READ), [rev], [], tmp_path / "bin")
-    assert not C.fetch_bin(r, "pkg", *args, lines.append, PLAT) and "no published build" in lines[-1]
+    r, head = repo(tmp_path)
+    fork, mid = "a" * 40, "b" * 40
+    published(url, r, tmp_path, fork, files={"v": b"main's old verifier"})
+    published(url, r, tmp_path, mid, C.prefix_of("one-circuit"), files={"v": b"the branch's verifier"})
+    lines, revs = [], [head, mid, fork]
+    args = (client(url, READ), revs, [], tmp_path / "bin")
+    assert C.fetch_bin(r, "pkg", *args, lines.append, PLAT)
+    assert (tmp_path / "bin" / "pkg" / "v").read_bytes() == b"main's old verifier"
     assert C.fetch_bin(r, "pkg", *args, lines.append, PLAT, branch="one-circuit")
-    assert "of branch/one-circuit's build" in lines[-1]
-    assert C.restore(r, "pkg", client(url, READ), [rev], [], lines.append, env(url, tmp_path), PLAT, lake[0],
-                     branch="one-circuit") and "branch/one-circuit's build" in lines[-1]
-    sh("git", "update-ref", "refs/remotes/origin/main", rev, cwd=r)
-    C.publish(r, rev, tmp_path / "out", ["pkg"], client(url), lambda m: None, plat=PLAT)
+    assert (tmp_path / "bin" / "pkg" / "v").read_bytes() == b"the branch's verifier"
+    assert f"branch/one-circuit's build at {mid[:12]}" in lines[-1]
+    assert C.restore(r, "pkg", client(url, READ), revs, [], lines.append, env(url, tmp_path), PLAT, lake[0],
+                     branch="one-circuit") and f"branch/one-circuit's build at {mid[:12]}" in lines[-1]
+    published(url, r, tmp_path, mid, files={"v": b"main's verifier"})
     assert C.fetch_bin(r, "pkg", *args, lines.append, PLAT, branch="one-circuit") and "of main's build" in lines[-1]
+    assert (tmp_path / "bin" / "pkg" / "v").read_bytes() == b"main's verifier"
+
+
+def test_get_bin_passes_over_a_record_that_lists_no_executables(s3, tmp_path):
+    b, url = s3
+    r, head = repo(tmp_path)
+    older = "a" * 40
+    published(url, r, tmp_path, older, C.prefix_of("one-circuit"), files={"v": b"the branch's verifier"})
+    without_bin(b, published(url, r, tmp_path, head, files={"v": b"never read"}))
+    args = (client(url, READ), [head, older], [], tmp_path / "bin", lambda m: None, PLAT)
+    assert C.fetch_bin(r, "pkg", *args, branch="one-circuit")
+    assert (tmp_path / "bin" / "pkg" / "v").read_bytes() == b"the branch's verifier"
+    with pytest.raises(C.CacheError, match="published before records held them"):
+        C.fetch_bin(r, "pkg", *args)
+
+
+def test_get_bin_says_which_commit_it_fetched_and_exact_takes_only_heads_own(s3, tmp_path):
+    b, url = s3
+    r, head = repo(tmp_path)
+    older = "a" * 40
+    key = published(url, r, tmp_path, older)
+    lines, args = [], (client(url, READ), [head, older], [], tmp_path / "bin")
+    assert C.fetch_bin(r, "pkg", *args, lines.append, PLAT) and f"an ancestor of HEAD ({head[:12]})" in lines[-1]
+    about = tmp_path / "bin" / "pkg.json"
+    assert json.loads(about.read_text()) == {"package": "pkg", "rev": older, "head": head, "prefix": C.TOP, "record": key,
+                                             C.BIN: json.loads(b.objects[key][0])[C.BIN]}
+    with pytest.raises(C.CacheError, match="--exact"):
+        C.fetch_bin(r, "pkg", *args, lines.append, PLAT, exact=True)
+    assert json.loads(about.read_text())["rev"] == older
+    published(url, r, tmp_path, head)
+    assert C.fetch_bin(r, "pkg", *args, lines.append, PLAT, exact=True) and "HEAD's own" in lines[-1]
+    assert json.loads(about.read_text())["rev"] == head
+    with pytest.raises(SystemExit):
+        C.main(["get", "--exact", "--root", str(r)])
+
+
+def test_a_second_fetch_leaves_nothing_the_new_record_does_not_list(s3, tmp_path):
+    """A verifier deleted from the tree must not stay runnable from the directory."""
+    b, url = s3
+    r, head = repo(tmp_path)
+    older = "a" * 40
+    published(url, r, tmp_path, older)
+    args = (client(url, READ), [head, older], [], tmp_path / "bin", lambda m: None, PLAT)
+    assert C.fetch_bin(r, "pkg", *args)
+    (tmp_path / "bin" / "pkg" / "stray").write_bytes(b"left by hand")
+    published(url, r, tmp_path, head, files={"pkg-verifier": b"\x7fELF verifier 2"})
+    assert C.fetch_bin(r, "pkg", *args)
+    assert {p.name: p.read_bytes() for p in (tmp_path / "bin" / "pkg").iterdir()} == {"pkg-verifier": b"\x7fELF verifier 2"}
+    assert sorted(p.name for p in (tmp_path / "bin").iterdir()) == ["pkg", "pkg.json"]
+
+
+def test_a_package_inside_another_has_a_directory_of_its_own(s3, tmp_path):
+    """`security/Proofs` sits inside `security`: fetching either never touches the other's executables."""
+    b, url = s3
+    r, head = repo(tmp_path)
+    (r / "pkg" / "inner").mkdir()
+    shutil.copy(r / "pkg" / "lean-toolchain", r / "pkg" / "inner" / "lean-toolchain")
+    published(url, r, tmp_path, head, files={"outer": b"outer"})
+    published(url, r, tmp_path, head, files={"inner": b"inner"}, pkg="pkg/inner")
+    for pkg in ("pkg/inner", "pkg", "pkg"):
+        assert C.fetch_bin(r, pkg, client(url, READ), [head], [], tmp_path / "bin", lambda m: None, PLAT)
+    got = {p.relative_to(tmp_path / "bin").as_posix(): p.read_bytes() for p in (tmp_path / "bin").rglob("*")
+           if p.is_file() and p.suffix != ".json"}
+    assert got == {"pkg/outer": b"outer", "pkg%2Finner/inner": b"inner"}
 
 
 def test_a_branchs_prune_deletes_nothing_of_main(s3, tmp_path):

@@ -7,9 +7,11 @@ machine's own `python3`, which may be older than the workspace's 3.12, so it kee
                                                   restore main's cached build of each package (default: every package with
                                                   a `lean-audit.json`) into Lake's local cache; `lake build` then unpacks
                                                   those modules instead of compiling them
-    python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME] [--platform TRIPLE]
-                                                  write each package's built executables to DIR/<package>/<name>, each
-                                                  checked first; no Lean toolchain is needed
+    python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME] [--platform TRIPLE] [--exact]
+                                                  write each package's built executables to DIR/<package>/<name> (the
+                                                  package's path quoted, as `out_dir` names it), each checked first, and
+                                                  the commit they were built at to DIR/<package>.json; --exact: only
+                                                  HEAD's own build; no Lean toolchain is needed
     python tools/verity/lean/cache.py build PKG OUT      (integration, inside the build's sandbox) `lake build` PKG writing Lake's
                                                   cache under OUT, and stage what it built in OUT/stage and its executables
                                                   in OUT/bin
@@ -20,8 +22,9 @@ machine's own `python3`, which may be older than the workspace's 3.12, so it kee
     python tools/verity/lean/cache.py prune [--keep N] [--dry-run] [--branch NAME]
                                                   (integration) delete what no record of the last N published commits needs
 
-The bucket (`LEAN_CACHE_BUCKET`) holds `main/` and, for a branch's commits, `branch/<name>/`, which a 7-day lock keeps
-from being overwritten or deleted; each holds, under its own prefix:
+The bucket (`LEAN_CACHE_BUCKET`) holds `main/`, which a 7-day lock keeps from being overwritten or deleted, and, for a
+branch's commits, `branch/<name>/`, which no lock holds, so that it can go when the branch lands; each holds, under its
+own prefix:
 - `<toolchain>/<platform>/<package>/<manifest>/<rev>.sha256.json`: one record per published commit and package, the
   sha256 and size of every file `lake cache stage` wrote: Lake's `outputs.jsonl` (each module's input hash to its archive)
   and one archive per module, then for each dependency the build compiled (ArkLib and the packages it brings; not Mathlib
@@ -31,7 +34,9 @@ from being overwritten or deleted; each holds, under its own prefix:
 - `blobs/<sha256>`: each of those files under its own hash, shared across that prefix's commits.
 
 `main/` holds only commits on `origin/main`, and `branch/<name>/` only commits on `origin/<name>`, with its own blobs and its
-own prune; `get` reads `main/` first, and a branch only when told to (`--branch`).
+own prune. `get` reads a branch only when told to (`--branch`), and then takes the newest ancestor of `HEAD` across both
+prefixes, main's on a tie: main holds records of the branch's old ancestors, and an executable of one is another verifier.
+With `--bin` a record that lists no executables is passed over, and what was fetched says which commit it is of.
 
 A fetched executable is for the prover finding out whether its evidence passes, and for development. Its integrity is the
 publisher's key and a sha256 against a record in this bucket: enough for completeness, not for a verdict an auditor relies
@@ -505,18 +510,23 @@ def former(root: Path, pkg: str) -> list[str]:
 
 
 def find(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], ident: dict,
-         branch: str | None = None) -> tuple[str, dict, str] | None:
-    """(prefix, identity, rev) of ``pkg``'s newest record among ``revs`` (newest first): under main's prefix, at the
-    package's path and then at each path it had before a layout move, then under ``branch``'s the same way. None when none
-    has one; a quarantined scope is passed over."""
-    for prefix in (TOP, *((prefix_of(branch),) if branch else ())):
-        # A layout move renames a package's directory and no byte Lake hashes, and records are keyed by that directory:
-        # until integration publishes a commit after the move, the build is under the path the package had before it.
-        for at in (ident, *({**ident, "package": old} for old in former(root, pkg))):
+         branch: str | None = None) -> list[tuple[str, dict, str]]:
+    """(prefix, identity, rev) of ``pkg``'s newest record in each place one can be, the newest commit among ``revs``
+    (newest first) first: under main's prefix and, with ``branch``, under the branch's, each at the package's path and at
+    each path it had before a layout move. On one commit main's comes first, then the package's own path; a quarantined
+    scope is passed over. Main holds records of a branch's old ancestors (its fork point and before), so the branch's newer
+    build has to win over them, not wait behind them."""
+    index = {r: i for i, r in enumerate(revs)}
+    # A layout move renames a package's directory and no byte Lake hashes, and records are keyed by that directory:
+    # until integration publishes a commit after the move, the build is under the path the package had before it.
+    places = [ident, *({**ident, "package": old} for old in former(root, pkg))]
+    hits = []
+    for p, prefix in enumerate((TOP, *((prefix_of(branch),) if branch else ()))):
+        for k, at in enumerate(places):
             sc = scope(at, prefix)
             if not quarantined(sc, q) and (rev := newest(s3, sc, revs)) is not None:
-                return prefix, at, rev
-    return None
+                hits.append((index[rev], p, k, prefix, at, rev))
+    return [(prefix, at, rev) for _, _, _, prefix, at, rev in sorted(hits, key=lambda h: h[:3])]
 
 
 def built_by(prefix: str) -> str:
@@ -526,8 +536,9 @@ def built_by(prefix: str) -> str:
 
 def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=print, env=os.environ, plat: str | None = None,
             lake: list[str] | None = None, branch: str | None = None) -> bool:
-    """Main's newest cached build of ``pkg`` among ``revs`` (``branch``'s where main has none) into Lake's local cache, every
-    file checked first. False when there is nothing to restore; CacheError when a check fails."""
+    """The newest cached build of ``pkg`` among ``revs`` (`find`: main's, or with ``branch`` the newer of main's and the
+    branch's) into Lake's local cache, every file checked first. False when there is nothing to restore; CacheError when a
+    check fails."""
     if plat is None and shutil.which("lean", path=_elan_env(env)["PATH"]) is None:
         log(f"lean-cache: {pkg}: no Lean toolchain here (bash tools/verity/lean/setup.sh {pkg} installs elan, the pinned "
             f"toolchain and the dependencies); building from source")
@@ -541,11 +552,11 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
         log(f"lean-cache: {pkg}: its dependencies aren't fetched (run tools/verity/lean/setup.sh {pkg}); building from source")
         return False
     found = find(root, pkg, s3, revs, q, ident, branch)
-    if found is None:
+    if not found:
         log(f"lean-cache: {pkg}: no cached build of an ancestor of HEAD ({sc}"
             f"{f', nor under {prefix_of(branch)}' if branch else ''}); building from source")
         return False
-    prefix, at, rev = found
+    prefix, at, rev = found[0]
     raw = s3.get(record_key(at, rev, prefix))
     if raw is None:
         raise CacheError(f"{record_key(at, rev, prefix)} was listed but can't be read")
@@ -595,46 +606,76 @@ def default_platform() -> str:
 
 
 def fetch_bin(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], dest: Path, log=print, plat: str | None = None,
-              branch: str | None = None) -> bool:
-    """``pkg``'s executables in its newest published build among ``revs`` (`find`), each written to ``dest``/<pkg>/<name>
-    with mode 755 once every one of them is checked against the record. False when nothing is published; CacheError when a
-    check fails or the record lists no executables (it was published before records held them)."""
+              branch: str | None = None, exact: bool = False) -> bool:
+    """``pkg``'s executables in its newest published build among ``revs`` whose record lists them (`find`; a record
+    published before records held them is passed over), written to `out_dir(dest, pkg)`/<name> with mode 755 once every
+    one of them is checked against the record, and described in `out_dir(dest, pkg)`.json: the commit they were built at,
+    HEAD, the prefix, the record and each one's sha256 and size. The directory is made anew and swapped in, so it holds
+    only what the record lists; the description is removed before the swap and written after it. False when nothing is
+    published; CacheError when a check fails, when no record found lists executables, or with ``exact`` when the build is
+    not HEAD's own (``revs[0]``)."""
     if plat is None and shutil.which("lean", path=_elan_env()["PATH"]) is None:
         plat = default_platform()
     ident = identity(root, pkg, plat)
     found = find(root, pkg, s3, revs, q, ident, branch)
-    if found is None:
+    if not found:
         log(f"lean-cache: {pkg}: no published build of an ancestor of HEAD ({scope(ident)}"
             f"{f', nor under {prefix_of(branch)}' if branch else ''})")
         return False
-    prefix, at, rev = found
-    key = record_key(at, rev, prefix)
-    raw = s3.get(key)
-    if raw is None:
-        raise CacheError(f"{key} was listed but can't be read")
-    rec = check_record(raw, at, rev)
-    if BIN not in rec:
-        raise CacheError(f"{key} lists no executables: it was published before records held them")
-    out = dest / pkg
-    out.mkdir(parents=True, exist_ok=True)
+    for prefix, at, rev in found:
+        key = record_key(at, rev, prefix)
+        raw = s3.get(key)
+        if raw is None:
+            raise CacheError(f"{key} was listed but can't be read")
+        rec = check_record(raw, at, rev)
+        if BIN in rec:
+            break
+    else:
+        raise CacheError(f"{record_key(found[0][1], found[0][2], found[0][0])} lists no executables: it was published "
+                         f"before records held them")
+    if exact and rev != revs[0]:
+        raise CacheError(f"the newest published build with executables is of {rev[:12]}, not HEAD's own ({revs[0][:12]}): "
+                         f"--exact")
+    out = out_dir(dest, pkg)
+    about = out.with_name(out.name + ".json")
+    dest.mkdir(parents=True, exist_ok=True)
     blobs, exes = prefix + "blobs/", sorted(rec[BIN].items())
-    with tempfile.TemporaryDirectory(prefix=".lean-cache-bin-", dir=out) as tmp:
+    new = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=dest))
+    try:
         with ThreadPoolExecutor(THREADS) as ex:
-            list(ex.map(lambda nf: s3.download(blobs + nf[1]["sha256"], Path(tmp) / nf[0], nf[1]["sha256"], nf[1]["bytes"]),
-                        exes))
+            list(ex.map(lambda nf: s3.download(blobs + nf[1]["sha256"], new / nf[0], nf[1]["sha256"], nf[1]["bytes"]), exes))
         for name, _ in exes:
-            os.chmod(Path(tmp) / name, 0o755)
-            os.replace(Path(tmp) / name, out / name)
-    log(f"lean-cache: {pkg}: {len(exes)} executables of {built_by(prefix)} build at {rev[:12]} in {out}, each checked "
-        f"against its record (for the prover and development: a verdict of record is built from the commit's source)")
+            os.chmod(new / name, 0o755)
+        os.chmod(new, 0o755)
+        about.unlink(missing_ok=True)
+        if os.path.lexists(out):
+            gone = new.with_name(new.name + ".old")
+            os.rename(out, gone)
+            os.rename(new, out)
+            if gone.is_dir() and not gone.is_symlink():
+                shutil.rmtree(gone)
+            else:
+                gone.unlink()
+        else:
+            os.rename(new, out)
+        tmp = new.with_name(new.name + ".json")
+        tmp.write_text(json.dumps({"package": pkg, "rev": rev, "head": revs[0], "prefix": prefix, "record": key,
+                                   BIN: rec[BIN]}, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, about)
+    finally:
+        shutil.rmtree(new, ignore_errors=True)
+    of = "HEAD's own" if rev == revs[0] else f"an ancestor of HEAD ({revs[0][:12]})"
+    log(f"lean-cache: {pkg}: {len(exes)} executables of {built_by(prefix)} build at {rev[:12]}, {of}, in {out}, each "
+        f"checked against its record and described in {about.name} (for the prover and development: a verdict of record "
+        f"is built from the commit's source)")
     return True
 
 
 def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, fetch_state=None, bin_dir: Path | None = None,
-        branch: str | None = None, plat: str | None = None) -> int:
+        branch: str | None = None, plat: str | None = None, exact: bool = False) -> int:
     """`get`: 0 when every package was restored or had nothing to restore, 1 when a check failed (that package builds from
-    source). With ``bin_dir``, each package's executables instead (`fetch_bin`), and 1 also for a package that has none
-    published or a cache that can't be read: what was asked for isn't there."""
+    source). With ``bin_dir``, each package's executables instead (`fetch_bin`, with ``exact``), and 1 also for a package
+    that has none published or a cache that can't be read: what was asked for isn't there."""
     want = 1 if bin_dir is not None else 0
     if env.get("LEAN_CACHE", "").strip().lower() in OFF:
         log("lean-cache: off on this machine (LEAN_CACHE); building from source")
@@ -652,7 +693,7 @@ def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, f
     for pkg in pkgs:
         try:
             if bin_dir is not None:
-                if not fetch_bin(root, pkg, s3, revs, q, bin_dir, log, plat, branch):
+                if not fetch_bin(root, pkg, s3, revs, q, bin_dir, log, plat, branch, exact):
                     status = 1
             else:
                 restore(root, pkg, s3, revs, q, log, env, branch=branch)
@@ -992,10 +1033,13 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("packages", nargs="*")
     g.add_argument("--root", type=Path, default=None)
     g.add_argument("--bin", type=Path, default=None, metavar="DIR",
-                   help="write each package's executables to DIR/<package>/<name>, each checked first; for the prover "
-                        "and development, not for a verdict of record (built from the commit's source by whoever relies "
-                        "on it)")
-    g.add_argument("--branch", help="read this branch's builds (`branch/<name>/`) where main has none")
+                   help="write each package's executables to DIR/<package>/<name> (the package's path quoted: "
+                        "`security%%2FProofs`), each checked first, and the commit they were built at to "
+                        "DIR/<package>.json; for the prover and development, not for a verdict of record (built from the "
+                        "commit's source by whoever relies on it)")
+    g.add_argument("--exact", action="store_true", help="with --bin: only HEAD's own build, never an ancestor's")
+    g.add_argument("--branch", help="read this branch's builds (`branch/<name>/`) too: the newest ancestor of HEAD across "
+                                    "it and main's is taken, main's on a tie")
     g.add_argument("--platform", help="the target triple of the executables (default: `lean --version`'s, else this "
                                       "machine's `<arch>-unknown-linux-gnu`)")
     b = sub.add_parser("build", help="(integration, in the sandbox) build PKG writing Lake's cache, and stage it")
@@ -1016,13 +1060,16 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--key-file", default=KEY_FILE)
     r.add_argument("--branch", help="prune `branch/<name>/` (default: main's prefix)")
     a = ap.parse_args(argv)
+    if a.cmd == "get" and a.exact and a.bin is None:
+        ap.error("--exact goes with --bin")
     if a.cmd == "get":
         here = Path.cwd()
         root = a.root or Path(subprocess.run(["git", "-C", str(here), "rev-parse", "--show-toplevel"],
                                              capture_output=True, text=True).stdout.strip() or here)
         pkgs = [os.path.relpath((here / x).resolve(), root.resolve()) for x in a.packages] or packages(root)
         try:
-            return get(root.resolve(), pkgs, bin_dir=a.bin and a.bin.resolve(), branch=a.branch, plat=a.platform)
+            return get(root.resolve(), pkgs, bin_dir=a.bin and a.bin.resolve(), branch=a.branch, plat=a.platform,
+                       exact=a.exact)
         except CacheError as e:
             print(f"lean-cache: {e}", file=sys.stderr)
             return 2
