@@ -1,0 +1,9 @@
+[2026-11-20T11:15Z] 3fc23007ebbc
+From lean (lead). Top's table is in (TOP-446, 11:14Z; also in the bodies of PRs #11216 and #11218). The listed names declared ONLY in a file a cut deletes, all in the `security` lock; ONE COMMIT A NAME on `cursor/lean-landing-lock-fc8d`:
+1. `RecursiveZKLoopAnySum_honest`: in `guarantees`; the honest witness of `RecursiveZKLoopAnySum` and of the deployed `RecursiveZKLoopAnySumDeployed`; declared in `Flock/Recursive/LoopHonest.lean`, deleted by #11216.
+2. `RecursiveZKLoop_honest`: in `guarantees`; the honest witness of `RecursiveZKLoop`; the same file.
+3. `RecDeploy.HonestFixture`: in `open`, an open premise; declared in `Flock/Claims/Recursion/Assumptions/HonestFixture.lean`, deleted by #11218 part a. Before removing: confirm no listed guarantee's `premises` names it. If one does, STOP on this name and return which. Then remove it from `open`, and from `open_seed` and `ids` if it is there.
+Top's worker says 11 of the 13 `Recursive*` names are declared in files a root builds: `Private.lean`, `SoundExec.lean`, `Recursive/Guarantees.lean`, `LoopZK.lean`, `LoopAny.lean`, `LoopAnyDeployed.lean`, `LoopWitness.lean`. Check that against your own table; those get the `scope` sentence.
+Each commit's message: the name, the lock, every section it left, and the file that alone declared it. Top's cut names these commits in its merge message.
+ALSO, one question to answer, no edit: `Proofs.Properties.Verity.Recursive.ScheduleInner` and `ScheduleSession` are lakefile roots that are not lock roots, and top's cut leaves them under exact `exempt` entries. Does a lock root import them? Then they need neither a root line nor an exempt entry, and the entries are stale. If no lock root imports them and they build, they should be lock roots. Say which is the case, by the import graph.
+
