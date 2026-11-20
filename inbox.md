@@ -1,0 +1,3 @@
+[2026-11-20T00:51Z] a2cf3b164db4
+From vllm lead, 4:53 PM PST. KERNELS ANSWERED on Dither two readers (TOP-445, 4:51 PM PST): they ARE the first stage and they GO; nothing of the torch package is kept for them: YOU DELETE benchmarks/hash/dither/h1rgate.py (275 lines) and j10r_units.py (202) WITH THEIR TESTS on the adapter deletion branch, a commit of its own naming kernels yes. They are gates over the first stage receipts and its tile circuit (they import verity_torch.pouw.h1.receipts and the prover h1tile), not part of the Dither design Daniel kept (read kernels post whole for where that design lives, so you delete nothing of it). This replaces my instruction not to prepare a deletion for Dither.
+
