@@ -3154,5 +3154,95 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : Batch0Typed) :
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
   fun bytes P units S d L e h hr hs hd hco => liftWordEval_batch0 hLC hT bytes P units S d L e h hr hs hd (batch0_of_calls hco)
 
-end Flock.Chain
+section UnitWordProof
+open InferenceOnlyVerifier.Properties.SecurityProofs
 
+theorem ofParts_getD (ps : Array Part) {t : ℕ} (ht : t < (Seq.ofParts ps).count) :
+    (Seq.ofParts ps).toArray.getD t default = (Seq.ofParts ps).get t := by
+  obtain ⟨i, hi, h1, h2, hg⟩ := Walk.seq_get ps ht
+  rw [hg]
+  have hok : seqOk (Seq.ofParts ps) = true := by simp [seqOk, Seq.ofParts]
+  exact toArray_getD_part hok hi h1 h2
+
+theorem foldlM_inv {α β : Type} (l : List α) (f : β → α → Option β) (I : ℕ → β → Prop)
+    (hstep : ∀ n (hn : n < l.length) b, I n b → ∃ b', f b l[n] = some b' ∧ I (n + 1) b') :
+    ∀ k n b, k + n = l.length → I n b → ∃ o, (l.drop n).foldlM f b = some o ∧ I l.length o
+  | 0, n, b, hk, hI => ⟨b, by simp [List.drop_eq_nil_of_le (by omega : l.length ≤ n)],
+      by rw [show l.length = n by omega]; exact hI⟩
+  | k + 1, n, b, hk, hI => by
+    obtain ⟨b', h1, h2⟩ := hstep n (by omega) b hI
+    obtain ⟨o, g1, g2⟩ := foldlM_inv l f I hstep k (n + 1) b' (by omega) h2
+    refine ⟨o, ?_, g2⟩
+    rw [List.drop_eq_getElem_cons (by omega), List.foldlM_cons, h1]
+    exact g1
+
+/-- **The word at a primitive node of a unit**: in member `m` of root node `k`, which calls a composite, the gate of
+primitive node `n`, computed on the trace, is its primitive on the words `v` gives its arguments' references, where `v`
+gives each reference the word at the gate below it that it resolves to. -/
+theorem unit_node_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    {n : ℕ} (hn : n < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size) {nd : Node}
+    (hnd : (P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]! = nd) (hf : nd.form = .prim)
+    (hp : (P.defs[nd.fn]!).prim = true) (hg1 : (P.defs[nd.fn]!).gates = 1)
+    (hseq : ∀ a ∈ nd.args.toList, ∃ ps, a.seq = Seq.ofParts ps)
+    (Y : (Flock.OfProgram.ofProgram P).Trace) {G : ℕ}
+    (hGd : (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[n]! = G)
+    (hGN : G < (Flock.OfProgram.ofProgram P).N) (hkey : isInputId (P.defs[nd.fn]!).key = false)
+    (hY : Flock.OfProgram.inputAt P G = false → Y ⟨G, hGN⟩ = (Flock.OfProgram.ofProgram P).op ⟨G, hGN⟩ Y)
+    {w0 : ℕ} (hret : (P.defs[nd.fn]!).ret = .value w0) (hw : ∀ y, (Prog.evalBool P nd.fn y).length = w0)
+    (v : Ref → List Bool)
+    (hv : ∀ i < nd.args.size, ∀ t < (nd.args[i]!).seq.count, ∀ q,
+      resolve P (P.child P.rootScope k m) ((nd.args[i]!).seq.get t) = .ok q → q < G →
+        v ((nd.args[i]!).seq.get t) = portWord Y ⟨q, 0⟩) (w : ℕ) :
+    portWord Y ⟨G, w⟩ =
+      Prog.evalBool P nd.fn ((nd.args.toList.flatMap fun a => Flock.Program.argVals v a a.seq.count id).flatten) := by
+  subst hnd
+  obtain ⟨p, ops, w', ⟨⟨sc', hg⟩, -, -⟩, hlt⟩ := hG G hGN
+  have hg' : P.gate ((P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[n]! + 0) =
+      .ok (p, ops, sc') := by rw [Nat.add_zero, hGd]; exact hg
+  obtain ⟨rfl, rfl, hops⟩ := unit_gate_at hroot hB hL hk hm hc hn (by rw [members_one (Or.inl hf)]; omega) hp hg1 hg'
+  have hga : Flock.OfProgram.gateAt P G = some (((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn, ops) := by
+    unfold Flock.OfProgram.gateAt; rw [hg]
+  have hlt' : ∀ a ∈ ops.toList, a < G := fun a ha => hlt a (Array.mem_toList_iff.1 ha)
+  have hin : Flock.OfProgram.inputAt P G = false := by unfold Flock.OfProgram.inputAt; rw [hga]; exact hkey
+  have hwd : ∀ y, (Prog.evalBool P ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).fn y).length =
+      Flock.OfProgram.widthAt P G := fun y => by
+    unfold Flock.OfProgram.widthAt; rw [hga]; simp only [hret]; exact hw y
+  rw [word_at_computed Y hGN hga hin hlt' (hY hin) (hwd _)]
+  congr 1
+  obtain ⟨L, hlen, hflat, hLi⟩ := OperandWidths.operands_lists P _ _ 0 ops hops
+  rw [hflat, List.map_flatten, flatMap_flatten_map]
+  congr 2
+  apply List.ext_getElem (by simp [hlen])
+  intro i h1 h2
+  have hi : i < ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args.size := by simpa [hlen] using h1
+  simp only [List.getElem_map, Array.getElem_toList]
+  obtain ⟨hlc, hres⟩ := hLi i (by simpa using h1)
+  have hcnt : L[i].length = (((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args[i]!).seq.count := by
+    rw [hlc]; unfold OperandWidths.cntOf; simp [hf, BodiesOk.beq_prim_batch]
+  have hai : ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args[i] =
+      ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args[i]! := (getElem!_pos _ i hi).symm
+  obtain ⟨ps, hps⟩ := hseq _ (Array.getElem_mem_toList hi)
+  rw [hai] at hps ⊢
+  unfold Flock.Program.argVals
+  apply List.ext_getElem (by simp [hcnt])
+  intro t t1 t2
+  simp only [List.length_map, List.length_range] at t1 t2
+  have ht : t < (((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args[i]!).seq.count := by simpa using t2
+  simp only [List.getElem_map, List.getElem_range, id]
+  have hr := hres t t1
+  have hro : OperandWidths.refOf ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!) 0 i t =
+      (((P.defs[(P.child P.rootScope k m).d]!).body.nodes[n]!).args[i]!).seq.get t := by
+    unfold OperandWidths.refOf; simp [hf, BodiesOk.beq_prim_batch]
+  rw [hro] at hr
+  have hmem : L[i][t] ∈ ops.toList := by
+    rw [hflat]; exact List.mem_flatten.2 ⟨L[i], List.getElem_mem _, List.getElem_mem _⟩
+  rw [hps, ofParts_getD ps (by rw [← hps]; exact ht), ← hps]
+  exact (hv i hi t ht _ hr (hlt' _ hmem)).symm
+
+end UnitWordProof
+
+end Flock.Chain
