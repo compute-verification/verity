@@ -264,6 +264,12 @@ def fanout (j : Json) : V Json := do
     ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
       Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
 
+/-- A member of the per-member form named `name` at the units `units`, with no files. -/
+private def unitsMember (name : String) (units : Array (Nat × Nat)) : OneStageZk.Member :=
+  let own : OneStageZk.Own :=
+    { programJ := .null, program := .empty, partition := .null, pub := "", registered := none }
+  { name := name, units := units, g := 1, own := own }
+
 /-- `{"program", "query", "members", "roots", "held"?}`, a program object, a template query, the members
 `[[name, [[first, end], ...]], ...]`, the record's roots and `fanout`'s `held`, to `{"roots", "held"}`: each member's
 `[port, tree]` at C's run input nodes' trees (`OneStageZk.runInputRoots`, the member holding no root of its own), and
@@ -281,8 +287,7 @@ def runInputRoots (j : Json) : V Json := do
           | some lo, some hi => pure (lo, hi)
           | _, _ => throw "a member's units are [first, end]"
         | _ => throw "a member's units are [first, end]"
-      pure ({ name, units, g := 1, own := { programJ := .null, program := .empty, partition := .null, pub := "",
-        registered := none } } : OneStageZk.Member)
+      pure (unitsMember name units)
     | _ => throw "a member is [name, [[first, end], ...]]"
   let roots ← OneStageZk.runInputRoots p.prog ms (Json.mkObj [("roots", getD j "roots")]) {}
   let why := match OneStageZk.heldRootsHeld (Partition.heldReads p.prog rs held) ms roots with
