@@ -789,6 +789,12 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
         (cache / WARM_SECONDS).write_text(json.dumps(before, sort_keys=True, indent=1) + "\n")
 
 
+def door_reads(f: dict) -> dict:
+    """A `CS.own_reads` file in the door's form (`REG.READS_V2`): each port's value, root, rows and domain, no position."""
+    return {"format": REG.READS_V2,
+            "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)} for p, e in f["ports"].items()}}
+
+
 def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str | None = None) -> None:
     """A sampled member's prover's file and its circuit, under the header its public file was held to before the sample, the
     circuit held to its compose's line first (`held`); a templated circuit's unit placed by ``tmpl_unit_bin``
@@ -1014,11 +1020,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
     # (`--interface`: the record the audit holds by SHA-512); a member with ports in shared trees reads each at its
     # tree's root, at the leaf its wiring gives (`Binding.tree`, `Binding.reads`), a registered read those reads name
-    # (`registered`, `interface.registered_file`'s). The door reads none of those own-tree reads: C gives each position
-    # (`Flock.OneCircuit.pos`), and its file is the position-free one (`Flock.Registered.FORMAT`), registered reads alone
-    reads = dict(registered or {}) if door else CS.own_reads(
-        {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}, mine,
-        roots, registered=REG)
+    # (`registered`, `interface.registered_file`'s). The door's file is the position-free one (`Flock.Registered.FORMAT`):
+    # C gives each position (`Flock.OneCircuit.pos`), so it carries no positions and binds no port
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
+                          **(registered or {})}, mine, roots, registered=REG)
+    if door:
+        reads = {k: door_reads(f) for k, f in reads.items()}
     iface = served / "circuit.json"
     iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
     for mm in members:
