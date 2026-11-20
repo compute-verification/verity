@@ -1225,10 +1225,14 @@ class Challenger:
 
     def check(self, name: str, unit: int, pub: bytes, op: dict, drawn: bool = True) -> str | None:
         """`check` of execution phase `name`'s unit `unit` against its registration and sample, of record (`record`), under the salt
-        its pass was checked against when it is certified (`salts`)."""
+        its pass was checked against when it is certified (`salts`), both verdicts kept in `name`'s witness."""
         _, reg = self._held(name)
-        return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
-                     salt=self.salts.get(name))
+        at = len(self.record.witness)
+        try:
+            return check(self.params, dict(reg.record), self._drawn(name).draw, unit, pub, op, drawn, record=self.record,
+                         salt=self.salts.get(name))
+        finally:
+            self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def select(self, name: str) -> S.Draw:
         """The sample, once: an execution phase's opens the execution phase's sampling coin after its registration and samples over `draw_key`;
