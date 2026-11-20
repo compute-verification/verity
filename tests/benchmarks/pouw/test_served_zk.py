@@ -16,6 +16,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 
@@ -1015,6 +1016,85 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
     assert body["audit"]["checks"]["roots"] == {"ok": False, "codes": ["roots"], "detail": {"ports": sorted(wrong)}}
 
 
+def _verify(path: Path, bad: int | None = None) -> Path:
+    """A stand-in for `verity-verify-proof verify --zk` on one session: it prints a line and the session's `VERDICT` (the
+    directory as given), rejecting (status 1) the session of unit ``bad``; a session record ``{"panic": ...}`` makes it
+    write a panic line and one ``{"status": N}`` end with status N, each after an accepting verdict."""
+    path.write_text(f"#!{sys.executable}\nimport json, sys\na = sys.argv\nd = a[a.index('--session') + 1]\n"
+                    "assert a[1:3] == ['verify', '--zk'] and '--circuit' in a and '--public' in a\n"
+                    "s = json.load(open(d + 'session.json'))\n"
+                    f"ok = s.get('unit') != {bad!r}\n"
+                    "print('setup: 3 ms')\n"
+                    "print('VERDICT ' + json.dumps({'session': d, 'accepted': ok, 'why': '' if ok else 'ring-switch claim 2 mismatch', 'zk': True}))\n"
+                    "if 'panic' in s: print('PANIC at Flock.verify Flock.Zk:1:2: index out of bounds', file=sys.stderr)\n"
+                    "sys.exit(s.get('status', 0 if ok else 1))\n")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+def _job_rows(tmp_path: Path, rec: dict, units: list[int], session: Callable[[int], dict] = lambda t: {"unit": t}) -> list[dict]:
+    """The job's rows for ``units``, as `job.sh`'s `units_json` writes them: each with a handed-in Lean output saying
+    ACCEPT (`lean-honest-own.out`), which the outcome no longer reads, beside its circuit, public file and session."""
+    rows = []
+    for t in units:
+        d = tmp_path / f"u{t}"
+        (d / "s").mkdir(parents=True)
+        (d / "s" / "session.json").write_text(json.dumps(session(t)))
+        (d / "circuit.txt").write_text("circuit")
+        (d / "pub.bin").write_bytes(b"pub")
+        (d / "stage.json").write_text(json.dumps({"definition": "Pc8TileSide", "circuit_sha512": "11" * 64,
+                                                  "class_sha512": "22" * 64, "ands": 7, "k_log": 3, "binding": "hash scratch"}))
+        (d / "open.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
+        (d / "lean-honest-own.out").write_text(f"VERDICT {json.dumps({'session': f'{d}/s/', 'accepted': True, 'why': ''})}\n")
+        (d / "prove.out").write_text(f"LIVE\t{json.dumps({'verdict': {'accepted': True, 'why': ''}, 'roots': _roots(rec)})}\n")
+        rows.append({"unit": t, "stage": str(d / "stage.json"), "pub": str(d / "pub.bin"), "circuit": str(d / "circuit.txt"),
+                     "lean": str(d / "lean-honest-own.out"), "opening": str(d / "open.json"), "rust": str(d / "prove.out"),
+                     "session": str(d / "s" / "session.json")})
+    return rows
+
+
+@pytest.mark.slow
+@LEAN
+def test_the_outcome_runs_the_lean_verifier_itself(served, tmp_path):
+    """The outcome's Lean verdict of record on each sampled proof block is the challenger's own run of the verifier on the
+    block's circuit, public file and delivered session (`run_lean`), never the Lean output a job hands it: a handed-in
+    output saying ACCEPT beside a session the verifier rejects ends REJECT. Its run's ``VERDICT`` lines' SHA-512 is kept.
+    With no verifier, or where its run writes a panic line or ends with a status `verify` does not document, the
+    outcome is refused by name (`LEAN_RUN`)."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    ch = _challenger(params)
+    _held(ch, "honest", rec)
+    d = ch.select("honest")
+    rows = _job_rows(tmp_path / "honest", rec, d.units)
+    ch.deliver("honest", SC._sessions(rows))
+    with pytest.raises(S.Refused) as e:
+        SC._units(rows, None)
+    assert _codes(e) == {SC.LEAN_RUN}
+    honest = SC._units(rows, str(_verify(tmp_path / "verify")), jobs=2)
+    printed = "".join(f"VERDICT {json.dumps({'session': f'{tmp_path}/honest/u{t}/s/', 'accepted': True, 'why': '', 'zk': True})}\n"
+                      for t in d.units[:1])
+    assert honest[0]["verdicts"]["lean"]["output_sha512"] == hashlib.sha512(printed.encode()).hexdigest()
+    assert all(u["verdicts"]["lean"]["accepted"] and u["verdicts"]["lean"]["of_record"] for u in honest)
+    bad = d.units[1]
+    forged = SC._units(rows, str(_verify(tmp_path / "verify-bad", bad=bad)))
+    assert [u["verdicts"]["lean"]["accepted"] for u in forged] == [t != bad for t in d.units]
+    o, pub, _ = ch.outcome("honest", honest)
+    assert o.accepted and pub["verdict"] is True
+    name = "ctl-forged"
+    ch.register(name, rec, stream=name, replay="honest")
+    assert ch.select(name).units == d.units
+    ch.deliver(name, SC._sessions(rows))
+    o, pub, _ = ch.outcome(name, forged)
+    assert not o.accepted and o.verdict.codes == ("reject",) and pub["verdict"] is False
+    for i, broken in enumerate(({"panic": 1}, {"status": 7})):
+        rows = _job_rows(tmp_path / f"broken-{i}", rec, d.units, lambda t: {"unit": t, **broken})
+        with pytest.raises(S.Refused) as e:
+            SC._units(rows, str(_verify(tmp_path / f"verify-{i}")))
+        assert _codes(e) == {SC.LEAN_RUN}
+
+
 def _through(ch, rec, name="honest"):
     """Execution phase `rec` received, sampled, delivered and its outcome, every sampled proof block accepted."""
     _held(ch, name, rec)
@@ -1267,19 +1347,19 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
     sha = {d: hashlib.sha512((d / "session.json").read_bytes()).hexdigest() for d in (a, b)}
     line = {"session": f"{a}/", "accepted": False, "why": "ring-switch claim 2 mismatch"}
     (tmp_path / "lean.out").write_text(f"setup: 3 ms\nVERDICT {json.dumps(line)}\n")
-    v = SC.lean_verdict(tmp_path / "lean.out")
+    v = SC.lean_verdict((tmp_path / "lean.out").read_text())
     assert v["of_record"] and v["accepted"] is False and "ring-switch" in v["why"] and len(v["digest"]) == 128
     assert v["sessions"] == [sha[a]] and v["digest"] == hashlib.sha512(SC.canonical_json(line)).hexdigest()
     two = [{"session": str(a), "accepted": True, "why": ""}, {"session": str(b), "accepted": True, "why": ""}]
     (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in two))
-    assert SC.lean_verdict(tmp_path / "two.out")["sessions"] == [sha[a], sha[b]] and SC.lean_verdict(tmp_path / "two.out")["accepted"]
+    assert SC.lean_verdict((tmp_path / "two.out").read_text())["sessions"] == [sha[a], sha[b]] and SC.lean_verdict((tmp_path / "two.out").read_text())["accepted"]
     (tmp_path / "two.out").write_text("".join(f"VERDICT {json.dumps(x)}\n" for x in (two[0], {**two[1], "accepted": False, "why": "w"})))
-    assert SC.lean_verdict(tmp_path / "two.out")["accepted"] is False and SC.lean_verdict(tmp_path / "two.out")["why"] == "w"
+    assert SC.lean_verdict((tmp_path / "two.out").read_text())["accepted"] is False and SC.lean_verdict((tmp_path / "two.out").read_text())["why"] == "w"
     (tmp_path / "gone.out").write_text(f"VERDICT {json.dumps({**line, 'session': str(tmp_path / 'gone')})}\n")
     (tmp_path / "bare.out").write_text('VERDICT {"accepted":true,"why":""}\n')
-    assert SC.lean_verdict(tmp_path / "gone.out")["sessions"] == [None] == SC.lean_verdict(tmp_path / "bare.out")["sessions"]
+    assert SC.lean_verdict((tmp_path / "gone.out").read_text())["sessions"] == [None] == SC.lean_verdict((tmp_path / "bare.out").read_text())["sessions"]
     (tmp_path / "none.out").write_text("")
-    assert SC.lean_verdict(tmp_path / "none.out")["accepted"] is None and SC.lean_verdict(tmp_path / "none.out")["sessions"] == []
+    assert SC.lean_verdict((tmp_path / "none.out").read_text())["accepted"] is None and SC.lean_verdict((tmp_path / "none.out").read_text())["sessions"] == []
     (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}}\n')
     assert SC.rust_verdict(tmp_path / "prove.out")["accepted"] is True and not SC.rust_verdict(tmp_path / "prove.out")["of_record"]
     assert SC.live_roots(tmp_path / "prove.out") is None and SC.live_roots(None) is None
@@ -1321,6 +1401,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"
                     "print('DRAW ' + json.dumps({'law': 'subset', 'population': p, 'k': k, 'units': stream_subset(k, p, src)}))\n")
+    verify = _verify(tmp_path / "verify")
     lean.chmod(lean.stat().st_mode | stat.S_IEXEC)
     rec = json.loads((tmp_path / "registration.json").read_text())
     dry = _challenger(params, coins=_coins())        # the process's coins: its sample is the one the job opens
@@ -1334,12 +1415,14 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         (tmp_path / f"open{u}.json").write_text(json.dumps({"of_record": False, "accepted": True, "why": ""}))
         (tmp_path / f"s{u}").mkdir()
         (tmp_path / f"s{u}" / "session.json").write_text(json.dumps({"unit": u}))
+        (tmp_path / f"circuit{u}.txt").write_text("circuit")
         (tmp_path / f"lean{u}.out").write_text(f"VERDICT {json.dumps({'session': f'{t}/s{u}/', 'accepted': True, 'why': ''})}\n")
         (tmp_path / f"stage{u}.json").write_text(json.dumps({"definition": "d", "circuit_sha512": "1", "class_sha512": "2",
                                                              "ands": 1, "k_log": 1, "binding": "hash scratch"}))
         (tmp_path / f"prove{u}.out").write_text(f"LIVE\t{json.dumps({'verdict': {'accepted': True, 'why': ''}, 'roots': _roots(rec)})}\n")
-        rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "lean": f"{t}/lean{u}.out",
-                     "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json", "rust": f"{t}/prove{u}.out"})
+        rows.append({"unit": u, "stage": f"{t}/stage{u}.json", "pub": f"{t}/pub{u}.bin", "circuit": f"{t}/circuit{u}.txt",
+                     "lean": f"{t}/lean{u}.out", "opening": f"{t}/open{u}.json", "session": f"{t}/s{u}/session.json",
+                     "rust": f"{t}/prove{u}.out"})
     (tmp_path / "units.json").write_text(json.dumps(rows))
     honest = {"registration": f"{t}/registration.json", "manifest": f"{t}/manifest.json"}
     reqs = [{"op": "coins"},
@@ -1358,7 +1441,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     monkeypatch.setattr(sys, "stdin", io.StringIO("".join(json.dumps(r) + "\n" for r in reqs)))
     monkeypatch.setattr(SC, "Coins", lambda epoch, entropy: _coins())   # the process's coins are the ones that salted the pass
     capsys.readouterr()
-    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean)], record=ORL.Record) == 0
+    assert SC.main(["challenger", p, f"{t}/log", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 0
     replies = capsys.readouterr().out.splitlines()
     assert [x.split(" ", 1)[0] for x in replies] == ["COINS", "OPENED", "REFUSED", *["REFUSED"] * len(SC.CASES), "REGISTERED",
                                                      "DRAWN", "REFUSED", "PENDING", "DELIVERED", "ACCEPT", "REFUSED"]
@@ -1387,12 +1470,13 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
     assert accepted and all(e in o["of_record"] for e in accepted)
 
-    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean)], record=ORL.Record) == 0
+    assert SC.main(["replay", p, str(log), f"{t}/replay", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 0
     assert capsys.readouterr().out.startswith("SAME ")
-    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler, record=ORL.Record())  # the twin
+    assert (tmp_path / "replay").is_dir() and not SC.replay(params, log, tmp_path / "replay2", SC.python_sampler, record=ORL.Record(),
+                                                            verify=str(verify))  # the twin
     forged = {**sampling, "coin": ("00" if sampling["coin"][:2] != "00" else "01") + sampling["coin"][2:]}
     (log / "openings.jsonl").write_text(json.dumps(salt) + "\n" + json.dumps(forged) + "\n")
-    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean)], record=ORL.Record) == 1
+    assert SC.main(["replay", p, str(log), f"{t}/replay3", "--lean", str(lean), "--verify", str(verify)], record=ORL.Record) == 1
     out = capsys.readouterr().out
     assert out.startswith("DIFFERENT ") and "does not open against" in out
 
