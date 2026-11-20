@@ -1,6 +1,6 @@
 """Sessions of several tables (`Stmt.setupTables`, `--session-tables J`): the Lean verifier builds each table's
 statement from its part of the session's sample (without one, of the population's units), never from anything in the record.
-The sessions are live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
+The sessions are live ones on RoPE, each passing every check of its server, and none is `--zk`. Without `--plain-tables`, several
 tables without `--zk` are a form the one-table plain claim does not cover (`Flock.ProvedScope`), so the verifier refuses every session, for
 that once every check has passed: a sampled one for its subset sample without `--zk` at setup first, and a sample it sets no
 statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
@@ -22,9 +22,10 @@ from verity_flock.record_text import session_text
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
-#: RoPE d64 (8 instances) with loopback sessions of several tables: J = 2 without a sample, J = 2 with `--draw subset:4` (two), J = 4
-FIXTURE = "art:425f6860"
-STATEMENT = "verity/flock-circuit@967b8d06+seed-injection"
+#: RoPE d64 (8 instances) with loopback sessions of several tables: J = 2 without a sample, J = 2 with `--draw subset:4` (two),
+#: J = 4 (`pod/96-session-tables.sh`)
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "session-tables"
+STATEMENT = "verity/flock-circuit+seed-injection"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -34,10 +35,9 @@ def rope(tmp_path_factory):
     sys.path.insert(0, str(VERIFIER))
     import ci
 
-    try:
-        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+    assert (FIXTURE / "stage" / "circuit.txt").is_file(), (
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures {FIXTURE.relative_to(FIXTURE.parents[7])}`")
+    root = ci.canonical_tree(FIXTURE, tmp_path_factory.mktemp("store") / "session-tables")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     return root
 

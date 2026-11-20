@@ -185,6 +185,9 @@
   "art:fc9d18e2a2e8474fd447b830cbe2a6b77c64118e0a463a5e05f1cf2c7f6a7295": "tests/verity/circuits/qcall_vectors.json",
   "art:519d84c74b2560218cc9df4dab478a3e4def7d36ae09b95a815487e2abfe8105": "tests/verity/circuits/qword_vectors.json",
   "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain",
+  "art:dbb6b477b327e702b5bfc966112c5de07042a10683f0653adc4001979476c3a3": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain-descriptor-v2",
+  "art:06745f84e47b6c288575a521908d926d643c89c1cd70da86ac4689f6a822ad2c": "tests/verity/protocols/proofs/flock/prover/fixtures/registered-reads",
+  "art:fe832ea47edd381c681c33f736b997f7514bd0dd929616369baef8a75407ada1": "tests/verity/protocols/proofs/flock/prover/fixtures/session-tables",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -270,6 +273,15 @@
     "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": [
       "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a",
       "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
+    ],
+    "art:dbb6b477b327e702b5bfc966112c5de07042a10683f0653adc4001979476c3a3": [
+      "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
+    ],
+    "art:06745f84e47b6c288575a521908d926d643c89c1cd70da86ac4689f6a822ad2c": [
+      "art:bf70d8eb6799f6a6284b649341a4ae2044642a47ac509c1d28bdabe5e018e85a"
+    ],
+    "art:fe832ea47edd381c681c33f736b997f7514bd0dd929616369baef8a75407ada1": [
+      "art:425f686027a8995ec4a328c617473de659f9c07678d6f7002bd18b3761d0657d"
     ]
   }
 }

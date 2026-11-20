@@ -43,21 +43,11 @@ def kernels() -> list[Any]:
 
 
 def table_probes() -> dict[str, tuple[int, Any, int, tuple[tuple[int, int], ...], Any]]:
-    """`tanh_rn` (2^27 entries of two words) as parameter 1 of the Definitions that read it, probed at its ends and its
-    regions' edges (`TANH_RN_REGIONS`); `TanhF32Rn_v2` reads entry i through the word of its region whose low 27 bits are i
-    (past HI where no region word has them)."""
+    """`tanh_rn` (2^27 entries of two words) as parameter 1 of the read that takes it, probed at its ends and its regions'
+    edges (`TANH_RN_REGIONS`)."""
     from verity_vllm.definitions.registry import tables
 
-    lo = tables.TANH_RN_LO
-
-    def word(i: int) -> int:
-        return 0x38000000 | i if (0x38000000 | i) >= lo else 0x40000000 | i
-
-    return {
-        "TableRead27x2_v1": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS, lambda i: [[i], [i | 0xF8000000]]),
-        "TanhF32Rn_v2": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS,
-                         lambda i: [[word(i)], [word(i) | 0x80000000]]),
-    }
+    return {"TableRead27x2_v1": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS, lambda i: [[i], [i | 0xF8000000]])}
 
 
 def lazy_operands() -> dict[str, tuple[str, ...]]:
