@@ -1538,7 +1538,8 @@ private def inputBody (defs : Array Defn) (rootKey : String) (w b : String) (bi 
 
 /-- §5.2 read through word `w`'s body `b` at place `bi`: no Definition calls the root, so a body is not the root and reaches
 no call of it, else it would read the root's input nodes. A body that reaches the root is Boolean only where the root is
-(`reach`), so the walk runs only then; each place enters it once. -/
+(`reach`), so the walk runs only then. Each place below `defs.size` enters `todo` at most once, so `defs.size + 1`
+iterations of one pop each empty it. -/
 private def rootInBody (defs : Array Defn) (index : Std.HashMap String Nat) (rootKey : String) (reach : Array Bool)
     (w b : String) (bi : Nat) : Option String := Id.run do
   let some ri := index[rootKey]? | return none
@@ -1549,12 +1550,12 @@ private def rootInBody (defs : Array Defn) (index : Std.HashMap String Nat) (roo
   for _ in [0:defs.size + 1] do
     let some i := todo.back? | return none
     todo := todo.pop
-    let d := defs[i]!
+    let some d := defs[i]? | continue
     if d.prim then continue
     for x in d.body.nodes do
       if x.fn == ri then
         return some s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} calls the root {rootKey}, which no Definition calls"
-      if !seen.contains x.fn then
+      if x.fn < defs.size && !seen.contains x.fn then
         seen := seen.insert x.fn
         todo := todo.push x.fn
   return none
