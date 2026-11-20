@@ -1622,7 +1622,36 @@ def member_negative_cases(case: dict) -> dict[str, tuple[dict, dict | None]]:
               "n3-served-null": evidence({**ev, "served": None}),
               "n4-session-root-not-registered": evidence(
                   {**ev, "session_roots": {next(iter(params["ports"])): "00" * 64}})}
+    e = ports[inp]
+    if isinstance(e.get("domain"), str) and e["domain"]:
+        other = ("1" if e["domain"][0] == "0" else "0") + e["domain"][1:]
+        cases[f"n5-input-{inp}-read-at-its-root-another-domain"] = read({**ports, inp: {**e, "domain": other}})
+    cases[f"n5-input-{inp}-read-stating-positions"] = read({**ports, inp: {**e, "reads": [0]}})
+    cases |= member_public_elsewhere(case, k)
     return cases
+
+
+def member_public_elsewhere(case: dict, k: str) -> dict[str, tuple[dict, dict]]:
+    """n5's position form: member ``k``'s public file with its ``units.indices`` moved to as many units before its own
+    (after, for the first member), so `withPositions` would read its run input at another member's positions; the
+    file is written beside the case's blobs and named by its SHA-512, as the parameters name a public file."""
+    params = case["params"]
+    m = params["proofs"]["members"][k]
+    src = next((Path(b) for b in case["blobs"] if MB.PF.file_sha512(Path(b)) == m["public"]), None)
+    if src is None:
+        return {}
+    head, body = src.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    us = list(h.get("units", {}).get("indices") or [])
+    if not us:
+        return {}
+    shift = -len(us) if min(us) >= len(us) else len(us)
+    h["units"] = {**h["units"], "indices": [u + shift for u in us]}
+    to = src.parent / f"n5-elsewhere-{src.name}"
+    to.write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n" + body)
+    p = {**params, "proofs": {**params["proofs"], "members": {
+        **params["proofs"]["members"], k: {**m, "public": MB.PF.file_sha512(to)}}}}
+    return {f"n5-{k}-public-file-at-another-members-units": ({**case, "params": p, "blobs": [*case["blobs"], str(to)]}, p)}
 
 
 def run_member_negatives(case: dict, rec: dict | None = None, program: Program | None = None,
