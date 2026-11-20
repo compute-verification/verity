@@ -15,8 +15,8 @@ To manage a window: `in_process_coins` (coins held in this process, which credit
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
 executable, built), and `served_passes`, `coins_of` and `SERVED_SCHEMA` (what a served Pearl-C window records). A
 workload's own GPU commitments build on the row-table kernels: `row_table_host_lib`, `row_table_nvcc`, `hm_tables`,
-`leaf_prefixes` and the other ``row_table``/``ROW_TABLE`` names, and its registered tables on `registered_commit`. The
-rest of `__all__` names the runs, their schemes and settings."""
+`leaf_prefixes` and the other ``row_table``/``ROW_TABLE`` names. The rest of `__all__` names the runs, their schemes and
+settings."""
 from __future__ import annotations
 
 import importlib
@@ -90,7 +90,6 @@ _LAZY = {
     "layout_of": (f"{_POUW}.verifier.credit", "layout_of"),
     "lms_verify": (f"{_SERVING}.coins.challenger", "lms_verify"),
     "pins_head": (f"{_SERVING}.coins.challenger", "pins_head"),
-    "registered_commit": (f"{_SERVING}.h1.registered", "commit"),
     "session_of": (f"{_SERVING}.coins.challenger", "session_of"),
     "y_value": (f"{_SERVING}.pearl_c.window", "y_value"),
     "RowTableArgs": (f"{_SERVING}.row_table_kernels", "Args"),

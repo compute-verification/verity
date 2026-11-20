@@ -15,8 +15,7 @@ module's docstring says what it holds.
 | --- | --- |
 | Pearl-C | `pearl_c/` |
 
-H1 is deleted: `h1/` holds only `registered.py`, the registered-table commit the vLLM adapter's expert and window tables
-use until it moves to `verity.commitments`. The live coins a window draws (its challenger and sample session) are in
-`coins/`.
+H1 is deleted; a registered table commits through `verity.commitments.periods.rows`. The live coins a window draws (its
+challenger and sample session) are in `coins/`.
 
 There is nothing here to run on its own: the vLLM adapter drives it while serving.
