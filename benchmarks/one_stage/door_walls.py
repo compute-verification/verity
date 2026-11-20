@@ -3,7 +3,7 @@ once (no commit, no prover, no coins), its templates' lowered rows held to their
 Programs put through the same steps and rows.
 
     door_walls.py census --circuit NAME|DIR [--blocks one-per-template|families|shapes|all|U,LO-HI,...] [--lower EXE]
-                         [--json FILE] [--no-rows]
+                         [--units one|floor|plan] [--cap N] [--json FILE] [--no-rows]
     door_walls.py fuzz --seed S [--cases N] [--minutes M] [--lower EXE] [--json FILE]
     door_walls.py case NAME [--lower EXE]
 
@@ -26,6 +26,14 @@ the commit C was built at (`built_at`), and exits 1 when any chosen block is ref
 refused honest or accept a wrong output, 2 when the tool itself fails. A census of the class of record runs on a node:
 ``research run --on auto --cwd clone --mem-gb 64 --cpus 8 --timeout 2h -- env CIRCUITS=class_of_record:families bash
 benchmarks/one_stage/door_walls.sh``.
+
+``--units`` sets each chosen block's size: ``one``, the chosen unit alone; ``floor``, from the chosen unit, the fewest
+consecutive units of its template (1, 2, 4, ..., then all of its range from there) for which every step passes, each size
+in a partition of its own; ``plan``, the block holding the chosen unit in the partition the real path registers
+(`plan_blocks`: `IF.partition_blocks` at ``--cap`` units a member for a circuit lowered as an `IF.Circuit`, one unit a
+block for Pearl+'s credited linear), every chosen block in that one partition. Under ``floor`` and ``plan`` a second
+table gives each block's size, its widest row in bits as `one_circuit.lower` hands it to `Compose.compose`, its gates
+(`count`) and its rows. In the runner, an item ``NAME:BLOCKS:UNITS``.
 
 ``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word-typed parameters and fields of bits of widths not a multiple of
 16, calls, nested calls, batches, scans, callees whose word parameters reach no word primitive, mixed widths, parts of
@@ -100,6 +108,39 @@ def _catalog() -> None:
     PG.register_boolean_bodies(V.boolean_version)
 
 
+#: by builder, the `IF.Circuit` it lowered and its wired Program and query, whose plan (`plan_blocks`) the census reads
+_CIRCUITS: dict[str, tuple[Any, tuple[Any, dict]]] = {}
+#: the units of a plan's member at most: the stated cap of `prove_path.py` and of the served window (`served_door.py window`)
+CAP = 64
+
+
+def _held(name: str, circuit: Any) -> tuple[Any, dict]:
+    built = circuit.program()
+    _CIRCUITS[name] = (circuit, built)
+    return built
+
+
+def plan_blocks(name: str, cap: int = CAP) -> tuple[list[tuple[int, int]], str]:
+    """The builder's blocks as the real path groups its units, and the code that makes them: `IF.partition_blocks` for an
+    `IF.Circuit` (each template's units cut at its wires' and registered reads' ends, then into members of at most
+    ``cap``), one unit a block for Pearl+'s credited linear (`credited_in_c.py`'s stage). `Unchecked` for a builder with no
+    plan."""
+    if name == "pearl_plus":
+        from verity.circuits import partition_object as PO
+        from verity.circuits import restrict as R
+        c, q = load(name)
+        pop = PO.TemplatePartition(R.program(c), q).population
+        return [(u, u + 1) for u in range(pop)], "benchmarks/pouw/credited_in_c.py's stage: one unit a block"
+    if name not in _CIRCUITS:
+        load(name)
+    if name not in _CIRCUITS:
+        raise Unchecked(f"{name}: no registered partition or plan groups its units")
+    from verity.commitments.periods import interface as IF
+    circuit, built = _CIRCUITS[name]
+    return ([(lo, hi) for lo, hi in IF.partition_blocks(circuit, cap, built)],
+            f"verity.commitments.periods.interface.partition_blocks(circuit, cap={cap})")
+
+
 def one_linear() -> tuple[bytes, dict]:
     """`one_linear.py`'s registered circuit: 288 ``Gemm_v2{K=576, N=8}`` units at Ampere's dot, ``x`` external, ``w`` the
     registered weight's rows."""
@@ -111,7 +152,8 @@ def one_linear() -> tuple[bytes, dict]:
     g = bind(G.Gemm, K=k, N=n, **G.GEMM_AMPERE)
     gid = descriptor_id(g)
     reg = I.Registered({"weights": e * k}, reads=(I.Read(gid, "w", "weights", 0, (tokens, e // n), 0, (0, n * k)),))
-    program, query = I.Circuit("one_linear", ((g, tokens * e // n),), external=(f"{gid}/x",), registered=reg).program()
+    program, query = _held("one_linear", I.Circuit("one_linear", ((g, tokens * e // n),), external=(f"{gid}/x",),
+                                                   registered=reg))
     return _bytes(program), query
 
 
@@ -122,7 +164,7 @@ def chain() -> tuple[bytes, dict]:
         "periods_chain", ROOT / "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
-    program, query = m.circuit().program()
+    program, query = _held("chain", m.circuit())
     return _bytes(program), query
 
 
@@ -138,7 +180,7 @@ def test_class() -> tuple[bytes, dict]:
     (`test_window_circuit`'s ``window`` fixture)."""
     S, WC = _vllm()
     c = WC.class_circuit(S._registered(), WC.WindowClass(2, 4, 2), None, WC.Grain(gemm_words=1024, rows=256, select=64))
-    program, query = c.program()
+    program, query = _held("test_class", c)
     return _bytes(program), query
 
 
@@ -149,7 +191,7 @@ def class_of_record() -> tuple[bytes, dict]:
     reg = S.Registered.of(S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(S.RTXPRO6000)),
                           default_seed=7)
     c = WC.lower(reg, WC.WindowClass(4, 27, 2), None, requests=[WC.Request(0, j, 27, 2) for j in range(4)]).circuit
-    program, query = c.program()
+    program, query = _held("class_of_record", c)
     return _bytes(program), query
 
 
@@ -198,7 +240,7 @@ def pous_setup() -> tuple[bytes, dict]:
     """Storage's store blocks: PoUS's setup C at its test's point (`window.Setup(64, 189, 16, 4, 4)`), every unit one
     `PousP2SetupCheck_v2`."""
     from verity.protocols.resource_accounting.memory.pous.prover import window as WIN
-    program, query = WIN.Setup(64, 189, 16, 4, 4).circuit().program()
+    program, query = _held("pous_setup", WIN.Setup(64, 189, 16, 4, 4).circuit())
     return _bytes(program), query
 
 
@@ -302,6 +344,9 @@ class Result:
     circuit: bytes | None = field(default=None, repr=False)
     key: str | None = None
     rows: str = "not reached"
+    row_bits: int | None = None
+    gates: int | None = None
+    tried: list = field(default_factory=list)
 
     @property
     def klass(self) -> str:
@@ -310,6 +355,29 @@ class Result:
 
 def _err(e: BaseException) -> str:
     return f"{type(e).__name__}: {e}"
+
+
+def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | None]:
+    """C_S's widest row in bits as `one_circuit.lower` hands it to `Compose.compose` (an input port's bits, an output
+    port's 16-bit words), and its root's two-input gates (`count`); None where C_S calls other than one template."""
+    from verity.circuits import restrict as R
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.count import count
+    from verity.circuits.program import input_id
+    from verity.protocols.proofs.spot.verifier.one_stage.certified_rows import _fields
+    D = R.program(c_s)
+    called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
+    try:
+        gates = count(D)[descriptor_id(D.root)].gates
+    except Exception:  # noqa: BLE001 - a block the count can't walk still gets its row width
+        gates = None
+    if len(called) != 1:
+        return None, gates
+    params, ret = D.defs[called[0]].signature()
+    ks = cut.get(called[0], {})
+    rows = [sum(t.leaf_widths()) // max(1, ks.get(n, 1)) for n, t in params]
+    rows += [16 * -(-sum(f.leaf_widths()) // 16) for f in _fields(ret)]
+    return max(rows, default=0), gates
 
 
 class Door:
@@ -364,6 +432,7 @@ class Door:
         cut, why = self.cuts()
         if why is not None:
             return stop("cuts", why)
+        r.row_bits, r.gates = sizes(r.c_s, cut or {})
         t = time.perf_counter()
         try:
             r.circuit = OC.lower(r.c_s, self.partition, self.exe, cut=cut)
@@ -522,30 +591,88 @@ def block_rows(c_s: bytes, cuts: dict, exe: Callable[[], Path], seed: int = 0, i
     return "yes" if v.exact else "yes (sampled)"
 
 
-def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True) -> list[Result]:
+UNITS = ("one", "floor", "plan")
+
+
+def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True, units: str = "one",
+           plan: Sequence[tuple[int, int]] | None = None) -> list[Result]:
     """Each chosen block through the door's static steps and, with ``rows``, its template's rows (`block_rows`, once
-    per template digest)."""
+    per template digest and block size). ``units``: ``one``, each chosen unit a block; ``plan``, the block of ``plan``
+    (one level of the population) holding each chosen unit, all in that one partition; ``floor``, from each chosen unit
+    ``u``, the fewest consecutive units ``k`` of its template, doubling from 1 up to the units of its range from ``u``
+    (that last tried too), for which every step passes, each ``k`` its own partition (`floor_of`)."""
     from verity.circuits import partition_object as PO
     from verity.circuits import restrict as R
     chosen = choose(c, query, how)
-    pop = PO.TemplatePartition(R.program(c), query).population
-    blocks, ks = tiling(chosen, pop)
-    door = Door(c, query, blocks, exe)
-    seen: dict[str, str] = {}
-    out = []
-    for (lo, hi, s), k in zip(chosen, ks):
-        r = door.run(k, lo, hi, s)
+    tp = PO.TemplatePartition(R.program(c), query)
+    seen: dict[tuple, str] = {}
+
+    def rows_of(r: Result, door: Door) -> None:
         if rows and r.c_s is not None:
-            key = "|".join(r.templates)
+            key = ("|".join(r.templates), r.units[1] - r.units[0])
             if key not in seen:
                 seen[key] = block_rows(r.c_s, door.cuts()[0] or {}, exe)
             r.rows = seen[key]
         r.c_s = r.circuit = None
-        out.append(r)
+
+    def said(r: Result) -> Result:
         if log:
-            log(json.dumps({"block": k, "units": [lo, hi], "templates": list(r.templates), "shape": s, "step": r.step,
-                            "text": r.text[:600], "rows": r.rows, "seconds": r.seconds}))
+            log(json.dumps({"block": r.block, "units": list(r.units), "templates": list(r.templates), "shape": r.shape,
+                            "step": r.step, "text": r.text[:600], "rows": r.rows, "row_bits": r.row_bits,
+                            "gates": r.gates, "tried": r.tried, "seconds": r.seconds}))
+        return r
+
+    out = []
+    if units == "floor":
+        for lo, _hi, s in chosen:
+            out.append(said(floor_of(c, query, tp, lo, s, exe, rows_of)))
+        return out
+    if units == "plan":
+        if plan is None:
+            raise ValueError("--units plan needs the circuit's plan (`plan_blocks`)")
+        blocks = sorted(plan)
+        starts = [lo for lo, _ in blocks]
+        door = Door(c, query, blocks, exe)
+        done = set()
+        for lo, _hi, s in chosen:
+            k = bisect.bisect_right(starts, lo) - 1
+            if k in done:
+                continue
+            done.add(k)
+            r = door.run(k, *blocks[k], s)
+            rows_of(r, door)
+            out.append(said(r))
+        return out
+    blocks, ks = tiling(chosen, tp.population)
+    door = Door(c, query, blocks, exe)
+    for (lo, hi, s), k in zip(chosen, ks):
+        r = door.run(k, lo, hi, s)
+        rows_of(r, door)
+        out.append(said(r))
     return out
+
+
+def floor_of(c: bytes, query: dict, tp: Any, u: int, s: str, exe: Callable[[], Path], rows_of) -> Result:
+    """The block [u, u + k) at the fewest ``k`` (1, 2, 4, ..., then the units of u's range from u) that passes every
+    step, else at the largest tried; its ``tried`` lists each ``k`` with its class (``through``) and widest row."""
+    _k, _t, a, n = next(x for x in tp.ranges if x[2] <= u < x[2] + x[3])
+    most = a + n - u
+    ks, k = [], 1
+    while k < most:
+        ks.append(k)
+        k *= 2
+    ks.append(most)
+    tried = []
+    for k in ks:
+        blocks, at = tiling([(u, u + k, s)], tp.population)
+        door = Door(c, query, blocks, exe)
+        r = door.run(at[0], u, u + k, s)
+        tried.append([k, r.klass or "through", r.row_bits])
+        if r.step is None:
+            break
+    r.tried = tried
+    rows_of(r, door)
+    return r
 
 
 def table(results: Sequence[Result], c_sha256: str = "", built: str = "") -> list[dict]:
@@ -580,6 +707,27 @@ def render(rows: Sequence[dict]) -> str:
         lines.append(f"| {r['class'][:160]} | {r['step']} | {r['count']} | {ts} | {rv} | block {ex['block']}, units "
                      f"{ex['units']}, {ex['templates'][0] if ex['templates'] else '-'} | {r['owner']} | {r['c_sha256']} "
                      f"| {r['built']} |")
+    return "\n".join(lines)
+
+
+def floor_table(results: Sequence[Result]) -> list[dict]:
+    """Per block of a ``floor`` or ``plan`` census: its template, the units at which it passes every step (``never, up
+    to N``), its widest row in bits and gates at that size, its rows, and the class it stopped at."""
+    out = []
+    for r in results:
+        k = r.units[1] - r.units[0]
+        out.append({"template": r.templates[0] if len(r.templates) == 1 else "|".join(r.templates), "first": r.units[0],
+                    "passes_at": k if r.step is None else f"never, up to {k}", "row_bits": r.row_bits,
+                    "gates": r.gates, "rows": r.rows, "class": r.klass or "through", "tried": r.tried})
+    return out
+
+
+def render_floor(rows: Sequence[dict]) -> str:
+    lines = ["| template | units per block it passes at | widest row (bits) | block's gates | rows | stopped at |",
+             "|---|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['template']} | {r['passes_at']} | {r['row_bits']} | {r['gates']} | {r['rows']} "
+                     f"| {r['class'][:120]} |")
     return "\n".join(lines)
 
 
@@ -1328,6 +1476,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--lower")
     a.add_argument("--json")
     a.add_argument("--no-rows", action="store_true")
+    a.add_argument("--units", choices=UNITS, default="one")
+    a.add_argument("--cap", type=int, default=CAP)
     b = sub.add_parser("fuzz")
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--cases", type=int, default=100)
@@ -1355,13 +1505,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     t = time.perf_counter()
     c, q = load(args.circuit)
     say("BUILT " + json.dumps({"circuit": args.circuit, "bytes": len(c), "seconds": round(time.perf_counter() - t, 1)}))
-    results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows)
+    plan, by = plan_blocks(args.circuit, args.cap) if args.units == "plan" else (None, "")
+    if by:
+        say("PLAN " + json.dumps({"by": by, "blocks": len(plan)}))
+    results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows, units=args.units,
+                     plan=plan)
     rows = table(results, hashlib.sha256(c).hexdigest(), built_at())
+    sized = floor_table(results) if args.units != "one" else []
     if args.json:
-        Path(args.json).write_text(json.dumps({"circuit": args.circuit, "blocks": args.blocks, "table": rows}, indent=1))
+        Path(args.json).write_text(json.dumps({"circuit": args.circuit, "blocks": args.blocks, "units": args.units,
+                                               "plan": by, "table": rows, "sizes": sized}, indent=1))
     print(render(rows))
+    if sized:
+        print(render_floor(sized))
     refused = sum(r.step is not None or not r.rows.startswith(("yes", "too large", "not reached", "unchecked")) for r in results)
-    say("CENSUS " + json.dumps({"circuit": args.circuit, "blocks": len(results), "refused": refused,
+    say("CENSUS " + json.dumps({"circuit": args.circuit, "units": args.units, "blocks": len(results), "refused": refused,
                                 "classes": len([r for r in rows if r["class"] != "through"])}))
     return 1 if refused else 0
 
