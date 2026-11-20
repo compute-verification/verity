@@ -235,23 +235,27 @@ def pearl_plus() -> tuple[bytes, dict]:
     return _bytes(program), LY.query(program)
 
 
+def _accounting() -> Any:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("door_walls_circuits",
+                                                  ROOT / "tests/benchmarks/one_stage/door_walls_circuits.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 def pous_setup() -> tuple[bytes, dict]:
     """Storage's store blocks: PoUS's setup C at its test's point (`window.Setup(64, 189, 16, 4, 4)`), every unit one
     `PousP2SetupCheck_v2`."""
-    from verity.protocols.resource_accounting.memory.pous.prover import window as WIN
-    program, query = _held("pous_setup", WIN.Setup(64, 189, 16, 4, 4).circuit())
+    program, query = _held("pous_setup", _accounting().pous_setup())
     return _bytes(program), query
 
 
 def network_scan() -> tuple[bytes, dict]:
     """The network scan's units: `scan_zk.scan_root` over its own templates (start, ingress, egress) at its test class
     and T = 4 buckets."""
-    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
-    cls, t = sz.TEST.cls, 4
-    defs = sz._defs(cls)
-    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, t))
-    root = sz.scan_root([(defs[k], counts[k], sz.FIXED[k]) for k in sz.TEMPLATES], t // cls.EVERY, cls.EVERY)
-    return _bytes(root), sz.PA.template_instances_query([defs[k] for k in sz.TEMPLATES])
+    root, query = _accounting().network_scan()
+    return _bytes(root), query
 
 
 def lean_odd() -> tuple[bytes, dict]:
