@@ -542,11 +542,13 @@ private def heldToy (n : Nat) : Prog :=
   let input : Defn :=
     { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
       outLeaves := 1, binding := some Flock.Program.RUN }
-  let a : Defn := { key := "A", id := "A", prim := true, params := #[("x", .array 4 v16)], ret := v16, gates := 1,
-    paramLeaves := 4, outLeaves := 1 }
-  let nodes : Array Node := #[{ form := .batch, fn := 0, args := #[], out := .array 4 v16, n := 4 },
+  let a : Defn :=
+    { key := "A", id := "A", prim := true, params := #[("x", .array 4 v16)], ret := v16, gates := 1, paramLeaves := 4,
+      outLeaves := 1 }
+  let reader : Node :=
     { form := .batch, fn := 1, out := .array n v16, n := n, axes := #[none],
-      args := #[{ ty := .array 4 v16, seq := Flock.Program.Seq.ofParts #[.affine false 0 0 4] }] }]
+      args := #[{ ty := .array 4 v16, seq := Flock.Program.Seq.ofParts #[.affine false 0 0 4] }] }
+  let nodes : Array Node := #[{ form := .batch, fn := 0, args := #[], out := .array 4 v16, n := 4 }, reader]
   let root : Defn :=
     { key := "R", id := "R", prim := false, params := #[], ret := v16, gates := 0, paramLeaves := 0, outLeaves := 1,
       body := { params := #[], retType := v16, nodes := nodes, ret := default, offsets := #[0, 4, 4 + n] } }
