@@ -1149,7 +1149,7 @@
   "InferenceOnlyVerifier.Theta",
   "InferenceOnlyVerifier.Desc",
   "InferenceOnlyVerifier.Protocol",
-  "InferenceOnlyVerifier.DefinitionDigest",
+  "Circuits.DefinitionDigest",
   "Spot.RecordText",
   "Flock",
   "Base",

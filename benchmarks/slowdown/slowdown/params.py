@@ -6,7 +6,7 @@ sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a 
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]
-    phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm-80gb-tensor/e4m3 x 8", status = "datasheet" }
+    phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm-80gb-sm/e4m3's datasheet reading x 8", status = "datasheet" }
 
 What another file states is read from it, not restated in a layer (`sourced`; a file that sets one of these keys is
 refused). From `verity`: the monitoring periods are core's (`PERIODS`), each the registry's `horizon.<name>.seconds`; the
