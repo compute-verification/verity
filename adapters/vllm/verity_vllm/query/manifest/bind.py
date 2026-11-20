@@ -37,7 +37,8 @@ each step's events in four passes; the k-th event of a name in the step is occur
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
    0..n-1 for n members, slot i binds the i-th; one member left, slot 0 binds it; otherwise none binds (a hook that returned y while
    the quant branch went unacquired never binds y to port 0).  A narrowed linear's rows (a row's `narrowed_of`: some columns of the
-   rows of a tensor the module returns) are no tuple slot: only a label binds them.
+   rows of a tensor the module returns) are no tuple slot: only a label binds them, and its widest rows' member binds by slot; a slot
+   of a narrowed linear that binds nothing is refused, by its module, invocation and slot.
 
 A row whose Values are rows r0.. of the runtime tensor (`runtime_rows`) binds like any other; the binding map starts each request's
 entry at row r0 of its share (`runtime_place`).
@@ -47,7 +48,7 @@ never a tuple slot; when several requests' rows spell it at one step (two rows a
 the k-th of them in the step's row order (`owners`), the order the collector commits its rows in.
 
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
-`""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
+`""`, which no row has (but a narrowed linear's, refused above).  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
 every missing or doubly bound identity.  What stays by name, each with its reason: a source's declared label (the tap knows which
 Call's port it reads) and the encodings above (identity format).
 """
@@ -285,6 +286,9 @@ class Binder:
                 taken.add(c)
             for slot in order:
                 if out[sl[slot]] is None:
+                    if any(c[0] == op and c[2] == k for c in narrowed):
+                        raise ValueError(f"step {step}: {op} at invocation {k}, slot {slot}: a narrowed linear's slot binds none of "
+                                         f"its members {[c[1] for c in ops.get(op, []) if c[2] == k]} (left: {[c[1] for c in left]})")
                     out[sl[slot]] = (op, "", k, "unbound")
         return out  # type: ignore[return-value]
 

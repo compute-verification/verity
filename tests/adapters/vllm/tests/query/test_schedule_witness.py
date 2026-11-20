@@ -1,7 +1,5 @@
-"""A TP rank Program's `schedule` witness (`format.SCHEDULE_PARAM`, DeepSeek-V4's Marlin align keys) is neither token ids nor an identity
-of the manifest.  The DSV4 manifest of record counted each `MoeAlignRanks_v1` read of it as an `input_token_ids` row of the experts module
-(one row per align call; on a hash-routed layer the 1536 router reads and the align's one shared a row), which no source binds and the
-replay would have read as the prompt.  The query header records the witness and its readers; another reader is refused by name."""
+"""A Program's `schedule` input (`format.SCHEDULE_PARAM`) is neither token ids nor an identity of the manifest, and nothing commits
+or binds it: every Call that reads it is refused by name."""
 from __future__ import annotations
 
 import pytest
@@ -9,7 +7,6 @@ import pytest
 from tests.query.test_module_body import W, _call
 from tests.query.test_tp_moe_members import tp_moe_program
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.required import QUERIES, request_manifest
 from verity_vllm.query.units import ValueRef
@@ -45,23 +42,11 @@ def _manifest(P: ProgramView, rank: int, query: str) -> dict:
     return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=2, query=query).manifest
 
 
-@pytest.mark.parametrize("query", QUERIES)
-def test_the_schedule_is_no_token_id_and_the_header_names_its_readers(query):
-    ms = [_manifest(aligned_program(), rank, query) for rank in (0, 1)]
-    for m in ms:
-        assert m["complete"], m["unmodelled"]
-        ids = [(x["op_path"], x["rows"]) for x in m["identities"] if x["family"] == "input_token_ids"]
-        assert ids == [(f"{W}.embed", 1)], ids
-        assert m["query"]["tp"]["witness_inputs"] == {"schedule": {"readers": 1, "binding": "each reader's own committed rank (port 0)"}}
-        assert not [x for x in m["identities"] if "schedule" in (x["op_path"], x["output_member"])]
-    g = merge_ranks(ms)
-    assert g["complete"] and g["tp_peer_binding"]["n_unbound"] == 0, g["tp_peer_binding"]
-
-
-def test_another_reader_of_the_schedule_is_refused_by_name():
-    m = _manifest(aligned_program(reader="MoeAlignRanksByIndex_v1"), 0, QUERIES[0])
+@pytest.mark.parametrize("reader", ["MoeAlignRanks_v1", "MoeAlignRanksByIndex_v1"])
+def test_a_reader_of_the_schedule_is_refused_by_name(reader):
+    m = _manifest(aligned_program(reader=reader), 0, QUERIES[0])
     assert not m["complete"]
-    assert [k for k in m["unmodelled"] if "reads the `schedule` witness" in k and "MoeAlignRanksByIndex_v1" in k], m["unmodelled"]
+    assert [k for k in m["unmodelled"] if "reads the `schedule` witness" in k and reader in k], m["unmodelled"]
 
 
 def test_a_program_without_the_witness_states_none():

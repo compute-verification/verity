@@ -10,7 +10,7 @@ Needs torch (torch.save/load of the oracle steps); CPU only.
   * NEGATIVE retained copy changed after the commit (the oracle agrees with the change) -> not_verified -> FAIL
   * MoE align witnesses: nothing is exempt, so every tensor is compared whatever the witnesses say; a differing witness FAILS by name
     with what it implies (a routing difference, or routing or schedule), even when every value is equal; a witness on one side only
-    FAILS; a schedule difference alone never reads as routing
+    FAILS
 
 The rank's members are committed on the GPU-tree step block path and read through `oracle_compare.OpenedReader` (opened, verified against the
 rank's run root), as `worker.tp2_commit_finalize` reads them.
@@ -365,5 +365,3 @@ def test_a_witness_on_one_side_only_fails_named(tmp_path):
     (list(OW.MEMBERS), OW.ROUTING), (["align.rank"], OW.ROUTING_OR_SCHEDULE), (["align.rank", "align.start", "align.blk"], OW.ROUTING_OR_SCHEDULE)])
 def test_what_a_differing_witness_implies(members, implies):
     assert OW.implied(members) == implies
-
-

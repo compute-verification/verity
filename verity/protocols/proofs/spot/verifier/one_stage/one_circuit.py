@@ -14,7 +14,7 @@ from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
-from verity.circuits.program import input_id
+from verity.circuits.program import input_id, recut_gates
 
 from .certified_rows import _fields
 from . import lean_child as LC
@@ -84,8 +84,11 @@ def restrict(c: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, 
              decoded: Decoded | None = None) -> bytes:
     """C_S (`OneStageZk.restrict`): the descriptor bytes of C compacted to the block of ``units`` (ascending ``[lo, hi)``
     ranges of the partition's units), Core's `Circuit.restrict` (`restrict.restrict`); `Refused` where C, the partition
-    or the units give no block."""
-    return R.restrict(c, partition, [tuple(u) for u in units], D=(decoded or Decoded(c)).get()).descriptor
+    or the units give no block, and where C's root reads an input node recut, as the gate layout refuses it."""
+    D = (decoded or Decoded(c)).get()
+    if D.root.body.recut:
+        raise Refused("E_FORM", recut_gates(D.root.body.recut))
+    return R.restrict(c, partition, [tuple(u) for u in units], D=D).descriptor
 
 
 def _listed(query: Mapping[str, Any]) -> list[Any] | None:

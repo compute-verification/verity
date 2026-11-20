@@ -59,10 +59,8 @@ The attestation's signature reads no hash of witness. The network attester signs
 - `salt_c` is sampled by the network attester (`certificate.Issuer`'s `coins`), 64 bytes, fresh per record, and handed to the
   prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf is
   the head alone);
-- each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
 - the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, execution phase) and
-  `D`, a hiding commitment to `R`. The in-the-clear check (`TransferBlocks.clear`, a debug comparison) also checks `D`
-  against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
+  `D`, a hiding commitment to `R`. `CertifiedRecord.verify` checks `D` against the head and `salt_c` over the opening.
 
 ## The network attester (`grid`)
 
@@ -170,107 +168,13 @@ bit set and the parameters digest of `params` and Σ_sync, and compares it with 
 digests mean equal records, so the audit stays exact. An attested record rests on `cr/sha-512`,
 on the signature's unforgeability, and on an honest network attester.
 
-## Through the proof system (`service`)
+## N2's link (`service`)
 
-One execution phase's attestations are registered through the proof system
-(`verity.protocols.proofs.spot.verifier.service`) as a `Spec` of its own (`service.TransferBlocks`, one per link):
-- **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress attested records,
-  leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the network attester's salt, then the
-  attestation), and their heads,
-  leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
-  `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the execution phase. A proof that reads only a
-  head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the attestation's 272
-  more. The ZK server keeps the records and salts (`Hidden`). The challenger receives one salted root and never an
-  attestation, a network attester's salt or a head.
-- **Selection:** `All`. A registration is one execution phase, one proof block, so an accepted outcome is the exhaustive
-  fact. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
-  registration's order (`TransferBlocks.register`): the receipt keeps the order, and the order is the execution phase.
-- **The network verdict of record** is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε
-  or share credit. Over the stream's registrations and outcome records, it accepts only when, for every execution phase w of
-  the link (`TransferBlocks.windows`), the w-th registration is execution phase w and its outcome of
-  record accepted. A rejected or late execution phase,
-  a registered one with no outcome yet, a gap in the registrations (one registered out of order or never, or a
-  run that stops short of the profile) and a registration past the profile each reject the link, and `refused` lists
-  their execution phases. A run's network verdict is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a
-  Python model, not the verifier) builds no `TransferBlocks` outcomes, so its account doesn't read this
-  aggregate. Its `Account.sound` is the same AND over its own port records: false on any refused port's execution phase, each
-  charged at its link's line rate (`refused_bits`).
-- **Public** (`service.PUBLIC`): the population, the execution phase, the value's leaf count, domain and salted root, the
-  parameters digests and the network attester's profile (its execution phases and parameters digest), all bound by the spec's context with the link, the run,
-  the network attester's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A
-  rejected execution phase shows only the service's `reject`; the violation's kind stays in the verifier. A registration
-  with any other field, a second root, a root entry with another key, or anything more in `window` is refused.
-- **The check** is `TransferBlocks.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, over the two attestations' signed
-  digests (``egress``, ``ingress``) and each end's head check's other parameters but its direction, which the proof
-  block fixes (egress 0, ingress 1). Its output is two bits: ``verdict``, the AND of the two head checks, and
-  ``deadline``, the AND of the two heads' deadline bits. The attestations are not in the proof block: the verifier
-  checks them on their public fields (`TransferBlocks.certified`: each verifies under the network attester's key in its session,
-  `TransferBlocks.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
-  states the proof block on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
-  network attester's salt) and the output row ``o0``, one u16 word (`TransferBlocks.layout`, `service.OUT_BITS`), its circuit
-  `TransferBlocks.proof_block`. The head check is a Boolean Definition,
-  `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
-  bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
-  root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and `window` are the
-  execution phase's, its status is complete, its T, r, B, τ_b and parameters digest are the end's declared grid's
-  (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the execution phase
-  (`NetworkHeadCounts`; an execution phase past the profile has no row and is a reject), and the head's record digest R
-  (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the attestation
-  signs the head the check opened. In the proof block's Program each head check is one gate that names the Definition
-  and its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment
-  gadgets' Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest
-  is core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names
-  a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
-  (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
-  through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
-  class no sidecar pins has a gate naming no digest (`@unpinned`), and no proof of its proof block is accepted until a
-  root of that class is pinned.
-- **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
-  T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
-  of it the head row's hm96 digest; the signed digest is 290,246 at T = 4 and 1,333,292 at T = 600, the record digest's
-  ⌈(244 + L + 4T) / 128⌉ compressions (five and 23), the salted digest's two and an equality of 512 bits. With the
-  three ANDs that join the four parts a head check is 1,066,260 at T = 4 and 3,229,371 at T = 600. The record digest
-  hashes the head a second time, beside the opening's row digest; a record v3 whose digest is the head row's
-  sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
-  a proof can make without the content, and the only grid check on ingress. It runs on every execution phase: a
-  structural check runs in full.
-- **N3, the content check,** a prototype evaluated in the clear and in no proof-system Spec, is retired, superseded by the network attester's step-indexed scan (`ingress_scan`, `egress`), which
-  `verity/protocols/resource_accounting/network/prover/scan_zk.py` proves in zero knowledge, outside this protocol.
-- **Its verifier** is `TransferBlocks.verify`, which decides on the delivered proof (`service.Delivered`) and
-  public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
-  circuit file the auditor committed) accepts every session, the sessions prove the link's registered proof block (every
-  gate names a pinned digest and every session names the registered Program, the partition object's `program`,
-  `TransferBlocks.proved`) and the sampled proof block; the proof's ``pub`` row opens, under the salt delivered, to the
-  verifier's own copy (`TransferBlocks.public_arguments`: the registered root, the execution phase's public fields and both
-  signed digests) and its ``o0`` row to the output word delivered, whose verdict and deadline bits are both 1; the
-  attestations verify (`TransferBlocks.certified`); and the execution phase's declared sync is one of Σ_sync. It receives the
-  registration, the sample, the attestations' public fields and signatures (from the network attester, beside the proof
-  system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
-  file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
-  ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. The verdict of record is the Lean's (`NetworkCheck.TransferBlocks`, `service.OF_RECORD`), with the
-  Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its
-  claim is the heads' only: both are the network attester's, on its grid under its parameters digest. The egress grid
-  is the head's counts filled with its frames in order, and the head's digest binds both, so the frames are the rest of
-  the grid, and nothing in this protocol holds them (the scan does).
-- **The in-the-clear check** is `TransferBlocks.clear`, over the opening: the opening reproduces the registered root,
-  each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), the opening's two
-  attestations hold under the network attester's key in its session (`TransferBlocks.certified`), and both heads met their
-  deadline. It is a debug comparison (`verify(…, opening=…)`, off by default, which
-  decides nothing) and the tests' reference. A run that proves nothing (a rehearsal, the simulator) has no outcome of
-  record, so `TransferBlocks.network_verdict` rejects its link, every window it didn't prove refused.
-
-What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered proof
-block whose public row is the verifier's own and whose output word is 0b11 and the attestations verify; the outcome record binds the root, the sample and the delivered sessions. The claim is counts only: on every
-execution phase, both heads are the network attester's, on its grid and under its parameters digest, so the link's
-timing is its schedule's ("A network attester link" below). A link that isn't the network attester's gets no verdict
-(`ValueError`, failing closed). What it doesn't establish: the head
-check leaves the head's deadline byte and frames root free. The proof block reads the deadline for its public bit and
-nothing reads the frames root, so an accepted outcome says nothing of the frames. The proof opens the head leaves (2, 3)
-only: the record leaves (0, 1), each attested record whole, are committed but nothing in the verdict reads them, and
-the attestations' signatures are checked on the host from their public fields, not in the proof. One clock per
-spatial unit across links is not checked (each registration is one execution phase, alone), and nothing here checks the
-frames' consistency with the served computation.
+`service.TransferBlocks` is one link's public fields (the link, its one grid, the network attester's key and session, its
+profile) and the attestations' check on their public fields (`TransferBlocks.certified`: two attestations, each verifying
+under the network attester's key in its session and naming the link, its end and the execution phase); `service.encode` is
+an attested record's leaf bytes. N2's execution phase verdict is the Lean's, `NetworkCheck.TransferBlocks`, which
+`network-records verdicts` answers as ``link-window``; no Python sends it a case, and no proof of N2's head checks runs.
 
 ## A network attester link (`service.NetworkAttesterProfile`)
 
@@ -762,7 +666,7 @@ phase, and each bucket's proof block reads its row there by a registered read. T
   then the slots no connection holds.
 - **Row t,** for t in 0 … T − 1, is bucket t's R cells concatenated: R·B bytes, 25,088 at the rehearsal (R = 98) and
   431,616 served (R = 1,686).
-- **Its leaf value** is `head_check.hiding_value(row, salt)`, the `hm96-sha512/row/v2` leaf: hm96's (`hm96.SHA512`,
+- **Its leaf value** is `bits.hiding_value(row, salt)`, the `hm96-sha512/row/v2` leaf: hm96's (`hm96.SHA512`,
   its default key) tree leaf over `commit_string(key, sha512_row_v2_digest(row, 8·R·B), salt)`. The salt is fresh for
   each row: 192 bytes of the network attester's own randomness.
 - **The tree** is the dense `frame-v3-sha512` domain of T rows, `io_tie.domain(binding, T)`, which is
