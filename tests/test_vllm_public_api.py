@@ -184,10 +184,6 @@ PUBLIC = {
     "verity_vllm.pipeline.long_row": "I1: the check template of a two-stage window over one of DSA's long rows "
                                      "(DsaTopKReadRowsCut, at the served statics SERVED and served) and the window's "
                                      "class over it (layout), which benchmarks/one_stage/two_stage.py registers",
-    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
-                                     "Program it declares (H1Windows), which a period's offline Program must equal",
-    "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
-                                      "its record R and their log (W_FILE, R_FILE, LOG)",
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
@@ -297,9 +293,6 @@ PUBLIC = {
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
                                        "Context, Target)",
-    "verity_vllm.protocols.pouw": "I1: PoUW's protocol option, and what a run that is its own auditor reads of it: its "
-                                  "coins an in-process challenger's (challenged) and the H1 run an installed H1 option "
-                                  "serves (h1_run), which the harness's arms and benchmarks/pouw read",
     "verity_vllm.messages": "I1: the messages between the adapter and the prover: the process's exchange, through which "
                             "the adapter's hooks emit verity.hooks events and schemes file their requests (current), "
                             "which benchmarks/pouw's Pearl-C arms file their kernel through",
@@ -315,9 +308,7 @@ PUBLIC = {
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
 KNOWN = frozenset({
     "verity_vllm.check.fold_compare",
-    "verity_vllm.check.replay.evaluate",
     "verity_vllm.commit.committer.host_retention",
-    "verity_vllm.commit.opened",
     # the compile slice and its pieces (`verity_vllm.compiler`), which the network attester's drivers under `benchmarks/` import
     "verity_vllm.compiler.cache_step",
     "verity_vllm.compiler.compile_slice",
@@ -368,7 +359,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.hopper",
     "verity_vllm.definitions.registry.int8_exact",
     "verity_vllm.definitions.registry.io_shell",
-    "verity_vllm.definitions.registry.lifted",
     "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
     "verity_vllm.definitions.registry.pouw_rows",
@@ -397,7 +387,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",
-    "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
@@ -405,7 +394,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.commit_replay",
     "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
@@ -425,18 +413,12 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_attach_specs'),
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
-    ('verity_vllm.check.replay.evaluate', '_Unresolved'),
-    ('verity_vllm.check.replay.evaluate', '_evaluate_row'),
-    ('verity_vllm.check.replay.evaluate', '_weight_runs'),
     ('verity_vllm.compiler.served_tie', '_bits'),
     ('verity_vllm.compiler.served_tie', '_int'),
     ('verity_vllm.definitions.registry.hopper', '_BoundPrims'),
-    ('verity_vllm.definitions.registry.lifted', '_LIFTED_COMPOSITES'),
-    ('verity_vllm.definitions.registry.lifted', '_UNLIFTED_OF'),
     ('verity_vllm.pipeline.serving_rows', '_bind'),
     ('verity_vllm.pipeline.serving_rows', '_operand'),
     ('verity_vllm.pipeline.serving_rows', '_read_s8'),
-    ('verity_vllm.pipeline.tp.commit_replay', '_of_record'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
@@ -459,7 +441,6 @@ KNOWN_SITES = {
     ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
-    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _SHARED_WORDS,
 }

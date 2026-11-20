@@ -57,11 +57,11 @@ def test_a_trace_splits_into_loads_and_each_is_timed_from_its_arrivals_and_steps
 
 
 def test_a_windows_close_on_the_loop_counts_only_in_busy_throughput(tmp_path):
-    w = {"window": 0, "seconds": {"open": 0.4, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.5}, "pouw_h1": {"tied": True}}
+    w = {"window": 0, "seconds": {"open": 0.4, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.5}}
     ld = O.serve_dir(_dir(tmp_path / "c", _load(10.0, 0.5, window=0), windows=[w]))["loads"][0]
     assert ld["tokens_per_s"] == pytest.approx(2.0) and ld["busy_tokens_per_s"] == pytest.approx(1.0)
     assert ld["windows"] == {"n": 1, "closed_mid_load": 0, "open_s": 0.4, "close_on_loop_s": 2.0, "close_on_loop_after_s": 2.0,
-                             "arm_close_s": 1.5, "h1": ["tied"]}
+                             "arm_close_s": 1.5}
 
 
 def test_the_table_takes_first_loads_and_puts_composed_over_stock(tmp_path):
@@ -148,8 +148,8 @@ def test_a_load_the_commit_serves_as_two_windows_is_one_load_with_the_gap_and_mi
         return [{"kind": "arrive", "request": a, "t": t0}, {"kind": "arrive", "request": b, "t": t0},
                 {"kind": "window", "window": w, "event": "open"}, _step(t0 + 1, {a: 1, b: 1}, (a, b)),
                 {"kind": "window", "window": w, "event": "close"}]
-    ws = [{"window": 0, "seconds": {"open": 0.5, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.0}, "pouw_h1": {"tied": True}},
-          {"window": 1, "seconds": {"open": 0.5, "on_loop": 1.0}, "pouw_h1": {"error": "refused"}}]
+    ws = [{"window": 0, "seconds": {"open": 0.5, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.0}},
+          {"window": 1, "seconds": {"open": 0.5, "on_loop": 1.0}}]
     c = _dir(tmp_path / "c", half(10.0, 0) + half(13.0, 1), windows=ws)
     (c / "load.timings.json").write_text(json.dumps(_timings(9.9, 0.0, 1.2, 4.2)))
     assert len(O.loads(O._jsonl(c / O.TRACE))) == 2
@@ -157,7 +157,7 @@ def test_a_load_the_commit_serves_as_two_windows_is_one_load_with_the_gap_and_mi
     assert (ld["requests"], ld["tokens"], ld["steps"], ld["span_s"]) == (4, 4, 2, pytest.approx(4.0))
     assert ld["time_to_first_token_s"] == pytest.approx(1.0) and ld["busy_tokens_per_s"] == pytest.approx(4 / 5.0)
     assert ld["windows"] == {"n": 2, "closed_mid_load": 1, "open_s": 1.0, "close_on_loop_s": 3.0, "close_on_loop_after_s": 1.0,
-                             "arm_close_s": 1.0, "h1": ["tied", "error"]}
+                             "arm_close_s": 1.0}
 
 
 def test_public_ratios_carry_no_count_time_or_rate_of_either_arm(tmp_path, capsys):

@@ -15,8 +15,7 @@
 testpaths = ["."]
 pythonpath = ["../../.."]   # the repository root: its tests import others' as `tests.X`, the tests of X
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
-# The suite also tests PoUW's pieces of composite's cases (`pouw_piece.py`, on PoUW's difftest cases and a served H1
-# window's line), and v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
+# The suite also tests v2's case (`v2_case.py`, on a served window's compose.log), and the two-stage audit's second stage on
 # a toy replay block (`toy.py`, `test_toy.py`; `audit.py` proves it on a node), and, opt-in (`VERITY_TWO_STAGE_GUARD`;
 # `guard_node.py --pytest` on a node), SPOT[Flock]'s two-stage Lean model on a run's guard export (`test_guard.py`).
 
@@ -37,8 +36,8 @@ untraced = [
     "test_served_advice_day.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
-    "test_proof_layers_script.py", "test_kept_bootstrap.py",
-    "test_toy.py", "test_guard.py",
+    "test_kept_bootstrap.py",
+    "test_toy.py", "test_guard.py", "test_door_walls.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
@@ -78,7 +77,7 @@ parts = 7
 # records audit. `adapters/vllm/tools/served_run/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `adapters/vllm/tools/served_run/published.sh`,
-# the list of files a Commit run publishes, which `test_commit_records` holds a5_llama1b_h200.sh to.
+# the list of files a Commit run publishes, which `test_commit_records` holds to its entries.
 # `verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes

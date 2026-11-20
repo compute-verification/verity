@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,10 @@ if importlib.util.find_spec("torch") is not None:  # torch is an extra of this p
     import torch._inductor.config  # noqa: F401
 
 import verity.circuits.defs  # noqa: E402,F401  (loaded before the first test, so the guard's snapshot always holds it)
+
+sys.path.append(str(Path(__file__).resolve().parents[3] / "verity" / "circuits"))
+
+import stand_in  # noqa: E402,F401  (the test primitives' Boolean bodies, registered as it loads)
 
 _MISSING = object()
 

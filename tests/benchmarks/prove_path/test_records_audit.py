@@ -163,6 +163,12 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
         RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
 
 
+def test_the_advice_binding_is_the_registrations_alone_and_leaves_the_circuit_record_as_it_is(written, tmp_path):
+    bare = _write(tmp_path / "bare", advice=False)
+    assert bare.doc == written.doc
+    assert not {"compiler", "advice"} & set(bare.rec["window"]) and {"compiler", "advice"} <= set(written.rec["window"])
+
+
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
     """A window's io shell (`ScanSlots_v4`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
@@ -536,40 +542,6 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     served = json.loads(capsys.readouterr().out)
     assert PP.main(["compiler", "--serve", str(phi)]) == 0
     assert json.loads(capsys.readouterr().out) == served
-
-
-def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
-    circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
-    takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-
-    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
-
-    def lower(registered, compiled, cls, tables=None):
-        seen.append((cls.outputs, tables))
-        return circuit
-
-    monkeypatch.setattr(WC, "window_circuit", lower)
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
-    (s.run / "h1").mkdir()
-    (s.run / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
-    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
-    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--class", "4,32,2"]
-    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
-    assert PP.main([*base, "--out", str(tmp_path / "t.json"), "--window-registration", str(tmp_path / "w.json")]) == 0
-    assert seen == [(2, None), (2, WC.Tables(64, 8, 2))]
-    with pytest.raises(SystemExit):
-        PP.main([*base, "--out", str(tmp_path / "k.json"), "--window-registration", str(tmp_path / "w.json"), "--h1-prover", "k"])
-    capsys.readouterr()
-    assert PP.main([*base, "--out", str(tmp_path / "o.json"), "--window-registration", str(tmp_path / "other.json")]) == RA.REFUSED
-    assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
 
 
 def _listed(w: CS.Binding) -> CS.Binding:

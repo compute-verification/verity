@@ -36,7 +36,8 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   verifier's process answered of the session after it opened, in the order it answered them, as `Verifier.handle`
   takes its `p2_*` ops, each line's bytes as the prover sent them, hex: `{"op": "p2_event", "event", "coin"}` (a
   start, a boundary or a close with the coin the challenger released for it, `Verifier.eventOn 2 1`, whole: its
-  `COIN_BYTES`, of which the process read the first `Codec.COIN_BYTES`), `{"op": "p2_root", "t", "i", "now", "line"}`
+  `COIN_BYTES`, of which the process read the first `Codec.COIN_BYTES`; a close's its sample's coins, whole, which the
+  process read whole), `{"op": "p2_root", "t", "i", "now", "line"}`
   (`P2Session.receive`), `{"op": "p2_openings", "t", "line"}` (`P2Session.verify`) and `{"op": "p2_fail"}`
   (`P2Session.fail`). The close is the memory challenger's signature over the whole case (`P2Close`): its key, the
   log's length, the case's chain (`P2Close.chainOf` over the case's head `headOf`, the commitment's digest and the
@@ -46,8 +47,9 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
 * the check, in order: the registration's root is the params' `store_root`; the close (`closeRefusal`) is under a
   trusted key, counts the log's lines, holds the case's
   chain and verifies under S1's LMS at its deployed parameters (`Lms.deployed`, `MemoryChallenger.LMS`) on the params'
-  session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
-  state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
+  session; every coin is the challenger's `COIN_BYTES`, a close's a whole number of them (`coinRefusal`); then the log
+  replayed from the session's first state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`, a close's
+  whole. Each refusal is named. The replay rejects
   when an entry is a request the process would have answered with an error, and with the failure that rejected the
   session; it is undecided while a window is unverified; it accepts once every window is and each drew exactly
   `min(s, U_t)` of its receipts (`P2Session.drawsRefusal`).
@@ -211,21 +213,31 @@ def closeRefusal (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence
 def signedOk (lp : Lms.Params) (p : Params) (head : ByteArray) (e : Evidence) : Bool :=
   (closeRefusal lp p head e).isNone
 
-/-- Why a coin of the log isn't the challenger's whole coin, none when every coin is. -/
+/-- Why a coin of the log isn't the challenger's whole coin, none when every coin is: a close's is its sample's coins,
+whole, a positive number of them (their number is `Verifier.withCoin`'s to check). -/
 def coinRefusal (e : Evidence) : Option String := Id.run do
   for h : k in [0:e.log.size] do
-    if let .event _ (some c) := e.log[k].op then
-      if c.size ≠ COIN_BYTES then
-        return some s!"log entry {k}: a coin is the challenger's {COIN_BYTES} bytes, not {c.size}"
+    if let .event ev (some c) := e.log[k].op then
+      match ev with
+      | .close .. =>
+        if c.size = 0 || c.size % COIN_BYTES ≠ 0 then
+          return some s!"log entry {k}: a sample's coins are the challenger's whole {COIN_BYTES}-byte coins, not {c.size} bytes"
+      | _ =>
+        if c.size ≠ COIN_BYTES then
+          return some s!"log entry {k}: a coin is the challenger's {COIN_BYTES} bytes, not {c.size}"
   return none
 
 /-- One entry of the log through session `s`, as the verifier's process answers it (`Verifier.handle`'s `p2_*` ops),
-its coin read at its first `Codec.COIN_BYTES`: the session after it, or the error the process would have answered. -/
+its coin read at its first `Codec.COIN_BYTES`, a close's sample's coins whole: the session after it, or the error the
+process would have answered. -/
 def step (held : P2Session.Held) (s : Session.State) : Op → V Session.State
   | .event e coin =>
     match e with
     | .start _ | .boundary _ | .close .. => do
-      let (_, s) ← Verifier.eventOn 2 1 s e (coin.map (·.extract 0 Codec.COIN_BYTES))
+      let read := match e with
+        | .close .. => id
+        | _ => (·.extract 0 Codec.COIN_BYTES)
+      let (_, s) ← Verifier.eventOn 2 1 s e (coin.map read)
       pure s
     | _ => throw "a P2 session's events are a start, a boundary or a close: a root or openings is a line"
   | .root t i now line => pure (P2Session.receive held s t i line now).2

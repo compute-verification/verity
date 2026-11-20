@@ -38,4 +38,4 @@ def test_with_refresh_off_the_reference_prover_s_bytes_are_as_before():
     assert h.hexdigest()[:32] == OFF_DIGEST
 
 
-OFF_DIGEST = "44f48586406025d6efb522a0729da090"
+OFF_DIGEST = "6a296e500feae48597eaeb93872afb4d"

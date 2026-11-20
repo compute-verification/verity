@@ -6,9 +6,29 @@ reader of the linear takes y by wire from the node that wrote it and the verifie
         (a: Array<TM, f32[K]>, b: Array<TN, f32[K]>, cert, salt: u8[32], root: u8[64], unit: u32, rows: Array<TM, u32>,
          eb: Array<TN, e4m3[32]>, fa, fb: Array<K, e4m3[32]>, g: Array<32, f32[32]>)
         -> (digest: u8[64], y: Array<TR, bf16[TN]>, ok: bit)
-    PearlPlusTileLeaf_v1{D}                             on bits
-        (x: u8[64], y: u8[192], root, domain: u8[64], pos: Array<D, bit>, path: Array<D, u8[64]>) -> bit
-        1 iff the hm96-sha512 leaf of digest x under salt y opens at pos to root (`Hm96Sha512Leaf_v1`, `FrameV3Read_v1`)
+    PearlPlusTileSeed_v2{K,TN}                          on 16-bit words
+        (salt: u16[16], root: u16[32], col: u32)
+        -> (key: u16[16], eb_0 … eb_{TN-1}: Array<1, u16[2]>, f_0 … f_7: Array<K/8, u16[2]>)
+        key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), and the line indices: eb's col·TN + j one a field, F's
+        t in `F_ROWS` = 8 fields of K/8 (the σ of its unregistered word body behind `WordBits` and `BitsWord{16}`)
+    PearlPlusTileLine_v3{SIDE,FACTOR,G}                 on 16-bit words: the σ of one line's word body on each index
+        (key: u16[16], index: Array<G, u16[2]>) -> Array<G, u16[16]>   `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)
+    PearlPlusGramRow_v4{K,DEV,P}                        on 16-bit words: the σ of one Gram row's word body
+        (fb, fa: Array<K, u16[16]>) -> Array<32, u16[2]>       row P of `PearlCGram_v1`, for F_B's column P
+
+Each port and each output of these units is in 16-bit words, the width C commits a value in: a byte string two bytes a
+word, the first the low byte, and a value on bits (a line's 32 E4M3 codes, an index's or an FP32 word's 32 bits) its
+bits in order, low bit first, 16 a word; each unit takes its words' bits inside (`WordBits{16}`) and writes its bits
+back in words (`BitsWord{16}`), so no reader reads a writer's field at a width other than the writer's.
+
+The node (`pearl_plus_credited.PearlPlusTileCoreWords_v4`) maps the line over eb's TN indices one line a unit (SIDE 1,
+FACTOR 0, G 1) and over F's 8 groups of K/8 indices (SIDE 0 and 1, FACTOR 1, G K/8), and Calls the Gram row for each of
+F_B's 32 columns: each line unit and each row is independent given the key, so each is a unit of its own when C is laid
+(`verity.circuits.laying`), and eb, fa, fb and g reach the core as wired values. Every unit reads each of its writers'
+output fields whole: a line unit its key and its own indices (the seed writes one field a unit), a Gram row F_B's and
+F_A's lines (its column P a static, so F_B's column is no part of a line's field), and the core the lines and the rows.
+A reader of F reads 8 rows of each side whatever K, and a reader of eb one row a line, so that a row of B that the laying
+opens the core into reads its own line whole; Flock gives each row a block reads its own hm96 slot.
 
 The core, from the registry's call Definitions (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call`) and PoUW's inert-work bound (`inert_bound`):
 
@@ -35,9 +55,9 @@ The core, from the registry's call Definitions (`verity.protocols.resource_accou
   - ``ok`` is every real row's and B row's admission, the bound's verdict, each served word finite (`pearl_c_u.y` refuses
     a non-finite word and a BF16 overflow) and each filler row's every word zero, and-ed.
 
-Where the tile sits in the linear (its column tile) is C's wiring, so the core reads no column index: E_B's lines ``eb``
-are the column tile's, in the public row the verifier fills itself (`pearl_plus_credited.public`), with the salt, B's
-root and the rest of the noise, so the salt and the root reach the core only through that row.
+The core reads no column index: E_B's lines ``eb`` are the column tile's, which the noise derives from ``col``.  The node
+(`pearl_plus_credited.PearlPlusTileCoreWords_v4`) derives the noise and Calls the core on the salt and B's root of the public row
+the verifier fills itself (`pearl_plus_credited.public`), so the salt and the root reach the tile only through that row.
 
 The core is one registered Definition, its σ: its word body is an unregistered Definition the σ lifts and names as its
 word view, through which a fixture tile is evaluated on words against the scheme (`reference`).  Every Definition the core
@@ -50,22 +70,19 @@ from fractions import Fraction
 from typing import Any, Sequence
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.ops.fp32 import F32MulV2
 from verity.circuits.ops.prims import Bf16ToF32, F32ToE4m3Sat
-from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Eq, I32Le
+from verity.circuits.ops.scalar import Bf16GtStrict, BitAnd, F32IsFinite, I32Add, I32Eq, I32Le
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.refs import Coll, array_of, tuple_of
 from verity.circuits.silicon import fp32
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments.gates import frame_v3 as F3
-from verity.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.commitments.gates.hm96 import reference as hm96_reference
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 from verity.circuits.ops.boolean.versions import lift_body
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import PearlCRowA, PearlCRowB
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming import LINE
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise import BYTES32, BYTES64, PearlCRowDigest
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_forming import LINE, PearlCChain
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_noise import (
+    BYTES32, BYTES64, NORM_E, NORM_F, PearlCLineKey, PearlCNoiseLine, PearlCRowDigest, PearlCSeedB)
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCUnscale
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Shape
@@ -80,11 +97,11 @@ from . import tile_units as U
 from . import leaves as L
 from verity.circuits.ops import words as W
 
-__all__ = ["PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusSaltDead", "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3",
-           "PearlPlusTileLeaf", "core", "leaf_reference", "reference", "served"]
+__all__ = ["LINES", "PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusGramRowV4", "PearlPlusSaltDead",
+           "PearlPlusSaltDeadV2", "PearlPlusTileCoreV3", "PearlPlusTileLineV3", "PearlPlusTileSeed", "core", "gram_row", "line",
+           "noise", "reference", "seed", "served"]
 
-F32, U32, BIT, I32, BF16 = Value(32), Value(32), Value(1), Value(32), Value(16)
-HM96_SALT = Array(192, Value(8))
+F32, U32, BIT, I32, BF16, E4M3, W16 = Value(32), Value(32), Value(1), Value(32), Value(16), Value(8), Value(16)
 R = pc8.R
 SLICE = C.SLICE
 
@@ -247,38 +264,236 @@ _CORE = CompositeDefinition(
 PearlPlusTileCoreV3 = _on_bits(_CORE, 3)
 
 
-# ---- the leaf and the unit ----------------------------------------------------------------------------------------------
+# ---- the tile's noise ---------------------------------------------------------------------------------------------------
 
-def _refs(c: Coll) -> list:
-    return [c.refs[t] for t in range(c.refs.count)]
-
-
-def _words(c: Coll) -> Coll:
-    """A byte string's bits (bytes of 8 bits, LSB first) as hm96's and frame-v3's 64-bit words: LSB first, bytes big-endian."""
-    data = _refs(c)
-    out = [data[8 * (8 * w + 7 - b) + j] for w in range(len(data) // 64) for b in range(8) for j in range(8)]
-    return Coll(Array(len(data) // 64, F3.WORD), TR._refs(out))
-
-
-def _leaf_sig(S):
-    F3._check_depth(S.D)
-    byte = BL.bit_type(BYTES64)
-    return ((("x", byte), ("y", BL.bit_type(HM96_SALT)), ("root", byte), ("domain", byte), ("pos", Array(S.D, BIT)),
-             ("path", Array(S.D, byte))), BIT)
+def _times(e: U._Emit, x, n: int):
+    """``x`` · ``n`` (u32, wrapping) for a static n >= 1: `I32Add` of x's doublings at n's set bits."""
+    total = None
+    while n:
+        if n & 1:
+            total = x if total is None else e.call(I32Add, total, x)
+        n >>= 1
+        if n:
+            x = e.call(I32Add, x, x)
+    return total
 
 
-def _leaf_body(B, S, x, y, root, domain, pos, path):
-    leaf = B.call(Hm96Sha512Leaf, _words(x), _words(y))[2]
-    sibs = Coll(Array(S.D, F3.DIGEST), TR._refs([r for k in range(S.D) for r in _refs(_words(path[k]))]))
-    return B.call(F3.read(S.D, SCHEMA_HM96_SHA512_ROW_SEG), _words(root), _words(domain), leaf, pos, sibs)
+def _refuse_slices(b: dict) -> str | None:
+    k = b.get("K", 256)
+    return None if isinstance(k, int) and k >= SLICE and k % SLICE == 0 else f"F is whole {SLICE}-code slices: K = {k!r}"
 
 
-PearlPlusTileLeaf = CompositeDefinition(
-    "PearlPlusTileLeaf", 1, ("D",), _leaf_sig, _leaf_body, conformance="exact-model-tested",
-    doc="1 iff the hm96-sha512 leaf of the 64-byte digest x under the 192-byte salt y, framed under hm96-sha512/row-seg/v1 "
-        "at rank = position = pos, opens along path to root in the depth-D frame-v3-sha512 tree of domain id domain "
-        "(`audit.Hm96Domain` with digests)")
+def _refuse_gram(b: dict) -> str | None:
+    dev, p = b.get("DEV", "h100"), b.get("P", 0)
+    return _refuse_slices(b) or (None if dev in DEVICES else f"no device record {dev!r}") or \
+        (None if isinstance(p, int) and 0 <= p < R else f"P is F_B's column, 0 <= P < {R}: {p!r}")
 
+
+_NOISE_CONF = ("protocol-defined; equal to `pearl_plus_credited`'s row references and the scheme's noise on their fixtures "
+               "(tests/verity/protocols/resource_accounting/compute/pouw/prover/test_pearl_plus_public_row.py)")
+
+
+def _seed_body(B, S, salt, root, col):
+    e = U._Emit(B)
+    key = B.call(PearlCLineKey, B.call(PearlCSeedB, salt, root))
+    base = _times(e, col, S.TN)
+    eb = [base if j == 0 else e.call(I32Add, base, j) for j in range(S.TN)]
+    return tuple_of(key, array_of(eb), array_of([e.c(32, t) for t in range(S.K)]))
+
+
+_SEED = CompositeDefinition(
+    "PearlPlusTileKey", 1, ("K", "TN"),
+    lambda S: ((("salt", BYTES32), ("root", BYTES64), ("col", U32)), Tuple(BYTES32, Array(S.TN, U32), Array(S.K, U32))),
+    _seed_body, refuse=_refuse_slices, register=False, conformance=_NOISE_CONF,
+    doc="A -h3 tile's line key and its lines' indices on words: key = `PearlCLineKey_v1`(`PearlCSeedB_v1`(salt, root)), "
+        "eb's col·TN + j for j < TN (u32, wrapping) and F's t for t < K")
+_SEED_BITS = _on_bits(_SEED, 2, register=False)
+
+
+def _words(t) -> Array:
+    """The 16-bit words (`W16`) that hold the bits of bit type ``t``, low bit first: the width C commits a value in."""
+    n = t.leaves
+    if n % 16 or t.width_set() != {1}:
+        raise DomainError(f"{t!r} is no whole 16-bit words of bits")
+    return Array(n // 16, W16)
+
+
+def _unpack(B, x, t):
+    """Words ``x`` as the bit type ``t`` they hold, low bit first (`WordBits{16}`)."""
+    return Coll(t, B.batch(bind(WordBits, W=16), Coll(Array(t.leaves // 16, W16), x.refs), axes=(0,)).refs)
+
+
+def _pack(B, x, t):
+    """Bits ``x`` as the 16-bit words of type ``t``, low bit first (`BitsWord{16}`)."""
+    n = x.type.leaves // 16
+    return Coll(t, B.batch(bind(BitsWord, W=16), Coll(Array(n, Array(16, BIT)), x.refs), axes=(0,)).refs)
+
+
+def _seed_params(S) -> tuple:
+    bits = dict(bind(_SEED_BITS, K=S.K, TN=S.TN).signature()[0])
+    return ("salt", _words(bits["salt"])), ("root", _words(bits["root"])), ("col", U32)
+
+
+#: F's K lines in this many groups of K/F_ROWS: the fields a reader of F_A or F_B reads, whatever K
+F_ROWS = 8
+
+
+def _seed_ret(S) -> Tuple:
+    key, eb, f = bind(_SEED_BITS, K=S.K, TN=S.TN).signature()[1].fields
+    return Tuple(_words(key), *[Array(1, _words(eb.elem))] * S.TN, *[Array(S.K // F_ROWS, _words(f.elem))] * F_ROWS)
+
+
+def _seed_on_words(B, S, salt, root, col):
+    sigma = bind(_SEED_BITS, K=S.K, TN=S.TN)
+    bits = dict(sigma.signature()[0])
+    cb = Coll(bits["col"], B.batch(bind(WordBits, W=32), Coll(Array(1, U32), col.refs), axes=(0,)).refs)
+    out = B.call(sigma, _unpack(B, salt, bits["salt"]), _unpack(B, root, bits["root"]), cb)
+    return _pack(B, out, _seed_ret(S))
+
+
+PearlPlusTileSeed = CompositeDefinition(
+    "PearlPlusTileSeed", 2, ("K", "TN"), lambda S: (_seed_params(S), _seed_ret(S)),
+    _seed_on_words, refuse=_refuse_slices, conformance=_NOISE_CONF,
+    doc="`PearlPlusTileKey_v1` on 16-bit words: the salt's and the root's words and col's bits (`WordBits`), its σ "
+        "(`PearlPlusTileKey_v2`), and the key and the lines' indices back in 16-bit words (`BitsWord{16}`), one field "
+        "each for the key, each of eb's TN indices and each of F's `F_ROWS` groups of K/`F_ROWS` indices, so that each "
+        "line unit the node maps reads one field whole by wire, at the width C commits it in")
+
+
+def _on_words16(bits: CompositeDefinition, version: int, doc: str) -> CompositeDefinition:
+    """``bits`` (a σ whose every port and return is bits) with each port and its return in the 16-bit words that hold
+    those bits, low bit first: each port's words its bits (`WordBits{16}`), then ``bits``, then its bits in words
+    (`BitsWord{16}`)."""
+    statics = tuple(bits.statics)
+
+    def sigma(S) -> SpecializedDefinition:
+        return bind(bits, **{k: getattr(S, k) for k in statics})
+
+    def signature(S):
+        params, ret = sigma(S).signature()
+        return tuple((n, _word_type(t)) for n, t in params), _word_type(ret)
+
+    def body(B, S, *xs):
+        f = sigma(S)
+        out = B.call(f, *(_unpack(B, x, t) for x, (_n, t) in zip(xs, f.signature()[0])))
+        return _pack(B, out, _word_type(f.signature()[1]))
+
+    return CompositeDefinition(bits.name, version, statics, signature, body, refuse=bits.refuse,
+                               conformance=bits.conformance, doc=doc)
+
+
+def _word_type(t) -> Any:
+    """A bit type's 16-bit words, an Array of them its elements' words (`_words`)."""
+    if isinstance(t, Array) and t.elem.leaves % 16 == 0 and t.elem.leaves > 16:
+        return Array(t.n, _word_type(t.elem))
+    return _words(t)
+
+
+def _line_body(B, S, key, index):
+    e = U._Emit(B)
+    return B.call(PearlCNoiseLine, key, e.c(8, S.SIDE), e.c(8, S.FACTOR), index, e.c(16, NORM_F if S.FACTOR else NORM_E))
+
+
+def _refuse_line(b: dict) -> str | None:
+    side, factor = b.get("SIDE", 1), b.get("FACTOR", 1)
+    return None if (side, factor) in ((1, 0), (0, 1), (1, 1)) else \
+        f"a tile's lines are E_B's (SIDE 1, FACTOR 0), F_A's (0, 1) and F_B's (1, 1): {side, factor!r}"
+
+
+_LINE = CompositeDefinition(
+    "PearlPlusTileLine", 1, ("SIDE", "FACTOR"), lambda S: ((("key", BYTES32), ("index", U32)), LINE),
+    _line_body, refuse=_refuse_line, register=False, conformance=_NOISE_CONF,
+    doc="One of a -h3 tile's noise lines on words: `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm), norm bf16 8192 "
+        "for E_B's (FACTOR 0) and bf16 512 for F's")
+_LINE_BITS = _on_bits(_LINE, 2, register=False)
+
+
+def _lines_signature(S):
+    sigma = bind(_LINE_BITS, SIDE=S.SIDE, FACTOR=S.FACTOR)
+    (_k, kt), (_i, it) = sigma.signature()[0]
+    return (("key", _words(kt)), ("index", Array(S.G, _words(it)))), Array(S.G, _words(sigma.signature()[1]))
+
+
+def _lines_body(B, S, key, index):
+    sigma = bind(_LINE_BITS, SIDE=S.SIDE, FACTOR=S.FACTOR)
+    (_k, kt), (_i, it) = sigma.signature()[0]
+    lines = B.batch(sigma, _unpack(B, key, kt), _unpack(B, index, Array(S.G, it)), axes=(None, 0))
+    return _pack(B, lines, Array(S.G, _words(sigma.signature()[1])))
+
+
+def _refuse_lines(b: dict) -> str | None:
+    g = b.get("G", 1)
+    return _refuse_line(b) or (None if isinstance(g, int) and g >= 1 else f"G is a count of lines, G >= 1: {g!r}")
+
+
+PearlPlusTileLineV3 = CompositeDefinition(
+    "PearlPlusTileLine", 3, ("SIDE", "FACTOR", "G"), _lines_signature, _lines_body, refuse=_refuse_lines,
+    conformance=_NOISE_CONF,
+    doc="G of a -h3 tile's noise lines on 16-bit words: the key's words and each of the G indices' words their bits, "
+        "`PearlPlusTileLine_v2` (σ of `PearlCNoiseLine_v1`(key, SIDE, FACTOR, index, norm)) on each index, and each "
+        "line's 32 E4M3 codes back in 16 words, low bit first")
+
+
+def _gram_row_body(B, S, fb, fa):
+    d = DEVICES[S.DEV]
+    chain = bind(PearlCChain, K=S.K, DOT=pc8.ATOMS[d.atom.name], G=d.g or 0)
+    column = fb.take(1, S.P)
+    return array_of([B.call(chain, column, fa.take(1, q)) for q in range(R)])
+
+
+_GRAM_ROW = CompositeDefinition(
+    "PearlPlusGramRow", 2, ("K", "DEV", "P"),
+    lambda S: ((("fb", Array(S.K, LINE)), ("fa", Array(S.K, LINE))), Array(R, F32)),
+    _gram_row_body, refuse=_refuse_gram, register=False, conformance=_NOISE_CONF,
+    doc="Row P of a -h3 tile's Gram matrix on words, from F_B's lines whole (``fb``) and F_A's (``fa``): "
+        "`PearlCChain_v1`{K, the device's atom, its window (0: none)} of F_B's column P and each of F_A's 32 columns, "
+        "`PearlCGram_v1`'s row P")
+_GRAM_ROW_BITS = _on_bits(_GRAM_ROW, 3, register=False)
+PearlPlusGramRowV4 = _on_words16(
+    _GRAM_ROW_BITS, 4, "Row P of a -h3 tile's Gram matrix on 16-bit words: F_B's and F_A's lines' words their bits, "
+                       "`PearlPlusGramRow_v3` (σ of row P of `PearlCGram_v1`, F_B's column P against each of F_A's 32), "
+                       "and the row's 32 FP32 words back in 16-bit words, two each, low half first")
+
+
+def seed(k: int, tn: int) -> SpecializedDefinition:
+    return bind(PearlPlusTileSeed, K=k, TN=tn)
+
+
+#: a tile's three kinds of line, (SIDE, FACTOR): E_B's, F_A's, F_B's
+LINES = {"eb": (1, 0), "fa": (0, 1), "fb": (1, 1)}
+
+
+def line(kind: str, g: int) -> SpecializedDefinition:
+    side, factor = LINES[kind]
+    return bind(PearlPlusTileLineV3, SIDE=side, FACTOR=factor, G=g)
+
+
+def gram_row(k: int, dev: str, p: int) -> SpecializedDefinition:
+    return bind(PearlPlusGramRowV4, K=k, DEV=dev, P=p)
+
+
+def noise(B, k: int, tn: int, dev: str, salt, root, col) -> tuple:
+    """A tile's noise in the body under construction from C's words of its ``salt``, ``root`` and ``col``: (eb, fa, fb, g)
+    in 16-bit words, `seed`'s Call, then `line` mapped over eb's TN indices one line a unit and over F's `F_ROWS` groups
+    of indices K/`F_ROWS` lines a unit, and a `gram_row` Call for each of F_B's 32 columns, each reading F_B's and F_A's
+    lines whole."""
+    s = B.call(seed(k, tn), salt, root, col)
+    key = s[0]
+
+    def run(at: int, n: int):
+        t = s[1 + at].type
+        return Coll(Array(n, t), s.refs.slice(s.type.field_offset(1 + at), s.type.field_offset(1 + at) + n * t.leaves))
+
+    def lines(kind: str, n: int, at: int, members: int):
+        out = B.batch(line(kind, n // members), key, run(at, members), axes=(None, 0))
+        return Coll(Array(n, out.type.elem.elem), out.refs)
+
+    eb = lines("eb", tn, 0, tn)
+    fa, fb = (lines(kind, k, tn, F_ROWS) for kind in ("fa", "fb"))
+    return eb, fa, fb, array_of([B.call(gram_row(k, dev, p), fb, fa) for p in range(R)])
+
+
+# ---- the unit -------------------------------------------------------------------------------------------------------
 
 def core(scheme: C.PearlC, k: int, tm: int, tn: int, n: int, tr: int | None = None) -> SpecializedDefinition:
     """`PearlPlusTileCore_v3` for ``scheme`` (forming v1, -h3) at depth ``k``, a TM × TN tile of a linear of ``n`` columns
@@ -364,7 +579,3 @@ def _cap_ok(d, k: int, n: int, rho: int, ac, bc, sd) -> bool:
     bound = at.cap * C.PearlC(forming="v1", device=at, hashing="h0").credit_of(Shape(m, k, n)) * len(ac) * len(bc) / (m * n)
     return debit <= bound
 
-
-def leaf_reference(digest: bytes, hsalt: bytes, root: bytes, domain: bytes, pos: int, path: Sequence[bytes]) -> int:
-    """`PearlPlusTileLeaf_v1` on bytes: 1 iff the digest's hm96 leaf under ``hsalt`` opens at ``pos`` to ``root``."""
-    return F3.opens(SCHEMA_HM96_SHA512_ROW_SEG, root, domain, hm96_reference(digest, hsalt)[2], pos, path)

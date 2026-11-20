@@ -100,7 +100,6 @@ from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from holes import waits_on
 from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
@@ -231,9 +230,19 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
-#: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
-#: from them (`one_circuit.block`), and refuses an object naming none.
-BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(u, u + 1) for u in range(SETUPS[3].population)]])
+XOR16 = PrimitiveDefinition("CoreSpotXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
+                            register=False)
+#: `PAIR` and `TRIPLE` over u16 words, the one form the door lowers (`OneStageZk.admitted`), each `x` a 128-byte row,
+#: past a compression before its last block, which a Flock block's pin needs.
+PAIR16 = bind(CompositeDefinition("CoreSpotPair16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                  lambda B, S, x: B.call(XOR16, x[0], x[1]), register=False))
+TRIPLE16 = bind(CompositeDefinition("CoreSpotTriple16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                    lambda B, S, x: B.call(XOR16, B.call(XOR16, x[0], x[1]), x[2]), register=False))
+_MIXED16 = Setup(PN.mixed_population_program([(PAIR16, 2), (TRIPLE16, 3)]),
+                 P.template_instances_query([PAIR16.id, TRIPLE16.id]))
+#: `SETUPS[3]`'s population over u16 words, with a partition object naming its proof blocks, one unit each: the door
+#: derives the drawn block's circuit from them (`one_circuit.block`), and refuses an object naming none.
+BLOCKED = Setup(_MIXED16.program, _MIXED16.query, blocks=[[(u, u + 1) for u in range(_MIXED16.population)]])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -363,7 +372,7 @@ GENESIS = "9e" * 64
 BX, BOUT = (f"{codec.descriptor_id(BLOCK)}/{p}" for p in ("x", "o0"))
 BOUNDARY = Setup(PN.population_program(BLOCK, 4), P.template_instance_query(BLOCK.id), names=(BOUT, BX), rows=(3, 3))
 INTERIOR = Setup(PN.population_program(PAIR, 6), P.template_instance_query(PAIR.id))
-PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR]}
+PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR, BLOCKED]}
 PROGRAMS[PO.program_sha512(Program(BLOCK))] = Program(BLOCK)
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: The strata a work table may name: the templates' and the Calls'.
@@ -2769,7 +2778,6 @@ def _challenger_sample(rng: random.Random, s: Setup, sampling_design: dict, rec:
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
-@waits_on("restrict")
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`Spot.OneStageZk`, `one_stage.proofs.verdicts_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
@@ -2828,8 +2836,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", f"proofs: session s's coins are not the challenger's: {NO_TREE}")
     assert run(base | {"proofs": proofs(["s", "t"]), "sessions": ["s", "t"]}) == (
         "reject", "proofs: the evidence names 2 sessions: the drawn units are proved in one session")
-    got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:])
-    assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:]) == \
+        run(base | {"proofs": proofs(["s"]), "sessions": ["s"]})
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
     assert got[0] == "reject" and got[1].startswith("proofs: session s's record: no blob has the SHA-512"), got
     assert run(base | {"proofs": proofs(["s"]), "sessions": ["t"]}) == (
@@ -2890,7 +2898,6 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     return rec, ch, base, params
 
 
-@waits_on("restrict")
 def test_v2_refuses_a_population_out_of_order(server, server_v2):
     """v2 refuses a docket whose program's proof blocks, read stratum by stratum, are not its population's units
     in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
@@ -2999,7 +3006,6 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
         PF.members_v2([ms[0], ms[0]])
 
 
-@waits_on("restrict")
 def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
     (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
@@ -3052,7 +3058,6 @@ def test_link_points_refuses_a_sampling_design_none_of_whose_samples_ends():
             LP.refused(sampling_design, 10, [([[0, 10]], 1)])
 
 
-@waits_on("restrict")
 def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
@@ -3075,7 +3080,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
-    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    table = {PAIR16.id: 2, TRIPLE16.id: {"floor": 1, "work": 1}}
     uncovered = {"a stratified design": ({"k": 3, "law": "stratified"}, None, "stratified"),
                  "a work design": ({"k": 3, "law": "work"}, table, "work"),
                  "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),
@@ -6485,7 +6490,6 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
-@waits_on("restrict")
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats

@@ -111,7 +111,7 @@ hands them to `Flock.Zk.verify`. -/
 def sessionProofs (p : _root_.Spot.OneStageZk.Params) (e : _root_.Spot.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) : Option (Array ByteArray) := do
   let s ← e.sessions[0]?
-  let tags0 ← Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT
+  let tags0 ← Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT
   let circuitB ← (bs.get p.own.circuit "circuit").toOption
   let pubB ← (bs.get p.own.pub "public file").toOption
   let rd ← (_root_.Spot.OneStageZk.readsOf p.own.registered).toOption
@@ -322,7 +322,7 @@ the run's proved units held to them (`provedHeld`). -/
 theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
-    ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+    ∃ tags0 circuitB pubB rd, Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
       ∃ scope ksFiles programSha want,
@@ -410,7 +410,7 @@ def V2Verified (p : _root_.Spot.OneStageZk.Params) (e : _root_.Spot.OneStageZk.E
     (bs : _root_.Core.Blobs) (record : String) (spec : SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
     (proofs : Array ByteArray) : Prop :=
   ∃ rs tags0 circuitB pubB rd, e.sessions = #[rs] ∧
-    Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+    Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
     bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
     _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd ∧ sessionRecord e bs = some record ∧
     _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd

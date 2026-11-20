@@ -11,10 +11,17 @@ public import Spot.Wires
 public import Spot.Edges
 public import Spot.RecordText
 public import Spot.Restrict
+public import Spot.Partition
+public import Circuits.DefinitionDigest
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
+public import Std.Data.HashSet
 import all Init.Util
+meta import Flock
+meta import Spot.Restrict
+meta import Spot.Edges
+meta import Circuits.DefinitionDigest
 
 /-!
 # One-stage v2: the parameters, one statement's check, and a member's statement and files
@@ -43,8 +50,11 @@ open Lean (Json)
 open Flock (V)
 
 def PROTOCOL : String := "verity/sampled-proofs/one-stage/v2"
-/-- The statement every sampled proof block's session proves (`one_stage.proofs.STATEMENT`). -/
-def STATEMENT : String := "verity/flock-circuit"
+/-- The statement every sampled proof block's session proves: the templated one (`Flock.Tags.tmplName`,
+`one_stage.proofs.TMPL_STATEMENT`), the form `restrict`'s block circuit is written in. -/
+def STATEMENT : String := "verity/flock-circuit/tmpl"
+
+example : STATEMENT = Flock.Tags.tmplName := rfl
 /-- The refusal of parameters naming no challenger: the sample's coins are never the prover's to choose. -/
 def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
@@ -80,6 +90,68 @@ def templateOk (c : Flock.Circuit) : V Unit := do
   if c.upv = 0 then throw NO_ROW_WHY
   if returnedBits c > SIZE_CLASS_MAX then throw WIDE_WHY
 
+/-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
+circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
+writer's output field at the part's first reference (`Flock.Program.partLeafAt`, `fieldIx`); an uncut port is left out.
+`edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
+is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
+`edge-form`), and so is a port of one template read in rows of two lengths. -/
+def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
+    V (List (String × List (String × Nat))) := do
+  let fu := Spot.Edges.firstUnits rs
+  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+  let mut cs : List (String × List (String × Nat)) := []
+  for k in [0:nodes.size] do
+    if Spot.Edges.isInputNode P k then continue
+    let node := nodes[k]!
+    if node.form == .scan then
+      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
+    let some (rt, _) := fu[k]? | throw "edge-template"
+    let defn := P.defs[node.fn]!
+    for i in [0:node.args.size] do
+      let (port, ty) := defn.params[i]!
+      for q in node.args[i]!.seq.parts do
+        let (run, lanes) := Flock.Program.partLanes q
+        let some (false, w, l) := Flock.Program.partLeafAt run lanes 0 | continue
+        if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
+        let wd := P.defs[nodes[w]!.fn]!
+        if wd.outLeaves == 0 then continue
+        let some f := Flock.Program.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
+        let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
+        if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
+        let kc := ty.leaves / fl
+        let ports := (cs.lookup rt).getD []
+        match ports.lookup port with
+        | some k' =>
+          if k' != kc then
+            throw s!"ioCuts: template {rt}'s port {port} is read in rows of {ty.leaves / k'} and of {fl} leaves"
+        | none => cs := (rt, ports ++ [(port, kc)]) :: cs.filter (·.1 != rt)
+  return (cs.reverse.map fun (t, ps) => (t, ps.filter (·.2 > 1))).filter (!·.2.isEmpty)
+
+/-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
+the root's nodes, arguments and parts. -/
+def hasEdge (P : Flock.Program.Prog) : Bool :=
+  ((P.defs[P.root]?).map (·.body.nodes)).getD #[] |>.any fun n => n.args.any fun a =>
+    a.seq.parts.any fun q => (Flock.Registered.partNodes q).any fun k => !Spot.Edges.isInputNode P k
+
+/-- in(S)'s row cuts (`ioCuts`) on C decoded, `prog`, at the partition's ranges (`Partition.evaluate`); none where C's
+root has no edge (`hasEdge`). -/
+def cutsOf (prog : V Flock.Program.Prog) (partition : Json) : V (List (String × List (String × Nat))) := do
+  let P ← prog
+  if !hasEdge P then return []
+  ioCuts P (← Partition.evaluate { desc := .ofProg P, prog := P } (getD partition "query"))
+
+/-- A block circuit's input rows: each parameter `(name, bits)` a row of its own, or, cut `k` ways (`cuts`, `ioCuts`'
+for its template), `k` rows `name#j` of `bits / k` each, in order (`interface.RowLayout.cut`, `row_name`). -/
+def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array (String × Nat) :=
+  ins.flatMap fun (n, b) => match cuts.lookup n with
+    | some k => if k ≤ 1 then #[(n, b)] else (Array.range k).map fun j => (s!"{n}#{j}", b / k)
+    | none => #[(n, b)]
+
+#guard cutRows [("x", 4)] #[("x", 1024), ("w", 256)] ==
+  #[("x#0", 256), ("x#1", 256), ("x#2", 256), ("x#3", 256), ("w", 256)]
+#guard cutRows [] #[("x", 1024)] == #[("x", 1024)]
+
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
 as the bytes `--program` reads), the partition object, the public file's committed SHA-512 (the commitment) and theta's
 registration (the registered file, which states no position), and the first unit of the statement's block. -/
@@ -90,22 +162,238 @@ structure Own where
   pub : String
   registered : Option Json
   first : Nat := 0
+  /-- C decoded and the partition's blocks, once a session: every member's `Own` is `{ shared with … }`, which keeps
+  these, so no `Own` is updated at `program` or `partition`. -/
+  prog : Thunk (V Flock.Program.Prog) := Thunk.mk fun _ => Flock.Program.decode program
+  blocks : Thunk (V (Option (Array (Nat × Nat)))) := Thunk.mk fun _ => Flock.HmRow.blocksOf partition program
+  cuts : Thunk (V (List (String × List (String × Nat)))) := Thunk.mk fun _ => cutsOf prog.get partition
+
+/-- The layout C_S's template is lowered at (`one_circuit.LAYOUT`). -/
+def LAYOUT : String := "iv/hybrid/4"
+
+/-- The templates a template query lists (`one_circuit._listed`); none for another query. -/
+def listedOf (partition : Json) : Option (Array String) :=
+  let q := partition.getObjValD "query"
+  let ps := q.getObjValD "params"
+  match q.getObjValAs? String "name" with
+  | .ok "Q_template_instance" => some #[(ps.getObjValAs? String "template").toOption.getD ""]
+  | .ok "Q_template_instances" => match ps.getObjValD "templates" with
+    | .arr ts => some (ts.map fun t => (t.getStr?).toOption.getD "")
+    | _ => none
+  | _ => none
+
+/-- The prefix of every refusal of `admitted`, which names its clause after it. -/
+def NOT_ADMITTED : String := "lower: not the one form the door lowers (Spot.OneStageZk.admitted)"
+
+/-- A refusal by `admitted`'s clause `clause`. -/
+def notAdmitted {α : Type} (clause detail : String) : V α := throw s!"{NOT_ADMITTED}, {clause}: {detail}"
+
+/-- What `admitted` accepts: the block's template `key`, its index `d` in C_S, and its block circuit's input rows and
+return fields `(name, bits)`, in the order `Flock.Lower.lower` lays their leaves. -/
+structure Admit where
+  key : String
+  d : Nat
+  ins : Array (String × Nat)
+  fields : Array (String × Nat)
+
+/-- The composite Definitions Definition `d` of `P` reaches, itself included, whose parameter or return leaves are not
+all one bit (`Flock.Lower.onBits`), by key, ascending. Its work is the Definitions reached, each once, with their nodes. -/
+def wideFrom (P : Flock.Program.Prog) (d : Nat) : Array String := Id.run do
+  let bound := P.defs.foldl (fun n x => n + x.body.nodes.size + 1) 2
+  let mut seen : Std.HashSet Nat := {}
+  let mut todo := #[d]
+  let mut at_ := 0
+  let mut wide : Array String := #[]
+  for _ in [0:bound] do
+    if h : at_ < todo.size then
+      let i := todo[at_]
+      at_ := at_ + 1
+      if seen.contains i then continue
+      seen := seen.insert i
+      let some x := P.defs[i]? | continue
+      if x.prim then continue
+      if !Flock.Lower.onBits x then wide := wide.push x.key
+      todo := todo ++ x.body.nodes.map (·.fn)
+    else break
+  return wide.qsort (· < ·)
+
+/-- A port name the block circuit's file and `flock-lower-check compose`'s `name:bits,…` carry as written. -/
+def plainName (n : String) : Bool := !n.isEmpty && n.all fun c => ![',', ':', '#', ' ', '\t', '\r', '\n'].contains c
+
+/-- **The one form the door lowers**: C_S's block, its root calling one template, admitted only where every clause holds,
+else refused under `NOT_ADMITTED` by the first that fails. Each clause makes the block circuit's rows, laid in whole u16
+words a row (`Flock.Compose.compose`), agree with the leaves `Flock.Lower.lower` lays one after another from column 0:
+* `one-template`: the root's non-input nodes call one Definition, the template;
+* `listed`: the partition's template query lists it, and it is a Definition of C_S;
+* `port-names`: its parameters' names are plain (`plainName`), and its rows (`cutRows`) and fields `o{j}` are named
+  once each;
+* `on-bits`: the template lifted to bits (`Flock.Lift.lift`) reaches no composite with a leaf wider than one bit
+  (`wideFrom`), so no word is read as one column (`Flock.Lower.WIDE` never refuses what this admits);
+* `cut-rows`: a cut of in(S)'s (`cuts`) names a parameter, at least two ways, whose leaves are of one width and divide
+  by the cut, so its rows are its leaves in equal runs of equal bits;
+* `whole-words`: there is a return field (`fieldsOf`), and every input row and return field is a positive whole number of
+  u16 words, so each starts at the column of its first leaf and no column follows its last;
+* `leaves-are-bits`: the rows' bits are the lifted template's parameter leaves and the fields' its return leaves, so no
+  input or output column is past a leaf.
+A function of the partition, `cuts` and C_S, in the template's description. -/
+def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) : V Admit := do
+  let some listed := listedOf partition
+    | throw (Flock.OneCircuit.notDerived
+        "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
+  let some root := S.defs[S.root]? | notAdmitted "one-template" "C_S's root is not one of its Definitions"
+  let mut called : Array String := #[]
+  for k in [0:root.body.nodes.size] do
+    if Spot.Edges.isInputNode S k then continue
+    let key := ((root.body.nodes[k]?).bind (S.defs[·.fn]?) |>.map (·.key)).getD ""
+    if !called.contains key then called := called.push key
+  let keys := called.qsort (· < ·)
+  let #[key] := keys
+    | notAdmitted "one-template" s!"C_S's root calls {keys.toList}, and a block's units are instances of one template"
+  if !listed.contains key then notAdmitted "listed" s!"C_S's template {key} is not one the partition's query lists"
+  let some d := S.index[key]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
+  let some fn := S.defs[d]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
+  let cs := (cuts.lookup key).getD []
+  let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
+  let ins := cutRows cs (fn.params.map fun (n, t) => (n, bits t))
+  let fields := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", bits f)
+  if let some (n, _) := fn.params.find? (!plainName ·.1) then
+    notAdmitted "port-names" s!"C_S's template {key}: parameter '{n}' is empty or holds ',', ':', '#' or a space"
+  let names := ins.map (·.1) ++ fields.map (·.1)
+  if let some n := names.find? fun n => (names.filter (· == n)).size > 1 then
+    notAdmitted "port-names" s!"C_S's template {key}: port {n} is named twice"
+  let (L, dl) ← match Flock.Lift.lift S d with
+    | .ok r => pure r
+    | .error e => notAdmitted "on-bits" s!"the lift to bits refuses C_S's template {key}: {e}"
+  if let some w := (wideFrom L dl)[0]? then
+    notAdmitted "on-bits" s!"C_S's template {key} reaches {w}, whose leaves are not all one bit after the lift to bits"
+  for (p, k) in cs do
+    let some (_, t) := fn.params.find? (·.1 == p)
+      | notAdmitted "cut-rows" s!"C_S's template {key}: a cut names {p}, which is no parameter"
+    if k < 2 || (Flock.Program.Widths.homo t).isNone || t.leaves % k != 0 then
+      notAdmitted "cut-rows" s!"C_S's template {key}: parameter {p} of {t.leaves} leaves cut {k} ways, not into equal runs of leaves of one width"
+  if fields.isEmpty then notAdmitted "whole-words" s!"C_S's template {key} returns no field"
+  for (what, rs) in [("input row", ins), ("return field", fields)] do
+    if let some (n, b) := rs.find? fun (_, b) => b == 0 || b % 16 != 0 then
+      notAdmitted "whole-words" s!"C_S's template {key}: {what} {n} of {b} bits is not a positive whole number of u16 words"
+  let some l := L.defs[dl]? | notAdmitted "leaves-are-bits" s!"C_S's template {key} has no lift to bits"
+  let sIn := ins.foldl (· + ·.2) 0
+  let sOut := fields.foldl (· + ·.2) 0
+  if sIn != l.paramLeaves || sOut != l.outLeaves then
+    notAdmitted "leaves-are-bits" s!"C_S's template {key}: rows of {sIn} bits and fields of {sOut}, its lift's {l.paramLeaves} parameter and {l.outLeaves} return leaves"
+  return { key, d, ins, fields }
+
+/-- **The door admits C_S**: `admitted` accepts it. The hypothesis of every statement about the block circuit the door
+lowers. -/
+def Admitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) : Prop :=
+  (admitted partition cuts S).toOption.isSome = true
+
+instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+    Decidable (Admitted partition cuts S) := inferInstanceAs (Decidable (_ = true))
+
+/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, refused unless `admitted`, then lowered at its
+one template by `Flock.Lower.lower` and written by `Flock.Compose.compose` at the rows and fields `admitted` gives:
+output ports its return fields `o{j}` in u16 words, META's `program_digests` the template's `definitionDigest` read off
+`CJ`, C's descriptor. -/
+def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+    V ByteArray := do
+  let a ← admitted partition cuts S
+  let outs := a.fields.map fun (n, b) => (n, b / 16)
+  let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
+  let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
+    ((CJ.getObjValD "definitions").getObjValD a.key)
+  let nIn := a.ins.foldl (fun n p => n + p.2 / 16) 0
+  let nOut := outs.foldl (· + ·.2) 0
+  let t ← Flock.Lower.lower S a.d (Array.replicate nIn 16) (Array.replicate nOut 16)
+  Flock.Compose.compose
+    { name := s!"unit/{a.key}", body := .tmpl t LAYOUT, ins := a.ins, outs, programDigests := [(a.key, digest)] }
+    ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
+
+/-- E(x : Array n (Value 1), y : Value 1) = (x, Not y), at n = 3 and 2047: the one-stage path would read `y` from x's
+padding and leave the second output's word without a row. -/
+def E3 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",3,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,3]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":3,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,3]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,4]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",3,["Value",1]],["Tuple",[["Array",3,["Value",1]],["Value",1]]]]}"#
+def E2047 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2047]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2048]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]],["Tuple",[["Array",2047,["Value",1]],["Value",1]]]]}"#
+
+/-- C(a : Value 32, b : Value 1) = (a, Not b), which reaches no word primitive, so `Flock.Lift.lift` leaves `a` a word
+(`Flock.Test.LowerBad.PASS`). -/
+def C32 : String := r#"{"annotations":{},"boolean":{},"callees":["Input32_v1","Input1_v1","Not_v1","C_v1"],"definitions":{"C_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":1}],"fn":2,"form":"primitive","out":1}],"params":[["a",["Value",32]],["b",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,1]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Value",32],["Value",1]]]},"form":"composite","id":"C_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Input32_v1":{"form":"primitive","id":"Input32_v1","params":[],"ret":["Value",32]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[CProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"fn":0,"form":"primitive","out":0},{"args":[],"fn":1,"form":"primitive","out":1},{"args":[{"refs":{"affine":["n",0,0,1]},"type":0},{"refs":{"affine":["n",1,0,1]},"type":1}],"fn":3,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2]},"ret_type":["Tuple",[["Value",32],["Value",1]]]},"form":"composite","id":"Root[CProg_v1]_v1"}},"program_fn":"CProg_v1","root":"Root[CProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",32],["Value",1],["Tuple",[["Value",32],["Value",1]]],["Array",2,["Value",32]],["Array",2,["Value",1]],["Array",2,["Tuple",[["Value",32],["Value",1]]]]]}"#
+
+/-- `admitted` on unit 0 of the descriptor `d`, the query listing template `t`, at the template's cuts `cs`. -/
+def admitE (d : String) (t : String := "E_v1") (cs : List (String × Nat) := []) : V Admit := do
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", t)])]
+  admitted (Json.mkObj [("query", q)]) [(t, cs)] (← Spot.Restrict.restrict P #[0])
+
+/-- `lowerBlock` on unit 0 of the descriptor `d`, its template `E_v1`. -/
+def lowerE (d : String) : V ByteArray := do
+  let CJ ← Json.parse d
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
+  lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0])
+
+/-- Whether `r` is refused by `admitted`'s clause `clause` with detail `detail`. -/
+def refusedBy {α : Type} (r : V α) (clause detail : String) : Bool :=
+  match r with | .error e => e == s!"{NOT_ADMITTED}, {clause}: {detail}" | .ok _ => false
+
+#guard refusedBy (lowerE E3) "whole-words" "C_S's template E_v1: input row x of 3 bits is not a positive whole number of u16 words"
+#guard refusedBy (lowerE E2047) "whole-words" "C_S's template E_v1: input row x of 2047 bits is not a positive whole number of u16 words"
+#guard refusedBy (admitE C32 "C_v1") "on-bits" "C_S's template C_v1 reaches C_v1, whose leaves are not all one bit after the lift to bits"
+#guard refusedBy (admitE E3 "F_v1") "listed" "C_S's template E_v1 is not one the partition's query lists"
+#guard refusedBy (admitE (E3.replace "[[\"x\"," "[[\"o0\",")) "port-names" "C_S's template E_v1: port o0 is named twice"
+#guard refusedBy (admitE (E3.replace "[[\"x\"," "[[\"x:1\",")) "port-names" "C_S's template E_v1: parameter 'x:1' is empty or holds ',', ':', '#' or a space"
+#guard refusedBy (admitE E3 "E_v1" [("z", 3)]) "cut-rows" "C_S's template E_v1: a cut names z, which is no parameter"
+#guard refusedBy (admitE E3 "E_v1" [("x", 2)]) "cut-rows" "C_S's template E_v1: parameter x of 3 leaves cut 2 ways, not into equal runs of leaves of one width"
+#guard refusedBy (admitE E3 "E_v1" [("x", 3)]) "whole-words" "C_S's template E_v1: input row x#0 of 1 bits is not a positive whole number of u16 words"
+
+/-- E(x y : Array 16 (Value 1)) = (x, map Not y): two rows and two fields of one word each. -/
+def E16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,16]},{"affine":["n",0,0,16]}]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,32]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]]}"#
+
+#guard match admitE E16 with
+  | .ok a => a.key == "E_v1" && a.ins == #[("x", 16), ("y", 16)] && a.fields == #[("o0", 16), ("o1", 16)]
+  | .error _ => false
+#guard refusedBy (admitE E16 "E_v1" [("x", 2)]) "whole-words" "C_S's template E_v1: input row x#0 of 8 bits is not a positive whole number of u16 words"
+
+/-- E(x y : Array 16 (Value 1)) = (Not y[0], x): a return field of one bit, then another. -/
+def F16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["p",0,0,16]}]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,17]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Value",1],["Array",16,["Value",1]]]]]}"#
+
+#guard refusedBy (lowerE F16) "whole-words" "C_S's template E_v1: return field o0 of 1 bits is not a positive whole number of u16 words"
+
+/-- C of one unit each of two templates, A(x : Array 16 (Value 1)) = map Not x and B the same. -/
+def AB16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_v0"],"definitions":{"A_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"A_v0"},"B_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"B_v0"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"axes":[0],"fn":2,"form":"batch","n":1,"out":1},{"args":[{"refs":{"affine":["n",1,0,16]},"type":1}],"axes":[0],"fn":3,"form":"batch","n":1,"out":1}],"params":[],"ret":{"concat":[{"affine":["n",2,0,16]},{"affine":["n",3,0,16]}]},"ret_type":["Tuple",[["Array",1,["Array",16,["Value",1]]],["Array",1,["Array",16,["Value",1]]]]]},"form":"composite","id":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1"}},"program_fn":"WiredPopulations_v1{templates=[\"A_v0\",\"B_v0\"],record=\"27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd\",counts=[1,1]}","root":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",16,["Value",1]],["Array",1,["Array",16,["Value",1]]]]}"#
+
+/-- `admitted` on the block of units `us` of the descriptor `d`, under a `Q_template_instances` query listing `ts`. -/
+def admitIn (d : String) (ts : List String) (us : Array Nat) : V Admit := do
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instances"), ("params", Json.mkObj [("templates", Lean.toJson ts)])]
+  admitted (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us)
+
+#guard refusedBy (admitIn AB16 ["A_v0", "B_v0"] #[0, 1]) "one-template" "C_S's root calls [A_v0, B_v0], and a block's units are instances of one template"
+#guard (admitIn AB16 ["A_v0", "B_v0"] #[1]).toOption.map (·.key) == some "B_v0"
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
-Core `Circuit.restrict`. The block is the partition's (`HmRow.blocksOf`) and its Program `Spot.Restrict.restrict`'s;
-no encoder writes a lowered Program as a circuit file, so it refuses after the Program. -/
-def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray := do
-  let some bs ← Flock.HmRow.blocksOf partition C
-    | throw "restrict: the partition object has no blocks"
+Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s
+on `prog`, C decoded, and its file `lowerBlock`'s on `CJ`, C's descriptor, at in(S)'s cuts `cuts` (`cutsOf`). -/
+def restrictOn (CJ : V Json) (prog : V Flock.Program.Prog) (blocks : V (Option (Array (Nat × Nat))))
+    (cuts : V (List (String × List (String × Nat)))) (partition : Json) (block : Nat) : V ByteArray := do
+  let some bs ← blocks | throw "restrict: the partition object has no blocks"
   let some (lo, hi) := bs.find? (·.1 == block)
     | throw s!"restrict: no block of the partition starts at unit {block}"
-  discard <| Spot.Restrict.restrict (← Flock.Program.decode C) ((List.range' lo (hi - lo)).toArray)
-  throw (Flock.OneCircuit.notDerived
-    "restrict : C -> Partition -> Block -> Circuit (C_S: the block's Program lowered and written as a circuit file)")
+  let S ← Spot.Restrict.restrict (← prog) ((List.range' lo (hi - lo)).toArray)
+  lowerBlock (← CJ) partition (← cuts) S
 
-/-- The statement's circuit file, derived from C and the partition (`restrict`). -/
-def Own.circuitFile (p : Own) : V ByteArray := restrict p.program p.partition p.first
+/-- `restrictOn` on C's bytes. -/
+def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray :=
+  let CJ : V Json := match Flock.Program.readJson C with
+    | some (.ok j) => pure j
+    | some (.error e) => throw s!"restrict: C is not JSON: {e}"
+    | none => throw "restrict: C is not UTF-8"
+  let prog := Flock.Program.decode C
+  restrictOn CJ prog (Flock.HmRow.blocksOf partition C) (cutsOf prog partition) partition block
+
+/-- The statement's circuit file, derived from C and the partition (`restrictOn`), on C decoded, its blocks and in(S)'s
+cuts, each once a session. -/
+def Own.circuitFile (p : Own) : V ByteArray :=
+  restrictOn (pure p.programJ) p.prog.get p.blocks.get p.cuts.get p.partition p.first
 
 /-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
 block (META `vus_per_block`) and its statement's own inputs. -/
@@ -363,7 +651,8 @@ def NOT_ONE_MEMBER : String :=
 
 /-- The window's trees of its templates' fields: each root of the record `rec` whose port is `<template>/<field>`
 of a template of `ts` (`templateOf`), by template, as `(field, root)` in the record's order, each root its domain,
-leaves and root under the bare field. One pass over the record's roots. -/
+leaves and root under the bare field, and `tree`, the tree's own port `<template>/<field>`, which `headerHeldAt` reads.
+One pass over the record's roots. -/
 def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Array (String × Json)) :=
   match getD rec "roots" with
   | .arr rs => rs.foldl (fun acc r => match getD r "port" with
@@ -371,14 +660,14 @@ def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Ar
       | some (t, f) =>
         if ts.contains t then
           acc.insert t ((acc.getD t #[]).push (f, Json.mkObj [("domain", getD r "domain"),
-            ("leaves", getD r "leaves"), ("port", .str f), ("root", getD r "root")]))
+            ("leaves", getD r "leaves"), ("port", .str f), ("root", getD r "root"), ("tree", .str port)]))
         else acc
       | none => acc
     | _ => acc) {}
   | _ => {}
 
 /-- The window's tree of template `template`'s field `field` among the trees `ft` (`fieldTreesOf`), under the port
-name `port`: its domain, leaves and root; none where the record names no such tree. -/
+name `port`: its domain, leaves, root and `tree`; none where the record names no such tree. -/
 def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
   ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
     Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root")]
@@ -456,13 +745,6 @@ def rootsByPort (rec : Json) : Std.HashMap String Json :=
 `committed/<port>`, `<port>` the record's root's. -/
 def COMMITTED : String := "committed/"
 
-/-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
-(`COMMITTED`), and `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
-once for the window, by node; none for a registered value's port. -/
-def treePortOf (q : Flock.Registered.Port) : Option String :=
-  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
-  else if Flock.Registered.isFreshValue q.value then some q.value else none
-
 /-- Whether `v` is a field tree's name `<template>/o<j>` (`Flock.Registered.fieldTree`), the value `treeReads`
 holds a wired row of in(S) to. -/
 def fieldTreeName (v : String) : Bool :=
@@ -470,8 +752,16 @@ def fieldTreeName (v : String) : Bool :=
   | l :: _ :: _ => l.startsWith "o" && l.length > 1 && (l.drop 1).toString.all Char.isDigit
   | _ => false
 
-/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`): which
-writer's tree a wired port reads is C's, and until it is derived from C here the port is refused. -/
+/-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
+(`COMMITTED`), `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
+once for the window, by node, and `<template>/o<j>` for a template's field tree (`fieldTreeName`), which `portTreeHeld`
+admits only as the member's own output; none for a registered value's port. -/
+def treePortOf (q : Flock.Registered.Port) : Option String :=
+  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
+  else if Flock.Registered.isFreshValue q.value || fieldTreeName q.value then some q.value else none
+
+/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is not
+`who`'s own output at its template's tree: a wired input's writer tree is not opened here yet. -/
 def WIRED_TREE_WHY (who port : String) : String :=
   s!"registered: {who}'s port {port}: a wired port's tree is not derived from C yet"
 
@@ -490,9 +780,12 @@ def TREE_OTHER (who port tree what : String) : String :=
 /-- A registered port `q` of `who` that opens a committed tree (`treePortOf`) held to the record's root at that
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
 (`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
-is a field tree's name refuses first (`WIRED_TREE_WHY`). -/
-def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Registered.Port) : V Unit :=
-  if !q.value.startsWith COMMITTED && fieldTreeName q.value then throw (WIRED_TREE_WHY who q.name) else
+is a field tree's name is opened only as the member's own output, `<tmpl>/<port>` for the member's template `tmpl`,
+whose rows `Flock.Registered.outReads` reads at the leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
+def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port) :
+    V Unit :=
+  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) then
+    throw (WIRED_TREE_WHY who q.name) else
   match treePortOf q with
   | none => pure ()
   | some t =>
@@ -506,11 +799,14 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Re
 
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
-port. One pass over the file's ports, each a lookup. -/
-def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) : V Unit :=
+port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
+file's ports, each a lookup. -/
+def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none) :
+    V Unit :=
   match j with
   | none => pure ()
-  | some j => (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who)
+  | some j =>
+    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -866,7 +1162,7 @@ the evidence's (`provedHeld`); and for a length a session's statement can't hold
 `WORD`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
   tablesHeld p bs
-  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  let some tags0 := Flock.Tags.byName? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
   (if p.registered.isNone && readsRegistered p.programJ then
@@ -916,7 +1212,7 @@ def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.
 
 /-- The tables of the session `run` sets up: the statement's tags' at `inputsOf`'s count, one table. None when the
 statement is unknown, which `run` refuses. -/
-def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
+def sessionTables : Array String := ((Flock.Tags.byName? STATEMENT).map (·.tableNames 1)).getD #[]
 
 /-- The parameter naming how many tables one session sets up: the audit at `J` tables in one session, as
 `verity-verify-proof --session-tables J` and `SampledKSLiveV5` take them. Read nowhere yet: `inputsOf` and `inputsAt`
@@ -938,7 +1234,7 @@ def tablesOfJson (j : Json) : V Nat :=
 
 /-- The tables a session of `J` tables sets up: the statement's tags' at `J` (`Flock.Tags.tableNames`), the names its
 link's `root_b` would hold. At `J = 1` it is `sessionTables`. -/
-def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames J)).getD #[]
+def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.byName? STATEMENT).map (·.tableNames J)).getD #[]
 
 /-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
@@ -953,7 +1249,7 @@ files of the verifier's own files `p`. None where it sets up no table. -/
 def rootBTablesAt (inputs : Flock.Tags → ByteArray → ByteArray → V Flock.Witness.Inputs) (p : Own) (bs : Core.Blobs)
     (record : String) : Array (String × Option Nat) :=
   let tabs : Option (Array Flock.Setup) := (do
-    let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+    let some tags0 := Flock.Tags.byName? STATEMENT | throw s!"the statement {STATEMENT} is not known"
     let I ← inputs tags0 (← p.circuitFile) (← bs.get p.pub "public file")
     let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
@@ -1316,6 +1612,82 @@ def headerHeld (rec h : Json) : V Unit :=
   | some p => throw (UNWIRED_WHY p)
   | none => if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
 
+/-- The refusal of a member's public file whose header's `instances` is not its slice's population, which `headerHeldAt`
+checks on the header as parsed, before it drops any port. -/
+def POPULATION_WHY : String := "public file: not the registration's: population"
+
+/-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
+the template shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
+the registration's (`headerHeldAt`). -/
+def SHARED_UNREAD (p tree : String) : String :=
+  s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++
+    "there: a member's rows of a tree other members' rows share are held to the registration's root by opening it at " ++
+    "the leaves C gives, and the header's own root there is no commitment to them"
+
+/-- The slice `rec` and the header `h` without port `p`'s root and domain. -/
+def dropPort (rec h : Json) (p : String) : Json × Json :=
+  let rs := match getD rec "roots" with | .arr rs => rs.filter (getD · "port" != .str p) | _ => #[]
+  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
+  let fv := getD h "frame_v3"
+  let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
+  (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
+
+/-- Port `p` reads `v` as a registered value of the verifier's: its registered file's ports `held` hold `p` at `v`,
+a value that names no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field tree
+(`fieldTreeName`), the trees `treePortOf` opens. -/
+def registeredAt (held : Array Flock.Registered.Port) (p v : String) : Bool :=
+  !v.startsWith COMMITTED && !Flock.Registered.isFreshValue v && !fieldTreeName v &&
+    held.any fun q => q.name == p && q.value == v
+
+/-- The refusal of a member's public file whose port `p`, which the slice holds no root of, is read at `v`, which the
+verifier's registered file holds at `p` as no registered value (`headerHeldAt`). -/
+def UNREGISTERED_WHY (p v : String) : String :=
+  s!"public file: port {p} reads {v}, and the verifier's registered file holds no registered value {v} at {p}: a " ++
+    "port the registration holds no root of is held only at a registered value's root"
+
+/-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
+template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
+(`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
+root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
+whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
+root of that `reads` names and the header names is held by those reads too where the verifier's registered file's
+ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
+that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
+read a registered or supplied input node (`regNode`), so it is not compared either; at any other value it refuses by
+name (`UNREGISTERED_WHY`). Every other port is `headerHeld`'s. -/
+def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Registered.Port) (rec h : Json) : V Unit := do
+  if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
+  let fv := getD h "frame_v3"
+  let shared := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
+    match getD r "port", getD r "tree" with
+    | .str p, .str t => some (p, t, r)
+    | _, _ => none
+  let mut cur := (rec, h)
+  for (p, t, r) in shared do
+    if reads.contains (p, t) then
+      cur := dropPort cur.1 cur.2 p
+    else if !(getD (getD fv "roots") p matches .null)
+        && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
+      throw (SHARED_UNREAD p t)
+  for (p, v) in reads do
+    if !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
+      if !registeredAt held p v then throw (UNREGISTERED_WHY p v)
+      cur := dropPort cur.1 cur.2 p
+  headerHeld cur.1 cur.2
+
+/-- The member's registered reads, `(port, value)` each, from its registered file (none without one). -/
+def Member.reads (m : Member) : V (Array (String × String)) :=
+  match m.own.registered with
+  | none => pure #[]
+  | some j => ((Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")).map (·.map fun q => (q.name, q.value))
+
+/-- The member's registered file's ports (none without one): the verifier's registered values `headerHeldAt` holds a
+port at. -/
+def Member.held (m : Member) : V (Array Flock.Registered.Port) :=
+  match m.own.registered with
+  | none => pure #[]
+  | some j => (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
+
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
 `headerHeld` at the member's `slice` of the registration): its strata are the registration's restricted to its units,
@@ -1326,7 +1698,7 @@ def Member.population (m : Member) (slice : Json) (pubB : ByteArray) : V Unit :=
   let strata ← Partition.strata (← Program.parse m.own.program) (getD m.own.partition "query")
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeld slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- A member's circuit held to the parameters' units a proof block, at the units a proof block `g` its circuit file
 parses with: a circuit file that parses with another `vus_per_block` refuses. One that does not parse (`none`) passes
@@ -1392,7 +1764,7 @@ where `run` refuses on blobs whose pinned tables are `tables`. -/
 def statementOf (p : Own) (population : ByteArray → V Unit) (tables : List (String × ByteArray)) (bs : Core.Blobs) :
     V StepAt :=
   (p.circuitFile >>= fun circuitB => lookupsOf circuitB >>= tablesMatch tables) >>= fun _ =>
-  match Flock.Tags.find? STATEMENT with
+  match Flock.Tags.byName? STATEMENT with
   | none => throw s!"the statement {STATEMENT} is not known"
   | some tags0 =>
     match tags0.plainLeaves with
@@ -1637,7 +2009,7 @@ def Member.populationOn (m : Member) (strata : V (Array (String × Array (Nat ×
   let strata ← strata
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeld slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- `Member.population` is `Member.populationOn` at the strata of the member's partition's query over its program's
 parse. -/
@@ -1718,7 +2090,7 @@ def statementOn (tags0 : Flock.Tags) (fk : FileKept) (sha : Option String) (p : 
 
 /-- **`statementOf` at the inputs' own lookup tables (`ownTables`) is `statementOn` at what `fileOf` keeps of its
 circuit file, read at the blobs' lookup tables, and its program's digest**, where the statement's tags are known. -/
-theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (p : Own)
+theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (p : Own)
     (population : ByteArray → V Unit) (bs : Core.Blobs) :
     (ownTables p bs >>= fun tables => statementOf p population tables bs) =
       statementOn tags0 (fileOf tags0 (tablesOf bs) p.circuitFile) (programDigest p.program) p population bs := by
@@ -1748,7 +2120,7 @@ def Member.filesOn (m : Member) (tags0 : Flock.Tags) (fk : FileKept) (pk : Progr
 
 /-- `Member.files` is `Member.filesOn` at what `fileOf` keeps of its circuit file, read at the blobs' lookup tables,
 and what `programOf` keeps of its program under its partition. -/
-theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (m : Member)
+theorem Member.files_on {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (m : Member)
     (slice : Json) (bs : Core.Blobs) :
     m.files slice bs =
       m.filesOn tags0 (fileOf tags0 (tablesOf bs) m.own.circuitFile) (programOf m.own.program m.own.partition)
@@ -1769,7 +2141,7 @@ def keptFiles (slice : Member → Json) (bs : Core.Blobs) (tags0 : Flock.Tags) (
       keptFiles slice bs tags0 tables (some pk) ms >>= fun as => pure ((m.name, a) :: as)
 
 /-- `keptFiles` on a program that is what `programOf` reads of its bytes under its partition is `membersFiles`. -/
-theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = some tags0) (slice : Member → Json)
+theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = some tags0) (slice : Member → Json)
     (bs : Core.Blobs) : ∀ (ms : List Member) (prog : Option ProgramKept),
       (∀ pk, prog = some pk → pk = programOf pk.bytes pk.partition) →
       keptFiles slice bs tags0 (tablesOf bs) prog ms = membersFiles slice bs ms
@@ -1788,7 +2160,7 @@ strata evaluated once for the members that read it: `keptFiles` from no file and
 tags and the blobs' lookup tables, each read once. It returns what `membersFiles` returns, a refusal included
 (`membersFiles_eq_kept`), and is compiled in its place. -/
 def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
-  match Flock.Tags.find? STATEMENT with
+  match Flock.Tags.byName? STATEMENT with
   | some tags0 => keptFiles slice bs tags0 (tablesOf bs) none ms
   | none => membersFiles slice bs ms
 
@@ -1798,7 +2170,7 @@ exactly what `membersFiles` returns, a statement for each member or the first re
 @[csimp] theorem membersFiles_eq_kept : @membersFiles = @membersFilesKept := by
   funext slice bs ms
   unfold membersFilesKept
-  cases ht : Flock.Tags.find? STATEMENT with
+  cases ht : Flock.Tags.byName? STATEMENT with
   | none => rfl
   | some tags0 => exact (keptFiles_eq ht slice bs ms none (fun _ h => nomatch h)).symm
 

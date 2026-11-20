@@ -211,7 +211,6 @@
   "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.Sampled.CouplingAt",
   "Proofs.Properties.Verity.Sampled.CountsLayout",
-  "Proofs.Properties.Verity.Sampled.Event",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
@@ -357,7 +356,6 @@
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
   "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck",
-  "Proofs.Properties.Verity.SampledTwo.MemberChecks",
   "Proofs.Properties.Verity.Sampled.Record.PartCong",
   "Proofs.Properties.Verity.Sampled.Record.PartSame",
   "Proofs.Properties.Verity.Sampled.Record.ReadsSame",
@@ -366,7 +364,6 @@
   "Proofs.Properties.Verity.SampledTwo.AtStmt",
   "Proofs.Properties.Verity.SampledTwo.DrawRoots",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
-  "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
   "Proofs.Properties.Verity.SampledTwo.SessionAsk",
   "Proofs.Flock.SpotFlock.HeldOfWires",
@@ -447,6 +444,10 @@
   "Proofs.Flock.SpotFlock.BlockCommits"
  ],
  "exempt": {
+  "Proofs.Properties.Verity.SampledTwo.RoundsRise": "red until PRF-644 (owner proofs, due 2026-11-23): RoundsRise at line 780 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.SampledTwo.MemberChecks": "red until PRF-644 (owner proofs, due 2026-11-23): MemberChecks.statement_circuit and its use at line 87 reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.Sampled.Record.Nums": "red until PRF-644 (owner proofs, due 2026-11-23): Record.Nums.stmtTags_sess reads the session statement's tags as the circuit statement's, which the template statement no longer is",
+  "Proofs.Properties.Verity.Sampled.Event": "red until PRF-644 (owner proofs, due 2026-11-23): Event.statement_zkTags reads the session statement's tags as the circuit statement's, which the template statement no longer is",
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
   "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
   "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session, the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 #: the modules that hold a stand-in challenger: `Host`, `_SaltSession` and `_Session`
-STAND_INS = ("challenger_host.py", "test_pouw_h1_refusals.py", "test_rt4_h1_challenger.py")
+STAND_INS = ("challenger_host.py",)
 
 
 @pytest.mark.parametrize("module", STAND_INS)

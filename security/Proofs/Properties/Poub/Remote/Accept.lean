@@ -109,10 +109,10 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
 
 theorem verifyWindow_accept {reg : Registration} {appends : Array Append} {w : WindowRecord} {coin : ByteArray}
     {samples : Nat} {openings : Array Opening} (h : verifyWindow reg appends w coin samples openings = some .accept) :
-    ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+    ∃ sampled, receiptSample samples coin (w.passes.map (·.plan.length)) = some sampled ∧
       checkWindow reg reg.digest appends w sampled openings = .accept := by
   unfold verifyWindow at h
-  cases hd : receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) with
+  cases hd : receiptSample samples coin (w.passes.map (·.plan.length)) with
   | none => simp [hd] at h
   | some sampled => simp [hd] at h; exact ⟨sampled, rfl, h⟩
 

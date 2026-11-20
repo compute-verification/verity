@@ -170,7 +170,8 @@
   {
    "name": "rate.native_peak_flop_per_second",
    "value": 989400000000000.0,
-   "unit": "FLOP/s"
+   "unit": "FLOP/s",
+   "reading": "datasheet"
   },
   {
    "name": "overhead.vs_native_peak",

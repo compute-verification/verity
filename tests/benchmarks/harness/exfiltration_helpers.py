@@ -164,13 +164,6 @@ def recorded(tmp: Path, *, planned: bool = True) -> Store:
     return s
 
 
-#: a made-up served run's record, as its reader gives it: the window served 1,000 s on 8 GPUs, 8,000 GPU-seconds, and the
-#: audit's 960 of them, 12%: two proving sessions on a GPU each (480), staging (20), the replay (240), the interior
-#: commitment (20) and the serving charge over stock on the same load (8,000 - 7,800)
-SERVED = {"run": "r20261113-000000-5e7d", "serving": {"seconds": 1000.0, "gpus": 8},
-          "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 1}], "staging": [{"seconds": 20.0, "gpus": 1}],
-          "replay": [{"seconds": 30.0, "gpus": 8}], "interior": [{"seconds": 5.0, "gpus": 4}],
-          "stock": {"seconds": 975.0, "gpus": 8}, "prove_seconds_source": "busy"}
 HOLDER = "r20261113-000000-a000"
 
 

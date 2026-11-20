@@ -46,6 +46,14 @@ def expand(seed: bytes, n: int) -> bytes:
     return b"".join(hashlib.sha512(seed + c.to_bytes(4, "big")).digest() for c in range(-(-n // 64)))[:n]
 
 
+def session_coins(seed: bytes, windows: int, samples: int) -> list[bytes]:
+    """A P2 session's coins as `p2SessionFn` reads them: W challenges of 32 bytes, then each window's sample's coins
+    whole (`coins.sample_coins`)."""
+    whole = coins.RAW_BYTES * coins.sample_coins(samples)
+    return ([expand(seed + b" challenge %d" % t, coins.COIN_BYTES) for t in range(windows)]
+            + [expand(seed + b" sample %d" % t, whole) for t in range(windows)])
+
+
 def fault(take, n: int) -> int:
     """Which of `n` faults an input carries, 1 … `n`, or 0 for none, about half the time."""
     f = take(st.integers(0, 2 * n))
@@ -338,7 +346,7 @@ def p2_session(v) -> dict:
     """`p2SessionFn`: the registration file's bytes and the prover's request line read as `p2_parties` reads them
     (`registration_of`, `plan_of`, `message`, `params_of`) under the auditor's session parameters (`auditor_of`), a
     request out of form refused as such and one off the auditor's with `params_of`'s reason, and the events through
-    `B.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
+    `B.Books` on a challenger replaying the case's W challenges and W samples' coins: the held store, every event's result and the
     answer, less its reason."""
     with M.decoding():
         data = M.hex_(v, "registration")
@@ -361,12 +369,14 @@ def p2_session(v) -> dict:
         return {"refused": "request", "reason": str(e)}
     with M.decoding():
         committed = M.hexes(v, "coins")
-        if len(committed) != 2 * params.windows or any(len(c) != coins.COIN_BYTES for c in committed):
-            raise D.Reject("2W coins of 32 bytes")
+        W, whole = params.windows, coins.RAW_BYTES * coins.sample_coins(params.samples)
+        if (len(committed) != 2 * W or any(len(c) != coins.COIN_BYTES for c in committed[:W])
+                or any(len(c) != whole for c in committed[W:])):
+            raise D.Reject("W challenges of 32 bytes, then W samples' coins, each whole")
         M.nat(v, "chunk")
         not_before = M.nat(v, "not_before_ns")
         events = [p2_event_of(e) for e in M._list(v, "events")]
-    b = B.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
+    b = B.Books(params, reg, M.replayed(reg, 0, params.windows, committed, [], samples=params.samples), plan, not_before)
     results = [p2_apply(b, e) for e in events]
     answer = json.loads(json.dumps(B.answer(b.s, plan=plan)))
     del answer["reason"]
@@ -433,7 +443,7 @@ def p2_events(store: p2_prover.Store, plan: Plan, params, committed: list[bytes]
     3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
     window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
     window t's deadline. The events end once the session has its outcome."""
-    b = B.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
+    b = B.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, [], samples=params.samples),
                        plan, not_before)
     prover = p2_prover.Prover(store, entropy=Entropy(b"p2 session"))
     events: list[dict] = []
@@ -520,7 +530,7 @@ def p2_session_inputs(take) -> dict:
     session = {"deadline_ns": deadline_ns, "passes": passes, "samples": samples, "window_ns": window_ns,
                "windows": windows}
     req = p2_parties.request_of(reg.node, **session)
-    committed = [expand(b"coin %d " % j + take(st.binary(max_size=4)), coins.COIN_BYTES) for j in range(2 * windows)]
+    committed = session_coins(b"coin " + take(st.binary(max_size=4)), windows, samples)
     not_before = take(st.sampled_from([0, 0, 10 ** 6]))
     edit, pick = fault(take, 17), take(st.integers(0, 1 << 16))
     at = (take(st.integers(0, windows - 1)), take(st.integers(0, passes - 1)))
@@ -663,7 +673,7 @@ def committed_session(server, committed, session: dict | None, asked: dict) -> D
     reg = committed.registration
     req = p2_parties.request_of(reg.node, **asked)
     held = p2_parties.SESSION if session is None else session
-    coins_ = [expand(b"committed coin %d" % j, coins.COIN_BYTES) for j in range(2 * held["windows"])]
+    coins_ = session_coins(b"committed coin", held["windows"], held["samples"])
     events = [] if any(asked[k] != held[k] for k in p2_parties.SESSION) else p2_events(
         committed, Plan.whole(reg.blocks), p2_parties.params_of(reg, req, held), coins_, 0)
     v = {"registration": json.dumps(p2_parties.registration_json(reg)).encode().hex(),

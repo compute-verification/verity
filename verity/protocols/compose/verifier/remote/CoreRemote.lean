@@ -265,12 +265,12 @@ private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W"
   ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
 
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the execution phase's,
-and `proofs`, the circuit and public files' SHA-512s and the verifier's registered file. -/
+and `proofs`, the public file's SHA-512 and the verifier's registered file (the circuit file is derived from C and the partition). -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
   ("challenger", challenger), ("delta", "1/10"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
   ("program", jsonOf descriptor),
-  ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),
+  ("proofs", Json.mkObj [("public", rep "c2"), ("registered", readsFile)]),
   ("query", query), ("registered", Json.mkObj [(PouwVerifier.Credit.commitIds 0, 1), (PouwVerifier.Credit.commitRows 0 64, 1)]),
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window_root", rep "0e"), ("work_table", Json.null)] ++
     (outputs.map fun o => [("outputs", o)]).getD [])

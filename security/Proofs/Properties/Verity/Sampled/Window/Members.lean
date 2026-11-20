@@ -60,7 +60,7 @@ values read only with the verifier's registered file, the circuit and public fil
 word, the registered reads), then `StepAt.ofOwn`. A refusal where `run` refuses. -/
 def statementOf (p : _root_.Spot.OneStageZk.Own) (bs : _root_.Core.Blobs) : Flock.V StepAt :=
   _root_.Spot.OneStageZk.tablesHeld p bs >>= fun _ =>
-  match Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT with
+  match Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT with
   | none => throw s!"the statement {_root_.Spot.OneStageZk.STATEMENT} is not known"
   | some tags0 =>
     match tags0.plainLeaves with
@@ -84,7 +84,7 @@ theorem statementOf_ok_iff {p : _root_.Spot.OneStageZk.Own} {bs : _root_.Core.Bl
     statementOf p bs = .ok a ↔
       ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (rd : _root_.Spot.OneStageZk.Reads),
         _root_.Spot.OneStageZk.tablesHeld p bs = .ok () ∧
-        Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
+        Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧ tags0.plainLeaves = false ∧
         (p.registered.isNone && _root_.Spot.OneStageZk.readsRegistered p.programJ) = false ∧
         bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
         _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD circuitB pubB
@@ -94,7 +94,7 @@ theorem statementOf_ok_iff {p : _root_.Spot.OneStageZk.Own} {bs : _root_.Core.Bl
   · intro h
     unfold statementOf at h
     obtain ⟨⟨⟩, htab, h⟩ := ebind_ok h
-    cases htags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT with
+    cases htags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT with
     | none => rw [htags] at h; cases h
     | some tags0 =>
       rw [htags] at h

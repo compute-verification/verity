@@ -73,8 +73,11 @@ for s in sessions:
 
 def stand_in(monkeypatch, exe: Path) -> None:
     """`proofs.verify` on the stand-in verifier `exe` (`FAKE`), the Lean lowering of each drawn block's C_S
-    (`one_circuit.lower`) stood in by C_S itself."""
+    (`one_circuit.lower`) stood in by C_S itself, and its executable by a file beside `exe`."""
+    lower = exe.with_name("flock-lower-check")
+    lower.write_text("the stand-in lowering\n")
     monkeypatch.setattr(PF, "executable", lambda: exe)
+    monkeypatch.setattr(PF, "lower_executable", lambda: lower)
     monkeypatch.setattr(OC, "lower", lambda c_s, _partition, _exe, *_a: c_s)
 
 

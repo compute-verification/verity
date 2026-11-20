@@ -10,7 +10,6 @@ composes the two calculators that do, so it needs no GPU and no node, only the e
 verity bench exfiltration                 the figure, the inputs, each part, and the two side by side a period
 verity bench exfiltration --json          the same as one document: value, unit, inputs, parts, periods
 verity bench exfiltration --share 0.05    read at another share of total compute
-verity bench exfiltration --served-run F  beside it, the share a served two-stage run's record F measures
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
 verity bench exfiltration --response-ids N the network attester's part for a class of at most N ids a response
 verity bench exfiltration --scan-delta D  the network attester's errors at another δ of its scans (a fraction)
@@ -164,89 +163,7 @@ refused. With no run carrying the record the account is not made and the print n
 
 Every figure is read at a share of total compute that is given (`--share`, 10% by default) and marked assumed. Beside
 it the command prints the share a served two-stage run measures: the audit's GPU-seconds on the run over the window's
-serving GPU-seconds. Without a run's record it prints that share as "not measured: no served run's record".
-
-With `--served-run FILE`, the record as the reader of a served run's record gives it, the command reads each part of
-the audit's GPU time from it and marks it measured: the sessions' proving, the staging of the sampled proof blocks,
-the replay of the sampled spans, the interior commitment of their proof blocks, and the serving charge. Where the
-record lacks a field, the command names it and what the run doesn't write, marks it missing, and claims no share.
-Where it claims one, it prints the compute audit's part over the world's year at that share beside the part at the
-given share, at which every other figure stays.
-
-The record is one JSON object (`served_share` in `exfiltration.py`):
-
-- `run`: the served run's id.
-- `commit`: the commit its second stage ran; `runs`: each of its four runs (`serve`, `first`, `replay`, `second`)
-  as `{"run", "commit", "dirty", "why", "machine"}`, null for a run whose directory the reader wasn't given. The
-  holes are read at these commits (below).
-- `prove`, `staging`, `replay`, `interior`: each a list of what held GPUs for that part, one entry a session or a
-  step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held. A step that started no
-  process on a card is on 0 GPUs and adds no GPU-seconds; a part whose entries are all on 0 GPUs prints "on CPUs: no
-  GPU-seconds" beside its 0. A count under 0 or not a whole number is refused.
-- `prove_seconds_source`: which seconds `prove`'s are. `busy`, the proof server's busy seconds a card: the proving is
-  measured. `session`, a session's seconds with its wait behind the others of its prover included: the proving and
-  the share that sums it print `measured, at most`, an upper bound. Absent, `prove` lacks it and no share is claimed;
-  any other value is refused. Either way a part's GPU-seconds are the seconds held times the GPUs held.
-- `serving`: one such entry, the window's load: the seconds it was served over and the GPUs its engine held.
-- `stock`: one such entry, stock vLLM serving the same load at the same launch settings save Verity's changes. The
-  serving charge is the served GPU-seconds less stock's, measured.
-- `serving_cost` and `serving_cost_source`, where there is no `stock`: `verity bench serve_tax`'s cost of the served
-  arm over stock, as a fraction (stock's output tokens a second over the arm's, less one), and the run and load it is
-  of. The serving charge is then the served GPU-seconds times c / (1 + c), modeled, since those loads are not the
-  window's.
-
-`verity bench serve_tax` (`benchmarks/serve_tax/`) serves the two-stage window as its `two-stage` arm, and each load's
-`meta.json` there holds the seconds it was served over and the GPUs' busy seconds (`wall_s`, `gpu`), for every arm the
-job serves. So the window's serving and, where the same job served `compiled` on the same plan and rate, stock's are
-read from that record, and no stock serve of this command's own is needed.
-
-The reader is `python -m verity_bench.served_record --second DIR [--first DIR] [--serve DIR] [--replay DIR]
-[--serving META] [--stock META]` (`benchmarks/harness/verity_bench/served_record.py`). A served run is four runs
-(the serve, the first stage, the replay of the sampled spans, the second stage), and each `DIR` is one's directory
-as it is fetched, its `job.json` beside its `out/`; only the second stage is required. It prints the record from the
-files those runs published and the two loads' `meta.json`, with `None` for each field those files lack, and names
-each one with the file it read and what that file holds instead. It computes no share and decides no verdict.
-
-- A session's seconds are those its own `prove_seconds_source` names in `audit.timing`: `busy`, the proof server's
-  clock on the session's prover (`busy_s`), or `session`, the audit's clock on the whole session (`session_s`). The
-  record's `prove_seconds_source` is `busy` only where every session's is, and `session` where any is; where a
-  session names none its seconds are `session_s` and the field is named as absent.
-- Beside the fields above the record holds `audit`, what the audit showed: the class the second stage audited, as
-  its summary names the first stage's file (`class`), and the digest of the registration it read (`registration`);
-  the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it held, the stream's
-  outcome with its codes and whether it says it is complete, the layout the serve committed, what the interior
-  registered, and what holds the four runs' files to each other.
-
-## What a served run's audit showed
-
-From a record that holds `audit` the command prints one more section, before SPOT's holes
-(`benchmarks/harness/verity_bench/served_row.py`; `served_run` in the JSON), read against the tree:
-
-- **The verdict**, in the verifier's own words: how many of the sampled proof blocks' proofs the Lean verifier accepted, then the
-  final accept as the stream's outcome gave it: given, refused with its codes, or withheld, where every check of the
-  second stage held and the outcome is refused by one code the table names a reason for. An accept the verifier
-  withheld is never printed as given, and neither is an outcome that accepted beside a second stage that did not
-  hold: that one is printed as refused. An accept whose outcome does not say it is complete is printed as given and
-  not complete. The summary's top-level `accepted` is the one-stage record of the sessions alone and is never read
-  as the audit's verdict.
-- **What the audit covered**: the replay block as the layout names it, the stand-in (instances of the check's
-  template) or a Definition of the class's own.
-- **To fully proved**: the replay block where it is the stand-in; its inputs where the interior registers them,
-  which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict
-  whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and the final accept where it was
-  not given, or is not complete. Which verifier decides each kind of verdict, and the lock entry that covers it, are
-  data (`verity_bench/data/served_row.json`). SPOT's holes and the cited theorem are the next block's, and
-  this one prints no line on them.
-- **The mark** is `proved` only where that list is empty, the final accept is given and complete, the cited
-  theorem's lock entry lists no open premise and each of SPOT's holes is closed at every one of the served run's
-  four runs' commits, as the next block reads them; `run, not proved` otherwise.
-- **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
-  the provers ran on and what the data file notes of a card.
-- **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`, in the
-  command's own words: `accept` only for an accept that is complete, `not complete` for one that is not, `refuse`,
-  or `withheld`. Beside that record's fields it names what the verdict is of: its `class`, its `serve` (the serve's
-  run) and its `registration` (the digest the second stage read), each null where the served run's files give none,
-  and the section then says which it lacks.
+serving GPU-seconds. It prints that share as "not measured: no served run's record".
 
 ## The security level
 
@@ -362,8 +279,8 @@ plan of the case, is left out and listed under "Refused".
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures), `simulated` (what a stand-in does in its place: the network attester's set-time
-  card, the one such input), `assumed`, `missing` (a field a served run's record lacks, with its gap), `measured, at
-  most` or `modeled, at most` (an upper bound: a served run's proving read from its sessions' seconds), or `run, not
+  card, the one such input), `assumed`, `missing`, `measured, at
+  most` or `modeled, at most` (an upper bound), or `run, not
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's
   come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
@@ -395,10 +312,7 @@ plan of the case, is left out and listed under "Refused".
 - **Each monitoring period over all compute, under the label**: the same scopes, with the network attester's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
-- **SPOT's holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
-  over the served run's own code instead: its record's `commit` and each of its runs' commits, each listed, a hole
-  closed only where its fix is an ancestor of every one of them. Where any of the four runs is not given, such a
-  hole prints "closed at the runs read", naming the runs read and those not given, and the label stays `SPOT`. The
+- **SPOT's holes in the code that ran**, over the compute audit's runs of record. The
   block holds the label (`SPOT`, or
   `SPOT soundness` only when every hole is closed), each hole's status, and the theorem with its open premises as
   the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON). The holes are the two resampling holes
@@ -441,7 +355,7 @@ research run --on auto --project verity --source . --cwd source --store-read -- 
 ## What you may change
 
 Every input the print lists with its mark: the share of total compute, the network check's share, the planner's row
-and step, the class of ids a response, the scans' δ and a served run's record, each by its flag. And the record the
+and step, the class of ids a response, and the scans' δ, each by its flag. And the record the
 rows come from: the store's runs of record, or one run's record directory with `--from`.
 
 ## What is fixed

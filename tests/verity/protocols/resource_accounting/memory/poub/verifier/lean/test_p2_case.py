@@ -33,7 +33,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import period as 
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
-from verity.protocols.resource_accounting.memory.poub.verifier import p2_case, p2_lean, p2_parties, receipts
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2_case, p2_lean, p2_parties, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -122,8 +122,10 @@ def test_an_honest_sessions_case_is_accepted_with_its_credited_reads(exe, lean, 
     assert evidence["close"]["lines"] == len(evidence["log"])
     assert evidence["close"]["chain"] == p2_case.chain(p2_case.head_of(case), evidence["log"]).hex()
     assert p2_parties.case_digest(case) == evidence["close"]["chain"]
-    coins = [x["coin"] for x in evidence["log"] if x["op"] == "p2_event" and x["coin"] is not None]
-    assert coins and all(len(bytes.fromhex(c)) == p2_case.COIN_BYTES == 64 for c in coins)
+    sizes = {(x["event"]["kind"] == "close", len(bytes.fromhex(x["coin"]))) for x in evidence["log"]
+             if x["op"] == "p2_event" and x["coin"] is not None}
+    whole = p2_case.COIN_BYTES * coins.sample_coins(p2_parties.SESSION["samples"])
+    assert p2_case.COIN_BYTES == 64 and sizes == {(False, 64), (True, whole)}
     assert case["params"]["store_root"] == store.registration.root.hex()
     assert case["params"]["request"] == request(store, p2_parties.SESSION)
     ops = [x["op"] for x in _evidence(case)["log"]]

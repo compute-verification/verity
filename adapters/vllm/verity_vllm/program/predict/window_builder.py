@@ -330,6 +330,42 @@ def check_provable(circuit: IF.Circuit) -> None:
         raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
 
 
+def check_served(circuit: IF.Circuit) -> dict[str, dict[str, str]]:
+    """`check_provable` for a served window, which the door proves: it refuses past `IF.MAX_ROWS` rows or `IF.K_MAX`. ->
+    by id with why, without refusing, each template the door cannot prove, under each reason it has: ``row_floor``, none of
+    its rows past `IF.LAST_BLOCK_BYTES` bytes, so none has a compression before its last SHA-512 block (the predicate of
+    `IF.check_proof_block`, mirroring the door's own refusal in Lean, ``VStar/Compose.lean``'s ``metaHead``); and
+    ``prover_floor``, a block of all of its units in the window under the prover's zero-knowledge floor (``m >= ZK_M_MIN``,
+    `laying.zk_min_units`), estimated from a unit's input and output bits and ANDs, since the door's lowering sets its
+    ``k_log``. Such a template's units stay in the circuit and its sample: a draw of one is a failed proof."""
+    from verity.circuits.count import count
+    from verity.circuits.laying import ZK_M_MIN, zk_min_units
+    from verity.circuits.program import Program
+
+    why, named = [], {"row_floor": {}, "prover_floor": {}}
+    for fn, n in circuit.templates:
+        tid, cuts = descriptor_id(fn), circuit.cuts.get(descriptor_id(fn))
+        lay = IF.layout(fn)
+        ins, outs = [2 * w for _, w, _ in lay.cut(cuts)], [2 * w for _, w in lay.outs]
+        if len(ins) + len(outs) > IF.MAX_ROWS:
+            why.append(f"{tid}: {len(ins) + len(outs)} rows, past a proof block's {IF.MAX_ROWS}")
+        elif (k := IF.proof_block_k_log(ins, outs)) > IF.K_MAX:
+            why.append(f"{tid}: its rows alone need a Flock block of 2^{k} bits, past 2^{IF.K_MAX}")
+        if all(b <= IF.LAST_BLOCK_BYTES for b in ins + outs):
+            named["row_floor"][tid] = (f"no row past {IF.LAST_BLOCK_BYTES} B (its widest {max(ins + outs)} B), so none has a "
+                                       "compression before its last SHA-512 block")
+        prog = Program(fn)
+        bits = 8 * (sum(ins) + sum(outs)) + count(prog)[descriptor_id(prog.root)].ands
+        k = max(bits - 1, 1).bit_length()
+        # g is the door's, unknown before its lowering; at g = 1 the floor is the fewest units any packing needs.
+        if n < (need := zk_min_units(k, 1)):
+            named["prover_floor"][tid] = (f"a unit is {bits} input, output and AND bits, so k_log about {k}, and a block of "
+                                          f"all {n} units is under {need} (`zk_min_units` at g 1): m under {ZK_M_MIN}")
+    if why:
+        raise Unexpressible(f"{len(why)} templates Flock wouldn't prove: " + "; ".join(why))
+    return named
+
+
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot Flock's composer gives it
     (`interface.unit_rows`)."""

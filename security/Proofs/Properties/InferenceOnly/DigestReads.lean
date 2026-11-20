@@ -28,7 +28,7 @@ open Lean (Json)
 open Flock.Program
 open Claims.Json (Wf)
 open FlockDeploy (JsonEquiv)
-open InferenceOnlyVerifier.DefinitionDigest (canonicalEntry)
+open Flock.DefinitionDigest (canonicalEntry)
 open private natJ? intJ? paramsOf at_ buildNode from Circuits.Descriptor
 
 /-- Node `nd`'s callee as `Reaches` reads it: its `fn` index into the descriptor's callees. -/

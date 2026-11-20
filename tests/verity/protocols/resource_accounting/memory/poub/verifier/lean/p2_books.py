@@ -78,17 +78,19 @@ class Books:
     (`period._Held`), and each event's result as the Lean writes it (`Difftest.resultJ`), a call the session refuses
     `REFUSED`. A root or openings line is read as `P2Session` reads it: a line out of form rejects the session
     `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is the coin the last
-    event released: a start's or a boundary's challenge, or a close's openings coin."""
+    event released: a start's or a boundary's challenge, or a close's sample's coins."""
 
     def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.SessionCoins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
         self.s = audit.AuditRun(params, registration, None, coins_, not_before_ns=not_before_ns, clock=self.clock)
         self.released: C.LiveOpening | None = None
+        self.sample: bytes | None = None
+        """A close's: its sample's coins, whole, when the close released them."""
         self.why: str | None = None
 
     def _at(self, now: int, call: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-        self.clock.now, self.released = now, None
+        self.clock.now, self.released, self.sample = now, None, None
         try:
             return call()
         except audit.SessionError:
@@ -122,10 +124,11 @@ class Books:
 
     def close(self, t: int, now: int) -> dict[str, Any]:
         def call() -> dict[str, Any]:
-            n = len(self.s.coins.opened(C.OPENINGS))
+            c = t // self.s.params.groups_per_coin
+            had = self.s.coins.sample_bytes(c)
             out = self.s.close(t)
-            opened = self.s.coins.opened(C.OPENINGS)
-            self.released = opened[-1] if len(opened) > n else None
+            got = self.s.coins.sample_bytes(c)
+            self.sample = got if had is None else None
             return verdict_json(out) if isinstance(out, audit.Verdict) else {"draws": [list(d) for d in out]}
         return self._at(now, call)
 

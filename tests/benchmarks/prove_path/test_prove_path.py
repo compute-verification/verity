@@ -616,7 +616,8 @@ def _registered(d: Path) -> dict:
 
 
 def _check(rec: dict, mine, publics: dict[str, bytes]):
-    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics))
+    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics),
+                   partition=mine.partition)
 
 
 def _rows(d: Path) -> bytes:
@@ -1943,7 +1944,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     monkeypatch.setattr(PP.I2Compiler, "load", loaded)
     monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
     monkeypatch.setattr(WC, "lower", lambda *a, **k: SimpleNamespace(circuit=None))
-    monkeypatch.setattr(WC, "check_provable", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "check_served", lambda *a, **k: {})
     (tmp_path / "advice.bin").write_bytes(s.data)
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
@@ -2050,7 +2051,7 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
 
     monkeypatch.setattr(WC, "lower", lowered)
     monkeypatch.setattr(WC, "takes", lambda compiled, c: requests)
-    monkeypatch.setattr(WC, "check_provable", lambda circuit: None)
+    monkeypatch.setattr(WC, "check_served", lambda circuit: {})
     monkeypatch.setattr(WW, "weight_values", lambda r, s, _reg, keep_rows=False: weight_values(r, s, None, grain, keep_rows=keep_rows))
     monkeypatch.setattr(ST, "compile_steps", lambda *a, **k: SimpleNamespace(requests=[SimpleNamespace(id=i) for i in served]))
     p = SimpleNamespace(progs={i: i for i in served}, dirs={i: str(tmp_path) for i in served}, arrivals={i: 0 for i in served})
@@ -2064,7 +2065,7 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     (tmp_path / "binding_map_p0.json").write_text("{}")
     monkeypatch.setattr(PP, "record1", lambda *a: SimpleNamespace(
         run=SimpleNamespace(run_root=bytes(64)), bdir=tmp_path, row={"commit": {}}, out=tmp_path, pair=0, store=None,
-        manifest=None))
+        manifest=None, aliases=None))
     monkeypatch.setattr(WOR, "CheckpointIndex", lambda *a, **k: None)
     monkeypatch.setattr(CPU, "OnRead", lambda *a: None)
     monkeypatch.setattr(CPU, "provider", lambda *a: lambda label, lo, hi: zeros[label][lo:hi])
@@ -2094,8 +2095,11 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
         return filled["rows"]
 
     def window(*a, **k):
+        filled.update(advice=k.get("advice"))
         raise Closed
 
+    bound = {"compiler": {"name": "c", "digest": "cd" * 64}, "advice": {"root": "ef" * 64, "bits": 0}}
+    monkeypatch.setattr(PP, "served_binding", lambda a, c, data, r: bound)
     monkeypatch.setattr(WRS, "Rows", rows)
     monkeypatch.setattr(IF, "Window", window)
     (tmp_path / "advice.bin").write_bytes(b"")
@@ -2109,31 +2113,24 @@ def test_window_commit_fills_the_served_circuits_slots_and_rows_from_its_served_
     assert [P.positions for P in low.programs] == [5, 4] and len(slots) == 2
     assert [s.fn for s in slots] == [P.fn for P in low.programs]
     assert SS.SCAN_STATE in filled["values"] and sum(filled["rows"].n.values()) > 0
+    assert filled["advice"] is bound
 
 
-def test_window_circuits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, the verifier's window-circuit reads W's
-    tables (`window_class.Tables` of the serve's H1 window Program) with no key; none without W. Refused by name for a W
-    under another Program, and where H1's rounds aren't the class's outputs."""
-    from verity_vllm.program.predict.window_circuit import Tables
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
-    (serve / "h1").mkdir(parents=True)
-    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
-    (serve / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
-    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-
-    def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), **kw}
-        return PP.h1_tie(argparse.Namespace(**args), cls)
-    assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
-    w, meta, tables = tie()
-    assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
-    with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
-        tie(window_registration=str(tmp_path / "other.json"))
-    with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
-        tie(SimpleNamespace(outputs=4))
+def test_a_served_window_commit_binds_the_advice_the_server_committed(tmp_path, monkeypatch):
+    """`served_binding`: the window commit's advice binding is the server's own (the root its opening opens, under the served
+    compiler), committed nothing a second time; advice bytes other than the opening's are refused by name, and so is a
+    docket binding another root."""
+    s = _served(tmp_path, monkeypatch)
+    a = argparse.Namespace(**vars(s.a), advice=str(tmp_path / "advice.bin"))
+    r = PP.record1(s.a.bundle, s.a.row_dir)
+    assert PP.served_binding(a, s.compiler, s.data, r) == s.bound
+    with pytest.raises(ValueError, match="^advice: .* other advice than window 0's committed opening"):
+        PP.served_binding(a, s.compiler, s.data + b"\0", r)
+    reg = s.run / "advice" / "w0" / "registration.json"
+    doc = json.loads(reg.read_text())
+    reg.write_text(json.dumps({**doc, "binding": {**doc["binding"], "advice": {**doc["binding"]["advice"], "root": "ee" * 64}}}))
+    with pytest.raises(ValueError, match=r"published records are refused \(advice\)"):
+        PP.served_binding(a, s.compiler, s.data, r)
 
 
 def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():

@@ -101,8 +101,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's registration. Without
     ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check refuses first (with no
     block audit, none, whose parameters the check refuses). ``answers`` is the scan's ``answers.json`` where ``scan``
-    doesn't hold it: a chain record keeps it on its private side (chain_record.sh), for the row registrations it
-    carries whole."""
+    doesn't hold it, kept on the private side for the row registrations it carries whole."""
     if v3c is not None and circuit is None:
         raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
     dep = json.loads(SA._found(run, "deployment.json").read_text())

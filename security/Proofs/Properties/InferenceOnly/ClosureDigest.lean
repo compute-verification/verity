@@ -19,8 +19,8 @@ of the byte strings `Hashed` names.
 namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open Lean (Json)
-open InferenceOnlyVerifier.DefinitionDigest (isComposite definitionDigest closureDigest)
-open InferenceOnlyVerifier.DefinitionDigest.SecurityProofs (isComposite_iff)
+open Flock.DefinitionDigest (isComposite definitionDigest closureDigest)
+open Flock.DefinitionDigest.SecurityProofs (isComposite_iff)
 
 /-- A loop over a list keeps an invariant that each step keeps. -/
 theorem forIn_inv {α β ε : Type} (l : List α) (f : α → β → Except ε (ForInStep β)) (I : β → Prop)
