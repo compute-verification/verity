@@ -182,6 +182,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 HERE = (Path(__file__).resolve().parent)
@@ -197,6 +198,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, definition_digest, descriptor_chunks, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
+from verity_flock import circuit as FC  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
@@ -316,6 +318,12 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     one = "templates" not in params
     digests = tuple(P.program_digest(Program(u)) for u in units)
     schemas = {t: s for t, (s, _n) in mine.trees.items()}
+    # a run input node's tree input/n<w> is no member's: its leaves are in the schema its readers' files name
+    for mm in members:
+        if (f := mm["st"].get("registered_file")) is not None:
+            for e in json.loads(f.read_text())["ports"].values():
+                if REG.is_fresh_value(e.get("value")):
+                    schemas.setdefault(e["value"], e.get(RV.SCHEMA_KEY, RV.SCHEMA))
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
     taken = program_values(mine.program)
     public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
@@ -530,7 +538,8 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, workers: i
 
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
              "registered-read-against-another-root": (at({"root": "00" * 64}), "does not open", None)}
-    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1), None)
+    # the door's file (`door_reads`) names no rows: C gives them, so there is no other row for the file to name
+    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1 and "reads" in e), None)
     if many is not None:
         e = honest["ports"][many]
         cases["registered-reads-another-row"] = (
@@ -788,9 +797,16 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
         (cache / WARM_SECONDS).write_text(json.dumps(before, sort_keys=True, indent=1) + "\n")
 
 
-def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
+def door_reads(f: dict) -> dict:
+    """A `CS.own_reads` file in the door's form (`REG.READS_V2`): each port's value, root, rows and domain, no position."""
+    return {"format": REG.READS_V2,
+            "ports": {p: {k: v for k, v in e.items() if k not in ("reads", RV.READS_FROM)} for p, e in f["ports"].items()}}
+
+
+def stage(served: Path, mm: dict, files: tuple[dict, dict], tmpl_unit_bin: str | None = None) -> None:
     """A sampled member's prover's file and its circuit, under the header its public file was held to before the sample, the
-    circuit held to its compose's line first (`held`)."""
+    circuit held to its compose's line first (`held`); a templated circuit's unit placed by ``tmpl_unit_bin``
+    (`a0.templated`), the statement's ``tmpl_unit``."""
     m, st_dir = mm["m"], mm["st"]["dir"]
     if not mm["circuit"].exists() and mm.get("make"):
         if (pin := mm["make"]()[0]["pin"]) != mm["pin"]:
@@ -802,6 +818,9 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
             (st_dir / "tables").mkdir(exist_ok=True)
             link(f, st_dir / "tables" / f.name)
+    if mm["circ"].meta.get("statement") == FC.TMPL_STATEMENT:
+        text = (st_dir / "circuit.txt").read_text()
+        mm["st"] |= a0.templated(SimpleNamespace(meta=mm["circ"].meta, text=text), st_dir, tmpl_unit_bin)
     got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
     with open(got["inst"], "rb") as f:
@@ -872,6 +891,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps(why))
         return summary, False
     want = CS.expected_ports(mine)
+    # a circuit record with run inputs registers each run input node's tree beside the members' (`Window`), read off the
+    # record only where it is the circuit the audit holds
+    held_doc = served / "circuit.json"
+    if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
+        want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
@@ -961,6 +985,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # the header against the member's slice of the docket: the per-member form's rule, in its one Python
         # at the reads the verifier opens a shared output tree at (`rows.own_reads`'s `rows.out_value`)
         opened = {(p, mine.tree(m, p)) for p, _ in m.outs if mine.tree(m, p) != m.port(p)}
+        # and at the run input nodes' trees its registered file reads (`interface.registered_file`'s run inputs), as
+        # Lean's members check reads them off that file (`Member.reads`)
+        opened |= {(p, e["value"]) for p, e in ((registered or {}).get(m.key) or {}).get("ports", {}).items()
+                   if REG.is_fresh_value(e.get("value"))}
         why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key],
                                                                     opened)
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
@@ -1014,8 +1042,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # header's to (`REG.bind_ports`), never a port the window's registered circuit record declares registered
     # (`--interface`: the record the audit holds by SHA-512); a member with ports in shared trees reads each at its
     # tree's root, at the leaf its wiring gives (`Binding.tree`, `Binding.reads`), a registered read those reads name
+    # (`registered`, `interface.registered_file`'s). The door's file is the position-free one (`Flock.Registered.FORMAT`):
+    # C gives each position (`Flock.OneCircuit.pos`), so it carries no positions and binds no port
     reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
                           **(registered or {})}, mine, roots, registered=REG)
+    if door:
+        reads = {k: door_reads(f) for k, f in reads.items()}
     iface = served / "circuit.json"
     iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
     for mm in members:
@@ -1023,7 +1055,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             m = mm["m"]
             fv_roots = mm["header"]["frame_v3"]["roots"]
             own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[mine.tree(m, p)]["root"],
-                                                              "domain": want[mine.tree(m, p)]["domain"]} for p in fv_roots})
+                                                              "domain": want[mine.tree(m, p)]["domain"]}
+                                                          for p in fv_roots if mine.tree(m, p) in roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
@@ -1089,6 +1122,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
+    # the prover's Lean session loop is set up on the statement its environment names, fixed here, before `stage`
+    for mm, _ in drawn:
+        if mm["circ"].meta.get("statement") == FC.TMPL_STATEMENT:
+            mm["st"]["statement"] = FC.TMPL_STATEMENT
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
     def staged(mm: dict, local: list[int]) -> dict:
@@ -1102,7 +1139,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
         (sdir / SAMPLE_FILE).write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
-        stage(served, mm, files)
+        stage(served, mm, files, getattr(a, "tmpl_unit_bin", None))
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
                 "session_law": session_sampling_design}
 
@@ -1190,9 +1227,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                # a port at a shared tree is held by its registered reads there, and its header root is its own rows' alone
+                # a port at a shared tree, or a registered value's (a run input's input/n<w>), is held by its registered
+                # reads there, and its header root is its own rows' alone
                 "roots": {mine.tree(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()
-                          if mine.tree(m, p_name) == m.port(p_name)},
+                          if p_name not in m.values and mine.tree(m, p_name) == m.port(p_name)},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -1329,6 +1367,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     result["checks_before_draw"] = checks
     result["case_v2"] = case_written(out)
     members_lean(out, result, pm)
+    members_negatives(out, result, rec, mine.program)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1526,12 +1565,13 @@ def case_written(out: Path) -> dict:
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,
-                 check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+                 check: Callable[[dict], tuple] = MB.case_check_out) -> None:
     """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
     verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
     where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
     detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
-    verdict and says why under ``reason``; one whose case Lean could not read is refused."""
+    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where ``check`` gives the
+    outcome's line as the executable printed it (`members.case_check_out`), the detail holds it and its SHA-512."""
     checks = result.setdefault("checks", {})
     if not isinstance(pm, dict):
         checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
@@ -1540,7 +1580,7 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
     try:
         if not case.is_file():
             raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
-        verdict, why = check(json.loads(case.read_text()))
+        verdict, why, *printed = check(json.loads(case.read_text()))
     except MB.LeanError as e:
         checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
         result["accepted"] = False
@@ -1550,10 +1590,123 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
     ok = verdict == "accept"
     codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
     checks["members_lean"] = {"ok": ok and python, "ran": True, "codes": codes, "detail": {
-        "lean": {"verdict": verdict, "reason": why},
+        "lean": {"verdict": verdict, "reason": why,
+                 **({"output": printed[0].decode(), "output_sha512": hashlib.sha512(printed[0]).hexdigest()}
+                    if printed else {})},
         "python": {"accepted": python, "failed": failed}}}
     if not ok:
         result["accepted"] = False
+
+
+def member_negative_cases(case: dict) -> dict[str, tuple[dict, dict | None]]:
+    """The audit's own per-member case changed one way each, every change made to what was fixed before the draw: the
+    first sampled member's ports, each in turn, held by nothing (its registered read dropped, and no session root names
+    it), its run input's read at a root the registration does not hold, the evidence's
+    ``session_roots`` null, its ``served`` null, and a session root at the registration's first port other than its
+    root. Each with the parameters the per-member run's Python reads, where the change is the run's. Every member,
+    drawn or not, has each port held by `headerHeldAt` (`membersFiles`); for a member not drawn, which registered value
+    its weights port names is held only by `classHeld`, since `Registered.pos` and `withPositions` run only in a
+    session's setup."""
+    params, ev = case["params"], json.loads(bytes.fromhex(case["evidence"]))
+    k = ev["proofs"]["statements"][0]["member"]
+    m = params["proofs"]["members"][k]
+    ports = m["registered"]["ports"]
+    inp = next(p for p, e in ports.items() if REG.is_fresh_value(e.get("value")))
+
+    def read(change: dict) -> tuple[dict, dict]:
+        p = {**params, "proofs": {**params["proofs"], "members": {
+            **params["proofs"]["members"], k: {**m, "registered": {**m["registered"], "ports": change}}}}}
+        return {**case, "params": p}, p
+
+    def evidence(e: dict) -> tuple[dict, None]:
+        return {**case, "evidence": json.dumps(e, sort_keys=True, separators=(",", ":")).encode().hex()}, None
+
+    cases = {f"n1-{q}-{e.get('value')}-held-by-nothing": read({p: f for p, f in ports.items() if p != q})
+             for q, e in ports.items()}
+    cases |= {f"n2-input-{inp}-read-at-another-root": read({**ports, inp: {**ports[inp], "root": "00" * 64}}),
+              "n3-session-roots-null": evidence({**ev, "session_roots": None}),
+              "n3-served-null": evidence({**ev, "served": None}),
+              "n4-session-root-not-registered": evidence(
+                  {**ev, "session_roots": {next(iter(params["ports"])): "00" * 64}})}
+    e = ports[inp]
+    if isinstance(e.get("domain"), str) and e["domain"]:
+        other = ("1" if e["domain"][0] == "0" else "0") + e["domain"][1:]
+        cases[f"n5-input-{inp}-read-at-its-root-another-domain"] = read({**ports, inp: {**e, "domain": other}})
+    cases[f"n5-input-{inp}-read-stating-positions"] = read({**ports, inp: {**e, "reads": [0]}})
+    cases |= member_public_elsewhere(case, k)
+    return cases
+
+
+def member_public_elsewhere(case: dict, k: str) -> dict[str, tuple[dict, dict]]:
+    """n5's position form: member ``k``'s public file with its ``units.indices`` moved to as many units before its own
+    (after, for the first member), so `withPositions` would read its run input at another member's positions; the
+    file is written beside the case's blobs and named by its SHA-512, as the parameters name a public file."""
+    params = case["params"]
+    m = params["proofs"]["members"][k]
+    src = next((Path(b) for b in case["blobs"] if MB.PF.file_sha512(Path(b)) == m["public"]), None)
+    if src is None:
+        return {}
+    head, body = src.read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    us = list(h.get("units", {}).get("indices") or [])
+    if not us:
+        return {}
+    shift = -len(us) if min(us) >= len(us) else len(us)
+    h["units"] = {**h["units"], "indices": [u + shift for u in us]}
+    to = src.parent / f"n5-elsewhere-{src.name}"
+    to.write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n" + body)
+    p = {**params, "proofs": {**params["proofs"], "members": {
+        **params["proofs"]["members"], k: {**m, "public": MB.PF.file_sha512(to)}}}}
+    return {f"n5-{k}-public-file-at-another-members-units": ({**case, "params": p, "blobs": [*case["blobs"], str(to)]}, p)}
+
+
+def run_member_negatives(case: dict, rec: dict | None = None, program: Program | None = None,
+                         check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> dict[str, dict]:
+    """Lean's `checkMembersAt` on each of `member_negative_cases`, and the per-member run's Python beside it where the
+    change is the run's and the docket ``rec`` and ``program`` are given; ``refused`` whether Lean refused it."""
+    got = {}
+    ev = json.loads(bytes.fromhex(case["evidence"]))
+    k = ev["proofs"]["statements"][0]["member"]
+    print("MEMBERS-NEG-PORTS " + json.dumps({k: {p: {"value": e.get("value"), "root": e.get("root")} for p, e in
+                                                 case["params"]["proofs"]["members"][k]["registered"]["ports"].items()}},
+                                            sort_keys=True), flush=True)
+    for name, (c, p) in member_negative_cases(case).items():
+        try:
+            verdict, why = check(c)
+        except MB.LeanError as e:
+            verdict, why = "lean-not-run", str(e)
+        row = {"refused": verdict == "reject", "lean": {"verdict": verdict, "reason": why}}
+        if p is not None and rec is not None and program is not None:
+            try:
+                run, pwhy = MB.members_run(p, rec, ev, MB.blobs_of([Path(b) for b in c["blobs"]]), program=program,
+                                           verify=AC.lms_verify)
+                row["python"] = {"refused": run is None, "reason": pwhy}
+            except Exception as e:  # noqa: BLE001 - the row names what the twin does not decide
+                row["python"] = {"refused": None, "reason": f"{type(e).__name__}: {e}"}
+        got[name] = row
+        print("MEMBERS-NEG " + json.dumps({name: row}, sort_keys=True), flush=True)
+    return got
+
+
+def members_negatives(out: Path, result: dict, rec: dict, program: Program) -> None:
+    """`run_member_negatives` on the audit's own per-member case, under ``A5_MEMBERS_NEGATIVES=DIR`` and only in the
+    first audit that writes DIR: the case, its files copied under DIR and named there, is kept in DIR (``case.json``)
+    for `members_mutants.py`, and the rows are ``result["members_negatives"]``."""
+    keep = os.environ.get("A5_MEMBERS_NEGATIVES")
+    path = out / "case-v2.json"
+    if not keep or Path(keep).exists() or not path.is_file() \
+            or not (result.get("checks", {}).get("members_lean") or {}).get("ran"):
+        return
+    case = json.loads(path.read_text())
+    (Path(keep) / "blobs").mkdir(parents=True)
+    blobs = []
+    for i, b in enumerate(case["blobs"]):
+        to = Path(keep) / "blobs" / f"{i}-{Path(b).name}"
+        shutil.copyfile(b, to)
+        blobs.append(str(to))
+    (Path(keep) / "case.json").write_text(json.dumps({**case, "blobs": blobs}, sort_keys=True))
+    result["members_negatives"] = run_member_negatives(case, rec, program)
+    (Path(keep) / "negatives.json").write_text(json.dumps(result["members_negatives"], indent=1, sort_keys=True))
 
 
 #: why an audit with no per-member case has no `members_lean` verdict where `members_proof` gives no reason
@@ -2505,6 +2658,7 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--zk-server", help=ZK_SERVER_HELP)
+    ap.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit: places a templated member circuit's unit rows (`a0.templated`), which its prover and verifier read")
     ap.add_argument("--gpus", type=cards,
                     help="the proof server's cards, their indices comma-separated (0,1), as nvidia-smi numbers them: "
                          "a prover a card, behind the ZK server (--zk-server) or not; default the CPU. CUDA_DEVICE_ORDER "

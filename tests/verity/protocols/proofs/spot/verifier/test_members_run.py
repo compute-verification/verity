@@ -20,7 +20,7 @@ import pytest
 from verity.circuits import partition_object as PO, population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.types import Array, Value
+from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import closing as K, docket as DK, members as M, one_circuit as OC
@@ -599,6 +599,13 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="per-member form"):
         w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})
+
+
+def test_a_return_of_no_fields_has_no_field_tree():
+    """A return's fields count as Lean's `Circuits.Descriptor.fieldsOf` counts them: the empty tuple's none, a
+    tuple's each, any other type one."""
+    types = (Tuple(), Tuple(Value(8), Value(16)), Value(8), Array(2, Value(8)))
+    assert [M.return_fields(t) for t in types] == [0, 2, 1, 1]
 
 
 def _periods_interface_tests():

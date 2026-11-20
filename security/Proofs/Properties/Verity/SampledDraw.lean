@@ -360,7 +360,8 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
   swap
   · obtain ⟨r, -, -, hc⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
     exact ⟨_, _, _, hc⟩
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   try simp only [] at h
   split at h
   · cases h

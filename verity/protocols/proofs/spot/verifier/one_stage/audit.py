@@ -221,7 +221,8 @@ def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Ma
                  session_registered: Mapping[str, str] | None = None, certified: Sequence[str] = ()) -> dict[str, Any]:
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
-    must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
+    must be the registered root; that every port is held is the members check's, `OneStageZk.headerHeldAt`'s, per member
+    and port). `session_registered`: `{value: root}`, the registered roots the verdicts of
     record opened the sessions' reads against (`session_registered(verdicts)`, never the docket's own), less the
     reads of its own ports at their own roots, with the reads of the window values its caller names less those at their
     window entries' roots (`held_reads`); each read it reports must be of a registered value, at
@@ -237,7 +238,7 @@ def audit_record(docket: Mapping[str, Any], receipt: Mapping[str, Any], draw: Ma
     if session_roots is not None:
         registered = {r["port"]: r["root"] for r in docket["roots"]}
         wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
-        if not session_roots or wrong:
+        if wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
     want = {e["value"]: e["root"] for e in docket.get("registered", [])}
     opened = dict(session_registered or {})

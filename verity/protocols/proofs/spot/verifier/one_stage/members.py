@@ -81,6 +81,12 @@ EXITS = {"accept": 0, "reject": 1, "undecided": 2}
 
 
 def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: Sequence[Path] = ()) -> tuple[str, str | None]:
+    """`check_out`'s verdict and reason."""
+    return check_out(params, commitment, evidence, blobs)[:2]
+
+
+def check_out(params: Mapping[str, Any], commitment: bytes, evidence: bytes,
+              blobs: Sequence[Path] = ()) -> tuple[str, str | None, bytes]:
     """v2's check of the case of parameters `params`, docket `commitment` and evidence `evidence` (each
     the bytes the audit reads) on the files `blobs` (`V2_EXE`'s ``check``, `OneStageZk.protocol`): the verdict
     (``accept``, ``reject`` or ``undecided``) and the reason, None on an accept. A case in either form is checked in
@@ -92,21 +98,27 @@ def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: 
             path.write_bytes(b)
         p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], ok_statuses=LC.CHECK_EXITS)
     try:
-        got = json.loads(p.stdout.strip().splitlines()[-1])
+        line = p.stdout.strip().splitlines()[-1]
+        got = json.loads(line)
     except (IndexError, ValueError):
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
     if (not isinstance(got, dict) or got.get("verdict") not in EXITS or p.returncode != EXITS[got["verdict"]]
             or not (got.get("reason") is None or type(got["reason"]) is str)
             or (got["verdict"] == "accept") != (got.get("reason") is None)):
         raise LeanError(f"{V2_EXE} check answered a line that is not an outcome's (exit {p.returncode}): {got!r}"[:600])
-    return got["verdict"], got["reason"]
+    return got["verdict"], got["reason"], line.encode()
 
 
 def case_check(case: Mapping[str, Any]) -> tuple[str, str | None]:
     """`check` on a case as a driver writes one: ``{"blobs": [path, ...], "commitment": hex, "evidence": hex,
     "params": {...}}``."""
-    return check(case["params"], bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]),
-                 [Path(b) for b in case["blobs"]])
+    return case_check_out(case)[:2]
+
+
+def case_check_out(case: Mapping[str, Any]) -> tuple[str, str | None, bytes]:
+    """`check_out` on a case as `case_check` reads one: the verdict, the reason and the outcome's line as printed."""
+    return check_out(case["params"], bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]),
+                     [Path(b) for b in case["blobs"]])
 
 
 #: `OneStageZk.sessionTables`, the tables of a member's session, each with no ``root_B`` length (module docstring)
@@ -612,8 +624,9 @@ def field_trees_why(what: str) -> str:
 
 
 def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any]) -> list[tuple[str, int]]:
-    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' order, ``<template>/o<j>`` for each
-    return field of the one Definition the partition's ranges over C give its members' units, its leaves that
+    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' name order (Lean's `membersOf` reads
+    them from a JSON object, whose keys it holds sorted), ``<template>/o<j>`` for each return field
+    (`return_fields`) of the one Definition the partition's ranges over C give its members' units, its leaves that
     Definition's units."""
     try:
         ranges = P._template(program, query, "the members' partition").ranges
@@ -639,9 +652,14 @@ def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping
     out: list[tuple[str, int]] = []
     for t, tid in tids.items():
         n = sum(c for _k, r, _a, c in ranges if r == tid)
-        ret = fns[tid].signature()[1]
-        out += [(f"{t}/o{j}", n) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+        out += [(f"{t}/o{j}", n) for j in range(return_fields(fns[tid].signature()[1]))]
     return out
+
+
+def return_fields(ret: Any) -> int:
+    """`Circuits.Descriptor.fieldsOf`'s length: a tuple's fields, none for the empty tuple; any other type one."""
+    fields = getattr(ret, "fields", None)
+    return 1 if fields is None else len(fields)
 
 
 def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Mapping[str, Any]) -> None:
@@ -724,8 +742,8 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
-    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, and each wired port at its
-    writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, each port C reads from a run
+    input node at the docket's ``input/n<w>`` (`_run_input_roots`), and each wired port at its writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
@@ -1178,5 +1196,5 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
-           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why", "run_own_root_why",
-           "wired_tree_why"]
+           "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
+           "run_own_root_why", "wired_tree_why"]

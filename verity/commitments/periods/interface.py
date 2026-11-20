@@ -1820,6 +1820,19 @@ def run_inputs_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
     return tuple(Read.of(x) for x in doc.get("run_inputs", ()))
 
 
+def run_input_ports(doc: Mapping[str, Any], w: CS.Binding) -> dict[str, dict[str, Any]]:
+    """The registration's trees of C's run input nodes that the record ``doc`` names (``run_inputs``), as
+    ``registration.check`` takes a port (`rows.expected_ports`): ``{input/n<w>: {leaves, domain}}``, a leaf per unit of
+    its reader, each `registered_value.domain` over the period's program digest at the reader's port's words, as
+    `Window` commits it."""
+    prog = program_digest(w.program)
+    out: dict[str, dict[str, Any]] = {}
+    for r in run_inputs_of(doc):
+        n, words = int(r.radix[0]), int(r.step[0])
+        out.setdefault(r.param, {"leaves": n, "domain": RV.domain(prog, r.param, words, n).domain_id.hex()})
+    return out
+
+
 def filled_ports(registered: Registered | None, wires: Sequence[Wire], ingress: Sequence[Ingress],
                  boundary_reads: Sequence[Read]) -> frozenset[tuple[str, str]]:
     """The (template, port) pairs a wire, registered read, ingress or boundary read fills, wholly or in part."""

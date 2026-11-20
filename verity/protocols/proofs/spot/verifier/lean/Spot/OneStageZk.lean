@@ -877,6 +877,8 @@ verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one stateme
 that all accepted, and the run's own `all` says it again, so an acceptance reads the run. -/
 def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
+  if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else
+  if e.base.served.isNone then .reject NO_SERVED else
   match membersRun p ms c e sts bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
@@ -895,6 +897,10 @@ theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Com
   unfold checkMembersAt at h
   split at h
   · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
   · rename_i r hr
     split at h
     · rename_i pub' prof' hc
@@ -905,6 +911,19 @@ theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Com
       · cases h
     · cases h
     · cases h
+
+/-- The per-member form's check refuses evidence naming no session roots object, whatever else it names. -/
+theorem checkMembersAt_noRoots {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} (h : e.base.sessionRoots = none) :
+    checkMembersAt p ms c ξ e sts bs = .reject NO_SESSION_ROOTS := by
+  simp [checkMembersAt, h]
+
+/-- The per-member form's check refuses evidence naming session roots and no served units, whatever else it names. -/
+theorem checkMembersAt_noServed {p : Params} {ms : Array Member} {c : OneStage.Commitment} {ξ : ByteArray}
+    {e : Evidence} {sts : Array StatementFiles} {bs : Core.Blobs} {roots : Lean.Json}
+    (hr : e.base.sessionRoots = some roots) (h : e.base.served = none) :
+    checkMembersAt p ms c ξ e sts bs = .reject NO_SERVED := by
+  simp [checkMembersAt, hr, h]
 
 /-- The refusal of parameters and evidence of two forms (`checkBlobsAt`). -/
 def FORMS : String :=
