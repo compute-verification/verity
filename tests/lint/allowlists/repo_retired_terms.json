@@ -2198,7 +2198,6 @@
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_inert_bound_lean.py", "count": 8},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py", "count": 131},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit.py", "count": 119},
-    {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit_statements.py", "count": 14},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_epoch_coins.py", "count": 10},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_live_window.py", "count": 16},
     {"file": "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_pearl_c.py", "count": 4},
