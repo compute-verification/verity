@@ -89,6 +89,7 @@ if [ -n "$RUN_KEYS" ]; then
   done
 fi
 export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT/benchmarks/harness PYTHONDONTWRITEBYTECODE=1
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 K=
 S=$(mktemp -d); trap 'rm -rf "$S" ${K:+"$K"}' EXIT
 LIB=${P2_LIB:-}

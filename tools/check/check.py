@@ -1978,16 +1978,6 @@ OPT_IN = {
         "test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
         "test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
-        "VERITY_VLLM_INTERIOR_TABLE": (
-            "pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
-            "pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
-            "pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
-            "pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
-            "pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
-            "pipeline/test_interior_table.py::test_a_table_reads_interior_registers_the_same_root_and_domain_each_commit",
-            "pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
-            "pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
-            "pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
     "benchmarks/prove_path": {"VERITY_SLOW": (

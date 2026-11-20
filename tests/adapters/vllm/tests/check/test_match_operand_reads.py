@@ -296,7 +296,7 @@ def test_a_read_through_a_mux_is_a_read_of_its_live_operand_when_the_comparison_
     """A padded Program holds a mux where a flat one holds the live value, `SelectI32_v1` or a batch of `SelectBf16_v1` whose second
     operand is the live one.  Unfolding, a read of the mux is the read of the same leaves of that operand, through a mux of a mux
     too; a mux whose live operand is not one run is named by its instance.  Otherwise a read of a mux is a read of an instance like
-    any other.  In the record's form, the one `program-compare` unfolds."""
+    any other.  In the record's form, the one `program_compare.main` unfolds."""
     P = _mux_reader(runs, compact=False)
     assert P.canon(READ - 2, True) == [unfolded]
     assert P.canon(READ - 2, False) == P.canon(READ - 2) == [folded]
@@ -314,7 +314,7 @@ MUX_STRIDES = [   # (what the operand reads, its runs): reads whose first run is
 def test_the_compact_form_unfolds_a_read_that_begins_at_a_mux_to_the_records_sources(runs):
     """The compact form's sources of a read whose first run is of a mux are the record's, as progressions: a stride over one mux is a
     stride over its live operand, a stride from one mux to another is unfolded run by run, and a mux whose live operand is not one
-    run is named by its instance once per run.  No command asks for this: `program-compare` refuses to unfold a side whose
+    run is named by its instance once per run.  No command asks for this: `program_compare.main` refuses to unfold a side whose
     operands are progressions, and a request is compared with its component without unfolding."""
     record, compact = _mux_reader(runs, compact=False), _mux_reader(runs, compact=True)
     assert compact.canon(READ - 2, True) == [_as_compact(record.canon(READ - 2, True)[0])]
@@ -349,7 +349,7 @@ def test_unfolding_compares_a_padded_program_with_a_flat_one_in_the_records_form
     """`compare_steps` unfolding its first side: the padded Program's zero and muxes leave its sequence, a read of a mux is the flat
     Program's read of the live value, and what is left is addressed by its place in what is left.  The unfolded side's operands are
     the record's runs, from a compact view too, so the other side has to be in the record's form: against a flat Program in the
-    compact form every operand counts different under equal hashes, which is why `program-compare` refuses to unfold a side whose
+    compact form every operand counts different under equal hashes, which is why `program_compare.main` refuses to unfold a side whose
     operands are progressions.  Without unfolding the two sequences differ and nothing is wired."""
     padded, runs = _mux_reader([("n", M, 0, 2)], compact=compact), [("n", E, 2, 4)]
     res = compare_steps(padded, _flat_reader(runs, compact=False), unfold_a=True)

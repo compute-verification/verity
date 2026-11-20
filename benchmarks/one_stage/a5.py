@@ -13,8 +13,7 @@ circuit opens the record's own leaves (`pipeline.deferred_rows`).
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--zk-server flock-zk-server] --out DIR [--delta 0.5]
 A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
-(`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
-`c2_replay.serving_rows`), serving's own commitment, made before any sample. A5 takes it only over a
+(`commit --serving-rows`, `serving_rows.readers`, run before the bundle is sealed), serving's own commitment, made before any sample. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
 window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
 against, is SHA-512 too (`weights_sha512`: rows-sha512's docket, `step_rows.weights_tree`). The summary reports the form
