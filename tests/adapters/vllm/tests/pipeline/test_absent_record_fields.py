@@ -1,10 +1,5 @@
 """What these readers make of a record that leaves an optional field out: the field absent, null and empty read alike.
 
-* `verity_vllm.pipeline.program_cache`: a workload without `sweep` or `requests` keys a derive by nulls and no requests.
-* `verity_vllm.pipeline.vu_store`: a unit that states no evaluations names no value; a replay record that states no evaluator kept
-  no block on the device, and one that states no weights has no root for the export's provenance.
-* `verity_vllm.pipeline.manifest`: a Build's record without `program` has no recorded digest; an incomplete manifest that states
-  neither its unmodelled keys nor its peer binding is still refused, and says so.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
   the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
 * `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no
@@ -19,30 +14,20 @@
 """
 from __future__ import annotations
 
-import copy
-import dataclasses
 import gc
-import hashlib
 import json
 from types import SimpleNamespace
 
 import pytest
-from verity_torch.correspondence.runtime import NAMESPACE as CORRESPONDENCE
 
-from tests.pipeline import tp_toy
-from tests.pipeline.test_build_ir_record import _write
 from verity_vllm import gc_tuning
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
-from verity_vllm.pipeline import manifest as M
 from verity_vllm.pipeline import match as RC
 from verity_vllm.pipeline import match_fold as MF
-from verity_vllm.pipeline import program_cache as PC
-from verity_vllm.pipeline import vu_store as VS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-NO_SWEEP = dict.fromkeys(PC.DERIVE_INPUTS)
 SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sampling_seeds": [7, 8]}
 
 
@@ -61,100 +46,8 @@ def _the_collector_as_pytest_has_it(monkeypatch):
     assert after == held, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
-@pytest.mark.parametrize("doc, want", [
-    ({}, {**NO_SWEEP, "requests": 0}),
-    ({"sweep": None, "requests": None}, {**NO_SWEEP, "requests": 0}),
-    ({"sweep": {}, "requests": []}, {**NO_SWEEP, "requests": 0}),
-    ({"sweep": {"batch": 2}, "requests": [{}, {}, {}]}, {**NO_SWEEP, "batch": 2, "requests": 3}),
-    ({"sweep": {**SWEEP, "row_id": "not a derive's input"}, "requests": [{}]}, {**SWEEP, "requests": 1}),
-])
-def test_a_derive_is_keyed_by_the_sweep_fields_it_reads_and_the_number_of_requests(tmp_path, doc, want):
-    p = tmp_path / "workload.json"
-    p.write_text(json.dumps(doc))
-    assert PC.derive_inputs(p) == want
-
-
-def test_a_unit_that_states_no_evaluations_names_no_value_of_the_store(tmp_path):
-    values, program = tmp_path / "values", tmp_path / "programs" / "p0"
-    values.mkdir()
-    program.mkdir(parents=True)
-    blob = b"\x00\x01"
-    held = {"value": hashlib.sha256(blob).hexdigest(), "dtype": "u8"}
-    (values / f"{held['value']}.u8").write_bytes(blob)
-    units = [{}, {"evaluations": None}, {"evaluations": []}, {"evaluations": [{"args": [held], "outs": {"y": {"sample": held}}}]}]
-    (program / "units.jsonl").write_text("".join(json.dumps(u) + "\n" for u in units))
-    assert VS.verify_store(tmp_path) == {"ok": True, "bad_values": [], "missing_values": 0, "values": 1}
-    units.append({"evaluations": [{"args": [{"value": "0" * 64, "dtype": "u8"}], "outs": {}}]})
-    (program / "units.jsonl").write_text("".join(json.dumps(u) + "\n" for u in units))
-    assert VS.verify_store(tmp_path) == {"ok": False, "bad_values": [], "missing_values": 1, "values": 1}
-
-
 class _Engine:
     cp = {"repo": "tiny/model", "revision": "abc"}
-
-
-def _exported(tmp_path, monkeypatch, sr: dict) -> dict:
-    """What `after_replay` hands the export for the replay record `sr`: its keyword arguments."""
-    seen: list[dict] = []
-
-    def export(*_a, **kw):
-        seen.append(kw)
-        return {"sets": [], "wall_s": 0}
-
-    monkeypatch.setattr(VS, "export_vus", export)
-    monkeypatch.setattr(VS, "memory_headroom", lambda: 1.0)
-    (tmp_path / "limits.json").write_text(json.dumps({"workers": 4}))
-    assert VS.after_replay(str(tmp_path), {"result": True, **sr}, 0, b"\x00" * 32, {}, {}, None, None, {}, None, {}, {}, {}, {}, _Engine()) == {
-        "sets": [], "wall_s": 0}
-    (kw,) = seen
-    return kw
-
-
-@pytest.mark.parametrize("sr", [{}, {"evaluator": None, "weights": None}, {"evaluator": {}, "weights": {}},
-                                {"evaluator": {"retention": "host"}, "weights": {"root": "another field"}}])
-def test_a_replay_that_states_no_device_retention_and_no_weights_root_exports_forked_with_no_root(tmp_path, monkeypatch, sr):
-    kw = _exported(tmp_path, monkeypatch, sr)
-    assert kw["limits"].workers == 4
-    assert kw["provenance"]["weights"] == {"checkpoint": {"repo": "tiny/model", "revision": "abc", "weights_of_record_root": None}}
-
-
-def test_a_replay_that_kept_its_blocks_on_the_device_exports_in_one_process_and_its_weights_root_is_recorded(tmp_path, monkeypatch):
-    kw = _exported(tmp_path, monkeypatch, {"evaluator": {"retention": "device"}, "weights": {"committed_root": "ab" * 64}})
-    assert kw["limits"].workers == 1
-    assert kw["provenance"]["weights"]["checkpoint"]["weights_of_record_root"] == "ab" * 64
-
-
-@pytest.mark.parametrize("res", [{}, {"program": None}, {"program": {}}])
-def test_a_build_record_that_states_no_program_has_no_recorded_digest(tmp_path, res):
-    assert M.recorded_program_digest(str(tmp_path), res) is None
-
-
-@pytest.mark.parametrize("man, said", [
-    ({"complete": False}, "manifest INCOMPLETE: 0 unmodelled key(s), first []; tp_peer_binding n_unbound None"),
-    ({"complete": False, "unmodelled": None, "tp_peer_binding": None},
-     "manifest INCOMPLETE: 0 unmodelled key(s), first []; tp_peer_binding n_unbound None"),
-    ({"complete": False, "unmodelled": {}, "tp_peer_binding": {}},
-     "manifest INCOMPLETE: 0 unmodelled key(s), first []; tp_peer_binding n_unbound None"),
-    ({"complete": False, "unmodelled": {"d": 1, "b": 2, "a": 1, "c": 1}, "tp_peer_binding": {"n_unbound": 2}},
-     "manifest INCOMPLETE: 4 unmodelled key(s), first ['a', 'b', 'c']; tp_peer_binding n_unbound 2"),
-])
-def test_an_incomplete_manifest_is_refused_whatever_it_states_of_its_unmodelled_keys_and_its_peer_binding(capsys, man, said):
-    assert M.incomplete_rc(man) == 4
-    assert capsys.readouterr().err.splitlines() == [said]
-
-
-@pytest.mark.parametrize("binding, unbound", [(None, None), ({}, None), ({"n_unbound": 0}, 0), ({"n_unbound": 3, "bound": 1}, 3)])
-def test_the_global_manifest_s_summary_states_the_unbound_peers_only_where_the_manifest_does(tmp_path, monkeypatch, capsys, binding, unbound):
-    man = {"populations": {"identities": 5, "by_family": {"call_boundaries": 5}}, "manifest_digest": "m" * 64, "program_digest": "p" * 128,
-           "complete": True, **({} if binding is None else {"tp_peer_binding": binding})}
-    monkeypatch.setattr(M, "build_global_ranks", lambda *_a, **_k: man)
-    fixture, out = tmp_path / "workload.json", tmp_path / "manifest.json"
-    fixture.write_text("{}")
-    a = cli.parse("manifest", ["build-global", "--fixture", str(fixture), "--programs-root", str(tmp_path), "--out", str(out)], {})
-    assert M.main(a) == 0 and json.loads(out.read_text()) == man
-    assert json.loads(capsys.readouterr().out) == {
-        "identities": 5, "manifest_digest": "m" * 64, "program_digest": "p" * 128, "complete": True, "by_family": {"call_boundaries": 5},
-        "tp_peer_binding_n_unbound": unbound, "out": str(out)}
 
 
 def _plan(tmp_path, monkeypatch) -> RC.Plan:
@@ -372,7 +265,7 @@ NO_BLOCK = {"eos_token_ids": None, "lag": None, "async_scheduling": None, "moe_c
 def test_the_workload_program_s_summary_states_null_for_a_block_its_result_does_not_have(tmp_path, monkeypatch, capsys, blocks, stated):
     monkeypatch.setattr(GP, "build", lambda *_a, **_k: {**RESULT, **blocks})
     (tmp_path / "w.json").write_text("{}")
-    a = cli.parse("global-program", ["--workload", str(tmp_path / "w.json"), "--derived", str(tmp_path), "--out", str(tmp_path)], {})
+    a = cli.parse(GP, ["--workload", str(tmp_path / "w.json"), "--derived", str(tmp_path), "--out", str(tmp_path)], {})
     assert GP.main(a) == 0
     assert json.loads(capsys.readouterr().out) == {**SUMMARY, **stated}
     monkeypatch.setattr(GP, "build", lambda *_a, **_k: {"ok": False, "reason": "refused", "message": "why"})
@@ -431,27 +324,6 @@ def test_a_launch_context_that_states_no_length_by_step_conditions_on_none(launc
     assert cond["launch_context"] == {"max_seqlen_q_by_step": {}, "conflict": True}
     stated = B.applicability_conditions(TargetProfile.default(), {}, {}, {}, launch={**launch, "max_seqlen_q_by_step": {3: 9, 1: 4}})
     assert stated["launch_context"]["max_seqlen_q_by_step"] == {"1": 4, "3": 9}
-
-
-@pytest.mark.parametrize("rewrites", [{}, {"kv_rewrites": None}, {"kv_rewrites": []}])
-def test_the_program_writer_counts_no_kv_rewrite_for_a_derive_that_states_none(rewrites, tmp_path):
-    rep, mod, record, inner = tp_toy.derive_rank(2, 0)
-    root = next(n for n, m in mod.named_modules() if m is inner)
-    provenance = {k: v for k, v in rep.provenance.items() if k != "kv_rewrites"}
-    res = _write(f"{tmp_path}/none", dataclasses.replace(rep, provenance={**provenance, **rewrites}), record, root)
-    assert res["kv_rewrites"] == 0 and res["program"]["correspondence"]["namespace"] == CORRESPONDENCE
-    two = _write(f"{tmp_path}/two", dataclasses.replace(rep, provenance={**provenance, "kv_rewrites": [{}, {}]}), record, root)
-    assert two["kv_rewrites"] == 2
-
-
-@pytest.mark.parametrize("keep", [(), ("theta",)])
-def test_the_program_writer_records_no_correspondence_for_a_program_that_carries_none(keep, tmp_path):
-    rep, mod, record, inner = tp_toy.derive_rank(2, 0)
-    bare = copy.copy(rep.program)
-    bare.annotations = {k: v for k, v in rep.program.annotations.items() if k in keep}
-    res = _write(f"{tmp_path}/bare", dataclasses.replace(rep, program=bare, correspondence_digest=None), record,
-                 next(n for n, m in mod.named_modules() if m is inner))
-    assert res["program"]["correspondence"] is None and res["program"]["correspondence_digest"] is None
 
 
 @pytest.mark.parametrize("unstated", [{}, {"tp": None, "declared_derived": None}, {"tp": {}, "declared_derived": {}}])

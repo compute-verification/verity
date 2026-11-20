@@ -2128,8 +2128,8 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     gpp.write_text(json.dumps(gp))
     out1 = tmp_path / "gm1.json"
     out2 = tmp_path / "gm2.json"
-    cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out1)])
-    cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--tokens-optional", "--out", str(out2)])
+    cli.run(gm, ["--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out1)])
+    cli.run(gm, ["--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--tokens-optional", "--out", str(out2)])
     assert json.loads(Path(out1).read_text())["verdict"] == "FAIL" and json.loads(Path(out2).read_text())["verdict"] == "PASS"
 
 
@@ -2314,7 +2314,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))
     out, dout = tmp_path / "gm.json", tmp_path / "decomp.json"
-    rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
+    rc = cli.run(gm, ["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     assert rc == 0
     doc = json.loads(dout.read_text())
     comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
@@ -2337,7 +2337,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     # byte for byte -- match_diff's drift rule on check() and the CLI alike)
     out_rec = tmp_path / "gm_recflow.json"
     monkeypatch.setenv(GMF.FLAG, impl)
-    assert cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out_rec), "--within-step", "dag"]) == 0
+    assert cli.run(gm, ["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out_rec), "--within-step", "dag"]) == 0
     recflow = json.loads(out_rec.read_text())
     assert not ({"derived_available", "missing_derived", "extra_derived", "pipeline"} & set(recflow["x09"]))
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
@@ -2347,7 +2347,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
         import sys as _sys
         dout2 = tmp_path / "decomp_m.json"
         env = dict(os.environ, MATCH_IMPL=impl, MATCH_WORKERS=workers, PYTHONPATH=os.pathsep.join(p for p in _sys.path if p))
-        p = subprocess.run([_sys.executable, "-m", "verity_vllm.pipeline.cli", "global-match", "--global-program", str(gpp), "--oracle", str(oracle),
+        p = subprocess.run([_sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.check.match.global_match", "--global-program", str(gpp), "--oracle", str(oracle),
                             "--out", str(tmp_path / "gm_m.json"), "--decomp-out", str(dout2), "--within-step", "dag"], env=env, capture_output=True, text=True)
         assert p.returncode == 0, p.stderr[-800:]
         assert json.dumps(strip(json.loads(dout2.read_text())), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
@@ -2359,12 +2359,12 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
             r["component"]["dir"] = None
     gpp.write_text(json.dumps(gp2))
     monkeypatch.setenv(GMF.FLAG, impl)
-    rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
+    rc = cli.run(gm, ["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag"])
     doc = json.loads(dout.read_text())
     assert rc == 4 and doc["verdict"] == "MISSING_DERIVED" and doc["missing_derived"]
     # the row's driver derives the named shape and reruns with --derived: the same global Program (G1-G8 unchanged), X-09 complete again
     monkeypatch.setenv(GMF.FLAG, impl)
-    rc = cli.main(["global-match", "--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
+    rc = cli.run(gm, ["--global-program", str(gpp), "--oracle", str(oracle), "--out", str(out), "--decomp-out", str(dout), "--within-step", "dag",
                   "--derived", dropped])
     doc = json.loads(dout.read_text())
     assert doc["verdict"] == "PASS" and not doc["missing_derived"]

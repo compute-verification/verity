@@ -44,6 +44,7 @@ if [ -n "$CORES" ] && [ -z "${ROWS_PINNED:-}" ]; then
   exec env ROWS_PINNED=1 taskset -c "$CORES" bash "$TREE/benchmarks/poub_session/rows.sh" "$@"
 fi
 export RS=benchmarks/poub_session PR=verity/protocols/resource_accounting/memory/poub/prover O=${OUT:-${RESEARCH_RUN_DIR:?}/out}
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 mkdir -p "$O"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/rows.txt"; }
 first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done; }

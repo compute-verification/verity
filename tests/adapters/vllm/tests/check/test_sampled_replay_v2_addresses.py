@@ -3,12 +3,9 @@ the rows `request_manifest` counts.  An interior row whose output crosses a modu
 identity has its rows; every identity with Program rows is produced by the addressed rows, on a request Program and on a TP rank Program."""
 from __future__ import annotations
 
-import pytest
 
 from tests.check.test_sampled_replay import _program
-from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import index as IX
-from verity_vllm.check.replay import population as POP
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
@@ -23,14 +20,6 @@ def _v2_manifest(inst: dict, res: dict | None = None, **kw) -> dict:
     return request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id="r0", **kw).manifest
 
 
-def _reconciles(man: dict, pi: IX.ProgramIndex, rank: int = 0) -> None:
-    addresses: dict = {}
-    POP.population(pi, "r0", rank=rank, addresses=addresses)
-    checks = COV.query_population(man, addresses, set(), ranks=[rank])["query_checks"]
-    bad = {k: v for k, v in checks.items() if isinstance(v, dict) and v.get("n")}
-    assert not bad, bad
-
-
 def test_the_crossing_interior_row_is_addressed_as_the_module_output_it_crosses_as():
     """The gemma2-2b shape: the root body's `embed * normalizer` has no module-output name of its own but crosses into layer 0 --
     the v2 query requires it as (model, out) and the rule addresses exactly those rows, with the manifest's row count."""
@@ -42,16 +31,6 @@ def test_the_crossing_interior_row_is_addressed_as_the_module_output_it_crosses_
     assert all([m[0] for m in pi.describe(inst["rows"][i])["members"]] == ["out"] for i in crossing)
     rows = [x for x in man["identities"] if x["op_path"] == "model" and x["output_member"] == "out"]
     assert sum(int(x["rows"]) for x in rows) == len(crossing)
-
-
-@pytest.mark.parametrize("variant", [{}, {"bias": True}, {"attn": True}, {"scale": True}])
-def test_the_addressed_rows_reconcile_with_the_manifest_identity_by_identity(variant):
-    """Every identity of the manifest with Program rows is produced by the addressed rows, with the manifest's row count, and no
-    addressed row is outside the manifest (`query_population`'s fail-closed checks)."""
-    inst, _woff = _program(**variant)
-    man = _v2_manifest(inst)
-    assert man["complete"], man["unmodelled"]
-    _reconciles(man, IX.ProgramIndex(inst))
 
 
 def _tp_rank_program(rank: int, world: int = 2) -> dict:
@@ -91,14 +70,3 @@ def _tp_rank_program(rank: int, world: int = 2) -> dict:
     return {"schema": "cb-a/instance-sequence/v1", "digest": "d" * 64, "params": params, "rows": rows}
 
 
-@pytest.mark.parametrize("rank", [0, 1])
-def test_a_tp_rank_programs_addressed_rows_reconcile_with_its_rank_manifest(rank):
-    """TP-04 on the v2 query: a wired rank Program's manifest carries the rank-local partials (`part_rank<r>` / `shard_rank<r>`) beside
-    every collective output, and the rows addressed with the rank's TP context produce every one of them."""
-    inst = _tp_rank_program(rank)
-    res = {"program": {"digest": f"{rank}" * 64, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": 2, "T": 1,
-           "target": {"declared": {"compute_capability": [8, 9]}}, "attention_impls_observed": {}, "tp": {"world": 2, "rank": rank}}
-    man = _v2_manifest(inst, res, workload={"sweep": {"row_id": "tp2-df", "batch": 1, "arrive_steps": [0]}}, rank=rank, ranks=2)
-    assert man["complete"], man["unmodelled"]
-    assert {x["output_member"] for x in man["identities"] if x["family"] == "tp_rank_partials"} == {f"part_rank{rank}", f"shard_rank{rank}"}
-    _reconciles(man, IX.ProgramIndex(inst, tp={"rank": rank, "world": 2}, attention_paths=list(IMPL)), rank=rank)

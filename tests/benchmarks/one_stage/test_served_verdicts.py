@@ -2763,10 +2763,9 @@ def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refu
     from verity.protocols.compose import schemes
 
     pearl, get = schemes.get("pearl-plus"), schemes.get
-    assert S.declared_unchecked(pearl.protocol) == (
-        "coins' signatures checked on the served node only; not checked by the auditor; the tie covers a workload served "
-        "eager (vLLM's graph mode NONE): under a CUDA graph (FULL or PIECEWISE) a step's linear runs at the capture size, "
-        "with rows no request owns, and those rows are outside what the tie covers")
+    said = S.declared_unchecked(pearl.protocol)
+    assert pearl.unchecked and said == "; ".join(schemes.S.sentences(pearl))
+    assert not any(name in said for name in pearl.unchecked)
     stand_in = dataclasses.replace(pearl, unchecked={})
     monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
     assert S.declared_unchecked(pearl.protocol) == ""
@@ -6560,6 +6559,7 @@ sys.exit(1)
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
+    shutil.rmtree(out / "composite")
     (d / "private/logs/sampled-proofs/keep/served" / "window").mkdir(parents=True)
     (d / "private/logs/sampled-proofs/keep/served" / "window" / "case.json").write_text("{}")
     assert run().returncode == 0
@@ -6625,6 +6625,15 @@ UNSHOWN = {"remote-v1": ["COMPOSITE remote-v1: NOT_ESTABLISHED the tree is no gi
 #: Onsite's run as served_table.py's pearl-plus piece sets it: remote v1 composes beside onsite where the tree has its Lean
 ONSITE_POUW = {"POUW": "pearlplus"}
 REMOTE_V1_MAIN = "verity/protocols/compose/verifier/remote/RemoteV1Main.lean"
+#: composite.py and the files of the tree it loads, at their paths in the tree
+COMPOSITE_FILES = ("benchmarks/one_stage/composite.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py",
+                   "verity/protocols/proofs/spot/verifier/one_stage/settings.py")
+
+
+def _copy_composite(tree: Path) -> None:
+    for f in COMPOSITE_FILES:
+        (tree / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(HERE.parents[2] / f, tree / f)
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
@@ -6657,8 +6666,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -6723,8 +6731,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != attester}
     for p, where in own.items():
@@ -6760,6 +6767,55 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
         assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
             p for p in C.COMPONENTS[x] if p not in want]
     assert (kept / "case.json").read_text() == case and not list(out.rglob("case.json"))
+
+
+#: Stand-ins for remote's Lean (`NO_LEAN` but for its end) and each one's lines in OUT/verdicts.txt; None: the tree lacks
+#: lean_child, so composite.py ends on a traceback, with a reject's status
+CRASHES = {
+    "reject": (NO_LEAN, ["COMPOSITE remote: VERDICT verity/remote/v0 reject stand-in"]),
+    "panic": (NO_LEAN.replace("sys.exit(1)", 'print("PANIC at Verity.x Verity.X:1:2: oops", file=sys.stderr)'),
+              ["COMPOSITE remote: ERROR lean-panic: the Lean verifier wrote a panic: its answer is not read"]),
+    "status 3": (NO_LEAN.replace("sys.exit(1)", "sys.exit(3)"),
+                 ["COMPOSITE remote: ERROR lean-exit: the Lean verifier ended with a status it does not document: its "
+                  "answer is not read: status 3"]),
+    "traceback": (None, ["COMPOSITE remote: ERROR composite.py ended with status 1 and printed no verdict, its log on "
+                         "the node"]),
+}
+
+
+@pytest.mark.parametrize("stand_in", list(CRASHES))
+def test_a_composite_that_printed_no_verdict_is_an_error_and_a_reject_stays_a_reject(tmp_path, stand_in):
+    """served_composite.sh under PRODUCT=remote with a stand-in lake whose remote is ``stand_in``: a reject prints its
+    VERDICT line and the step exits 0; a panic line (under an accept and status 0), a status the check doesn't document,
+    or a composite.py that ends on a traceback (a toy tree without the lean_child it loads) prints an ERROR line and no
+    VERDICT, writes no public composite, and the step exits 1."""
+    lean, want = CRASHES[stand_in]
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{lean or NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(bin_ / "prlimit", PRLIMIT.format(seen=tmp_path / "prlimit.seen"))
+    (tree / "verity/protocols/compose/verifier/remote").mkdir(parents=True)
+    if lean is None:
+        (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+        shutil.copy(HERE.parents[2] / COMPOSITE_FILES[0], tree / COMPOSITE_FILES[0])
+    else:
+        _copy_composite(tree)
+    (d / "private" / "sampled").mkdir(parents=True)
+    (d / "private" / "sampled" / "case.json").write_text(json.dumps({"commitment": "c0", "evidence": "beef",
+                                                                     "params": {}}))
+    (d / "private" / "sampled" / "answer.json").write_text(json.dumps({"protocol": "verity/sampled-proofs/v1",
+                                                                       "verdict": "accept"}))
+    out.mkdir()
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "PRODUCT": "remote", "SERVED_NODE": "the-served-node"}
+    r = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_composite.sh"), str(d),
+                        str(out)], cwd=tree, env=env, check=False, capture_output=True, text=True)
+    said = [x for x in (out / "verdicts.txt").read_text().splitlines() if x.startswith("COMPOSITE remote: ")
+            and " NOT_ESTABLISHED " not in x]
+    assert (said, r.returncode) == (want, 0 if stand_in == "reject" else 1), r.stderr
+    assert (out / "composite" / "remote" / "composite.json").is_file() == (stand_in == "reject")
 
 
 DIGEST = "5e" * 64
