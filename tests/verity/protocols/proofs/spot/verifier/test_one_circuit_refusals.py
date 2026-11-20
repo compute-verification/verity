@@ -97,3 +97,17 @@ def test_cuts_of_a_root_reading_a_port_in_rows_no_writer_field_divides_are_refus
     c = b"".join(descriptor_chunks(Program(root)))
     part = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(writer), descriptor_id(reader)]}}}
     assert _refused(lambda: OC.cuts(c, part)) == "E_LOWER: in(S)'s cuts: edge-rows"
+
+
+def test_cuts_of_a_query_listing_a_template_of_no_gate_are_refused_in_leans_words():
+    """A template that returns its parameter has no gate: the query is refused as `Partition.checkTemplates` refuses it,
+    though the other template, whose instance a block might hold alone, has gates."""
+    A2 = Array(2, BIT)
+    same = bind(CompositeDefinition("DoorCutSame", 0, (), lambda S: ((("x", A2),), A2), lambda B, S, x: x, register=False))
+    xor = bind(CompositeDefinition("DoorCutXor", 0, (), lambda S: ((("x", A2),), BIT), lambda B, S, x: B.call(xor_gate(2), x),
+                                   register=False))
+    root = CompositeDefinition("DoorCutGateless", 0, (), lambda S: ((("a", A2),), BIT),
+                               lambda B, S, a: B.call(xor, B.call(same, a)), register=False)
+    c = b"".join(descriptor_chunks(Program(root)))
+    part = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(same), descriptor_id(xor)]}}}
+    assert _refused(lambda: OC.cuts(c, part)) == "E_QUERY: query-refused: template DoorCutSame_v0 has no gate"
