@@ -44,17 +44,11 @@ untraced = [
     "pipeline/test_research_tools.py",
     "pipeline/test_row.py",
     "pipeline/test_row_tables_stream.py",
-    "pipeline/test_serve_h1.py",
     "pipeline/test_source_identity.py",
     "pipeline/test_tp_gpu_lease.py",
     "program/predict/test_predict.py",
     "program/test_derive_transfer.py",
     "protocols/poub/test_commit_session.py",
-    "protocols/test_credit_gate.py",
-    "protocols/test_pouw_h1.py",
-    "protocols/test_pouw_h1_commit.py",
-    "protocols/test_pouw_h1_live.py",
-    "protocols/test_rt4_h1_challenger.py",
     "tools/test_ratchet_gate.py",
     "tools/test_suite_parts.py",
 ]
@@ -66,17 +60,15 @@ untraced = [
 # this package registers and the demo's stored workload (adapters/vllm/tools/served_run/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_poub_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
-# imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
-# period-open's --circuit-files with infra's gate (verity/protocols/compose/verifier/live_challenger/auditor.py), and the in-process gate
-# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/protocols/compose/verifier/live_challenger/models.py);
+# imports lean_verifier.py, challengers.py and store_layout.py; the in-process gate (tests/protocol_options/challenger_host.py)
+# runs infra's gate (verity/protocols/compose/verifier/live_challenger/auditor.py) and its model registry (verity/protocols/compose/verifier/live_challenger/models.py);
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
 # tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
-# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_poub_session.py
-# `poub-verifier`.
+# `spot-verifier` and test_poub_session.py `poub-verifier`.
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 # verity_vllm/definitions is a suite of its own, which this suite's directory leaves out; the package imports it throughout.
 # The package imports the PyTorch adapter (adapters/torch/verity_torch) throughout, and tests/program/test_inputs.py reads its
@@ -84,7 +76,6 @@ untraced = [
 # tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
 # difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
 # tests/tools/test_served_run.py reads `run.sh bindings`' output for the applications' configurations with `verity run`'s reader.
-# tests/pipeline/test_serve_h1.py loads adapters/torch's test_pouw_h1_receipts.py by its path, for its lanes-form Window;
 # tests/protocols/test_pous_served.py runs the memory attester, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 # tests/program/predict/test_window_rows.py serves through network accounting's tests' driver (its scan_traffic.py).
@@ -96,7 +87,7 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "applications/remote.toml", "applications/onsite_network.toml",
           "benchmarks/one_stage/served_verdicts.sh",
           ".gitignore",
-          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json",
@@ -123,7 +114,7 @@ inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "a
           "tools/research/src/research/pipefail.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py", "tools/difftest",
-          "tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py", "tools/verity/cli/verity_cli",
+          "tools/verity/cli/verity_cli",
           "tests/verity/protocols/resource_accounting/network/verifier/scan_traffic.py"]
 parallel = true
 # verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
@@ -335,7 +326,3 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["commit/test_census_and_memory_map.py"]
 paths = ["verity/circuits/requirement", "tools/difftest"]
-
-[[tool.verity.tests.reads]]
-tests = ["pipeline/test_serve_h1.py"]
-paths = ["tests/adapters/torch/tests/pouw/test_pouw_h1_receipts.py"]

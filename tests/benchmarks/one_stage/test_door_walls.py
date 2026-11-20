@@ -74,6 +74,24 @@ def test_the_census_reports_leans_compose_refusal_and_the_doors_by_class(tmp_pat
     assert W.main(["census", "--circuit", "lean_case", "--lower", str(exe)]) == 1
 
 
+def test_floor_doubles_to_the_range_and_plan_takes_the_registered_blocks(tmp_path):
+    W._catalog()
+    exe = _stub(tmp_path)
+    c, q = W.chain()
+    from verity.circuits import partition_object as PO
+    from verity.circuits import restrict as R
+    n = next(n for _k, _t, a, n in PO.TemplatePartition(R.program(c), q).ranges if a == 0)
+    (r,) = W.census(c, q, "0", lambda: exe, rows=False, units="floor")
+    ks = [k for k, _klass, _bits in r.tried]
+    assert n > 1 and ks[-1] == n and all(k == 2 ** j for j, k in enumerate(ks[:-1])) and r.units == (0, n)
+    assert {klass for _k, klass, _bits in r.tried} == {r.klass} and r.step == "lower"
+    assert len({bits for _k, _klass, bits in r.tried}) == 1 and r.gates
+    plan, by = W.plan_blocks("chain")
+    assert by.startswith("verity.commitments.periods.interface.partition_blocks")
+    got = W.census(c, q, "0", lambda: exe, rows=False, units="plan", plan=plan)
+    assert [g.units for g in got] == [next(b for b in plan if b[0] == 0)]
+
+
 def test_one_cause_is_one_class():
     a = "E_LOWER: flock-lower-check compose (1): unit/Gemm_v2{K=16,N=16}: no row at 1234 of 'x_v1'"
     b = "E_LOWER: flock-lower-check compose (2): unit/SiluMul_v2{I=128}: no row at 7 of 'y_v3'"

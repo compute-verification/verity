@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The door's walls (`door_walls.py`) on a CPU node: Lean's flock-lower-check built once per source of Flock's verifier
-# (cached under its `lake_closure.py` key), then the census on each CIRCUITS item (NAME:BLOCKS) and the fuzzer for
+# (cached under its `lake_closure.py` key), then the census on each CIRCUITS item (NAME:BLOCKS[:UNITS]) and the fuzzer for
 # FUZZ_MINUTES from FUZZ_SEED. Each census's table and the fuzzer's summary go to $OUT.
 # research run --on auto --cwd clone --mem-gb 32 --cpus 8 --timeout 2h -- bash benchmarks/one_stage/door_walls.sh
 set -uo pipefail
@@ -28,11 +28,11 @@ $UV sync -q --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O
 PY=.venv/bin/python
 rc=0
 for item in $CIRCUITS; do
-  name=${item%%:*}; blocks=${item#*:}
-  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --lower $LOW --json $O/census-$name.json \
-    > $O/census-$name.log 2>&1
-  r=$?; echo "CENSUS $name $blocks rc $r"; grep -h '^BUILT\|^CENSUS\|^|' $O/census-$name.log | cut -c1-600
-  [ $r -gt 1 ] && { tail -20 $O/census-$name.log; rc=1; }
+  IFS=: read -r name blocks units <<< "$item"; units=${units:-one}; f=$O/census-$name-$units
+  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
+    > $f.log 2>&1
+  r=$?; echo "CENSUS $name $blocks $units rc $r"; grep -h '^BUILT\|^PLAN\|^CENSUS\|^|' $f.log | cut -c1-600
+  [ $r -gt 1 ] && { tail -20 $f.log; rc=1; }
 done
 if [ "$FUZZ_MINUTES" != 0 ]; then
   $PY benchmarks/one_stage/door_walls.py fuzz --seed $FUZZ_SEED --cases $FUZZ_CASES --minutes $FUZZ_MINUTES --lower $LOW \
