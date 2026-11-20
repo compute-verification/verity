@@ -885,6 +885,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps(why))
         return summary, False
     want = CS.expected_ports(mine)
+    # a circuit record with run inputs registers each run input node's tree beside the members' (`Window`), read off the
+    # record only where it is the circuit the audit holds
+    held_doc = served / "circuit.json"
+    if held_doc.is_file() and hashlib.sha512(held_doc.read_bytes()).hexdigest() == summary.get("circuit"):
+        want |= IF.run_input_ports(json.loads(held_doc.read_bytes()), mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": sampling_design, "delta": a.delta, "firewall": a.zk_server,
                     "arm": "fw" if a.zk_server else "dev",
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})

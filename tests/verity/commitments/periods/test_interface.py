@@ -493,6 +493,7 @@ def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path
     rec = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__)
     assert mine.members == win.window.members
+    assert I.run_input_ports(rec, mine) == {v: {"leaves": roots[v]["leaves"], "domain": roots[v]["domain"]} for v in names}
     files = I.registered_file(rec, mine, {}, got["roots"])
     assert files[m1["name"]]["ports"]["x"]["value"] == names[0]
     assert files[m1["name"]]["ports"]["x"]["root"] == x.root.hex()
