@@ -157,7 +157,7 @@ def test_an_honest_pass(exe, tmp_path):
             got = same(exe, [path], draws, over_cap=rule)
             assert got["verdict"] == "accept" and len(got["verdicts"]) == draws + 1
             assert got["over_cap"] == (rule or VR.UNCREDITED) and got["work"]["over_cap_draws"] == 0
-            assert got["work"]["credited"] == 0 < got["work"]["macs"]
+            assert got["work"]["credited"] == 0 < got["work"]["checked_macs"]
             works.append(got["work"])
         assert works[0] == works[1] == works[2]
 
@@ -171,7 +171,7 @@ def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
     for rule in (None, *VR.OVER_INERT_BOUND):
         got = same(exe, [path], 16, over_cap=rule)
         assert got["verdict"] == "accept" and got["work"]["over_cap_draws"] == 0
-        assert (got["work"]["macs"], got["work"]["credited_tiles"]) == (19 * 16 * 128, 2)
+        assert (got["work"]["checked_macs"], got["work"]["credited_tiles"]) == (19 * 16 * 128, 2)
 
 
 def test_a_row_over_its_inert_bound_and_its_give_up(exe, tmp_path):
@@ -577,15 +577,15 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
     work, kept = got["work"], got["exact_work"]
     exact = VR.credit_at_assumption(passes, 8, VR.DELTA, work["over_cap_draws"])
     whole = VR.structural_credit(passes, 8, VR.DELTA, work["over_cap_draws"])
-    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "macs": exact["macs"]}
+    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "checked_macs": exact["checked_macs"]}
     assert work == {**whole, "credited": 0, "give_up": Wd.pad(whole["credited"] - exact["credited"])}
-    assert work["macs"] > kept["macs"] and work["credited_tiles"] >= kept["credited_tiles"] and work["give_up"] > 0
+    assert work["checked_macs"] > kept["checked_macs"] and work["credited_tiles"] >= kept["credited_tiles"] and work["give_up"] > 0
     got = same(exe, [a, b], 8, tie=wab, record=tmp_path / "coin.json")
     assert got["verdict"] == "accept" and "load" not in got["tie"]
     assert got["exact_work"] is None and got["work"] == {**exact, "credited": 0}
     got = same(exe, [b], 8, tie=wab, load=cls, rounds=[1], dropped=(0,), record=tmp_path / "coin1.json")
     assert got["verdict"] == "accept" and got["tie"]["load"] == [2, 8, 2]
-    assert got["work"]["macs"] == VR.pass_macs(VR.whole_pass(passes[1])) > got["exact_work"]["macs"] == VR.pass_macs(passes[1])
+    assert got["work"]["checked_macs"] == VR.pass_macs(VR.whole_pass(passes[1])) > got["exact_work"]["checked_macs"] == VR.pass_macs(passes[1])
     cases = [([a, b], wab, (2, 8, 3), {}), ([a, b], wab, (2, 8, 1), {}), ([a, b], wab, (4, 4, 2), {}),
              ([a, b], wab, (2, 4, 2), {}), ([a, b], wab, (1, 16, 2), {}), ([b0, a1], w(b0, a1), cls, {}),
              ([a, wide], w(a, wide), cls, {}),

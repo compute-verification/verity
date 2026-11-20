@@ -693,7 +693,7 @@ def credited_cells(scheme: Any, r: PW.UnitRecord) -> list[int]:
 
 
 def pass_macs(p: Pass) -> int:
-    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``macs`` over it alone;
+    """One pass's credited cells' MACs, each cell at its record's kept K (`credit_at_assumption`'s ``checked_macs`` over it alone;
     over `whole_pass`, `structural_credit`'s)."""
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
@@ -736,12 +736,12 @@ def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int 
     tiles = sum(1 for cells, _ in taken.values() for c in cells if c)
     wrong, rho = sum((w for _, w in taken.values()), Fraction(0)), passes[0].scheme.cap
     credited = (1 - rho) * max(macs - wrong, Fraction(0))
-    return {"credited": math.floor(credited), "credited_tiles": tiles, "macs": macs, "rho": str(rho), "epsilon": str(eps),
+    return {"credited": math.floor(credited), "credited_tiles": tiles, "checked_macs": macs, "rho": str(rho), "epsilon": str(eps),
             "over_cap_draws": over}
 
 
 #: the exact credit's fields the grid form replaces (`grid_work`), kept as the profile's ``exact_work``
-EXACT_WORK = ("credited", "credited_tiles", "macs")
+EXACT_WORK = ("credited", "credited_tiles", "checked_macs")
 
 
 def whole(r: PW.UnitRecord) -> PW.UnitRecord:
@@ -803,7 +803,7 @@ def uncredited_cells(r: PW.UnitRecord) -> tuple[int, dict[str, int]]:
 def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """Where an accepted run's linears' MACs go uncredited, call by call (the verify document's ``uncredited``): each call's
     real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
-    the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
+    the credit's ``checked_macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
     its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
     `credit_at_assumption`'s deduction takes off it at ε with no sample over the inert-work bound; ``over_bound_macs``, what
     the ``over`` samples on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
@@ -882,7 +882,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     Held to a class, the work the verdict publishes (``public.work``, and the line's credit) is in the grid form
     (`grid_work`): the class's structural credit, MACs and credited tiles (`structural_credit`), the credit less the
     give-up padded up to H1's execution phase grid (``give_up``), so at most the exact credit. The exact one
-    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``macs``) is the profile's ``exact_work``, held on the
+    (`credit_at_assumption`'s ``credited``, ``credited_tiles`` and ``checked_macs``) is the profile's ``exact_work``, held on the
     node. Without a class the structural credit is not defined, and ``public.work`` is the exact credit.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), each of its calls

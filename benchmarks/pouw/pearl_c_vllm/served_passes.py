@@ -143,12 +143,12 @@ found by the SHA-256s ``--verify``'s document names, so a renamed DIR still serv
 ``DIR/coins.json``, at that document's samples, δ and samples over the inert-work bound. It samples nothing and judges
 nothing. It writes ``{schema, verify, commitment, records, uncredited}`` to ``--out`` and exits 0 only where the
 document accepted, the passes are its run's (their commitment is its ``commitment``, `verify_run.run_commitment`) and
-the totals are its credit's exactly (``checked_macs`` its ``macs``, ``credited`` its ``credited``); else it prints why
+the totals are its credit's exactly (``checked_macs`` its ``checked_macs``, ``credited`` its ``credited``); else it prints why
 and exits 1, writing nothing.  A run held to its class's fixed load publishes its work in the grid form instead
-(``give_up`` among it, `verify_run.grid_work`): its ``macs`` are the passes' whole MACs, each call's real MACs less its
+(``give_up`` among it, `verify_run.grid_work`): its ``checked_macs`` are the passes' whole MACs, each call's real MACs less its
 side channels, and its ``credited`` the whole passes' credit less ``give_up``, the give-up padded up to H1's window
 grid.  There the totals' whole MACs (``checked_macs`` and the ``excluded_a``, ``excluded_b`` and ``voluntary`` cells')
-are its ``macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
+are its ``checked_macs``, and their ``credited`` is at least its ``credited`` and at most that plus ``give_up``; what the
 padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
@@ -496,7 +496,7 @@ def timed_credit(served: dict, work: dict, coins, rounds: list[int] | None = Non
     held = held if rounds is None else [held[s] for s in rounds]
     form = VR.whole_pass if "give_up" in work else (lambda p: p)
     warm = sum(VR.pass_macs(form(VR.load(Path(p["manifest"]), coins))) for p in held if not p.get("timed", True))
-    return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["macs"] - warm,
+    return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["checked_macs"] - warm,
             "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
 
 
@@ -849,13 +849,13 @@ def uncredited(args: argparse.Namespace) -> int:
     t = got["totals"]
     if "give_up" in work:
         whole = t["checked_macs"] + sum(t.get(x, 0) for x in ("excluded_a", "excluded_b", "voluntary"))
-        if whole != work["macs"] or not work["credited"] <= t["credited"] <= work["credited"] + work["give_up"]:
+        if whole != work["checked_macs"] or not work["credited"] <= t["credited"] <= work["credited"] + work["give_up"]:
             return refused(f"the calls credit {t['credited']:,} of {whole:,} whole MACs, and the verdict's grid form "
-                           f"{work['credited']:,} of {work['macs']:,} less a give-up of {work['give_up']:,}")
+                           f"{work['credited']:,} of {work['checked_macs']:,} less a give-up of {work['give_up']:,}")
         held_to = f"the verdict's grid form, {t['credited'] - work['credited']:,} past its credit (grid)"
-    elif (t["checked_macs"], t["credited"]) != (work["macs"], work["credited"]):
+    elif (t["checked_macs"], t["credited"]) != (work["checked_macs"], work["credited"]):
         return refused(f"the calls sum to {t['checked_macs']:,} checked and {t['credited']:,} "
-                       f"credited MACs, and the verdict's credit is {work['macs']:,} and {work['credited']:,}")
+                       f"credited MACs, and the verdict's credit is {work['checked_macs']:,} and {work['credited']:,}")
     else:
         held_to = "the verdict's credit exactly"
     out = Path(args.out)

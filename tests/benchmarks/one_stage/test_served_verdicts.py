@@ -332,7 +332,7 @@ def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_o
     reference's and the Lean's (`_tile_verdicts`). The verdict, its outputs (the work credited, the tie and the class it
     held), the sample's count and source and a record's verdicts by protocol stay as written, and the documents in full are
     under the private dir."""
-    work = {"credited": 990, "credited_tiles": 3, "macs": 1000, "rho": "1/400", "epsilon": "1/100", "over_cap_draws": 0}
+    work = {"credited": 990, "credited_tiles": 3, "checked_macs": 1000, "rho": "1/400", "epsilon": "1/100", "over_cap_draws": 0}
     answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
               "public": {"work": work, "unit": "MAC", "tie": {"record": "cd" * 64, "tables": 10, "load": [2, 8, 2]}},
               "profile": {"delta": "1/100", "draws": 3, "source": "ef" * 32, "over_cap": "uncredited",
@@ -368,9 +368,9 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     wherever a document names it (the reference's profile, the Lean's printout, `served_passes.py lean`'s record of both
     and the answer of record's profile), in a line's JSON, in a JSON string's text and in a JSON object cut short. The
     grid work, its give-up among it, stays as written, and the documents in full are under the private dir."""
-    work = {"credited": 134_190_203_114, "credited_tiles": 29_440, "macs": 136_230_993_920, "rho": "1/400",
+    work = {"credited": 134_190_203_114, "credited_tiles": 29_440, "checked_macs": 136_230_993_920, "rho": "1/400",
             "epsilon": "9982889/1000000000", "over_cap_draws": 0, "give_up": 335_544_320}
-    exact = {"credited": 134_194_399_455, "credited_tiles": 29_429, "macs": 135_895_449_600}
+    exact = {"credited": 134_194_399_455, "credited_tiles": 29_429, "checked_macs": 135_895_449_600}
     tie = {"record": "cd" * 64, "tables": 265, "load": [4, 32, 4]}
     answer = {"protocol": "verity/pouw/pearl-plus/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
               "public": {"work": work, "unit": "MAC", "tie": tie},
@@ -381,7 +381,7 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     docs = {"pieces/pearlplus/pearlplus-answer.json": answer, "pieces/pearlplus/pearlplus-lean.json": lean,
             "pieces/pearlplus/pearlplus-lean-check.json": {"lean": lean, "python": {"verdict": "accept", "work": work,
                                                                                     "exact_work": exact}, "differ": []},
-            "pieces/pearlplus/verify.json": {"answer": answer, "timed": {"passes": 4, "macs": work["macs"],
+            "pieces/pearlplus/verify.json": {"answer": answer, "timed": {"passes": 4, "macs": work["checked_macs"],
                                                                          "credited": work["credited"]}},
             "record/record.json": {"rows": [{"protocol": "pouw", "answer": of_record}]}}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
@@ -393,7 +393,7 @@ def test_publish_holds_a_class_held_pearlplus_runs_exact_credit_and_leaves_its_g
     assert {rel: json.loads((private / rel).read_text()) for rel in docs} == docs
     for rel in docs:
         text = (out / rel).read_text()
-        assert "exact_work" not in text and str(exact["credited"]) not in text and str(exact["macs"]) not in text, rel
+        assert "exact_work" not in text and str(exact["credited"]) not in text and str(exact["checked_macs"]) not in text, rel
         assert str(work["credited"]) in text and str(work["give_up"]) in text, rel
     shown = {**answer, "profile": {k: v for k, v in answer["profile"].items() if k != "exact_work"}}
     assert pub["pieces/pearlplus/pearlplus-answer.json"] == shown and shown["public"] == answer["public"]
@@ -1852,7 +1852,7 @@ def _pearlplus_run(accepted: bool = True, source: str = S.LIVE_SOURCE) -> tuple[
               "coins": {"source": source, "session": {"session": SID} if live else None,
                         "closed": {"closed": True, "complete": True} if live else None},
               "passes": [{"pass": i, "timed": i > 0, "units": 64, "macs": 1000 * i} for i in range(4)]}
-    work = {"credited": 5500, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+    work = {"credited": 5500, "credited_tiles": 40, "checked_macs": 5600, "rho": "1/100", "epsilon": "1/100"}
     verified = {"draws": 459, "delta": "1/100",
                 "line": "ACCEPT verity/pouw/pearl-plus/v1 …" if accepted else "REJECT verity/pouw/pearl-plus/v1: pass 1 tile 7: B opening",
                 "answer": {"verdict": "accept", "reason": None, "public": {"work": work}} if accepted else
@@ -1920,7 +1920,7 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
     assert (got["pouw"]["coin_source"], got["pouw"]["session"], got["pouw"]["coins"]) == (S.LIVE_SOURCE, SID, None)
-    assert got["pouw"]["credit"] == {"credited": 5500, "macs": 5600, "epsilon": "1/100"}
+    assert got["pouw"]["credit"] == {"credited": 5500, "checked_macs": 5600, "epsilon": "1/100"}
     assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
 
 
@@ -2573,7 +2573,7 @@ def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joine
 
 
 PEARL_W = "d7" * 64
-PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
+PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "checked_macs": 5600, "rho": "1/100", "epsilon": "1/100"}
 
 
 #: the window-circuit record V3c held R's circuit to, kept beside R (`S.CIRCUIT_RECORD`), which Pearl+'s period opens on
@@ -2650,7 +2650,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record",
                  "Lean credits nothing": {"work": {**PEARL_LEAN_WORK, "credited": 0}},
                  "Lean other epsilon": {"work": {**PEARL_LEAN_WORK, "epsilon": "1/50"}},
                  "class held": {"work": {**PEARL_LEAN_WORK, "give_up": 96}, "exact_work": {
-                     "credited": 5490, "credited_tiles": 39, "macs": 5590}}}.get(case, {}))
+                     "credited": 5490, "credited_tiles": 39, "checked_macs": 5590}}}.get(case, {}))
     if case != "no Lean":
         (piece / S.PEARLPLUS_LEAN).write_text(json.dumps(lean))
     audit = tmp_path / "audit"

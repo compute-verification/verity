@@ -498,7 +498,7 @@ def test_a_scheme_no_served_run_attaches_is_not_implemented():
       "LEAN": to("work", "credited", value=MACS["linears"] + 1)},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
       "its passes are not one load of the class")),
-    ({"ANSWER": to("public", "work", "macs", value=2 * MACS["linears"])},
+    ({"ANSWER": to("public", "work", "checked_macs", value=2 * MACS["linears"])},
      "Pearl+'s answer holds 272,461,987,840 MACs, more than the 136,230,993,920 of the linears of the policy's class"),
 ])
 def test_a_record_that_cannot_give_the_models_macs_at_one_load_of_its_class_exits_2(store, tmp_path, capsys, edits, why):
@@ -852,7 +852,7 @@ def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load
     whole, credited = PASSES + 29_360_128, CREDITED - 1_000_000
 
     def held(give_up: int = 4_194_304, macs: int = whole) -> dict:
-        work = {"credited": credited, "macs": macs, "epsilon": "1/100", "give_up": give_up}
+        work = {"credited": credited, "checked_macs": macs, "epsilon": "1/100", "give_up": give_up}
         return {"ANSWER": to("public", "work", value=work), "LEAN": to("work", value=work)}
 
     store.add(RUN, a_record(tmp_path, **held()))

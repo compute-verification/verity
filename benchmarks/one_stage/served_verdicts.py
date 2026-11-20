@@ -938,7 +938,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "coin_source": doc.get("coin_source"), "session": check.get("session"),
                 "coins": check.get("reason", "unchecked"),
                 **{k: doc.get(k) for k in ("scheme", "load", "passes", "dropped", "served_tokens", "generate_s", "tie")},
-                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
+                "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "checked_macs", "epsilon")},
                 "coin": None if published is None else {k: published.get(k) for k in ("art", "preserved", "error", "sha512")},
                 "give_up": doc.get("give_up"),
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
@@ -2018,7 +2018,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
         return None, f"the Lean verdict's ε {work.get('epsilon')!r} is not the reference's {ref.get('epsilon')!r}"
     weaker = {} if kind == "stratified" else {"weaker_tie": WEAKER_TIE.format(design=design)}
     return {**answer, "public": {**answer["public"], "work": {k: work.get(k) for k in
-                                                              ("credited", "credited_tiles", "macs", "rho", "epsilon")}
+                                                              ("credited", "credited_tiles", "checked_macs", "rho", "epsilon")}
                                  | ({"give_up": work["give_up"]} if "give_up" in work else {})},
             "profile": {**answer["profile"], "lane": lane, "key_sha512": key, "period": name, "session": session,
                         "draw_session": drew.get("session"), "reference_work": ref,

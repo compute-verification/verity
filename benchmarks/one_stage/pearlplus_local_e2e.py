@@ -310,7 +310,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
         "output_tokens": 1, "ok": True, "over_caps": [],
         "coins": {"source": S.LIVE_SOURCE, "reserved": reserved, "session": carried,
                   "closed": {"closed": True, "complete": True}},
-        "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("macs"), "manifest": str(path)}]}))
+        "passes": [{"pass": 0, "timed": True, "units": 2, "macs": work.get("checked_macs"), "manifest": str(path)}]}))
     # the Lean verdict before the piece, as the harness takes it, so the piece holds both checks' costs
     tie = ((answer.get("public") or {}).get("tie") or {}).get("record")
     if lean is None:
