@@ -1,7 +1,6 @@
 module
 
 public import Std.Data.HashMap
-public import Circuits.DefinitionDigest
 public import Flock.FV3
 public import Flock.Bytes
 public import Flock.Hash
@@ -13,6 +12,7 @@ public import PouwVerifier.Json
 public import PouwVerifier.Opening
 public import PouwVerifier.Pass
 public import PouwVerifier.Rounds
+public import PouwVerifier.Template
 public import PouwWindow.Sample
 public import PouwWindow.Rounds
 public import Spot.ChallengerCoins
@@ -467,10 +467,6 @@ def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flo
 def SCHEMA : String := Flock.Program.SCHEMA
 def WINDOW_FN : String := "PouwH1Window_v3"
 def RECORD : List String := ["TILES", "LINEARS", "CALLS", "M", "PREFIX"]
-def TILE_FN : String := "PouwH1WindowTile_v1"
-def SHARED : List String := ["zy", "salt", "position", "roots"]
-/-- `credit.SHARED_J10R`: a J10-R template's, its call's first position and its unit's blocks after `SHARED`. -/
-def J10R : List String := ["call", "blocks"]
 /-- An execution phase's tile is at a K its proof covers, a multiple of `TILE_K_STEP` below `TILE_K_LIMIT`: the K the tile's
 `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32). -/
 def TILE_K_STEP : Nat := 32
@@ -514,54 +510,6 @@ def loads? (text : String) : Option Json :=
     | .error _ => none
   | .error _ => none
 
-/-- How deep `bitsOf` reads a type: deeper than Python's recursion limit reads. -/
-def TYPE_DEPTH : Nat := 1000
-
-/-- `credit._bits`: a type's bits, its leaves' widths: `Value<w>` w, an Array n of its element's, a Tuple or Record its
-fields'; zero past `fuel` levels. -/
-def bitsOf : Nat → Flock.Program.Ty → Nat
-  | 0, _ => 0
-  | _ + 1, .value w => w
-  | fuel + 1, .array n t => n * bitsOf fuel t
-  | fuel + 1, .tuple fs => fs.foldl (fun s t => s + bitsOf fuel t) 0
-  | fuel + 1, .record fs => fs.foldl (fun s t => s + bitsOf fuel t.2) 0
-
-/-- The definition the decoded Program `P` keys by `id`, if it has one. -/
-def defn? (P : Flock.Program.Prog) (id : String) : Option Flock.Program.Defn :=
-  P.index[id]?.bind (P.defs[·]?)
-
-/-- `credit.TILE_PINS`: each pinned instance of `h1window.template` (its key, `TILE_FN{UNIT=…,K=k}`) with its closure
-digest, from the same `h1_tiles.json` `credit.py` reads, which `test_h1_tile_pins.py` writes from the registry. -/
-def TILE_PINS : List (String × String) :=
-  match Json.parse (include_str "../h1_tiles.json") with
-  | .ok j => (fields j).filterMap fun (key, d) => (str? d).map (key, ·)
-  | .error _ => []
-
-/-- `credit._tile`: the R × C of K = `k`'s template `d` (its decoded definition in the descriptor `j`) and whether it is
-J10-R's (its parameters end in `SHARED` then `J10R`), or none when it is not `h1window.template`'s: a composite
-`TILE_FN` keyed `TILE_FN{UNIT=…,K=k}` (its binding record, which the decoder holds to its bindings), whose A and B rows
-are n·R and n·C chunk rows of 8·K/n + 32 bits each, n = `chunks?` K, and whose closure digest in `j`
-(`Flock.DefinitionDigest.closureDigest`: its body and every body under it) is its key's pin in `TILE_PINS`, so the
-name over another body is no template. -/
-def tileOf (j : Json) (d : Flock.Program.Defn) (k : Nat) : Option (Nat × Nat × Bool) := do
-  let x ← chunks? k
-  guard (!d.prim && d.id == TILE_FN)
-  let pin ← TILE_PINS.lookup d.key
-  let .ok h := Flock.DefinitionDigest.closureDigest j d.key | none
-  guard (h == pin)
-  let [("UNIT", _), ("K", kb)] := (Flock.Program.recordPairs d.key).toList | none
-  guard (kb == toString k)
-  let names := d.params.toList.map (·.1)
-  let today := [s!"a_k{k}", s!"b_k{k}"] ++ SHARED
-  let j10r := names == today ++ J10R
-  guard (names == today || j10r)
-  let rows ← (d.params.toList.take 2).mapM fun (_, t) => (match t with
-    | .array n e => if 1 ≤ n && n % x == 0 && bitsOf TYPE_DEPTH e == 8 * (k / x) + 32 then some n else none
-    | _ => none)
-  match rows with
-  | [r, c] => some (r / x, c / x, j10r)
-  | _ => none
-
 /-- `credit._runs`: `(template, count)` pairs with adjacent ones of one template merged. -/
 def runs (xs : List (String × Nat)) : List (String × Nat) :=
   (xs.foldl (fun acc (t, n) => match acc with
@@ -588,8 +536,7 @@ function's record (`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template 
 whose A and B rows give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP`
 below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs are each call's (M/R)·(n/C)
 instances of its K's template, in the calls' order: a call one instance and a batch its members, as the template query
-counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. `descriptor` is the bytes `P` was
-decoded from, whose JSON `tileOf` reads each template's closure from. -/
+counts units. Its cost is the descriptor's bytes (`descriptor`, which `P` is decoded from), never the gates its nodes unroll to. -/
 def layoutOf (P : Flock.Program.Prog) (descriptor : ByteArray) : R Json := do
   let some j := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let fn := P.programFn
