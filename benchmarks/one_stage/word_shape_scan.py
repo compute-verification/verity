@@ -160,11 +160,13 @@ COUNTS = ("templates: the distinct Definitions the root's nodes call, input prim
 
 
 def report(desc: dict, name: str, raw: bytes | None = None) -> dict:
-    """`scan`'s line; ``raw`` the descriptor's bytes, whose sha256 and size it prints."""
+    """`scan`'s line, after the description's: its ``program_sha512``, the digest a registration and a partition
+    object name it by (`codec.program_digest`), and ``raw``'s sha256 and size, the file's."""
+    from verity.circuits.codec import program_digest
     out = scan(desc, name)
-    if raw is not None:
-        print("DESCRIPTION " + json.dumps({"circuit": name, "sha256": hashlib.sha256(raw).hexdigest(),
-                                           "bytes": len(raw)}), flush=True)
+    print("DESCRIPTION " + json.dumps({"circuit": name, "program_sha512": program_digest(desc)}
+                                      | ({"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+                                         if raw is not None else {})), flush=True)
     print("COUNTS " + COUNTS, flush=True)
     print("SCAN " + json.dumps({k: v for k, v in out.items() if k not in ("hits", "unaligned")}
                                | {"templates_count": len(out["templates"]),
