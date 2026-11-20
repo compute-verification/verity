@@ -204,7 +204,7 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
     member the parameters don't name, a second statement of one member, a statement of two sessions, a record or a proof
     file no blob holds, a proof file changed after its session's closing round (`NO_CLOSING`), a tree no statement's
     session records (`UNUSED_TREE`), members that are not the population laid range by range (`MEMBERS_LAID`), two
-    members reading one registered value at two roots. A member's circuit is C_S (`one_circuit.restrict`), read
+    members reading one registered value at two roots, a registered port stating positions. A member's circuit is C_S (`one_circuit.restrict`), read
     last."""
     a = Audit("members-twin")
     first, last = a.evidence["proofs"]["statements"]
@@ -239,6 +239,11 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
         return {"format": form, "ports": {"p": {**port, "root": root * 64}}}
     same("v1", f"member {A}: registered reads: not a verity/registered-reads/v2 file",
          params=a.members(A, registered=registered("aa", "verity/registered-reads/v1")))
+    placed = registered("aa")
+    placed["ports"]["p"]["reads"] = [0]
+    same("positions", f"member {A}: registered reads: port p: a verity/registered-reads/v2 port holds keys of [value, "
+                      "root, leaves, words, word_bits, domain, row_schema, known, param] and no other (no position: C "
+                      "and the partition give them)", params=a.members(A, registered=placed))
     two = a.members(A, registered=registered("aa"))
     two = two | {"proofs": {"members": two["proofs"]["members"] | {
         B: a.params["proofs"]["members"][B] | {"registered": registered("bb")}}}}
