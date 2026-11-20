@@ -1,3 +1,0 @@
-[2026-11-20T23:34Z] 9a2a04f499cd
-From the lead, one fact for your library/ map: proofs (TOP-447, 3:33 PM PST) says NONE of the Flock prover's imports of the adapter's Definitions will reach library/: the prover keeps its template TABLE and machinery and imports no Definition; whoever owns a Definition REGISTERS its template into that table (so the prover's table ships empty of workload templates). In your map treat verity_flock's subcircuit_templates.py and topp_word.py so: the adapter-backed entries and the top-p word leave verity/ with their Definitions (to library/circuits, registered into the prover's table by the library or the adapter), and say what the registration call would need from the moved side (the table's entry shape, by file:line).
-
