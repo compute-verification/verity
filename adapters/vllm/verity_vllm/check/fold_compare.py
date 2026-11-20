@@ -1,7 +1,7 @@
 """verity_vllm/check/fold_compare.py — M4: the four comparisons of a folded observation log against the evidence and Serve_v4.
 
-    uv run verity-vllm fold-compare --log data/logs/m1.jsonl.gz --snapshots data/logs/m1 \
-        --profile vllm_d9105ea80_sm89_eager --out out/capture/reports/compare_m1.json
+    uv run verity-vllm fold-compare --log LOG.jsonl.gz --snapshots SNAPSHOTS_DIR \
+        --profile vllm_d9105ea80_sm89_eager --out out/capture/reports/compare.json
 
 Each comparison is a function returning a JSON-able dict with a `status` in {"pass", "fail", "skipped", "error"}:
 

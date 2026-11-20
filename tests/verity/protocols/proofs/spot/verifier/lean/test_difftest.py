@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib.util
 import json
 import random
 import re
@@ -57,8 +58,6 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
-import settings
-import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
@@ -100,8 +99,23 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+
+
+def _by_path(name: str, path: Path):
+    """The module at `path`, loaded once as `name`: this file is imported by path from other suites, where a bare
+    `import settings` finds their own registry and `stand_in` is on no path."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with_name("settings.py"))
+stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
