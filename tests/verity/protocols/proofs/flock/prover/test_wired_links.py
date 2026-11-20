@@ -163,13 +163,19 @@ def _stage(topo, d: Path, wired: bool):
         st["other_words"] = CS.stage(units, SPEC, shape, cl, _cut(_lanes(units, cl, tp, inputs, {N: flip[N]}), N, tp.population),
                                      d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
         for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
-            (d / f"{name}.reads.json").write_text(json.dumps({"format": RG.READS, "ports": st[k]["registered_reads"]}))
+            (d / f"{name}.reads.json").write_text(json.dumps(_reads_v2(st[k]["registered_reads"])))
         wrong = json.loads(json.dumps(st["honest"]["registered_reads"]))
         wrong[port]["tree"]["field"] = "aux"
-        (d / "wrong_field.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wrong}))
+        (d / "wrong_field.reads.json").write_text(json.dumps(_reads_v2(wrong)))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
+
+
+def _reads_v2(ports: dict) -> dict:
+    """The verifier's `--registered` file of ``ports``: positions are the verifier's own, from C and the partition."""
+    return {"format": RG.READS_V2, "ports": {k: {f: v for f, v in e.items() if f not in ("reads", RV.READS_FROM)}
+                                             for k, e in ports.items()}}
 
 
 def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
