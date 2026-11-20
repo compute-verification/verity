@@ -227,6 +227,7 @@ def test_the_registrys_list_is_the_formats():
 
 
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
+MESSAGE = "pous.session.message/v1"
 #: the circuits' own test of the three bodies: the vectors, `held` (the verifier's coins and commitments) and `REFUSALS`, each
 #: a refusal with its text, which Lean is held to here
 _CASES = Path(__file__).parents[6] / "verity" / "circuits" / "test_supplied.py"
@@ -247,7 +248,7 @@ def fixed(label: str, n: int) -> bytes:
 def mark_of(fn: str, args: dict, head: int | None = None) -> dict:
     if fn == ROUND:
         return {"supplied": fn, "args": args, "layout": "halves", "bits": 96}
-    bits = 848 if fn == CONTEXT else 8 * (head + head % 2)
+    bits = 848 if fn == CONTEXT else 512 if fn == MESSAGE else 8 * (head + head % 2)
     return {"supplied": fn, "args": args, "layout": "le", "bits": bits}
 
 
@@ -274,7 +275,7 @@ def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...
     tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
     c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
     return {"commitment": c.to_json(), "ended": "complete", "rounds": k, "place": 0,
-            "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex(),
+            "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex(), "message": fixed(f"message{seed}", 64).hex(),
             "openings": [tree.opening(j).to_json() for j in range(k)]}
 
 
@@ -338,6 +339,10 @@ MUTATIONS = {
     "key upper": lambda d, j: d.update(key=d["key"].upper()),
     "key number": lambda d, j: d.update(key=5),
     "no key": lambda d, j: d.pop("key"),
+    "message short": lambda d, j: d.update(message=d["message"][2:]),
+    "message upper": lambda d, j: d.update(message=d["message"].upper()),
+    "message number": lambda d, j: d.update(message=5),
+    "no message": lambda d, j: d.pop("message"),
     "ended late": lambda d, j: d.update(ended="late"),
     "ended number": lambda d, j: d.update(ended=1),
     "no ended": lambda d, j: d.pop("ended"),
@@ -376,7 +381,7 @@ def sessions(draw) -> dict:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
         except (KeyError, IndexError, TypeError, AttributeError):
             pass
-    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "place") if x in doc})
+    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "message", "place") if x in doc})
     coin = CASES.text({x: doc[x] for x in ("openings", "carried", "coin_root") if x in doc})
     if draw(st.integers(0, 6)) == 0:
         commit = _formed(commit, draw(st.sampled_from(COMMITMENT_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
@@ -387,18 +392,20 @@ def sessions(draw) -> dict:
     if draw(st.integers(0, 24)) == 0:
         coin = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
     coins = {ROUND: coin.encode("latin-1") if coin == "\xff" else coin.encode()}
-    commitments = {f: (commit.encode("latin-1") if commit == "\xff" else commit.encode()) for f in (ROUND, HEADER, CONTEXT)}
+    commitments = {f: (commit.encode("latin-1") if commit == "\xff" else commit.encode()) for f in (ROUND, HEADER, CONTEXT, MESSAGE)}
     if draw(st.integers(0, 24)) == 0:
         coins.pop(ROUND)
     if draw(st.integers(0, 24)) == 0:
-        commitments.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT])))
-    fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT]))
+        commitments.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT, MESSAGE])))
+    fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT, MESSAGE]))
     tables = (coins, commitments)
     if fn == ROUND:
         placed = draw(st.sampled_from([{ROUND: 1}] * 8 + [{ROUND: 0}, {ROUND: 3}, {}, None]))
         return session_instance(fn, {"round": rnd}, tables, draw(st.sampled_from([96, 96, 96, 64])), placed)
     if fn == CONTEXT:
         return session_instance(fn, {}, tables, draw(st.sampled_from([848, 848, 848, 832])))
+    if fn == MESSAGE:
+        return session_instance(fn, {}, tables, draw(st.sampled_from([512, 512, 512, 496])))
     head = max(1, _head_of(tables) + draw(st.sampled_from([0, 0, 0, 0, 0, 0, -1, 1])))
     return session_instance(fn, {"head": head}, tables, 8 * (head + head % 2) if draw(st.integers(0, 9)) else 8 * head)
 
@@ -433,7 +440,8 @@ def test_the_storage_sessions_bodies_agree(pieces):
 
 VECTOR_CASES = [(f"round {j}", ROUND, {"round": j}, VECTORS["round_coin"][j], "halves", 32) for j in range(3)] + [
     ("the header", HEADER, {"head": VECTORS["head"]}, VECTORS["header"], "le", 16),
-    ("the context", CONTEXT, {}, VECTORS["context"], "le", 16)]
+    ("the context", CONTEXT, {}, VECTORS["context"], "le", 16),
+    ("the message", MESSAGE, {}, CASES.RELEASE["message"], "le", 16)]
 
 
 @needs_lake

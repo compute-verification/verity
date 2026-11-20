@@ -479,6 +479,7 @@ list names whose body is not there yet.
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
 | `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.session.message/v1` | commitment | supplied | | 512 |
 | `pous.setup.salt/v1` | coin | supplied | | 192 |
 | `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
 | `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
@@ -489,15 +490,15 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-The storage session's three functions read what the memory attester released after the session, which the verifier holds
-by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key}`, the session commitment,
-how the session ended and its rounds, the registered LMS public key's hex) and, for the round coin, as a coin (`coins`: JSON
+The storage session's four functions read what the memory attester released after the session, which the verifier holds
+by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key, message}`, the session
+commitment, how the session ended and its rounds, the LMS public key's hex and the signed message's) and, for the round coin, as a coin (`coins`: JSON
 `{openings}`). A commitment is registered before any coin, so the order rule counts `coins` alone. `pous.session.round_coin/v1`
 is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
 commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused);
 `pous.session.header/v1` is the header of a session that ended complete with all `k` rounds, which the commitment's `ended`
 and `rounds` are compared with, so a late or short session has no statement; `pous.session.context/v1` is the 106 bytes the
-signature's message hashes before the record. Each number they read is a canonical natural (no sign, fraction, exponent or
+signature's message hashes before the record; `pous.session.message/v1` is the 64-byte message m the signature signs. Each number they read is a canonical natural (no sign, fraction, exponent or
 leading zero) within its field's width. Each refuses, by the name "no statement", what the held commitment or coin lacks or the
 arguments don't fit. Nothing reads these bodies through the door yet.
 

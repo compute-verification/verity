@@ -243,7 +243,8 @@ verifier evaluates. C names the function in its input's mark, under its digest, 
 
 /-- Every function a mark may name, the format's closed list (`verity.circuits.supplied.FUNCTIONS` names the same). -/
 def FUNCTIONS : List String :=
-  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.setup.salt/v1",
+  ["pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1", "pous.session.message/v1",
+   "pous.setup.salt/v1",
    "poub.read.pass_seed/v1", "poub.read.pass_root/v1", "window.salt/v1", "pouw.pearlplus.salt/v1", "registered.root/v1",
    "record.root/v1", "log.base/v1", "const.u16/v1"]
 def LAYOUTS : List String := ["le", "halves", "digest"]
@@ -450,17 +451,28 @@ private def context (commitments : Array (String × ByteArray)) (v : String) (m 
   let ctx := Flock.SessionCoins.signedContext ident session
   return (#[("bytes", Flock.hexOf ctx)], ctx.size)
 
+/-- The storage session's signed message: the held commitment's `message`, the 64 bytes the memory attester signed. -/
+private def message (commitments : Array (String × ByteArray)) (v : String) (m : Mark) :
+    V (Array (String × String) × Nat) := do
+  let f := m.fn
+  if !m.args.isEmpty then throw s!"supplied input {v}: {f} takes no args"
+  let rel ← heldObject commitments "commitment" v f
+  let some msg := hexOpt (getD rel "message") | throw (noStatement v f "commitment's message is no lowercase hex")
+  if msg.size != 64 then throw (noStatement v f s!"message is {msg.size} bytes, not 64")
+  return (#[("bytes", Flock.hexOf msg)], 64)
+
 /-- A function's body: its value's sources (`sourceBytes`) and its length in bytes. `const.u16/v1`'s `value` as a u16
 little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
 drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
 `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
 `registered.root/v1` the root the record registers for its `value` and `record.root/v1` the root the record names for its
-`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's three functions read what the
-memory attester released after the session, the JSON `{commitment, openings, key}` held under the function's name:
+`port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's four functions read what the
+memory attester released after the session, the JSON `{commitment, openings, key, message}` held under the function's name:
 `pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` (12 bytes) of the round's last opening, which opens its
 committed coin below the commitment's blocks; `pous.session.header/v1` the header of a session that ended complete with
 all its rounds, in `head` bytes (whole u16 words: a zero byte after an odd one); `pous.session.context/v1` the 106 bytes
-the signature's message hashes before the record. "no statement" for any other function, whose body isn't written. -/
+the signature's message hashes before the record; `pous.session.message/v1` the 64-byte message m the signature signs.
+"no statement" for any other function, whose body isn't written. -/
 def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mark) : V (Array (String × String) × Nat) := do
   match m.fn with
   | "const.u16/v1" =>
@@ -487,6 +499,7 @@ def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mar
   | "pous.session.round_coin/v1" => roundCoin coins commitments v m
   | "pous.session.header/v1" => header commitments v m
   | "pous.session.context/v1" => context commitments v m
+  | "pous.session.message/v1" => message commitments v m
   | f => throw s!"supplied input {v}: no statement: {f}'s body is not the verifier's yet"
 
 /-- A supplied input's one row of sources (`Rows`): its body's, led by `(LE, "")` where its layout is `le`, its value's

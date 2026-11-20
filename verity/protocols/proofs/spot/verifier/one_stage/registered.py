@@ -716,15 +716,30 @@ def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) 
     return [("bytes", ctx.hex())], len(ctx)
 
 
+def _message(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's ``message``: the 64-byte digest the memory attester signed, released in the clear."""
+    f = m["supplied"]
+    if m["args"]:
+        raise ValueError(f"supplied input {name}: {f} takes no args")
+    rel = _held_object(commitments, "commitment", name, f)
+    msg = rel.get("message")
+    if not (isinstance(msg, str) and _EVEN_HEX.fullmatch(msg)):
+        raise _no_statement(name, f, "commitment's message is no lowercase hex")
+    if len(msg) != 128:
+        raise _no_statement(name, f, f"message is {len(msg) // 2} bytes, not 64")
+    return [("bytes", msg)], 64
+
+
 def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
     """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
     statement" where the verifier can't compute it. ``coins`` and ``commitments`` are what the verifier holds of each function
-    as a coin and as a released commitment, by function name. The storage session's three functions read the commitment, a
-    JSON object `{commitment, ended, rounds, key}` (`SessionCommitment.to_json`, how the session ended and its rounds, the
-    registered LMS public key's hex), and `pous.session.round_coin/v1` the coin, `{openings}` (`CoinOpening.to_json`):
+    as a coin and as a released commitment, by function name. The storage session's four functions read the commitment, a
+    JSON object `{commitment, ended, rounds, key, message}` (`SessionCommitment.to_json`, how the session ended and its
+    rounds, the LMS public key's hex, the signed message's hex), and `pous.session.round_coin/v1` the coin, `{openings}` (`CoinOpening.to_json`):
     `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin below the commitment's blocks;
     `pous.session.header/v1` the header of a session that ended complete with all its rounds in `head` bytes, padded to whole
-    u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the record. Each number they read
+    u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the record;
+    `pous.session.message/v1` the 64-byte message m the signature signs. Each number they read
     is canonical (`_canonical_numbers`) and within its field's width."""
     f = m["supplied"]
     if f == "pous.session.round_coin/v1":
@@ -733,6 +748,8 @@ def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str
         return _header(commitments, name, m)
     if f == "pous.session.context/v1":
         return _context(commitments, name, m)
+    if f == "pous.session.message/v1":
+        return _message(commitments, name, m)
     if f == "const.u16/v1":
         x = _arg(name, m, "value", int)
         if x >= 1 << 16:

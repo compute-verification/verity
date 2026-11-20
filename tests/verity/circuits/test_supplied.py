@@ -134,9 +134,11 @@ def test_each_function_has_its_lean_body(name):
 #: the header and the context
 VECTORS = json.loads((Path(__file__).parent / "pous_session_vectors.json").read_text())
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
+MESSAGE = "pous.session.message/v1"
 #: what the verifier holds of the session as a released commitment: the commitment, how the session ended and its rounds, the key,
-#: and the place the verifier registered it at (before the place its coin is released at, 1)
-RELEASE = {"commitment": VECTORS["commitment"], "ended": "complete", "rounds": 3, "key": VECTORS["key"], "place": 0}
+#: the signed message, and the place the verifier registered it at (before the place its coin is released at, 1)
+RELEASE = {"commitment": VECTORS["commitment"], "ended": "complete", "rounds": 3, "key": VECTORS["key"],
+           "message": hashlib.sha512(b"pous session message").hexdigest(), "place": 0}
 
 
 def text(doc) -> str:
@@ -144,11 +146,11 @@ def text(doc) -> str:
 
 
 def held(commitment=None, coin=None, **over) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """The verifier's ``(coins, commitments)``: the commitment held under each of the three functions' names, ``over`` replacing
+    """The verifier's ``(coins, commitments)``: the commitment held under each of the four functions' names, ``over`` replacing
     parts of it, and the round coin (the openings) under the round coin's; ``commitment`` and ``coin`` give a text as it is."""
     blob = (commitment if commitment is not None else text({**RELEASE, **over})).encode()
     return ({ROUND: (coin if coin is not None else text({"openings": VECTORS["openings"]})).encode()},
-            {ROUND: blob, HEADER: blob, CONTEXT: blob})
+            {ROUND: blob, HEADER: blob, CONTEXT: blob, MESSAGE: blob})
 
 
 def with_commitment(**fields):
@@ -189,6 +191,11 @@ def test_header_of_an_even_length_has_no_padding():
 
 def test_context_vector():
     assert G.body(*held(), "x", mark(CONTEXT)) == ([("bytes", VECTORS["context"])], 106)
+
+
+def test_message_vector():
+    """The message is the 64 bytes released in the clear, as released."""
+    assert G.body(*held(), "x", mark(MESSAGE)) == ([("bytes", RELEASE["message"])], 64)
 
 
 def test_the_marks_reach_the_leaves_their_layouts_read():
@@ -282,6 +289,10 @@ REFUSALS = [
     ("a key of 15 bytes", held(key="ab" * 15), CONTEXT, {}, CONTEXT + "'s key is 15 bytes, not an LMS identifier's 16"),
     ("a key that is no hex", held(key="x"), CONTEXT, {}, CONTEXT + "'s commitment's key is no lowercase hex"),
     ("a session of 31 bytes", with_commitment(session="ab" * 31), CONTEXT, {}, CONTEXT + "'s session is 31 bytes, not 32"),
+    ("a message of 63 bytes", held(message="ab" * 63), MESSAGE, {}, MESSAGE + "'s message is 63 bytes, not 64"),
+    ("a message in capitals", held(message=RELEASE["message"].upper()), MESSAGE, {},
+     MESSAGE + "'s commitment's message is no lowercase hex"),
+    ("no message", held(message=None), MESSAGE, {}, MESSAGE + "'s commitment's message is no lowercase hex"),
     # numbers: one strict reader, in every body
     ("a k of 1e0", raw('"k":3,', '"k":3e0,'), ROUND, R0, ROUND + CANON),
     ("a k with a leading zero", raw('"k":3,', '"k":03,'), ROUND, R0, ROUND + "'s commitment is no JSON"),
@@ -323,6 +334,7 @@ def test_the_arguments_each_function_takes():
     assert refusal(held(), ROUND) == "supplied input x: " + ROUND + " takes the args [round]"
     assert refusal(held(), HEADER, round=0) == "supplied input x: " + HEADER + " takes the args [head]"
     assert refusal(held(), CONTEXT, head=1) == "supplied input x: " + CONTEXT + " takes no args"
+    assert refusal(held(), MESSAGE, head=1) == "supplied input x: " + MESSAGE + " takes no args"
 
 
 def test_the_header_is_compared_with_what_was_released_not_assumed():
