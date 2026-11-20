@@ -156,7 +156,7 @@ settings_class() {  # $1, the settings file: the class its serve commits the win
 
 settings_engine() {  # $1, the settings file: the engine args its serve states, MAX_MODEL_LEN,T (the harness's 512 each
   # where the settings name none)
-  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-${H1_T:-512}}"' "$1"
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-512}"' "$1"
 }
 
 serve() {
@@ -331,6 +331,7 @@ import hashlib, json, os, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[3]).resolve().parents[1]))
 from benchmarks.one_stage import a0 as a0
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 lean, root = sys.argv[1], Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
 circuit = root / "circuit.txt"
@@ -348,8 +349,8 @@ def member(name, link):
     return out, a0.lean_verify(lean, st, 8, out)
 
 def said(out):  # the verifier's own answer on the archive's circuit and public objects, the archive's path left out
-    p = subprocess.run([lean, "statement", "--statement", a0.STATEMENT_ID, "--archive", str(out / "archive"), "--circuit", key,
-                        "--public", pub], capture_output=True, text=True)
+    p = LC.run([lean, "statement", "--statement", a0.STATEMENT_ID, "--archive", str(out / "archive"), "--circuit", key,
+                "--public", pub])
     return p.returncode, (p.stdout + p.stderr).replace(str(out), "OUT")[-600:]
 
 (put_out, put), (link_out, linked) = member("put", False), member("link", True)

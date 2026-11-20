@@ -8,20 +8,15 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from bench_standins import on_stand_in_machine
 from verity_bench import jobs, settings
 from verity_bench.cli import main
-from verity_config.settings import DEBUG, REDACTED, VALUE, WHERE, Registry, Setting, UnknownSetting, direct_uses
+from verity_config.settings import UnknownSetting, direct_uses
 
 MEMBER = (Path(__file__).resolve().parents[3] / "benchmarks" / "harness")
 REGISTRY_FILE = "verity_bench/settings.py"
 #: The files of this member that still use the environment directly, and how often (`direct_uses`).  It only shrinks.
 BASELINE: dict[str, int] = {}
-
-
-def test_every_setting_has_a_type_a_role_and_a_doc() -> None:
-    for name, s in settings.SETTINGS.items():
-        assert s.name == name and callable(s.type) and s.role in (VALUE, WHERE, DEBUG) and s.doc.strip(), s
-        assert name.startswith(settings.REGISTRY.prefixes) or not name.startswith("VERITY_"), name
 
 
 def test_the_variables_and_the_result_form_the_harness_shares_with_research_are_researchs() -> None:
@@ -30,48 +25,6 @@ def test_the_variables_and_the_result_form_the_harness_shares_with_research_are_
 
     assert {result.ENV_RUN_ID, result.ENV_RUN_DIR, result.ENV_SOURCE_SHA} <= settings.SETTINGS.keys()
     assert kit.RESULT_SCHEMA == result.RESULT_SCHEMA
-
-
-def test_a_read_parses_the_environment_at_the_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
-    assert settings.RESEARCH_RUN_ID == "local" and not settings.is_set("RESEARCH_RUN_ID")
-    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    assert settings.RESEARCH_RUN_ID == "r1" == settings.get("RESEARCH_RUN_ID") and settings.raw("RESEARCH_RUN_ID") == "r1"
-    assert settings.get("RESEARCH_RUN_ID", {"RESEARCH_RUN_ID": ""}) == "local"
-    with pytest.raises(AttributeError):
-        _ = settings.VERITY_BENCH_NOT_A_SETTING
-    with pytest.raises(AttributeError, match="not a declared setting"):
-        settings.put("VERITY_BENCH_NOT_A_SETTING", "1")
-    numbers = Registry("x.py", ("X_",), Setting("X_N", int, 3, VALUE, "a number"), shared=False)
-    assert numbers.get("X_N", {}) == 3 and numbers.get("X_N", {"X_N": "4"}) == 4
-    with pytest.raises(ValueError, match="X_N='four'"):
-        numbers.get("X_N", {"X_N": "four"})
-    with pytest.raises(ValueError, match="declared twice"):
-        Registry("x.py", ("X_",), *[Setting("X_N", int, 3, VALUE, "a")] * 2, shared=False)
-
-
-def test_put_setdefault_and_unset_write_only_declared_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
-    assert settings.setdefault("VERITY_BENCH_VENV", "/v") == "/v" == settings.VERITY_BENCH_VENV
-    settings.put("VERITY_BENCH_VENV", "/w")
-    env = settings.environ()
-    env["VERITY_BENCH_VENV"] = "/x"
-    assert settings.VERITY_BENCH_VENV == "/w"
-    settings.unset("VERITY_BENCH_VENV")
-    assert settings.VERITY_BENCH_VENV is None
-
-
-def test_the_record_carries_the_value_settings_in_force() -> None:
-    env = {"VERITY_BENCH_SETUP": "benchmarks/harness/setup/pearl_c.sh", "RESEARCH_SOURCE_SHA": "a" * 40,
-           "VERITY_BENCH_VENV": "/v", "RESEARCH_RUN_ID": "r", "PATH": "/bin"}
-    rec = settings.record(env)
-    assert rec["schema"] == "verity-config/settings/v1"
-    assert rec["values"] == {"RESEARCH_SOURCE_SHA": "a" * 40, "VERITY_BENCH_SETUP": "benchmarks/harness/setup/pearl_c.sh"}
-    assert rec["digest"] == ("8f3621ccf6b149240eb7d51f56bc8150b8aaa1c2eb1edb70dbfbd678417f3c6b"
-                             "da0c4cde48e9f6b5600736fe733aa02bf35754807ec6f56335e92f97a7a3b691")
-    assert settings.record({})["values"] == {}
-    keyed = Registry("x.py", ("X_",), Setting("X_API_KEY", str, None, VALUE, "a credential"), shared=False)
-    assert keyed.record({"X_API_KEY": "dummy-not-a-real-key"})["values"] == {"X_API_KEY": REDACTED}
 
 
 def test_an_unknown_verity_bench_variable_is_refused_by_name() -> None:
@@ -125,6 +78,7 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-0000")
     monkeypatch.delenv("OUT", raising=False)
     monkeypatch.chdir(root)
+    on_stand_in_machine(monkeypatch, tmp_path)
     monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")

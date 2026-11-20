@@ -8,8 +8,7 @@ before the build's answer, and any other before serving begins, at the first ste
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by the types the proof layer and each declared scheme declare (`types`, `Scheme.messages`): a body is checked against its declared
-type as it is written and as it is read, and its bytes are left as they are. `tests/workload_messages.toml` lists each
-message's writers and readers.
+type as it is written and as it is read, and its bytes are left as they are.
 """
 
 from __future__ import annotations
@@ -430,7 +429,7 @@ _TYPES: tuple[int, MessageTypes] | None = None
 
 
 def types() -> MessageTypes:
-    """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
+    """The message types on disk: the proof layer's, useful work's workload list (which no scheme declares), and
     those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
     of them declares (`compose.schemes.workload_messages`)."""
     global _TYPES

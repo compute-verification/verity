@@ -419,7 +419,8 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     fleet = tomllib.loads((ROOT / LB.SLOWDOWN).read_text())["fleet"]["world-h200"]
     card = json.loads((ROOT / LB.WORKLOAD).read_text())
     census = next(e for e in json.loads((ROOT / LB.ADVERSARY).read_text()) if e["id"] == "world-inference-2027")
-    peak = next(e for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK)
+    peak = next(r for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK
+                for r in e["readings"] if r["name"] == LB.READING)
     assert inp["world_machines"].value == LB.world_links() == fleet["count"]["value"] == 46_870_000
     assert inp["datacenter_machines"].value == LB.datacenter_links() == 12_500 and inp["machine_gpus"].value == 8
     assert (inp["mfu_serve"].value, inp["mfu_serve"].mark) == (fleet["mfu_serve"]["value"], "assumed")

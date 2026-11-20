@@ -86,7 +86,7 @@ from typing import Any, BinaryIO
 
 from verity.commitments import hm96
 from verity.commitments.hm96 import batch as HB
-from verity.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth
+from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth
 from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
 from verity.protocols.resource_accounting.network.verifier import transfer_rows as TR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction, Issuer
@@ -293,29 +293,6 @@ def os_salts(value: int, first: int, n: int) -> bytes:
     return os.urandom(SALT_BYTES * n)
 
 
-class Frame:
-    """A frame-v3-sha512 domain's leaf and node hashes with their framing before the varying fields precomputed: each
-    `CommitmentDomain.leaf`'s and `node`'s."""
-
-    def __init__(self, domain_id: bytes, schema: str = SCHEMA) -> None:
-        d = len(domain_id).to_bytes(8, "big") + domain_id
-        s = schema.encode()
-        self.leaf_head = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF + d
-        self.leaf_tail = len(s).to_bytes(8, "big") + s + (64).to_bytes(8, "big")
-        self.node_head = _FRAME + len(_NODE).to_bytes(4, "big") + _NODE + d
-        self.domain_id = domain_id
-
-    def leaf(self, rank: int, value: bytes) -> bytes:
-        r = _uint(rank)
-        rr = len(r).to_bytes(8, "big") + r
-        return hashlib.sha512(self.leaf_head + rr + rr + self.leaf_tail + value).digest()
-
-    def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        lv, ix = _uint(level), _uint(index)
-        return hashlib.sha512(self.node_head + len(lv).to_bytes(8, "big") + lv + len(ix).to_bytes(8, "big") + ix
-                              + b"\0" * 7 + b"\x40" + left + b"\0" * 7 + b"\x40" + right).digest()
-
-
 def subtree(dom: CommitmentDomain, row_bytes: int, data: bytes, salts: bytes, j0: int, bits: int,
             schema: str = SCHEMA) -> bytes:
     """The subtree root over ranks ``[j0, j0 + 2^bits)`` of a registered value's tree: `data`'s whole rows from rank
@@ -325,7 +302,7 @@ def subtree(dom: CommitmentDomain, row_bytes: int, data: bytes, salts: bytes, j0
     if len(data) != n * row_bytes or len(salts) != n * SALT_BYTES or n > 1 << bits:
         raise ValueError(f"{len(data)} bytes and {len(salts)} of salts are not as many rows of {row_bytes} bytes, "
                          f"at most 2^{bits}")
-    f, xs = Frame(dom.domain_id, schema), bytearray()
+    xs = bytearray()
     if schema == G.SCHEMA_SEG:
         for k in range(n):
             xs += sha512_row_seg_digest(data[row_bytes * k:row_bytes * (k + 1)], 8 * row_bytes)
@@ -335,12 +312,9 @@ def subtree(dom: CommitmentDomain, row_bytes: int, data: bytes, salts: bytes, j0
             h = xh.copy()
             h.update(data[row_bytes * k:row_bytes * (k + 1)])
             xs += h.digest()
-    level = [f.leaf(j0 + k, t) for k, t in enumerate(HB.tree_leaves(_INST, _KEY, bytes(xs), salts))]
+    level = [dom.leaf(j0 + k, j0 + k, schema, t) for k, t in enumerate(HB.tree_leaves(_INST, _KEY, bytes(xs), salts))]
     level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
-    for d in range(bits):
-        base = j0 >> (d + 1)
-        level = [f.node(d, base + k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
-    return level[0]
+    return levels(dom.domain_id, level, j0, hash=dom.hash)[-1][0]
 
 
 def decode_blocks(params: P2.P2Params, salt: bytes, first: int, cstar: bytes) -> bytes:
@@ -563,12 +537,8 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
         raise Refused("length", f"the link carried {pos} bytes, and the load is {length}")
     roots = {}
     for i, v in enumerate(values):
-        level, d = [got[i][c] for c in range(len(got[i]))], chunk_bits(v, chunk_bytes)
-        f = Frame(doms[i].domain_id, v.schema)
-        while len(level) > 1:
-            level = [f.node(d, q // 2, level[q], level[q + 1]) for q in range(0, len(level), 2)]
-            d += 1
-        roots[v.name] = level[0]
+        chunks = [got[i][c] for c in range(len(got[i]))]
+        roots[v.name] = levels(doms[i].domain_id, chunks, depth=chunk_bits(v, chunk_bytes), hash=doms[i].hash)[-1][0]
     return Relayed(roots, pos, time.perf_counter() - t0, len(jobs))
 
 

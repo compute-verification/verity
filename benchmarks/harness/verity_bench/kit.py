@@ -439,6 +439,19 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
     return table
 
 
+def machine_cpus(name: str | None = None, *, directory: Path | None = None) -> int:
+    """The processors machine `name`'s record gives (`[properties]` `cpus`, read as `machine_properties` reads it), which a
+    served point's host-quiet gate bounds the load by; refused by name where the record gives it ``"unread"``."""
+
+    entry = machine_properties(name, directory=directory)["cpus"]
+    if entry["value"] == "unread":
+        name = name or settings.RESEARCH_MACHINE
+        raise SystemExit(f"machine {name!r}: its record gives cpus \"unread\", and a served point's host-quiet gate is "
+                         f"bounded by it: read it on the machine and write in its record's [properties] "
+                         f"cpus = {{ value = N, read = \"nproc\" }}")
+    return entry["value"]
+
+
 class NotListed(SystemExit):
     """The run's machine's `[properties]` are read and list no CUDA toolkit at the version asked for."""
 

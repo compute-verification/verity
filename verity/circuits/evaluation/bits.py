@@ -90,12 +90,33 @@ class Compiled:
 _COMPILED: "weakref.WeakKeyDictionary[SpecializedDefinition, Compiled]" = weakref.WeakKeyDictionary()
 
 
-def _spec(target: Any) -> SpecializedDefinition:
+def _spec(target: Any, words: bool = False) -> SpecializedDefinition:
     if isinstance(target, CompositeDefinition):
         target = bind(target)
-    if not isinstance(target, SpecializedDefinition) or not BL.is_boolean(target):
+    if not isinstance(target, SpecializedDefinition) or not (words or BL.is_boolean(target)):
         raise TypeError(f"{getattr(target, 'id', target)!r} is not a Boolean composite Definition")
     return target
+
+
+def _starts(t: Type) -> np.ndarray | None:
+    """Each leaf's first bit in ``t``'s bits and, last, their count; None where every leaf is one bit."""
+    w = t.homogeneous_width()
+    if w == 1 or not t.leaves:
+        return None
+    ws = np.full(t.leaves, w, np.int64) if w is not None else np.asarray(t.leaf_widths(), np.int64)
+    return np.concatenate(([0], np.cumsum(ws)))
+
+
+def _nbits(t: Type) -> int:
+    s = _starts(t)
+    return t.leaves if s is None else int(s[-1])
+
+
+def _wiring(fn: PrimitiveDefinition) -> int | None:
+    """The bit `BitOf{W}x{I}` takes, -1 for `WordOf{W}` (its bits as they are), None for any other primitive."""
+    from verity.circuits.population import BIT_OF_ID, WORD_OF_ID
+    m = BIT_OF_ID.fullmatch(fn.id)
+    return int(m[2]) if m else -1 if WORD_OF_ID.fullmatch(fn.id) else None
 
 
 def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
@@ -114,26 +135,46 @@ def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> l
     return [(int(kinds[s]), outs[s:e], a[s:e], b[s:e]) for s, e in zip(cuts[:-1], cuts[1:])]
 
 
-def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here: the module's verb
-    spec = _spec(target)
+def compile(target: Any, words: bool = False) -> Compiled:  # shadows `builtins.compile`, unused here: the module's verb
+    """``words``: also a composite with word leaves, each its bits least significant first, whose word primitives are the
+    wiring ones (`BitOf`, `WordOf`), copies, or have a Boolean body (`program.boolean_body`), a call of it; TypeError at any
+    other."""
+    spec = _spec(target, words)
     hit = _COMPILED.get(spec)
     if hit is not None:
         return hit
     body = spec.body
-    p_base, k = [], 2
+    p_base, p_st, k = [], [], 2
     for _, t in body.params:
         p_base.append(k)
-        k += t.leaves
-    n_params, node_base, const = k - 2, [], {}
+        p_st.append(_starts(t))
+        k += _nbits(t)
+    n_params, node_base, n_st, const = k - 2, [], [], {}
     for q, nd in enumerate(body.nodes):
         node_base.append(k)
-        k += nd.out.leaves
+        n_st.append(_starts(nd.out))
+        k += _nbits(nd.out)
         if isinstance(nd.fn, PrimitiveDefinition) and BL.is_constant_bit(nd.fn):
             const[q] = nd.fn.evaluate()
+    wide = any(s is not None for s in p_st + n_st)
 
     def idx(refs) -> np.ndarray:
-        return np.fromiter((p_base[i] + j if s == "p" else const[i] if i in const else node_base[i] + j for s, i, j in refs),
-                           dtype=np.int64, count=refs.count)
+        if not wide:
+            return np.fromiter((p_base[i] + j if s == "p" else const[i] if i in const else node_base[i] + j
+                                for s, i, j in refs), dtype=np.int64, count=refs.count)
+        first, width = np.empty(refs.count, np.int64), np.ones(refs.count, np.int64)
+        for r, (s, i, j) in enumerate(refs):
+            if s != "p" and i in const:
+                first[r] = const[i]
+                continue
+            st, b = (p_st[i], p_base[i]) if s == "p" else (n_st[i], node_base[i])
+            if st is None:
+                first[r] = b + j
+            else:
+                first[r], width[r] = b + st[j], st[j + 1] - st[j]
+        if (width == 1).all():
+            return first
+        return np.repeat(first - (np.cumsum(width) - width), width) + np.arange(int(width.sum()))
 
     def member_refs(nd) -> Members:
         """Row m: member m's operand wires, ``a.take(ax, m)`` of each argument mapped over ``ax`` and the whole of each shared
@@ -144,9 +185,10 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             if ax is None:
                 out.append(whole)
                 continue
-            outer, n, L = axis_runs(a.type, ax)
+            outer, n, _ = axis_runs(a.type, ax)
             if n != nd.n:
                 raise ValueError(f"{spec.id}: a batch of {nd.n} maps an axis of {n}")
+            L = whole.size // (outer * n)
             out.append(whole.reshape(outer, n, L).transpose(1, 0, 2).reshape(n, outer * L))
         return Members(nd.n, out)
 
@@ -161,13 +203,29 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             run.clear()
 
     for q, nd in enumerate(body.nodes):
-        fn, base = nd.fn, node_base[q]
+        fn, base, gk, wire = nd.fn, node_base[q], None, None
         if isinstance(fn, PrimitiveDefinition):
             if q in const:
                 continue
             gk = BL.gate_kind(fn)
-            if gk is None:
-                raise TypeError(f"{spec.id} node {q}: {fn.id} is not a Boolean gate or constant bit")
+            wire = None if gk is not None or not words else _wiring(fn)
+            if gk is None and wire is None:
+                if words:
+                    from verity.circuits.program import boolean_body
+                    try:
+                        fn = boolean_body(fn)
+                    except LookupError as e:
+                        raise TypeError(f"{spec.id} node {q}: {nd.fn.id} is a word primitive with no Boolean body: {e}") from e
+                if not isinstance(fn, SpecializedDefinition):
+                    raise TypeError(f"{spec.id} node {q}: {nd.fn.id} is not a Boolean gate, constant bit, wiring primitive "
+                                    "or word primitive with a Boolean body")
+        if wire is not None:
+            ops = (np.concatenate([idx(a.refs) for a in nd.args])[None] if nd.form == "primitive" else
+                   member_refs(nd)[:].reshape(nd.n, -1))
+            src = (ops if wire < 0 else ops[:, wire]).reshape(-1)
+            run.append((1, np.arange(base, base + len(src), dtype=np.int64), src, np.zeros(len(src), np.int64)))
+            continue
+        if gk is not None:
             kind, arity = gk
             if nd.form == "primitive":
                 ops = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
@@ -188,20 +246,20 @@ def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here
             counts[kind] += len(ops) * max(1, arity - 1)
             continue
         flush()
-        child = compile(fn)
+        child = compile(fn, words)
         max_size = max(max_size, child.max_size)
-        if nd.form == "call":
+        if nd.form in ("call", "primitive"):
             members = np.stack([np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)])
         elif nd.form == "batch":
             members = member_refs(nd)
         else:
-            xs = [(idx(a.refs), a.type.elem.leaves) for a in nd.args[1:1 + nd.n_xs]]
+            xs = [(idx(a.refs), _nbits(a.type.elem)) for a in nd.args[1:1 + nd.n_xs]]
             shared = [idx(a.refs) for a in nd.args[1 + nd.n_xs:]]
-            steps.append(("scan", child, idx(nd.args[0].refs), xs, shared, nd.n, nd.out.fields[0].leaves, base))
+            steps.append(("scan", child, idx(nd.args[0].refs), xs, shared, nd.n, _nbits(nd.out.fields[0]), base))
             for kk in _KINDS:
                 counts[kk] += nd.n * child.counts[kk]
             continue
-        steps.append(("call", child, members, base, fn.out_leaves))
+        steps.append(("call", child, members, base, len(child.ret_idx)))
         for kk in _KINDS:
             counts[kk] += len(members) * child.counts[kk]
     flush()
@@ -407,3 +465,31 @@ def evaluate_words(target: Any, *inputs: Any) -> np.ndarray:
     wret = BL.word_type(c.ret)
     out = _to_words(_evaluate(c, bits), BL.elements(c.ret))
     return out.astype(type_dtype(wret)).reshape((n, *type_shape(wret)))
+
+
+_UNLOWERED: "weakref.WeakSet[SpecializedDefinition]" = weakref.WeakSet()
+
+
+def lowers(target: SpecializedDefinition) -> bool:
+    """Whether `evaluate_lowered` takes ``target``: `compile` with ``words`` takes it and no port leaf is wider than 64 bits."""
+    if target in _UNLOWERED:
+        return False
+    try:
+        c = compile(target, words=True)
+    except TypeError:
+        _UNLOWERED.add(target)
+        return False
+    return max((w for t in (*c.params, c.ret) for w in t.width_set()), default=1) <= 64
+
+
+def evaluate_lowered(target: SpecializedDefinition, *arrays: np.ndarray) -> np.ndarray:
+    """``N`` instances of a composite that `lowers`, bit-sliced through its bit view (`compile` with ``words``): arrays and
+    output as `evaluate_batch` shapes them."""
+    from .batch import type_dtype, type_shape
+
+    c = compile(target, words=True)
+    n = len(arrays[0]) if arrays else 0
+    cols = [_to_bits(np.asarray(a).reshape(n, t.leaves), t.leaf_widths()) for a, t in zip(arrays, c.params)]
+    bits = np.concatenate(cols, axis=1) if cols else np.zeros((n, 0), np.uint8)
+    out = _to_words(_evaluate(c, bits), c.ret.leaf_widths())
+    return out.astype(type_dtype(c.ret)).reshape((n, *type_shape(c.ret)))

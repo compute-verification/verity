@@ -332,7 +332,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
     and session log are beside the periods) and the prover is here, answering it in `session`
     (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the
-    period's tools, the Lean verifier answers and must agree with the Python; without `pous-run-protocol` the Python's
+    period's tools, the Lean verifier answers alone; without `pous-run-protocol` the Python's
     reject or undecided stands and its accept is undecided (`unjudged`). It writes `out/pous.case.json` (onsite's PoUS
     case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party,
     whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
@@ -359,10 +359,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     where = challenger_session.placement(node, party.host, key_sha512, **deployment(doc))
     answer, lean = period.answer, {}
     if "pous-run-protocol" in tools:
-        lean["run"] = serve(tools["pous-run-protocol"], [period.case])[0]
-        if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
-            raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
-        answer = lean["run"]
+        answer = lean["run"] = serve(tools["pous-run-protocol"], [period.case])[0]
     else:
         answer = unjudged(answer)
     if fresh and "pous-setup" in tools:

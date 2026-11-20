@@ -150,6 +150,8 @@ def held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) (first : 
   refHeaders := fun t => (it.circuits.map (·.2.2.1)).toList.getD t .null
   frame := u.c₀
   more := u.more
+  held := some ⟨Flock.hexOf it.params.verifier.program.desc.sha512, it.params.verifier.windowRoot,
+    Spot.Docket.fixedOf it.params.verifier⟩
 
 /-- **SPOT's own frame at the wired program**, from the code `c₀`, as HONEST2's instance sets it. Nothing it reads is
 `h.frame`. -/
@@ -406,7 +408,8 @@ theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
         rows := rfl
         parts := hP
         refs := hR
-        refReads := hrr }
+        refReads := hrr
+        held := rfl }
   · cases hc
 
 /-! ## At the form's run of record -/

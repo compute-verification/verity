@@ -4,7 +4,7 @@
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
     python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
-For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstream binary, the job:
+For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstream binary, and each live set marked `check`, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
   own K (`statement.stratified`, `agree.py --stratified`) for sessions sampled by the stratified sampling design, and a plain session's
@@ -22,7 +22,9 @@ For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstre
   without a sample, refused once every check has passed). A session refused last, and for nothing else, passed every check.
 
 `--live` runs `live.sets` instead: sets with no upstream binary, whose upstream verdicts are the live server's in each
-case's `case.json` (`agree.py --upstream live`).
+case's `case.json` (`agree.py --upstream live`). Without `--live` or `--sets`, the live sets marked `check` run beside the
+replayable ones (labelled `live<i>`): each is replayed from its stored fixture, with no live server, against those recorded
+verdicts. Each set's result names the verifier it was compared with (`second`).
 
 `--inputs DIR` holds the stored inputs already fetched (`DIR/<art id prefix>/…`, as the store's fetch lays them
 out), for a machine without store access. `--jobs` runs sets in parallel, and `--session-jobs` a set's sessions across that
@@ -66,8 +68,12 @@ def fetch(art, store):
     ref, _, path = art.partition("/")
     d = store / ref.split(":", 1)[1]
     if not d.exists():
-        subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], check=True, capture_output=True,
-                       env=store_env())
+        p = subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], capture_output=True,
+                           text=True, env=store_env())
+        if p.returncode:
+            shutil.rmtree(d, ignore_errors=True)
+            raise SystemExit(f"ci: error: cannot fetch {ref} from the evidence store (exit {p.returncode}): "
+                             f"{(p.stderr.strip().splitlines() or ['no message'])[-1]}")
     if path:
         return d / path
     files = list(d.iterdir())
@@ -115,8 +121,12 @@ def py(*args):
     subprocess.run([sys.executable, *map(str, args)], check=True, capture_output=True)
 
 
-def run_set(i, s, a, ups, store):
-    up = agree.LIVE if a.live else ups.get(s["pr83"])
+#: the verifier each set's Lean verdicts are compared with
+SECOND = {False: "upstream's pinned verifier", True: "our live server's recorded verdicts"}
+
+
+def run_set(i, s, a, ups, store, live=False):
+    up = agree.LIVE if live else ups.get(s["pr83"])
     if up is None:
         return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this circuit prover commit"}, False
     w = a.work / f"set{i}"
@@ -171,10 +181,13 @@ def run_set(i, s, a, ups, store):
         cmd += ["--lean-refuses-drawn", s["lean_refuses_drawn"]]
     if "lean_refuses_drawless" in s:
         cmd += ["--lean-refuses-drawless", s["lean_refuses_drawless"]]
+    if "second_alone_reason" in s:
+        cmd += ["--second-alone-reason", s["second_alone_reason"]]
     # in-process: every set's verifier processes sample on one budget (SLOTS), so a long set takes the slots short ones free
     rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())
-    r.update({"set": i, "pr83": s["pr83"], "lean_statement": s["lean_statement"], "detail": st.get("detail", "")})
+    r.update({"set": i, "pr83": s["pr83"], "lean_statement": s["lean_statement"], "detail": st.get("detail", ""),
+              "second": SECOND[live]})
     return r, rc != 0
 
 
@@ -198,6 +211,19 @@ def sha256(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def picked(v, a):
+    """(label, set, live) for each set to run: `--live`, `live.sets`; else `replayable.sets` and the live sets marked
+    `check`, replayed from their stored fixtures against the live server's verdicts recorded there (labelled `live<i>`)."""
+    live = list(enumerate(v["live"]["sets"]))
+    if a.live:
+        pick = [int(i) for i in a.sets.split(",")] if a.sets else range(len(live))
+        return [(i, live[i][1], True) for i in pick]
+    rep = v["replayable"]["sets"]
+    if a.sets:
+        return [(int(i), rep[int(i)], False) for i in a.sets.split(",")]
+    return [(i, s, False) for i, s in enumerate(rep)] + [(f"live{i}", s, True) for i, s in live if s.get("check")]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lean", required=True)
@@ -215,16 +241,16 @@ def main():
     a = ap.parse_args()
     ups = dict(u.split("=", 1) for u in a.upstream)
     store = a.inputs or (a.work / "store")
-    sets = json.loads((HERE / "vectors.json").read_text())["live" if a.live else "replayable"]["sets"]
-    pick = [int(i) for i in a.sets.split(",")] if a.sets else list(range(len(sets)))
+    pick = picked(json.loads((HERE / "vectors.json").read_text()), a)
     global SLOTS
     if a.session_jobs <= 0:
         a.session_jobs = auto_session_jobs()
     SLOTS = threading.Semaphore(a.session_jobs)
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        done = list(ex.map(lambda i: run_set(i, sets[i], a, ups, store), pick))
+        done = list(ex.map(lambda p: run_set(p[0], p[1], a, ups, store, live=p[2]), pick))
     results = [r for r, _ in done]
-    bad = any(b for _, b in done)
+    agreeing = [r["set"] for r in results if "skipped" not in r and r["agree"] and not r["disagree"]]
+    bad = any(b for _, b in done) or not agreeing
     (a.work / "result.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
     print(json.dumps(results))
     if a.out:

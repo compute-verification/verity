@@ -16,6 +16,7 @@ artifacts = [
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
     "verity",
+    "tests/verity/circuits/stand_in.py",
     "benchmarks/one_stage",
     "benchmarks/prove_path",
     "calibration/sampling_plan",
@@ -44,7 +45,6 @@ inputs = [
     "benchmarks/one_stage/interfaces/verity_e2e_demo",
     "verity/commitments/cuda/commit_slots/slots.py",
     "adapters/vllm/tools/served_run/serve_load.py",
-    "adapters/vllm/tools/served_run/published.sh",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.json",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-bundle.bin",
     "tests/benchmarks/one_stage/interfaces/fixtures/drawn-unit-registration.json",

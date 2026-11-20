@@ -23,6 +23,7 @@ rounds gave none and every round passed.
 namespace MemoryAttester.Properties.SecurityProofs
 
 open MemoryAttester
+open Flock.SessionCoins (COMPLETE)
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where

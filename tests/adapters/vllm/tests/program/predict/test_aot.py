@@ -203,13 +203,13 @@ def test_the_compare_command_prints_a_line_a_rank_and_its_verdict_last(tmp_path,
     doc = {"schema": A.SCHEMA, "row": "row", "equal": equal,
            "ranks": {"0": {"step": part, "workload": part, "secs": {"step": 1.0}},
                      "1": {"step": part, "workload": {**part, "equal": equal}, "errors": {} if equal else {"workload": "Unexpressible: x"}}},
-           "predicted": {"dir": "pred", "parts": {"workload": part, "manifest": part}, "equal": True}}
+           "predicted": {"dir": "pred", "parts": {"workload": part, "build_request_LP5_T3": part}, "equal": True}}
     monkeypatch.setattr(A, "compare", lambda *_a: doc)
     out = tmp_path / "comparison.json"
     a = A.CompareOptions(row_dir="traced", row="row", config="config.json", out=str(out), predicted="pred")
     assert A.main(a) == (0 if equal else 1) and json.loads(out.read_text()) == doc
     assert capsys.readouterr().out.splitlines() == [
-        "rank 0: step =  workload =", f"rank 1: step =  workload {'=' if equal else '≠'}", "predicted pred: workload =  manifest =",
+        "rank 0: step =  workload =", f"rank 1: step =  workload {'=' if equal else '≠'}", "predicted pred: workload =  build_request_LP5_T3 =",
         f"[predict] row: {'EQUAL on every rank' if equal else 'NOT EQUAL'} -> {out}"]
 
 

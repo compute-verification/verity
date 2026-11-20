@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import pytest
 
-from verity.circuits import codec, partition_object as PO
+from verity.circuits import codec, partition_object as PO, supplied as SU
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CATALOG_PACKAGES, REGISTRY, CompositeDefinition, bind, catalog_package
 from verity.circuits.evaluation import evaluate_batch
@@ -218,6 +218,69 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salts_of=fixed(changed)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
+def _leaf_strings(win: I.Window, seed: int = 0) -> tuple[dict, dict[str, bytes]]:
+    """Every `leaf_rows` port's salts and strings (`rows.row_strings`), and the same salts by member port."""
+    handed, by_member = {}, {}
+    for k, lr in win.leaf_rows().items():
+        ys = hashlib.shake_256(f"{seed} {k}".encode()).digest(CS.SALT_BYTES * len(lr.rows))
+        handed[k] = (ys, CS.row_strings(lr.rows, ys, lr.schema))
+        by_member |= lr.split(ys, CS.SALT_BYTES)
+    return handed, by_member
+
+
+def test_close_leafs_the_strings_it_is_handed_as_it_leafs_the_rows_it_hashes():
+    """`close` handed every port's strings makes the roots and strings it makes itself from the same rows and salts, and
+    `leaf_rows` is every port it commits in full."""
+    win, *_ = window()
+    handed, by_member = _leaf_strings(win)
+    assert set(by_member) == set(CS.full_ports(win.window))
+    got, made = win.close(strings=handed), win.close(salts_of=by_member)
+    assert got.roots == made.roots and all(got.bc[p] == made.bc[p] for p in by_member)
+
+
+def test_a_port_its_later_units_read_by_wire_takes_strings_for_its_external_units_alone():
+    """`chain`: ``x`` is held in full only by the units reading the embedding, so its `leaf_rows` port is theirs, at
+    their unit indices, and `close` handed its strings makes the roots it makes from the same salts."""
+    win = I.Window(chain(), RUN, SAMPLING_DESIGN, 2)
+    win.record(GEMM, *chain_values(), {"chain": 0})
+    lr = win.leaf_rows()[(GID, "x")]
+    assert lr.units == list(range(REQUESTS)) and [p for p, _, _ in lr.members] == [win.window.members[0].port("x")]
+    handed, by_member = _leaf_strings(win)
+    assert set(by_member) == set(CS.full_ports(win.window))
+    assert win.close(strings=handed).roots == win.close(salts_of=by_member).roots
+
+
+def test_close_refuses_strings_it_cannot_place():
+    win, *_ = window()
+    handed, _ = _leaf_strings(win)
+    k = next(iter(handed))
+    ys, bc = handed[k]
+    for bad, why in (({q: v for q, v in handed.items() if q != k}, "no strings for"),
+                     ({**handed, ("other", "x"): (ys, bc)}, "is no port the period commits in full"),
+                     ({**handed, k: (ys, bc[:-1])}, "not whole"),
+                     ({**handed, k: (ys[:-CS.SALT_BYTES], bc[:-CS.BC_BYTES])}, "not the port's 10 rows")):
+        with pytest.raises(ValueError, match=f"^strings: .*{why}"):
+            win.close(strings=bad)
+
+
+def test_a_handed_string_not_its_rows_is_closed_and_opens_no_root():
+    """`close` leafs a string that isn't its row's as given; an opening of the row (its row and salt hashed to its leaf, as
+    the door hashes them) doesn't make the root."""
+    win, *_ = window()
+    handed, _ = _leaf_strings(win)
+    lr = handed[(TID, "x")]
+    bad = bytearray(lr[1])
+    bad[CS.BC_BYTES * 5] ^= 1
+    c = win.close(strings={**handed, (TID, "x"): (lr[0], bytes(bad))})
+    honest = win.close(strings=handed)
+    m = win.window.members[1]
+    p = m.port("x")
+    assert c.window.tree(m, "x") == p and c.roots[p] != honest.roots[p]
+    assert CS.row_strings(c.rows[p], c.salts[p], m.schema("x")) == honest.bc[p] != c.bc[p]
+    remade, _ = CS.commit_ports({p: c.domains[p]}, {p: np.asarray(c.rows[p])}, {}, {p: c.salts[p]}, schemas={p: m.schema("x")})
+    assert remade[p] == honest.roots[p] != c.roots[p]
+
+
 def test_a_periods_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
     """Unless a test hands salts in, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
@@ -399,6 +462,42 @@ def test_several_templates_are_one_population():
     win = I.Window(w, RUN, SAMPLING_DESIGN, 2)
     assert [(m.template, m.base, m.n) for m in win.window.members] == [(TID, 0, 2), (TID, 2, 1), (AID, 3, 2)]
     assert I.layout(ACC).outs == (("o0", 2),)
+
+
+def test_run_inputs_are_committed_once_each_in_its_run_input_nodes_tree(tmp_path):
+    """With ``run_inputs``, C is the same circuit and each input port is read from its run input node's one tree
+    ``input/n<w>`` (`run_input_reads`): no member holds a tree of it, the registration holds its root beside the
+    members', each member's header names its units' rows of it, the verifier's period from the record is the prover's,
+    and a record naming other reads is refused."""
+    got = {}
+
+    def record(*a, **_k):
+        got["roots"] = a[4]
+        return {"leaf_layer": "l"}
+
+    reg = type("R", (), {"KINDS": ("served",), "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    win = I.Window(I.Circuit("test", ((COORD, 10),), run_inputs=True), RUN, SAMPLING_DESIGN, 4)
+    assert codec.program_digest(win.window.program) == codec.program_digest(I.Circuit("test", ((COORD, 10),)).program()[0])
+    names = [r.param for r in win.runs]
+    assert [r.port for r in win.runs] == ["x", "sx", "wrow", "sw"] and len(set(names)) == 4
+    assert all(re.fullmatch(r"input/n\d+", v) for v in names)
+    ins, outs = values(10)
+    win.record(COORD, ins, outs)
+    doc = win.write(win.close(), tmp_path, {"by": "test"}, registrar=reg)
+    roots = {r["port"]: r for r in got["roots"]}
+    x = win.inputs[names[0]]
+    assert roots[names[0]]["root"] == x.root.hex() and x.leaves == 10
+    assert not any(p.endswith("/x") for p in roots)
+    m1 = doc["members"][1]
+    assert m1["registered"]["x"] == {"value": names[0], "positions": [4, 5, 6, 7]}
+    rec = json.loads(I.circuit_bytes(win.circuit_record()))
+    mine = I.window_of_record(rec, SAMPLING_DESIGN, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    files = I.registered_file(rec, mine, {}, got["roots"])
+    assert files[m1["name"]]["ports"]["x"]["value"] == names[0]
+    assert files[m1["name"]]["ports"]["x"]["root"] == x.root.hex()
+    with pytest.raises(ValueError, match="run_inputs"):
+        I.window_of_record({**rec, "run_inputs": rec["run_inputs"][:1]}, SAMPLING_DESIGN, BY_ID.__getitem__)
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
@@ -768,6 +867,50 @@ def test_a_record_that_lists_its_members_declares_its_period_ingress_and_is_coun
         I.circuit_record(win.window, "chain", [(GID, 8)], cap=2, wires=chain().wires, declared={W: [first.doc()]})
     with pytest.raises(ValueError, match="one or the other"):
         I.window_of_record({**json.loads(I.circuit_bytes(win.circuit_record())), W: [first.doc()]}, SAMPLING_DESIGN, by_id)
+
+
+def test_a_supplied_value_is_one_short_value_committed_under_public_salts_at_its_programs_digest():
+    """A supplied parameter carries its mark (§5.4); `Window.give` reads its function's value by the mark's layout into
+    rows of its reading port's words and commits them under the public salts at the Program's digest, which the verifier
+    recomputes; a mark whose value is not the parameter's whole leaves, of a function the registry lacks or at args it
+    doesn't take is refused, and so is a value of another length or a parameter no mark names."""
+    mark = {"supplied": "pous.session.header/v1", "args": {"head": 512}, "layout": "le", "bits": 4096}
+    read = I.Read(GID, "w", "s", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 0, 0))
+    reg = I.Registered({"s": 256}, reads=(read,), supplied={"s": mark})
+    assert I.Registered.of(reg.doc()) == reg and reg.doc()["supplied"] == {"s": mark}
+    win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
+    value = bytes(range(256)) * 2
+    win.give("s", value)
+    got, prog = win.registered["s"], codec.program_digest(win.window.program)
+    assert got.rows == (tuple(int.from_bytes(value[2 * i:2 * i + 2], "little") for i in range(256)),)
+    assert got.salts == tuple(RV.supplied_salts(prog, "s", 1))
+    assert got.root == RV.Registered.commit(prog, "s", got.rows, RV.supplied_salts(prog, "s", 1), 16, V2).root
+    for bad, why in [({"s": {**mark, "bits": 2048}}, "is not 2048 bits"),
+                     ({"s": {**mark, "supplied": "no.such/v1"}}, "a function of the registry"),
+                     ({"s": {**mark, "args": {}}}, "takes the args"),
+                     ({"t": mark}, "a registered parameter"),
+                     (("s",), "an object of a mark by parameter")]:
+        with pytest.raises(ValueError, match=why):
+            I.Registered({"s": 256}, reads=(read,), supplied=bad)
+    with pytest.raises(ValueError, match="value is 4096 bits, not 4080"):
+        win.give("s", value[:-2])
+    with pytest.raises(ValueError, match="none of the circuit's supplied parameters"):
+        win.give("t", value)
+
+
+def test_a_supplied_value_of_32_bit_leaves_is_given_in_the_rows_its_reads_fix():
+    """A supplied value whose format is 32-bit leaves (`FP32_SEG`), read by a port of ``K / 2`` 16-bit words, is given in
+    rows of ``K / 4`` leaves (`read_shape`), so the period over the given rows takes them as it takes a committed value's;
+    one value is three 32-bit halves read by two-word ports in the same way (storage's round coin under `halves`)."""
+    mark = {"supplied": "pous.session.header/v1", "args": {"head": 6 * K}, "layout": "halves", "bits": 6 * K * 8}
+    reg = I.Registered({"w": 6 * K // 2}, reads=(READ,), formats={"w": FP32_SEG}, supplied={"w": mark})
+    win = I.Window(I.Circuit("reads", ((COORD, 12),), registered=reg), RUN, SAMPLING_DESIGN, 4)
+    value = bytes(range(256)) + bytes(range(6 * K - 256))
+    win.give("w", value)
+    got, leaves = win.registered["w"], SU.leaves("halves", value, 32)
+    assert (got.leaves, got.words, got.word_bits) == (6, K // 4, 32)
+    assert got.rows == tuple(tuple(leaves[i * K // 4:(i + 1) * K // 4]) for i in range(6))
+    I.Window(win.circuit, RUN, SAMPLING_DESIGN, 4, registered=win.registered)
 
 
 def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_registered_at_a_held_root():
@@ -2896,3 +3039,38 @@ def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
     for bad in [{**doc, "scheme": "x"}, {**doc, "advice": "zz"}, {**doc, "salts": doc["salts"][:2]}, None]:
         with pytest.raises(ValueError):
             I.opened_advice(c, bad)
+
+
+def _tie(doc: dict, **change) -> tuple[bytes, dict]:
+    body = json.dumps(doc).encode()
+    reg = {"program": doc.get("program"), "partition": doc.get("partition"),
+           "window": {"circuit": hashlib.sha512(body).hexdigest(), "run": doc.get("run")}}
+    return body, {**reg, **change}
+
+
+@pytest.mark.parametrize("field", ["program", "partition", "run"])
+def test_a_tie_refuses_a_field_neither_side_names(field):
+    """A program, partition or run that the record and its registration both leave out is refused by name, never taken as
+    equal; so is one only the registration leaves out."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "run": "r1"}
+    whole = dict(doc)
+    del doc[field]
+    with pytest.raises(ValueError, match=f"^the circuit record names no {field}, so nothing ties"):
+        I.tied_record(*_tie(doc))
+    body, reg = _tie(whole)
+    reg = {**reg, "window": {**reg["window"], "run": None}} if field == "run" else {**reg, field: None}
+    with pytest.raises(ValueError, match=f"^the registration names no {field}, so nothing ties"):
+        I.tied_record(body, reg)
+    assert I.tied_record(*_tie(whole)) == whole
+
+
+def test_a_stated_record_ties_with_no_run_on_either_side():
+    """A stated record (`descriptor_record`: its ``cap``, no run) is tied with no run on either side, and only it."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "cap": 1}
+    assert I.tied_record(*_tie(doc)) == doc
+    body, reg = _tie(doc)
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(body, {**reg, "window": {**reg["window"], "run": "r1"}})
+    del doc["cap"]
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(*_tie(doc))

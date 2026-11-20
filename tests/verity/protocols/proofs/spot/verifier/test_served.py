@@ -172,16 +172,18 @@ def test_a_reused_tree_takes_an_earlier_records_registered_value():
                    window_root="a7" * 64).ok
     for bad, why in ((dataclasses.replace(tree, root="ce" * 64), "not value 'a/16@0'"),
                      (dataclasses.replace(tree, domain="db" * 64), "not value 'a/16@0'"),
-                     (dataclasses.replace(tree, reused=("ee" * 64, "a/16@0")), "the log holds no record"),
-                     (dataclasses.replace(tree, reused=(DD.digest(earlier), "nope")), "the log holds no record"),
+                     (dataclasses.replace(tree, reused=("ee" * 64, "a/16@0")), "the log's last record is no record"),
+                     (dataclasses.replace(tree, reused=(DD.digest(earlier), "nope")), "the log's last record is no record"),
                      (dataclasses.replace(tree, reused=(DD.digest(earlier), "a/16@0"), output=(DD.digest(earlier), "x")),
                       "not both"),
                      (dataclasses.replace(tree, reused=("ab" * 64,)), "reused is")):
         with pytest.raises(ValueError, match=why):
             register_served(prog, Q, [bad], log=[earlier])
     short = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "words": 1}])
-    with pytest.raises(ValueError, match="the log holds no record"):
+    with pytest.raises(ValueError, match="the log's last record is no record"):
         register_served(prog, Q, [dataclasses.replace(tree, reused=(DD.digest(short), "a/16@0"))], log=[short])
+    with pytest.raises(ValueError, match="the log's last record is no record"):
+        register_served(prog, Q, [tree], log=[earlier, short])
 
 
 @pytest.mark.parametrize("change, why", [

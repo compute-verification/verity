@@ -64,6 +64,7 @@ probability `P_a(Freg)` of a set fixed at registration. The committed form itsel
   agreeing with the trace make correct, the block's session is not extracted at its first slot, or the run's
   extractions disagree with themselves or open a gate off the trace: otherwise the trace on the gates, the kept
   openings elsewhere, makes the block correct (`Sessions.opens`). `reg_split` is it at the committed trace and `Freg`.
+  `trace_split_of` reads only the contract's `slots`, `shared` and `opens` at the statement (`SharedOpens`).
 * `bconfX_of_disagree`, `bconf_of_disagree`: two kept openings of one position under one roots that disagree are a
   collision among the two runs' extractions' own calls, at two tapes and at one.
 * `pr_inConf_le`, `pr_conflict_le`: a disagreement within one run, or between two runs at one tape, is a collision
@@ -296,16 +297,32 @@ theorem selReg_some (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pro
 
 /-! ## The deterministic half -/
 
+/-- **The contract's clauses the deterministic half reads**, at one statement `s` of `x` on `Pt`: `slots` and `shared`
+at `x`, and `opens` at `s` on `Pt`. A contract read level by level gives them at one level too. -/
+structure SharedOpens (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (Pt : Sampling.Partition) :
+    Prop where
+  slots : ∀ r, (L.checked x r).length ≤ L.nPU x
+  shared : ∀ (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
+    (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
+    L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →
+    L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
+  opens : ∀ (Ω : Type) (Pv : Prover Ω) ω r u xS vS w, (run H Pv L.V x ω r).out = .acc →
+    u ∈ L.checked x r → L.session x u (run H Pv L.V x ω r).seen = some (xS, vS) → A.R xS w →
+    ∃ b, Pt.blocks[u]? = some b ∧ ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+      (∀ q ∈ L.reveal s u (run H Pv L.V x ω r).seen w, L.commit.Opens H q.1 q.2 = true →
+        (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+        (q.1 = L.iroots x (run H Pv L.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+      s.prog.Correct (s.prog.refIn b val ι) b
+
+theorem Sessions.toSharedOpens {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg}
+    {s : AuditStatement} {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
+    (hin : InScope Pt s) : L.SharedOpens H x s Pt :=
+  ⟨hS.slots x, hS.shared x, fun Ω Pv ω r u xS vS w => hS.opens x s Pt Ω Pv ω r u xS vS w hs hPt hin⟩
+
 set_option synthInstance.maxSize 1024 in
-/-- **The deterministic half, at a trace**: at an accepted run whose sample holds, at slot `i`, a proof block `u` that
-no values agreeing with the trace `tr` on the program's gates make correct, the session of `i` is not extracted at its
-first slot `i₀`'s coins, or the run's extractions disagree with themselves or open a gate off `tr`. Otherwise the values
-that are `tr` on the program's gates and the kept openings elsewhere, with the interior values the kept openings give,
-agree with every opening the session's witness reveals at `u` that passes (`u`'s slot shows `i₀`'s session,
-`Sessions.shared`), so they make `u` correct (`Sessions.opens`). The trace is the reader's: the committed trace at the
-run's tape (`reg_split`), or one read at the statement. -/
-theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
-    {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
+/-- **The deterministic half, at a trace, from `SharedOpens`**: `trace_split` at the contract's clauses it reads. -/
+theorem trace_split_of {H : Msg → Msg} {L : Compiled Coin A} {x : Msg} {s : AuditStatement}
+    {Pt : Sampling.Partition} (hS : L.SharedOpens H x s Pt) (hs : L.parse x = some s)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
     (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x)) (hiu : (L.checked x r)[i.val]? = some u.val)
     (tr : ℕ → Option Bool)
@@ -333,12 +350,12 @@ theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) 
   obtain ⟨xS, vS, hsess, hsh, w, hw, hR⟩ := hfd
   obtain ⟨hk, hc, hfirst⟩ := of_leadOf hlead
   have hsu : L.session x u (run H P L.V x ω r).seen = some (xS, vS) := by
-    rw [← hS.shared x Ω P ω r _ _ _ _ hacc hu₀ hiu hk]
+    rw [← hS.shared Ω P ω r _ _ _ _ hacc hu₀ hiu hk]
     exact hsess
   have hub : u.val ∈ L.sessBlocks x (L.checked x r) i₀ := by
     rw [sessBlocks, hc]
     exact List.mem_filterMap.2 ⟨i.val, self_mem_sessSlots hiu u.isLt, hiu⟩
-  obtain ⟨b, hb, hcor⟩ := hS.opens x s Pt Ω P ω r u xS vS w hs hPt hin hacc hu hsu hR
+  obtain ⟨b, hb, hcor⟩ := hS.opens Ω P ω r u xS vS w hacc hu hsu hR
   refine hF ⟨b, hb, fun g => if g < s.prog.gates.length then tr g else L.opensAt H P x ω r c g,
     ιOf (L.kept H P x s ω r c) (L.iroots x (run H P L.V x ω r).seen u), fun g hg => ?_,
     hcor _ _ fun q hq hok => ?_⟩
@@ -361,6 +378,27 @@ theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) 
         exact hv
     · rw [← hi]
       exact ιOf_eq hagree hqk
+
+set_option synthInstance.maxSize 1024 in
+/-- **The deterministic half, at a trace**: at an accepted run whose sample holds, at slot `i`, a proof block `u` that
+no values agreeing with the trace `tr` on the program's gates make correct, the session of `i` is not extracted at its
+first slot `i₀`'s coins, or the run's extractions disagree with themselves or open a gate off `tr`. Otherwise the values
+that are `tr` on the program's gates and the kept openings elsewhere, with the interior values the kept openings give,
+agree with every opening the session's witness reveals at `u` that passes (`u`'s slot shows `i₀`'s session,
+`Sessions.shared`), so they make `u` correct (`Sessions.opens`). The trace is the reader's: the committed trace at the
+run's tape (`reg_split`), or one read at the statement. -/
+theorem trace_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
+    {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
+    (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x)) (hiu : (L.checked x r)[i.val]? = some u.val)
+    (tr : ℕ → Option Bool)
+    (hF : ¬ ∃ b, Pt.blocks[u.val]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+      (∀ g < s.prog.gates.length, val g = tr g) ∧ s.prog.Correct (s.prog.refIn b val ι) b)
+    (i₀ u₀ : Fin (L.nPU x)) (hlead : L.leadOf x (L.checked x r) i = some i₀)
+    (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
+    ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨ L.InConf H P x s ω r c ∨
+      ∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ tr g ≠ some b := by
+  exact trace_split_of (hS.toSharedOpens hs hPt hin) hs P ω r c hacc i u hiu tr hF i₀ u₀ hlead hu₀
 
 set_option synthInstance.maxSize 1024 in
 /-- **The deterministic half**: at an accepted run whose sample holds proof block `u` of the committed trace's

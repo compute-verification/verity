@@ -121,7 +121,7 @@ UR_PAIR = re.compile(r"\.(64|WIDE)\b")
 BULK = re.compile(r"UBLK(CP|RED)|UTMA(LDG|STG|REDG)")
 #: a bulk reduction (UBLKRED) by its opcode alone is TMAred512, the census's class for one of 512 B: its issue slot and
 #: 512 B on DS_smem on DS-120, its own unit's rows on the measured census. That bounds below every bulk reduction the
-#: tree runs on sm_120 (side.cu's and smem_side.cu's 512 B to 4 KB, cpw_routes' 1 to 16 KB, fold_bulk's 8 to 32 KB);
+#: tree runs on sm_120 (fold_bulk's 8 to 32 KB);
 #: one under 512 B would be overstated, so it must be counted by its bytes
 BULK_RED = "UBLKRED"
 #: UTMABIG's bytes on DS-120: 99 KB, the most shared memory a block holds on sm_120 (CUDA C++ Programming Guide,

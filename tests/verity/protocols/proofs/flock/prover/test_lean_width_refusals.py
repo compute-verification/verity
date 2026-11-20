@@ -12,6 +12,9 @@ import pytest
 from test_lean_verifier import LEAN, VERIFIER
 
 
+_spec = importlib.util.spec_from_file_location("recut_vectors", Path(__file__).resolve().parents[4] / "circuits" / "recut_vectors.py")
+recut_vectors = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(recut_vectors)
 INFERENCE_ONLY_SCRIPTS = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "workload_classification" / "training_detection" / "inference_only" / "verifier" / "lean" / "scripts"
 
 
@@ -40,14 +43,17 @@ def _tile_window(bits: bool) -> str:
 def test_width_refusals_agree_with_the_codec(tmp_path):
     """The inference-only difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
-    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
+    template's bits and its bits as them (`_tile_window`), and reads of an input node at another width (`recut_vectors.reads`):
+    the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
+    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET`, `recut-width`, `recut-boundary` or `recut-overrun`
+    exactly those the codec does, with the codec's message
     (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
     with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)},
+                     *({"program": d} for _, d in recut_vectors.reads())]:
             desc = json.loads(inst["program"])
             try:
                 V.reference.codec.decode_program(desc, V.reference.declared(desc))
@@ -60,4 +66,4 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
                         "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 215, "recut": 92, "neither": 127}

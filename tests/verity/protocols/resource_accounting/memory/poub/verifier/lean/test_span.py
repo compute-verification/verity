@@ -53,7 +53,8 @@ def span_public(v: Any) -> dict:
         params = M.params_of(reg, kw)
         t = M.int_(v, "t")
     clock = M.Clock()
-    s = AuditRun(params, reg, None, M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+    s = AuditRun(params, reg, None, M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin,
+                                    samples=params.samples),
                  not_before_ns=not_before, clock=clock)
     for e in events:
         M.apply(s, clock, e)

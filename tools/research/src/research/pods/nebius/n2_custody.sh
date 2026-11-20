@@ -5,8 +5,7 @@
 # run record (logs and declared outputs, store.custody) into node 1's /workspace/jobs/store, pushed to R2 and verified there. The
 # .custody that verify writes beside node 1's copy comes back into node 2's run dir, whose files it lists unchanged, so node 2's
 # own `research data custody --triage` sees the run on the remote. The Job's research is VY_CUSTODY_SRC on node 1, which deploy.toml
-# installs from the commit this file comes from. n2_commit.sh and n2_build.sh name this as their runs' custody (RESEARCH_LOCAL_ONLY),
-# without which `research run` refuses to start on a store with no remote.
+# installs from the commit this file comes from.
 #
 #   on node 2:  n2_custody.sh [--dry-run]   one round (the user timer n2-custody.timer, every 10 min); --dry-run lists what it would push
 #
@@ -30,7 +29,7 @@
 # Node 2's timed windows (PoUW's measurements) run with nothing else on the node: a round starts, and starts each push, only while the
 # fill runner's status is fresh and says no window runs or waits, and no booked window is on or starts within the round's bound
 # (PASS_S + PUSH_S); else it stops there, with one log line and exit 0, and the next round asks again. Its Jobs run on node 1, so it
-# keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z, as n1_custody.sh does) the same way, and no Job of it runs into node 1's
+# keeps node 1's daily hold (VY_CUSTODY_QUIET, 12:10-13:30Z) the same way, and no Job of it runs into node 1's
 # quiet hour: a push starts only while its rsync and a Job of at least JOB_MIN_S end before 12:30Z, and the Job's
 # activeDeadlineSeconds and the grace a stopped pod has (GRACE_S; on SIGTERM its bash exits, and research is killed) end it a minute before.
 set -u
@@ -41,8 +40,9 @@ MAX_RUNS=${VY_CUSTODY_MAX_RUNS:-20}
 PASS_S=${VY_CUSTODY_PASS_S:-1200}
 MAX_FILES=${VY_CUSTODY_MAX_FILES:-20000}
 MAX_GB=${VY_CUSTODY_MAX_GB:-50}
-# on node 1, root's alone (as n1_custody.sh's): the research deploy.toml installs and the Python the Jobs run with the Secret
+# on node 1, root's alone: the research deploy.toml installs and the Python the Jobs run with the Secret
 SRC=${VY_CUSTODY_SRC:-/workspace/custody}
+NAMES=adapters/vllm/verity_vllm/pipeline/private_names.json   # SRC's private names, custody's floor (store.private.FLOOR_ROOTS)
 PYHOME=${VY_CUSTODY_PYHOME:-/workspace/custody/python}
 PY=${VY_CUSTODY_PY:-$PYHOME/cpython-3.12.14-linux-x86_64-gnu/bin/python3.12}
 LOOP=${VY_CUSTODY_LOOP:-$STATE/push.sh}
@@ -356,11 +356,11 @@ for c in "${fresh[@]}" "${retry[@]}"; do
   fi
   if [ -z "$src_ok" ]; then
     # python -m puts the working directory first on sys.path, so the Job runs from /, never the world-writable /workspace/jobs
-    bad=$(timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml && test -x $PY || exit 1
-      bad=\$(find $SRC/tools/research $PYHOME -path $PYHOME/.lock -prune -o \\( \\( ! -uid 0 ! -uid \$(id -u) \\) -o \\( -perm /022 ! -type l \\) \\) -print -quit 2>&1)
+    bad=$(timeout 60 "${SSH[@]}" -n "$N1" "test -f $SRC/tools/research/src/research/store/custody.py && test -f $SRC/tools/research/store.pod.toml && test -f $SRC/$NAMES && test -x $PY || exit 1
+      bad=\$(find $SRC/tools/research $SRC/$NAMES $PYHOME -path $PYHOME/.lock -prune -o \\( \\( ! -uid 0 ! -uid \$(id -u) \\) -o \\( -perm /022 ! -type l \\) \\) -print -quit 2>&1)
       [ -z \"\$bad\" ] || { echo \"\$bad\"; exit 4; }")
     rc=$?
-    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC, or no $PY (deploy.toml installs the tree: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml; the Python: n1_custody.sh)"; exit 3; }
+    [ "$rc" = 1 ] && { log "refused: no research tree at $N1:$SRC, no private names beside it, or no $PY (deploy.toml installs the tree: research deploy install vy-nebius-1 --by WHO $SRC/tools/research/src/research $SRC/tools/research/store.pod.toml $SRC/$NAMES; the Python: n1_custody.sh)"; exit 3; }
     [ "$rc" = 4 ] && { log "refused: $N1:$bad could be changed by a uid other than root: the Jobs run $SRC's research and $PY with the Secret research-r2"; exit 3; }
     [ "$rc" = 0 ] || { log "refused: node 1 not reached (\`ssh $N1\` exited $rc)"; exit 3; }
     src_ok=1

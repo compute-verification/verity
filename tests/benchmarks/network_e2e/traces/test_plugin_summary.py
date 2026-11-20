@@ -146,12 +146,13 @@ def test_client_id(mod):
 def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     plugin, summary = mod("vllm_trace_plugin"), mod("summary")
     serve(tmp_path, monkeypatch, plugin)
-    (tmp_path / "plan.jsonl").write_text("".join(json.dumps({"i": i, "prefix": p, "prefix_len": q}) + "\n"
-                                                 for i, p, q in ((0, 3, 16), (1, None, 0))))
-    (tmp_path / "meta.json").write_text(json.dumps({"model": "m", "requests": 2, "seed": 0, "traces": {"t": {}}}))
+    plan = {"sha512": "ab" * 64, "recipe": {"c4": "c4.json.gz", "c4_sha512": "cd" * 64, "tokenizer": "tokenizer.json",
+                                            "tokenizer_sha512": "ef" * 64, "docs": 9, "seed": 5, "requests": 2}}
+    (tmp_path / "meta.json").write_text(json.dumps({"model": "m", "plan": plan, "traces": {"t": {}}}))
     (tmp_path / "t" / "meta.json").write_text(json.dumps({"rate": 1.0, "why": "test", "unfinished": 0}))
-    client = [{"id": "t-00000", "i": 0, "status": 200, "output_ids": [7, 8, 128001], "send_unix": 999.5},
-              {"id": "t-00001", "i": 1, "status": 200, "output_ids": [5, 6, 6, 3]}]
+    client = [{"id": "t-00000", "i": 0, "prefix": 3, "prefix_len": 16, "status": 200, "output_ids": [7, 8, 128001],
+               "send_unix": 999.5},
+              {"id": "t-00001", "i": 1, "prefix": None, "prefix_len": 0, "status": 200, "output_ids": [5, 6, 6, 3]}]
     (tmp_path / "t" / "client.jsonl").write_text("".join(json.dumps(c) + "\n" for c in client))
     (tmp_path / "t" / "raw" / "accept.2.jsonl").write_text(json.dumps(
         {"id": "t-00000", "path": "/v1/completions", "accept": 999.6, "conn_request": 1, "headers": 999.7, "body": 999.8}) + "\n")
@@ -172,16 +173,21 @@ def test_summary_joins_and_counts(tmp_path, monkeypatch, mod):
     assert steps[0]["batch"] == ["t-00001", "t-00000"] and steps[0]["new"][0]["kind"] == "prefill"
     assert steps[0]["new"][0]["final"] is False and steps[1]["cached"][1]["kind"] == "decode"
     reqs = [json.loads(x) for x in (tmp_path / "t" / "requests.jsonl").read_text().splitlines()]
-    assert [r["first_step"] for r in reqs] == [0, 0] and reqs[0]["prefix"] == 3 and reqs[0]["eos"] is True
+    assert [r["first_step"] for r in reqs] == [0, 0] and reqs[0]["eos"] is True
+    assert [(r["prefix"], r["prefix_len"]) for r in reqs] == [(3, 16), (None, 0)]
     assert (reqs[0]["accept_unix"], reqs[0]["body_unix"], reqs[1]["accept_unix"]) == (999.6, 999.8, None)
     assert [r["engine_add_index"] for r in reqs] == [0, 1] and "warden" not in reqs[0]
-    assert "| t | 1.0 | test | 2 of 2 |" in (tmp_path / "README.md").read_text()
+    readme = (tmp_path / "README.md").read_text()
+    assert "| t | 1.0 | test | 2 of 2 |" in readme
+    assert out["plan"] == plan == json.loads((tmp_path / "summary.json").read_text())["plan"]
+    assert f"the same 2 requests (seed 5; the plan's SHA-512 is `{'ab' * 64}`)" in readme
+    assert "plan.jsonl" not in readme and not (tmp_path / "plan.jsonl").exists()
 
 
 def test_summary_keeps_a_failed_trace_and_drops_a_cut_line(tmp_path, mod):
     summary = mod("summary")
-    (tmp_path / "plan.jsonl").write_text('{"i": 0}\n{"i": 1')
-    assert summary.read_jsonl(tmp_path / "plan.jsonl") == [{"i": 0}]
+    (tmp_path / "cut.jsonl").write_text('{"i": 0}\n{"i": 1')
+    assert summary.read_jsonl(tmp_path / "cut.jsonl") == [{"i": 0}]
     (tmp_path / "meta.json").write_text(json.dumps({"traces": {"u": {"error": "RuntimeError: not ready"}}}))
     out = summary.summarize(tmp_path)
     assert out["traces"]["u"] == {"trace": "u", "error": "RuntimeError: not ready"}
@@ -294,7 +300,7 @@ def test_summary_joins_the_adversarys_choices_to_its_steps(tmp_path, mod):
         (1, "prefill over KV", 16, 24, False, 2)
     honest = tmp_path / "honest"
     (honest / "raw").mkdir(parents=True)
-    assert summary.join_trace(honest, {})["adversary"] is None
+    assert summary.join_trace(honest)["adversary"] is None
 
 
 def test_compare_corpora_refuses_different_plans_and_labels_by_variant(tmp_path, mod):
@@ -302,14 +308,18 @@ def test_compare_corpora_refuses_different_plans_and_labels_by_variant(tmp_path,
     for name, variant, plan in (("c1", "seeded", "p"), ("c2", "async-seeded", "p"), ("c3", "greedy", "q")):
         root = tmp_path / name
         trace(root / "heavy", [([row("a", 0, 2, 2, 0)], ["a"], [[7]], [])], [(0, "a", [7], "stop", 0)])
-        (root / "plan.jsonl").write_text(plan)
-        (root / "meta.json").write_text(json.dumps({"variant": variant, "traces": {"heavy": {}}}))
+        (root / "meta.json").write_text(json.dumps({"variant": variant, "plan": {"sha512": plan * 128},
+                                                    "traces": {"heavy": {}}}))
     c = summary.compare_corpora([summary.corpus_spec(str(tmp_path / "c1")), summary.corpus_spec(f"{tmp_path / 'c2'}:heavy")],
                                 tmp_path / "out")
     assert c["traces"] == ["seeded/heavy", "async-seeded/heavy"] and c["identical"] == 1
     assert (tmp_path / "out" / "compare.json").exists() and "identical: all 1" in (tmp_path / "out" / "COMPARE.md").read_text()
+    assert c["plan_sha512"] == "p" * 128 == json.loads((tmp_path / "out" / "compare.json").read_text())["plan_sha512"]
     with pytest.raises(SystemExit, match="2 different plans"):
         summary.compare_corpora([(tmp_path / "c1", None), (tmp_path / "c3", None)], tmp_path / "out2")
+    (tmp_path / "c2" / "meta.json").write_text(json.dumps({"variant": "async-seeded", "traces": {"heavy": {}}}))
+    with pytest.raises(SystemExit, match=r"c2/meta\.json names no plan \(`plan\.sha512`"):
+        summary.compare_corpora([(tmp_path / "c1", None), (tmp_path / "c2", None)], tmp_path / "out3")
 
 
 def test_seeded_requests_carry_the_public_seed_of_their_trace_independent_id(mod):

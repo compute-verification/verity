@@ -1,10 +1,10 @@
 """What the Match's commands say beside the documents they write goes to the package's logger, and nothing to stdout:
-`verity_vllm.check.match.batch_decomp.main` and `verity_vllm.check.match.program_dag.main` log the result they wrote,
+`verity_vllm.check.match.batch_decomp.main` logs the result it wrote,
 `verity_vllm.check.match.global_match.main` logs what is about to run before it runs, its brief after, and as an error the X-09
 document it could not write, `verity_vllm.check.match.instance_sequence` names in a warning a registry module that failed to
 import, and `verity_vllm.check.match.global_match_fast` names in a warning a forked worker's result file it could not remove.
 
-`batch_decomp` and `program_dag` run on the toy of `test_batch_decomp_e2e.py`; `global_match.main` runs over a stand-in for its
+`batch_decomp` runs on the toy of `test_batch_decomp_e2e.py`; `global_match.main` runs over a stand-in for its
 checker, since the lines under test are `main`'s own.
 
 The capture log is also an input the two commands take by path: `batch-decomp --log` and `global-match --log` name a capture
@@ -33,8 +33,6 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as gmf
 from verity_vllm.check.match import instance_sequence as seq
-from verity_vllm.check.match import program_dag
-from verity_vllm.check.match import program_loaders as loaders
 from verity_vllm.definitions.registry import catalog
 from verity_vllm.pipeline import cli
 
@@ -113,23 +111,6 @@ def test_batch_decomp_reads_the_capture_log_that_its_log_option_names(memory, tm
     varies = ("log", "utc", "seconds")                                         # the path given, and when and how long each run was
     assert {k: v for k, v in b.items() if k not in varies} == {k: v for k, v in a.items() if k not in varies}
     assert b["engine_steps"] == 3 and [e["request_id"] for e in b["requests"]] == ["r0", "r1"]
-
-
-# ------------------------------------------------------------------------------------------------------------------ program-dag
-
-
-def test_program_dag_writes_its_result_logs_it_and_exits_by_it(memory, tmp_path, monkeypatch, caplog, capsys):
-    """The toy has no derived dir: a single request's fold stands in for it, as it does for `batch_decomp`."""
-    monkeypatch.setattr(loaders, "load_derived", lambda d, label, compact: loaders.load_oracle(d, label, compact=compact))
-    a, b = e2e.fold_alone(e2e.R0, tmp_path / "a"), e2e.fold_alone(e2e.R1, tmp_path / "b")
-    same, other = tmp_path / "same.json", tmp_path / "other.json"
-    with caplog.at_level(logging.INFO, logger="verity_vllm"):
-        assert program_dag.main(program_dag.Options(a=a, b=a, out=str(same))) == 0
-        assert program_dag.main(program_dag.Options(a=a, b=b, out=str(other))) == 1
-    first, second = _logged(caplog, program_dag)
-    assert json.loads(first.getMessage()) == json.loads(same.read_text()) and json.loads(same.read_text())["equal"] is True
-    assert json.loads(second.getMessage()) == json.loads(other.read_text()) and json.loads(other.read_text())["equal"] is False
-    assert first.levelno == second.levelno == logging.INFO and capsys.readouterr().out == ""
 
 
 # ------------------------------------------------------------------------------------------------------------------ global-match

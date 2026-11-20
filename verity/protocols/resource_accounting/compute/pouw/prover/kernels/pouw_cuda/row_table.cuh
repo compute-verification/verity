@@ -1,3 +1,4 @@
+// The row tables' device code, kept here until proofs decides where it lives.
 // A serving step's row tables (`verity.commitments.row_table`, `commit.row_tables.step_roots`) as functions that compile for
 // the host (g++, `row_table_host.cpp`, the twin the CPU tests hold to the Python reference) and the device (nvcc,
 // `row_table.cu`). One thread computes one segment digest, one row's leaf or one tree node. The hm96-sha512 leaf and the

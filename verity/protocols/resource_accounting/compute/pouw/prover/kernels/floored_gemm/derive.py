@@ -1,6 +1,6 @@
 """The duo receipts of one 128 x 128 tile, the CPU reference the edited GEMMs' references share.
 
-`tile_receipts` folds a tile's u32 words after each step (masked_gemm's mref.py's duo receipts, one tile at a time) under
+`tile_receipts` folds a tile's u32 words after each step (the duo receipts, one tile at a time) under
 ref.py's keys; `TM`, `BN`, `WM` and `NCT` are the tile's shape and `U_TAG` the SHA-512 tag of lpgemm.cu's U. It loads the
 ref.py beside it from its file, so a reader in another directory loads this file the same way: it puts nothing on its
 path, and the name `derive` stays with the directory whose own scripts import one by it (harness/).
@@ -25,7 +25,7 @@ WM, NCT = 32, 512
 
 
 def tile_receipts(seed: int, Ts: list[np.ndarray], tile: int) -> np.ndarray:
-    """mref.duo_receipts for one tile (its index ``tile`` in the call's row-major tile order): Ts the tile's 128 x 128 u32
+    """The duo receipts of one tile (its index ``tile`` in the call's row-major tile order): Ts the tile's 128 x 128 u32
     words after each step, (NCT, 8)."""
     KA = np.array([[key_mul(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)
     KK = np.array([[key_xor(ln, t) for t in range(16)] for ln in range(2)], dtype=np.uint32)

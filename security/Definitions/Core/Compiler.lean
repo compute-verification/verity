@@ -138,7 +138,9 @@ structure Compiler.Output where
 
 /-- **One execution phase's output** over the compiler's output `o` so far: the execution block `E` over `o`'s circuit,
 its partition into `m` proof blocks, which hold the block's computed gates, each proof block's inference block among
-`n` (`parent`). -/
+`n` (`parent`). It extends `o`'s boundary and no more: it names no gate of `o` an output that was not one already
+(`outputs_old`), and of `o`'s gates it reads only `o`'s boundary gates (`reads_boundary`), whose values `o`'s phases
+committed before this phase's coin. -/
 structure Compiler.Phase (o : Compiler.Output) where
   E : o.D.Extension
   n : ℕ
@@ -146,6 +148,8 @@ structure Compiler.Phase (o : Compiler.Output) where
   unit : Fin E.n → Option (Fin m)
   input_iff : ∀ i, unit i = none ↔ E.isInput i = true
   parent : Fin m → Fin n
+  outputs_old : ∀ g : Fin o.D.N, Fin.castAdd E.n g ∈ E.outputs → g ∈ o.D.outputs
+  reads_boundary : ∀ (i : Fin E.n) (g : Fin o.D.N), Fin.castAdd E.n g ∈ E.reads i → g ∈ o.P.boundary
 
 namespace Compiler
 
@@ -157,6 +161,8 @@ def Phase.empty (o : Output) : Phase o where
   unit := Fin.elim0
   input_iff i := i.elim0
   parent := Fin.elim0
+  outputs_old _ h := absurd h (Finset.notMem_empty _)
+  reads_boundary i := i.elim0
 
 /-- `o`'s layout with the block `E` appended: `o`'s for `o`'s gates; for `E`'s, none registered and phase
 `o.phases + 1`. -/

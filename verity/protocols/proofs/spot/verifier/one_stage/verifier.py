@@ -45,8 +45,10 @@ import fcntl
 import functools
 import json
 import math
+import os
 import secrets
 import subprocess
+import sys
 import tempfile
 import threading
 from fractions import Fraction
@@ -58,7 +60,13 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
 from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, draw as D, hello as H, link_points as LP, docket as R
+from .lean_child import LEAN_EXIT, LEAN_PANIC, OK, exit_why, panic_line
+from .settings import lean_env
 from .verdict import Verdict
+
+#: the statuses a `Difftest.serve` process ends with: 0, at the end of its input, after its last answer; while it
+#: answers, it hasn't ended
+SERVE_EXITS = OK
 
 RECORD_VERDICT = "lean"
 """Whose verdict is the record's: `"lean"` (`spot-verifier`) or `"python"` (this package's, the reference)."""
@@ -119,22 +127,45 @@ def _dumps(value: Any) -> str:
 
 class _Server:
     """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
-    the first call and again after it dies."""
+    the first call and again after it dies, in `lean_env`: a panic ends it, and a panic line on its standard error refuses
+    the call it answered. Its end is a check of its answers: one between calls refuses the next call, and one other than
+    as `SERVE_EXITS` documents raises at `close`."""
 
     def __init__(self, exe: str = EXE, package: Path = PACKAGE) -> None:
         self.exe, self.package = exe, package
         self._proc: subprocess.Popen | None = None
+        self._owner: int | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
 
+    def _forked(self) -> None:
+        """A forked process's copy of its parent's handle is dropped: the parent's process is the parent's to check."""
+        if self._proc is not None and self._owner != os.getpid():
+            self._proc = None
+
+    def _ended(self) -> str | None:
+        """Why the process, which ended, ended other than as documented: a panic line, a signal, or a status outside
+        `SERVE_EXITS`; None where it ended at one."""
+        self._stderr.seek(0)
+        panic = panic_line(self._stderr.read().decode("utf-8", "replace"))
+        return f"{LEAN_PANIC}: {panic}" if panic is not None else exit_why(self._proc.returncode, SERVE_EXITS)
+
     def call(self, fn: str, value: Any) -> tuple[str, Any]:
-        """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`."""
+        """`("output", JSON)` or `("reject", reason)`; anything else raises `LeanError`, and so does the call after an
+        answer where the process ended in between, which its input never asked it to."""
         line = _dumps({"fn": fn, "input": value})
         with self._lock:
-            if self._proc is None or self._proc.poll() is not None:
+            self._forked()
+            if self._proc is not None and self._proc.poll() is not None:
+                why = self._ended() or f"{LEAN_EXIT}: status {self._proc.returncode}"
+                self._proc = None
+                raise LeanError(f"{self.exe} ended after its last answer, before {fn}: {why}")
+            if self._proc is None:
+                self._owner = os.getpid()
                 self._stderr = tempfile.TemporaryFile()
                 self._proc = subprocess.Popen([str(executable(self.exe, self.package))], stdin=subprocess.PIPE,
-                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8")
+                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8",
+                                              env=lean_env())
             try:
                 self._proc.stdin.write(line + "\n")
                 self._proc.stdin.flush()
@@ -147,7 +178,18 @@ class _Server:
                 self._stderr.seek(0)
                 err = self._stderr.read().decode("utf-8", "replace")[-2000:]
                 self._proc = None
-                raise LeanError(f"{self.exe} ended on {fn}: {err}")
+                panic = panic_line(err)
+                raise LeanError(f"{LEAN_PANIC}: {panic}" if panic else f"{self.exe} ended on {fn}: {err}")
+            self._stderr.seek(0)
+            if (panic := panic_line(self._stderr.read().decode("utf-8", "replace"))) is not None:
+                self._proc.kill()
+                self._proc.wait()
+                self._proc = None
+                raise LeanError(f"{LEAN_PANIC}: {panic}")
+            if self._proc.poll() is not None:
+                why = self._ended() or f"{LEAN_EXIT}: status {self._proc.returncode}"
+                self._proc = None
+                raise LeanError(f"{self.exe} ended with its answer to {fn}: {why}")
         try:
             msg = json.loads(reply)
         except ValueError:
@@ -159,18 +201,46 @@ class _Server:
         raise LeanError(f"{self.exe} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
-        """End the server: `Difftest.serve` stops at the end of its input."""
+        """End the server: `Difftest.serve` stops at the end of its input. Raises `LeanError` where the process it
+        answered from did not then end as documented: an answer already read is refused at the close."""
         with self._lock:
-            if self._proc is not None and self._proc.poll() is None:
-                self._proc.stdin.close()
-                self._proc.wait()
+            self._forked()
+            proc, self._proc = self._proc, None
+            if proc is None:
+                return
+            unread = None
+            if proc.poll() is None:
+                try:
+                    proc.stdin.close()
+                except BrokenPipeError as e:
+                    unread = e
+                proc.wait()
+            self._proc = proc
+            why = self._ended()
             self._proc = None
+            if why is not None:
+                if unread is not None:
+                    why += " (its input was closed before what it was handed was written whole)"
+                raise LeanError(f"{self.exe} did not end as documented at its close: {why}")
 
 
 _server = _Server()
-atexit.register(_server.close)
 _caller_server = _Server(CALLER_EXE, CALLER_PACKAGE)
-atexit.register(_caller_server.close)
+
+
+@atexit.register
+def _close_at_exit() -> None:
+    """The servers' close is a check of every answer they gave: one that fails ends the process with status 70."""
+    failed = []
+    for server in (_caller_server, _server):
+        try:
+            server.close()
+        except LeanError as e:
+            failed.append(str(e))
+    if failed:
+        print("\n".join(failed), file=sys.stderr, flush=True)
+        sys.stdout.flush()
+        os._exit(70)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
@@ -464,12 +534,13 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
         history: Mapping[str, Any] | None = None, family: str | None = None,
         key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None,
-        certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
+        certified: Mapping[str, Mapping[str, Any]] | None = None, partition: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one docket, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
     log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
-    let through, ``history`` its history tables, ``certified`` its certified entries, which an interior docket
+    let through, ``history`` its history tables, ``certified`` its certified entries, ``partition`` the window's partition
+    object R2 held the record's digest to (None: the blockless one), which an interior docket
     takes none of), `check_public`'s values and declared items, the receipt's challenger and
     place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
@@ -496,7 +567,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record with round 2's
     `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, None, work_table,
+    args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
                               seed_salt=seed_salt, pool=pool, tied=tied, history=history, certified=certified),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],

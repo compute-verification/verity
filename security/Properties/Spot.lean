@@ -251,10 +251,11 @@ def OutputValueIs (log : Array Json) (leaves words bits : Nat) (record value : S
     (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
 
 /-- What an output value takes from its earlier record, for a value of `leaves` leaves, `words` words and `bits` word
-bits: its port (`OutputPortIs`) or its registered value (`OutputValueIs`). -/
+bits: its port (`OutputPortIs`) or its registered value (`OutputValueIs`), the latter of the log's last record alone
+(`Docket.lastDigest`). -/
 def EarlierIs (log : Array Json) (leaves words bits : Nat) (record : String) : Docket.Earlier → Prop
   | .port p => OutputPortIs log leaves record p
-  | .value u => OutputValueIs log leaves words bits record u
+  | .value u => record = Docket.lastDigest log ∧ OutputValueIs log leaves words bits record u
 
 /-- R7, for a v2 record (`Docket.checkOutputs`): the verifier derives its own entries for the values it expects
 registered (`Docket.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for

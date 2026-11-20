@@ -300,7 +300,7 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     try:
         v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=sheets.figures(a.figures_node),
                               source=os.urandom(32), windows=a.windows,
-                              window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
+                              window_ns=a.window_ns, samples=a.samples, delta=verifier.audit.DELTA, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()
         out["verifier"] = v.session(0, v.allowance(v.ping(4)), None)
@@ -309,7 +309,11 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
         raise
     finally:
         if v is not None:
-            v.stop()
+            try:
+                v.stop(check="error" not in out)
+            except verifier.lv.LeanError as e:
+                out["error"] = e
+                out.pop("verifier", None)
 
 
 def fit_main(a: argparse.Namespace) -> int:

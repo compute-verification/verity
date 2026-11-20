@@ -188,6 +188,7 @@ gates or a leaf of one of the unit's reader rows. -/
 theorem returnsOwn (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : ReturnsOwn P rs W := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   intro tid u sc out l g lo hi' hu ho
   cases hp : (P.defs[sc.d]!).prim with
   | true => exact Or.inl (returnsOwn_prim hP hrs hu hp ho).2
@@ -201,7 +202,7 @@ theorem returnsOwn (hP : ReadProg P)
       Resolve.good_child P (parent := P.rootScope)
         (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hc hm rfl
     obtain ⟨f, -, hf, hl, hres, -, -⟩ := ho
-    obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec k hk
+    obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec hrc k hk
     obtain ⟨hbp, hcount, -⟩ := hcallee.2 hc
     have ht : (outRow (P.defs[(P.child P.rootScope k m).d]!) f).1 + l <
         (P.defs[(P.child P.rootScope k m).d]!).body.ret.count :=
@@ -221,6 +222,7 @@ earlier gate of the unit or a leaf of one of the unit's reader rows. -/
 theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) : OperandsOwn P rs W := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   intro tid u sc g p ops sc' hu hlo hhi hgate o ho
   cases hp : (P.defs[sc.d]!).prim with
   | true =>
@@ -239,7 +241,7 @@ theorem operandsOwn (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.Securit
     have hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hp
     rcases Resolve.gate_within P ⟨hr, hrp⟩ hB hlay hk hm hc hlo hhi hgate o ho with hin | ⟨i, j, hi, hj, hij⟩
     · exact Or.inl hin
-    · obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec k hk
+    · obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec hrc k hk
       have hbp' : (P.defs[(P.child P.rootScope k m).d]!).body.params =
           (P.defs[(P.child P.rootScope k m).d]!).params := (hcallee.2 hc).1
       rw [hbp'] at hi hj
@@ -273,6 +275,7 @@ is a leaf of one row at most, at one place. -/
 theorem ownRows_holds (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs) :
     OwnRows P rs W := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP
   obtain ⟨hov, hlay⟩ := read_walk hP
   have hP' := hP

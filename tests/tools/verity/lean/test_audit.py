@@ -597,6 +597,20 @@ EARLY = ["compile-time.lakefile", "unchecked.source", "compile-time.source", "or
          "compile-time.not-a-module"]
 
 
+def test_an_exempt_entry_is_a_reason_or_an_owner_an_issue_and_a_due_date():
+    """An `exempt` entry is the reason nothing imports the file, or {why, owner, issue, due} for a file left out of the
+    roots until its issue ends; any other form fails, and either form exempts its files."""
+    files = {"P.A": "P/A.lean", "P.B": "P/B.lean", "P.C": "P/C.lean"}
+    owed = {"why": "red until the statement is restated", "owner": "@proofs", "issue": "PRF-1", "due": "2026-11-23"}
+    pol = {"roots": ["P"], "exempt": {"P.A": "a scratch file", "P.B": owed}}
+    assert A.exempt_owed(owed) and not A.exempt_owed("a scratch file")
+    assert [(f.code, f.entry) for f in A.orphan_failures(pol, files, {"P.C"})] == []
+    for bad in ("", " ", {"why": "red"}, owed | {"owner": "proofs"}, owed | {"issue": "soon"}, owed | {"due": "Monday"},
+                owed | {"why": " "}, owed | {"more": 1}, 3):
+        fails = A.orphan_failures(pol | {"exempt": {"P.A": "a scratch file", "P.B": bad}}, files, {"P.C"})
+        assert [(f.code, f.entry) for f in fails] == [("orphan.exempt-form", "P.B")], bad
+
+
 def test_a_failure_the_sources_show_before_the_build_is_the_one_the_audit_of_the_build_gives(tmp_path, monkeypatch):
     """`sources_judge` reads the sources and the lock, no build: each failure it gives, the audit of the build gives
     again with the same code, entry and text and in the same order (`EARLY` is every code it can give).  What only the
@@ -1293,7 +1307,6 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "assumptions.outside-module": ({**opol, "open": {}, "assumptions": {"P.Sound": {"owner": "@lean"}}}, now),
         "domain.uncovered": (uncovered, wfacts),
         "open.seed": ({**opol, "open_seed": seed}, now),
-        "witnesses.missing": ({**bare, "unwitnessed": {}}, wfacts),
         "witnesses.unwitnessed-changed": ({**bare, "unwitnessed": {"P.sound": sha("its statement before")}}, wfacts),
         "witnesses.stale": ({**wrec, "witnesses": wrec["witnesses"] | {"P.gone": wrec["witnesses"]["P.sound"]}}, wfacts),
         "witnesses.assumed-stale": ({**wrec, "witnesses_assumed": {"P.Gone": "assumed as it stands"}}, wfacts),
@@ -1305,14 +1318,23 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "assumptions.no-owner": ({**pol, "assumptions": {"P.Hyp": without(pol["assumptions"]["P.Hyp"], "owner")}}, facts()),
         "open.no-owner": ({**opol, "open": {"P.Sound": without(sound, "owner")}}, now),
         "domain.no-owner": (covered, wfacts),
+        "scope.stale": ({**pol, "scope": {"P.gone": "Only the plain sessions."}}, facts()),
     }
 
 
-def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
+def unwitnessed_missing() -> tuple[dict, dict]:
+    """(lock, facts): `P.sound`, which the witnesses rule holds to witnesses, listed with neither witnesses nor an
+    `unwitnessed` entry (`witnesses.missing`), which no repair settles."""
+    lock, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    return {**lock, "unwitnessed": {}}, now
+
+
+def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag(monkeypatch):
     """Each code of `BOOKKEEPING` (drive's lock run after a landing repairs the bookkeeping and warns) comes
     from a lock `repaired` mends, so the policy's checks pass on the lock it writes, and each repair is one warning line naming
     the entry and its owner. Without `--bookkeeping warn` the same lock fails: no bookkeeping code is a record difference, so
     `regenerated` settles none of it. A code in the set that no case provokes fails here."""
+    unwitnessed(monkeypatch)
     cases = bookkeeping_cases()
     assert set(cases) == A.BOOKKEEPING and not set(A.BOOKKEEPING) & set(A.RECORD_DIFFERENCE)
     for code, (policy, now) in cases.items():
@@ -1333,9 +1355,8 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
     fixed, _ = fix("open.unlisted")
     assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {
         "owner": "@lean", "issue": "LEAN-186", "due": "2026-11-14"}
-    for code in ("witnesses.missing", "witnesses.unwitnessed-changed"):
-        fixed, now = fix(code)
-        assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "listed at its hashes now"
+    fixed, now = fix("witnesses.unwitnessed-changed")
+    assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "re-keyed at its hashes now"
     fixed, now = fix("witnesses.unwitnessed-unlisted")
     assert fixed["unwitnessed"] == {"P.sound": now["pins"]["P.sound"]["type_sha256"]}, "only the entry of no guarantee goes"
     assert "open_seed" not in fix("open.seed")[0]
@@ -1428,6 +1449,73 @@ def opened(now: dict) -> dict:
     return A.judge({**POLICY, "assumptions": {}, "open_seed": seed}, now, FILES, update=True)[1]
 
 
+def unwitnessed(monkeypatch) -> None:
+    """Switches the deployed guarantees' witness rule off for a test of the trust gap, whose fixture has no witness."""
+    monkeypatch.setattr(A, "deployed_witness_failures", lambda lock: [])
+
+
+def test_a_guarantee_is_deployed_only_with_an_honest_witness():
+    """A guarantee `deployed` lists with no honest lemma under `witnesses` fails, whatever `unwitnessed` allows it: a
+    whole entry, or the honest half.  The allowance of a deployed guarantee's `nontrivial` half holds, and the counts
+    are the report's."""
+    lock = {"deployed": ["G", "H", "K", "L"], "guarantees": dict.fromkeys("GHKLM", {}),
+            "witnesses": {"G": {"honest": ["G.honest"], "nontrivial": "G.not"}, "H": {"honest": ["H.honest"]},
+                          "K": {"nontrivial": "K.not"}},
+            "unwitnessed": {"H": {"type_hash": "h", "missing": "nontrivial", "why": "no fixture"},
+                            "K": {"type_hash": "k", "missing": "honest", "why": "no fixture"}, "L": "l", "M": "m"}}
+    fails = A.deployed_witness_failures(lock)
+    assert [(f.code, f.entry) for f in fails] == [("trust.deployed-unwitnessed", "K"), ("trust.deployed-unwitnessed", "L")]
+    assert "drop it from `deployed`" in fails[0]
+    assert A.deployed_witnesses(lock) == {"witnessed": 2, "unwitnessed": 2, "allowed_deployed": 3, "allowed": 1}
+    assert A.deployed_witness_failures(lock | {"deployed": ["G", "H"]}) == []
+    assert A.deployed_witness_failures({"guarantees": {"M": {}}}) == []
+
+
+SCOPED = {"deployed": ["G"], "guarantees": dict.fromkeys("GHK", {}), "scope": {"H": "Only the plain sessions of one table."}}
+
+
+def test_a_scope_of_a_listed_guarantee_not_deployed_passes_and_the_report_counts_it():
+    """A `scope` entry, one sentence, of a listed guarantee `deployed` doesn't list passes, a full stop inside a word
+    included, and the report counts the listed guarantees with and without one."""
+    assert A.scope_failures(SCOPED) == []
+    assert A.scope_failures(SCOPED | {"scope": {"H": "Sessions of format v1.2 only."}}) == []
+    assert A.scope_failures({"guarantees": {"G": {}}}) == []
+    assert A.scope_counts(SCOPED) == {"with": 1, "without": 2}
+    assert A.scope_counts({"guarantees": {"G": {}}}) == {"with": 0, "without": 1}
+
+
+def test_a_scope_entry_of_no_listed_guarantee_is_bookkeeping():
+    fails = A.scope_failures(SCOPED | {"scope": SCOPED["scope"] | {"Gone": "Only the plain sessions."}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.stale", "Gone")]
+    assert "drop the entry" in fails[0] and "scope.stale" in A.BOOKKEEPING
+
+
+@pytest.mark.parametrize("s", ["", "  ", "Only the plain sessions", "Plain sessions. And the one table.",
+                               "Plain sessions\nof one table.", 3, ["Plain sessions."]])
+def test_a_scope_entry_that_is_not_one_sentence_fails(s):
+    fails = A.scope_failures(SCOPED | {"scope": {"H": s}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.form", "H")]
+    assert "write one sentence" in fails[0] and "scope.form" not in A.BOOKKEEPING
+    assert [f.code for f in A.scope_failures(SCOPED | {"scope": ["H"]})] == ["scope.form"]
+
+
+def test_a_deployed_guarantee_with_a_scope_fails():
+    fails = A.scope_failures(SCOPED | {"scope": {"G": "Only the plain sessions."}})
+    assert [(f.code, f.entry) for f in fails] == [("scope.deployed", "G")]
+    assert "drop it from `deployed`" in fails[0] and "scope.deployed" not in A.BOOKKEEPING
+
+
+def test_an_update_neither_adds_nor_drops_a_scope_entry():
+    """`--update` writes `scope` as the lock has it, a stale entry included, and adds none to a lock without one; a move
+    re-keys it."""
+    pol = recorded()
+    scope = {"P.t": "Only the plain sessions.", "P.gone": "Only the plain sessions."}
+    assert A.judge({**pol, "scope": scope}, facts(), FILES, update=True)[1]["scope"] == scope
+    assert "scope" not in A.judge(pol, facts(), FILES, update=True)[1]
+    assert A.renamed_witnesses({"scope": scope}, {"P.t": "P.t2"})["scope"] == {
+        "P.t2": "Only the plain sessions.", "P.gone": "Only the plain sessions."}
+
+
 def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_through_the_guarantees_it_cites():
     """A deployed guarantee rests on the named assumptions and open premises its record lists, and through a domain
     hypothesis that is another listed guarantee's statement (`cites`) on that guarantee's, transitively (a cycle ends).  A
@@ -1452,12 +1540,13 @@ def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_t
         "trust_gap": {"Q.t": ["Q.Sound", "R.x"]}}
 
 
-def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_until_its_trust_gap_entry_lists_it():
+def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_until_its_trust_gap_entry_lists_it(monkeypatch):
     """`deployed` lists `P.t`, which takes `P.Sound`, an open premise `trust` doesn't list: that is its gap.  The lock fails
     until `trust_gap` lists it, and neither an update nor the lock run's bookkeeping lists it, so a premise enters the gap
     only by a person's hand; listed, the lock passes, and so does one whose trust holds the premise, in the base or as
     `P.t`'s own with its reason.  A guarantee's own trust is a deployed guarantee's, and each holds a premise and a
     reason."""
+    unwitnessed(monkeypatch)
     now = sounded()
     lock = {**opened(now), "trust": {"base": HYP}, "deployed": ["P.t"], "ids": IDS}
     assert A.judge({k: v for k, v in lock.items() if k != "deployed"}, now, FILES)[0] == []
@@ -1506,6 +1595,7 @@ def test_a_discharged_premise_fails_until_its_trust_gap_entry_drops_which_an_upd
     listing `P.Sound` fails, as bookkeeping (not a record difference, so `--regenerate` alone doesn't settle it), until the
     entry drops: `--update` drops it, and so does the lock run under `--bookkeeping warn`, whose warning names the premise.
     The report holds each deployed guarantee's gap."""
+    unwitnessed(monkeypatch)
     before = {**opened(sounded()), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]},
               "ids": IDS}
     assert A.judge(before, sounded(), FILES)[0] == []
@@ -4531,9 +4621,10 @@ def test_an_entry_without_a_why_for_a_prop_no_statement_takes_fails_and_an_updat
                          f"one-line `why` naming that statement"]
 
 
-def test_a_deployed_guarantee_that_reads_an_open_premise_resting_on_a_read_has_it_in_its_gap():
+def test_a_deployed_guarantee_that_reads_an_open_premise_resting_on_a_read_has_it_in_its_gap(monkeypatch):
     """What a guarantee's record lists under `premises.open` is in its trust gap, so a deployed guarantee that holds such
     a `Prop` fails until a person lists it in its `trust_gap` entry, as for a premise it takes."""
+    unwitnessed(monkeypatch)
     now = holding()
     pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
     lock = {**pol, "trust": {"base": HYP}, "deployed": ["P.t"]}
@@ -5495,9 +5586,10 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
-        f"\"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\"; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks)"]
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back as it "
+        f"was; at its statement as built that is \"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\". Otherwise it "
+        "gets its witnesses, or an exemption: a ruling, which no run writes, written by hand on soundness's word with its "
+        "owner's reason in `why` ({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
     assert witness_codes(*out_of_scope) == []
@@ -5686,11 +5778,10 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
     that one side lists and whose entry the other side dropped: the check holds it to its witnesses
     (`witnesses.missing`). The failure says how to carry them and, for that case alone, prints the entry to write back
-    at its statement as built, in the form the lock run writes: its type hash, or {type_hash, unfolded_hash} of a
-    guarantee stated as a definition; a new guarantee gets its witnesses. Written back as printed, the lock passes.
-    `--update` lists it under no `unwitnessed`, which only shrinks; after a landing the lock run lists it there and
-    warns."""
-    lock, now = bookkeeping_cases()["witnesses.missing"]
+    at its statement as built: its type hash, or {type_hash, unfolded_hash} of a guarantee stated as a definition; a new
+    guarantee gets its witnesses. Written back as printed, the lock passes. Neither `--update` nor the lock run's repair
+    lists it under `unwitnessed`, which only shrinks: an exemption is a ruling, written by hand."""
+    lock, now = unwitnessed_missing()
     h = now["pins"]["P.sound"]["type_sha256"]
     assert "P.sound" in lock["guarantees"] and "witnesses" not in lock and lock["unwitnessed"] == {}
     (missing,) = fails = A.judge(lock, now, FILES)[0]
@@ -5705,20 +5796,20 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
-        f"\"P.sound\": \"{h}\"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks)")
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back as it "
+        f"was; at its statement as built that is \"P.sound\": \"{h}\". Otherwise it gets its witnesses, or an exemption: "
+        "a ruling, which no run writes, written by hand on soundness's word with its owner's reason in `why` "
+        "({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)")
 
     def printed(failure) -> dict:
-        return json.loads("{" + failure.split("write the entry back: ")[1].split("; a new guarantee gets")[0] + "}")
+        return json.loads("{" + failure.split("as built that is ")[1].split(". Otherwise it gets")[0] + "}")
     assert printed(missing) == {"P.sound": h} == {"P.sound": lock["guarantees"]["P.sound"]["type_hash"]}
     assert A.judge({**lock, "unwitnessed": printed(missing)}, now, FILES)[0] == []
     kept, rec = A.judge(lock, now, FILES, update=True)
     assert [(x.code, x.entry) for x in kept] == [("witnesses.missing", "P.sound")] and rec["unwitnessed"] == {}
     fixed = A.repaired(lock, now, FILES, fails, TICKET)
-    assert fixed["unwitnessed"] == printed(missing) and A.judge(fixed, now, FILES)[0] == []
-    assert A.bookkeeping_warnings(fails, fixed, TICKET) == [
-        "bookkeeping: P.sound (@lean): listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and "
-        "`nontrivial` witnesses (witnesses.missing)"]
+    assert fixed["unwitnessed"] == {} and A.judge(fixed, now, FILES)[0] == fails
+    assert not A.BOOKKEEPING.match(missing) and A.bookkeeping_warnings(fails, fixed, TICKET) == []
 
     body = wbody("P.Holds", binders=["∀", "→", "→"])
     _, stated = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
@@ -5726,11 +5817,72 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
     bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": pair["type_hash"]}}}
     (lifted,) = A.witness_failures(bare, stated, WOWN)
     assert lifted.code == "witnesses.missing" and lifted.endswith(
-        "write the entry back: \"P.sound\": " + json.dumps(pair) + "; a new guarantee gets its witnesses, not an entry "
-        "(`UNWITNESSED` only shrinks)")
+        "as built that is \"P.sound\": " + json.dumps(pair) + ". Otherwise it gets its witnesses, or an exemption: a "
+        "ruling, which no run writes, written by hand on soundness's word with its owner's reason in `why` "
+        "({type_hash, why}), never as a bare hash (`UNREASONED` only shrinks)")
     assert printed(lifted) == {"P.sound": pair}
     assert A.witness_failures({**bare, "unwitnessed": printed(lifted)}, stated, WOWN) == []
-    assert A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET)["unwitnessed"] == {"P.sound": pair}
+    assert not A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET).get("unwitnessed")
+
+
+def test_the_lock_run_fails_by_name_on_a_guarantee_with_no_unwitnessed_entry_and_re_keys_one_it_holds(
+        tmp_path, monkeypatch):
+    """The lock run (`--bookkeeping warn`) on a lock listing `P.sound`, which the witnesses rule holds to witnesses, with
+    neither witnesses nor an `unwitnessed` entry: it fails on `witnesses.missing` naming `P.sound`, with the fix, and
+    writes no repaired lock, so no entry; on a lock holding an entry at `P.sound`'s statement before, it passes and the
+    lock it writes holds the entry re-keyed to the statement as built, with one warning."""
+    lock, now = unwitnessed_missing()
+    frozen = {"default_owner": "@lean", "shape": {"frozen": dict.fromkeys(lock["guarantees"], "frozen: open")}}
+    _, audit = bookkeeping_audit(tmp_path / "missing", monkeypatch, lock | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert A.reported(rep)["failure_codes"] == ["witnesses.missing"] and rep["failures"][0].startswith(
+        "witnesses: P.sound lists no witnesses"), rep["failures"]
+    assert "which no run writes" in rep["failures"][0] and rep.get("bookkeeping_left") == 1
+    assert "regenerated" not in rep and "bookkeeping" not in rep and not (work / A.POLICY).exists()
+
+    held, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    _, audit = bookkeeping_audit(tmp_path / "held", monkeypatch, held | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert "bookkeeping_left" not in rep and rep["regenerated"] == str(work / A.POLICY), rep["failures"]
+    assert json.loads((work / A.POLICY).read_text())["unwitnessed"] == {"P.sound": now["pins"]["P.sound"]["type_sha256"]}
+    assert rep["bookkeeping"] == ["bookkeeping: P.sound (@lean): its `unwitnessed` entry re-keyed to its statement's "
+                                  "hashes now: it owes its `honest` and `nontrivial` witnesses "
+                                  "(witnesses.unwitnessed-changed)"]
+
+
+def test_a_whole_exemption_keeps_its_reason_through_the_update_a_move_and_the_lock_run(tmp_path, monkeypatch):
+    """{type_hash, why} exempts both witnesses, as a bare hash does, and its `why` stays through `--update`, a move and
+    the lock run's re-key; a `why` that is empty or not text is no form. The bare hash and {type_hash, unfolded_hash},
+    the entries carried from before the reason was required (`UNREASONED`), are still read."""
+    _, f = witnessed()
+    h = f["pins"]["P.sound"]["type_sha256"]
+    whole = {"type_hash": h, "why": "its owner's reason, on soundness's word"}
+    lock = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": whole}}
+    assert A.unwitnessed_entry(whole) == (h, None) and A.witness_failures(lock, f, WOWN) == []
+    assert A.unwitnessed_kept(lock, f, {}) == {"P.sound": whole}
+    for bad in ("", None, 3):
+        assert witness_codes({**lock, "unwitnessed": {"P.sound": {"type_hash": h, "why": bad}}}, f) == ["witnesses.form"]
+    assert str(A.witness_failures({**lock, "unwitnessed": {"P.sound": {"type_hash": h, "why": ""}}}, f, WOWN)[0]) == (
+        "witnesses: unwitnessed[P.sound] is {type_hash, why}, or {type_hash, missing: honest or nontrivial, why} for a "
+        "guarantee whose `witnesses` entry lacks that half, each with `unfolded_hash` for a guarantee whose statement is a "
+        "definition and `why` its owner's reason, on soundness's word")
+    assert A.unwitnessed_entry(h) == A.unwitnessed_entry({"type_hash": h, "unfolded_hash": sha("u")}) == (h, None)
+    assert witness_codes({**lock, "unwitnessed": {"P.sound": h}}, f) == []
+
+    old = sha("before the move")
+    moved = facts(pins={"P.sound": f["pins"]["P.sound"] | {"moved": {"sha256": old}}}, own_modules=sorted(WOWN))
+    was = {**lock, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": old}},
+           "unwitnessed": {"P.sound": whole | {"type_hash": old}}}
+    assert witness_codes(was, moved) == [] and A.unwitnessed_kept(was, moved, {}) == {"P.sound": whole}
+
+    held, now = bookkeeping_cases()["witnesses.unwitnessed-changed"]
+    held = held | {"unwitnessed": {"P.sound": {"type_hash": held["unwitnessed"]["P.sound"], "why": whole["why"]}}}
+    frozen = {"default_owner": "@lean", "shape": {"frozen": dict.fromkeys(held["guarantees"], "frozen: open")}}
+    _, audit = bookkeeping_audit(tmp_path, monkeypatch, held | frozen, now)
+    rep, work = audit("2026-11-14")
+    assert "bookkeeping_left" not in rep, rep["failures"]
+    assert json.loads((work / A.POLICY).read_text())["unwitnessed"] == {
+        "P.sound": {"type_hash": now["pins"]["P.sound"]["type_sha256"], "why": whole["why"]}}
 
 
 def lifted_pin(body: str) -> dict:
@@ -5780,6 +5932,8 @@ def test_an_unwitnessed_entry_of_a_restated_definition_fails():
     keyed = {**bare, "unwitnessed": {"P.sound": {"type_hash": h, "unfolded_hash": u}}}
     assert witness_codes(keyed, f) == []
     assert A.unwitnessed_kept(keyed, f, {}) == keyed["unwitnessed"]
+    reasoned = {**bare, "unwitnessed": {"P.sound": keyed["unwitnessed"]["P.sound"] | {"why": "its owner's reason"}}}
+    assert witness_codes(reasoned, f) == [] and A.unwitnessed_kept(reasoned, f, {}) == reasoned["unwitnessed"]
     assert witness_codes(keyed, g) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(keyed, g, {}) == {}
     unkeyed = {**bare, "unwitnessed": {"P.sound": h}}
@@ -9039,12 +9193,35 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
             "the seal reads this build's `.olean`, not the stale copy a reused pid left"
     finally:
         seals.close()
+
     gone = tmp_path / "noproc"
     gone.mkdir()
     (base / "999999-abcd").mkdir()                               # a dead run's directory, the new `<pid>-<suffix>` layout
     A.Seals(base).sweep(proc=gone)
     assert not stale.exists() and not (base / "999999-abcd").exists(), \
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
+
+
+def test_a_seal_seeds_every_root_an_exempt_prefix_covers(tmp_path, monkeypatch):
+    """`Facts.lean` imports every root by name, so a root under an `exempt` prefix (an exempt module `X` beside the root
+    `X.A`) is still sealed; without it the facts step finds no `.olean` for `X.A` in the seal's copies."""
+    pkg = tmp_path / "pkg"
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    (lib / "X").mkdir(parents=True)
+    (pkg / "X").mkdir()
+    for m in ("X", "X/A", "X/B"):
+        (pkg / f"{m}.lean").write_text("")
+        (lib / f"{m}.olean").write_bytes(b"")
+    seeded = []
+
+    def graph(pkg, modules, out, log):
+        seeded.extend(modules.read_text().split())
+        return {"graph": {}, "search": []}
+
+    monkeypatch.setattr(A, "graph", graph)
+    (tmp_path / "work").mkdir()
+    A.Sealed(pkg, "x", tmp_path / "seal").take(["X.A"], {"X": "a scratch module"}, tmp_path / "work", log=lambda s: None)
+    assert seeded == ["X.A"], f"the root `X.A` is sealed and the exempt `X` and the unrooted `X.B` are not: {seeded}"
 
 
 def test_two_packages_of_one_name_sealed_side_by_side_get_a_directory_each(tmp_path, monkeypatch):
@@ -9171,7 +9348,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
@@ -9197,7 +9374,7 @@ def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tm
     monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
 
-    def keys(facts, toolchain, digest=None, walked=None):
+    def keys(facts, toolchain, digest=None, walked=None, graphs=None):
         clock[0] += 3
         return {m: m for m in facts["graph"]}
 
@@ -9223,7 +9400,7 @@ def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkey
     may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
     entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
     facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9263,7 +9440,7 @@ def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, mo
     own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [],
            "graph": {"P": {"imports": []}}, "files": {"P": "P.lean"}, "pins": {}}
     monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: dict(own))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {"P": "pkey"})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {"P": "pkey"})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
 
     def run(cmd, cwd, log, timeout=None):
@@ -9729,7 +9906,7 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
              "axioms": []}
     first = [{"module": "P.Wide", "threads": 64, "why": "w"}, {"module": "P.Heavy", "threads": 2, "why": "w"},
              {"module": "P.Gone", "threads": 1, "why": "w"}]
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None, walked=None, graphs=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     monkeypatch.setenv("LEAN_NUM_THREADS", "8")
     calls, rejected = [], set()

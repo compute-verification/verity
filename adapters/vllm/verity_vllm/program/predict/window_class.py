@@ -9,7 +9,7 @@ a read of an output row (`interface.Read`), which fills no input and holds the p
 row, so a table that isn't what the model computed fails the proof of the proof block that reads it. Each quantizer at
 that K is `Int8RowQuant_v5{K, R, ROUND}` at its round, whose ``o2`` is H1's leaf of its row (its codes four to a u32, then its scale: the
 node's words whole), read as row c·m + i of its round's A table, c its index among its position's int8 linears of that K
-and i its position's row; each position's token row (its lane's of the slot's `ScanSlots_v3`, its `TokenFeed_v1`'s or the
+and i its position's row; each position's token row (its lane's `ScanSlots_v5`'s, its `TokenFeed_v1`'s or the
 previous select's) is read as row i of its round's input-ids table. A position's round and row are a fixed load's (`Tables.at`):
 every request of the class's prompt length and outputs, all admitted at round 0 in slot order, so the circuit is the
 class's, and a window that isn't that load is refused (`FixedLoad.held`). The circuit's program takes the tables as its values
@@ -27,8 +27,7 @@ that reads row i of its call's y and hands its BF16 words on to its readers in r
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
 call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
 ``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at its linears, reads none
-of them. Its
-census (`window_cut.census`) counts each cut linear by shape, and none is tied to PoUW's credited product yet.
+of them.
 """
 from __future__ import annotations
 
@@ -172,7 +171,7 @@ class PearlTables(FixedLoad):
     K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
     to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
     ``words``, doubled where its unit would be no proof block (`window_cut.linears`). ``scheme`` is the PoUW scheme the
-    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_cut.census`): the deployment
+    window's Pearl+ serves under, whose credited product a tie would hold y to: the deployment
     states it, since it names the device."""
     WHAT = "Pearl+'s tables"
     scheme: str
@@ -242,11 +241,12 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
 
 def requests_of(advice: Any, cls: WindowClass) -> tuple[Request, ...]:
     """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs and
-    at its lane of the class's one boundary: the advice carries no admission bucket, so a class of more boundaries is
-    refused, as are requests past ``cls``'s envelope, carried across windows or served from the prefix cache."""
+    at its lane of the class's one boundary: neither C's shape nor the advice holds the bucket a request arrived in, so a
+    class of more boundaries is refused, as are requests past ``cls``'s envelope, carried across windows or served from the
+    prefix cache."""
     if len(cls.boundaries) != 1:
-        raise Unexpressible(f"{cls}: the advice carries no request's admission bucket, so its requests are anchored at a class "
-                            f"of one boundary, not {len(cls.boundaries)}")
+        raise Unexpressible(f"{cls}: a class of {len(cls.boundaries)} boundaries, and a served Program reads boundary 0's scan "
+                            "state row: the advice holds no request's bucket, which no block checks as a committed value yet")
     if advice.carried:
         raise Unexpressible(f"{len(advice.carried)} requests carried into the window, which its lowering doesn't take yet")
     for st in advice.steps:
@@ -270,6 +270,9 @@ def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],
         if anchor not in cls.boundaries:
             raise Unexpressible(f"request {i}: anchored at bucket {anchor}, none of its class's boundaries "
                                 f"{list(cls.boundaries)}")
+        if anchor != cls.boundaries[0]:
+            raise Unexpressible(f"request {i}: anchored at bucket {anchor}, and a served Program reads boundary 0's scan state "
+                                "row: C's shape holds no request's bucket, which no block checks as a committed value yet")
         if end is not None and end < anchor:
             raise Unexpressible(f"request {i}: its last output at bucket {end}, before its anchor {anchor}")
         out.append(Request(anchor, anchored.get(anchor, 0), prompt, outputs))

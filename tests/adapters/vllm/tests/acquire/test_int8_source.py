@@ -1,7 +1,8 @@
-"""`acquire.sources.int8_source`: the exact-int8 quantizers' results committed under the manifest's names -- a linear's (x_q, s_a) as
-its Int8RowQuant_v1 call boundaries (claimed from the call-boundary source), an attention module's KV quantization as
-`<attention>/kv_quant.0..3`, declared as Int8KvQuant_v1's ports -- bit for bit what the served ops computed; nothing outside a committed
-step or the manifest's sites; and the binder binds every identity of the attention under the manifest's own spelling."""
+"""`acquire.sources.int8_source`: the exact-int8 quantizers' results committed under the capture plan's names -- a linear's (x_q, s_a)
+as its Int8RowQuant call boundary's two members (claimed from the call-boundary source), at every engine step; an attention
+module's KV quantization as `<attention>/kv_quant.0..3`, declared as the plan's Int8KvQuant Definition's ports -- bit for bit what
+the served ops computed; nothing outside a committed step or the plan's sites; and the binder binds every value of the attention
+under the plan's own spelling."""
 from __future__ import annotations
 
 import types
@@ -10,9 +11,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import int8_source as I8
-from verity_vllm.acquire.sources import taps
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
@@ -22,17 +21,28 @@ LIN, ATTN = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn.attn"
 S, G, D, BS = 5, 2, 32, 4
 
 
-def _manifest(steps=(0, 1)):
-    ids = []
-    for e in steps:
-        ids += [{"family": "call_boundaries", "op_path": f"{LIN}/row_quant_{e}", "output_member": m, "step": e, "engine_step": e,
-                 "spec": "Int8RowQuant_v1", "request_id": "r0"} for m in ("0", "1")]
-        ids += [{"family": "instance_outputs", "op_path": ATTN, "output_member": f"kv_quant.{p}", "port": p, "step": e, "engine_step": e,
-                 "spec": "Int8KvQuant_v1", "request_id": "r0"} for p in I8.KV_PORTS]
-        ids.append({"family": "instance_outputs", "op_path": ATTN, "output_member": "out", "port": "out", "step": e, "engine_step": e,
-                    "spec": "Int8LutAttentionRow_v1", "request_id": "r0"})
-        ids.append({"family": "instance_outputs", "op_path": LIN, "output_member": "0", "step": e, "engine_step": e, "spec": "ScaledMmS8_v1"})
-    return {"ranks": 1, "identities": ids}
+QUANT_OP = f"{LIN}/row_quant"
+
+
+def _class(op, member, capture, width, dtype, definition):
+    return {"op_path": op, "member": member, "capture": capture, "width": width, "dtype": dtype, "definitions": [definition]}
+
+
+def _plan(quant=True, version=1):
+    """The plan classes (`capture_plan.of_build`) of a row with one int8 linear and one int8 attention."""
+    kv = [_class(ATTN, f"kv_quant.{p}", "module_output", w, d, "Int8KvQuant_v1")
+          for p, w, d in zip(I8.KV_PORTS, (D, D, D, D), ("i8", "i8", "f32", "f32"))]
+    return [*([_class(QUANT_OP, "0", "call_boundary", 64, "i8", f"Int8RowQuant_v{version}"),
+               _class(QUANT_OP, "1", "call_boundary", 1, "f32", f"Int8RowQuant_v{version}")] if quant else []),
+            _class(LIN, "0", "module_output", 8, "bf16", "ScaledMmS8_v1"), *kv,
+            _class(ATTN, "out", "module_output", D, "bf16", "Int8LutAttentionRow_v1")]
+
+
+def _identities(steps=(0,)):
+    """What the seal's binder places of the attention at each step (`serve_seal.served_binder_of`): each member of its plan rows."""
+    return {"identities": [{"op_path": ATTN, "output_member": m, "invocation": 0, "identity": None, "request_id": "*", "step": None,
+                            "engine_step": e, "rank": 0}
+                           for e in steps for m in [*(f"kv_quant.{p}" for p in I8.KV_PORTS), "out"]], "requests_declared": []}
 
 
 class _Linear(nn.Module):
@@ -99,24 +109,25 @@ def _run(src, com, model, step):
     return x, kv, args[3]
 
 
-def test_the_quantizers_results_are_committed_under_the_manifests_names_as_the_ops_computed_them():
-    com, model, man = _Committer(), _Model(), _manifest()
-    classes, src = I8.attach(com, I8.applies(man), man, ("instance_outputs",), model=model)
-    assert classes == ("instance_outputs", "call_boundaries") and com.sources == [src]
+@pytest.mark.parametrize("version", [1, 5])
+def test_the_quantizers_results_are_committed_under_the_plans_names_as_the_ops_computed_them(version):
+    com, model, plan = _Committer(), _Model(), _plan(version=version)
+    classes, src = I8.attach(com, I8.applies(plan), plan, ("module_output",), model=model)
+    assert classes == ("module_output", "call_boundary") and com.sources == [src]
     src.install()
     try:
         x, (k, v), ks = _run(src, com, model, 1)
     finally:
         src.uninstall()
     xq, s_a = E.quantize_rows(x)
-    assert torch.equal(com.got[f"{LIN}/row_quant_1/0"], xq) and torch.equal(com.got[f"{LIN}/row_quant_1/1"], s_a)
+    assert torch.equal(com.got[f"{QUANT_OP}/0"], xq) and torch.equal(com.got[f"{QUANT_OP}/1"], s_a)
     for m, t in zip(I8.KV_LABELS, A.kv_quant(k, v, ks)):
         assert torch.equal(com.got[f"{ATTN}/{m}"], t.reshape(-1)), m
-    assert sorted(com.got) == sorted([f"{LIN}/row_quant_1/0", f"{LIN}/row_quant_1/1", *(f"{ATTN}/{m}" for m in I8.KV_LABELS)])
+    assert sorted(com.got) == sorted([f"{QUANT_OP}/0", f"{QUANT_OP}/1", *(f"{ATTN}/{m}" for m in I8.KV_LABELS)])
     assert not com.errors and src.stats["quant_tensors"] == 2 and src.stats["kv_tensors"] == 4
     assert int8_ops.row_quant is not None and not isinstance(int8_ops.row_quant, types.FunctionType)      # the op is back
     decl = {c["class"]: c for c in src.declaration_classes()}
-    assert decl["call_boundaries"]["tensors"] == 2 and decl[I8.KV_CLASS]["tensors"] == 4
+    assert decl["call_boundary"]["tensors"] == 2 and decl[I8.KV_CLASS]["tensors"] == 4
 
 
 class _Read(nn.Module):
@@ -155,7 +166,7 @@ def test_a_credited_read_commits_the_attentions_kv_quantization_as_the_paged_rea
     qsl, seq = torch.tensor([0, S, S + 1], dtype=torch.int32), torch.tensor(lens, dtype=torch.int32)
     got, outs = [], []
     for credited in (False, True):
-        com, model, man = _Committer(), _Model(), _manifest(steps=(1,))
+        com, model, man = _Committer(), _Model(), _plan()
         model.model.layers[0].self_attn.attn = _Read(credited)
         _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
         src.install()
@@ -176,38 +187,66 @@ def test_a_credited_read_commits_the_attentions_kv_quantization_as_the_paged_rea
 
 
 def test_nothing_is_committed_outside_a_committed_step_or_a_site():
-    com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
-    _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
+    com, model, plan = _Committer(), _Model(), _plan(quant=False)
+    _classes, src = I8.attach(com, True, plan, (), explicit_classes=True, model=model)
     src.install()
     try:
         model.model.layers[0].mlp.down_proj((torch.randn(2, 64)).bfloat16())                  # no job
-        _run(src, com, model, 3)                                                                # a step without a row_quant site
+        _run(src, com, model, 3)                                                                # a linear the plan names no site of
     finally:
         src.uninstall()
     assert sorted(com.got) == sorted(f"{ATTN}/{m}" for m in I8.KV_LABELS)
 
 
+def test_a_site_is_committed_at_every_engine_step_under_the_plans_op():
+    """The plan names a call boundary by its op, its fx node's count over a request dropped: a served step batches requests at
+    any step of their own, so the names are the same at each."""
+    com, model, plan = _Committer(), _Model(), _plan()
+    _classes, src = I8.attach(com, True, plan, (), explicit_classes=True, model=model)
+    src.install()
+    try:
+        for step in (0, 7):
+            com.got.clear()
+            _run(src, com, model, step)
+            assert {f"{QUANT_OP}/0", f"{QUANT_OP}/1"} <= set(com.got)
+    finally:
+        src.uninstall()
+    assert not com.errors and src.stats["quant_tensors"] == 4
+
+
 def test_the_call_boundary_source_leaves_int8_quantizer_boundaries_to_this_source():
-    man = _manifest()
-    assert CB.manifest_sites(man) == []
-    assert CB.unattached(man, []) and not CB.unattached(man, taps.attached(man))
-    assert I8.SHORT_NAME in taps.attached(man) and I8.SHORT_NAME not in taps.attached({"identities": []})
+    plan = _plan()
+    assert [I8.claim(c) for c in plan[:3]] == [I8.SHORT_NAME, I8.SHORT_NAME, None]
+    assert I8.quant_sites(plan) == {(0, LIN): QUANT_OP} and (41, LIN) in I8.quant_sites(plan)
+    assert I8.applies(plan) and not I8.applies([plan[2]])
 
 
-def test_x03_holds_the_quantizer_names_to_the_steps_sites():
-    src = I8.Int8Source(_Committer(), _Model(), I8.quant_sites(_manifest()), [])
-    names = {f"{LIN}/row_quant_0/0": 1, f"{LIN}/row_quant_0/1": 1, f"{LIN}": 1}
-    rest, bad = src.split_step_names(names, 0, False)
-    assert rest == {LIN: 1} and bad == {}
-    _rest, bad = src.split_step_names(names, 1, False)
-    assert bad == {f"{LIN}/row_quant_0/0": (1, 0), f"{LIN}/row_quant_0/1": (1, 0), f"{LIN}/row_quant_1/0": (0, 1), f"{LIN}/row_quant_1/1": (0, 1)}
+def test_x03_holds_the_quantizer_names_to_the_sites_at_every_step():
+    src = I8.Int8Source(_Committer(), _Model(), I8.quant_sites(_plan()), [])
+    names = {f"{QUANT_OP}/0": 1, f"{QUANT_OP}/1": 1, f"{LIN}": 1}
+    for step in (0, 1):
+        rest, bad = src.split_step_names(names, step, False)
+        assert rest == {LIN: 1} and bad == {}
+    _rest, bad = src.split_step_names({LIN: 1, f"{QUANT_OP}/0": 2}, 1, False)
+    assert bad == {f"{QUANT_OP}/0": (2, 1), f"{QUANT_OP}/1": (0, 1)}
+
+
+@pytest.mark.parametrize("edit,why", [
+    (lambda p: p[0].update(member="q"), r"row_quant/q: an Int8RowQuant call boundary's member is its output 0"),
+    (lambda p: p.append({**p[0], "op_path": f"{LIN}/row_quant_b"}), r"has two Int8RowQuant ops"),
+    (lambda p: p[0]["definitions"].append("Gemm_v1"), r"row_quant/0 is Int8RowQuant's and another Definition's")])
+def test_a_plan_the_source_cannot_tap_is_refused_by_name(edit, why):
+    plan = _plan()
+    edit(plan)
+    with pytest.raises(ValueError, match=why):
+        I8.quant_sites(plan)
 
 
 def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
     """Under a credited cache read the attention quantizes its windows with `verity_int8::kv_quant_window_batch`: the same
     `<attention>/kv_quant.0..3`, bit for bit, two requests at one step concatenated in batch order, each its own slice of the batch's
     padded results (the Commit left 4,096 of them unbound)."""
-    com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
+    com, model, man = _Committer(), _Model(), _plan()
     (_kc, _vc, _b, ks), (k, v) = _kv_args()
     rows_k, rows_v = torch.cat([k, k[:2]]), torch.cat([v, v[:2]])
     model.model.layers[0].self_attn.attn.forward = lambda: int8_ops.kv_quant_window_batch(rows_k, rows_v, [0, S], [S, 2], ks)
@@ -225,21 +264,23 @@ def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
     assert not com.errors and src.stats["kv_tensors"] == 4
 
 
-def test_a_manifest_without_int8_sites_refuses_the_source():
+def test_a_plan_without_int8_sites_refuses_the_source():
     with pytest.raises(SystemExit):
-        I8.attach(_Committer(), True, {"identities": []}, (), model=_Model())
+        I8.attach(_Committer(), True, [], (), model=_Model())
+    with pytest.raises(SystemExit):
+        I8.attach(_Committer(), True, _plan(quant=False)[:1], (), model=_Model())
 
 
-def test_the_binder_binds_the_kv_quantization_and_the_attentions_return_under_the_manifests_spelling():
-    """The manifest spells a hinted multi-port Call's Values `<hint>.<port>` (`query.required.member_name`) and the attention's return
-    `out`.  Committed as bare digits, `<attention>/0..3` were slots of the attention's return beside the return itself, so none of the
-    five bound (5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as
-    Int8KvQuant_v1's ports they bind by port, and the return binds its one remaining member."""
-    man = _manifest(steps=(0,))
-    src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(man))
-    assert src.kv == [ATTN]
+def test_the_seals_binder_places_the_kv_quantization_by_the_plans_member_names():
+    """The plan spells a hinted multi-port Call's Values `<hint>.<port>` and the attention's return `out`; the source commits
+    `<attention>/kv_quant.0..3`, so the binder of the plan's rows (`serve_seal.served_binder_of`, which carry no Definition and no
+    port) places each by its label and the return at its one remaining member.  Committed as bare digits, `<attention>/0..3` were
+    slots of the attention's return beside the return itself, and none of the five bound."""
+    plan, man = _plan(), _identities()
+    src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(plan))
+    assert src.kv == [ATTN] and not hasattr(src, "ports")
     names = [*(f"{ATTN}/{m}" for m in I8.KV_LABELS), ATTN]
-    bound = Binder.of_manifest(man, rank=0, ports=src.ports()).bind(0, names)
-    assert [(op, m, how) for op, m, _k, how in bound] == [*((ATTN, f"kv_quant.{p}", "port") for p in I8.KV_PORTS), (ATTN, "out", "slot")]
-    digits = Binder.of_manifest(man, rank=0).bind(0, [*(f"{ATTN}/{p}" for p in I8.KV_PORTS), ATTN])
+    bound = Binder(man["identities"], rank=0, ports={}).bind(0, names)
+    assert [(op, m, how) for op, m, _k, how in bound] == [*((ATTN, f"kv_quant.{p}", "label") for p in I8.KV_PORTS), (ATTN, "out", "slot")]
+    digits = Binder(man["identities"], rank=0, ports={}).bind(0, [*(f"{ATTN}/{p}" for p in I8.KV_PORTS), ATTN])
     assert {how for *_x, how in digits} == {"unbound"}

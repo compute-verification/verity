@@ -28,7 +28,7 @@ def test_an_honest_session_opens_one_live_coin_an_append_and_each_page_decodes_u
     assert a != b and len(a) == len(b) == codec.COIN_BYTES
     assert [coins.coin(o) for o in r.s.coins.opened(coins.APPEND)] == [a, b]
     assert r.s.coins.afters(coins.APPEND) == tuple(x[2].root for x in r.s._appends)
-    assert not {a, b} & {coins.coin(o) for o in r.s.coins.opened(coins.CHALLENGE) + r.s.coins.opened(coins.OPENINGS)}
+    assert not {a, b} & {coins.coin(o) for o in r.s.coins.opened(coins.CHALLENGE) + r.s.coins.opened(coins.SAMPLE)}
     assert [x[3] for x in r.s._appends] == [a, b]
     k = r.store.registration.key
     for j, own, other in [(j, a, b) for j in range(N, N + 4)] + [(j, b, a) for j in range(N + 4, N + 6)]:
@@ -75,7 +75,7 @@ def test_an_append_sent_again_flips_no_coin_and_rejects_the_session() -> None:
 def test_an_append_no_root_follows_is_a_failure_at_the_last_close() -> None:
     """An append's coin is used once a root follows it: the append joins that root's window.  One after window 0's
     last root joins window 1; one after the session's last root never joins a window, and closing the last window
-    is the session's `coin` rejection, before its openings coin is released."""
+    is the session's `coin` rejection, before its sample's coins are released."""
     r = Run(store(), windows=2)
     assert r.run() is None
     r.boundary()
@@ -87,14 +87,14 @@ def test_an_append_no_root_follows_is_a_failure_at_the_last_close() -> None:
     assert r.s.close(0) and r.s.verify(0, [r.prover.open(r.passes[0, i], q) for i, q in r.s.windows[0].draws]).accepted
     assert r.s.close(1) == audit.Verdict(1, False, "coin")
     assert r.s.coins.appends == 2 and r.s.windows[1].draws is None and r.s.outcome == "coin"
-    assert r.s.coins.opened(coins.OPENINGS)[0].index == 0 and len(r.s.coins.opened(coins.OPENINGS)) == 1
+    assert [o.index for o in r.s.coins.opened(coins.SAMPLE)] == list(range(r.s.coins.m))
 
 
 def test_a_session_that_reserves_no_append_coins_has_no_append_family_and_refuses_an_append() -> None:
     """A session reserves only the coins it will use (`coins.families`): with no append coins its layout has no append
     family, an append is the session's `coin` rejection with nothing opened, and asking its coins for one is refused."""
     r = Run(store(), appends=0)
-    assert r.s.commitment.families == ((coins.CHALLENGE, 2), (coins.OPENINGS, 2))
+    assert r.s.commitment.families == ((coins.CHALLENGE, 2), (coins.SAMPLE, 2 * r.s.coins.m))
     assert r.s.append(hashlib.sha512(b"page").digest(), 1) == audit.Verdict(0, False, "coin")
     assert r.s.coins.appends == 0 and r.s.coins.opened(coins.APPEND) == () and r.s.extent == N
     with pytest.raises(CoinError, match="no poub/append family"):

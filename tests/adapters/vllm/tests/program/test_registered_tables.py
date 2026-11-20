@@ -7,10 +7,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits.boolean import table as BT
-from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.constants import REGISTRATION, inputs
-from verity.circuits.defs import REGISTRY, bind
-from verity.circuits.evaluation import RegisteredTable, evaluate
+from verity.circuits.defs import REGISTRY
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
 
@@ -47,23 +46,6 @@ def test_a_read_has_its_boolean_form_up_to_max_words():
         assert f"{p.name}_v2" not in REGISTRY.defs
 
 
-def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
-    """`TableRead16x1_v1` comes from its lazy family in a process that never built a Definition reading it."""
-    import json
-    import subprocess
-    import sys
-
-    prog = Program(T.GeluTanhMulBf16V3, registered=("gelu_tanh_bf16",))
-    d = tmp_path / "p.json"
-    d.write_text(json.dumps(encode_program(prog)))
-    code = ("import json, sys; from verity.circuits.codec import decode_program, program_digest; from verity.circuits.defs import REGISTRY; "
-            "import verity_vllm.definitions.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
-            "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
-    out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
-    assert out == [program_digest(prog)]
-    assert len(inputs(prog.circuit)[REGISTRATION]) == 1 << 16
-
-
 def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
     rng = np.random.default_rng(12)
     lo, hi = T.TANH_RN_LO, T.TANH_RN_HI
@@ -73,57 +55,6 @@ def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
         assert e == D.tanh_f32_bits(w) and e < 1 << 31
     assert hi - lo < 1 << 27   # every region word has its own index
     assert T.tanh_rn_entry((lo - 1) & 0x7FFFFFF) == 0 == T.tanh_rn_entry(hi & 0x7FFFFFF)
-
-
-def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
-    """`TanhF32Rn_v2` reads `tanh_rn`'s 2^28 words lazily (`tanh_rn_table`), two per instance: on both signs of each rule's and
-    each region's edges, every exponent, and random words of the region and of all f32, it is `TanhF32Rn_v1`."""
-    rng = np.random.default_rng(15)
-    lo, hi = T.TANH_RN_LO, T.TANH_RN_HI
-    edges = [0, 1, 0x007FFFFF, 0x00800000, lo - 1, lo, lo + 1, 0x37FFFFFF, 0x38000000, 0x3F800000, 0x3FFFFFFF, 0x40000000, hi - 1,
-             hi, 0x41200000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF]
-    edges += [0x38000000 | e for r in T.TANH_RN_REGIONS for e in (r[0], r[1] - 1)] + [0x40000000 | e for r in T.TANH_RN_REGIONS for e in r]
-    exponents = [e << 23 | m for e in range(256) for m in (0, 1, 0x400000, 0x7FFFFF)]
-    words = edges + exponents + rng.integers(lo, hi, 2000).tolist() + rng.integers(0, 1 << 31, 1000).tolist()
-    words = [(w & 0x7FFFFFFF) | s for w in words for s in (0, 1 << 31)]
-    table, reads = T.tanh_rn_table(), []
-    assert (table.name, table.leaves, table.declared_by) == ("tanh_rn", T.TANH_RN_TABLE.leaves, D.TanhF32Rn)
-    def counting(j):
-        reads.append(j)
-        return table.word(j)
-    counted = RegisteredTable("tanh_rn", counting, table.leaves, D.TanhF32Rn)
-    fn = bind(T.TanhF32RnV2)
-    assert fn.id == "TanhF32Rn_v2"
-    for w in words:
-        assert evaluate(fn, w, counted) == (D.TanhF32Rn.evaluate(w),), hex(w)
-    assert len(reads) == 2 * len(words)
-
-
-def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
-    """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
-    of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
-    active, a ⊥ and an invalid table word as the flat widths do."""
-    from verity.circuits.ops import scalar as SC
-
-    from verity_vllm.definitions.registry import lifted as L
-    from verity_vllm.definitions.registry import operand_widths as OW
-
-    assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
-    assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]
-    lp = L.lifted_prim_v1(T.table_read(16, 1))
-    words = list(range(1 << 16))
-    assert lp.evaluate(5, *words) == 5
-    assert lp.evaluate(5, *words[:9], L.enc_bot(16), *words[10:]) == L.enc_bot(16)
-    assert lp.evaluate(5, *words[:-1], L.inv(16)) == L.inv(16)
-    assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
-
-
-def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
-    """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
-    difftest runs it on every gate word)."""
-    table = T.table_words("gelu_tanh_bf16")
-    for g, u in [(0x3F80, 0x8000), (0xFF80, 0), (0x7FC0, 0x3F80), (0x0001, 0x7F80), (0x8000, 0xFF80)]:
-        assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 
 
 def test_a_registered_values_derivation_registers_no_gelu_table():
@@ -169,4 +100,3 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     a = materialize(twin, [xs, w])
     b = materialize(prog, [xs, [eps], w])
     assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
-

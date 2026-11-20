@@ -43,12 +43,8 @@ to Python.
 * a sampled leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
   `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
   combine): each known port's rows' words.
-* a sampled leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
-  `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
-  `r`, `c`, `k`, `lane` or null, `known` an object of ports); `leaf_own` (those records, the tile and
-  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
-  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its sample, a reject where it
-  refuses.
+* a sampled leaf's sample policy (`PouwWindow.Lanes.checkFull`, by `tests/test_reg_file.py`): `full_draw` (`record`, a
+  session record's text): `true` where `checkFull` accepts its sample, a reject where it refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -185,35 +181,6 @@ def knownRowsJson (j : Json) : Except String Json := do
     (fun _ => .empty) lane
   pure (Json.mkObj (ks.toList.map fun (port, rows) => (port, toJson (rows.map (·.1)))))
 
-/-- The statement: lane `lane`, or the combine where `lane` is null. -/
-def leafStmt (j : Json) : Except String (Option Nat) :=
-  match field? j "lane" with
-  | none | some .null => pure none
-  | some _ => some <$> nat j "lane"
-
-/-- The unit's placement: `place`'s `{value: [table, base]}`, each value it doesn't name its own table from row 0
-(`Lanes.selfPlace`), every value so where `place` is absent or null. -/
-def leafPlace (j : Json) : Except String (String → String × Nat) := do
-  match field? j "place" with
-  | none | some .null => pure Lanes.selfPlace
-  | some (.obj kvs) =>
-    let ps ← kvs.toArray.toList.mapM fun (v, e) => match e with
-      | .arr #[.str t, b] => do
-        let some b := (b.getNat?).toOption | throw s!"value {v}'s base row is not a natural number"
-        pure (v, t, b)
-      | _ => throw s!"value {v}'s placement is not [table, base]"
-    pure fun v => (ps.lookup v).getD (Lanes.selfPlace v)
-  | some _ => throw "the input's place is not an object"
-
-/-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced` and the
-placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known`. -/
-def registeredFileJson (j : Json) : Except String Json := do
-  let T ← leafTile j
-  let _ ← leafPorts j
-  let rs ← Lanes.roots? (← get j "registration") (← get j "produced") T.lanes (2 * T.nw) Flock.HmRow.ROW_SCHEMA_V2
-  let .obj known ← get j "known" | throw "the input's known is not an object"
-  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList
-
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
   ("floor_point", ofN floorPoint?),
@@ -295,11 +262,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
       [("port", toJson p), ("words", toJson w), ("seed", toJson sd), ("derivation", toJson d)]).toArray)]),
   ("n_digits", fun j => do pure (toJson (Lanes.nDigits (← nat j "ks")))),
   ("known_rows", knownRowsJson),
-  ("registered_file", registeredFileJson),
-  ("leaf_own", fun j => do
-    Lanes.leafOwn? (← get j "registration") (← get j "produced") (← get j "file") (← leafPlace j) (← leafTile j)
-      (← leafStmt j) Flock.HmRow.ROW_SCHEMA_V2
-    pure (Json.bool true)),
   ("full_draw", fun j => do
     Lanes.checkFull (← str j "record")
     pure (Json.bool true)),

@@ -118,9 +118,6 @@ DECLARED: dict[str, str] = {
     "WAKE_GUARD_STATE": "the budget guard's state a wake reads",
     "WAKE_MACHINES_D": "the machine registry a wake reads",
     "NEBIUS_BIN": "the Nebius CLI a wake runs",
-    # read by the node scripts that run alone, and by their tests
-    "VY_BUNDLE_SIZES": "the pacer's learned bundle sizes",
-    "VY_PROVER_CPUS": "the CPUs node 1's prover runs on",
     # infra's control pod
     "AGENT_WATCH_OFFSET": "the agent watch relay's offset file (default ~/agent-watch/offset)",
     "AGENT_WATCH_ON_POD": "set: the relay runs on the guard host itself, so it reads without ssh",

@@ -111,7 +111,6 @@
       ],
       "linear": "PRF",
       "owns": [
-        "tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0/",
         "security/Proofs/Flock/",
         "security/Proofs/Core/",
         "security/Definitions/Core/",
@@ -241,14 +240,12 @@
       "owns": [
         "adapters/",
         "benchmarks/served_units/",
-        "benchmarks/unit_block/",
         "benchmarks/served_commit/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "calibration/native_peak/",
         "calibration/tc_probe/",
         "calibration/tc_probe_fp4/",
-        "benchmarks/bool_build_cost/",
         "calibration/f32_exhaustive/",
         "benchmarks/mempool/",
         "verity/circuits/",
@@ -314,7 +311,6 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
-        "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
@@ -671,7 +667,6 @@
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
         "calibration/attester_timing/",
-        "benchmarks/scan_cost/",
         "benchmarks/attester_load/",
         "security/Definitions/Certifier.lean",
         "security/Definitions/Certifier/NetWitness.lean",
@@ -945,7 +940,6 @@
       "usergroup": "S0CAYGG5BDW",
       "linear": "HASH",
       "owns": [
-        "benchmarks/hash/",
         "benchmarks/kernels/"
       ],
       "branch_suffixes": [

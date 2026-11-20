@@ -78,6 +78,12 @@ def fieldIx (t : Ty) (o : Nat) : Option Nat :=
     (if acc.2.1 ≤ o && o < acc.2.1 + ty.leaves && acc.1.isNone then some acc.2.2 else acc.1,
       acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
 
+/-- The return field of `t` that starts at leaf `o`: its index and leaves. -/
+def fieldSpan (t : Ty) (o : Nat) : Option (Nat × Nat) :=
+  ((fieldsOf t).foldl (fun (acc : Option (Nat × Nat) × Nat × Nat) ty =>
+    (if acc.2.1 == o && acc.1.isNone then some (acc.2.2, ty.leaves) else acc.1,
+      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
+
 /-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf (`Lane.leafAt`, as `Part.get`'s grid). -/
 def partLeafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × Int) :=
   let g := lanes.length

@@ -119,6 +119,55 @@ def scanTmpl : V Tmpl.Tmpl := do
       | .error _ => false
   | .error _ => false
 
+/-! ## A batch over listed references
+
+`Perm_v1`: a batch of four `Xor2_v1` over axis 1 of `Array<2, Array<4, Value<1>>>`, member `m` reading references `m`
+and `4 + m` of its argument, as a hand-written Boolean body's levels list theirs: all explicit, or affine and explicit
+parts mixed. Its outputs on all 16 inputs are the XORs its references name, and its template Definition's `CALL`s are
+the pieces, within `Lower.callBound`. -/
+
+def xorDef : Program.Defn :=
+  { key := "Xor2_v1", id := "Xor2_v1", prim := true, params := #[("x", .array 2 (.value 1))], ret := .value 1, gates := 1,
+    paramLeaves := 2, outLeaves := 1 }
+
+def pairsTy : Program.Ty := .array 2 (.array 4 (.value 1))
+
+def permDef (ps : Array Program.Part) : Program.Defn :=
+  { key := "Perm_v1", id := "Perm_v1", prim := false, params := #[("a", .array 4 (.value 1))], ret := .array 4 (.value 1),
+    body := { params := #[("a", .array 4 (.value 1))], retType := .array 4 (.value 1),
+              nodes := #[{ form := .batch, fn := 0, n := 4, axes := #[some 1], out := .array 4 (.value 1),
+                           args := #[{ ty := pairsTy, seq := Program.Seq.ofParts ps, dims := pairsTy.axisDims 1 }] }],
+              ret := Program.Seq.ofParts #[.affine false 0 0 4], offsets := #[] },
+    gates := 4, paramLeaves := 4, outLeaves := 4 }
+
+def permTmpl (ps : Array Program.Part) : V Tmpl.Tmpl :=
+  Lower.lower { defs := #[xorDef, permDef ps], index := {}, root := 1, programFn := "", sha512 := ByteArray.empty } 1
+    #[16] #[16]
+
+def pa (j : Nat) : Program.Ref := ⟨true, 0, j⟩
+
+def MIXED : Array Program.Part := #[.affine true 0 0 2, .explicit #[pa 3, pa 2], .affine true 0 0 4]
+def LISTED : Array Program.Part := #[.explicit #[pa 1, pa 2, pa 3, pa 0, pa 0, pa 0, pa 1, pa 2]]
+
+/-- Every input: member `m`'s output is the XOR of the bits its references `m` and `4 + m` name; and the template
+Definition's `CALL`s number `calls`, within the bound. -/
+def permOk (ps : Array Program.Part) (calls : Nat) : Bool := match permTmpl ps with
+  | .ok t =>
+    let refs := (Program.Seq.ofParts ps).toArray
+    (t.defs.getD (t.root - 1) default).calls.size == calls && calls ≤ Lower.callBound (permDef ps) &&
+    (List.range 16).all fun x => match outputs t 4 (bits x 4) with
+      | .ok bs => (List.range 4).all fun m => bs[m]! == (x.testBit refs[m]!.j != x.testBit refs[4 + m]!.j)
+      | .error _ => false
+  | .error _ => false
+
+-- the mixed argument: members 0 and 1 one stepping `CALL`, members 2 and 3 one each
+#guard permOk MIXED 3
+#guard permOk LISTED 4
+-- a strided part is refused by name
+#guard match permTmpl #[.strided true 0 0 4 0 1 8] with
+  | .error e => e == "a batch argument stepping through strided or grid references"
+  | .ok _ => false
+
 -- a template the reader refuses is refused under the self-check's own name, not as a refusal of the input
 #guard match tmpl with
   | .ok t => match Lower.selfCheck { t with root := t.defs.size } with

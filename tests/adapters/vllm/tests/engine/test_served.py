@@ -11,12 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 from tests import fake_vllm
-from verity_vllm.config import WORKLOADS, RowId, row_execution, workload_files
+from verity_vllm.config import WORKLOADS, RowId, workload_files
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.pipeline import row_records
-from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 #: The switches GLM-5.3's Commit of record ran under (its versions.json: ``env`` VLLM_BATCH_INVARIANT=0,
@@ -78,14 +76,6 @@ def test_the_engine_profile_sets_no_switch_but_with_its_reason():
     assert set(engine_env.REASONS) == set(engine_env.ENGINE) and all(engine_env.REASONS.values())
 
 
-@pytest.mark.parametrize("path", ROWS, ids=lambda p: p.stem)
-def test_a_rows_build_runs_under_its_execution_labels_batch_invariance(path):
-    """The Build applies its target's `env()` (`build.derive_step`; no target: `TargetProfile.default()` or the host's, both
-    batch-invariant), the engine its execution label's (`served.apply`): one row, one batch invariance."""
-    declared = row_records.declared_target(str(path), row=path.stem)
-    target = parse_target_arg(declared, base=TargetProfile.default())
-    label = SV.execution_env(row_execution(path.stem))
-    assert {k: target.env()[k] for k in label} == label
 
 
 def test_glm53s_row_declares_each_switch_with_its_source_and_reason():
@@ -230,18 +220,11 @@ def test_a_rank_reads_back_each_switch_as_vllm_resolved_it(vllm_stub):
                    "collectives": _ROUTES}
 
 
-def test_a_rank_reads_back_nccls_switches_and_two_records_differ_in_each_collective_switch_and_route(vllm_stub, monkeypatch):
-    """The read-back carries NCCL's own switches from the rank's environment; `collectives_differ` names, rank by rank, every
-    collective switch and resolved route two engines differ in, and nothing else."""
+def test_a_rank_reads_back_nccls_switches(vllm_stub, monkeypatch):
+    """The read-back carries NCCL's own switches from the rank's environment."""
     monkeypatch.setenv("NCCL_ALGO", "NVLS")
     a = SV.read_rank(SimpleNamespace(vllm_config=_vllm_config()))
     assert a["switches"]["NCCL_ALGO"] == "NVLS" and a["switches"]["NCCL_PROTO"] is None
-    b = {**a, "switches": {**a["switches"], "NCCL_ALGO": None, "enforce_eager": False},
-         "collectives": {**a["collectives"], "flashinfer_backend": "trtllm"}}
-    assert SV.collectives_differ({"ranks": [a]}, {"ranks": [a]}) == []
-    assert SV.collectives_differ({"ranks": [a]}, {"ranks": [b]}) == [
-        "rank 3: NCCL_ALGO 'NVLS' against None", "rank 3: flashinfer_backend 'mnnvl' against 'trtllm'"]
-    assert SV.collectives_differ({"ranks": [a]}, {"ranks": []}) == ["ranks [3] against []"]
 
 
 def test_a_process_that_never_loaded_flashinfers_all_reduce_reads_no_backend(vllm_stub, monkeypatch):

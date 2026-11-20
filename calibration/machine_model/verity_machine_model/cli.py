@@ -4,11 +4,10 @@ Each command is a module of `verity_machine_model.commands`, whose docstring is 
 prints them all. This module only dispatches.
 
 A command that reads one device's model is given the device, and refused without one: `--device sm_NN` (before the
-command, or on `eps`, `redteam` and `margin`) reads that device's directory (DESIGN.md "Devices"), and `--card SKU`
+command, or on `eps`) reads that device's directory (DESIGN.md "Devices"), and `--card SKU`
 (before the command) the device whose model is that card's (its `model.toml`'s `card`), refusing a card no device's
 model is. `--data DIR` (before the command) reads another data directory, such as a copy of a device's with a candidate
-row. `cover`, `headline` and `lean-headline` read every device they cover and take none. `solve` exits 1 when the vector fails its check or doesn't
-reproduce a published number, and `solve` and `attacks` exit 1 on a device no price vector is solved on.
+row. A command whose module sets `READS_DEVICE = False` reads every device it covers and takes none.
 """
 from __future__ import annotations
 

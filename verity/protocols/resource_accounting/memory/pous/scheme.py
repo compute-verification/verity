@@ -2,9 +2,11 @@
 and ``wipe``.
 
 **PoUS** is decided by `PousCheck.RunProtocol.protocol` (`verifier/check/PousVerifier/RunProtocol.lean`), whose
-`Core.Account` row is memory held in the GPUs' HBM, verified from below. It adds no block to the registered circuit yet:
-its setup unit, `PousP2SetupCheck_v1` (`prover/setup_circuit.py`), is in no window, and what it certifies is a share ρ of
-the store `C*`, not a cost per block, so it states what it requires of the proof layer instead (`requires`). Its
+`Core.Account` row is memory held in the GPUs' HBM, verified from below. Its blocks are the store's: the setup's C
+(`prover/window.py`'s `Setup`) is one unit of `PousP2SetupCheck_v2` (`prover/setup_circuit.py`) a store block, each
+costing the bits one store block holds (`P2Params.w`, the unit's static W), which the verifier reads from the registered
+C; the session's units credit nothing. What its verdict certifies is still a share ρ of the store `C*` from its own
+arithmetic (`verifier.period.certify`), and it states what it requires of the proof layer (`requires`). Its
 certificate is P2's at the store's block count (`verifier.period.certificate`): up to `2^23` blocks
 `Pous.SecurityProofs.P2SlackFamilyUncond`, in abstract M1 with no named assumption; above, `periodHeldAt`, which takes
 `P2RingRoundSecureWide` and `RingDeviceAt`. Onsite's soundness takes PoUS's target, `PousSound`, as a premise. A device's
@@ -29,8 +31,11 @@ challenger's binding, and its attach (`prover/wipe_served.py`) runs the whole wi
 
 from __future__ import annotations
 
+import re
+import shlex
 from collections.abc import Mapping
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 from verity.commitments import domains
@@ -40,7 +45,9 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+from verity.protocols.resource_accounting.scheme import (Block, Charge, Executable, Lacks, Launch, Order, Reading, Scheme,
+                                                         register)
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -95,12 +102,11 @@ def _wipe_reading(row: Mapping[str, Any]) -> Reading:
 
 
 POUS = register(Scheme(
-    name="pous",
+    name=CS.COMPONENT,
     messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
-    blocks=Lacks("the memory attester's session answers and checks its challenges outside the workload's circuit: no "
-                 "block of the circuit carries its cost"),
+    blocks=(Block("PousP2SetupCheck_v2", lambda shape: P2.P2Params(shape["W"], shape["C0"], 1).w),),
     assumptions=("Verity.Vocab.PousSound", TRUSTED_DEVICE, "Pous.P2.Assumptions.P2RingRoundSecureWide",
                  "Pous.Period.RingDeviceAt"),
     log=(Order("weights", "salt"), Order("store", "challenges")),
@@ -113,7 +119,7 @@ POUS = register(Scheme(
     hooks=("declared", "memory", "blocks"),
     requires={
         "one-labelling": "C*'s own tree over the memory attester's row digests (`VerifierKey.from_row_digests`); "
-                         "`PousP2SetupCheck_v1` is in no window, and setup's tie decodes C* in Python each period",
+                         "`PousP2SetupCheck_v2` is in no window, and setup's tie decodes C* in Python each period",
         "log-order": "its own salt, `setup.sample_salt(source, commitment)` after the commitment to W, and the memory "
                      "attester's coin tree, its session header bound to setup's root",
         "log-times": "the memory attester's own clock: each answer within Δ + RTT of its index, in the rounds it signs",
@@ -131,7 +137,10 @@ POUS = register(Scheme(
     colocated=(),
     needs=frozenset({"store"}),
     depends=(),
-    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
+                            entry="verity.protocols.resource_accounting.memory.pous.scheme:launch_pous",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/verifier/check", "pous-run-protocol"),))},
+    reads={},
     answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="space",
@@ -155,11 +164,11 @@ def _wipe_check_settings(values: Any) -> str | None:
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
     from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
-    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER})
+    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER, "development_of": period.development_of})
 
 
 WIPE = register(Scheme(
-    name="wipe",
+    name=WP.COMPONENT,
     protocol=domains.WIPE_PROTOCOL,
     resource="memory",
     blocks=Lacks("the wipe runs before the engine loads, outside the workload's circuit: no block of the circuit "
@@ -189,7 +198,9 @@ WIPE = register(Scheme(
     colocated=(),
     needs=frozenset(),
     depends=(),
-    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
+                            entry="verity.protocols.resource_accounting.memory.pous.scheme:launch_wipe",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/attester/lean", "wipe-protocol"),))},
     answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="wipe",
@@ -205,4 +216,62 @@ WIPE = register(Scheme(
                     Lacks("not a kernel scheme")),
 ))
 
-__all__ = ["POUS", "WIPE"]
+#: the scripts' one flag for a development run's attester: on the workload's machine, under a key made for the run
+RUN_KEYS = "--run-keys"
+DEVELOPMENT = {"DEVELOPMENT": "1"}
+WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
+POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
+ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
+#: served_wipe.sh's variable for each binding of the wipe's memory attester
+_WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
+#: served_piece.py's flag for each binding of PoUS's memory attester
+_POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
+
+
+def onsite_command(name: str) -> str:
+    """The tree's command for the onsite piece run through ``name`` (``WIPE_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``):
+    `ONSITE_PIECES`'s ``ONSITE_<name>``, the one place that names it, to which its ``onsite_piece_commands`` holds
+    every caller's (any other value is refused by name). LookupError where the file names none."""
+    text = (Path(__file__).resolve().parents[5] / ONSITE_PIECES).read_text()
+    if not (m := re.search(rf"^ONSITE_{name}='([^']*)'$", text, re.M)):
+        raise LookupError(f"{ONSITE_PIECES} names no ONSITE_{name}")
+    return m.group(1)
+
+
+def _wipe_hooks(cfg, params, bound, pinned):
+    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh): the tree's command
+    (`onsite_command`). The key is the configuration's pin alone, as WIPE_KEY_SHA512, which the runner sets over the
+    node's environment, so neither the environment nor a binding gives another; with no pin served_wipe.sh refuses.
+    Unbound, the key is the run's (`RUN_KEYS`, the tree's command's one other form), and no pin is passed."""
+    if "address" not in bound:
+        return {"WIPE_CMD": f"{onsite_command('WIPE_CMD')} {RUN_KEYS}", **DEVELOPMENT}
+    return {"WIPE_CMD": onsite_command("WIPE_CMD"), "WIPE_KEY_SHA512": "".join(pinned),
+            **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
+
+
+def _pous_hooks(cfg, params, bound, pinned):
+    """PoUS's prover after the workload (POUS_CMD, served_piece.sh): the memory attester's timed reads answered from
+    the served weights held as P2's C* on the card, with the memory attester on the workload's machine in a development
+    run. The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
+    trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
+    words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
+             "--rounds", str(params["challenges"]),
+             *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
+    return {"POUS_CMD": onsite_command("POUS_CMD"), "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
+            **({} if "address" in bound else DEVELOPMENT)}
+
+
+def launch_pous(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """PoUS's prover piece (its `Launch.entry`): its hooks and the scripts they run. It launches and collects, and
+    decides no verdict."""
+    return _pous_hooks, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT)
+
+
+def launch_wipe(declaration: Scheme) -> tuple[Any, tuple[str, ...]]:
+    """The wipe's prover piece (its `Launch.entry`): its hooks and the script they run. It launches and collects, and
+    decides no verdict."""
+    return _wipe_hooks, (WIPE_SCRIPT,)
+
+
+__all__ = ["ATTESTER_SCRIPT", "DEVELOPMENT", "ONSITE_PIECES", "POUS", "POUS_SCRIPT", "RUN_KEYS", "WIPE", "WIPE_SCRIPT",
+           "launch_pous", "launch_wipe", "onsite_command"]

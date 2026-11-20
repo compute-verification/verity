@@ -253,8 +253,7 @@ def tick_corpus(root, name: str, client: list[dict]):
     (d / "client.jsonl").write_text("".join(json.dumps(c) + "\n" for c in client))
     (d / "meta.json").write_text(json.dumps({"rate": 4.0, "why": "test", "unfinished": 0, "server_argv": []}))
     (d / "server.log").write_text("")
-    (root / "plan.jsonl").write_text('{"i": 0}\n{"i": 1}\n')
-    (root / "meta.json").write_text(json.dumps({"model": "m", "requests": 2, "eos_token_ids": [7], "admit": "tick",
+    (root / "meta.json").write_text(json.dumps({"model": "m", "eos_token_ids": [7], "admit": "tick",
                                                 "tick": TICK, "traces": {name: {}}}))
     return d
 

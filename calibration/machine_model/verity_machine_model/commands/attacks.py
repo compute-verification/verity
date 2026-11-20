@@ -1,5 +1,6 @@
 """machine-model attacks [NAME] [--design D] [-n N]
-                                          the N cheapest attacks of each design (or of D) at NAME's prices"""
+                                          the N cheapest attacks of each design (or of D) at NAME's prices;
+                                          exits 1 on a device no price vector is solved on"""
 from __future__ import annotations
 
 import argparse

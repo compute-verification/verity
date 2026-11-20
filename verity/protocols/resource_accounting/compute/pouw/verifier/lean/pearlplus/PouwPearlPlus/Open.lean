@@ -5,10 +5,10 @@ public import PouwPearlPlus.Grid
 public import Flock.Bytes
 
 /-!
-# The prover's openings from a pass's files (`verify_run.Opened`), and the verdict as JSON
+# The prover's openings from a pass's files (`opened.Opened`), and the verdict as JSON
 
-`opening` reads each opened tile's rows, leaf and y rows from the pass's files as `verify_run.Opened` does: each file is
-held to its manifest entry's size and, where the entry has one, its SHA-256 (`verify_run.Files`); rows are BF16
+`opening` reads each opened tile's rows, leaf and y rows from the pass's files as `opened.Opened` does: each file is
+held to its manifest entry's size and, where the entry has one, its SHA-256 (`opened.Files`); rows are BF16
 widened to the committed FP32 words, each followed by its hm96 salt, the opened leaf's 192 bytes from the salts the pass
 kept beside the rows (`saltOf`: a call's `salts` for A, its fixed operand's `salts` for B, the manifest's `salts_t` for the
 transcript, its y's `salts` for y, leaf i's at 192 i), and a path is read from a tree file laid out as the device writes it
@@ -26,10 +26,10 @@ namespace PouwVerifier.PearlPlus
 
 open Lean PouwCommit
 
-/-- `verify_run.pow2`: `1 << (n - 1).bit_length()`. -/
+/-- `opened.pow2`: `1 << (n - 1).bit_length()`. -/
 def pow2 (n : Nat) : Nat := if n ≤ 1 then 1 else 2 ^ ((n - 1).log2 + 1)
 
-/-- `verify_run.opening`: position `pos`'s path in a tree file of `count` positions. -/
+/-- `opened.opening`: position `pos`'s path in a tree file of `count` positions. -/
 def pathOf (tree : ByteArray) (count pos : Nat) : List ByteArray := Id.run do
   let mut path := []
   let mut off := 0
@@ -51,7 +51,7 @@ def f32Row (data : ByteArray) (k i : Nat) : ByteArray := Id.run do
     out := out.push 0 |>.push 0 |>.push data[base + 2 * j]! |>.push data[base + 2 * j + 1]!
   return out
 
-/-- `verify_run.f32_row` on a y file: row `i` is the words the file holds of it (`data[2ki : 2k(i + 1)]`, widened), fewer
+/-- `opened.f32_row` on a y file: row `i` is the words the file holds of it (`data[2ki : 2k(i + 1)]`, widened), fewer
 than `k` where the file ends inside the row or before it, so the verifier sees the row the prover's file holds and not one
 padded to the call's width; half a word is numpy's refusal. -/
 def f32Slice (data : ByteArray) (k i : Nat) : Except String ByteArray := do
@@ -86,7 +86,7 @@ def filesOf (man : Json) (p : Pass) (tid : Nat) : List Json := Id.run do
   return spec u "rows" ++ spec u "tree" ++ spec u "salts" ++ spec wt "rows" ++ spec wt "tree" ++ spec wt "salts" ++
     spec man "leaves" ++ spec man "tree_t" ++ spec man "salts_t" ++ spec y "rows" ++ spec y "tree" ++ spec y "salts"
 
-/-- `verify_run.Files`: the bytes `data` read at manifest entry `spec`'s path, held to its `bytes` and, where it has one,
+/-- `opened.Files`: the bytes `data` read at manifest entry `spec`'s path, held to its `bytes` and, where it has one,
 its `sha256`. -/
 def held (spec : Json) (data : ByteArray) : Except String ByteArray := do
   let key := (str? spec "path").getD ""

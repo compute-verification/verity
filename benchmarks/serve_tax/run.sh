@@ -129,7 +129,7 @@
 # rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
 # that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
 # counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
-# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; glm53-standin
+# checkpoint on one GPU; glm53 GLM-5.3's on eight; glm53-standin
 # its stand-in on one, a directory under /tmp of the cut config and that checkpoint's tokenizer; llama8b,
 # qwen3-30b and llama32-1b their pinned snapshots under HF_HOME on one. GPU_LEASE_ON and GPU_LEASE_CORES are the
 # lease's --on and --cores. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's

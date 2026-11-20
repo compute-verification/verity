@@ -10,21 +10,25 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments.domains import CERTIFIER_PROTOCOL
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 
 
 def lean_check(exe: str, case: Mapping[str, Any], d: Path,
                run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
     """``EXE check`` (``network-period``'s, or ``network-rows``') on the case's three files in ``d``: its answer (its
-    last line). ``run`` runs it with its output captured as text (`subprocess.run`'s ``capture_output=True, text=True``
-    by default)."""
+    last line). ``run`` runs it with its output captured as text (`lean_child.run` in `lean_child.lean_env` by
+    default). `lean_child.LeanPanic` where it wrote a panic line, whatever it answered, and `lean_child.LeanExit` where
+    it was killed or ended with a status `Core.Protocol.main` does not document, whichever ``run`` ran it."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
     argv = [exe, "check", *map(str, files)]
-    p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
-    if p.returncode not in (0, 1, 2) or not p.stdout.strip():
+    p = run(argv) if run else LC.run(argv, ok_statuses=LC.CHECK_EXITS)
+    LC.refuse_panic(p.stderr)
+    LC.refuse_exit(p.returncode, LC.CHECK_EXITS)
+    if not p.stdout.strip():
         raise SystemExit(f"{Path(exe).name} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 

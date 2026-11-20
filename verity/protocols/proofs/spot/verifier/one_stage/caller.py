@@ -95,7 +95,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None,
+          coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
+          commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = ()) -> Verdict:
     """The caller's codes for `rec` against `docket.check`'s arguments (`Caller.check`). The arguments it doesn't read
     are `docket.check`'s, so a caller hands both the same."""
     c = _Collect()
@@ -105,6 +107,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     supplied, outputs, schemas = R.pool_values(pool, program, supplied, outputs, schemas, log)
     supplied = R.with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
+    sup = {**sup, **G.marked_rows(program, registered or {}, sup, coins, commitments, released, len(log),
+                                  [bytes.fromhex(k) for k in attester_keys])}
     v2 = bool(registered) or bool(R._certified(certified, registered or {}, sup))
     pins = R._pins(pinned, registered or {}, sup)
     outs = R._outputs(outputs, registered or {}, sup, pins, log)

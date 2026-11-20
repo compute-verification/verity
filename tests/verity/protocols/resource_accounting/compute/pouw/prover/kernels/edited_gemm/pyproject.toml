@@ -7,9 +7,9 @@ pythonpath = ["../../../../../../../../../verity/protocols/resource_accounting/c
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# d2sgemm_ref.py's tests read floored_gemm's
-# derive.py (tile_receipts) and the ref.py it loads; cgemm_ref.py's also read the construction it recomputes a tile
-# through, co_words.py, beside it. test_egemm_ref.py holds egemm_ref.py to the receipt folds'
+# cgemm_ref.py's and egemm_ref.py's tests read floored_gemm's derive.py (tile_receipts) and the ref.py it loads;
+# cgemm_ref.py's also read the construction it recomputes a tile through, co_words.py, beside it. test_egemm_ref.py
+# holds egemm_ref.py to the receipt folds'
 # reference: `verity.protocols.resource_accounting.compute.pouw.verifier.receipts.receipt_conform`'s check, with the receipt_folds.py and vectors.json it
 # reads and the packages above it, which import nothing. egemm_ref.py loads the r9 twin from the receipts' fixture.
 inputs = ["verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/derive.py", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/ref.py",

@@ -75,7 +75,7 @@ def test_the_device_block_path_reads_the_exact_invocation_at_its_dev_off_too():
         b = rd(0, f"{ROT}/0{OC.ORDINAL_SEP}{2 * L + 1}", W * 2, W * 4)          # request r1's row of invocation L (ordinal 2L+1)
         assert np.frombuffer(b, dtype=np.uint16).tolist() == (np.arange(W) + 1000 * L + 10).tolist(), L
     assert rd.stats["reads"] == 4 and rd.stats["failed"] == 0
-    st = OP.CommittedStore.of_record(bmap, rd, manifest)
+    st = OP.CommittedStore.of_record(bmap, rd, OP.alias_table(manifest))
     for L in range(4):
         op = ROT if L == 0 else f"model.layers.{L}.self_attn.rotary_emb"
         w, _ = st.words("r0", 0, op, "0", 0, W)
@@ -84,7 +84,7 @@ def test_the_device_block_path_reads_the_exact_invocation_at_its_dev_off_too():
 
 def test_layer_l_reads_its_own_invocations_words_through_the_alias_table_on_a_real_shaped_binding_map():
     rd, bmap, manifest = _record()
-    st = OP.CommittedStore.of_record(bmap, rd, manifest)
+    st = OP.CommittedStore.of_record(bmap, rd, OP.alias_table(manifest))
     assert st.name_inv[(0, f"{ROT}/0")] == 4 and st.name_inv[(0, "model.layers.1.self_attn.q_norm/out")] == 1
     for L in range(4):
         op = ROT if L == 0 else f"model.layers.{L}.self_attn.rotary_emb"

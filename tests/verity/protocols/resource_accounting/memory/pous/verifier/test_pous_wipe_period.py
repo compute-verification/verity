@@ -551,13 +551,14 @@ def test_the_verifier_trusts_the_pinned_key_alone() -> None:
     assert other.report == pinned.report | {"key_pinned": False} and other.case["params"]["trusted"] == []
 
 
-def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_path) -> None:
+def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_path, monkeypatch) -> None:
     """The wipe attached with a pin of another key than the one its challenger, on its own host, signs under: the
     session, honest in every read, is rejected, by a case that trusts no key, and the record and the summary say whose
     key it was and that it wasn't the pinned one."""
     other = hashlib.sha512(b"another key").hexdigest()
     _, side_of = _side(tmp_path, {})
-    got, private = _attach(tmp_path, side_of, pins=[side_pin()[0] | {"key-sha512": other}])
+    wipe_judge.stand_in(monkeypatch)
+    got, private = _attach(tmp_path, side_of, pins=[side_pin()[0] | {"key-sha512": other}], judge="wipe-protocol")
     s = got.summary()
     assert (s["verdict"], s["reason"], s["public"]) == ("reject", UNTRUSTED, None)
     assert (s["key_pinned"], s["key_sha512"]) == (False, wipe_side.key_sha512())

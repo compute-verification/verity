@@ -12,9 +12,8 @@ its rules) that only PoUW reads. PoUW's Lean imports this module, and through it
 
 namespace Domains
 
--- PoUW: the protocol and its identifier
+-- PoUW: the protocol
 abbrev POUW_PROTOCOL : String := "verity/pouw/v1"
-abbrev POUW_IDENTIFIER : String := "verity/pouw/identifier/v1"
 abbrev POUW_PASS_MANIFEST : String := "verity/pouw/pass-manifest/v1"
 
 -- PoUW: epochs: coins, salts and the weights they bind
@@ -73,7 +72,6 @@ abbrev POUW_SEED : String := "verity/pouw/seed/v2"
 abbrev POUW_RECEIPT : String := "verity/pouw/receipt/v1"
 abbrev POUW_NOISE : String := "verity/pouw/noise/v1"
 abbrev POUW_CALL_SEED : String := "verity/pouw/call-seed/v1"
-abbrev POUW_EPS1_SEED : String := "eps1-sm120-h1fx1/seed/v1"
 abbrev POUW_DITHER_CALL : String := "verity/pouw/dither/call/v1"
 abbrev POUW_DITHER_FILL : String := "verity/pouw/dither/fill/v1"
 abbrev POUW_DITHER_OPERAND : String := "verity/pouw/dither/operand/v1"

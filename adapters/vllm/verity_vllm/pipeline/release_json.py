@@ -15,9 +15,9 @@ a record names its tree or none.  Rules:
 
 Stdlib only at import time; `write` imports torch/vllm lazily for the env identity.
 
-  verity-vllm release-json write --tag <tag> --tree <tree> --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
-  verity-vllm release-json check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
-  verity-vllm release-json line <tree>                                          -> "<release line>\t<record path or ->"
+  cli.run(release_json) write --tag <tag> --tree <tree> --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
+  cli.run(release_json) check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
+  cli.run(release_json) line <tree>                                          -> "<release line>\t<record path or ->"
 """
 from __future__ import annotations
 

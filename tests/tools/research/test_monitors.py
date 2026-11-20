@@ -91,7 +91,7 @@ def test_an_incident_opens_once_with_a_note_and_clears_once(tmp_path):
     assert state["open"] == {} and state["last_pass"] == T0 + 240
 
 
-def test_the_note_has_alert_sinks_front_matter_and_names_its_monitor(tmp_path):
+def test_the_note_has_the_lane_contracts_front_matter_and_names_its_monitor(tmp_path):
     passes(M.new_state(), mon(found()), [["a"]], tmp_path)
     text = next((tmp_path / "outbox").iterdir()).read_text()
     fm = M.front_matter(text)
@@ -114,9 +114,9 @@ def test_an_incident_clears_only_once_gone_for_its_clear_s(tmp_path):
 
 
 def test_a_timers_unit_that_fails_every_run_is_one_incident(tmp_path):
-    """vy-custody.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
+    """vy-node-sweep.service fails each 5-minute run and is out of `systemctl --failed` while the next one runs: one open, no clears."""
     [m] = [m for m in M.MONITORS if m.id == "units-n2"]
-    out = passes(M.new_state(), m, [["system:vy-custody.service"], []] * 6, tmp_path, every=300)
+    out = passes(M.new_state(), m, [["system:vy-node-sweep.service"], []] * 6, tmp_path, every=300)
     assert [e["event"] for evs in out for e in evs] == ["open"]
 
 
@@ -1606,7 +1606,7 @@ def test_the_units_deploy_toml_runs_on_a_machine_are_its_run_entries_less_held_o
     assert M.expected_units("vy-nebius-cpu-1", MANIFEST, NOTHING) == ["systemd:vy-a.service", "systemd:vy-b.timer"]
     real = set(M.expected_units("vy-nebius-2", M.MANIFEST.read_text(), NOTHING))
     assert real >= {"systemd:vy-watchdog.timer", "systemd:vy-lease.service", "systemd:vy-monitors.timer"}
-    assert "systemd:vy-n2-offload.service" not in real and all(M.EXPECTED_OFF.values())
+    assert all(M.EXPECTED_OFF.values())
 
 
 def test_a_step_that_isnt_applied_on_a_machine_holds_its_units_as_drift_holds_its_files():

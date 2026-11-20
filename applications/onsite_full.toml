@@ -25,6 +25,19 @@ commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
 [params."verity/pous/p2/v4/run"]
 challenges = 320
 
+[params."verity/pouw/pearl-plus/v1"]
+kernel = ""
+cubin = ""
+schedule = "serial"
+transcript_dir = ""
+coins = ""
+challenger = ""
+lane = ""
+peer = ""
+users = ""
+
+[params."verity/pouw/pearl-plus/v1".session]
+
 [params."verity/certifier/v0"]
 order = "arrival"
 hold_ms = 5000
@@ -41,10 +54,6 @@ reserve_bytes = 1073741824
 tier = ""
 limit_ns = 20000000
 reads = 0
-
-[params."verity/pouw/pearl-plus/v1"]
-class = "4,27,2"
-tie-uniform = true
 
 [[party]]
 name = "workers"

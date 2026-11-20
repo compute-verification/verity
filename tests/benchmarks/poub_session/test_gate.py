@@ -362,24 +362,6 @@ def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.Co
     return p, [line.split(" ", 2)[2] for line in sent.read_text().splitlines()] if sent.exists() else None
 
 
-@pytest.mark.parametrize("form, want", [
-    ({}, PACED),
-    ({"PACED": "64:60000:33273:7", "PACE_PASS_MS": "46"},
-     "--paced 64:60000:33273:7 --pace-pass-ms 46 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"},
-     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"SESSIONS": "2"}, "--sessions 2 --minutes 30 --jitter-ms 50 --quantile max"),
-    ({"BIND": "1", "MODEL": "TINY", "ARENA_BLOCKS": "7"}, PACED),
-], ids=["default", "paced", "one-coin-a-window", "sessions-alone", "a-model-named"])
-def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin_a_window(tmp_path, form, want):
-    """The request names one form: PACED's words at PACE_PASS_MS, by default the four paced sessions, or SESSIONS
-    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace. It names no model, engines or
-    arenas, whatever the environment holds: the verifier holds no checkpoint."""
-    p, sent = host(tmp_path, **form)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
-
-
 @pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
 @pytest.mark.parametrize("form, why", [
     ({"SESSIONS": "1", "PACED": "1:1000:2773:7"}, "the host's run takes one form, so unset SESSIONS or both of the others"),

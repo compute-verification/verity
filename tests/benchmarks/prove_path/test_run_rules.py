@@ -1,14 +1,11 @@
 """The rules `run.sh` states and the partition files an audit reads, held to what a stream takes, without running the
 script:
 
-* each rule the script states for its stand-in, the honest run's and the forged run's, under ``--zk`` and under
-  ``PP_PLAIN=1``, is a rate (a stream refuses a fixed design as its rule), and over the stand-in's window, one template's
-  stratum of eight proof blocks a rank, its sampling design is the one the window registers under it: half the proof
-  blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
 * the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
   the tie's own design, work over every one of its units;
 * that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
   arm of the script audits a window as forging a read;
+* that arm takes a tie's pins as given or refused only on `weights-tie pins`' own answer, never on a traceback;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
   (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
@@ -17,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 
 from verity.commitments.periods.population import population_program
@@ -28,9 +26,9 @@ REPO = BENCH.parents[1]
 RUN_SH = REPO / "benchmarks" / "prove_path" / "run.sh"
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
 KEPT = (BENCH, REPO / "benchmarks" / "one_stage")
-#: the script's variable for the kind of its stand-in's rules, and a partition file's key for the rule it states
-VAR, KEY = "SAMPLING_DESIGN", "law"
-#: the stand-in's window a rank (`tests.pipeline.served_tp --world 2 --I 256`): its one template and its proof blocks
+#: a partition file's key for the rule it states
+KEY = "law"
+#: a window of one template's stratum: its template and its proof blocks
 STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
 #: the partition files that still state a fixed design (``subset:K``, ``stratified:K`` or ``work:K``), by path from the
@@ -59,22 +57,6 @@ def rule_of(text: object) -> tuple[S.Selection | None, str | None]:
     return (None, S.BERNOULLI) if rule.text.startswith("bernoulli") else (rule, None)
 
 
-def stated() -> list[tuple[bool, bool, str]]:
-    """The rules the script's stand-in states, each as (under ``PP_PLAIN=1``, the forged run's, its text): the kind the
-    script's variable holds, first under ``--zk`` and then under ``PP_PLAIN=1``, with the rate the honest run hands
-    `served_tp` and the one the forged run writes to its partition file."""
-    text = RUN_SH.read_text()
-    kinds = re.findall(rf"\b{VAR}=([\w-]+)", text)
-    honest = re.findall(rf"--{KEY} \${VAR}:([\w/]+)", text)
-    forged = re.findall(rf'\\"{KEY}\\": \\"\${VAR}:([\w/]+)\\"', text)
-    assert (len(kinds), len(honest), len(forged)) == (2, 1, 1), (
-        f"{RUN_SH.name} no longer states its stand-in's rules as this test reads them ({VAR}=KIND twice, --{KEY} ${VAR}:RATE "
-        f"and \"{KEY}\": \"${VAR}:RATE\" once each): found {kinds}, {honest}, {forged}; state them so, or teach `stated` the "
-        "new form")
-    return [(plain, is_forged, f"{kind}:{arg}")
-            for plain, kind in zip((False, True), kinds, strict=True) for is_forged, arg in ((False, honest[0]), (True, forged[0]))]
-
-
 def partitions() -> dict[str, object]:
     """The rule each partition file states, by the file's path from the root: the JSON objects with ``templates`` and a
     rule among the files kept beside the drivers (`KEPT`) and each file the script names."""
@@ -85,29 +67,6 @@ def partitions() -> dict[str, object]:
         if isinstance(doc, dict) and {"templates", KEY} <= set(doc):
             out[path.relative_to(REPO).as_posix()] = doc[KEY]
     return out
-
-
-def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registers():
-    """`prove_path.py audit` states its partition file's text as the stream's rule, so a fixed design there ends the audit
-    at the rule check, before any session opens. Each of the stand-in's four rules is a rate, and over a rank's window the
-    sampling design the stream names for it, which its `register` holds the docket to, is the one the window
-    registers: the serving rows read the partition file's text as a rate of that kind and resolve it over the window's
-    program, by the steps of `serving_rows.population`. The honest run samples half a rank's proof blocks and the forged
-    run every one, so its forged unit is sampled; a plain session's design is stratified."""
-    rules = stated()
-    refusals = {text: why for _plain, _forged, text in rules if (why := rule_of(text)[1])}
-    assert not refusals, (f"{RUN_SH.name}'s stand-in states a rule a stream refuses, so its audit ends at the rule check: "
-                          f"state {RATE} instead ({refusals})")
-    program, query = population_program([(SRW.template(STANDIN).fn, UNITS)])
-    for plain, forged, text in rules:
-        rule, _why = rule_of(text)
-        names = S.selection_sampling_design(rule, UNITS, S.selection_sizes(rule, program, query))
-        read = SRW.sampling_design_of(text)
-        assert read == {KEY: names[KEY], "rate": text}, (text, read)
-        registers, table = S.params_sampling_design(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
-        assert registers == names and table is None, (text, registers, names, table)
-        assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
-        assert not plain or names[KEY] == "stratified", (text, names)
 
 
 def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
@@ -164,6 +123,39 @@ def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
     assert script.count("--forged-read") == arm.count("--forged-read") == 1, (
         f"{RUN_SH.name} audits a window as forging a registered read (`--forged-read`) outside its weights tie's "
         "`--served`: say in its header which arm passes on that refusal, and hold it here")
+
+
+#: `weights-tie pins`' outcomes: its status, its line and its stderr, whether it wrote the pins, and whether the honest
+#: tie and a forged one take each as their answer
+PINS = {
+    "pinned": (0, '{"pinned": true, "weights": 3}', "", True, (True, False)),
+    "refused": (1, '{"pinned": false, "why": "the tie window holds no root of it"}', "", False, (False, True)),
+    "traceback": (1, "", "Traceback (most recent call last):\nRuntimeError: died\n", False, (False, False)),
+    "refused, then a traceback": (1, '{"pinned": false, "why": "x"}', "Traceback (most recent call last):\n", False,
+                                  (False, False)),
+    "killed": (137, "", "", False, (False, False)),
+}
+
+
+def test_the_weights_ties_arm_takes_only_pins_own_answer_and_a_traceback_is_no_refusal(tmp_path):
+    """A forged tie passes only on `weights-tie pins`' own refusal: status 1, its ``{"pinned": false, ...}`` line and no
+    pins written, with no traceback; the honest tie only on status 0, its ``{"pinned": true, ...}`` line and the pins.
+    A traceback (status 1, a refusal's status) or a kill is neither, and the arm says PINS ERROR."""
+    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    fn = re.search(r"^  pins_answered\(\) \{.*?^  \}$", arm, re.M | re.S)
+    assert fn and "pins_answered $pinned " in arm and "PINS ERROR" in arm, (
+        f"{RUN_SH.name}'s weights tie arm no longer judges `weights-tie pins` by `pins_answered`")
+    for case, (status, line, err, wrote, want) in PINS.items():
+        d = tmp_path / case.replace(" ", "-").replace(",", "")
+        d.mkdir()
+        (d / "verdict").write_text(f"{line}\n" if line else "")
+        (d / "err").write_text(err)
+        if wrote:
+            (d / "pins").write_text("{}")
+        got = tuple(subprocess.run(["bash", "-c", f'{fn.group(0)}\npins_answered {status} "$1/verdict" "$1/err" "$1/pins" '
+                                    f'{forged}', "-", str(d)], check=False).returncode == 0
+                    for forged in ("", "--forged"))
+        assert got == want, (case, got)
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():

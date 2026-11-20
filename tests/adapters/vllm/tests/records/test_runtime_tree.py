@@ -18,7 +18,7 @@ from verity_vllm.records.runtime_tree import (
     runtime_tree_of,
 )
 
-FIELDS = ("schema", "source", "runner", "modules", "buffers")
+FIELDS = ("schema", "source", "runner", "modules", "buffers", "shared")
 EMPTY: tuple[object, ...] = (None, 0, "", False, [], {})
 
 
@@ -28,11 +28,12 @@ def a_tree() -> RuntimeTree:
                                    source="a test")
 
 
-def test_the_document_is_the_five_fields_under_the_schema_of_record():
+def test_the_document_is_its_fields_under_the_schema_of_record():
     doc = a_tree().to_json()
     assert tuple(doc) == FIELDS and doc["schema"] == SCHEMA == "verity-vllm/runtime-tree/v1"
     assert list(doc["modules"]) == ["", "body.blocks.0"] and doc["buffers"] == ["body.blocks.0.scale", "body.mask"]
     assert doc["runner"] == {"sample": True, "sampler_module": False, "source": "declared"} and doc["source"] == "a test"
+    assert doc["shared"] == {}
 
 
 def test_a_tree_reads_back_as_it_was_saved(tmp_path):
@@ -74,7 +75,7 @@ def test_a_field_of_another_type_is_read_as_its_expression_reads_it():
 
 def test_the_tree_of_a_model_names_every_module_and_buffer_and_states_the_runner():
     class Leaf:
-        def named_modules(self):
+        def named_modules(self, remove_duplicate=True):
             return [("", self), ("inner", object())]
 
         def named_buffers(self):
@@ -106,7 +107,7 @@ def test_the_meta_tree_is_the_built_models_with_the_runner_declared_or_copied(mo
     from verity_vllm.program.frontend import vllm_meta
 
     class Model:
-        def named_modules(self):
+        def named_modules(self, remove_duplicate=True):
             return [("", self), ("inner", object())]
 
         def named_buffers(self):

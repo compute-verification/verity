@@ -36,7 +36,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
   session's ``e2e_s``, ``wait_s`` (the prover waiting on the verifier), ``witness_s`` and ``prove_total_s``. ``--no-audit``
   stages only the honest statement and runs the points, Lean verifying each arm's session at the largest k. ``--lease``
-  is a command each prover process runs under (`a8_gpu.sh`'s GPU lease), so the device is held for the proofs alone; the
+  is a command each prover process runs under (a GPU lease), so the device is held for the proofs alone; the
   process's wall then includes the lease's wait, and the session's own times don't.
 """
 from __future__ import annotations
@@ -110,7 +110,7 @@ def window(store: audit_prover.Store, L: int, samples: int, delta: float, secret
     reg, N = store.registration, store.registration.blocks
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=samples, delta=delta, window_ns=10, codec=P512)
     clock = a7.Clock()
-    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
+    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed), samples=p.samples),
                        not_before_ns=0, clock=clock)
     prover = audit_prover.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []

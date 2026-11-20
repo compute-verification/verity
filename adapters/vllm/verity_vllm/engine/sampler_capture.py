@@ -7,8 +7,7 @@ token of), as bf16 bits, and after it their sampled ids. `take`, run in every wo
 runner's own sampler back: the wrap is a patch of `engine.hooks`, listed by ``hooks.live(TAG)`` while it is on. `spans`
 lays the rows out: rank 0's, which every other rank that sampled the request must have taken bit for bit with the same
 ids, at the engine steps its tokens were emitted at, with the launch that fixes its Program. `write` writes them as
-`records.logits_capture`, which `pipeline.interior_rows.captured` reads as a token select's span. CPU replay writes the
-same record in tests.
+`records.logits_capture`. CPU replay writes the same record in tests.
 
 The runner is vLLM's V2 model runner (`v1.worker.gpu.model_runner`), whose sampler takes ``(logits, input_batch)``. A
 runner that shards sampling across ranks (``batch_sharder``), samples draft tokens, or hands the sampler logits that
@@ -80,7 +79,7 @@ def kept_rows(logits: Any, b: Any, keep: Sequence[int]) -> np.ndarray:
 
 def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None = None,
                template: str | None = None) -> dict[str, dict[str, Any]]:
-    """A token select's pieces' rows on the logits' device, as `pipeline.interior_rows.pieces` lays them out on the host:
+    """A token select's pieces' rows on the logits' device, as the host lays them out:
     ``logits`` the n kept rows (bf16, or their int16 bits), ``ids`` the n sampled ids, ``template`` the token select
     the rows are units of (`TokenSelect_v4{V}` when None), ``c`` `TokenSelect_v4`'s chunk (``min(CHUNK, V)``). By
     template, its ports' u16 words as int16, each input row named after its parameter. `TokenSelect_v4`: each token's
@@ -249,8 +248,7 @@ def spans(takes: Sequence[Mapping[str, Any]], steps: Sequence[Mapping[str, Any]]
 
 
 def write(directory: Path, template: str, spans: Mapping[str, Mapping[str, Any]]) -> Path:
-    """Each request's span of ``spans`` written to ``directory`` (`records.logits_capture`, read by
-    `pipeline.interior_rows.captured`): its ``logits`` ((n, V) u16, row j the bf16 bits its j-th token was selected from),
+    """Each request's span of ``spans`` written to ``directory`` (`records.logits_capture`): its ``logits`` ((n, V) u16, row j the bf16 bits its j-th token was selected from),
     ``tokens`` (the n ids selected), ``steps`` (the n engine steps) and ``program`` (what fixes its Program: the Program's
     digest, or its launch's). ``template`` is the token-select row template the rows are units of."""
     directory.mkdir(parents=True, exist_ok=True)

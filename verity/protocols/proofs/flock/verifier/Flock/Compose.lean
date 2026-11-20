@@ -27,12 +27,14 @@ inductive Body where
 
 /-- A block for the file: its unit `body`, whose input group is one 16-bit leaf per input word in `ins`' order and whose
 output group is one 16-bit leaf per output word in `outs`' order; `ins` are the input rows (name, length in bits), `outs`
-the output ports (name, u16 words). -/
+the output ports (name, u16 words); `programDigests`, META's `program_digests` when not empty: the template the units are
+instances of, by its descriptor id, which a template query's partition reads (`HmRow.circuitTemplate`). -/
 structure Block where
   name : String
   body : Body
   ins : Array (String × Nat)
   outs : Array (String × Nat)
+  programDigests : List (String × String) := []
   deriving Inhabited
 
 def SLOT_LOG : Nat := 18
@@ -116,8 +118,9 @@ def zeroOutputsT (t : Tmpl.Tmpl) : Array Nat :=
 def bitPort (name : String) (l : Nat) : Port :=
   { name, words := (l + 15) / 16, chunks := ((l + 7) / 8 + 17 + 127) / 128 - 1, nb := 0, bits := l, v2 := true }
 
-/-- An output port's row: its words zero-padded to whole SHA-512 blocks, a bit row of all of them (`circuit.out_row`). -/
-def outPort (name : String) (words : Nat) : Port := bitPort name (16 * ((words + 63) / 64 * 64))
+/-- An output port's row: a bit row of exactly its words, the row the period commits for it (`rows.Member.out_rows` of
+a statement of bit rows, `circuit._out_ports`' `v2_out_rows`). -/
+def outPort (name : String) (words : Nat) : Port := bitPort name (16 * words)
 
 /-- `circuit._ranges`: the unpacked ranges largest first, each aligned to its power-of-two span, then the packed ones
 aligned to their slot; and the block's `k_log`. -/
@@ -221,7 +224,9 @@ def compose (b : Block) (programSha512 partitionDigest : String) : V ByteArray :
     ("dummy", Json.mkObj [("bc", Json.arr (bcs.map (str ∘ hexOf))), ("outputs", nats u.zero)]),
     ("leaf_scheme", Tags.leafSchemeHm96Os), ("mask_log", nat MASK_LOG),
     ("per_vu", Json.mkObj [("unit", nat 1), (SHA_NET, nat nSha), (HM_NET, nat nHm)]),
-    ("lookups", Json.mkObj []), ("wires", Json.arr wires), ("program_sha512", str programSha512),
+    ("lookups", Json.mkObj []), ("wires", Json.arr wires)] ++
+    (if b.programDigests.isEmpty then [] else [("program_digests", Json.mkObj (b.programDigests.map fun (k, v) => (k, str v)))]) ++
+    [("program_sha512", str programSha512),
     ("partition", Json.mkObj [("rule", str PARTITION_V1), ("digest", str partitionDigest)])] ++ u.extra)
   return (s!"{u.tags.fileFormat} {b.name}\nMETA {← canon mj}\n" ++ u.text ++ rowNets.get).toUTF8
 

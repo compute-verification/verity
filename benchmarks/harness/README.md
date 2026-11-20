@@ -3,8 +3,7 @@
 This is the harness benchmarks share. Its main job is one measurement: what an arm, a protocol option or an
 experimental install, adds to served inference over stock vLLM, on the same GPU, through the vLLM adapter's public
 interfaces. A spec names a model, its arms and a sweep. The harness expands it into points, times each point with the
-arms interleaved and gated to give the same tokens, and records one run per point. A table only ever puts results
-side by side whose identities agree.
+arms interleaved and gated to give the same tokens, and records one run per point.
 
 It also holds the kit: the few calls every benchmark's runner shares to lease a GPU, stamp the host, pair a ratio,
 write a result and print a core benchmark's number.
@@ -27,10 +26,7 @@ verity-bench run SPEC        # in a research run: the spec's point without a pas
                              # (--point POINT: one of several; --again POINT: that point though a passing run
                              # stands for it; plan takes --again to show it first)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
-verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
-verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
-verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, no point's run: under a
                                                         # research run its numbers go into the run's result (the kit's writer)
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
@@ -39,8 +35,6 @@ verity-bench prove --system S --workload W  # a proof system's prover on a workl
                                             # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
                                                 # reads (`verity bench prove lean-verify`, the same README)
-verity-bench prove-layers --flock R --zk R --sampling R --recursion R  # the proof benchmark by layer, the benchmark result
-                                                # for each layer read from its run's out/ or run id (`verity bench prove layers`, the same README)
 ~~~
 
 ## Running a point
@@ -97,19 +91,20 @@ code, and fails when the code has one this list lacks.
 | --- | --- |
 | Arms | a protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`), a built-in such as `stock-fp8`, or an experimental arm a spec names by its module |
 | Gates before timing | `tokens` (an arm gives its control's tokens exactly), `kv-pool` (an arm and its control get the same KV-cache pool), `arm` (the arm's own gate) |
-| Gates after timing | `timed-tokens`, `engine-identity`, `arm-closing` |
+| Gates after timing | `timed-tokens`, `engine-identity`, `arm-closing`, `host-quiet` |
 | Modes | `resident`, every arm's engine on the GPU at once and the arms interleaved rep by rep; else `blocks`, an engine for each arm in turn |
 | Metrics of a timed rep | `time_per_output_token_s`, `time_to_first_token_s`, `tokens_per_s`, `peak_gpu_memory_bytes`; and where every rep has them, `decode_time_per_token_s`, `inter_token_latency_p50_s`, `inter_token_latency_p99_s` |
 | A result | `verity-bench/vllm-overhead/v1`: its identity, its baseline, its sweep, its gates, how it ran, and its points |
 | A point | one recorded `research run` of `verity-bench run SPEC`; queued, of the kind `vllm-bench-1gpu` |
 
-One failed gate times nothing. Every metric is reported as a mean and as a ratio to the baseline paired by rep.
+One failed gate times nothing. `host-quiet` fails an arm's point when any of its timed reps opened at a one-minute load
+average over half the processors the machine's record gives (`cpus`, which a point refuses to run without). Every metric is reported as a mean and as a ratio to the baseline paired by rep.
 
 Every gate is the benchmark's own check, run by its process on the served node: each stored gate says so as
 `checked_by: piece`, and the result's table prints it. `checked_by` takes proofs' runners and no word of our own
 (`kit_report.CHECKED_BY`: `piece`, in the words of proofs' `PIECE` in `benchmarks/one_stage/served_verdicts.py`, and
 `lean`). The
-served table, the overhead table, a steady point's `out/verdict.json`, `lean-verify`'s record and `prove layers` say who
+served table, the overhead table, a steady point's `out/verdict.json` and `lean-verify`'s record say who
 ran their checks in the same words. A result stored before the field says `not recorded`.
 
 ## The kit

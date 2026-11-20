@@ -74,18 +74,19 @@ theorem resolveStep_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc
 primitive's Definition has the default body (`BodiesOk.CalleeOk`), so in the activation of a unit of a primitive
 `⟨false, 0, j⟩` resolves to the unit's one gate. It holds by the decoder's defaults, not by a rule of the format:
 the default body has no node, the default node's form is a primitive's, and an offset out of range reads 0. -/
-theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default) :
+theorem resolve_default (P : Prog) (sc : Scope) (k j : ℕ) (hb : (P.defs[sc.d]!).body = default)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc ⟨false, k, j⟩ = .ok sc.off := by
   obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 1 :=
     ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-  unfold resolve
-  rw [hn]
+  rw [Flock.Program.resolve_eq hrc, hn]
   exact run_one (resolveStep_default P sc k j hb) n
 
 /-- **Every leaf an activation whose body is the default returns is the activation's own gate**: reference `t` of
 the default body's return is `⟨false, 0, t⟩` (`default_get`), which `resolve_default` resolves. As
 `resolve_default`, it holds by the decoder's defaults, not by a rule of the format. -/
-theorem ret_default (P : Prog) (sc : Scope) (t : ℕ) (hb : (P.defs[sc.d]!).body = default) :
+theorem ret_default (P : Prog) (sc : Scope) (t : ℕ) (hb : (P.defs[sc.d]!).body = default)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     resolve P sc ((P.defs[sc.d]!).body.ret.get t) = .ok sc.off := by
   rw [hb]
   show resolve P sc ((default : Seq).get t) = _
@@ -109,7 +110,7 @@ theorem gate_member_prim {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size
     (h : P.gate (P.child P.rootScope k m).off = .ok (p, ops, sc')) :
     p = ((P.defs[P.root]!).body.nodes[k]!).fn ∧ sc' = P.rootScope ∧
       operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m = .ok ops := by
-  unfold Prog.gate at h
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
   by_cases hge : (P.child P.rootScope k m).off ≥ (P.defs[P.root]!).gates
   · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [hge, ite_false, bind, Except.bind] at h
@@ -139,7 +140,8 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
     {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
     (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
-    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ) :
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ)
+    (hrc : (P.defs[P.root]!).body.recut = #[] := by assumption) :
     ∃ g, resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) = .ok (.inl g) ∧
       resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g := by
@@ -148,8 +150,7 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 2 :=
     ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
   refine ⟨_, hstep, ?_⟩
-  unfold resolve
-  rw [hfuel]
+  rw [Flock.Program.resolve_eq hrc, hfuel]
   exact run_two_ok (rs_unit P d off k m i t hf) hstep fuel
 
 end
@@ -172,6 +173,7 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     ∃ k m, k < (P.defs[P.root]!).body.nodes.size ∧ ((P.defs[P.root]!).body.nodes[k]!).form = .batch ∧
       m < ((P.defs[P.root]!).body.nodes[k]!).members ∧ sc = P.child P.rootScope k m ∧
       (P.defs[sc.d]!).body = default ∧ (P.defs[sc.d]!).gates = 1 ∧ ∃ w, (P.defs[sc.d]!).ret = .value w := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
@@ -181,7 +183,7 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     rw [getElem!_pos rs i hi]
     simp
   obtain ⟨hlt, -, hform, hcount⟩ := hall _ hmem
-  obtain ⟨-, hcallee, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
+  obtain ⟨-, hcallee, hnode⟩ := Resolve.decoded_root bytes P hdec hrc _ hlt
   have hp' : (P.defs[((P.defs[P.root]!).body.nodes[rs[i]!.node]!).fn]!).prim = true := hp
   obtain ⟨hbody, hg1, -, hw⟩ := hcallee.1 hp'
   have hbatch : ((P.defs[P.root]!).body.nodes[rs[i]!.node]!).form = .batch := by
@@ -217,6 +219,7 @@ theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP :
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
     (ho : OutLeaf P sc out l g lo hi) : g = sc.off ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, hg1, -⟩ := prim_unit hP hrs hu hp
   obtain ⟨f, -, -, -, hres, -, -⟩ := ho
   rw [Resolve.ret_default P sc _ hbody] at hres
@@ -245,6 +248,7 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
       m < ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).members ∧
       ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
         (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
   have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
@@ -258,7 +262,7 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
   rw [hnodes, List.mem_filter] at hno
   have hkey : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).key = false := by
     simpa using hno.2
-  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
+  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec hrc _ hlt
   refine ⟨j, m, hj, htj, huj, hsc, hlt, ?_, hform, ?_, hnode.1⟩
   · simp [Desc.isInputNode, hkey]
   · rw [← hcount]
@@ -286,6 +290,7 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
     ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hov, hlay⟩ := read_walk hP
   obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
@@ -304,6 +309,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
     {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
     ∀ o ∈ ops, ∃ i t, i < (P.defs[sc.d]!).params.size ∧ t < ((P.defs[sc.d]!).params[i]!).2.leaves ∧
       Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok o := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨hpd, -, k, m, hk, hf, hm, hsc, hops⟩ := prim_unit_gate hP hrs hu hp h
   obtain ⟨-, -, -, -, -, -, -, hg1, -⟩ := prim_unit hP hrs hu hp
   have hkey : Flock.Program.isInputId (P.defs[p]!).key = false :=
@@ -315,7 +321,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   have hkey' : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = false := hkey
   have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
     simp [Desc.isInputNode, hkey']
-  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
+  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec hrc k hk
   intro o ho
   obtain ⟨i, hi, t, ht, hres⟩ := Resolve.operands_spec P P.rootScope _ m ops hops o ho
   have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
@@ -339,7 +345,7 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   have hog : o = g := by
     obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 1 :=
       ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
-    unfold Flock.Program.resolve at hres'
+    replace hres' := Flock.Program.resolve_run hres'
     rw [hfuel, Resolve.run_one hstep fuel] at hres'
     exact (Except.ok.inj hres').symm
   refine ⟨i, t, Nat.lt_of_lt_of_eq hi hno.1, ht', ?_⟩
@@ -354,6 +360,7 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
       ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
         out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
+  have hrc := InferenceOnlyVerifier.Properties.SecurityProofs.Walk.walkable_recut P hP.2.2.2.2.1
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
   have hfields : Flock.Program.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
     (congrArg Flock.Program.fieldsOf hw).trans rfl

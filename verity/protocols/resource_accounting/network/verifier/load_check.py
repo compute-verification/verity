@@ -1,11 +1,9 @@
-"""The check of the weights' load: the manifest a shape gives, and the load's registrations read against it."""
+"""The weights' load: the manifest a shape gives, which the load's registrations are read against. The check of a
+load's registrations is the Lean verifier's (`NetworkVerifier.Load.loadCheck`, which `relay_check.check_load` asks);
+its manifest is this one's, held to it by the check's agreement test."""
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
-from verity.protocols.resource_accounting.network.verifier import transfer_rows as TR
-from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 FORMAT = "verity-network-certifier/load/v1"
@@ -117,28 +115,3 @@ def shape_named(name: object) -> Shape:
         if s.name == name:
             return s
     raise ValueError(f"no shape {name!r}: one of {[s.name for s in SHAPES.values()]}")
-
-
-def check_load(doc: Mapping[str, Any], key: Any, session: bytes) -> tuple[dict[str, Any], list[str]]:
-    """A ``load.json`` read as the verifier reads it: each of its shape's values a registration that
-    `transfer_rows.check_registration` accepts under `key` and `session` for the value it expects, at the document's
-    program and link. Returns the count and the problems."""
-    try:
-        shape = shape_named(doc.get("shape"))
-        if doc.get("format") != FORMAT or doc.get("window") != WINDOW or not isinstance(doc.get("link"), str):
-            raise ValueError(f"not a load's registrations ({FORMAT}, window {WINDOW})")
-    except ValueError as e:
-        return {"values": 0, "registered": 0}, [f"load: {e}"]
-    values, regs = manifest(shape), doc.get("values")
-    if not isinstance(regs, list) or len(regs) != len(values):
-        return {"values": len(values), "registered": 0}, [f"load: not one registration of each of {len(values)} values"]
-    problems, ok = [], 0
-    for v, reg in zip(values, regs):
-        try:
-            TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS, window=WINDOW,
-                                  kind=KIND, value=v.name, program=doc.get("program"), words=v.reg_words, rows=v.leaves,
-                                  word_bits=v.word_bits, schema=v.schema)
-            ok += 1
-        except ValueError as e:
-            problems.append(f"load {v.name}: {e}")
-    return {"values": len(values), "registered": ok}, problems

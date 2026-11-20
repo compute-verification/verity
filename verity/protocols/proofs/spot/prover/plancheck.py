@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import json
 import math
-import subprocess
 from fractions import Fraction
 from typing import Iterable, Mapping, Sequence
 
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 from verity.protocols.proofs.spot.verifier.one_stage.verifier import LeanError, executable
 from .optimize import Cell, Grain, leak_count
 
@@ -164,10 +164,7 @@ def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | No
     verdict, a two-stage point's certified bits (None when refused) and the θ they are at."""
     if not designs:
         return []
-    p = subprocess.run([str(executable(EXE))], input="".join(json.dumps(d) + "\n" for d in designs),
-                       capture_output=True, text=True)
-    if p.returncode != 0:
-        raise LeanError(f"{EXE} exited {p.returncode}: {p.stderr[-2000:]}")
+    p = LC.run([str(executable(EXE))], input="".join(json.dumps(d) + "\n" for d in designs))
     out = [json.loads(line) for line in p.stdout.splitlines()]
     if len(out) != len(designs):
         raise LeanError(f"{EXE} answered {len(out)} of {len(designs)} designs")

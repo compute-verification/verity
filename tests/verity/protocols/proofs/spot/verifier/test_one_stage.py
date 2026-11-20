@@ -150,15 +150,15 @@ def test_several_templates_one_population():
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
 #: the program and docket digests of `_registration(6, version=0)`: what an old record holds
-V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
-             "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
-V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
-               "4ae03cca27ecd15b541e99f4769335f0aef7c726024f30fbbee1c35cdc764c53")
+V0_PAIR_6 = ("f48ead5729310772f4e376c2d9b3c45f09b86becd9b385821bb28eed0e9d1255"
+             "538ccc1c88449fce13baf1525f7d523e875470e06c0c0fe102a7e1b73d257e5d")
+V0_RECORD_6 = ("aabbe23588d9df8fd0e58d7d7f5c5ff0fe0231d36769183ec8f8bc146dc306dc"
+               "ba2c2d0b7212a8cec870cc81446b4ac3bf3845171b458cae6bc6264f748b7d6f")
 #: v1's program digests of `population_program(PAIR, 6)` and `mixed_population_program([(PAIR, 3), (XOR3, 5)])`
-V1_PAIR_6 = ("e8e632dcd15c1ebfde2fa1250164377934de456593abe8d655f36953ffd6ec09"
-             "3aea8ce599b6fe1fb99faaa4a4335e6d9e3c15ff4b79f853f709daf3fb84fccc")
-V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a36ddc"
-                    "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
+V1_PAIR_6 = ("d46d56b21d3be0fef873edbc247f883f97e70b03bc9cbd1194df7212c26ff04a"
+             "8b78c7cb5e49c5126b584c351c82b519a862a2f178e8d8f78c414720487dfded")
+V1_PAIR_3_XOR3_5 = ("f545623af3880e3b987fbdcbb6dd51f8db2b56ebd75af01621755e3b6a5c66e1"
+                    "1d8af0b21fa7c1117bf6d7a5d928c77ed975169deec98d46d6f5e5246dedc2a8")
 
 
 def _xor8_registry() -> DefinitionTable:
@@ -759,14 +759,12 @@ def test_the_partition_refuses_what_core_refuses(n):
 
 
 def test_a_program_that_is_not_topological_has_no_units():
-    """Core's `order_violation`: the population program whose instances read their own outputs is no computation."""
+    """The population program whose instances read their own outputs is no computation: the decoder refuses it by name
+    (`forward-reference`) before any query reaches its units."""
     d = json.loads(TEMPLATE["descriptors"]["population"])
     d["definitions"][d["root"]]["body"]["nodes"][2]["args"][0]["refs"] = {"affine": ["n", 2, 0, 6]}
-    looped = codec.decode_program(d, TEMPLATE_REG)
-    q = PO.template_instance_query(TEMPLATE["template_ids"]["TScale descriptor id"])
-    with pytest.raises(P.QueryRefused) as e:
-        P.units(looped, q)
-    assert [e.value.detail] == TEMPLATE["order_refused"][1]
+    with pytest.raises(ValueError, match="node 2: forward-reference: node 2 reads node 2, which is not before it"):
+        codec.decode_program(d, TEMPLATE_REG)
 
 
 @pytest.mark.parametrize("n", range(len(TEMPLATE["malformed"])), ids=[m[0] for m in TEMPLATE["malformed"]])
@@ -851,6 +849,30 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     prog, q, rec = _registration(6)
     v = _check(rec, prog, q, tied=["x"])
     assert v.ok and v.rests_on_period_check == ()
+
+
+def test_a_member_reading_a_held_or_tied_run_input_carries_a_registered_file():
+    """`members._held_read` (Lean's `OneStageZk.heldReadsFiled`): where R8 lets a run Input through as tied or held, a
+    member whose units meet a range reading it and that carries no registered file is refused by name; with every
+    reader's file it passes; a member reading only its own run Input, no file, passes."""
+    from verity.protocols.proofs.spot.verifier.one_stage import members as M
+
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        (k,) = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
+        n = P.units(shared, q)
+        ms = {f"m{u}": {"units": [(u, u + 1)], "registered": None if u == n - 1 else []} for u in range(n)}
+        with pytest.raises(M._Refused) as e:
+            M._held_read(ms, {"query": q, "tied": ["t"]}, shared)
+        assert str(e.value) == M.held_read_why(f"m{n - 1}", k)
+        M._held_read({u: {**m, "registered": []} for u, m in ms.items()}, {"query": q, "tied": ["t"]}, shared)
+    prog, q, _ = _registration(6)
+    own = {f"m{u}": {"units": [(u, u + 1)], "registered": None} for u in range(6)}
+    M._held_read(own, {"query": q}, prog)
+    (k,) = [k for k, node in enumerate(prog.root.body.nodes) if is_input(node.fn)]
+    with pytest.raises(M._Refused) as e:
+        M._held_read({"m0": {"units": [(0, 6)], "registered": None}}, {"query": q, "registered": {"x": 12}}, prog)
+    assert str(e.value) == M.held_read_why("m0", k)
 
 
 def test_registration_check_refuses_a_query_core_does_not_digest():

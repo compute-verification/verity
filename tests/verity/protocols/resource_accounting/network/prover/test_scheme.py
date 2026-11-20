@@ -138,6 +138,12 @@ class _Hooks(_Exchange):
             fn(ev)
 
 
+@pytest.mark.parametrize("process", [H.FRONT, H.ENGINE])
+def test_a_process_given_no_feed_is_refused_by_name(process) -> None:
+    with pytest.raises(ValueError, match=f"{NS.NETWORK_ATTESTER.name}: its {process} process was given no feed"):
+        NS.attach(object(), {"process": process, "settings": {"order": "release-order"}})
+
+
 def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     from verity.protocols.resource_accounting.network.prover import admission as A
     settings = {"bucket_us": 1000, "sat_us": 100, "free_us": 10}

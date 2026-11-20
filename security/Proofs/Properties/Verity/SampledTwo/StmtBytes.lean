@@ -78,7 +78,7 @@ theorem stmtRaw_le (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (table
       (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode.length ≤
       VStar.Recursive.SampledTwo.stmtSize m.own circuit pub (VStar.Recursive.SampledTwo.tablesSize tables) draw := by
   have hF : FlockDeploy.FORMAT.utf8ByteSize = 25 := by decide +kernel
-  have hS : Spot.OneStageZk.STATEMENT.utf8ByteSize = 20 := by decide +kernel
+  have hS : Spot.OneStageZk.STATEMENT.utf8ByteSize = 25 := by decide +kernel
   have hd := len_printed draw
   have hr := len_printed m.own.registered
   have hp : (_root_.Flock.RecordText.printT m.own.partition).toUTF8.size =
@@ -120,7 +120,7 @@ theorem stmtAt_lt {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.S
     {s : Spot.OneStageZk.RunFiles} {record : String} {circuit pub : ByteArray}
     (hm : SessionMsgs.memberAt p e t = some m) (hs : SessionMsgs.filesAt e t = some s)
     (hrec : SessionMsgs.recordAt bs s = some record)
-    (hc : (bs.get m.own.circuit "circuit").toOption = some circuit)
+    (hc : m.own.circuitFile.toOption = some circuit)
     (hpb : (bs.get m.own.pub "public file").toOption = some pub) :
     (SessionMsgs.stmtRaw m circuit pub (Spot.OneStageZk.tablesOf bs) (SessionMsgs.sampleBytes record)
       (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode.length < 2 ^ 64 := by

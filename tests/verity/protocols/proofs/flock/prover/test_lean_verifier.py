@@ -770,6 +770,14 @@ def test_template_queries_agree_with_the_vectors(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
+def test_partition_object_blocks_agree_with_the_python(tmp_path):
+    lake_build(LEAN)
+    p = subprocess.run(["python3", str(VERIFIER / "partition_object_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
+                        "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+
+
 def _has_check_cut():
     try:
         from verity.circuits.cut import check_cut  # noqa: F401
@@ -1637,6 +1645,26 @@ def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
     assert "the Lean verifier refuses each" in v["honest_upstream_only"]
     for c in v["honest"]:
         assert c["statement"] in LEGACY or "verity/flock-netlist/v1" in c["detail"], c["cell"]
+
+
+#: statement versions `Flock.Tags.all` no longer holds (`Flock.Test.Served.deleted`)
+DELETED = ["verity/flock-netlist/v1", "verity/flock-circuit@19c7269a", "verity/flock-circuit@fd02e847",
+           "verity/flock-circuit@631567f7", "verity/flock-circuit@eb90718f+seed-injection", "verity/flock-circuit@e51e2b86",
+           "verity/flock-circuit@f5df3bbc", "verity/flock-circuit/types@f5df3bbc", "verity/flock-circuit@b3727bd9",
+           "verity/flock-circuit/types@b3727bd9", "verity/flock-circuit/types@b3727bd9+seed-injection",
+           "verity/flock-circuit/types@cec3e347", "verity/flock-circuit/types@cec3e347+seed-injection"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_deleted_statement_version_is_an_unknown_statement(tmp_path):
+    """`verify` refuses a statement version it no longer knows by name, before it reads a file: exit 2, no verdict."""
+    lake_build(LEAN)
+    for name in DELETED:
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--statement", name, "--circuit",
+                            str(tmp_path / "c.txt"), "--public", str(tmp_path / "pub.bin"), "--session", str(tmp_path / "a")],
+                           capture_output=True, text=True)
+        assert p.returncode == 2 and p.stderr.startswith("unknown statement; known: "), (name, p.stdout + p.stderr)
+        assert not any(ln.startswith("VERDICT ") for ln in p.stdout.splitlines()), (name, p.stdout)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

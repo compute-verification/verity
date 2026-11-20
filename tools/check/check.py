@@ -1151,7 +1151,7 @@ def session_jobs() -> int:
     return max(1, min(cores(), memory_gb() // AGREEMENT_MEMORY_SHARE // int(m.group(1) if m else 8)))
 
 
-#: the agreement's memory floor: set 13's upstream replay (GEMM, m = 26) alone takes more than 15 GB
+#: the agreement's memory floor: the GEMM set's upstream replay (m = 26) alone takes more than 15 GB
 AGREEMENT_MIN_GB = 24
 
 
@@ -1160,10 +1160,11 @@ def _version(v: str) -> tuple[int, ...]:
 
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
-    """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the unpacked build and inputs in
-    ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended divergence (`agree.py`), as set
-    16's honest session does: Lean refuses it for completeness, upstream accepts it."""
+    """One real replay per upstream binary that `vectors.json` gives a stored honest session or a selftest record (a set
+    without lookup tables): (its pinned commit, the command `agree.py` would run, upstream's expected verdict), over the
+    unpacked build and inputs in ``w``. Upstream's verdict is the case's `upstream_accepted` where it records an intended
+    divergence (`agree.py`): Lean refuses it for completeness, upstream accepts it. A selftest record's case is one upstream
+    accepted live (its `case.json`)."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -1178,16 +1179,27 @@ def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     out: dict[str, tuple] = {}
     for s in json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]:
         st = s.get("statement", {})
-        if s["pr83"] in out or not s.get("sessions") or "tables" in st:
+        if s["pr83"] in out or "tables" in st:
             continue
-        honest = fetch(s["sessions"][0]["dir"])
+        if s.get("sessions"):
+            honest = fetch(s["sessions"][0]["dir"])
+            e = s["sessions"][0]["expect"]
+            expect = {"accepted": e.get("upstream_accepted", e["accepted"])}
+        elif s.get("selftest"):
+            d = w / "smoke" / s["pr83"]
+            subprocess.run([sys.executable, str(FLOCK_VERIFIER / "selftest_records.py"), str(fetch(s["selftest"][0])), str(d)],
+                           check=True, capture_output=True)
+            live = [p for p in sorted(d.iterdir()) if json.loads((p / "case.json").read_text())["live"]["accepted"]]
+            if not live:
+                continue
+            honest, expect = live[0], {"accepted": True}
+        else:
+            continue
         a = argparse.Namespace(upstream=str(w / "upstream" / f"upstream-{s['pr83']}"), statement=s["lean_statement"],
                                circuit=str(fetch(st["circuit"])), tables=None)
         public = honest / "pub.bin" if (honest / "pub.bin").exists() else fetch(st["public"])
         extra = ["--drawn-only"] if agree.drawn(str(honest)) else []
-        e = s["sessions"][0]["expect"]
-        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)],
-                          {"accepted": e.get("upstream_accepted", e["accepted"])})
+        out[s["pr83"]] = (s["pr83"], [*agree.upstream_cmd(a, str(public), extra), str(honest)], expect)
     return list(out.values())
 
 
@@ -1197,7 +1209,7 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
     session here: a build for another CPU dies of SIGILL on the first instruction this one lacks, and prints nothing.
     Seconds, where the job itself would take an hour to disagree on every session."""
     if (gb := memory_gb()) < AGREEMENT_MIN_GB:
-        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (set 13's upstream replay alone takes more "
+        return (f"this machine may use {gb} GB; the agreement needs {AGREEMENT_MIN_GB} (the GEMM set's upstream replay alone takes more "
                 f"than 15 GB): record check on a larger machine")
     need, have = pin["upstream"].get("glibc"), os.confstr("CS_GNU_LIBC_VERSION") or ""
     if need and _version(have) < _version(need):
@@ -1293,16 +1305,72 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
         print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
-    sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
+    v = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())
+    sets = v["replayable"]["sets"] + [s for s in v.get("live", {}).get("sets", []) if s.get("check")]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
     print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
           flush=True)
-    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+    rc = subprocess.run(argv, cwd=ROOT).returncode
+    try:
+        print(f"check: lean-agreement: {agreement_outcome(json.loads((w / 'ci' / 'sets.json').read_text())['sets'])}",
+              flush=True)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"check: lean-agreement: no outcome: ci.py's sets.json can't be read ({type(e).__name__}: {e})", flush=True)
+    if rc:
         print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
     return rc
+
+
+def agreement_outcome(sets: list[dict]) -> str:
+    """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
+    the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept. Then the
+    fields `agree.py` and `ci.py` name: `both_refuse`, `second_alone_accepts` (each kind with its `reason`),
+    `lean_alone_accepts`, the refusals by the check the vectors name, `second` and `lean_failed`."""
+    ran = [r for r in sets if "skipped" not in r]
+    n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
+    disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
+    last = sum(r.get("passed_every_check", 0) for r in ran)
+    seconds: dict[str, list] = {}
+    for r in ran:
+        seconds.setdefault(r.get("second", AGREEMENT_UPSTREAM), []).append(r)
+    by = " and by upstream" if set(seconds) <= {AGREEMENT_UPSTREAM} else " and by each set's second verifier"
+    line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
+            f"{by if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            "are refused at it")
+    line += agreement_fields(ran, seconds, last)
+    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted and not last else
+                   f"; NO SESSION IS ACCEPTED: {accepted} accepted" if n and not accepted else "")
+
+
+#: the second verifier of a set whose result names none
+AGREEMENT_UPSTREAM = "upstream's pinned verifier"
+
+
+def agreement_fields(ran: list[dict], seconds: dict[str, list], last: int) -> str:
+    """The clauses `agreement_outcome` adds to ci's sentence, from the fields `sets.json` names."""
+    def c(k, rs=ran):
+        return sum(r.get(k, 0) for r in rs)
+    kinds: dict[str, int] = {}
+    for r in ran:
+        for k in r.get("second_alone_accepts") or ():
+            kinds[k["reason"]] = kinds.get(k["reason"], 0) + len(k["sessions"])
+    s = (f" (for those {last}, 'agree' is both verifiers' verdict on every check before the form's)" if last else "")
+    s += (f"; {c('both_refuse')} both refuse; {sum(kinds.values())} the second verifier alone accepts"
+          + (" (" + "; ".join(f"{k}: {why}" for why, k in kinds.items()) + ")" if kinds else "")
+          + f"; {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
+          f"{c('refused_at_named_check')} at the check the vectors name, {c('refused_at_another_check')} at another, "
+          f"{c('refused_where_none_named')} where they name none; compared with "
+          + "; ".join(f"{v}: sets {', '.join(str(r['set']) for r in rs)} ({c('accepted', rs)} accepted by the Lean verifier)"
+                      for v, rs in seconds.items()))
+    if alone := c("lean_alone_accepts"):
+        s += f"; FAILED: the Lean verifier alone accepts {alone}"
+    if failed := [f for r in ran for f in r.get("lean_failed") or ()]:
+        s += f"; ERROR: {len(failed)} Lean runs not read: " + "; ".join(failed)
+    return s
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall
@@ -1929,9 +1997,6 @@ AFTER_LEAN = SUITES.AFTER_LEAN
 #: no suite's key holds a variable; a test a variable turns on that this doesn't name, circuit-check's serial-report test of
 #: about 2.5 h, stays off.
 OPT_IN = {
-    "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
-        "test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-        "test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
     "adapters/vllm/verity_vllm/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
@@ -1949,16 +2014,6 @@ OPT_IN = {
         "test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
         "test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
-        "VERITY_VLLM_INTERIOR_TABLE": (
-            "pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
-            "pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
-            "pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
-            "pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
-            "pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
-            "pipeline/test_interior_table.py::test_a_table_reads_interior_registers_the_same_root_and_domain_each_commit",
-            "pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
-            "pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
-            "pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
         "VERITY_VLLM_HISTORY_E2E": (
             "pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
     "benchmarks/prove_path": {"VERITY_SLOW": (

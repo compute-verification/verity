@@ -20,11 +20,12 @@ jsonschema = pytest.importorskip("jsonschema")
 
 FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "deployments", "adversary")
 
-#: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
+#: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.  A line that names a
+#: card (`card`) is its card's figure, which tests/calibration/native_peak holds it to.
 PINNED = {
-    "hardware": {"a100-sxm4-80gb/bf16": 312e12, "h100-sxm5-80gb/bf16": 989.4e12, "h100-sxm5-80gb/e4m3": 1978.9e12,
-                 "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "rtx-pro-6000-server/bf16": 500e12,
-                 "rtx-pro-6000-server/e4m3": 1000e12, "rtx-pro-6000-server/e2m1": 2000e12, "l40s-48gb/bf16": 362.05e12,
+    "hardware": {"a100-sxm4-80gb/bf16": 312e12, "h100-sxm-80gb-sm/bf16": 1070.53056e12, "h100-sxm-80gb-sm/e4m3": 2141.06112e12,
+                 "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "rtx-pro-6000-server-tensor/bf16": 467.80416e12,
+                 "rtx-pro-6000-server-tensor/e4m3": 935.60832e12, "rtx-pro-6000-server-tensor/e2m1": 1871.21664e12, "l40s-48gb/bf16": 362.05e12,
                  "l40s-48gb/e4m3": 733e12},
     "deployments": {"dc-12500-machines-600s": (12500, 600)},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
@@ -36,9 +37,9 @@ PINNED = {
                              "scaled-mm-fp8-block-coordinate": ("K", "G", "semantics"), "bias-add": ("N",), "bf16-mul-scalar": ("N",),
                              "embedding-row": ("V", "H")},
     "datatypes": {"bf16": "BF16", "e4m3": "FP8 (E4M3)", "e2m1": "FP4 (NVFP4, E2M1)"},
-    "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm5-80gb/bf16": "H100 SXM5", "h100-sxm5-80gb/e4m3": "H100 SXM5",
-              "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090", "rtx-pro-6000-server/bf16": "RTX PRO 6000",
-              "rtx-pro-6000-server/e4m3": "RTX PRO 6000", "rtx-pro-6000-server/e2m1": "RTX PRO 6000", "l40s-48gb/bf16": "L40S",
+    "names": {"a100-sxm4-80gb/bf16": "A100 SXM4", "h100-sxm-80gb-sm/bf16": "H100 SXM5", "h100-sxm-80gb-sm/e4m3": "H100 SXM5",
+              "rtx-4090/e4m3": "RTX 4090", "rtx-5090/e2m1": "RTX 5090", "rtx-pro-6000-server-tensor/bf16": "RTX PRO 6000",
+              "rtx-pro-6000-server-tensor/e4m3": "RTX PRO 6000", "rtx-pro-6000-server-tensor/e2m1": "RTX PRO 6000", "l40s-48gb/bf16": "L40S",
               "l40s-48gb/e4m3": "L40S"},
     "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
@@ -104,7 +105,7 @@ def test_hardware_lines_are_dense_fp32_accumulate_peaks_with_their_datasheet() -
     for h in census.HARDWARE.values():
         assert "dense" in h.rate and "fp32 accumulate" in h.rate and h.id.endswith("/" + h.dtype) and census.line(h.device, h.dtype) is h
     assert "FP32 accumulate" in census.source(census.HARDWARE["rtx-4090/e4m3"])
-    h100 = census.source(census.HARDWARE["h100-sxm5-80gb/bf16"])
+    h100 = " ".join(s.label for s in census.HARDWARE["h100-sxm-80gb-sm/bf16"].readings[0].sources)
     assert "1978.9" in h100 and "sparsity" in h100
     fp4 = census.HARDWARE["rtx-5090/e2m1"]
     assert "3352" in census.source(fp4) and "Appendix A" in census.source(fp4) and "fp4" in fp4.rate
@@ -130,7 +131,7 @@ def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
     # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
     # hillclimbs (benchmarks/proof_throughput/gemm_hill.py)
-    rtx_pro = {f"rtx-pro-6000-server/{d}" for d in ("bf16", "e4m3", "e2m1")}
+    rtx_pro = {f"rtx-pro-6000-server-tensor/{d}" for d in ("bf16", "e4m3", "e2m1")}
     assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"} | rtx_pro
     sets = [s.target for s in census.INPUT_SETS.values()]
     assert set(sets) <= set(TARGETS) and len(sets) == len(set(sets))
@@ -325,7 +326,7 @@ def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_ba
         env = {k: v for k, v in vars(s.parameters).items() if isinstance(v, int)}
         assert census.evaluate(wm.bytes_per_input, env) == nbytes and wm.bytes_basis and wm.bytes_source
         assert s.id.startswith(s.template + "/") and s.display
-    for hid in ("h100-sxm5-80gb/bf16", "h100-sxm5-80gb/e4m3"):
+    for hid in ("h100-sxm-80gb-sm/bf16", "h100-sxm-80gb-sm/e4m3"):
         h = census.HARDWARE[hid]
         assert h.memory_bytes_per_second == 3.35e12 and "3.35 TB/s" in h.memory_sources[0].label and "3.35 TB/s" not in census.source(h)
     with pytest.raises(ValueError):

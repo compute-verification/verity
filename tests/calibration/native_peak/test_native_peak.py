@@ -49,8 +49,8 @@ def test_spec_table_and_size_parsing() -> None:
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "bf16")[0] == 312.0e12
     assert m.spec_peak("NVIDIA A100-SXM4-80GB", "e4m3") == (None, m.SPEC_PEAKS[1][2])
     assert m.spec_peak("NVIDIA A100 80GB PCIe", "bf16")[0] == 312.0e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 989.42976e12
-    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 1978.85952e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "bf16")[0] == 1070.53056e12
+    assert m.spec_peak("NVIDIA H100 80GB HBM3", "e4m3")[0] == 2141.06112e12
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
     assert m.spec_peak("NVIDIA H200", "bf16")[0] == 989.42976e12 and m.spec_peak("NVIDIA H200", "e4m3")[0] == 1978.85952e12
@@ -148,7 +148,7 @@ def test_measure_bf16_small_on_cuda(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
 
 
-def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_clock() -> None:
+def test_the_cards_reading_by_path_is_verity_devices_rate_at_each_clock_reading() -> None:
     from verity.device import load_card, number, rate
 
     m = _measure()
@@ -156,17 +156,37 @@ def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_cl
                       ("rtx-pro-6000-server", ("bf16", "e4m3", "nvf4"))):
         card = load_card(sku, directory=CARD_FILES)
         for fmt in fmts:
-            assert m.tensor_reading(sku, fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"]))), (sku, fmt)
+            for reading in ("tensor", "sm"):
+                assert m.tensor_reading(sku, fmt, reading) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"][reading]))), (sku, fmt, reading)
 
 
-def test_spec_peaks_agree_with_every_census_line() -> None:
-    """The pod-side table reads nothing on a pod but the shipped tree's cards; a line it reads from a card is the data sheet's
-    (the test above), and every other line must quote calibration/census/hardware.json's peak."""
+def test_every_census_line_is_its_card_or_its_spec_peaks_row() -> None:
+    """A census line that names a card (`card`) is the card's figure, recomputed here by `verity.device.rate` at the line's
+    clock reading, and it carries its data sheet's own figure as a named reading with its stated ratio to it (the RTX PRO 6000's
+    data sheet is 1.0688 times its card, and the H100's is 0.9243 times its card at its sm reading, the tensor's ceiling). Every other line must quote the pod-side table's data-sheet peak. The table agrees
+    with the card on every card line, and the line's memory figures are the card's."""
+    from verity.device import load_card, number, rate
+
     m = _measure()
     hardware = json.loads((REPO / "calibration" / "census" / "hardware.json").read_text(encoding="utf-8"))
     smi = {"NVIDIA A100 SXM4 80GB": "NVIDIA A100-SXM4-80GB", "NVIDIA H100 SXM5 80GB": "NVIDIA H100 80GB HBM3", "NVIDIA L40S 48GB": "NVIDIA L40S"}
     dtype = {"bf16": "bf16", "e4m3": "e4m3", "e2m1": "nvfp4"}
+    carded = {}
     for h in hardware:
-        peak, source = m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])
-        if not (source or "").startswith("calibration/hardware/cards/"):
-            assert peak == h["flop_per_second"], h["id"]
+        peak, _ = m.spec_peak(smi.get(h["device"], h["device"]), dtype[h["dtype"]])
+        if "card" not in h:
+            assert peak == h["flop_per_second"] and "readings" not in h, h["id"]
+            continue
+        card = load_card(h["card"]["sku"], directory=CARD_FILES)
+        derived = float(2 * rate(card, fmt=h["card"]["weight"], mhz=number(card["clock"][h["card"]["reading"]])))
+        assert h["flop_per_second"] == peak == derived and h["id"] == f"{h['card']['sku']}-{h['card']['reading']}/{h['dtype']}", h["id"]
+        assert card["clock"][h["card"]["reading"]]["mark"] == "ceiling", h["id"]
+        assert h["memory_bytes"] == number(card["store"]["dram"])
+        assert h.get("memory_bytes_per_second", number(card["memory"]["datasheet_bandwidth"])) == number(card["memory"]["datasheet_bandwidth"])
+        assert [r["name"] for r in h["readings"]] == ["datasheet"], h["id"]
+        for r in h["readings"]:
+            assert r["sources"] and r["ratio"] == round(r["flop_per_second"] / derived, 6), (h["id"], r["name"])
+        carded[h["id"]] = h["readings"][0]["ratio"]
+    assert {i: r for i, r in carded.items() if i.startswith("rtx-pro-6000-server")} == dict.fromkeys(
+        [f"rtx-pro-6000-server-tensor/{d}" for d in ("bf16", "e4m3", "e2m1")], 1.068823)
+    assert {i: r for i, r in carded.items() if i.startswith("h100")} == {"h100-sxm-80gb-sm/bf16": 0.924215, "h100-sxm-80gb-sm/e4m3": 0.924261}

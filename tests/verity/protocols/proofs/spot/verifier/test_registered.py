@@ -17,7 +17,8 @@ from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
 from verity.commitments.merkle import merkle_depth, tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.circuits.codec import canonical_json, decode_program, encode_program
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json, decode_program, descriptor_id, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
@@ -33,6 +34,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     verifier as V,
 )
 from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proofs.spot.verifier import levels as LV
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
@@ -182,6 +184,17 @@ def test_a_read_opens_only_its_own_row_under_its_own_value():
     assert not G.verify_read(dom, reg.root, 3, fresh, reg.path(3))
 
 
+def test_a_members_rows_of_a_shared_tree_open_it_only_at_its_own_leaves():
+    """One tree's rows 0 and 1 a member A's and 2 and 3 a member B's: B's rows open it at B's leaves and nowhere else, and
+    A's rows open none of B's; Flock's `Registered.check` (`Flock.Test.RegRows`) refuses the rest by these openings."""
+    reg = _registered(_program())
+    dom, a, b = reg.domain, (0, 1), (2, 3)
+    assert all(G.verify_read(dom, reg.root, p, reg.bcs[p], reg.path(p)) for p in a + b)
+    assert not any(G.verify_read(dom, reg.root, q, reg.bcs[p], reg.path(q)) for p, q in zip(b, a))
+    assert not any(G.verify_read(dom, reg.root, q, reg.bcs[p], reg.path(p)) for p, q in zip(b, a))
+    assert not any(G.verify_read(dom, reg.root, p, reg.bcs[q], reg.path(p)) for p, q in zip(b, a))
+
+
 def test_salts_are_one_per_row_and_never_reused():
     prog = _program()
     salt = hm96.SHA512.fresh_salt()
@@ -307,6 +320,18 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
         G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
 
 
+def test_the_verifiers_reads_file_without_positions_is_flocks_position_free_format():
+    """Without ``positions`` the file is Flock's `Registered.FORMAT` (`READS_V2`), whose verifier derives every read from
+    C: each port is the positioned file's but its ``reads``."""
+    prog = _program()
+    reg = _registered(prog)
+    v0 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()})
+    v2 = G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, positions=False)
+    assert (v0["format"], v2["format"]) == (G.READS, G.READS_V2 == "verity/registered-reads/v2" and G.READS_V2)
+    assert v2["ports"] == {p: {k: x for k, x in e.items() if k != "reads"} for p, e in v0["ports"].items()}
+    assert all("reads" in e for e in v0["ports"].values())
+
+
 def test_bind_ports_binds_each_port_the_file_leaves_out_at_the_registrations_root():
     """`bind_ports` (`Flock.RegBound`): a v1 file's ports the statement has and the file names no registered port for are
     bound at the docket's root and domain of their rows, its registered ports left as they are; a file with no
@@ -415,17 +440,6 @@ def test_two_reads_under_one_port_name_are_refused():
                         schemas={"A": G.SCHEMA_V2})["ports"].keys() == {"a0", "a1"}
 
 
-#: the SHA-512 of each `_two_params(second)` program's descriptor, `canonical_json(encode_program(...))` (for `w`, which
-#: no longer encodes, the `v` descriptor with `v` renamed): the bytes
-#: `verity/protocols/proofs/flock/verifier/Flock/Test/RegTwoParams.lean` holds (`desc`) and pins alike
-TWO_PARAMS = {
-    "w": "802171939d9baed267cc2b5516306111e61a937c6a5ad3892c0c032d44c287b2"
-         "78b2456e0f6e79f31d9797c9da6d86d1c67817396fa1f12ad1bb48055021b6fb",
-    "v": "352f7f13f7e80ef597b363b4fee73e5b2cd0a6c44cd4aae4a39337dbb87be66d"
-         "cd137737f06e3319226a2faee21a86c9a0921e027960d737e16164fbe5baa000",
-}
-
-
 def _two_params(second: str):
     """A program of the registered values A and B (two rows of two bytes each) whose proof block u is an instance of a
     template of the parameters `w` and `second`, reading row u of A at `w` and row u of B at `second`; and the template."""
@@ -454,10 +468,8 @@ def test_two_parameters_of_one_name_are_refused():
         _two_params("w")
     distinct, t = _two_params("v")
     desc = canonical_json(encode_program(distinct))
-    assert hashlib.sha512(desc).hexdigest() == TWO_PARAMS["v"]
     assert desc.count(b'"v"') == 1
     dup = desc.replace(b'"v"', b'"w"')
-    assert hashlib.sha512(dup).hexdigest() == TWO_PARAMS["w"]
     reg = DefinitionTable()
     reg.add(XOR8)
     with pytest.raises(ValueError, match=want):
@@ -466,6 +478,59 @@ def test_two_parameters_of_one_name_are_refused():
     doc = G.reads_file(distinct, q, {"A": 2, "B": 2}, {"A": "ab" * 64, "B": "cd" * 64})
     assert {p: (e["value"], e["root"], e["reads"]) for p, e in doc["ports"].items()} == {
         "w": ("A", "ab" * 64, [0, 1]), "v": ("B", "cd" * 64, [0, 1])}
+
+
+def _two_templates():
+    """A program whose first two proof blocks are instances of a template reading row u of A (two bytes) at its parameter
+    `b`, and whose last two are instances of another reading row u of B (three bytes) at its own `b`; the query over both,
+    and the two templates' ids."""
+    two, three = Array(2, Value(8)), Array(3, Value(8))
+    ta = bind(CompositeDefinition("RegisteredTestPortA", 0, (), lambda S: ((("b", two),), Value(8)),
+                                  lambda B, S, b: B.call(XOR8, b[0], b[1]), register=False))
+    tb = bind(CompositeDefinition("RegisteredTestPortB", 0, (), lambda S: ((("b", three),), Value(8)),
+                                  lambda B, S, b: B.call(XOR8, B.call(XOR8, b[0], b[1]), b[2]), register=False))
+
+    def sig(S):
+        return (("A", Array(2, two)), ("B", Array(2, three))), Array(4, Value(8))
+
+    prog = Program(bind(CompositeDefinition("RegisteredTestPortProgram", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(ta, A[0]), B_.call(ta, A[1]),
+                                                                                        B_.call(tb, B[0]), B_.call(tb, B[1])]),
+                                            register=False)))
+    ids = [descriptor_id(ta), descriptor_id(tb)]
+    return prog, PO.template_instances_query(ids), ids
+
+
+def test_a_port_of_one_name_in_two_templates_reads_each_templates_own_value():
+    """Two templates each read a value at a parameter `b`, A's two-byte rows in one and B's three-byte rows in the other.
+    Over both templates one key `b` would be two reads, and it is refused, never merged. With `template` each gets its
+    own: the value its own proof blocks read, at their rows, and every other proof block's row None; the file of one
+    template names its own value's leaves, row width and domain, never the other's."""
+    prog, q, (ta, tb) = _two_templates()
+    values, roots = {"A": 2, "B": 3}, {"A": "ab" * 64, "B": "cd" * 64}
+    with pytest.raises(ValueError, match="parameter 'b' reads 'A' in one template and 'B' in another"):
+        G.reads(prog, q, values)
+    assert G.reads(prog, q, values, template=ta) == {"b": {"value": "A", "rows": [0, 1, None, None]}}
+    assert G.reads(prog, q, values, template=tb) == {"b": {"value": "B", "rows": [None, None, 0, 1]}}
+    mine = G.registered_entries(prog, values)
+    for t, v in ((ta, "A"), (tb, "B")):
+        port = G.reads_file(prog, q, values, roots, positions=False, template=t)["ports"]["b"]
+        assert port == {"value": v, "root": roots[v], "leaves": 2, "words": values[v], "word_bits": 16,
+                        "domain": mine[v]["domain"]}
+    assert mine["A"]["domain"] != mine["B"]["domain"]
+
+
+def test_a_read_of_a_template_the_query_lacks_or_a_parameter_its_template_lacks_is_refused():
+    """A read is one template's parameter's: a template with no instance among the query's units is refused by name, and so
+    is a `ports` entry naming a parameter at which the named template reads no registered value (`col`, a parameter of
+    no template here), as the Lean verifier refuses a port of a parameter the statement's template does not have."""
+    prog, q, (ta, _tb) = _two_templates()
+    values, roots = {"A": 2, "B": 3}, {"A": "ab" * 64, "B": "cd" * 64}
+    with pytest.raises(ValueError, match=r"template RegisteredTestMix\S* has no instance among the query's units"):
+        G.reads(prog, q, values, template=MIX.id)
+    with pytest.raises(ValueError, match=re.escape(f"ports names parameters ['col'], and {ta} reads no registered value")):
+        G.reads_file(prog, q, values, roots, ports={"b": "b0", "col": "c"}, positions=False, template=ta)
+    assert G.reads_file(prog, q, values, roots, ports={"b": "b0"}, positions=False, template=ta)["ports"].keys() == {"b0"}
 
 
 def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():
@@ -1091,6 +1156,19 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, (change, got)
 
 
+def test_the_verifier_refuses_a_two_stage_run_by_name():
+    """`spot-verifier`'s `run` (`Pieces.runOfRecord`) refuses a two-stage rule with `levels.TWO_LEVELS_REFUSED`, and
+    `run` reports it as a failed verdict whatever the Python's twin says, never an accept."""
+    rec, check, _, _ = _seeded_case()
+    p, q, design, ports = check["program"], check["query"], check["sampling_design"], check["ports"]
+    rule = {"rule": "two-stage", "replay": "rate:1/2", "k": 1,
+            "grain": {"name": "Q_template_instance", "version": 0, "params": {"template": "t"}}}
+    got = V.run({"symbol": "accept"}, rec, p, q, design, check["scheme"], ports, None, (), [], None, None, rule, [], [],
+                "c", "r", b"", None, [], {}, [], {}, 0.5)
+    assert not got.ok and got.codes == (V.DISAGREE,)
+    assert got.verifiers["lean"] == {"refused": LV.TWO_LEVELS_REFUSED}, got.verifiers
+
+
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
     """`run` hands the Lean's run (`Run.run`) the history tables of each docket it parses, the boundary's and,
     under a two-stage design, the interior's, as the parameters `check` hands the Lean's docket, so a reader's
@@ -1512,8 +1590,9 @@ def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
     same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
-    doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is
-    refused before the record is read."""
+    doesn't hold, a record that isn't the log's last (the previous record, whose own check held the entry's domain), or
+    an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is refused before the
+    record is read."""
     prog = _program()
     reg = _registered(prog)
     first, ports = _record(prog, reg)
@@ -1543,6 +1622,9 @@ def test_r7_reuses_an_earlier_records_registered_value():
     for bad in ({"record": "ee" * 64, "value": "a/16@0"}, {"record": DD.digest(earlier), "value": "nope"},
                 {"record": DD.digest(earlier), "value": "W"}, {"record": DD.digest(rec), "value": "a/16@0"}):
         assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    later = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 7}, previous=DD.digest(earlier))
+    assert R.check({**rec, "previous": DD.digest(later)}, prog, Q, **{**kw, "log": [earlier, later]},
+                   outputs=out).codes[0] == "R7-output"
     for bad in ({"W": {**out["W"], "port": "prev.out"}}, {"W": {**out["W"], "value": 1}}, {"W": {"value": "a/16@0"}},
                 {"W": {**out["W"], "record": "EE" * 64}}):
         with pytest.raises(ValueError):

@@ -31,4 +31,7 @@ inputs = ["benchmarks/memory", "benchmarks/poub_session/summary.py", "benchmarks
     "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
     "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
     "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+    "verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/draw.py", "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
+    "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
 ]

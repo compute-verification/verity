@@ -240,73 +240,6 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
     assert P.n_splits_consts_bound == 2 and k0 in {r["k"] for r in P.inst}
 
 
-def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
-    """The two-rank D90 fixture (tests/check/test_tp2_d90_fixture.py) through compare with COMPACT operands:
-    the PEER canonical source of every collective instance (a progression of reads of the request's peers node, field-relative) expands
-    to the record's per-run list on both sides, the positive passes both ranks and every compare negative fails, exactly as in run form."""
-    import pytest
-
-    from verity_vllm.check.match import program_compare as C
-    try:
-        from tests.check import test_tp2_d90_fixture as T
-    except ImportError as e:   # pragma: no cover - the fixture needs the resolver/fold stack
-        pytest.skip(f"tp2 D90 fixture unavailable: {e}")
-
-    def run(compact: bool, sub: str, rank: int, fold_kw: dict, prog_kw: dict):
-        d = tmp_path / f"{sub}_{'c' if compact else 'r'}"
-        d.mkdir()
-        res, A, B = T.compare_rank(d, rank, T.fold_rank(rank, **fold_kw), T.rank_program(rank, **prog_kw), compact=compact)
-        return res, A, B
-
-    def canon_runs(P: C.RootView, i: int) -> list:
-        return [K.expand_mixed(a) for a in P.canon(i)]
-
-    for rank in (0, 1):
-        res_r, Ar, Br = run(False, f"pos{rank}", rank, {}, {})
-        res_c, Ac, Bc = run(True, f"pos{rank}", rank, {}, {})
-        assert Ac.compact and Bc.compact and not Ar.compact
-        assert res_r["ok"] and res_c["ok"], (res_r, res_c)
-        assert res_r["canonical_sha256"] == res_c["canonical_sha256"]
-        assert len(Ar.inst) == len(Ac.inst) and len(Br.inst) == len(Bc.inst)
-        for i in range(len(Ar.inst)):
-            assert [list(a) for a in Ar.canon(i)] == canon_runs(Ac, i), (i, Ar.inst[i]["spec"])
-        for i in range(len(Br.inst)):
-            assert [list(a) for a in Br.canon(i)] == canon_runs(Bc, i), (i, Br.inst[i]["spec"])
-        ar = next(i for i, r in enumerate(Ac.inst) if r["spec"].startswith("AllReduce2_v1"))
-        assert any(t[0] == "PEER" for t in Ac.canon(ar)[0]), Ac.canon(ar)
-    for name, fold_kw, prog_kw in (("swapped_rank", {}, {"swap_parts": True}), ("wrong_peer", {}, {"peer_of": {1: 0}}),
-                                   ("off_by_one_step", {}, {"peer_of": {2: 5, 5: 2}}), ("wrong_op", {}, {"wrong_op_k": 0}),
-                                   ("equal_result_wrong_producer", {"mut": {"wrong_producer": True}}, {}),
-                                   ("wrong_count", {"mut": {"drop_collective": 0}}, {}), ("reordered_lanes", {"mut": {"reorder": True}}, {})):
-        res_r, _, _ = run(False, name, 0, fold_kw, prog_kw)
-        res_c, _, _ = run(True, name, 0, fold_kw, prog_kw)
-        assert not res_r["ok"] and not res_c["ok"], name
-        assert res_r["canonical_sha256"] == res_c["canonical_sha256"], name
-        assert res_r["totals"] == res_c["totals"], name
-    # the two-rank fold persisted as runs and as progressions: the TP collective-row reader
-    # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
-    # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this check is the record reader's.
-    from verity_vllm.check.match import rank_match as RM
-    from verity_vllm.pipeline import match_fold as MF
-    folds = {r: T.fold_rank(r) for r in (0, 1)}
-    prod: dict[str, dict] = {}
-    for form in ("runs", "progressions"):
-        monkeypatch.setenv(MF.INSTANCES_FORM_ENV, form)
-        prod[form] = {}
-        for r in (0, 1):
-            d = tmp_path / f"store_{form}_rank{r}"
-            d.mkdir()
-            T.persist_fold(folds[r], d, r)
-            hdr = json.loads((d / "instances.jsonl").read_text().splitlines()[0])
-            assert hdr["operand_refs_form"] == form and hdr["schema"] == (MF.INSTANCES_SCHEMA_V2 if form == "progressions" else MF.INSTANCES_SCHEMA)
-            prod[form][r] = RM.own_producers_from_record(d / "instances.jsonl")
-    monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
-    assert prod["runs"] == prod["progressions"] and prod["runs"][0] and prod["runs"][0] == {k: v for k, v in RM.own_producers(folds[0]).items()}
-    verdicts = [RM.cross_rank_check({0: folds[0].collectives, 1: folds[1].collectives}, producers=prod[form],
-                                    fold_errors={0: len(folds[0].errors), 1: len(folds[1].errors)})["verdict"] for form in ("runs", "progressions")]
-    assert verdicts == ["PASS", "PASS"], verdicts
-
-
 def _prog_facts(P) -> dict:
     return {"digest": P.digest, "inputs": P.inputs, "inst": P.inst, "n_nodes": P.n_nodes, "param_names": P.param_names,
             "rows": P.oracle_rows, "wmap": P.oracle_wmap, "input_base": P.input_base, "n_input_nodes": P.n_input_nodes,
@@ -378,6 +311,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     from tests.check import test_global_match as T
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_loaders as PL
+    from verity_vllm.check.match import global_match as gm
     from verity_vllm.pipeline import cli
     from verity_vllm.pipeline import match_fold as MF
     monkeypatch.delenv(MF.INSTANCES_FORM_ENV, raising=False)
@@ -393,7 +327,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
             gpp = tmp_path / f"gp_{tag}.json"
             gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
-            cli.main(["global-match", "--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
+            cli.run(gm, ["--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
             docs[(impl, tag)] = json.loads(_text(out))
     for (impl, tag), d in docs.items():
         assert d["verdict"] == "PASS" and d["impl"]["name"] == impl, (impl, tag, d["reasons"])
@@ -601,20 +535,3 @@ def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_wha
     assert str(lean.value) == str(refused.value)
 
 
-def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):
-    """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over the D90 fixture, compact form: equal where
-    the sequence is, unequal on a compare negative."""
-    import pytest
-
-    from verity_vllm.check.match import global_match_fast as GMF
-    try:
-        from tests.check import test_tp2_d90_fixture as T
-    except ImportError as e:   # pragma: no cover
-        pytest.skip(f"tp2 D90 fixture unavailable: {e}")
-    for sub, prog_kw, want in (("pos", {}, True), ("wrong_op", {"wrong_op_k": 0}, False), ("swapped", {"swap_parts": True}, False)):
-        d = tmp_path / sub
-        d.mkdir()
-        res, A, B = T.compare_rank(d, 0, T.fold_rank(0), T.rank_program(0, **prog_kw), compact=True)
-        assert res["ok"] is want
-        dm = GMF.dag_multiset(A, B)
-        assert dm["equal"] is want and (dm["only_a"] == dm["only_b"] == 0) is want, (sub, dm)

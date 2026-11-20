@@ -57,6 +57,7 @@ from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
 from verity.commitments import docket_digest as DD
+from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.protocols.resource_accounting.network.verifier import registered as RH
 from verity.protocols.resource_accounting.network.verifier import span
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -213,7 +214,7 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
-    (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
+    (`paramsOfJson`): ``proofs``, exactly the public file's SHA-512 and the verifier's registered file or
     null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
     a subset sampling design (`subset_design`), its last refusal. The per-member form (``proofs`` exactly ``members``)
     is outside the mirror."""
@@ -222,10 +223,9 @@ def _one_stage_params(rest: dict) -> dict:
     pr = rest["proofs"]
     if isinstance(pr, dict) and sorted(pr) == ["members"]:
         raise ValueError("outside the mirror: the per-member form of the parameters' proofs")
-    _keys(pr, ["circuit", "public", "registered"], "proofs")
-    for k in ("circuit", "public"):
-        if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
-            raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
+    _keys(pr, ["public", "registered"], "proofs")
+    if not (isinstance(pr["public"], str) and len(pr["public"]) == 128 and all(c in "0123456789abcdef" for c in pr["public"])):
+        raise Reject("proofs: public is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
     p = ONE_STAGE.parsed_params_v2(rest)
@@ -308,7 +308,8 @@ def _two_stage_evidence(j: Any) -> dict:
 def _form_params(j: Any) -> dict:
     n, rest = _split(j, "parameters", params=True)
     if n == 2:
-        return _two_stage().params_of_json(j)
+        _two_stage().params_of_json(j)
+        raise Reject(TWO_LEVELS_REFUSED)
     return _one_stage_params(rest)
 
 
@@ -739,7 +740,7 @@ def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Excepti
         return [b""]
 
 
-#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names.
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record, the tie of remote's development

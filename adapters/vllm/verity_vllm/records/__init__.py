@@ -1,12 +1,11 @@
 """Stage records, typed: one frozen dataclass per record kind one stage writes and another reads.
 
 A record's `of` reads the parsed JSON as its writer writes it, with where it was read from, and refuses a missing required
-field, naming the file and the field (`fields.MissingField`); `build_summary`, `required_manifest` and `workload` have a `load`
+field, naming the file and the field (`fields.MissingField`); `required_manifest` and `workload` have a `load`
 too, which reads a file and hands it to `of`.  A field a writer may leave out is `X | None`, with the reason beside it; nothing
 is defaulted.  The package imports nothing else from `verity_vllm`, so every stage may import it.
 
-* `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`), as the replay's coverage reads it.
-* `query_checks` -- the sampled replay's reconciliation against Q(P) (`population.query_checks`), as the C2 rules read it.
+* `required_manifest` -- the required-value manifest (`verity-sweep/required-manifest/v1`).
 * `served_tokens` -- the driver's served tokens of one run (`capture/tokens.json`), as the global match's chronology check reads them.
 * `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same check reads them.
 * `workload` -- the workload (`verity-vllm/workload/v2`, and the v1 layout older runs hold), as the stochastic replay and
@@ -14,8 +13,6 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
   its `of` also refuses a field no writer writes (`fields.UnknownField`), and `dump` writes it back.
 * `global_match` -- the global match's Match result (`cb-a/global-match/v1`), as the executed prefix's link to the Match account reads it;
   its `of` refuses an unknown field and `dump` writes it back, as `workload`'s do.
-* `build_summary` -- the Build's summary (`build_summary.json`, in its `tp1`, `tp` and `tp2-r19` layouts), as the verdict reads the
-  Build's correspondence digest; its `of` refuses an unknown field and `dump` writes it back, as `workload`'s do.
 * `commit_run` -- the Commit record, one run of a pair (a line of `commit/runs.jsonl`: `verity/commit-integ/delta/v1`, the TP
   writer's `delta-tp/v1` and a sealed serving window's), as the verdict reads it; its `of` refuses an unknown top-level field.
 * `commit_binding` -- its `binding` block: the identity coverage, the executed prefix of record with its two account links, the rows
@@ -33,12 +30,11 @@ is defaulted.  The package imports nothing else from `verity_vllm`, so every sta
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.
 * `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
-  sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
-  `of` refuses an unknown field and `dump` writes it.
+  sampled request's logits rows, tokens and steps; its `of` refuses an unknown field and `dump` writes it.
 * `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
   nothing else: its readers read it as the dict it is.
-* `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
-  ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
+* `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v2`, ``predicted.json``): the Build of record the
+  ahead-of-time compiler wrote and the registered compiler it binds, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
 * `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`,
   ``commit.json``): its layout, each value's root and the index's leaf, as the class's registration and a recommit from the

@@ -33,6 +33,7 @@ LEAN_PKG=verity/protocols/resource_accounting/memory/poub/verifier/lean
 CU_PKGS=("nvidia-cuda-nvcc==13.0.88" "nvidia-cuda-runtime==13.0.96" "nvidia-cuda-crt==13.0.88" "nvidia-nvvm==13.0.88"
          "nvidia-cuda-cccl==13.0.85" ninja)
 export UV_CACHE_DIR=$KEEP/uv-cache UV_PYTHON_INSTALL_DIR=$KEEP/python PATH=$KEEP/bin:$PATH
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 last() { echo "vcf_job $STAGE: reached ${REACHED}${WHY:+; refused: $WHY}"; }
 trap last EXIT
 left() { echo $(( DEADLINE - $(date +%s) > 30 ? DEADLINE - $(date +%s) : 30 )); }
@@ -201,7 +202,7 @@ s = gen_sampling_module(); s.build_and_load(); print("loaded", s.build_dir)' > "
 got "FlashInfer's sampler built and loaded (nvcc $("$CUDA_HOME/bin/nvcc" --version | sed -n 's/.*release \([0-9.]*\),.*/\1/p'), ninja $(ninja --version), $("$CXX" --version | head -1))"
 say "CUDA_HOME=$CUDA_HOME CXX=$CXX nvcc=$(command -v nvcc) ninja=$(command -v ninja)"
 export VLLM_PY=$KEEP/vllm/bin/python LOCAL_WORK=$KEEP/work \
-  LEAN_EXE=$T/$LEAN_PKG/.lake/build/bin/poub-verifier RESEARCH_SOURCE_SHA=$COMMIT VERITY_BENCH_TRIAL=1 GPU=$CARD \
+  RESEARCH_SOURCE_SHA=$COMMIT VERITY_BENCH_TRIAL=1 GPU=$CARD \
   GPU_LEASE_ALLOWED_FILE=$KEEP/work/allowed-gpus
 say "verity bench memory --local on card $CARD (sm_$SM), $(( $(left) / 60 )) min left"
 timeout --signal=INT --kill-after=60 "$(left)" .venv/bin/verity bench memory --local > "$J/result/bench.out" 2> "$J/result/bench.err"

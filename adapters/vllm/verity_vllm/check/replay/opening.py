@@ -6,8 +6,8 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 """
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, Protocol
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -56,13 +56,6 @@ def _invocation(e: dict) -> int:
     return int(bound_identity(e).get("invocation", 0) or 0)
 
 
-class WordStore(Protocol):
-    """What a replay reads of a store: `CommittedStore.words`, which a request's own replay answers as well
-    (`request_replay.Replay`, `recomputed_prefix.RecomputedPrefix`)."""
-
-    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]: ...
-
-
 class CommittedStore:
     """Committed words of a bound identity: (request, ENGINE step, op_path, member, request-local element slice) via the binding map.
 
@@ -100,10 +93,11 @@ class CommittedStore:
 
     @classmethod
     def of_record(cls, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
-                  manifest: RequiredManifest | dict[str, Any] | None) -> CommittedStore:
-        """The store the replay of record uses: the binding map read through the manifest's alias table (None manifest = no aliases: a
-        shared module's layer-N path is then missing by name, never silently the lowest invocation)."""
-        return cls(bmap, committed, alias_table(manifest))
+                  aliases: Mapping[str, Sequence[Any]] | None = None) -> CommittedStore:
+        """The store the replay of record uses: the binding map read through ``aliases``, op_path -> (canonical op_path,
+        invocation) (`alias_table`'s, or a seal's runtime tree's; none: a shared module's layer-N path is then missing by name,
+        never silently the lowest invocation)."""
+        return cls(bmap, committed, {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()})
 
     def resolve(self, op_path: str) -> tuple[str, int]:
         return resolve_op_path(self.aliases, op_path)

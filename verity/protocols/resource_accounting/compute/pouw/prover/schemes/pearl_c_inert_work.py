@@ -229,7 +229,8 @@ def cut_flags(acc: int, a: Sequence[int], b: Sequence[int], device: Device = H10
     """`Mend.cuts`: per product of one atom step from the accumulator word `acc`, whether the adder cuts it, its aligned
     contribution at its group's exponent being 0: each group's exponent is the largest of the incoming value's and the
     group's nonzero non-NaN products', at least the floor, and a product's significand on the adder is shifted right by
-    its distance below it (`models.group_sum`)."""
+    its distance below it (`models.group_sum`). A zero product is cut wherever its nominal exponent lies, as
+    `Fp8Atom.aligned` is 0 at zero magnitude."""
     atom, rescale = device.atom, device.atom.width - FP32_SIGNIFICAND_WIDTH
     value: Term | None = None if (acc >> 23) & 0xFF == 0xFF else fp32_term(acc)
     out: list[bool] = []
@@ -248,7 +249,7 @@ def cut_flags(acc: int, a: Sequence[int], b: Sequence[int], device: Device = H10
             top = value.exponent
         for _, e, mag, _ in prods:
             scaled = mag << rescale if rescale >= 0 else mag >> -rescale
-            out.append((scaled >> (top - e)) == 0)
+            out.append(not mag or (scaled >> (top - e)) == 0)
         if value is not None and not any(nan for *_, nan in prods):
             value = group_sum([value, *(Term(s, e, m) for s, e, m, _ in prods)], width=atom.width,
                               zero_exponent=atom.zero_exponent)

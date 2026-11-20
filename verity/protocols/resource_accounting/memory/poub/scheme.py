@@ -17,9 +17,10 @@ No verifier loads this module: each verifier states its own id, component name a
 equal to the declarations. It reads each one's parties and channels from its verifier's manifest (`verifier.p2_parties`,
 `verifier.session_parties`).
 
-Neither declares a block: PoUB's opening unit (`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2``) is
-proved in the read session's own window (`prover.window`), not as a template of the served circuit's first level, and
-P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
+`POUB`'s blocks are its window's (`prover.window`): one unit of the opening unit ``BlockOpeningUnit_v2``
+(`verifier.commitments.gates.block_check`, ``BlockOpeningCheck_v2`` in its six rows) a sampled receipt, each costing
+the bits of the block a receipt reads, its static ``BYTES`` (`verifier.codec.BLOCK_BYTES`), which the verifier reads
+from the registered circuit. `BANDWIDTH` declares none: P2's openings go to its verifier in the clear. Each says its own term (`Scheme.delta_scheme`) as a `Term`: the sketch
 bound's error `δSketch g b Q P N εrank` (`DELTA_SCHEME`) at its receipts' layout (g, b), a function of the prover's hash
 budget ``Q``, the session's passes ``P``, the store's blocks ``N`` and the sign blocks' rank tail ``rank_tail`` (the
 Lean's εrank, which is not the audit's error ε).
@@ -33,6 +34,7 @@ its `GetsBack` gives. The term and the sides are not yet one statement: `Run.sch
 
 from __future__ import annotations
 
+import shlex
 from collections.abc import Mapping
 from fractions import Fraction
 from importlib import import_module
@@ -144,7 +146,7 @@ _REQUIRES = {
 }
 
 BANDWIDTH = S.register(S.Scheme(
-    name="bandwidth",
+    name=P2.COMPONENT,
     protocol=domains.POUB_P2,
     resource="read",
     blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
@@ -176,7 +178,12 @@ BANDWIDTH = S.register(S.Scheme(
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
-    pieces={"prover": S.Launch(optional=("host", "command"), development="host")},
+    pieces={"prover": S.Launch(
+        optional=("host", "command"), development="host",
+        entry="verity.protocols.resource_accounting.memory.poub.scheme:launch_bandwidth",
+        executables=(S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-p2-protocol"),
+                     S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-verifier")))},
+    reads={P2.CLOSER_PARTY: {"challenger": ("pous", "memory-challenger")}},
     answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     unchecked=P2.mc.UNCHECKED,
     record="bandwidth",
@@ -196,7 +203,7 @@ POUB = S.register(S.Scheme(
     name="poub",
     protocol=domains.POUB_PROTOCOL,
     resource="read",
-    blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
+    blocks=(S.Block("BlockOpeningUnit_v2", lambda shape: 8 * shape["BYTES"]),),
     assumptions=(*_SKETCH, "ResourceAccounting.Assumptions.WorkHardness",
                  "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling"),
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
@@ -211,9 +218,9 @@ POUB = S.register(S.Scheme(
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: the node store's registration root and a receipt root a pass",
-        "one-design": _OUTSIDE + "in the read session's own window (prover.window), whose circuit is not built "
-                                 "(memory-accounting/read-session-in-zero-knowledge); today its own sample of "
-                                 "receipts a window and its own pooled bound",
+        "one-design": "its blocks are proved in the read session's own window (prover.window), whose rows the "
+                      "verifier makes are not yet given (Window.give); today its own sample of receipts a window "
+                      "and its own pooled bound",
     },
     over="the credited bits: the committed receipts' words, committed · b bits (`Remote.Run.committed`)",
     under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
@@ -333,6 +340,29 @@ def session(verifier: str, **kw: Any) -> Any:
     return prover(SESSION_PROCESS)(verifier, **kw)
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
+BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
+#: served_piece.py's flag for each binding of PoUB's bandwidth verifier
+_BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
+
+
+def _bandwidth_hooks(cfg, params, bound, pinned):
+    """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
+    pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
+    case. Unbound, PoUS's run keys start the bandwidth party too, under PoUS's key made for the run."""
+    from verity.protocols.resource_accounting.memory.pous.scheme import onsite_command
+
+    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
+             *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
+    return {**({"POUS_ARGS": shlex.join(words)} if words else {"DEVELOPMENT": "1"}),
+            "BANDWIDTH_CMD": onsite_command("BANDWIDTH_CMD")}
+
+
+def launch_bandwidth(declaration: S.Scheme) -> tuple[Any, tuple[str, ...]]:
+    """The bandwidth audit's prover piece (its `Launch.entry`): its hooks and the script they run. It launches and
+    collects, and decides no verdict."""
+    return _bandwidth_hooks, (BANDWIDTH_SCRIPT,)
+
+
+__all__ = ["BANDWIDTH", "BANDWIDTH_SCRIPT", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
            "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
-           "requests", "session"]
+           "launch_bandwidth", "requests", "session"]

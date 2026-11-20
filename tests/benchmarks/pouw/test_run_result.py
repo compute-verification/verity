@@ -126,7 +126,7 @@ def test_exact_kits_writer_and_the_kits_write_one_result_key_for_key(a_run, tmp_
 
 def test_a_runs_second_writer_replaces_the_result_where_the_kit_refuses_a_second_validation(a_run):
     """`pearlc_k256_gate.sh`'s run is many processes that each write a whole result, and the run's is the last one's,
-    the verdict's; `theory/run.py`'s is each script's and then its own. Through the kit the first one's would stand."""
+    the verdict's. Through the kit the first one's would stand."""
     _write(a_run, a_run / "out" / "census.json")
     R.write(a_run / "out" / "verdict.json", False, "the verdict", "a part fails", [("parts", 2, "count")])
     last = json.loads((a_run / "result.json").read_text())

@@ -44,7 +44,7 @@ DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "wipe": f"{_MEMORY}.pous.scheme",
 })
 
-#: the modules whose ``MESSAGES`` are workload message types no scheme declares: useful work's (H1's)
+#: the modules whose ``MESSAGES`` hold workload message types no scheme declares: useful work's (its monitoring period)
 WORKLOAD_MESSAGES = (f"{_COMPUTE}.pouw.prover.workload",)
 
 

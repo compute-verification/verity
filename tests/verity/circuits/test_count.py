@@ -1,6 +1,6 @@
 """`count`: a circuit's Boolean gate count from its own Boolean bodies, held to the census of the circuit lifted to bits, on
 the periods' chain and three small Definitions; and `count_vectors.jsonl`, the vectors Lean's count reads
-(`uv run python tests/verity/circuits/test_count.py --write` rewrites them)."""
+(`uv run python tools/check/pins.py --write tests/verity/circuits/count_vectors.jsonl` rewrites them)."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,8 @@ from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.periods import interface as I
 
 PATH = Path(__file__).parent / "count_vectors.jsonl"
-REWRITE = "the count's vectors differ: a change meant to move them rewrites them (module docstring)"
+REWRITE = ("the count's vectors differ: a change meant to move them rewrites them with "
+           "`uv run python tools/check/pins.py --write tests/verity/circuits/count_vectors.jsonl`")
 F32 = Value(32)
 BIT = Value(1)
 ADD = REGISTRY["F32Add_v2"]
@@ -133,13 +134,14 @@ def test_a_word_primitive_without_a_body_is_refused_by_name():
         K.count(program)
 
 
-def test_a_catalogue_primitive_with_no_body_is_refused_by_name_and_never_priced():
+def test_a_catalogue_primitive_is_priced_by_its_own_boolean_body():
     from verity.circuits.ops import words as W
-    from verity.circuits.program import NoBooleanBody
 
     params, ret = W.PouwAdd64Hi.signature()
-    with pytest.raises(NoBooleanBody, match="PouwAdd64Hi_v1"):
-        _wrap("CountNoBody", params, ret, lambda B, S, *a: B.call(W.PouwAdd64Hi, *a))
+    program = _wrap("CountCatalogue", params, ret, lambda B, S, *a: B.call(W.PouwAdd64Hi, *a))
+    assert program.boolean[W.PouwAdd64Hi.id].id == "PouwAdd64Hi_v2"
+    got = K.count(program)[W.PouwAdd64Hi.id]
+    assert got.ands == 63 and got.gates == _lifted(program)
 
 
 def test_the_vectors_are_the_counts():

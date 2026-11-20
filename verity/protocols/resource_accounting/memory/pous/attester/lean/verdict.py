@@ -1,8 +1,8 @@
 """`memory_attester.verdict` computed by its Lean port, behind the Python's signature: `verdict(signed, commitment, openings,
 expected, trusted=..., schemes=...)` sends the record to `memory-challenger-verdict` (`MemoryChallenger.Judge`, built here
 with `lake` on first use) and returns its `Verdict`, the reasons the Python's word for word.  `memory_attester.verdict`
-stays the reference: `tests/test_verdict.py` holds this to it, and `benchmarks/pous/memory_attester/live.py`'s `judge`
-runs both on every session, records both, and rejects a session they disagree on.
+stays the reference, which `tests/test_verdict.py` holds this to; `benchmarks/pous/memory_attester/live.py` judges by
+this alone.
 
 The record goes as `to_json` writes its parts.  `expected` is read only at the labels the rounds name, so C's whole table
 never crosses; `schemes` goes by id, each one the port verifies (`MemoryChallenger.KNOWN_SCHEMES`: `memory_attester.LMS`
@@ -44,6 +44,16 @@ def server() -> D.Server:
     return D.Server([str(D.build(PACKAGE, EXE))])
 
 
+def finish() -> None:
+    """The end of a run's verdicts: the server's input closed, the process waited for, and `D.ProtocolError` by name
+    (`LEAN_PANIC` or `LEAN_EXIT`) where it ended with a panic line or a status but 0: no verdict it gave is used before this
+    returns. The next verdict starts a server of its own."""
+    if server.cache_info().currsize:
+        done = server()
+        server.cache_clear()
+        done.close_checked()
+
+
 def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOpening],
             expected: Callable[[int], bytes], *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Any] = mc.SCHEMES) -> mc.Verdict:
@@ -55,4 +65,4 @@ def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings
     return mc.Verdict(out["accepted"], tuple(out["reasons"]), out["late"], out["wrong"])
 
 
-__all__ = ["EXE", "record", "server", "verdict"]
+__all__ = ["EXE", "finish", "record", "server", "verdict"]

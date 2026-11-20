@@ -56,7 +56,8 @@ SECRET_BYTES = 64
 """The period's live secret, which the registration's codec seed and the challenger's coins come from."""
 DRAW = struct.Struct(">IQ")
 MAX_SAMPLES = 1 << 20
-MAX_DISCLOSED = 1 << 24
+MAX_DISCLOSED = 1 << 30
+"""End's body: every released coin with its opening, a window's sample's `coins.sample_coins(s)` coins among them."""
 ROOT = Body(size=receipts.DIGEST_BYTES, max=receipts.DIGEST_BYTES)
 MANIFEST = Manifest(
     ID, VERSION, "verity.protocols.resource_accounting.memory.poub.verifier.session_parties:request_of",

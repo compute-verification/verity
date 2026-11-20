@@ -263,7 +263,7 @@ everything that can make a claim false or can't be undone still fail.
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
-`uv run circuit-check <definition|template|request>`, with its report in the PR. A new Definition gets a binding in its
+`uv run circuit-check <definition|template|sidecar>`, with its report in the PR. A new Definition gets a binding in its
 module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), which the suite enforces.
 
 ## Checking and merging
@@ -352,7 +352,8 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   named assumption (`assumptions`) is declared in `security/Definitions/Assumptions.lean` or a module under it, and
   every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
   `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
-  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  witness must conclude it). A guarantee is deployed (`deployed`) only with an honest witness, a theorem that an honest
+  run is accepted, and the check fails on one without. Each deployed guarantee rests, outside the trust base (`trust.base`: SHA-512's
   collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
   (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
   to; the check prints each one's gap, the number Daniel drives to zero.
@@ -361,11 +362,12 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   own check regenerates rather than fails on and a candidate's records commit carries (`vqueue_records`).
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
   in a candidate's records run. A PR's own check still fails on it. The records run repairs it in its records commit and
-  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
-  the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
+  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, an
+  `unwitnessed` entry its guarantee's statement moved from (re-keyed), a stale entry, a premise a `trust_gap` entry lists that its guarantee
   no longer rests on, a missing owner, or a cap of `unread-caps.json` or
   `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
-  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  malformed lock always fail, and so does a guarantee the witnesses rule holds to witnesses it lacks with no `unwitnessed`
+  entry: an exemption is a ruling, which no run writes. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
   merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
   drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the

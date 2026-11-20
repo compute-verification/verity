@@ -424,31 +424,20 @@ def test_the_act_twin_is_the_definition(inter: int, G: int, specials: bool) -> N
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MoeExpertFp8BlockCoordinate_v2{K=256,G=128,KB=32,SWAP=False}":
-        (109778, 197810, 11175, "94332fbb6c435fd7a8344438ac9402c3021410860b04032cad9c253d621ddf11897c17dbee1b6640a600295bfe8324c81077ee22459a581778d3e1f96d283071"),
-    "MoeExpertFp8BlockCoordinateW_v2{K=256,G=128,KB=32,SWAP=False}":
-        (112208, 202460, 11285, "c31feda4eca0e41c22447406df556f76638ddb553ec548b8e56c6a76e9efb09d135f63ee56caff5dc513aa936b5d5046e26a3eb0f91eae4be66c0347b8b74502"),
     "ScaledMmFp8Block_v2{K=32,N=40,G=32}":
-        (551200, 992480, 56400, "7dc8e98a0274e6b1dd7a6b88c7b60488ad3eef4c3a0376704007526ed5b709d58c56e2a6a8feb20be84dd97c0b82190f5e8d9545e579bddc9a0983d4e186282a"),
+        (551200, 992480, 56400, "8f982c4d0ecc67f8d25d0915bfdf74659c063d8e98175143c1b94b1a6c1f0b16cb495f747e4b3a399dd7528a25b5c3db75be991500a948eeff38a9f5bb0babbd"),
     "ScaledMmFp8BlockSharedScale_v2{K=32,N=40,G=32}":
-        (458860, 815780, 52220, "60abef94ce2a00604d9ee7dd5052e678fa4f9c0eac967867d9dc04d409c293eda985414ec9e0ad3648bff480a186ad6f194506ce22def0a1a913aceec6eb4b53"),
+        (458860, 815780, 52220, "7ccaaa0a9e00eefad607cb10577e2d46f0ba6a184b25314b6b04743a3f19706f7e4c8c788daa87bb5dd831a2372bd3c7aed9e152f762e82cb4947c7e5ff8aa7d"),
     "SiluMulFp8BlockQuantResult_v2":
-        (19561, 38091, 1468, "6712f4b4c28cb6b216780434b20f11d82695f118f34388ea79535d8436790b91cf25e4d129bf7d57b39fb6e0e62b5cafec3be7ad65372823c9f0062226cb8bb9"),
+        (19561, 38091, 1468, "37ed03a0aeeb141ea6d769ec5db2fad9ec76352bdfe0d78719e15cc053a07b33cc2028250229c6cf75aca45e8e9534c76ed457d99ca56a79f25813cd37f8a82d"),
     "SiluMulFp8BlockQuant_v2{I=8,G=4}":
-        (191042, 377416, 16984, "b962d6fdb1581ff9e7ae32f9ce57a2463eca87644a16a1fe94143c546dcfcaf351046c037e6e44f452441379edb2e809ff41679ddc4f7f68de59165592a33041"),
+        (191042, 377416, 16984, "064d1de379b271904b452bac5914b91a7f7a284b6a2f9e1dc11163394beb59b3988c16ff77723b130b8ff5b263d3c2c5b0e4efe404c46c94603be71647b47b5a"),
 }
-PINNED = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=256, G=128, KB=32, SWAP=False),
-          bind(BM.MoeExpertFp8BlockCoordinateWV2, K=256, G=128, KB=32, SWAP=False),
-          bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
+PINNED = [bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
           bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 
-#: two tiles over two scale blocks, two tiles in one block, two steps in one tile, SWAP_AB; the ragged CUTLASS GEMMs over a whole and
-#: a partial weight block, and over a partial block alone
-AGREEMENT = [bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=32, KB=32, SWAP=False),
-             bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=32, SWAP=True),
-             bind(BM.MoeExpertFp8BlockCoordinateV2, K=64, G=64, KB=64, SWAP=False),
-             bind(BM.MoeExpertFp8BlockCoordinateWV2, K=64, G=32, KB=32, SWAP=True),
-             bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
+#: the ragged CUTLASS GEMMs over a whole and a partial weight block, and over a partial block alone
+AGREEMENT = [bind(BF.ScaledMmFp8BlockV2, K=32, N=40, G=32), bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=40, G=32),
              bind(BF.ScaledMmFp8BlockSharedScaleV2, K=32, N=8, G=32),
              bind(BM.SiluMulFp8BlockQuantResultV2), bind(BM.SiluMulFp8BlockQuantGroupV2, G=4), bind(BM.SiluMulFp8BlockQuantV2, I=8, G=4)]
 

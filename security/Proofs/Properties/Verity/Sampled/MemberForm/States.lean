@@ -43,8 +43,8 @@ theorem statementOf_reads {p : _root_.Spot.OneStageZk.Own} {population : ByteArr
     {tables : List (String × ByteArray)} {bs : _root_.Core.Blobs} {a : _root_.Spot.OneStageZk.StepAt}
     (h : _root_.Spot.OneStageZk.statementOf p population tables bs = .ok a) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray),
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      p.circuitFile = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.lookupsOf circuitB = .ok (tables.map (·.1)) ∧
       a.I = _root_.Spot.OneStageZk.inputsAt tags0 p circuitB pubB tables := by
   unfold _root_.Spot.OneStageZk.statementOf at h
@@ -78,8 +78,8 @@ tables among those names (`Spot.OneStageZk.tablesAmong`) and no other. -/
 theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : vm.statement slice bs = .ok a) :
     ∃ (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (names : List String),
-      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
-      bs.get vm.own.circuit "circuit" = .ok circuitB ∧ bs.get vm.own.pub "public file" = .ok pubB ∧
+      Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      vm.own.circuitFile = .ok circuitB ∧ bs.get vm.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names ∧
       (_root_.Spot.OneStageZk.tablesAmong names bs).map (·.1) = names ∧
       a.I = _root_.Spot.OneStageZk.inputsAt tags0 vm.own circuitB pubB
@@ -99,7 +99,7 @@ theorem statement_reads {vm : _root_.Spot.OneStageZk.Member} {slice : Json} {bs 
 /-- **v2 reads the member `vm`'s files among `R` on the blobs `bs`**: the circuit file and the public file it reads
 there under the member's two digests are the files those digests name among `R` (`Verity.namedFile`). -/
 def ReadsFiles (R : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (bs : _root_.Core.Blobs) : Prop :=
-  (∀ b, bs.get vm.own.circuit "circuit" = .ok b → b = Verity.namedFile (digestOf vm.own.circuit) R) ∧
+  (∀ b, vm.own.circuitFile = .ok b → b = memberCircuit vm) ∧
     ∀ b, bs.get vm.own.pub "public file" = .ok b → b = Verity.namedFile (digestOf vm.own.pub) R
 
 /-- **The statement the per-member form read for a member is the window's member's**: on the blobs sent `s`, where

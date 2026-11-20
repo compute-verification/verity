@@ -114,21 +114,24 @@ variable (h : Held)
 
 /-- **A session row's commit string is the table row its registered read opens**: at a session statement that sets up as
 a masked Flock statement with registered ports `own`, in Flock's scope with hidden outputs, and a Flock witness its
-relation accepts, at each table `j`, for each port `reg` of `own`, the table's port `q` named like it and each unit `n`:
-the commit string of row `q` of unit `n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens
-`reg` at the position its reads give for the unit, through the path the session gives there. -/
+relation accepts, at each table `j` and the ports `own'` `Registered.withPositions` derives there from C, for each port
+`reg` of `own` (its port `reg'` of `own'`), the table's port `q` named like it and each unit `n`: the commit string of
+row `q` of unit `n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens `reg` at the position
+`reg'`'s reads give for the unit, through the path the session gives there. -/
 theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {own} {w : Claims.Flock.Wit}
     (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hown : ins.registered = some own)
     (hsc : ScopedHidden xS)
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true) :
-    ∀ j (hj : j < sts.size), ∃ tb idx, sts[j].pub.tables = some tb ∧
-      _root_.Flock.Registered.unitIndices sts[j].pub = .ok idx ∧
-      ∀ reg ∈ own, ∃ q positions paths,
+    ∀ j (hj : j < sts.size), ∀ own',
+      _root_.Flock.Registered.withPositions sts[j].c sts[j].pub ins.read.I.program (some own) = .ok (some own') →
+      ∃ tb idx, sts[j].pub.tables = some tb ∧ _root_.Flock.Registered.unitIndices sts[j].pub = .ok idx ∧
+      ∀ reg ∈ own, ∃ reg' ∈ own', reg' = { reg with readsRel := reg'.readsRel, readsFrom := reg'.readsFrom } ∧
+        ∃ q positions paths,
         (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
         _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) ∧ ∀ n < sts[j].pub.n,
           _root_.Flock.Registered.ref tb sts[j].c.ports.size q n < tb.counts.getD q 0 ∧
-          reg.reads[idx.getD n 0]? =
+          reg'.reads[idx.getD n 0]? =
             some (some (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)) ∧
           _root_.Flock.Registered.opens reg
             (_root_.Flock.Hm96.Default512.commitString
@@ -138,12 +141,12 @@ theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
             (paths.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) ByteArray.empty) = true := by
   obtain ⟨hc, hh⟩ := hsc ins spec sts hset
   obtain ⟨hP, hR⟩ := relS_setupOf hset hck
-  intro j hj
-  obtain ⟨tb, idx, ht, hidx, hregs⟩ := opens_of_setup hset hown sts[j] (Array.getElem_mem hj)
+  intro j hj own' hw
+  obtain ⟨tb, idx, ht, hidx, hregs⟩ := opens_of_setup hset hown sts[j] (Array.getElem_mem hj) own' hw
   refine ⟨tb, idx, ht, hidx, fun reg hreg => ?_⟩
-  obtain ⟨q, positions, paths, hq, hent, hn⟩ := hregs reg hreg
+  obtain ⟨reg', hreg', hsame, q, positions, paths, hq, hent, hn⟩ := hregs reg hreg
   have hqlt : q < sts[j].c.ports.size := List.mem_range.1 (List.mem_of_find?_eq_some hq)
-  refine ⟨q, positions, paths, hq, hent, fun n hn' => ?_⟩
+  refine ⟨reg', hreg', hsame, q, positions, paths, hq, hent, fun n hn' => ?_⟩
   obtain ⟨hlt, hreads, hopens⟩ := hn n hn'
   refine ⟨hlt, hreads, ?_⟩
   have hrow : _root_.Flock.Hm96.Default512.commitString
@@ -270,8 +273,9 @@ theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decO
     hf x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   have hopen : (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 o.1 o.2 = true := by
     rcases hbr with ⟨own, reg, hown, hreg, hq, hread⟩ | ⟨hc1, hq, hrooted⟩
-    · obtain ⟨tb, _idx, ht, -, hregs⟩ := rows_open hset hown hsx hck j hj
-      obtain ⟨q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
+    · obtain ⟨own', hw⟩ := derived_of_setup hset hown sts[j] (Array.getElem_mem hj)
+      obtain ⟨tb, _idx, ht, -, hregs⟩ := rows_open hset hown hsx hck j hj own' hw
+      obtain ⟨_reg', -, -, q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
       obtain rfl : q' = q := Option.some.inj (hq'.symm.trans hq)
       obtain ⟨-, -, hopens⟩ := hrows n hn
       exact hread tb positions paths ht hent hopens

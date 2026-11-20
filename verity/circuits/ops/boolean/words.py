@@ -66,7 +66,9 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
   each stage's live ANDs are only the window the returned half reads.  A constant amount, as every call in `hashes` has,
   folds each stage to wiring with no AND (`forms`' AND of a constant is no gate).
 * `sum_mod`: a sum of weighted columns mod 2^width by full adders, a carry out of the top column dropped. The dot's partial
-  products (y's sign bit complemented, Baugh–Wooley), −128 · Σ y and the three-operand bytes are each one such sum.
+  products (y's sign bit complemented, Baugh–Wooley), −128 · Σ y and the three-operand bytes are each one such sum.  The
+  dot is a tensor-core step of the u8 x s8 IMMA without .satfinite (`census.silicon_step`), so the census counts its gates
+  as `tc:int8`.
 * the 8-bit forms and `noise_byte`: `forms.add`'s ripple; the pack wiring, no AND.
 * SHA-512's words (the 64-bit add's halves, Ch, Maj and the sigma halves): `verity.circuits.boolean.sha512`'s gates on
   the 64-bit word hi:lo, the add's ripple uncommitted, so its halves are 31 and 63 ANDs, Ch and Maj 32, the sigmas none.
@@ -75,8 +77,10 @@ builder itself (``.build``), for the word primitive's piece and for an activatio
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
+from verity.circuits.census import silicon_step
 from verity.circuits.types import Array
 from verity.circuits.silicon import fp
+from verity.circuits.silicon.integer import BLACKWELL_SM120_U8S8_M16N8K32
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import scalar as BS
 from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn, isqrt
@@ -424,7 +428,8 @@ def _def(word, build, ret, doc):
 
 PouwPackBE4 = _def(W.PouwPackBE4, pack_be4, U32, "four int7 entries' bytes, big-endian")
 PouwNoiseByte = _def(W.PouwNoiseByte, noise_byte, U8, "a noise entry from byte c mod 4 of w")
-PouwDot16U8S8 = _def(W.PouwDot16U8S8, dot16_u8s8, U32, "acc + Σ u8(x)·s8(y) over 16 products, mod 2^32")
+PouwDot16U8S8 = silicon_step(_def(W.PouwDot16U8S8, dot16_u8s8, U32, "acc + Σ u8(x)·s8(y) over 16 products, mod 2^32"),
+                             BLACKWELL_SM120_U8S8_M16N8K32)
 PouwFormX = _def(W.PouwFormX, form_x, U8, "a + e + 128 mod 256")
 PouwFormX3 = _def(W.PouwFormX3, form_x3, U8, "128 − (a + e1 + e2) mod 256")
 PouwAdd8 = _def(W.PouwAdd8, lambda C, b, f: add(C, _s8(b), f, width=8), U8, "b + f mod 256")

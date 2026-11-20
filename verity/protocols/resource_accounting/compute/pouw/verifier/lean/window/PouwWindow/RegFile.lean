@@ -21,16 +21,14 @@ accepted produced record alone:
   `partials`. Every value's rows are `schema`'s.
 * `want?`: statement `k`'s data ports at those roots and the unit's placement `place` (`ownOf`: each value's table and
   base row), where the verifier holds every table they read.
-* `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each port
-  `readFull` names (A, B and partials rows, by layout value) marked `read_in_full`, then the known ports.
+* `fullHole`: the refusal of a leaf statement with a port read in full (A, B and partials rows, `readFull`), which a
+  `Flock.Registered.FORMAT` file cannot mark (`PouwVerifier.Lanes`'s leaf file refuses every leaf statement so).
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as verity-verify-proof parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
-  ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
+  ports (`checkOwn`); a port that states no position, as every `Flock.Registered.FORMAT` port, is refused by name
+  (`positionHole`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
   statement's session records to the full sample (`checkFull`); `PouwCheck.LeafOwn` runs it at an execution phase unit's placement,
   from the execution phase's descriptor and round log.
-
-`tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
-accept it.
 -/
 
 @[expose] public section
@@ -94,34 +92,26 @@ def want? (rs : List (String × Flock.Registered.Port)) (place : String → Stri
       throw s!"port {nm} reads {(place v).1}, whose entry and root the verifier does not hold"
   pure (ownOf (rootsFn rs) place T k)
 
-/-- A registered port's `--registered` entry (`registered_value.port`): its value, root, leaves, row words and leaf width,
-domain, schema (named where it is not `hm96-sha512/row/v1`) and reads, and `read_in_full` where `full`. -/
-def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
-  Json.mkObj ([("value", Json.str p.value), ("root", Json.str (Flock.hexOf p.root)), ("leaves", toJson p.leaves)] ++
-    (match p.words with | some w => [("words", toJson w)] | none => []) ++
-    [("word_bits", toJson p.wordBits), ("domain", Json.str (Flock.hexOf p.domain))] ++
-    (if p.schema == Flock.HmRow.ROW_SCHEMA then [] else [(Flock.Registered.SCHEMA_KEY, Json.str p.schema)]) ++
-    [("reads", Json.arr (p.reads.map fun | some n => toJson n | none => Json.null))] ++
-    (if full then [(Flock.KnownRead.READ_KEY, Json.bool true)] else []))
+/-- The refusal of a leaf statement whose ports `full` a computed row reads in every bit: a `Flock.Registered.FORMAT`
+port holds no `read_in_full` (`Flock.KnownRead.READ_KEY` is not among `Flock.Registered.PORT_KEYS`), and a file without
+it would drop verity-verify-proof's check that every statement reads such a row at one width (`KnownRead.fullRows`). -/
+def fullHole (full : Array String) : String :=
+  Flock.OneCircuit.notDerived (s!"a leaf statement's ports {full.toList} are read in full, and a " ++
+    s!"{Flock.Registered.FORMAT} port has no {Flock.KnownRead.READ_KEY} (Flock.Registered.PORT_KEYS)")
 
-/-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
-verifier's roots and the unit's placement (`want?`), each port `readFull` names (a read of a `fullValue`, by its
-layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`: every port of the
-statement's circuit, as verity-verify-proof's `Registered.checkComplete` holds it to. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
-`leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
-def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat)
-    (known : List (String × Json)) : Except String Json := do
-  let ps ← want? rs place T k
-  if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
-    throw s!"port {nm} is both a read and known"
-  let full := readFull T k
-  pure <| Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0),
-    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))]
+/-- The refusal of the leaf verifier's position check on a `Flock.Registered.FORMAT` file: the file states no position,
+and the leaf's (`ownOf`: its value's base row at the unit's placement, plus the layout's row) is not a function of the
+leaf statement's C and partition, the leaf Program being one a K, kind and chunk for every unit of the period
+(`h1window.leaf_program`) while the placement is the unit's (`h1window.place`). -/
+def positionHole : String :=
+  Flock.OneCircuit.notDerived (s!"pouw-leaf-own: a {Flock.Registered.FORMAT} file states no position, and a " ++
+    "leaf's reads are at its unit's placement, which the leaf Program (C) and its partition do not give")
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
 the tile's statement exists (`lane?`, `combine?`), and the file, parsed as verity-verify-proof parses it, has one read at each
 port (`checkOneRead`) and holds the statement's data ports at the records' roots and the unit's placement `place`
-(`checkOwn`). -/
+(`checkOwn`). A `Flock.Registered.FORMAT` file, the one format `ofJson` reads, states no position, so a port without
+one is refused by name (`positionHole`). -/
 def leafOwn? (registration produced file : Json) (place : String → String × Nat) (T : Tile) (k : Option Nat)
     (schema : String) : Except String Unit := do
   match k with
@@ -129,6 +119,7 @@ def leafOwn? (registration produced file : Json) (place : String → String × N
   | none => discard (combine? T)
   let rs ← roots? registration produced T.lanes (2 * T.nw) schema
   let own ← Flock.Registered.ofJson file
+  if own.any (·.reads.isEmpty) then throw positionHole
   checkOneRead own
   checkOwn (← want? rs place T k) own
 

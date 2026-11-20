@@ -27,9 +27,9 @@ namespace MemoryAttester.Properties.SecurityProofs.Inputs
 open MemoryAttester Flock
 open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size ofBytes ofBytes_be)
 
-theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) :
+theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : SessionCoins.beN n x w = .ok b) :
     x < 2 ^ (8 * n) ∧ bs b = (List.range n).map fun i => (x >>> (8 * (n - 1 - i))).toUInt8 := by
-  unfold beN at h
+  unfold SessionCoins.beN at h
   split at h
   · rename_i hx
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -37,19 +37,36 @@ theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) 
     exact ⟨hx, by simp [bs]⟩
   · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-theorem beN_size {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) : b.size = n := by
+theorem beN_size {n x : Nat} {w : String} {b : ByteArray} (h : SessionCoins.beN n x w = .ok b) : b.size = n := by
   rw [← bs_length, (beN_ok h).2]
   simp
 
 /-- A fixed-width field and what follows it determine the field's value and what follows. -/
-theorem beN_split {n x y : Nat} {w w' : String} {b b' : ByteArray} {r r' : List UInt8} (h : beN n x w = .ok b)
-    (h' : beN n y w' = .ok b') (e : bs b ++ r = bs b' ++ r') : x = y ∧ r = r' := by
+theorem beN_split {n x y : Nat} {w w' : String} {b b' : ByteArray} {r r' : List UInt8}
+    (h : SessionCoins.beN n x w = .ok b) (h' : SessionCoins.beN n y w' = .ok b') (e : bs b ++ r = bs b' ++ r') :
+    x = y ∧ r = r' := by
   obtain ⟨hb, hr⟩ := split_bytes e (by rw [beN_size h, beN_size h'])
   subst hb
   obtain ⟨hx, e1⟩ := beN_ok h
   obtain ⟨hy, e2⟩ := beN_ok h'
   refine ⟨?_, hr⟩
   rw [← ofBytes_be n x hx, ← ofBytes_be n y hy, ← e1, ← e2]
+
+theorem beN_of_lt (n x : Nat) (w : String) (h : x < 2 ^ (8 * n)) : ∃ b, SessionCoins.beN n x w = .ok b := by
+  unfold SessionCoins.beN; simp only [h, ↓reduceIte]; exact ⟨_, rfl⟩
+
+theorem checkSalt_of_size {salt : ByteArray} (hs : salt.size = 192) : SessionCoins.checkSalt salt = .ok () := by
+  unfold SessionCoins.checkSalt; rw [hs]; rfl
+
+/-- A coin's leaf is written for a key of the hm96 form, a round below `2^32`, an index below `2^64` and a 192-byte
+salt. -/
+theorem coinLeaf_of (key session : ByteArray) (j index : Nat) (salt : ByteArray)
+    (hk : SessionCoins.checkKey key = .ok ()) (hj : j < 2 ^ 32) (hi : index < 2 ^ 64) (hs : salt.size = 192) :
+    ∃ b, SessionCoins.coinLeaf key session j index salt = .ok b := by
+  obtain ⟨bj, hbj⟩ := beN_of_lt 4 j "j" hj
+  obtain ⟨bi, hbi⟩ := beN_of_lt 8 index "index" hi
+  simp only [SessionCoins.coinLeaf, SessionCoins.coinDigest, hbj, hbi, hk, checkSalt_of_size hs]
+  exact ⟨_, rfl⟩
 
 theorem value_ok {r : Round} {v : ByteArray} (h : r.value = .ok v) :
     r.digest.size = 64 ∧ ∃ b1 b2 b3 b4, beN 4 r.j "j" = .ok b1 ∧ beN 8 r.index "index" = .ok b2 ∧
@@ -200,17 +217,21 @@ theorem stream_inj {rounds rounds' : Array Round} {s s' : ByteArray} (h : record
   obtain rfl : vs = vs' := Array.toList_inj.mp (flat_inj w w' hl e)
   exact rounds_inj hv hv'
 
-theorem message_ok {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
-    (h : message c e rounds = .ok rec) :
-    ∃ d, recordsDigest rounds = .ok d ∧
-      rec = Sha512.hash (SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
+theorem message_ok {c : ChallengePhaseCommitment} {salt : ByteArray} {e : String} {rounds : Array Round}
+    {rec : ByteArray} (h : message c salt e rounds = .ok rec) :
+    salt.size = RECORD_SALT_BYTES ∧ ∃ d, recordsDigest rounds = .ok d ∧
+      rec = Sha512.hash (SESSION_TAG ++ salt ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
         (header c e rounds.size).toUTF8 ++ d) := by
   unfold message at h
-  cases hr : recordsDigest rounds with
-  | error _ => simp [hr, bind, Except.bind] at h
-  | ok d =>
-    simp only [hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨d, rfl, h.symm⟩
+  by_cases hs : salt.size = RECORD_SALT_BYTES
+  · refine ⟨hs, ?_⟩
+    cases hr : recordsDigest rounds with
+    | error _ => simp [hs, hr, bind, Except.bind] at h
+    | ok d =>
+      simp only [hs, ne_eq, not_true_eq_false, if_false, hr, bind, Except.bind, pure, Except.pure,
+        Except.ok.injEq] at h
+      exact ⟨d, rfl, h.symm⟩
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryAttesterMessage I session rec = .ok m) :
     I.size = 16 ∧ m = Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field session) ++ field rec) := by
@@ -221,17 +242,19 @@ theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryAttesterMessag
     simp only [pure, Except.pure, Except.ok.injEq] at h
     exact ⟨not_not.mp hI, h.symm⟩
 
-/-- The session input, with records digests of one width, determines the header and the digest. -/
-theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
-    (e : SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
-    h = h' ∧ r = r' := by
+/-- The session input, with salts of one width and records digests of one width, determines the salt, the header and
+the digest. -/
+theorem challengePhase_split {s s' h h' r r' : ByteArray} (hs : s.size = s'.size) (hr : r.size = r'.size)
+    (e : SESSION_TAG ++ s ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ s' ++ be64 h'.size.toUInt64 ++ h' ++ r') :
+    s = s' ∧ h = h' ∧ r = r' := by
   have e := congrArg bs e
   simp only [bs_append] at e
   obtain ⟨e1, e2⟩ := List.append_inj' e (by rw [bs_length, bs_length, hr])
   simp only [List.append_assoc] at e1
   have e1 := List.append_cancel_left e1
+  obtain ⟨es, e1⟩ := split_bytes e1 hs
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
-  exact ⟨bs_inj e1, bs_inj e2⟩
+  exact ⟨es, bs_inj e1, bs_inj e2⟩
 
 /-- The signed message's input, under one key identifier and with records of one width, determines the record. -/
 theorem signed_split {I s s' r r' : ByteArray} (hr : r.size = r'.size)

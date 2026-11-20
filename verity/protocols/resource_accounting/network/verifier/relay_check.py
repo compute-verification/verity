@@ -7,7 +7,7 @@ import tempfile
 
 from pathlib import Path
 from verity.protocols.resource_accounting.network.verifier import (blob_files as bf, connection_rows_check as CRC,
-    lean_audit as LA, load_check as LK, period_check, record_files as RF, network_attester_rows as WR)
+    lean_audit as LA, period_check, record_files as RF, network_attester_rows as WR)
 from verity.protocols.resource_accounting.network.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
     record_head)
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
@@ -216,10 +216,13 @@ def check_start(dep: dict, key: LmsKey, session: bytes, params: NetworkAttesterP
             [] if why is None else [f"the session's start isn't certified ({why})"])
 
 
-def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
-    """A run's load read as the verifier reads it, None when it carried none: ``load.json`` signed under the
-    deployment's own key and session, every value's registration accepted (`load_check.check_load`), each at the root
-    the relay committed (``load-heads.json``)."""
+def check_load(run: Path, dep: dict) -> tuple[dict | None, list[str]]:
+    """A run's load read as the verifier reads it, None when it carried none: ``load.json`` under the deployment's
+    own key and session, every value's registration accepted, each at the root the relay committed
+    (``load-heads.json``). The check of the registrations is the Lean verifier's (`NetworkVerifier.Load.loadCheck`,
+    the ``load`` function of ``network-records verdicts``): its count and its problems are the ones given, a load it
+    can't state (a deployment's key or session it doesn't read) is refused, and nothing is checked in Python in its
+    place. That the registrations are the relay's heads is read here."""
     doc_path, heads_path = run / "load.json", run / "load-heads.json"
     if not doc_path.exists() and not heads_path.exists():
         return None, []
@@ -227,17 +230,19 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
         doc = json.loads(doc_path.read_text())
     except (OSError, ValueError):
         return {"values": 0, "registered": 0, "relayed": False}, ["load: the relay's heads aren't signed (no load.json)"]
-    problems = [] if (doc.get("key"), doc.get("session")) == (dep["key"], dep["session"]) else \
-        ["load: not signed under the deployment's key and session"]
-    summary, found = LK.check_load(doc, key, session)
+    try:
+        got = LA.SERVER.call("load", {"key": dep["key"], "session": dep["session"], "load": doc})
+        summary = {"values": got["values"], "registered": got["registered"]}
+        found = [f"load {p['value']}: {p['why']}" if "value" in p else f"load: {p['why']}" for p in got["problems"]]
+    except ValueError as e:
+        summary, found = {"values": 0, "registered": 0}, [f"load: not checked ({e})"]
     try:
         heads = json.loads(heads_path.read_text())
         relayed = (heads.get("program"), heads.get("link"), list(heads.get("roots", {}).items())) == \
             (doc.get("program"), doc.get("link"), [(r.get("value"), r.get("root")) for r in doc.get("values", [])])
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, TypeError):
         relayed = False
-    if not relayed:
-        problems.append("load: its registrations aren't the relay's heads (load-heads.json)")
+    problems = [] if relayed else ["load: its registrations aren't the relay's heads (load-heads.json)"]
     return summary | {"relayed": relayed}, problems + found
 
 
@@ -279,7 +284,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
                  for k in ADDRESSES if k in dep]
     start, start_problems = check_start(dep, key, session, params)
     problems += start_problems
-    load, load_problems = check_load(run, dep, key, session)
+    load, load_problems = check_load(run, dep)
     problems += load_problems
     windows, held = [], []
     for name, (link, direction) in CERTIFIED.items():

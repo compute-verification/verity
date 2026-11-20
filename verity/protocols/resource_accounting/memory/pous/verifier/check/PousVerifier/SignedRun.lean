@@ -8,13 +8,13 @@ meta import MemoryAttester.SetupRecord
 /-!
 # A PoUS run on the memory challenger's signed setup, as a core protocol
 
-`RunProtocol`'s run with the store's place taken by what the memory challenger's device signed at setup:
-`period.answer_signed`'s check in Lean. The run's check (`Run.checkAt`) reads the memory challenger's table of `C*` and
-ties it to the published root; this one reads the device's setup record (`MemoryChallenger.SetupRecord`, the published
-outputs it was given), signed by the session's own key under the session's id, and one Merkle path per round, so its
-case is the session, the record and the paths, a few megabytes at a served store where the run's is the whole table and
-`C*`. Its guarantee is not proved, and it certifies nothing: its profile says why (`GAPS`). Setup's acceptance is not
-checked here: it is the open premise `SETUP_ACCEPTED`, which the profile's certificate names among its hypotheses.
+`RunProtocol`'s run with the store's place taken by what the memory challenger's device signed at setup. The run's
+check (`Run.checkAt`) reads the memory challenger's table of `C*` and ties it to the published root; this one reads
+the device's setup record (`MemoryChallenger.SetupRecord`, the published outputs it was given), signed by the
+session's own key under the session's id, and one Merkle path per round, so its case is the session, the record and
+the paths, a few megabytes at a served store where the run's is the whole table and `C*`. Its guarantee is not proved,
+and it certifies nothing: its profile says why (`GAPS`). Setup's acceptance is not checked here: it is the open
+premise `SETUP_ACCEPTED`, which the profile's certificate names among its hypotheses.
 
 Each byte string is canonical JSON:
 
@@ -23,7 +23,7 @@ Each byte string is canonical JSON:
 * the evidence: `{"paths": [{"path": [hex, …], "row": hex}, …], "session": Run.ChallengePhaseRecord.toJson, "setup":
   SignedSetupRecord.toJson}`, for round `j` the row digest of block `rounds[j].index` and its path, siblings from the
   leaf up (`Merkle.path`, `verifier.MerkleTree.path`);
-* the check: `checkAt`, its first refusal the reason, word for word the Python's (`run.check_signed_at`):
+* the check: `checkAt`, its first refusal the reason:
   1. `Run.checkAt`'s lines that don't read the table: the setup published the point's blocks and a 24-byte salt; the
      session audits that setup at the point, bound to the published root, under the designated id;
   2. one opening for each of the session's rounds, and each opening's row, as the leaf `Run.rowLeaf` of its round's

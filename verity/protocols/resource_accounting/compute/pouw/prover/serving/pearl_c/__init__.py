@@ -17,7 +17,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover import schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import named, names
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import ROUND_CALLS, Matmul, Shape
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import SERIAL
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import (
@@ -55,8 +55,8 @@ KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H10
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
 LEAF_CAPACITY = 1 << 23
-#: calls one pass's A-root buffer holds, and rows its screen-flag buffer holds
-CALL_CAPACITY = 1 << 16
+#: calls one pass's A-root buffer holds, a round's (a call's position is below it), and rows its screen-flag buffer holds
+CALL_CAPACITY = ROUND_CALLS
 FLAG_ROWS = 1 << 22
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "rowdig_b", "salts_b")

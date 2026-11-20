@@ -43,6 +43,17 @@ def test_the_wired_program_is_its_members_evaluated_in_the_records_order():
     assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
 
 
+def test_a_value_the_record_supplies_is_a_supplied_input_with_its_mark():
+    mark = {"supplied": "poub.read.pass_root/v1", "args": {"window": 0, "pass": 0}, "layout": "le", "bits": 64}
+    rec = _record()
+    rec["registered"]["supplied"] = {"w": mark}
+    prog = wired_population_program([(A, 2), (B, 2)], rec)[0]
+    assert prog.bindings == ("supplied", "run", "run") and prog.supplied == {"w": mark}
+    assert [n.fn.id for n in prog.root.body.nodes if is_input(n.fn)][:1] == ["SuppliedInput16_v1"]
+    plain = wired_population_program([(A, 2), (B, 2)], _record())[0]
+    assert plain.bindings == ("run", "run", "run") and program_digest(plain) != program_digest(prog)
+
+
 def test_its_digest_moves_with_a_wire_and_with_a_count():
     digest = program_digest(wired_population_program([(A, 2), (B, 2)], _record())[0])
     assert program_digest(wired_population_program([(A, 2), (B, 2)], _record(base=1, step=-1))[0]) != digest
@@ -189,6 +200,23 @@ def test_a_wire_between_leaves_of_two_widths_is_refused():
                       "step": [0]}]}
     with pytest.raises(ValueError, match="wire-width"):
         wired_population_program([(A, 1), (G, 1)], rec)
+
+
+def _opened(*runs):
+    return {"templates": [[IA, 2]], "wires": [], "external": [f"{IA}/x"],
+            "registered": {"params": {}, "tables": [], "reads": [], "roots": [],
+                           "openings": [{"reader": IA, "table": "t", "key": "x", "ports": ["k"], "verdict": "o0", "at": at,
+                                         "units": n} for at, n in runs]}}
+
+
+def test_a_tables_openings_are_one_parameter_each_openings_units_after_the_one_befores():
+    one = wired_population_program([(A, 2)], _opened((0, 2)))[0]
+    two = wired_population_program([(A, 2)], _opened((1, 1), (0, 1)))[0]
+    assert one.fn.signature() == two.fn.signature() and [n for n, _ in two.fn.signature()[0]] == ["t/k", "0.x"]
+    x, k = [1, 2, 3, 4], [100, 200, 300, 400]
+    assert evaluate(two.fn, k[2:] + k[:2], x) == evaluate(one.fn, k, x)
+    with pytest.raises(ValueError, match="filled twice"):
+        wired_population_program([(A, 2)], _opened((0, 2), (1, 1)))
 
 
 @pytest.mark.parametrize("w", [16, 32])

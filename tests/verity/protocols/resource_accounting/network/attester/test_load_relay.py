@@ -39,6 +39,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.network.verifier import load_check as LK
+from tests.verity.protocols.resource_accounting.network.verifier import load_reference as REF
 from verity.protocols.resource_accounting.network.attester import load_relay as LR
 from verity.protocols.resource_accounting.network.attester.attester_key import signer
 
@@ -410,12 +411,12 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     regs = LR.sign_heads(Issuer(own, session), heads)
     doc = LR.load_doc(shape, heads, regs, RF.public_json(own.public_key()), session)
     key = RF.read_public(doc["key"])
-    assert LK.check_load(doc, key, session) == ({"values": len(TINY), "registered": len(TINY)}, [])
-    assert LK.check_load(doc, key, os.urandom(32))[0]["registered"] == 0
-    assert len(LK.check_load(dict(doc, values=[regs[1], regs[0], *regs[2:]]), key, session)[1]) == 2
-    assert LK.check_load(dict(doc, values=regs[:-1]), key, session)[1] == \
+    assert REF.check_load(doc, key, session) == ({"values": len(TINY), "registered": len(TINY)}, [])
+    assert REF.check_load(doc, key, os.urandom(32))[0]["registered"] == 0
+    assert len(REF.check_load(dict(doc, values=[regs[1], regs[0], *regs[2:]]), key, session)[1]) == 2
+    assert REF.check_load(dict(doc, values=regs[:-1]), key, session)[1] == \
         [f"load: not one registration of each of {len(TINY)} values"]
-    assert LK.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
+    assert REF.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
 
 
 def test_a_refused_write_records_its_word_and_says_the_sentence_to_stderr(tmp_path, capsys):

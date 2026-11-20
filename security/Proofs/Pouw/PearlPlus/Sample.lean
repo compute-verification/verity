@@ -32,8 +32,8 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
 
 The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
 set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
-fixed operand, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
-different salts share an index is not one game's run.
+fixed operand, and no two records share a call index. `passesPlaced` holds each index to its place, one round a pass,
+so no two records of a run share one.
 -/
 
 @[expose] public section

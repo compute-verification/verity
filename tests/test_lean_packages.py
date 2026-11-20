@@ -100,12 +100,32 @@ UNWITNESSED = {"security": 192, "security/Properties": 172, "verity/protocols/pr
 
 
 def test_the_unwitnessed_list_only_shrinks():
-    """A lock's `unwitnessed` never grows. A new guarantee of what an acceptance means, and one whose statement
-    changed, carries its witnesses instead; when a guarantee gets them, its entry goes, and its lock's number here comes
-    down with it (`_held`)."""
+    """A lock's `unwitnessed` grows only by an exemption soundness rules, with its reason. A new guarantee of what an
+    acceptance means, and one whose statement changed, carries its witnesses instead; when a guarantee gets them, its
+    entry goes, and its lock's number here comes down with it (`_held`)."""
     _held("UNWITNESSED", UNWITNESSED, {_rel(p): len(_lock(p).get("unwitnessed", {})) for p in lake_packages()},
-          "`unwitnessed`", "it only shrinks; give the guarantee you added its `honest` and `nontrivial` "
-          "witnesses under `witnesses` (check.py's failure names both) instead")
+          "`unwitnessed`", "give the guarantee you added its `honest` and `nontrivial` witnesses under `witnesses` "
+          "(check.py's failure names both) instead; an exemption is soundness's ruling, which raises this cap in its PR")
+
+
+#: the count of each lock's `unwitnessed` entries that exempt both witnesses with no reason (a bare hash, or {type_hash,
+#: unfolded_hash}), carried from before {type_hash, why} was the form: each owner gives its guarantee a witness, a
+#: reason or its removal from the listed guarantees
+UNREASONED = {"security": 185, "security/Properties": 162, "verity/protocols/proofs/flock/verifier": 7}
+
+
+def test_no_exemption_is_written_without_a_reason():
+    """No `unwitnessed` entry is added without its `why`: a whole exemption is {type_hash, why}, the reason its owner's
+    on soundness's word, and the entries carried without one only go (`_held`; the lock run lowers the cap and never
+    raises it, `lean_audit.NEVER_RAISED`). A merge that dropped a carried entry writes it back as it was."""
+    spec = importlib.util.spec_from_file_location("lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    count = audit.LOCK_CAPS["UNREASONED"]
+    _held("UNREASONED", UNREASONED, {_rel(p): count(_lock(p)) for p in lake_packages()},
+          "`unwitnessed` without a reason", "write the exemption as {\"type_hash\": …, \"why\": \"its owner's reason\"} "
+          "on soundness's word, never a bare hash or {type_hash, unfolded_hash} alone, or give the guarantee its "
+          "`honest` and `nontrivial` witnesses")
 
 
 def test_the_trust_base_is_one_list():
@@ -331,7 +351,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between the queued count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "OVERLONG security/Proofs": 275, "TREES_EXCEPT security": 1, "OVERLONG verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/proofs/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -566,7 +586,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 725}
+OVERLONG = {"security": 963, "security/Proofs": 53427, "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check": 282, "verity/protocols/proofs/flock/verifier": 690}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -583,10 +603,6 @@ def test_no_long_module_grows():
           f"the lines past {LONG} of a package's modules",
           "put the new declarations in a module beside the long one and import it; a generator splits its output:\n  "
           + "\n  ".join(f"{f}: {n} lines" for fs in long.values() for f, n in fs.items()))
-
-
-#: the Lean declarations whose own names carry each of the older names (`test_retired_terms.py`'s `LEAN_WORDS`)
-RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or queued when the rule came; an

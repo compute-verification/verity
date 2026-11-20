@@ -27,7 +27,7 @@ replays every tile of prefill's and decode's passes (``--passes``) word by word,
 the card and replays every ``--device-check``-th tile (`volunteer_pass.words_device`), and gives up, in each pass's records,
 the rows that leave a tile or one of its credited rows over its inert-work bound, which the screen can't see (the inert
 work is counted on the noised codes); the transcript is the capture's.  ``verify`` runs `verify_run.verify` on each pass
-``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every pass but control must be accepted
+``capture.json`` lists under ``coins.json``: every pass but control must be accepted
 (replay-verified, development shortcut; the protocol's check is a ZK proof) and control rejected.  ``full`` checks
 prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
 openings and its leaf against C~ and U recomputed from the opened rows on the device record
@@ -255,7 +255,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
         fast = scheme.forming == "v1" and scheme.device.g is not None
         _FULL.clear()
         _FULL.update(scheme=scheme, epoch=epoch, transcript=transcript, verifier=verifier, view=view, y=ys,
-                     prover=VR.Opened(man, VR.Files(d), verifier.refs), real={pos: u["real_rows"] for pos, u in enumerate(man["matmuls"])},
+                     prover=VR.prover_of(man, d, verifier.refs), real={pos: u["real_rows"] for pos, u in enumerate(man["matmuls"])},
                      every=every, install=FT.install, undo=FT.install(scheme) if fast else None)
         try:
             todo = range(c["count"])
