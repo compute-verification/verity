@@ -10,5 +10,26 @@ GEMM with its operands hidden.
 | `sha_noise.cuh` | noise expanded by SHA-512 in counter mode |
 | `sha_pass.cuh` | the noise pass over an operand |
 
-They are gated and timed only through the kernels that include them: `edited_gemm/egemm.cu` includes `lpgemm.cu`, and
-`benchmarks/pouw/edited_gemm/crun.sh` gates `cgemm.cu` on it.
+`edited_gemm/egemm.cu` includes `lpgemm.cu`. `mgemm.cu` is also timed on its own, against one plain GEMM (cuBLASLt's, or
+the plain mainloop) on the same shapes: its inputs, outputs and receipts are dumped at small shapes on poisoned output
+buffers, `mref.py` recomputes each bit on the CPU, and `mtable.py` prints each arm's cost beside its gate's verdict.
+
+## Try it
+
+Without a GPU, run the table on made-up bench and gate files:
+
+~~~sh
+uv run pytest tests/benchmarks/pouw/test_masked_gemm_tables.py -q
+~~~
+
+It prints `1 passed`.
+
+On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `benchmarks/pouw/masked_gemm/run.sh` builds, gates and times
+`mgemm.cu`'s arms, from the clone's root:
+
+~~~text
+research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
+  --send benchmarks/pouw/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+~~~
+
+It exits 4 when the build fails.

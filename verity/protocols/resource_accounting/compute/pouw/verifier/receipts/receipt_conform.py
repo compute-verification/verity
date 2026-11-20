@@ -5,14 +5,14 @@ differs.
     check_steps({"xin13": fn, ...})        a fold's step, fn(y, d0, d1, d2, d3, *keys) as receipt_folds' (duo: (y, z) in, out)
     check_key_rules({"key_ok_r9": fn, ...})
     check_header(path)                     a C++ header defining receipt_folds.cuh's rf_ functions, built with g++ (or nvcc)
-    p2ff_r9(mod), pfill_ref(mod), e2e_segment(mod), e2e_definitions(mod), scorer_folds(FOLDS, RECEIPT_TAGS)
+    p2ff_r9(mod), pfill_ref(mod), egemm_ref(mod), e2e_segment(mod), e2e_definitions(mod), scorer_folds(FOLDS, RECEIPT_TAGS)
                                            the existing implementations, each against the vectors and the schedule it runs
                                            (e2e_definitions evaluates E2E's Boolean Definitions on bits)
     pfill_cuh(path)                        pfill.cuh itself, through its host build, in each fold build
 
     python receipt_conform.py                       check receipt_folds.py and receipt_folds.cuh against vectors.json
     python receipt_conform.py --write               rewrite vectors.json from receipt_folds.py
-    python receipt_conform.py --adopter NAME PATH   check an implementation's module (p2ff_r9, pfill_ref,
+    python receipt_conform.py --adopter NAME PATH   check an implementation's module (p2ff_r9, pfill_ref, egemm_ref,
                                                     e2e_segment, e2e_definitions), scoring.py (scorer) or pfill.cuh
                                                     (pfill_cuh) at PATH
 """
@@ -541,6 +541,36 @@ def pfill_cuh(path: Path | str, compiler: str = "g++", v: dict | None = None) ->
     return n
 
 
+def egemm_ref(er: ModuleType, v: dict | None = None) -> int:
+    """egemm_ref.py: xin_keys, xin13_receipts and the duo tile_receipts on one whole tile (TILE_TAG's rule), every thread
+    against receipt_folds' egemm-xin13 and served-duo schedules."""
+    import numpy as np
+
+    v = v or load()
+    n = 0
+    for c in v["schedules"]["egemm-xin13"]:
+        assert [h(x) for x in er.xin_keys(u(c["seed"]), r9=True)[:2]] == c["keys"], f"xin_keys at {c['seed']}"
+        n += 1
+    seed, tile, T = 0x0123ABCD, 3, [tile_words(s) for s in range(2)]
+    Ts = [np.array(t, np.uint32) for t in T]
+    x13 = er.xin13_receipts(seed, Ts, tile)
+    duo = er.tile_receipts(seed, Ts, tile)
+    a0, a1, _ = F.egemm_xin_keys(seed)
+    for ctid in range(F.NCT):
+        p = [thread_words(t, ctid) for t in T]
+        y = F.egemm_xin13_start(tile, ctid)
+        yd, zd = F.served_start(seed, tile, ctid)
+        for q in p:
+            y = F.egemm_xin13_absorb(y, q, a0, a1)
+            yd, zd = F.served_duo_absorb(yd, zd, q)
+        assert [int(x) for x in x13[ctid, :4]] == y and not x13[ctid, 4:].any(), f"xin13_receipts thread {ctid}"
+        assert [int(x) for x in duo[ctid]] == [F.duo_final(a, b) for a, b in zip(yd, zd)], f"tile_receipts thread {ctid}"
+        n += 2
+    for c, want in v["tile"]["egemm-xin13"].items():
+        assert [h(int(x)) for x in x13[int(c), :4]] == want, f"tile vectors, thread {c}"
+    return n
+
+
 def e2e_segment(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's segment.py (PouwSegCheck's word twins): its constants, key rule, init and both folds' absorb and final."""
     v = v or load()
@@ -655,7 +685,7 @@ def main(argv: list[str]) -> int:
 
 
 __all__ = ["R5_KEYS", "R5_WORDS", "build", "check_header", "check_key_rules", "check_reference", "check_steps",
-           "e2e_definitions", "e2e_segment", "load", "main", "p2ff_r9", "pfill_cuh", "pfill_ref",
+           "e2e_definitions", "e2e_segment", "egemm_ref", "load", "main", "p2ff_r9", "pfill_cuh", "pfill_ref",
            "scorer_folds"]
 
 

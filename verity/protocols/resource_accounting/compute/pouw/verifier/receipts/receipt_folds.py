@@ -280,7 +280,7 @@ SCHEDULES = {
                    "build": {"ram": (4, None), "duo": (2, None), "xin13": (4, "-DPFILL_XIN13"), "li": (4, "-DPFILL_LI"),
                              "xin7": (4, "-DPFILL_XIN")}},
     "served-duo": {"folds": ("duo",), "where": "fgemm.cu duo, EGEMM derive.tile_receipts, E2E segment._duo_absorb"},
-    "egemm-xin13": {"folds": ("xin13",), "where": "egemm.cu x13_l2o"},
+    "egemm-xin13": {"folds": ("xin13",), "where": "egemm.cu x13_l2o, egemm_ref.xin13_receipts"},
     "e2e-xin": {"folds": ("xin13",), "where": "E2E segment._xin_absorb (PouwXinAbsorb_v1)"},
 }
 
