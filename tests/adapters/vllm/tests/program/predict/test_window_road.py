@@ -93,6 +93,14 @@ def _public(log, out, d, run):
     assert "COMPILER:" not in log and "BOUND-PROGRAM:" not in log
 
 
+def _card():
+    """Whether this node has a gpu-lease and a card nvidia-smi lists."""
+    if shutil.which("gpu-lease") is None or shutil.which("nvidia-smi") is None:
+        return False
+    p = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True)
+    return p.returncode == 0 and any(x.startswith("GPU ") for x in p.stdout.splitlines())
+
+
 def _end(log):
     return next(x for x in log.splitlines() if "ROAD END" in x)
 
@@ -109,9 +117,11 @@ def test_the_window_road_runs_remote_from_the_record_as_far_as_it_goes(tmp_path,
     assert "SEAL: the window's seal" in log and ": PASS" in log.split("SEAL: ")[1].splitlines()[0], log
     assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
             "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
-    if shutil.which("gpu-lease") is None:
-        assert ("pearl-plus: not run: needs a card: Pearl+'s piece takes its own gpu-lease, and this node has none: "
-                "compute-accounting's") in log, log
+    if not _card():
+        line = next(x for x in log.splitlines() if x.startswith("pearl-plus: not run: "))
+        assert line.startswith("pearl-plus: not run: needs a card: Pearl+'s piece takes its own gpu-lease, and ") and \
+            line.endswith(": compute-accounting's"), log
+        assert "pearl-plus" not in _end(log).split("refused")[0], _end(log)
     end = _end(log)
     assert re.search(r"ran \d+ \(preflight,seal,window,advice", end) and re.search(r"refused \d+ \(", end), end
     assert "sampled-proofs" in end and "record" in end and "composite" in end and "pearl-plus" in end and rc == 20, log

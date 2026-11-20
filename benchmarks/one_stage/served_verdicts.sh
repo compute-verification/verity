@@ -1913,8 +1913,13 @@ return "$rc"
 }
 road_piece() {  # STEP COMPONENT NAME OWNER: the piece by its owner's launcher, under the gpu-lease it takes itself
   command -v gpu-lease > /dev/null || { step_refused "$1" "needs a card: $3's piece takes its own gpu-lease, and this node has none: $4's"; return; }
+  nvidia-smi -L 2> /dev/null | grep -q '^GPU ' || { step_refused "$1" "needs a card: $3's piece takes its own gpu-lease, and nvidia-smi lists no card on this node: $4's"; return; }
   pieces --only "$2"
-  if [ "$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["rc"])' "$OUT/pieces/$2/piece.json" 2>/dev/null)" = 0 ]; then RAN+=("$1")
+  # ran only where the piece exited 0 and its own answer has a verdict: a piece that answers nothing ran nothing
+  if "$PY" -c 'import json, pathlib, sys
+d = pathlib.Path(sys.argv[1])
+doc = next((json.loads((d / n).read_text()) for n in ("answer.json", "development.json") if (d / n).is_file()), {})
+sys.exit(0 if json.loads((d / "piece.json").read_text())["rc"] == 0 and doc.get("verdict") else 1)' "$OUT/pieces/$2" 2> /dev/null; then RAN+=("$1")
   else FAILED+=("$1"); fi
 }
 road_wipe() {  # the wipe ran under the serve's lease, before its engine loaded: its answer is the serve dir's
