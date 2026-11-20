@@ -9,7 +9,7 @@ its members, and a member's registered read names its call's table; the circuit'
 
 Refused by name (`Unexpressible`): a class Program with an int8 linear or no linear but its LM heads, a position whose
 linears aren't the first position's, a linear whose y no rows of ``words`` doubled hand on in one unit, and a unit with a
-linear's, an int8 quant's or an embedding's name or its body but not both (`steps.family`); and, by `steps.egress`, a
+linear's, an int8 quant's or an embedding's name or its body but not both (`by_body.family`); and, by `by_body.egress`, a
 select's name over another body.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
-from .steps import egress, family
+from .by_body import egress, family
 from .window_builder import Row
 from .window_class import PearlTables, WindowClass
 
@@ -32,7 +32,7 @@ from .window_class import PearlTables, WindowClass
 @dataclass(frozen=True)
 class Linears:
     """A class Program's linears as a cut at them takes them (`PearlTables`): ``heads`` its LM heads' nodes (GEMMs a token
-    select reads, a select by its name or body as `steps.egress` lists it, which stay computed) and ``calls`` each
+    select reads, a select by its name or body as `by_body.egress` lists it, which stay computed) and ``calls`` each
     position's other GEMMs in order, the same at every position, each ``(K, N, W)``: its shape and the words of each row it
     hands its y on in."""
     heads: frozenset[int]
@@ -51,7 +51,7 @@ def _hands_on(N: int, W: int, rows: int) -> bool:
 
 
 def _linear(fn: Any) -> bool:
-    """Whether ``fn`` is a linear the cut takes, a `Gemm` by `steps.family`."""
+    """Whether ``fn`` is a linear the cut takes, a `Gemm` by `by_body.family`."""
     return family(fn, ("Gemm",), "the cut would hold another unit's output to Pearl+'s product") is not None
 
 

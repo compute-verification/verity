@@ -29,7 +29,7 @@ from verity_vllm.definitions.registry.dead_free import (
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
 from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
-from .steps import family as unit_family
+from .by_body import family as unit_family
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
@@ -701,5 +701,5 @@ FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQu
 
 
 def node_family(fn: Any) -> str | None:
-    """``fn``'s family among `FAMILIES` by `steps.family`: the lowering takes a unit by its family's name."""
+    """``fn``'s family among `FAMILIES` by `by_body.family`: the lowering takes a unit by its family's name."""
     return unit_family(fn, FAMILIES, "the window lowers a unit by its family's name")

@@ -118,7 +118,6 @@ carries what its trace's Build says beside it (`Compiled.named`, `naming`), so a
 """
 from __future__ import annotations
 
-import functools
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -126,8 +125,8 @@ from pathlib import Path
 from typing import Any
 
 import verity_vllm.pipeline.advice_code.format as I1
-from verity.circuits.codec import definition_digest, definition_entry, program_digest
-from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.codec import program_digest
+from verity.circuits.defs import bind
 from verity_torch.prune import dead_units
 
 from verity_vllm.definitions.registry import io_shell as IO
@@ -144,6 +143,7 @@ from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
+from .by_body import egress
 from .common import cyclic_gc_off, edge_config
 from .hits import Rows, check_sources, hit_chunks, producers_of
 from .ingress_policy import ingress_body, policy_of, request_of
@@ -153,79 +153,6 @@ from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
 SCHEMA = COMPILED_STEPS_SCHEMA
-#: the token-select families, whose registered composites `egress` holds a unit's name or body to: its sampled ids are a request
-#: Program's egress (`Compiled.transfer_gates`)
-EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-
-
-@functools.cache
-def registered_composites(families: tuple[str, ...]) -> tuple[CompositeDefinition, ...]:
-    """The registry's composites of ``families``."""
-    from verity_vllm.definitions.registry.catalog import load
-
-    reg, errors = load()
-    if errors:
-        raise ValueError(f"the registry's {', '.join(families)} can't be listed: {errors[0]}")
-    return tuple(d for d in reg.defs.values() if isinstance(d, CompositeDefinition) and d.name in families)
-
-
-def egress(fn: Any) -> bool:
-    """Whether ``fn`` is a token select: named as an `EGRESS` family, or with a registered select's body under another name.
-    A unit so named whose body is no registered select's at its statics is refused (ValueError), neither listed nor sampled."""
-    family = str(getattr(fn, "id", "")).split("{")[0].rsplit("_v", 1)[0]
-    if registered_body(fn, EGRESS):
-        return True
-    if family in EGRESS:
-        raise ValueError(f"{fn.id}: a unit named as the token select {family} whose body is no registered select's at its "
-                         "statics is refused: it is neither a transfer gate nor sampled")
-    return False
-
-
-def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
-    """Some registered composite of ``families`` bound at ``fn``'s statics, of ``fn``'s signature, has the definition digest
-    (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
-    if not isinstance(fn, SpecializedDefinition):
-        return False
-    mine = None
-    for sel in registered_composites(families):
-        if set(sel.statics) != set(fn.bindings):
-            continue
-        try:
-            want = bind(sel, **fn.bindings)
-        except (TypeError, ValueError):
-            continue
-        if want is fn:
-            return True
-        if want.signature() != fn.signature():
-            continue
-        mine = mine or definition_entry(fn)
-        theirs = definition_entry(want)
-        if definition_digest({**mine, "id": theirs["id"]}) == definition_digest(theirs):
-            return True
-    return False
-
-
-@functools.cache
-def _family_body(fn: SpecializedDefinition, families: tuple[str, ...]) -> str | None:
-    return next((f for f in families if registered_body(fn, (f,))), None)
-
-
-def family(fn: Any, families: tuple[str, ...], why: str) -> str | None:
-    """``fn``'s family among ``families``: its name, where a registered composite of that name has its body at its statics
-    (`registered_body`); None where it has neither the name nor such a body. A name over another body or a registered body
-    under another name is refused by name, since ``why``."""
-    name = getattr(fn, "name", None)
-    named = name if name in families else None
-    if named is not None and registered_body(fn, (named,)):
-        return named
-    body = _family_body(fn, families) if isinstance(fn, SpecializedDefinition) else None
-    if named is None and body is None:
-        return None
-    raise Unexpressible(f"{fn.id}: " + (f"a unit named as {named} whose body is no registered {named}'s at its statics"
-                                        if named is not None else f"a registered {body}'s body under another name") +
-                        f" is refused: {why}")
-
-
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the

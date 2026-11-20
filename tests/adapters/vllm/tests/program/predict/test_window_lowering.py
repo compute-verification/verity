@@ -28,7 +28,8 @@ from verity_vllm.program.predict import window_cut as WK
 from verity_vllm.program.predict import window_lowering as WL
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict.steps import RequestUnit, registered_composites, request_program
+from verity_vllm.program.predict.by_body import registered_composites
+from verity_vllm.program.predict.steps import RequestUnit, request_program
 from verity_vllm.program.predict.window_builder import Row
 from verity_vllm.program.predict.window_circuit import Grain, class_circuit
 from verity_vllm.program.predict.window_class import GREEDY, PearlTables, Tables
