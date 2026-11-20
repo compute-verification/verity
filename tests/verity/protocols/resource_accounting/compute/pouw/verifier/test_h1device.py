@@ -1,6 +1,5 @@
 """`circuit.h1device`: H1's device records. `h1window.h1_tile` without ``arch`` is the sm_120 tile it was before records
-existed (template and Program digests recorded on the tree before), sm_90's binds the same step, so its tiles are sm_120's
-id for id, and sm_90's domain is h1u's."""
+existed (template and Program digests recorded on the tree before)."""
 from __future__ import annotations
 
 import hashlib
@@ -14,7 +13,6 @@ from verity.circuits.silicon.instructions import INSTRUCTIONS
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1device as D
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 #: sha512 of the template descriptor of `HW.template(K, HW.tile_unit(K, (32, 32), definition))`, recorded before `h1_tile`
@@ -40,10 +38,10 @@ def _template_id(k: int, definition, **arch) -> str:
 
 
 @pytest.mark.parametrize("k", TEMPLATE_IDS)
-def test_the_default_and_sm120_and_sm90_tiles_are_the_recorded_ones(k) -> None:
-    """Without ``arch``, with ``arch="sm_120"`` and with ``arch="sm_90"``, each K's template is the one recorded before."""
+def test_the_default_and_sm120_tiles_are_the_recorded_ones(k) -> None:
+    """Without ``arch`` and with ``arch="sm_120"``, each K's template is the one recorded before."""
     for definition, want in zip((None, H.PouwH1Tile3), TEMPLATE_IDS[k]):
-        for arch in ({}, {"arch": "sm_120"}, {"arch": "sm_90"}):
+        for arch in ({}, {"arch": "sm_120"}):
             assert _template_id(k, definition, **arch) == want, (k, definition, arch)
 
 
@@ -55,23 +53,15 @@ def test_the_default_program_digest_is_the_recorded_one() -> None:
     assert P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8))) == PROGRAM_64
 
 
-def test_sm90s_domain_is_h1us_and_the_combines() -> None:
-    """sm_90 serves K >= `h1zy.LEAST_K` (384) with 512 | K, h1u's own refusal (the kernel's tests hold h1u to this
-    record), so its least K is 512; sm_120 keeps the Definitions' own refusals."""
-    assert Z.LEAST_K == 384 and D.SM90.domain == (384, 512)
-    for k in (64, 256, 384, 640, 1000, 1024 + 32):
-        with pytest.raises(ValueError, match=re.escape(f"K={k} is outside H1's domain on sm_90 (H200 SXM (sm_90a)): "
-                                                       f"K >= 384 (h1zy.LEAST_K")):
-            HW.h1_tile(k, (32, 32), arch="sm_90")
-    for k in (512, 1536, 2048, 6144, 14336, (1 << 17) - 512):
-        assert D.SM90.refuse(k) is None
-    assert HW.h1_tile(14336, (32, 32), arch="sm_90").id == HW.h1_tile(14336, (32, 32)).id
-    assert D.SM120.refuse(64) is None and HW.h1_tile(64, (4, 8), arch="sm_120").complete
+def test_sm120_keeps_the_definitions_refusals() -> None:
+    """sm_120's record bounds no K beyond the Definitions' own refusals (32 | K, K < 2^17)."""
+    assert HW.h1_tile(64, (4, 8), arch="sm_120").complete
+    assert HW.h1_tile(14336, (32, 32), arch="sm_120").id == HW.h1_tile(14336, (32, 32)).id
 
 
 def test_an_architecture_without_a_record_is_refused() -> None:
     for arch in ("sm_100", "sm_89", "", None):
-        with pytest.raises(ValueError, match=re.escape(f"H1 has no device record for {arch!r}: its records are sm_120, sm_90")):
+        with pytest.raises(ValueError, match=re.escape(f"H1 has no device record for {arch!r}: its records are sm_120")):
             HW.h1_tile(512, (32, 32), arch=arch)
 
 
@@ -82,10 +72,9 @@ def test_each_record_binds_its_pinned_step() -> None:
         ins = INSTRUCTIONS[dev.instruction]
         assert (ins.sm, ins.model, ins.status) == (dev.arch, dev.step, "pinned")
         assert dev.gemm == BG.GEMM_SM120_S8
-    assert D.SM90.gemm == BG.GEMM_SM90_S8
 
 
 def test_each_record_is_keyed_by_its_steps_architecture():
-    """A record's architecture is its s8 step's: sm_120's and sm_90's, as the records named them before."""
-    assert {a: d.step.arch for a, d in D.DEVICES.items()} == {"sm_120": "sm_120", "sm_90": "sm_90"}
-    assert (D.SM120.arch, D.SM90.arch) == ("sm_120", "sm_90")
+    """A record's architecture is its s8 step's: sm_120's, as the record named it before."""
+    assert {a: d.step.arch for a, d in D.DEVICES.items()} == {"sm_120": "sm_120"}
+    assert D.SM120.arch == "sm_120"
