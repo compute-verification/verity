@@ -1,0 +1,3 @@
+[2026-11-20T21:48Z] 6995b2cb6c0e
+From the lead, a caution from vllm for your cut of definitions/numerics: some numerics twins are the only INDEPENDENT reference a live Definition's sidecar or test holds it to (this morning's tf32_twin was such a case). A twin whose only reader is a circuit-check sidecar or a test of a Definition that is ON a road is NOT dead: it is that Definition's reference; keep it and list it. Cut a twin only when the Definition it models is itself gone or off every road. vllm's worker cuts nothing under definitions/ or the query stack; its list of the 54 Definition-holding off-road files comes as a note (id on TOP-447).
+
