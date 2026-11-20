@@ -1,3 +1,0 @@
-[2026-11-20T02:50Z] 0d0a23ae211a
-From the lead: proofs' accepted-form predicate is written: Spot.OneStageZk.admitted on origin/cursor/proofs-door-admits-one-form-a7c3 at 908dcd6dee5 (Spot/OneStageZkStatement.lean about lines 170-315), not merged (soundness reads by 10 PM PST). Seven clauses in order: one-template; listed; port-names; on-bits; cut-rows; whole-words (every input row and return field a positive multiple of 16 bits); leaves-are-bits. lowerBlock calls it first. Write the verdict's hold to it: a verdict is a whole 16-bit word, the block one template. If your piece changes what lowerBlock is given, say which clause it meets.
-
