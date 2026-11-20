@@ -5,13 +5,13 @@ the verifier's check of what it served.
 The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
 challenger started over a live epoch's layout, scheme `pouw_h1_challenger.SCHEME` and `pouw_h1_challenger.families` (S)
 as ``FAMILIES`` (`verity/protocols/compose/verifier/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
-(``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
+(``session``: S) and, once round 0's request table is committed (H1's runner (deleted)), has the gate (``gate``)
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
 install holds the same reserve answer, for a session reserved with its salt coin alone (`window.SALT_FAMILIES`), and has
 the gate open S on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W and the epoch's number k
 over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `audit.salt_of` over W. Round s's coin
-opens after round s's root (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
+opens after round s's root (H1's runner (deleted)); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``), H1's R. An H1 window's sampling coin is not S's: it comes
 from a sample session of its own (`DrawSession`, the pouw setting ``draw_session``, reserved withheld with
 `window.DRAW_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
@@ -342,7 +342,7 @@ def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:
 class DrawSession:
     """An H1 window's sampling coin from a sample session of its own (`window.DRAW_FAMILIES`) on the challenger at `at`'s host,
     reserved withheld on infra's gate (`reserved`, its reserve answer, `reserved_of`; None reserves none, and the sample is
-    refused, `NO_DRAW_SESSION`) and opened by `gate` on the window's sample root (`pouw_h1_requests.draw_root`) once the
+    refused, `NO_DRAW_SESSION`) and opened by `gate` on the window's sample root (`requests.draw_root`) once the
     prover's commitment is in: its challenger answers the hello with the sample session's layout alone and the coin's raw
     bytes, and releases its commitment and the coin's full opening only at its close (`remote.RemoteChallenger.close`,
     which checks them). `record(root)` is that opening (`LiveRecord.record`'s form), once: a retry never resamples.
@@ -388,7 +388,7 @@ class DrawSession:
 
 class Window:
     """An H1 window's session on the challenger at `at`, reserved on infra's gate (`reserved`, the gate's reserve answer,
-    `reserved_of`) and opened by `open` once round 0's request table is committed (`pouw_h1.H1Run.open_window`): the gate
+    `reserved_of`) and opened by `open` once round 0's request table is committed (H1's runner (deleted)): the gate
     opens it (`gate`) on the window's open root, `salt.window_open_root` of the weights' root `weights_root`, that
     table's root and the session, and the salt coin opens after that root, on the port the answer names (`at_port`).
     Its sampling coin comes from the sample session reserved as `draw_reserved` (`DrawSession`). `close` closes the session."""

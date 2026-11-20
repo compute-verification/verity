@@ -71,7 +71,7 @@ namespace Verity.Recursive.RefusalsOf
 
 open Lean (Json)
 open Flock (V)
-open BaseSetup (bind_ok noIdentifier_of_check forIn_mem body_ok body_yield)
+open FlockDeploy.BaseSetup (bind_ok noIdentifier_of_check forIn_mem body_ok body_yield)
 open FlockSoundness.Refine (throw_ne_ok)
 
 theorem mapError_ok {ε A : Type} {x : Except ε A} {f : ε → ε} {a : A} (h : x.mapError f = .ok a) : x = .ok a := by
