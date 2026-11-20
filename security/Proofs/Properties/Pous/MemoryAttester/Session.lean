@@ -131,8 +131,8 @@ theorem round_one (b : ByteArray) (hb : b.size = 1) :
 
 theorem message_one (c : ChallengePhaseCommitment) {salt : ByteArray} (hs : salt.size = RECORD_SALT_BYTES) (e : String)
     {d : ByteArray} (hd : d.size = 64) : ∃ m, message c salt e #[oneRecord d] = .ok m := by
-  simp [message, hs, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
-    Except.pure]
+  simp [message, hs, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Flock.SessionCoins.beN, Bind.bind,
+    Except.bind, Pure.pure, Except.pure]
 
 /-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/
 def oneReport (d : ByteArray) : Msg :=
@@ -147,7 +147,8 @@ theorem messages_one (b : ByteArray) (hb : b.size = 1) :
   show (Ch.challenge, Msg.index (oneCoins.indices[0]!)) ::
       oneRound.closing () (Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩) ++ [] = _
   rw [round_one b hb, List.append_nil]
-  simp only [Params.closing, hm]
+  have hm' : message (oneRound.commitment ()) (oneRound.salt ()) COMPLETE #[oneRecord (blockDigest b)] = .ok m := hm
+  simp only [Params.closing, hm']
   rfl
 
 /-- **The view is not less than the digest**: on the one-round session `oneRound`, run as it is meant to run, two

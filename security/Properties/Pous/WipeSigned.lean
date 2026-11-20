@@ -313,11 +313,12 @@ def measuredBatch (digest : Nat → ByteArray) (i : Nat) : StreamedWipe.Batch :=
   ⟨i, i, 1, MEASURED_FIRST_SEND_NS + i * MEASURED_MAX_READ_NS, MEASURED_FIRST_SEND_NS + (i + 1) * MEASURED_MAX_READ_NS, 0,
     digest i⟩
 
-/-- The honest session: the commitment, ended `complete` after its `k` batches, an empty start mark (a challenger with
-no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature `sig`. -/
-/-- Its record's salt: `RECORD_SALT_BYTES` zero bytes. -/
+/-- The honest session's record salt: `RECORD_SALT_BYTES` zero bytes. -/
 def MEASURED_SALT : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
 
+/-- The honest session: the commitment, its record salt, ended `complete` after its `k` batches, an empty start mark (a
+challenger with no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature
+`sig`. -/
 def measuredWipe (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
   ⟨measuredCommitment, MEASURED_SALT, StreamedWipe.COMPLETE, .empty, MEASURED_FILL_START_NS, MEASURED_FILL_END_NS,
     (Array.range measuredParams.k).map (measuredBatch digest), LMS, pk, sig⟩

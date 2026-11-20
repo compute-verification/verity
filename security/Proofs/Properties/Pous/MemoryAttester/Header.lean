@@ -39,7 +39,7 @@ theorem foldl_plain {f : String → Char → String} (hf : ∀ b c, plain c = tr
 
 theorem pyJsonStr_toList (s : String) (h : ∀ c ∈ s.toList, plain c = true) :
     (pyJsonStr s).toList = '"' :: s.toList ++ ['"'] := by
-  unfold pyJsonStr
+  unfold pyJsonStr Flock.SessionCoins.pyJsonStr
   simp only [Id.run]
   rw [List.forIn_pure_yield_eq_foldl]
   show (String.toList (List.foldl _ "\"" s.toList ++ "\"")) = _
