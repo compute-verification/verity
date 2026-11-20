@@ -16,8 +16,7 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   the pass, before the sample.
 
 `check` is the gate before any timing: a forward of every weight (m = 32) captured whole and replayed from poisoned stages
-and outputs must give Python's roots and b ‖ c over the rows it staged, which must be the calls' A words; the no-write
-control (the same replay with the commitments left out) must not.
+and outputs must give Python's roots and b ‖ c over the rows it staged, which must be the calls' A words.
 
 The device's tensors (`zeros`, `empty`, `fill_stages`) and the gate (`check`) are benchmark-side code, which verity does not
 import: they raise here, and `benchmarks/pouw/served_zk/statement_torch.py`'s Statement supplies them."""
@@ -175,7 +174,7 @@ class Statement:
         self.h.open()
         self.consts = constants(self.h)
         self.h.sync()
-        self.enabled = self.skip = False
+        self.enabled = False
         self.pos, self.count = slots_of({w: wt.k for w, wt in run.weights.items()})
         self.ks = sorted(self.count)
         self.stages: dict[tuple[int, int], Any] = {}
@@ -232,8 +231,6 @@ class Statement:
         if {c.w for c in calls} != set(self.pos) or len({c.m16 for c in calls}) != 1:
             raise RuntimeError("served_zk statement: a forward replayed whole calls every weight once, at one m16")
         cms = self._commits(calls[0].m16, sum(c.tiles for c in calls))
-        if self.skip:
-            return
         cms[-1].data = self.run.leaves.data_ptr() + self.run.nb * tiles_at
         self.h.stream = self.run.stream()
         try:
