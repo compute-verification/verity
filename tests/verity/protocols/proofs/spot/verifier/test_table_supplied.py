@@ -1,7 +1,8 @@
 """A table's supplied rows (`Window.supply`: its root, its domain id and the opening verdict's 1) are the rows R7 recomputes
 from the program's digest: a docket whose `supplied` names the table's root and domain id by `bytes` accepts the window's
 own rows in both verifiers, and each row's public salts are the program's (`registered_value.supplied_salts`), the digest
-`Window.give` and the verifier's `Supplied.root` salt with, never the partition's."""
+`Window.give` and the verifier's `Supplied.root` salt with, never the partition's. It runs Lean's registration check beside
+the Python twin (minutes, with the executable built): no cheaper test holds a window's own committed rows to Lean's R7."""
 from __future__ import annotations
 
 import hashlib
