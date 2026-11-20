@@ -30,12 +30,12 @@ statement), the verifier's own registered reads (`registered.json`, in place of 
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (`verity-verify-proof --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
 logs, DIR/upstream-verdicts.json (`agree`'s `--upstream-verdicts`) and DIR/result.json, whose `accepted` counts the sessions
-`verity-verify-proof verify` accepted (none of upstream's plain files), and whose `both_accept`, `both_refuse`,
-`upstream_alone_accepts` and `lean_alone_accepts` count the sessions by the two verdicts as compared (a session refused
-last, once every check has passed, as accepted). Its `refused_at_target`, `refused_elsewhere` and `refused_untargeted` count
-the Lean verifier's refusals by the reason the session's expectation names (none: a `case.json` alone), and `lean_panics` names
-the sessions whose Lean verifier wrote a panic (`PANIC_MARKS`), whose verdicts are not read. Exits 1 if the verifiers disagree
-on any session, either misses an expectation, the Lean verifier alone accepts one, or it panics.
+`verity-verify-proof verify` accepted (none of upstream's plain files), `both_refuse` the sessions both refuse, and
+`lean_alone_accepts` the sessions the Lean verifier accepts or refuses only last, once every check has passed, and upstream
+refuses. `second_alone_accepts` lists the sessions upstream alone accepts by their reason (`second_alone_reason`); `refused_at_named_check`, `refused_at_another_check` and `refused_where_none_named` count the
+Lean verifier's refusals by the reason the session's expectation names (none: a `case.json` alone); `lean_failed` holds
+`lean_run`'s refusal of each Lean run whose answer is not read. Exits 1 if the verifiers disagree on any session, either
+misses an expectation, the Lean verifier alone accepts one, or a Lean run is refused.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -164,16 +164,7 @@ def upstream_cmd(a, public, extra=()):
     return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 
 
-#: a Lean panic's message, whatever prefixes its line (the runtime's `PANIC at …`, the launch's `lean-panic:`, or a caught
-#: one printed as an error): the verifier's state past it is a default value, so no verdict it prints is read
-PANIC_MARKS = ("PANIC", "lean-panic:", "index out of bounds")
-
-
-def panicked(text):
-    return any(m in line for line in text.splitlines() for m in PANIC_MARKS)
-
-
-def verdicts(a, slots=None, panics=None):
+def verdicts(a, slots=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
     one upstream process per chunk, and each sampled session in its own upstream process (`replay --drawn-only` builds only its
     sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). On upstream's
@@ -215,18 +206,13 @@ def verdicts(a, slots=None, panics=None):
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
-    panics = set() if panics is None else panics
 
     def read(ts):
         with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
             done = list(ex.map(run, ts))
-        for (kind, _cmd, c), (out, err) in zip(ts, done):
+        for (kind, _cmd, _c), (out, err) in zip(ts, done):
             lines, errs = logs[kind]
             errs.append(err)
-            if kind == "lean" and panicked(out + err):
-                # a panicking verifier's verdicts are not read, a refusal included: its sessions fail by name
-                panics.update(c)
-                continue
             for line in out.splitlines():
                 if kind == "lean" and line.startswith("VERDICT "):
                     v = json.loads(line[8:])
@@ -262,6 +248,14 @@ def verdicts(a, slots=None, panics=None):
     return lean, up
 
 
+def second_alone_reason(a, s, L):
+    """Why the second verifier alone accepts session `s`, which the Lean verifier refuses for `L["why"]`: D12 at the
+    sampling design, the set's `--second-alone-reason`, else unexplained, with the Lean verifier's reason."""
+    if a.lean_refuses_drawn is not None and drawn(s) and L["why"].startswith(a.lean_refuses_drawn):
+        return f"{a.lean_refuses_drawn.removeprefix('refused: ').split(':')[0]}, which the Lean verifier refuses at setup"
+    return a.second_alone_reason or f"unexplained: the Lean verifier refuses it ({L['why']})"
+
+
 def main(argv=None, slots=None, quiet=False):
     ap = argparse.ArgumentParser()
     for k in ("--lean", "--upstream", "--circuit", "--public"):
@@ -285,6 +279,8 @@ def main(argv=None, slots=None, quiet=False):
                          "gives each its expected verdict")
     ap.add_argument("--lean-refuses-drawless", default=None, metavar="WHY",
                     help="D12 at a session without a sample: refused with WHY once every check has passed, compared as accepted")
+    ap.add_argument("--second-alone-reason", default=None,
+                    help="why the second verifier accepts what the Lean verifier refuses, for this set's expected divergences")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--sessions", nargs="+", required=True)
     ap.add_argument("--jobs", type=int, default=1, help="verifier processes at once (each builds its own statement)")
@@ -297,11 +293,12 @@ def main(argv=None, slots=None, quiet=False):
         case = Path(s) / "case.json"
         if case.exists():
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
-    panics = set()
-    lean, up = verdicts(a, slots, panics)
+    a.lean_refused = []
+    lean, up = verdicts(a, slots)
     rows, bad, passed = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], [], 0
-    both = {"both_accept": 0, "both_refuse": 0, "upstream_alone_accepts": 0, "lean_alone_accepts": 0,
-            "refused_at_target": 0, "refused_elsewhere": 0, "refused_untargeted": 0}
+    both = {"both_refuse": 0, "lean_alone_accepts": 0, "refused_at_named_check": 0, "refused_at_another_check": 0,
+            "refused_where_none_named": 0}
+    alone = {}
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
@@ -332,14 +329,17 @@ def main(argv=None, slots=None, quiet=False):
         if e is not None:
             ok = ok and L["accepted"] == e["accepted"] and any(L["why"].startswith(w) for w in e.get("whys") or [e["why"]])
         if L is not None and U is not None:
-            k = (("both_accept" if U["accepted"] else "lean_alone_accepts") if L["accepted"] else
-                 ("upstream_alone_accepts" if U["accepted"] else "both_refuse"))
-            both[k] += 1
-            # the dangerous direction fails whatever an expectation says
-            ok = ok and k != "lean_alone_accepts"
+            if L["accepted"] and not U["accepted"]:
+                # the dangerous direction fails whatever an expectation says
+                both["lean_alone_accepts"] += 1
+                ok = False
+            elif U["accepted"] and not L["accepted"]:
+                alone.setdefault(second_alone_reason(a, s, L), []).append(name)
+            elif not U["accepted"]:
+                both["both_refuse"] += 1
         if L is not None and not L["accepted"]:
-            both["refused_untargeted" if target is None else
-                 "refused_at_target" if L["why"].startswith(target) else "refused_elsewhere"] += 1
+            both["refused_where_none_named" if target is None else
+                 "refused_at_named_check" if L["why"].startswith(target) else "refused_at_another_check"] += 1
         if not ok and name not in bad:
             bad.append(name)
         av = lambda v: "-" if v is None else "A" if v["accepted"] else "R"
@@ -348,7 +348,8 @@ def main(argv=None, slots=None, quiet=False):
     (a.out / "agreement.tsv").write_text("\n".join(rows) + "\n")
     result = {"statement": a.statement, "sessions": len(a.sessions), "agree": len(a.sessions) - len(bad), "disagree": bad,
               "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted")), "passed_every_check": passed,
-              **both, "lean_panics": sorted(Path(s).name for s in panics)}
+              **both, "second_alone_accepts": [{"reason": r, "sessions": ns} for r, ns in alone.items()],
+              "lean_failed": a.lean_refused}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))

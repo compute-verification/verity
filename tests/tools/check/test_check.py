@@ -357,25 +357,30 @@ def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
 
 
 def test_the_agreements_outcome_names_each_sets_second_verifier_and_what_fails():
-    """Sessions refused only last are not refusals the verifiers agree on, a set compared with our live server is not read
-    as agreement with upstream, and the dangerous direction and a panic are said by name."""
-    last = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 0, "passed_every_check": 7, "both_accept": 7,
-             "both_refuse": 39, "upstream_alone_accepts": 4, "lean_alone_accepts": 0, "refused_at_target": 2,
-             "refused_elsewhere": 4, "refused_untargeted": 37}]
+    """Sessions refused only last are not refusals the verifiers agree on, each kind the second verifier alone accepts is
+    said with its reason, a set compared with our live server is not read as agreement with upstream, and the dangerous
+    direction and a Lean run not read are said by name."""
+    drawn = "a subset draw without --zk, which the Lean verifier refuses at setup"
+    last = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 0, "passed_every_check": 7, "both_refuse": 39,
+             "second_alone_accepts": [{"reason": drawn, "sessions": ["a", "b", "c", "d"]}], "lean_alone_accepts": 0,
+             "refused_at_named_check": 2, "refused_at_another_check": 0, "refused_where_none_named": 41}]
     said = CHECK.agreement_outcome(last)
-    assert "NO SESSION IS ACCEPTED: 0 accepted; 7 pass every Lean check before the form's and are refused at it" in said
-    assert "refusals only" not in said
-    assert ("7 both accept, 39 both refuse, 4 the second verifier alone accepts, 0 the Lean verifier alone accepts; "
-            "Lean's refusals: 2 at the check the vectors name, 4 at another, 37 where they name none") in said
+    assert "NO SESSION IS ACCEPTED: 0 accepted" in said and "refusals only" not in said and "both accept" not in said
+    assert ("7 pass every Lean check before the form's and are refused at it (for those 7, 'agree' is both verifiers' "
+            "verdict on every check before the form's); 39 both refuse; 4 the second verifier alone accepts (4: " + drawn
+            + "); 0 the Lean verifier alone accepts; Lean's refusals: 2 at the check the vectors name, 0 at another, 41 where "
+            "they name none") in said
     live = last + [{"set": "live6", "sessions": 3, "agree": 3, "disagree": [], "accepted": 1, "passed_every_check": 0,
-                    "both_accept": 1, "upstream_alone_accepts": 2, "second": "our live server's recorded verdicts"}]
+                    "second_alone_accepts": [{"reason": "the live server reads no registered roots", "sessions": ["r", "n"]}],
+                    "second": "our live server's recorded verdicts"}]
     said = CHECK.agreement_outcome(live)
     assert "1 accepted by the Lean verifier and by each set's second verifier" in said and "NO SESSION" not in said
+    assert "6 the second verifier alone accepts (4: " + drawn + "; 2: the live server reads no registered roots)" in said
     assert said.endswith("compared with upstream's pinned verifier: sets 0 (0 accepted by the Lean verifier); "
                          "our live server's recorded verdicts: sets live6 (1 accepted by the Lean verifier)")
-    bad = [{**last[0], "disagree": ["f", "s"], "agree": 48, "lean_alone_accepts": 1, "lean_panics": ["s"]}]
+    bad = [{**last[0], "disagree": ["f"], "agree": 49, "lean_alone_accepts": 1, "lean_failed": ["lean-panic: x"]}]
     said = CHECK.agreement_outcome(bad)
-    assert "FAILED: the Lean verifier alone accepts 1" in said and "ERROR: the Lean verifier panicked on 1 sessions (s)" in said
+    assert "FAILED: the Lean verifier alone accepts 1" in said and "ERROR: 1 Lean runs not read: lean-panic: x" in said
 
 
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):

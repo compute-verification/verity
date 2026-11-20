@@ -1327,38 +1327,50 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
 def agreement_outcome(sets: list[dict]) -> str:
     """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
     the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
-    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept. Each set
-    names the verifier it was compared with (`second`: upstream's pinned one, or our live server's recorded verdicts)."""
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept. Then the
+    fields `agree.py` and `ci.py` name: `both_refuse`, `second_alone_accepts` (each kind with its `reason`),
+    `lean_alone_accepts`, the refusals by the check the vectors name, `second` and `lean_failed`."""
     ran = [r for r in sets if "skipped" not in r]
-
-    def c(k, rs=ran):
-        return sum(r.get(k, 0) for r in rs)
-    n, agree = c("sessions"), c("agree")
-    disagree, accepted, last = sum(len(r.get("disagree") or ()) for r in ran), c("accepted"), c("passed_every_check")
-    seconds: dict[str, list[dict]] = {}
+    n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
+    disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
+    last = sum(r.get("passed_every_check", 0) for r in ran)
+    seconds: dict[str, list] = {}
     for r in ran:
         seconds.setdefault(r.get("second", AGREEMENT_UPSTREAM), []).append(r)
     by = " and by upstream" if set(seconds) <= {AGREEMENT_UPSTREAM} else " and by each set's second verifier"
     line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
-            f"{by if accepted and not disagree else ''}, {last} pass every Lean check before the form's and are refused at it; as compared, "
-            f"{c('both_accept')} both accept, {c('both_refuse')} both refuse, {c('upstream_alone_accepts')} the second "
-            f"verifier alone accepts, {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
-            f"{c('refused_at_target')} at the check the vectors name, {c('refused_elsewhere')} at another, "
-            f"{c('refused_untargeted')} where they name none; compared with "
-            + "; ".join(f"{s}: sets {', '.join(str(r['set']) for r in rs)} ({c('accepted', rs)} accepted by the Lean verifier)"
-                        for s, rs in seconds.items()))
-    if alone := c("lean_alone_accepts"):
-        line += f"; FAILED: the Lean verifier alone accepts {alone}"
-    if panics := [p for r in ran for p in r.get("lean_panics") or ()]:
-        line += f"; ERROR: the Lean verifier panicked on {len(panics)} sessions ({', '.join(panics)}): their verdicts are not read"
-    if n and not accepted:
-        line += ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if not last else
-                 f"; NO SESSION IS ACCEPTED: 0 accepted; {last} pass every Lean check before the form's and are refused at it")
-    return line
+            f"{by if accepted and not disagree else ''}, {last} pass every Lean check before the form's and "
+            "are refused at it")
+    line += agreement_fields(ran, seconds, last)
+    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted and not last else
+                   f"; NO SESSION IS ACCEPTED: {accepted} accepted" if n and not accepted else "")
 
 
 #: the second verifier of a set whose result names none
 AGREEMENT_UPSTREAM = "upstream's pinned verifier"
+
+
+def agreement_fields(ran: list[dict], seconds: dict[str, list], last: int) -> str:
+    """The clauses `agreement_outcome` adds to ci's sentence, from the fields `sets.json` names."""
+    def c(k, rs=ran):
+        return sum(r.get(k, 0) for r in rs)
+    kinds: dict[str, int] = {}
+    for r in ran:
+        for k in r.get("second_alone_accepts") or ():
+            kinds[k["reason"]] = kinds.get(k["reason"], 0) + len(k["sessions"])
+    s = (f" (for those {last}, 'agree' is both verifiers' verdict on every check before the form's)" if last else "")
+    s += (f"; {c('both_refuse')} both refuse; {sum(kinds.values())} the second verifier alone accepts"
+          + (" (" + "; ".join(f"{k}: {why}" for why, k in kinds.items()) + ")" if kinds else "")
+          + f"; {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
+          f"{c('refused_at_named_check')} at the check the vectors name, {c('refused_at_another_check')} at another, "
+          f"{c('refused_where_none_named')} where they name none; compared with "
+          + "; ".join(f"{v}: sets {', '.join(str(r['set']) for r in rs)} ({c('accepted', rs)} accepted by the Lean verifier)"
+                      for v, rs in seconds.items()))
+    if alone := c("lean_alone_accepts"):
+        s += f"; FAILED: the Lean verifier alone accepts {alone}"
+    if failed := [f for r in ran for f in r.get("lean_failed") or ()]:
+        s += f"; ERROR: {len(failed)} Lean runs not read: " + "; ".join(failed)
+    return s
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall

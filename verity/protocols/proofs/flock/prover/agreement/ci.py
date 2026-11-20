@@ -68,8 +68,12 @@ def fetch(art, store):
     ref, _, path = art.partition("/")
     d = store / ref.split(":", 1)[1]
     if not d.exists():
-        subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], check=True, capture_output=True,
-                       env=store_env())
+        p = subprocess.run([sys.executable, "-m", "research", "data", "fetch", ref, "--to", str(d)], capture_output=True,
+                           text=True, env=store_env())
+        if p.returncode:
+            shutil.rmtree(d, ignore_errors=True)
+            raise SystemExit(f"ci: error: cannot fetch {ref} from the evidence store (exit {p.returncode}): "
+                             f"{(p.stderr.strip().splitlines() or ['no message'])[-1]}")
     if path:
         return d / path
     files = list(d.iterdir())
@@ -177,6 +181,8 @@ def run_set(i, s, a, ups, store, live=False):
         cmd += ["--lean-refuses-drawn", s["lean_refuses_drawn"]]
     if "lean_refuses_drawless" in s:
         cmd += ["--lean-refuses-drawless", s["lean_refuses_drawless"]]
+    if "second_alone_reason" in s:
+        cmd += ["--second-alone-reason", s["second_alone_reason"]]
     # in-process: every set's verifier processes sample on one budget (SLOTS), so a long set takes the slots short ones free
     rc = agree.main([str(x) for x in cmd[2:]], slots=SLOTS, quiet=True)
     r = json.loads((w / "agree" / "result.json").read_text())
