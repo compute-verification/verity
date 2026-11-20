@@ -1213,16 +1213,30 @@ fails. -/
 def wordEval (P : Prog) (d : ℕ) (x : List (List Bool)) : List (List Bool) :=
   (wordDef? P (2 * P.defs.size + 2) d x).getD []
 
+theorem portWord_length {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (q : Spot.BlockFront.Port) :
+    (portWord X q).length = leafWidth P q := by
+  by_cases h : q.gate < (Flock.OfProgram.ofProgram P).N <;> simp [portWord, portBits, leafWidth, h]
+
+theorem portBits_length {P : Prog} (X : (Flock.OfProgram.ofProgram P).Trace) (ports : Array Spot.BlockFront.Port) :
+    (portBits X ports).length = (ports.toList.map (leafWidth P)).sum := by
+  simp [portBits_eq, List.length_flatten, Function.comp_def, portWord_length]
+
+/-- **`UnitWidths`** (open): unit `g`'s arguments, as `portBits` lays them, have its callee's parameter leaf widths, and
+its return leaves its callee's return widths, for every trace alike. -/
+def UnitWidths : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) →
+      (unitArgs P g).toList.map (leafWidth P) = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
+        (unitOuts P g).toList.map (leafWidth P) = (P.defs[(P.child P.rootScope k m).d]!).ret.widths.toList
+
 /-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
-`g`'s arguments' words have its callee's parameter leaf widths, and its return leaves' words are its callee's value on
-its arguments' words (`wordEval`). -/
+`g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`). -/
 def UnitWordComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
-        (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
-          outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g)
+        outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g)
 
 /-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of the template `admitted` gives, a Definition of C
 taken in the block's Program, evaluated on bits (`Prog.evalBool`), is C's value of it on words (`wordEval`), bit for
@@ -1235,10 +1249,13 @@ def LiftWordEval : Prop :=
     ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[a.d]!) →
       Prog.evalBool L e x.flatten = (wordEval P a.d x).flatten
 
-/-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
-theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
+/-- **`UnitComputes`**, on `UnitWidths`, `UnitWordComputes` and `LiftWordEval`. -/
+theorem unitComputes_of (hWd : UnitWidths) (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
   intro bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu hda Y hY
-  obtain ⟨hw, ho⟩ := hW bytes P hd hr g k m hu Y hY
+  have ho := hW bytes P hd hr g k m hu Y hY
+  have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
+    rw [← (hWd bytes P hd hr g k m hu).1]
+    simp [argWords, Function.comp_def, portWord_length]
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]
@@ -1262,5 +1279,44 @@ theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
   exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
+
+/-- **`DoorLengths`**, on `UnitWidths`. -/
+theorem doorLengths_of (hWd : UnitWidths) : DoorLengths := by
+  intro bytes P partition cuts units S a fr hd hr hs ha hab hf X g hg
+  obtain ⟨k, m, hu, -⟩ := frontUnitRanges P units fr hf g hg
+  have hda := admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu
+  obtain ⟨hwa, hwo⟩ := hWd bytes P hd hr g k m hu
+  obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
+  have hdx : (P.child P.rootScope k m).d = x.fn := by
+    rw [child_d]
+    generalize P.defs[P.root]! = R at h1 ⊢
+    simp [getElem!_def, h1]
+  have hlt : a.d < P.defs.size := by
+    rw [← hda, hdx]
+    exact (Array.getElem?_eq_some_iff.1 h2).1
+  rw [hda] at hwa hwo
+  obtain ⟨-, hpre, -⟩ := restrictShape P units S hs
+  obtain ⟨fn, L, dl, l, hfn, hlift, hl, hoff, -⟩ := admitted_walk ha
+  obtain ⟨hpi, hpo⟩ := admitLeaves ha hlift
+  obtain ⟨hp, hr'⟩ := leavesOff_none hoff
+  have hg' : L.defs.getD dl default = l := by
+    rw [Array.getD_eq_getD_getElem?, hl]; rfl
+  have hfnP : P.defs[a.d]! = fn := by
+    rw [← hpre _ hlt]
+    simp [getElem!_def, hfn]
+  rw [hfnP] at hwa hwo
+  have key : ∀ (ps : List (String × Ty)) (acc : ℕ),
+      ps.foldl (fun a x => a + x.2.widths.foldl (· + ·) 0) acc = acc + (ps.flatMap fun p => p.2.widths.toList).sum := by
+    intro ps
+    induction ps with
+    | nil => simp
+    | cons x ps ih =>
+      intro acc
+      simp only [List.foldl_cons, ih, List.flatMap_cons, List.sum_append, sum_foldl_add]
+      omega
+  unfold argBits outBits
+  rw [portBits_length, portBits_length, hwa, hwo, hpi, hpo, hg', ← hp, ← hr', sum_foldl_add, ← Array.foldl_toList,
+    key]
+  simp [leafWidths]
 
 end Flock.Chain
