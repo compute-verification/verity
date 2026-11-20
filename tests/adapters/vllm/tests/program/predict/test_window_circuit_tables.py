@@ -100,8 +100,8 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
 def test_each_tables_readers_are_templates_of_their_own():
     """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
-    every table has one, but a `ScanSlots_v4` lane's, a unit a slot, which holds one on the units its lane's slots read.
-    Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v4` and `TokenFeed_v1` units' and round
+    every table has one, but a `ScanSlots_v5` lane's, a unit a slot, which holds one on the units its lane's slots read.
+    Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v5` and `TokenFeed_v1` units' and round
     1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
     tables: dict[str, set[str]]
@@ -110,12 +110,12 @@ def test_each_tables_readers_are_templates_of_their_own():
     for (tid, _port, u), (table, _row) in _held_rows(c).items():
         tables.setdefault(tid, set()).add(table)
         held_units.setdefault(tid, set()).add(u)
-    scans = [t for t in tables if t.startswith("ScanSlots_v4")]
+    scans = [t for t in tables if t.startswith("ScanSlots_v5")]
     assert all(len(ts) == 1 and (t in scans or held_units[t] == set(range(units[t]))) for t, ts in tables.items())
     assert sorted(u for t in scans for u in held_units[t]) == list(range(CLASS.slots)) == list(range(units[scans[0]]))
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
-        *[("ScanSlots_v4", "input-ids/0", False)] * CLASS.lanes, ("SelectCollect_v2", "input-ids/1", True),
+        *[("ScanSlots_v5", "input-ids/0", False)] * CLASS.lanes, ("SelectCollect_v2", "input-ids/1", True),
         ("TokenFeed_v1", "input-ids/0", False)]
     assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
                                                             if p.startswith(("row-table/", "input-ids/"))}

@@ -11,7 +11,7 @@ request has no Program. The class circuit (`class_circuit`), every slot's Progra
 positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v4` (`scan_state.bridge`), a template a lane,
+(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v5` (`scan_state.bridge`), a template a lane,
 which gives its lane its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and
 its head (its prompt's length and ``max_tokens``). A served window has a unit a lane of each boundary, empty lanes
 included; a class circuit's slot holds a unit of every lane's template and reads its own lane's, so its slots lower the
@@ -101,7 +101,7 @@ Given H1's tables of the window (`Tables`, `window_class`), the circuit reads ea
 output row (`interface.Read`) that holds the proof block's output row to the registered row: each quantizer at the
 tables' K is `Int8RowQuant_v5{K, R, ROUND}`, its ``o2`` a row of its round's A table, and each position's token row a row of
 its round's input-ids table, at a fixed load's rows (`Tables.at`). Each reader reads one table, and each table's readers are
-templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v4` and `TokenFeed_v1`
+templates of their own: round s's quantizers bind ROUND = s, round 0's token rows are its `ScanSlots_v5` and `TokenFeed_v1`
 units' and a later round's the select before it, `io_shell.SelectCollect_v2{..., ROUND}`. So a sample stratified by
 template (one stratum a template) has a reader of every table.
 
@@ -119,7 +119,7 @@ it (`interface.ordered`, the circuit's ``order``).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the blocks'
 slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the stack, LM head
-and token select with its collector after it are that position's (the last's with the entry), and a lane's `ScanSlots_v4`
+and token select with its collector after it are that position's (the last's with the entry), and a lane's `ScanSlots_v5`
 unit its Program's first position's (an empty lane's, the slot's that holds its collector). An allocation's units are one entry, its slots' runs at one step side by side (the slot
 digit, then the run), and like entries that follow on merge, at one step and then at consecutive steps
 (`window_builder.inference`).
@@ -132,7 +132,8 @@ would read more than its prompt and the weights (a stochastic request's seed, a 
 peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose
 leaves aren't whole u16 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port
 read at two row counts or as rows that aren't its outer elements cut that many ways and a unit of more than ``grain.rows``
-rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering. The circuit is completeness only:
+rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering; a served window's,
+which the door proves, `check_served`'s. The circuit is completeness only:
 that it computes what serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -159,7 +160,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, advice_of, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, check_served, inference
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
@@ -198,7 +199,7 @@ class Lowered:
     units by their (slot, step), ``(at, count, slot, step)``, and in a served window's, each slot's request's index among
     the window's requests (`window_class.takes`), none in a class circuit's; each empty slot of a served window,
     ``(slot, the Program whose slot holds its units, its collector unit, its entry unit)`` (`_Program.place_empty`); and
-    each `ScanSlots_v4` unit, ``(anchor, lane, unit)``."""
+    each `ScanSlots_v5` unit, ``(anchor, lane, unit)``."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
@@ -231,7 +232,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
     linears are the first's (`window_cut.linears`). With ``requests`` (`window_class.takes`, `window_class.requests_of`),
     the served window's circuit: a Program a request of the request's own positions, longest first, reading its lane at
-    its anchor, so it holds exactly the requests' positions, and one `ScanSlots_v4` unit a lane of each boundary, one
+    its anchor, so it holds exactly the requests' positions, and one `ScanSlots_v5` unit a lane of each boundary, one
     allocation each, and one entry a slot of the class in slot order, an empty lane's units in the slot of the first
     Program at its boundary (`_Program.place_empty`), or of the first Program at a boundary no request is anchored at;
     refused with ``tables`` or ``programs``, or for a window of no request."""
@@ -421,5 +422,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Request", "Row", "Scheduled", "Tables",
-           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
+           "WEIGHTS", "WindowClass", "WindowCompiler", "check_provable", "check_served", "class_circuit", "class_program", "lower", "requests_of", "stop_ids",
            "takes", "window_circuit"]

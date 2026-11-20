@@ -82,11 +82,11 @@ structure Parsed where
 
 open Classical in
 /-- **What the committed files parse to**: the circuit file `cf` (with the lookup tables `tables`) as the verifier reads
-it (`Flock.Desc.parse tags`), and the public file `pf` against its circuit (`HmOut.loadPublic`), when both read and the
+it (`Flock.Desc.parseStmt tags`, a templated statement's file unrolled), and the public file `pf` against its circuit (`HmOut.loadPublic`), when both read and the
 unit's rows are built; else `none`. -/
 noncomputable def parsedOf (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray) :
     Option Parsed :=
-  match Flock.Desc.parse tags cf tables with
+  match Flock.Desc.parseStmt tags cf tables with
   | .error _ => none
   | .ok D =>
     match HmOut.loadPublic tags D.unroll pf with

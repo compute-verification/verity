@@ -142,6 +142,26 @@ def test_byte_ingress_compiles_to_the_same_programs_with_a_parse_unit_each():
     assert wired.summary()["transfer_gates"] == list(wired.transfer_gates)
 
 
+def test_a_token_select_is_a_transfer_gate_by_its_body_whatever_its_name():
+    from verity.circuits.defs import CompositeDefinition
+    from verity.circuits.ops.prims import const
+    from verity_vllm.definitions.registry import dead_free as DF
+    from verity_vllm.program.predict.steps import Compiled, egress
+
+    sel = DF.TokenSelectV4
+    real = bind(sel, V=256)
+    renamed = bind(CompositeDefinition("LogitArgmax", 1, sel.statics, sel.signature, sel.body, register=False, ports=sel.ports),
+                   V=256)
+    other = bind(CompositeDefinition("TokenSelect", 4, sel.statics, sel.signature, lambda B, S, logits: B.call(const(32, 0)),
+                                     register=False, ports=sel.ports), V=256)
+    assert other.id == real.id and other is not real and renamed.id == "LogitArgmax_v1{V=256}"
+    assert (egress(real), egress(renamed), egress(other)) == (True, True, False)
+    program = NS(fn=NS(body=NS(nodes=[NS(fn=renamed)])))
+    assert Compiled.transfer_gates.fget(NS(requests=[], programs={"p": program})) == ("LogitArgmax_v1{V=256}",)
+    program = NS(fn=NS(body=NS(nodes=[NS(fn=other)])))
+    assert Compiled.transfer_gates.fget(NS(requests=[], programs={"p": program})) == ()
+
+
 @pytest.mark.parametrize("edit, served, why", [
     (lambda b: b, None, "names no served model"),
     (lambda b: b.replace(b'"temperature":0', b'"temperature":1'), SERVED, "aren't in ingress schema v0"),

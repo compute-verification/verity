@@ -16,7 +16,7 @@
 
 `node` reads the same for several runs on one machine, and that machine's state they may hold or wait on: every GPU_LEASE_DIRS
 directory's live leases and live waiters as gpu-lease writes them (an `<i>.owner` line whose pid lives and whose `<i>.lock`
-someone flocks; a `wait.*` file someone flocks), with node 1's `n1-lease.json` pool record and `n1-lease.limits`, and the
+someone flocks; a `wait.*` file someone flocks), and the
 check and Lean slots (`tools/check/slot.py` and `lean_slot.py`'s `--status --json` documents, when the caller loaded them).
 gpu-lease's locks are read from /proc/locks, never probed; slot.py probes its line's tickets, as `check.py --slots` does.
 
@@ -235,14 +235,7 @@ def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, An
             owners.append({"index": i, **f})
     waits = [{"file": n, **fields(_text(d / n) or "")} for n in names
              if n.startswith("wait.") and n.rsplit(".", 1)[-1].isdigit() and _locked(d / n, held)]
-    try:
-        pool = json.loads((d / "n1-lease.json").read_text()) if (d / "n1-lease.json").exists() else None
-        pool = None if pool is None else {k: pool.get(k) for k in ("t", "pool", "pool_name", "blocked")} | {"pending_holders": len(pool.get("pending_holders") or [])}
-    except (OSError, ValueError, AttributeError) as e:
-        print(f"scopemem: {d / 'n1-lease.json'} unread, so no pool record ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
-        pool = None
-    return {"gpus": len(gpus), "locked": sum(_locked(d / f"{i}.lock", held) for i in gpus), "owners": owners, "waits": waits,
-            "pool": pool, "limits": _text(d / "n1-lease.limits")}
+    return {"gpus": len(gpus), "locked": sum(_locked(d / f"{i}.lock", held) for i in gpus), "owners": owners, "waits": waits}
 
 
 def node(run_dirs: list[str], proc: Path | None = None, cg_root: Path | None = None, slot_mods: tuple[Any, Any] | None = None,

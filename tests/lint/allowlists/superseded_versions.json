@@ -1,7 +1,8 @@
 {
   "rule": "superseded Definition versions (tests/tools/verity/circuit_check/test_superseded_versions.py)",
   "held": {
-    "ScaledMmS8_v1": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    "EmbeddingRead_v2": "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager",
+  "ScaledMmS8_v1": "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
   },
   "entries": [
     {"file": "adapters/vllm/verity_vllm/program/frontend/seed_rule.py", "kind": "superseded", "symbol": "SeedCheck", "detail": "SeedCheck_v1"},

@@ -44,7 +44,7 @@ REFERENCE = Path(__file__).resolve().parents[6] / "verity/protocols/workload_cla
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"
-ON_DEMAND = "LEnable_v1"
+ON_DEMAND = "GatherBf16x64_v1"
 ALONE = """
 import json, sys
 from verity_vllm.program.predict import block_counts as BC
@@ -108,6 +108,42 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     by = {t: BC.gates(BC.resolve(t), pub.table)[0] for t in (GEMM, ROPE)}
     assert cls.gates == 2 * by[GEMM] + 3 * by[ROPE] > 0
     assert cls.fresh == IF.input_count(small)["free"] // 2
+
+
+def _impostor(tid: str):
+    """A Definition under ``tid`` whose body is another: the registered one's with its two parameters swapped."""
+    real = BC.resolve(tid)
+    d = real.defn
+    other = CompositeDefinition(d.name, d.version, d.statics, d.signature, lambda B, S, a, b: d.body(B, S, b, a),
+                                register=False, ports=d.ports)
+    fn = bind(other, **real.bindings)
+    assert codec.descriptor_id(fn) == tid and fn is not real
+    return fn
+
+
+def test_a_record_its_ids_do_not_rebuild_is_refused_by_name(small, monkeypatch):
+    """The counts refuse a record whose template ids rebuild another program than the record's digest names: its program
+    field tampered, or one id bound to another body than the record's (two bodies under one id); and one that names no
+    program digest. The honest record is counted."""
+    assert BC.session(small)[1:] == (2, 3) and BC.fresh(small, 2, None, None) > 0
+    honest = codec.program_digest(IF.program_of_record(small, BC.resolve)[0])
+    assert honest == small["program"]
+    bare = {k: v for k, v in small.items() if k != "program"}
+    for count in (lambda d: BC.session(d), lambda d: BC.fresh(d, 2, None, None)):
+        with pytest.raises(ValueError, match="test/blocks: the circuit record names no program digest, so the Definitions its "
+                                             "template ids name can't be held to the declared circuit, and it is not counted"):
+            count(bare)
+        with pytest.raises(ValueError, match=f"test/blocks: its template ids rebuild the program {honest}, not the record's "
+                                             f"{'0' * 128}: a template's body under its id is not the declared circuit's"):
+            count({**small, "program": "0" * 128})
+    swapped = {ROPE: _impostor(ROPE)}
+    real = BC.resolve
+    monkeypatch.setattr(BC, "resolve", lambda tid: swapped.get(tid) or real(tid))
+    for count in (lambda d: BC.session(d), lambda d: BC.fresh(d, 2, None, None),
+                  lambda d: BC.judgment(DAY, [(d, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})):
+        with pytest.raises(ValueError, match=f"not the record's {small['program']}: a template's body under its id is not "
+                                             "the declared circuit's, and the record is not counted"):
+            count(small)
 
 
 def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
@@ -242,8 +278,7 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     from tests.program.predict.test_window_circuit import CLASS, GRAIN
 
     circuit = class_circuit(S._registered(), CLASS, None, GRAIN)
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    doc = IF.descriptor_record(circuit, 64)
     roots = {p: "ab" * 64 for p in circuit.registered.params if p.split("/", 1)[0] == WEIGHTS}
     pub, private = BC.judgment(DAY, [(doc, roots)], {"c": 0, "k": 0, "n": 0}, pins=roots)
     (cls,) = pub.classes

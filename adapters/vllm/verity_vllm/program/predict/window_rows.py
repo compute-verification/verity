@@ -14,7 +14,7 @@ attention isn't the Program's one-row decode's, though at as few keys as one blo
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
 cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum.
 Every other unit holds its Definition's function of the window's values:
-- a lane's `ScanSlots_v4` its first token and slot, occupancy word and head of the scan state row at its anchor
+- a lane's `ScanSlots_v5` its first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; a slot's lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt bound its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
@@ -55,9 +55,7 @@ from verity.commitments import registered_value as RV
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-    registered_commit,
-)
+from verity.commitments.periods.rows import registered as registered_commit
 
 from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
@@ -459,7 +457,7 @@ class Rows:
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
     `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
-    read opens its table's (its ``rows``, ``salts`` and ``path``) and a lane's `ScanSlots_v4` reads the scan state's row at
+    read opens its table's (its ``rows``, ``salts`` and ``path``) and a lane's `ScanSlots_v5` reads the scan state's row at
     its anchor. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
@@ -668,7 +666,7 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
 
 
 def _lane(scan: Any, state: Sequence[Any], anchor: int, of: Callable[..., Any] = IO.slots_reference) -> Any:
-    """The lane of `ScanSlots_v4` binding ``scan`` in ``state``'s row ``anchor``: its row and head
+    """The lane of `ScanSlots_v5` binding ``scan`` in ``state``'s row ``anchor``: its row and head
     (`io_shell.slots_reference`), or ``of``'s (`io_shell.scan_reference`: the binding's outputs)."""
     b = scan.bindings
     row = np.asarray(state[anchor], dtype=np.uint16).reshape(-1)
