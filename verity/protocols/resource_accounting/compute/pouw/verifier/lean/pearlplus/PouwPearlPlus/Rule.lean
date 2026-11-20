@@ -233,6 +233,39 @@ def wordMend (ea eb : Array Nat × Array Nat × Array Bool) : Nat :=
   let cm := wordCuts ea.2.1 eb.2.1
   ((List.range ea.2.2.size).filter fun l => (ea.2.2[l]! && eb.2.2[l]!) || (cp.getD l false && cm.getD l false)).length
 
+/-! The compiled `wordMend` (`wordMend_eq_arr`, a `@[csimp]`): `wordCuts`'s flags grown in an array, and each read in
+constant time; on the lists, the appends and the reads by position are quadratic in k, most of a tile's replay. -/
+
+def cutStepArr (st : Nat × Nat × Array Bool) (x : List Nat × List Nat) : Nat × Nat × Array Bool :=
+  let w := if st.1 % PearlPlus.G = 0 then 0 else st.2.1
+  (st.1 + 1, atom w x.1 x.2, st.2.2 ++ (cuts w x.1 x.2).toArray)
+
+def wordCutsArr (a b : Array Nat) : Array Bool :=
+  (((List.range (a.size / 32)).map fun t => (slice a (32 * t) 32, slice b (32 * t) 32)).foldl cutStepArr (0, 0, #[])).2.2
+
+def wordMendArr (ea eb : Array Nat × Array Nat × Array Bool) : Nat :=
+  let cp := wordCutsArr ea.1 eb.1
+  let cm := wordCutsArr ea.2.1 eb.2.1
+  ((List.range ea.2.2.size).filter fun l => (ea.2.2[l]! && eb.2.2[l]!) || (cp.getD l false && cm.getD l false)).length
+
+theorem foldl_cutStepArr (xs : List (List Nat × List Nat)) (n w : Nat) (fs : Array Bool) :
+    xs.foldl cutStepArr (n, w, fs) =
+      ((xs.foldl cutStep (n, w, fs.toList)).1, (xs.foldl cutStep (n, w, fs.toList)).2.1,
+        (xs.foldl cutStep (n, w, fs.toList)).2.2.toArray) := by
+  induction xs generalizing n w fs with
+  | nil => simp
+  | cons x xs ih => simp only [List.foldl_cons, cutStepArr, cutStep, ih, Array.toList_append]
+
+theorem wordCutsArr_eq (a b : Array Nat) : wordCutsArr a b = (wordCuts a b).toArray := by
+  simp [wordCutsArr, wordCuts, foldl_cutStepArr]
+
+theorem toArray_getD (l : List Bool) (i : Nat) : l.toArray.getD i false = l.getD i false := by
+  simp [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD]
+
+@[csimp] theorem wordMend_eq_arr : @wordMend = @wordMendArr := by
+  funext ea eb
+  simp only [wordMend, wordMendArr, wordCutsArr_eq, toArray_getD]
+
 /-- fs, the salt-dependent part of `FORMING` (the noise atom and the cast), per inert forming element. Must equal
 `Prices.h100`'s `forming_credited`. -/
 def FS : Nat := 64
