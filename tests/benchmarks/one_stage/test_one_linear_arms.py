@@ -48,12 +48,20 @@ CASES = {
     "registered refused by R8 before the draw": (
         "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {
             "ok": False, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}},
-        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+        'ARM registered REFUSED before the draw, a completeness limit: R8-shared-input [0]', 0),
     "registered refused by R8, read off a5's line": (
         "registered", 1, WINDOW + 'A5 {"refused_before_draw": {"registration": false}, "checks": {"registration": '
         '{"ok": false, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}}\n',
         {"ok": False, "checks_before_draw": {"registration": False}},
-        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+        'ARM registered REFUSED before the draw, a completeness limit: R8-shared-input [0]', 0),
+    "registered refused by R8 and every member's header, as a5 prints it, after the arm log's cut copy": (
+        "registered", 1, WINDOW + 'A5 {"refused_before_draw": {"m0": false, "registration": false}, "che\n'
+        'A5 {"refused_before_draw": {"m0": false, "registration": false}, "checks": {'
+        '"m0": {"ok": false, "codes": ["header"], "detail": {"header": "public file: port w has no tree under the member"}}, '
+        '"registration": {"ok": false, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}, '
+        '"source": {"ok": true}}}\n', {"ok": False, "checks_before_draw": {"m0": False, "registration": False}},
+        "ARM registered REFUSED before the draw, a completeness limit: R8-shared-input [0]; 1 members at header: "
+        "{'header': 'public file: port w has no tree under the member'}", 0),
     "registered refused before the draw by another check": (
         "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {"ok": False, "codes": ["R3-root"]}}},
         "ARM registered REJECT status 1, not REFUSED by its name", 1),
