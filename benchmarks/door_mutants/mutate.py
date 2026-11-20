@@ -347,6 +347,7 @@ def reach(spec: dict, out: Path, jobs: int, base: Path, step: str | None = None)
 # ----------------------------------------------------------------------------------------------------------------- run
 
 def _qual_match(func: str, reached_q: str) -> bool:
+    reached_q = reached_q.replace(".<locals>", "")
     return reached_q == func or reached_q.startswith(func + ".")
 
 

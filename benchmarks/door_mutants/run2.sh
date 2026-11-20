@@ -16,8 +16,13 @@ python3 - "$OUT/reach.json" $D/pass1/*reach.json <<'EOF'
 import json, sys
 m = {}
 for p in sys.argv[2:]:
-    m.update(json.load(open(p)))
+    for f, e in json.load(open(p)).items():
+        if f in m:
+            m[f]["reached"] = m[f]["reached"] + [x for x in e["reached"] if x not in m[f]["reached"]]
+            m[f]["deselect"] = sorted(set(m[f].get("deselect", [])) | set(e.get("deselect", [])))
+        else:
+            m[f] = e
 json.dump(m, open(sys.argv[1], "w"))
 EOF
-export MUT_BASE=$base MUT_SLOW=1 MUT_IDS=$D/pass1/survivors.txt MUT_RESULTS=results2.jsonl MUT_BUDGET=2400
+export MUT_BASE=$base MUT_SLOW=1 MUT_IDS=${IDS:-$D/pass1/survivors.txt} MUT_RESULTS=results2.jsonl MUT_BUDGET=2400
 .venv/bin/python $D/mutate.py run $D/spec.json "$OUT" --jobs "$JOBS" --step "$STEPS"
