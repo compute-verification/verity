@@ -20,7 +20,7 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   chain of windows rebuilt from its attested I/O under the config read off the endpoint's records
   (`endpoint_config`), its bits placed in the run's execution phases.
 * **The prove path** (`prove_path`, a directory or a gzipped tar): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
-  each arm a directory with its ``summary.json``; a forged arm, ``prove_path.py audit --forged``, is left out): an arm
+  each arm a directory with its ``summary.json``): an arm
   passes when every rank's audit accepted on the verifier's coins and every negative was refused. The advice the arm
   committed is held to the given advice's ``total_bits`` alone, its commitment being hiding. That holds it to the
   advice, not to these runs: the prove path is bound to them only when the advice is theirs and the Commit it proves is
@@ -487,8 +487,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
     an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window it proves (`served_commit`, named
     ``w<k> <arm>``), and the prove path is bound to these runs when every arm's is the endpoint's and sealed while
     serving, every arm's committed advice is held by content to the report's advice of its window (`held_to`: ``tied``,
-    which the report's OK requires of every such arm), and an arm's is one of the honest run's. A forged arm
-    (``prove_path.py audit --forged``) is left out."""
+    which the report's OK requires of every such arm), and an arm's is one of the honest run's."""
     srcs = [src] if isinstance(src, Path) else list(src)
     served = info is not None and bool(info.get("served"))
     commits = {int(d["window"]): d for d in _jsonl(ep / "windows.jsonl")} if served and ep is not None else {}
@@ -501,7 +500,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
                 s = json.loads((p / "summary.json").read_text())
             except (OSError, ValueError):
                 continue
-            if "ranks" not in s or s.get("forged"):
+            if "ranks" not in s:
                 continue
             ranks = {}
             for r, x in sorted(s["ranks"].items(), key=lambda kv: int(kv[0])):
