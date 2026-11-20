@@ -69,7 +69,6 @@ import pouw_credit_cases as credit_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
-from verity.circuits import codec
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
@@ -517,19 +516,24 @@ def test_honest_j10r_windows_are_credited(pass_server):
     assert any(credited), credited
 
 
+@pytest.fixture(scope="session")
+def window_k64(tmp_path_factory) -> bytes:
+    """The registry's window at K = 64, built once a session (`pouw_credit_cases.shared_window`)."""
+    return credit_cases.shared_window(tmp_path_factory.getbasetemp().parent)
+
+
 @pytest.mark.slow
-def test_the_tile_name_over_another_body_is_refused(pass_server):
+def test_the_tile_name_over_another_body_is_refused(pass_server, window_k64):
     """The compiled `Credit.descriptorDrawn` reads the registry's window at K = 64 (`registry_window`, its template one
     `credit.TILE_PINS` pins) past its layout, and refuses the same descriptor with one Definition under its template over
     another body (`other_body`: the name `PouwH1WindowTile_v1{UNIT=…,K=64}` and every id the same) as no template at
     K = 64, as `credit.layout_of` does: `Credit.tileOf`'s pin, the closure digest, which `test_credit`'s stand-in
     templates can't reach. Each descriptor is about 60 MB."""
-    desc = credit_cases.registry_window(64)
     case = credit_cases.window_drawn_instance(random.Random("pin/0"), "honest")
     outs = {}
-    for name, d in (("registry", desc), ("other-body", credit_cases.other_body(desc))):
-        hexed = codec.canonical_json({k: v for k, v in d.items() if k != "annotations"}).hex()
-        kind, out = D.replay(WINDOW_DRAWN, {**case, "descriptor": hexed}, pass_server)
+    other = credit_cases.desc_bytes(credit_cases.other_body(json.loads(window_k64)))
+    for name, raw in (("registry", window_k64), ("other-body", other)):
+        kind, out = D.replay(WINDOW_DRAWN, {**case, "descriptor": raw.hex()}, pass_server)
         assert kind == "output", out
         outs[name] = json.loads(out)
     assert outs["other-body"] == {"refused": ["layout", Cr.no_template(64)]}, outs["other-body"]

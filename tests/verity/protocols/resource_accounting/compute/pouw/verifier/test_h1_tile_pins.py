@@ -59,14 +59,20 @@ def test_the_pins_are_the_registrys_templates():
     assert Cr.TILE_PINS == json.loads(Cr.TILE_PINS_FILE.read_text())
 
 
+@pytest.fixture(scope="session")
+def window_k64(tmp_path_factory) -> bytes:
+    """The registry's window at K = 64, built once a session (`pouw_credit_cases.shared_window`)."""
+    return cases.shared_window(tmp_path_factory.getbasetemp().parent)
+
+
 @pytest.mark.slow
-def test_a_pinned_window_is_read_and_its_template_over_another_body_is_refused():
+def test_a_pinned_window_is_read_and_its_template_over_another_body_is_refused(window_k64):
     """The registry's window at K = 64 is read (its layout, the 4 × 8 tile); the same descriptor with one Definition
     under its template over another body, every id and signature the same (`pouw_credit_cases.other_body`), is refused
     as no template at K = 64 (`credit.layout_of`, by `_tile`)."""
-    desc = cases.registry_window(64)
+    desc = json.loads(window_k64)
     key = cases.template_key(desc)
-    lay, why = Cr.layout_of(descriptor_bytes(desc))
+    lay, why = Cr.layout_of(window_k64)
     assert why is None and lay["tile"] == [4, 8], why
     assert Cr._tile(desc["definitions"][key], key, 64, desc) == (4, 8, False)
     bad = cases.other_body(desc)

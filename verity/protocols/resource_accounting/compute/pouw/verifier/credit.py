@@ -899,15 +899,23 @@ def _record_fns(v: Any) -> list:
     return out
 
 
+#: {SHA-512 of a descriptor: whether it decodes}: a real window's decode takes seconds, and one period reads its window's
+#: descriptor many times
+_DECODED: dict[bytes, bool] = {}
+
+
 def _decodes(descriptor: bytes) -> bool:
     """Whether the codec's decoder reads `descriptor` from its bytes alone, each primitive as the descriptor declares it
     (`restrict.program`), as `Credit.programOf` reads it with `Flock.Program.decode`: a descriptor it refuses (``E_BODY_KEY``,
-    ``E_BODY_MISSING``, ``E_REINTERPRET``, ...) is no descriptor."""
-    try:
-        restrict.program(descriptor)
-    except (restrict.Refused, IndexError, AttributeError, RecursionError):
-        return False
-    return True
+    ``E_BODY_MISSING``, ``E_REINTERPRET``, ...) is no descriptor. Each descriptor is decoded once (`_DECODED`)."""
+    key = hashlib.sha512(descriptor).digest()
+    if key not in _DECODED:
+        try:
+            restrict.program(descriptor)
+            _DECODED[key] = True
+        except (restrict.Refused, IndexError, AttributeError, RecursionError):
+            _DECODED[key] = False
+    return _DECODED[key]
 
 
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:

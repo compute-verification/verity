@@ -128,6 +128,7 @@ mutation to the refusal it aims at.
 from __future__ import annotations
 
 import dataclasses
+import fcntl
 import functools
 import hashlib
 import itertools
@@ -135,6 +136,7 @@ import json
 import random
 import struct
 from collections.abc import Callable
+from pathlib import Path
 
 import pouw_rounds_cases as rc
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
@@ -881,6 +883,20 @@ def registry_window(k: int, tile: str = "v1") -> dict:
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
     unit = HW.tile_unit(k, (4, 8), {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}[tile])
     return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), unit=lambda _k: unit))
+
+
+def shared_window(base: Path, k: int = 64, tile: str = "v1") -> bytes:
+    """`registry_window` (K, `tile`)'s bytes (`desc_bytes`), built by the first process of a session to ask and written
+    under `base`, the directory a session's processes share (pytest-xdist workers' base temp's parent), so the other
+    workers read 60 MB rather than build it (half a minute, five GB). The lock is the file's own (`fcntl.flock`)."""
+    path = base / f"registry-window-k{k}-{tile}.json"
+    with open(base / f"{path.name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not path.exists():
+            tmp = path.with_suffix(".part")
+            tmp.write_bytes(desc_bytes(registry_window(k, tile)))
+            tmp.replace(path)
+    return path.read_bytes()
 
 
 def template_key(desc: dict) -> str:
