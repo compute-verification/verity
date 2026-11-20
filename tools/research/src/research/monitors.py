@@ -22,7 +22,7 @@ its last read. One that fails otherwise keeps its incidents open, and once it ha
 `<id>|unreadable` for infra.
 
 **Sinks.** Each open and clear is a line of `<alerts>/monitors.jsonl` (`research/monitors-event/v1`), and each open also a note
-in `<alerts>/outbox/` in alert_sink.py's format, so one relay posts these and Grafana's alike. A write there that fails opens or
+in `<alerts>/outbox/` in the lane contract's note format, so one relay posts these and any other note there alike. A write there that fails opens or
 clears nothing, so the next pass tries again. A node pass ends by PASS_S, inside the unit's timeout: a check still due then is
 Late and runs next pass. The state is saved after each monitor, and an event monitors.jsonl already has (a pass killed before
 it saved) isn't written again. With `$VY_MONITORS_SLACK_WEBHOOK` set (an incoming webhook; its URL is never
@@ -1757,7 +1757,7 @@ def esc(text: str) -> str:
 
 
 def note(ev: dict, now: float) -> tuple[str, str]:
-    """An open as alert_sink.py's note: (file name, markdown), the lane contract's front matter plus the monitor's own fields."""
+    """An open as a note: (file name, markdown), the lane contract's front matter plus the monitor's own fields."""
     name = f"{time.strftime('%Y%m%dT%H%MZ', time.gmtime(now))}-alert-{_slug(ev['monitor'])}-{hashlib.sha256(ev['key'].encode()).hexdigest()[:8]}.md"
     lines = ["---", f"id: {name[:-3]}", "campaign: nebius-monitoring", "lane: infra", "kind: finding", "status: open",
              f"tags: [{ev['severity']}]", "repo: compute-verification/verity", f"origin: {ev['by']} (research monitors, research/monitors.py)",
