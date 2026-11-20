@@ -403,7 +403,8 @@ class Lean:
             wall = time.monotonic() - t
             f.write(stdout)
         line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
-        v = (json.loads(line.split(" ", 1)[1]) if line
+        dead = LC.panic_line(log.read_text(errors="replace")) or LC.exit_why(p.returncode, LC.VERIFY_EXITS)
+        v = ({"accepted": False, "why": dead} if dead else json.loads(line.split(" ", 1)[1]) if line
              else {"accepted": False, "why": no_verdict(self.statement, p.returncode, log.read_text(errors="replace"))})
         return {"accepted": v.get("accepted") is True, "why": v.get("why"), **{k: v[k] for k in PROGRAM_FIELDS if k in v},
                 "wall_s": round(wall, 2), "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),

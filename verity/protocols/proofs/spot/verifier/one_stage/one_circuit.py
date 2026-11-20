@@ -254,7 +254,7 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
         src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
         src.write_bytes(c_s)
         p = LC.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
-                    PO.digest(partition), digests, str(dst)])
+                    PO.digest(partition), digests, str(dst)], ok_statuses=LC.COMPOSE_EXITS)
         if p.returncode != 0:
             raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
         return dst.read_bytes()
