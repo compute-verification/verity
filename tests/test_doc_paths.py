@@ -67,7 +67,6 @@ NOT_PATHS = {
     ("security/Proofs/Pous/Chain/Flat.lean", "P3MeetsFinal.lean"): "the band chain's Lean, outside this tree",
     ("security/Definitions/Hash/Guarantees.lean", "EmbeddingRead.h"): "a Lean name, the read's row `h`",
     ("security/Proofs/Flock/Claims/Recursion/DecodeTies.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
-    ("security/Proofs/Flock/Claims/Recursion/VerdictRowRDeployed.lean", "DecAt.sh"): "a Lean name, `DecAt`'s shape `sh`",
     ("security/Proofs/Flock/Claims/ZK/FrameOpenLive.lean", "d.h"): "a Lean name, the frame's pads",
     ("security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
     ("security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
