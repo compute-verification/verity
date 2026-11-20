@@ -130,8 +130,6 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dense.py", "kind": "superseded", "symbol": "AttnBlockSoftcap", "detail": "AttnBlockSoftcap_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dense.py", "kind": "superseded", "symbol": "Bf16DivScalar", "detail": "Bf16DivScalar_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dense.py", "kind": "superseded", "symbol": "Bf16MulScalar", "detail": "Bf16MulScalar_v1"},
-    {"file": "adapters/vllm/verity_vllm/definitions/registry/dense.py", "kind": "superseded", "symbol": "GeluTanhMulBf16", "detail": "GeluTanhMulBf16_v1"},
-    {"file": "adapters/vllm/verity_vllm/definitions/registry/dense.py", "kind": "superseded", "symbol": "TanhF32Rn", "detail": "TanhF32Rn_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dsa.py", "kind": "superseded", "symbol": "DsaMqaLogit", "detail": "DsaMqaLogit_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py", "kind": "superseded", "symbol": "DsaTopKDigitPick", "detail": "DsaTopKDigitPick_v1"},
     {"file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py", "kind": "superseded", "symbol": "DsaTopKMaskBlock", "detail": "DsaTopKMaskBlock_v1"},
