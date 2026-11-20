@@ -110,7 +110,7 @@ def ran(*args, **kw):
 
 def judged(exe, cases, *args):
     assert Path(exe).name == "wipe-protocol" and list(cases) == [wipes[-1].case]
-    assert len(args) == 2 and args[0] == "--server"
+    assert len(args) == 4 and (args[0], args[2]) == ("--server", "--fill") and args[3].isdigit()
     return [wipes[-1].answer]
 
 
@@ -272,7 +272,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
                      "address": ["10.96.0.36", 47611]}
     assert json.loads((d / "served.json").read_text()) == {
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
-        "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe",
+        "fill": 148_478_361_600, "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe",
         "key_pin": "configuration"}
     summary = json.loads((d / "summary.json").read_text())
     assert summary["verdict"] == "accept" and _decider(summary) and summary["k"] == W.READS

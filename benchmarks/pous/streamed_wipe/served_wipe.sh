@@ -22,7 +22,7 @@
 #                      refused
 #   WIPE_NODE          the wiped server's id (this host's name)
 #   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb), a cuda store's only; `any` is refused
-#                      by name: the SKU is checked
+#                      by name: the SKU is checked, and the judge holds the fill to its card file's store.wipe_fill
 # The reads are the declaration's (`WIPE.settings`' reads, 0: the memory attester chooses them, wipe_party.READS on the
 # auditor's party), never this launcher's. The Lean judge, wipe-protocol, is the wipe's declared executable
 # (`Launch.executables`, declared.py), built here in a scratch copy of verity/ (never this tree's .lake) whose place
@@ -54,10 +54,11 @@ refused() { cat "$DIR/refused.txt"; stamp refused; exit 3; }
 # `attach.py check|run`: the settings checked and the attach's refusals made before any lease, then the wipe itself
 attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-$(hostname)}" \
   "${WIPE_KEY_SHA512:-}" "$JUDGE" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
-  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" <<'EOF'
+  "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" "${STREAM:-}" \
+  "${WIPE_CARD:-h200-sxm-141gb}" "$ROOT/calibration/hardware/cards" <<'EOF'
 import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
-from verity import hooks as H
+from verity import device, hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
@@ -69,7 +70,8 @@ from verity_vllm.messages import Exchange
 
 DEFAULT = {"host": "vy-auditor-2", "address": "10.96.0.36:47611",
            "command": ["ssh", "-i", "~/.ssh/vy-auditor2-wipe", "-o", "BatchMode=yes", "research@10.96.0.36"]}
-mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream = sys.argv[1:]
+(mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, app, lease, own, ctrl, stream, sku,
+ cards) = sys.argv[1:]
 d, wipe = Path(d), schemes.get("wipe")
 
 
@@ -108,6 +110,12 @@ ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private"
        "node": node, "judge": judge or None, "wipe_stream": stream or None, **facts}
 try:
     settings = S.settings(wipe, given)
+    if settings["store"] == "cuda":
+        # the verifier's registered fill: the card file's, never the node's settings
+        store = device.load_card(sku, directory=Path(cards))["store"]
+        if "wipe_fill" not in store:
+            raise ValueError(f"wipe: the card file {sku} registers no store.wipe_fill, the memory the wipe fills")
+        ctx["fill"] = int(device.number(store["wipe_fill"]))
     # the scheme's attach hands the party in (below); this check runs before it, so it hands the scheme's own
     if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None,
                                  "party": MEMORY_ATTESTER}):
@@ -142,7 +150,8 @@ shutil.copy(private / "period.json", d / "period.json")
 answer, ran = got.answer, got.record()["served"]
 card = lease.split(",")[0] or ran["card"]
 (d / "served.json").write_text(json.dumps({
-    "serve_dir": serve_dir, "window": window, "server": ran["server"], "card": card, "key_pin": ran["key_pin"],
+    "serve_dir": serve_dir, "window": window, "server": ran["server"], "fill": ran["fill"], "card": card,
+    "key_pin": ran["key_pin"],
     "run": os.environ.get("RESEARCH_RUN_ID"),
     "lease": "its own (gpu-lease 1 --wait), given back before the serve takes one" if own else
              "the serve's: its engine loads on this card after the wipe"}, indent=1, sort_keys=True) + "\n")

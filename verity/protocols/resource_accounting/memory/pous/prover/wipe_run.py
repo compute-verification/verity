@@ -208,7 +208,8 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
-          "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None, "trusted_sha512": None}
+          "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None, "trusted_sha512": None,
+          "fill_bytes": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `wipe_store.Prover`; `host`, host memory
 through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, the driver's reserve included
 (`wipe_store.Cuda.info`'s `total_bytes`), so that what the fill doesn't reach counts in `R`; `disk`, the server's disks
@@ -232,7 +233,9 @@ node besides the one to a challenger on its own host, which the subprotocol adds
 "to", "via"}`, with `mbps` and `counted_by` (the network attester that counts it) when known (`wipe_party.link`).
 `trusted_sha512` is the verifier's pin, the SHA-512 of the memory attester's public key in 128 lowercase hex digits:
 the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
-this node made for the run."""
+this node made for the run. `fill_bytes` is the verifier's too, the bytes registered as the memory the wipe fills on the
+served node (a card file's `store.wipe_fill`), which the judge holds the session's fill to (`wipe-protocol --fill`): a
+session whose labels fill less is rejected. `None` registers none, and the judge holds the fill to 0 bytes."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
 DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, "spare_bytes": 0, "direct": True}
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
@@ -293,6 +296,8 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     if (pin := c["trusted_sha512"]) is not None and not (type(pin) is str and re.fullmatch("[0-9a-f]{128}", pin)):
         raise ValueError(f"period.json's wipe.trusted_sha512 is null or the SHA-512 of the memory attester's public "
                          f"key in 128 lowercase hex digits, not {pin!r}")
+    if (fill := c["fill_bytes"]) is not None and not (type(fill) is int and fill >= 0):
+        raise ValueError(f"period.json's wipe.fill_bytes is null or a byte count, not {fill!r}")
     return c
 
 
@@ -411,8 +416,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. The verifier trusts the
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
-    With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node
-    (``--server NODE serve``), once `ready` returns for it (a caller whose build runs beside the wipe waits there);
+    With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node and the
+    registered fill (``--server NODE --fill wipe.fill_bytes serve``), once `ready` returns for it (a caller whose build runs beside the wipe waits there);
     without it the wipe is undecided, whatever the Python said (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
@@ -482,7 +487,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
         ready(tools["wipe-protocol"])
-        answer = lean = serve(tools["wipe-protocol"], [wipe.case], "--server", node)[0]
+        answer = lean = serve(tools["wipe-protocol"], [wipe.case], "--server", node,
+                                   "--fill", str(c["fill_bytes"] or 0))[0]
     else:
         answer = answer | {"profile": None, "public": None, "reason": W.NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:

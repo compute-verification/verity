@@ -24,8 +24,8 @@ directory composite.py takes as ``--piece``.
 
 Before anything is written, the case is held to what the run published: for PoUS, the private opening opens the public
 answer's commitment, under the window's binding, to the digest of the case's commitment. The verdict is the
-component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node ``served.json``
-names, ``--server NODE serve``), refused unless it is the run's own answer but for the reason. A piece that fails any
+component's Lean's alone (``--lean-root``: `pous-run-protocol`, or `wipe-protocol` held to the served node and the
+registered fill ``served.json`` names, ``--server NODE --fill BYTES serve``), refused unless it is the run's own answer but for the reason. A piece that fails any
 of these is refused (`Refused`) and nothing is written.
 
 The case and its answer stay on the prover's side, in that 0700 directory, and so does composite.py's ``--out``, where it
@@ -264,7 +264,7 @@ def wipe_piece(window: Path, private: Path | None = None, *,
                exe: str | os.PathLike | None = None) -> tuple[Path, dict[str, Any]]:
     """The wipe's piece from its public ``window`` and its kept case (module docstring). The answer written is the
     subprotocol's own, the public one without the placement the run added to its profile (the Lean's when the subprotocol ran its
-    judge), or with ``exe`` the Lean's now (`judged`), held to the served node ``served.json`` names. Returns the
+    judge), or with ``exe`` the Lean's now (`judged`), held to the served node and fill ``served.json`` names. Returns the
     private directory and that answer."""
     public = _json(window / ANSWER)
     served = _json(window / "served.json") if (window / "served.json").is_file() else {}
@@ -275,7 +275,8 @@ def wipe_piece(window: Path, private: Path | None = None, *,
     case = _json(kept)
     prof = None if public.get("profile") is None else {k: v for k, v in public["profile"].items() if k != "placement"}
     own = {k: public.get(k) for k in (*WIPE_FIELDS, "reason")} | {"profile": prof}
-    server = () if served.get("server") is None else ("--server", str(served["server"]))
+    server = () if served.get("server") is None else ("--server", str(served["server"]),
+                                                       "--fill", str(served.get("fill") or 0))
     own = judged(case, own, exe, *server)
     return write(private, case, own), own
 
