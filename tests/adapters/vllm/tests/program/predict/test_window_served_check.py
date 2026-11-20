@@ -1,6 +1,6 @@
-"""A served window's check (`window_builder.check_served`): the older composer's floor is not asked, a template past what
-Flock takes is refused by name, and the templates a block of all of whose units is under the prover's floor are named
-and stay in the circuit's population."""
+"""A served window's check (`window_builder.check_served`): a template past what Flock takes is refused by name, and the
+templates the door can't prove are named under each reason (no row past the row floor; a block of all their units under
+the prover's floor), and stay in the circuit's population."""
 from __future__ import annotations
 
 import json
@@ -53,8 +53,9 @@ def test_a_tiny_window_the_older_composer_refuses_passes_and_names_its_small_tem
     with pytest.raises(Unexpressible, match="no row past 111 B"):
         WC.check_provable(circuit)
     named = WC.check_served(circuit)
-    assert named and all("under 25" in why for why in named.values())
-    _in_population(circuit, named)
+    assert named["row_floor"] and all("no row past 111 B" in why for why in named["row_floor"].values())
+    assert named["prover_floor"] and all("under 25" in why for why in named["prover_floor"].values())
+    _in_population(circuit, {**named["row_floor"], **named["prover_floor"]})
 
 
 def test_a_template_past_the_rows_flock_takes_is_refused_by_name(monkeypatch):
@@ -68,13 +69,18 @@ def test_a_template_past_the_rows_flock_takes_is_refused_by_name(monkeypatch):
 
 
 @pytest.mark.slow
-def test_a_served_window_at_the_class_of_record_passes_and_names_what_a_block_alone_cannot_prove():
-    """The H100 smoke's window (4 requests of 27 prompt ids and 2 outputs, one window): passes, naming the small templates,
-    each of whose units is in the population. Some four minutes: the class's own templates, which no smaller class has."""
+def test_a_served_window_at_the_class_of_record_passes_and_names_what_the_door_cannot_prove():
+    """The H100 smoke's window (4 requests of 27 prompt ids and 2 outputs, one window): passes, naming the small templates
+    under the row floor and the prover's, each of whose units is in the population; prints each list's templates and units.
+    Some four minutes: the class's own templates, which no smaller class has."""
     hf = json.loads(pinned_hf_config(SERVE["model"], SERVE["revision"]).read_text())
     reg = Registered.of(served_phi(SERVE, hf), 657832114885280620, ADV.CAP_BITS)
     circuit = _window(reg, WC.WindowClass(4, 27, 2), [(27, 2, G2)] * 4,
                       [[(i, 0, 27) for i in range(4)], [(i, 27, 1) for i in range(4)]])
     named = WC.check_served(circuit)
-    assert {t.split("{")[0] for t in named} >= {"OutCollect_v1", "SlotEntry_v1"}
-    _in_population(circuit, named)
+    n = {IF.descriptor_id(fn): k for fn, k in circuit.templates}
+    for reason, got in named.items():
+        assert {t.split("{")[0] for t in got} >= {"OutCollect_v1", "SlotEntry_v1"}, reason
+        _in_population(circuit, got)
+        print(f"UNPROVABLE {reason}: {len(got)} of {len(n)} templates, {sum(n[t] for t in got)} of {sum(n.values())} units: "
+              + " ".join(sorted(got)))

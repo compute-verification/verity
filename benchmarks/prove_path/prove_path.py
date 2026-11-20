@@ -1667,7 +1667,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
-            "unprovable_alone": alone, "seconds": seconds}
+            "unprovable": alone, "seconds": seconds}
 
 
 def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
