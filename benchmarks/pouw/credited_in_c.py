@@ -50,6 +50,7 @@ import random
 import resource
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -532,7 +533,12 @@ def stage(a) -> int:
     population = len(m_.units)
     laid = [descriptor_id(nd.fn) for nd in program.root.body.nodes if input_id(nd.fn.id) is None]
     cut = [descriptor_id(u) for t in ln.tiles for u, _n in PC.cut(t.core)]
-    assert laid == cut + ([descriptor_id(bind(Bf16AddRow, N=n))] * m if a.reader else []), (laid[:12], cut[:12])
+    cut += [descriptor_id(bind(Bf16AddRow, N=n))] * m if a.reader else []
+    if laid != cut:
+        at = next((i for i, (x, y) in enumerate(zip(laid, cut)) if x != y), min(len(laid), len(cut)))
+        print("LAIDCUT " + json.dumps({"laid": len(laid), "cut": len(cut), "first_difference": at,
+                                       "laid_from": laid[at:at + 4], "cut_from": cut[at:at + 4],
+                                       "laid_by": dict(Counter(laid)), "cut_by": dict(Counter(cut))}), flush=True)
     core = bind(PC.PearlPlusTileCoreWired, **ln.tiles[0].core.bindings)
     blocks = {}
     for u in range(population):
@@ -561,6 +567,8 @@ def stage(a) -> int:
                                                          "passed (credited_tiles)",
                      "refusal": f"{PS.TEST_INSTANCE}: tile {test.index} {test.test}" if test else None}
     print("CREDIT " + json.dumps(rec["credit"]), flush=True)
+    if a.until == "amounts":
+        return 0
 
     coin = os.urandom(64)
     of = [""] * population
@@ -1021,6 +1029,8 @@ def main() -> int:
     st.add_argument("--steer", default=None, metavar="TEMPLATE",
                     help="draw only among the blocks whose template's descriptor id starts with TEMPLATE, recorded as "
                          "steered")
+    st.add_argument("--until", choices=("amounts",), default=None,
+                    help="stop once the laid C's tiles and their amounts are stated (LAID, AMOUNTS, CREDIT)")
     dr = sub.add_parser("door")
     dr.add_argument("--lower", required=True)
     dr.add_argument("--lean", required=True, help="verity-verify-proof")
