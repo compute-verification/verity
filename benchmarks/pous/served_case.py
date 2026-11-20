@@ -51,6 +51,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from verity import lean_process as LC
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -113,7 +114,7 @@ def lean_answer(case: Mapping[str, Any], exe: str | os.PathLike, *args: str) -> 
     """``exe``'s answer on ``case`` (`period.serve`, ``args`` before ``serve``); `Refused` when it gives none."""
     try:
         return period.serve(exe, [case], *args)[0]
-    except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
+    except (OSError, IndexError, ValueError, subprocess.CalledProcessError, LC.LeanPanic) as e:
         raise Refused(f"{exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000]) from None
 
 
