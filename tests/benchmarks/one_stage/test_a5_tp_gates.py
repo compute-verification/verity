@@ -10,6 +10,7 @@ the received partial) are refused by name; and each refused run's window changes
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -121,6 +122,43 @@ def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_res
         strata = {s["template"]: s for s in D.derive(mine[r].program, mine[r].query, mine[r].law, mine[r].work_table)["strata"]}
         assert strata[tg]["units"] == [[0, Q * K * T]] and strata[tg]["k"] == Q * K * T
     assert regs[0]["roots"] != regs[1]["roots"]
+
+
+class _Coins:
+    """Deterministic coin bytes for a test's sample: SHA-512 in counter mode."""
+
+    def __init__(self) -> None:
+        self.at = 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.at.to_bytes(8, "big")).digest()
+            self.at += 1
+        return out[:n]
+
+
+def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(tmp_path, parts) -> None:
+    """Each way of leaving a transfer-gate unit unproved: the proved set less one (`check_proved`), a sample trading one for an
+    unsampled unit of the rest (`check_draw`, the stratum's count), and a registration whose sampling design samples the
+    transfer-gate template as the rest is (R1)."""
+    from verity.protocols.proofs.spot.verifier.challenger import coins as CO
+
+    mine, c, regs, _wins = committed(tmp_path, parts)
+    m, rec, gates = mine[0], regs[0], Q * K * T
+    n = rec["population"]
+    draw = {**rec["law"], "population": n, "units": sorted(CO.draw_first(CO.OwnRandomness(_Coins()), rec["law"], n)["units"])}
+    assert set(range(gates)) <= set(draw["units"]) and D.check_draw(draw, rec, rec["law"]).ok
+    left = [u for u in draw["units"] if u != 0]
+    assert not D.check_proved(draw, left, len(left)).ok and D.check_proved(draw, draw["units"], len(draw["units"])).ok
+    spare = next(u for u in range(gates, n) if u not in draw["units"])
+    v = D.check_draw({**draw, "units": sorted(set(draw["units"]) - {0} | {spare})}, rec, rec["law"])
+    assert (v.ok, list(v.codes)) == (False, ["strata-count"])
+    sampled = {t: {"work": 1, "floor": 1} for t in m.work_table}
+    publics = {mm.key: c[0].public_body(k) for k, mm in enumerate(m.members)}
+    v = V.check({**rec, "law": D.derive(m.program, m.query, m.law, sampled)}, m.program, m.query, m.law, AT.CS.SCHEME,
+                AT.CS.expected_ports(m), leaf_layer=AT.CS.leaf_layer(publics), work_table=m.work_table, partition=m.partition)
+    assert (v.ok, list(v.codes)) == (False, ["R1-law"])
 
 
 def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_name(tmp_path, parts) -> None:

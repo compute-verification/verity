@@ -32,10 +32,10 @@ Verity itself knows nothing of vLLM.
 | --- | --- |
 | `serve-openai` | the committing endpoint |
 | `row run\|stage\|chain` | a workload's Build, Match and Commit (`chain` also publishes its record) |
-| `build`, `match`, `commit` | one stage of one workload |
+| `build`, `match` | one stage of one workload |
 | `predict row\|compare\|emit` | the Build of record from the workload alone; held to a traced Build; a switched workload's Build |
 | `advice` | a served run's advice, from its step trace and Commit record |
-| `commit-replay`, `serving-rows` | a sealed Commit's replay on CPU; its serving rows and registration |
+| `serving-rows` | a sealed Commit's serving rows and registration |
 | `records show\|programs\|fetch\|publish` | the circuit database |
 | `neutrality --tier fast\|heavy` | rebuilds the workloads of record's Programs and fails when a digest moved |
 | `block-counts` | a day's inference blocks, judged against its declared c, k and n |
@@ -91,12 +91,6 @@ finish inside one served window. The parts, in the order they run:
   `PYTHONHASHSEED=0` and request ids not randomized, because the scheduler iterates sets of request ids. A model whose
   sparse attention selects positions by a top-k over more keys than it keeps is served and replayed with the
   canonical top-k plugin (`benchmarks/dsa_topk/`), since the stock kernels' selection can vary from run to run.
-- **The interior registration** (`verity_vllm/pipeline/interior_rows.py`). The replay takes each sampled request's
-  logits rows and sampled ids at every rank's sampler (`verity_vllm/engine/sampler_capture.py`, `replay.py
-  --capture`). `pieces` cuts them into the proof blocks Flock proves, and `interior` commits those after the boundary
-  registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
-  one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
-  token selection and not the model's layers.
 - **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second

@@ -1,7 +1,4 @@
-"""The replay bundle: what a Commit with `--replay-deferred` leaves for its C2 replay, which then runs on CPU without the engine.
-
-The GPU Commit runs the committed run, the openings, the weights pin and the commitment, and instead of the sampled replay + boundary
-linkage writes one bundle per instrumented run beside its outputs, `<out>/replay_bundle_p<pair>/`:
+"""The replay bundle a sealed window leaves, one per instrumented run, `<out>/replay_bundle_p<pair>/`:
 
     store/            the committed store (`commit.store_dump`): per step the metas, the retained bytes and the tree levels; the run root
     weights/tree.json the committed weights root and the tree under it (`register_weights`): geo digest, chunk, the registered tensors
@@ -23,11 +20,8 @@ under the private directory (`private_root`), at ``replay/<run root>/<digest of 
 inside (no ``private.json``) is read as it was stored.
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
-A full store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
-held for the two in turn; the bundle's device-resident tensors and the engine's facts are read before `start` returns, so nothing
-after it reads the device and a leased Commit can give its GPU back there (`gpu_lease.release`); a slim one is written at the C2
-site, after the challenge its reads come from.
 `open_bundle` checks every file against the manifest before anything is read from it.
+
 """
 from __future__ import annotations
 
@@ -36,9 +30,8 @@ import json
 import os
 import shutil
 import time
-from collections.abc import Callable, Mapping
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass
+from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +40,6 @@ from verity.commitments import salt_file as SF
 from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
-from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.records.schema_ids import (
     BOUNDARY_LINKAGE_SCHEMA,
     REPLAY_BUNDLE_SCHEMA,
@@ -58,8 +50,9 @@ from verity_vllm.records.schema_ids import (
 # that read them, and the two deferred records take their schema ids from `records.schema_ids`: the driver's import puts the
 # catalog's Definitions into the Definition table, and the Commit that defers its replay to a bundle never loads the driver.
 
-__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "deferred_records", "discard", "load_store", "open_bundle",
-           "partial", "path", "private_file", "private_refusal", "private_root", "seal", "seal_all", "weights_extra", "write_store", "write_store_files"]
+__all__ = ["ARGS", "HASHED", "MANIFEST", "NOT_RETAINED", "PENDING", "PRIVATE", "PRIVATE_DOC", "deferred_records", "discard",
+           "load_store", "open_bundle", "partial", "path", "private_file", "private_refusal", "private_root", "seal", "seal_all",
+           "weights_extra", "write_store", "write_store_files"]
 
 logger = init_logger(__name__)
 
@@ -78,7 +71,7 @@ ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "
 
 
 def path(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Path:
-    """The bundle of instrumented run ``pair``; a TP Commit's has one per rank (`pipeline.tp.commit_replay`)."""
+    """The bundle of instrumented run ``pair``."""
     return Path(out) / (f"replay_bundle_p{pair}" + (f"_rank{rank}" if rank is not None else ""))
 
 
@@ -139,147 +132,7 @@ def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
             {"schema": BOUNDARY_LINKAGE_SCHEMA, "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
 
 
-def refuse(args: Any) -> None:
-    """Exits by name when `--replay-deferred` cannot run with these Commit flags."""
-    if not args.replay_deferred:
-        return
-    why = ("no --program-dir / --programs-root: there is no C2 replay to defer" if not (args.program_dir or args.programs_root) else
-           "one instrumented committer only (no --arms, no control-only process)" if args.arms or args.only_arm == "control" else
-           f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
-           "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
-           "slim with --serving-rows: the plan would commit the window and seal every unit it reads; a full deferral commits it at "
-           "the C2 site (`c2_replay.serving_rows`)" if args.serving_rows and args.replay_deferred == "slim" else private_refusal())
-    if why:
-        raise SystemExit(f"--replay-deferred: {why}")
-
-
-@dataclass
-class Started:
-    """A full store's write running beside the checks before the C2 site (`start`), and the engine's facts read when it began."""
-    future: Future
-    hashed: dict[str, str]
-    engine: dict[str, Any]
-
-
-def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) -> Started | None:
-    """The full store's write, started once the run root is fixed, in a thread beside the binding and manifest coverage that precede the
-    C2 site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests
-    without waiting for both in turn.  The registered tensors the bundle carries (`weights_extra`, read from the device) and the engine's
-    facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
-    one (its reads come from the challenge), a retention other than host, or a store over its bound."""
-    if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
-            or C2.retention_of(com, args) != "host"
-            or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
-        return None
-    from verity_vllm.check.replay.driver import engine_facts_of_record
-
-    hashed: dict[str, str] = {}
-    try:
-        extras: Any = weights_extra(com, rc)
-    except ValueError as e:                          # raised where the write is taken (`defer`), as before
-        extras = e
-    engine = engine_facts_of_record()
-    pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
-
-    def write() -> float:
-        t0 = time.perf_counter()
-        if isinstance(extras, ValueError):
-            raise extras
-        write_store(out, pair, com, rc, digests=hashed, extras=extras)
-        return time.perf_counter() - t0
-
-    fut = pool.submit(write)
-    pool.shutdown(wait=False)
-    return Started(fut, hashed, engine)
-
-
-def prepare(args: Any) -> Any:
-    """`refuse`, then the slim bundle's planner (`replay_plan.Planner`), started now so it prepares while the engine runs."""
-    refuse(args)
-    if args.replay_deferred != "slim":
-        return None
-    from verity_vllm.pipeline.replay_plan import Planner
-
-    return Planner(args)
-
-
-def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
-          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
-          plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict],
-          started: Started | None = None) -> bool:
-    """At the C2 site of a deferred run: writes the bundle's store and weights tree (or takes the write `start` began), puts the run's
-    deferred sampled-replay and linkage records on `row` and the bundle's context in `deferred[pair]` (sealed once the run's record is
-    final, after the weights pin and the openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is
-    SLIM: only the ranges and tree nodes they opened.  False, with nothing written, when the store would exceed
-    `args.replay_bundle_cap_gb`: the replay then runs in process."""
-    from verity_vllm.check.replay.driver import engine_facts_of_record
-
-    tl.start("validate.replay_bundle", pair=pair)
-    slim, t = None, None
-    if started is not None:
-        t0 = time.perf_counter()
-        write_s, hashed = started.future.result(), started.hashed
-        logger.info("[delta] REPLAY BUNDLE (pair %s): store written in %.1f s beside the checks before the C2 site (waited %.1f s here)", pair,
-                    write_s, time.perf_counter() - t0)
-    else:
-        if plan is not None:
-            t0 = time.perf_counter()
-            try:
-                with SD.touched(com) as t:
-                    planned = plan()
-            except Exception as e:  # noqa: BLE001  -- no plan, no slim bundle: the replay runs in this process
-                tl.end("validate.replay_bundle", pair=pair, ok=False)
-                logger.warning("[delta] REPLAY BUNDLE (pair %s): no plan (%.300r); the C2 replay runs in this process", pair, e)
-                return False
-            replay, read = planned.get("replay"), t.nbytes()
-            sr_p: dict[str, Any] = replay if replay else {}  # a plan with no replay of its own: its picks are unknown
-            slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
-                    "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
-            logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
-                        slim["picked"], read >> 20, slim["plan_s"], slim["unresolved_n"])
-        size, bound = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
-        if size > bound:
-            tl.end("validate.replay_bundle", pair=pair, ok=False)
-            logger.warning("[delta] REPLAY BUNDLE (pair %s): REFUSED -- %.1f GB is over the %.0f GB bound (--replay-bundle-cap-gb); the C2 replay "
-                           "runs in this process", pair, size / 1e9, bound / 1e9)
-            return False
-        hashed = {}
-        write_store(out, pair, com, rc, digests=hashed, touched=t)
-    max_tokens = {str(q.get("request_id")): int(q.get("max_tokens") or 1) for q in reqs}
-    ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
-           "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
-           "stop_of_record": stop_of_record,
-           # the reconciliation of the not-executed class reads the placed identities only when a request stopped early
-           "ids_full": ids_full if any(len(v) < max_tokens.get(str(k), 0) for k, v in tokens.items()) else None,
-           "retention": C2.retention_of(com, args),
-           "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
-           "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": started.engine if started is not None else engine_facts_of_record(), "slim": slim,
-           HASHED: hashed}
-    row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
-    deferred[pair] = ctx
-    tl.end("validate.replay_bundle", pair=pair)
-    logger.info("[delta] C2 SAMPLED REPLAY + LINKAGE (pair %s): DEFERRED -- store and weights tree written to %s", pair, partial(out, pair))
-    return True
-
-
 PENDING = "PENDING: the C2 sampled replay + boundary linkage are deferred to the replay bundle"
-
-
-def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: int = 64, declaration: dict | None = None,
-                    required_classes: Any = None) -> tuple[bool | None, str]:
-    """The verdict of an instrumented run whose C2 replay is deferred: (False, reason) when a check the Commit ran itself fails -- C1, a
-    failing value-correspondence component (oracle compare, weights of record), the openings after release -- else (None, PENDING):
-    `check.verdict.commit_verdict` decides once the replay is on the record."""
-    from verity_vllm.check.verdict import _after_release_verdict, _c1_verdict
-
-    wp, vc = commit.get("weights_pin"), commit.get("value_correspondence")
-    fail = (_c1_verdict(commit, tokens_equal, min_openings, declaration, required_classes)
-            or ((False, f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}")
-                if isinstance(wp, dict) and wp.get("result") is False else None)
-            or ((False, vc.get("why") or f"value correspondence FAIL ({vc.get('method')})") if isinstance(vc, dict) and vc.get("result") is False else None)
-            or _after_release_verdict(commit, min_openings))
-    return fail if fail is not None else (None, PENDING)
 
 
 def awaits_replay(c: dict) -> bool:
@@ -292,17 +145,6 @@ def commit_of(row: dict) -> dict:
     """A run's Commit record; an empty one for a row that holds none, which neither passed nor awaits a replay."""
     commit = row.get("commit")
     return commit if commit else {}
-
-
-def pass_of(rows: list[dict]) -> bool | None:
-    """The Commit's X-03 pass over its instrumented runs: True when every one passed, None when none failed and some await their
-    deferred replay, else False."""
-    inst = [commit_of(r) for r in rows if r["arm"] != "control"]
-    if inst and all(bool(c.get("commit_pass")) for c in inst):
-        return True
-    if inst and all(bool(c.get("commit_pass")) or awaits_replay(c) for c in inst):
-        return None
-    return False
 
 
 def seal_all(out: Path, deferred: dict[int, dict], rows: list[dict], verdict: dict, pending: list[int], *, tl: Any) -> None:
