@@ -143,7 +143,6 @@
         "security/Proofs/Properties/Challenger/",
         "security/Proofs/Properties/Verity/Sampled.lean",
         "security/Proofs/Properties/Verity/Sampled/",
-        "security/Proofs/Properties/Verity/Recursive.lean",
         "security/Proofs/Properties/Verity/Recursive/",
         "security/Definitions/Core.lean",
         "security/Definitions/Flock.lean",

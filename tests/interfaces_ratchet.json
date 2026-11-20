@@ -46,7 +46,7 @@
   "verity/protocols/resource_accounting/network/verifier/load_check.py": 1
  },
  "lean_old_names": {
-  "Claims.Collision": 25,
+  "Claims.Collision": 21,
   "FlockSoundness.Game": 347,
   "structure Partition": 3,
   "structure Scheme": 5
