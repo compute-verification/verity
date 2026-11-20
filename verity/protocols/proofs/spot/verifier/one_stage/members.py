@@ -686,6 +686,29 @@ def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Map
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
 
 
+def slice_no_port_why(member: str) -> str:
+    """`OneStageZk.SLICE_NO_PORT_WHY`."""
+    return f"member {member}: a root of its slice names no port"
+
+
+def port_twice_why(member: str, port: str) -> str:
+    """`OneStageZk.PORT_TWICE_WHY`: the refusal of a member's slice whose roots name ``port`` twice."""
+    return (f"member {member}: its slice names port {port} twice: a member's slice holds one root of each port, the one "
+            "its public file's root there is held to")
+
+
+def _ports_once(ms: Mapping[str, Any], roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+    """`OneStageZk.portsOnceAll`: each member's slice, in the members' name order (Lean's `membersOf`), names each port
+    once, ports compared as strings: a root that names no port as a string refuses (`slice_no_port_why`), then the
+    first port a later root names again (`OneStageZk.portTwice`, `port_twice_why`)."""
+    for name in sorted(ms):
+        ports = [r.get("port") if isinstance(r, Mapping) else None for r in roots.get(name, ())]
+        if any(type(p) is not str for p in ports):
+            raise _Refused(slice_no_port_why(name))
+        if (p := next((p for i, p in enumerate(ports) if p in ports[i + 1:]), None)) is not None:
+            raise _Refused(port_twice_why(name, p))
+
+
 def _members_roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> tuple[dict[str, list[dict[str, Any]]],
                                                                              dict[str, list[tuple[str, dict[str, Any]]]]]:
     """`OneStageZk.membersRootsOf` before its wiring: `_roots`', each member's own output ports at its template's
@@ -745,13 +768,15 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, each port C reads from a run
     input node at the docket's ``input/n<w>`` (`_run_input_roots`), and each wired port at its writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
-    population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
+    population (`OneStageZk.laidHeld`), a root of the docket is not one member's, or a slice names a port twice
+    (`_ports_once`): an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
     ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
     try:
         _laid(ms, record)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft)
+        _ports_once(ms, roots)
     except _Refused as e:
         raise ValueError(str(e)) from None
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
@@ -1153,6 +1178,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _tree_ports_held(ms, record)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
+        _ports_once(ms, roots)
         _held_roots(ms, _held_reads(params, program), roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
@@ -1197,4 +1223,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
            "return_fields", "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why",
-           "run_own_root_why", "wired_tree_why"]
+           "port_twice_why", "run_own_root_why", "slice_no_port_why", "wired_tree_why"]
