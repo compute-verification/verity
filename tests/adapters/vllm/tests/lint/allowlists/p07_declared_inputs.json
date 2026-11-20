@@ -2,9 +2,6 @@
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "cwd", "symbol": "main", "detail": "os.getcwd"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
