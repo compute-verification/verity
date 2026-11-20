@@ -2315,5 +2315,22 @@ theorem liftWordEval_calls (hLC : LiftCalls) (hT : CallsTyped) :
   have hos : o.size = D.body.nodes.size := by simpa using g4
   exact seqBits hx g3 hret.1 (fun r hr' => by rw [hos]; exact hret.2 r hr')
 
+theorem scanCarryBits : ScanCarryBits := by
+  intro d fnOf primOf gatesOf k x hk hs
+  obtain ⟨hk', hx⟩ := Array.getElem?_eq_some_iff.1 hk
+  have hk'' : k < (Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes.size := by
+    rw [liftDef_nodes_size]; exact hk'
+  refine ⟨(Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k], by simp, ?_, ?_, ?_, ?_⟩
+  · simp [Flock.Lift.liftDef, hx]
+  · have e1 : (Form.scan == Form.prim) = false := rfl
+    have e2 : (Form.scan == Form.scan) = true := rfl
+    have e3 : (Form.scan == Form.batch) = false := rfl
+    simp [Flock.Lift.liftDef, hx, hs, Node.members, e1, e2, e3]
+  · simp [Flock.Lift.liftDef, hx]
+  · intro i hi
+    have hi' : i < ((Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k]).args.size := by
+      simp [Flock.Lift.liftDef, hx, hi]
+    rw [getElem!_pos _ i hi', getElem!_pos x.args i hi]
+    simp [Flock.Lift.liftDef, hx]
 end Flock.Chain
 
