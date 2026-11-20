@@ -164,6 +164,17 @@ T = bind(CompositeDefinition("RestrictToyT", 1, (), lambda S: ((("a", A4), ("k",
 TOY_PARTITION = {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(T)]}}}
 
 
+def test_a_template_with_no_gate_in_a_block_is_refused_by_name():
+    ident = bind(CompositeDefinition("RestrictToyIdent", 1, (), lambda S: ((("a", A4),), A4), lambda B, S, a: a, register=False))
+    def body(B, S, x, k):
+        return B.call(T, B.call(ident, B.call(T, x, k)), k)
+    program = _toy("RestrictToyNoGate", (("x", A4), ("k", A4)), A4, body)
+    c = b"".join(descriptor_chunks(program))
+    with pytest.raises(R.Refused, match="E_NO_GATE.*RestrictToyIdent_v1.*no gate"):
+        R.restrict(c, {"query": {"name": "Q_template_instances", "version": 0, "params": {"templates": [descriptor_id(T), descriptor_id(ident)]}}},
+                   [(0, 3)])
+
+
 def _toy(name: str, params, ret, body, supplied=()) -> Program:
     return Program(CompositeDefinition(name, 1, (), lambda S: (params, ret), body, register=False), registered=["k"],
                    supplied=supplied)
