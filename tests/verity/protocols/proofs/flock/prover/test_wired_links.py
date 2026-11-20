@@ -4,14 +4,14 @@ u's output row): layer 0's statement (``writers``) opens its output rows at thei
 them, each link row the writer's leaf by path (a tree port). The honest staging's link rows have their writers' output rows'
 `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt of its own, stage the
 same circuit with link rows that differ, as do a reader whose read is moved to another unit's leaf (``other_leaf``) and one
-whose link row is a row of other words under its writer's salt (``other_words``). The Lean verifier
-(`verity-verify-proof statement --program --registered`, when a Lean toolchain is present) accepts the writers and the
-honest readers and refuses every cheat, a linked statement without its program, and one without registered reads; a
-one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
-staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the live verifier gives the same verdicts
-with its own links file. Linking binds a public topology; it does not hide the topology."""
+whose link row is a row of other words under its writer's salt (``other_words``). When ``FLOCK_CIRCUIT`` names a build
+of ``flock-circuit``, the live verifier refuses the cheats with its own links file. The Lean verifier admits no class
+statement with links; the same cheats, on the templated statement C wires (`_tmpl`), are refused by
+`verity-verify-proof statement` and by the sampled proofs' setup, each by its own name, the honest one accepted. Linking
+binds a public topology; it does not hide the topology."""
 from __future__ import annotations
 
+import functools
 import json
 import os
 import random
@@ -20,6 +20,7 @@ import subprocess
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.circuits import partition_object as PO
@@ -29,9 +30,12 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
 from verity.circuits.private_circuits import universal as U
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import hm96
 from verity.commitments import registered_value as RV
 
+from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 
@@ -40,6 +44,13 @@ NC = N_IN + N_OUT
 #: layer 0 reads c[0:4]; layer 1 reads c[4:6], then layer 0's outputs
 WIRED = ((("c", 0, N_IN),), (("c", N_IN, NC), ("u", 0, 0, N_OUT)))
 FLAT = ((("c", 0, N_IN),),)
+#: the templated statements' unit: every parameter whole u16 words, src past one SHA-512 block, as the templated layout
+#: needs; layer 1's x is layer 0's whole output, as C's chain wires a layer
+TG, TN = 120, 16
+TWIRED = ((("c", 0, TN),), (("u", 0, 0, TN),))
+TFLAT = ((("c", 0, TN),),)
+MODE = "iv/hybrid/4"
+V2 = RG.SCHEMA_V2
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
@@ -49,15 +60,15 @@ SPOT = LEAN.parents[1] / "spot" / "verifier" / "lean"
 pytestmark = pytest.mark.slow
 
 
-def _program(topo):
-    fn = bind(U.UniversalUnit, G=G, N_IN=N_IN, N_OUT=N_OUT)
+def _program(topo, g=G, n_in=N_IN, n_out=N_OUT, nc=NC):
+    fn = bind(U.UniversalUnit, G=g, N_IN=n_in, N_OUT=n_out)
     params, ret = fn.signature()
-    sig = [("c", Array(N, Array(NC, U.BIT)))] + [(f"{nm}{i}", t) for i in range(len(topo)) for nm, t in params[:-1]]
+    sig = [("c", Array(N, Array(nc, U.BIT)))] + [(f"{nm}{i}", t) for i in range(len(topo)) for nm, t in params[:-1]]
 
     def body(B, S, c, *ps):
         us = []
         for i, parts in enumerate(topo):
-            xs = array_of([coll_concat(Array(N_IN, U.BIT), [c[t][p[1]:p[2]] if p[0] == "c" else us[p[1]][t][p[2]:p[3]] for p in parts])
+            xs = array_of([coll_concat(Array(n_in, U.BIT), [c[t][p[1]:p[2]] if p[0] == "c" else us[p[1]][t][p[2]:p[3]] for p in parts])
                            for t in range(N)])
             us.append(B.batch(fn, *ps[3 * i:3 * i + 3], xs, axes=(None, None, None, 0), n=N))
         return us[-1]
@@ -157,37 +168,110 @@ def _stage(topo, d: Path, wired: bool):
                                     wiring=replace(readers, writer_salts=False), salts=shared)
         st["own"] = CS.stage(units, SPEC, shape, cl, _cut(honest, N, tp.population), d / "own", packed=True, wiring=readers,
                              share_rows=False, salts=own)
-        st["mixed"] = CS.stage(units, SPEC, shape, cl, honest, d / "mixed", packed=True, wiring=wiring)
-        port = _meta(d / "honest")["links"][0]["port"]
-        _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
-        st["other_words"] = CS.stage(units, SPEC, shape, cl, _cut(_lanes(units, cl, tp, inputs, {N: flip[N]}), N, tp.population),
-                                     d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
-        for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
-            (d / f"{name}.reads.json").write_text(json.dumps(_reads_v2(st[k]["registered_reads"])))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
 
 
-def _reads_v2(ports: dict) -> dict:
-    """The verifier's `--registered` file of ``ports``: positions are the verifier's own, from C and the partition."""
-    return {"format": RG.READS_V2, "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "tree", RV.READS_FROM)}
-                                             for k, e in ports.items()}}
-
-
-def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
+def _edit(src: Path, dst: Path, pub: str, port: str, refs: dict) -> None:
     """``src``'s statement with port ``port``'s refs moved (instance i reads table row ``refs[i]``); its rows, and every row's
     stated position and path, unchanged."""
     shutil.copytree(src, dst)
     names = [p[0] for p in _meta(src)["ports"]]
-    head, body = (src / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
+    head, body = (src / pub).read_bytes().split(b"\n", 1)
     counts = [json.loads(head)["shared_rows"][x] for x in names]
     j, o = names.index(port), 128 * sum(counts)
     body = bytearray(body)
     for i, r in refs.items():
         at = o + 4 * (i * len(names) + j)
         body[at:at + 4] = r.to_bytes(4, "little")
-    (dst / f"pub-{n}.bin").write_bytes(head + b"\n" + bytes(body))
+    (dst / pub).write_bytes(head + b"\n" + bytes(body))
+
+
+def _tmpl(topo, d: Path) -> None:
+    """``topo``'s layers of the `TG`-gate unit as templated statements (`UnitStager` bound to C and its partition, `MODE`),
+    each port a registered read the verifier derives from C: op, src and out each layer's run input node's one row, x
+    layer 0's rows of c and layer 1's its writers' output rows, read by path in the output field's tree (`<template>/o0`,
+    leaf u unit u's output), which o0 opens at the unit's own leaf. Writes ``writers`` (layer 0) and its verifier's
+    ``writers.reads.json`` under ``d``; with two layers, layer 1's ``honest`` and ``readers.reads.json``, and the cheats:
+    x made up (``made_up``), the honest x under salts of the prover's own (``wrong_salt``), other words under the writer's
+    salt (``other_words``), a read moved to the other writer's leaf (``other_leaf``), x committed under a root of its own
+    (``own_root``, with ``own_root.reads.json`` naming that root), and the block circuit's x row named y (``no_row``).
+    A cheat's file is written with the honest outputs, so its only fault is x."""
+    rng = random.Random(f"test-wired-links/tmpl/{len(topo)}")
+    fn, program = _program(topo, TG, TN, TN, TN)
+    query = PO.template_instance_query(fn)
+    part = PO.build(program, query)
+    (d / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
+    pd, template = program_digest(program), descriptor_id(fn)
+    params = fn.signature()[0]
+    nodes = {nd.name: k for k, nd in enumerate(program.root.body.nodes) if getattr(nd, "name", None)}
+    bound = {"partition": P.digest(part), "program": pd}
+
+    @functools.cache
+    def stager(x: str):
+        return CS.UnitStager(fn, f"unit/{template}", [(x if nm == "x" else nm, V2, t.leaves, [nm]) for nm, t in params],
+                             [(V2, (0,))], bind=bound, layout=MODE)
+
+    def word(bits):
+        return tuple(sum(int(b) << j for j, b in enumerate(bits[k:k + 16])) for k in range(0, len(bits), 16))
+
+    def commit(value: str, rows):
+        return RV.Registered.commit(pd, value, rows, schema=V2)
+
+    nets = [U.pad(U.PrivateCircuit(TN, tuple((rng.randrange(4), rng.randrange(TN + g), rng.randrange(TN + g)) for g in range(TG)),
+                                   tuple(rng.randrange(TN + TG) for _ in range(TN))), TG, TN) for _ in topo]
+    c = [[rng.randrange(2) for _ in range(TN)] for _ in range(N)]
+    xs = [c]
+    for net in nets:
+        xs.append([U.interpret(net, x) for x in xs[-1]])
+    tree = commit(f"{template}/o0", [word(o) for layer in xs[1:] for o in layer])
+    assert CS.tree_leaves(PO.TemplatePartition(program, query), template) == list(range(N * len(topo)))
+    regs = [{p: commit(f"input/n{nodes[f'{p}{i}']}", [word(U.arguments(net, [0] * TN)[j])]) for j, p in enumerate(("op", "src", "out"))}
+            for i, net in enumerate(nets)]
+    regs[0]["x"] = commit(f"input/n{nodes['c']}", [word(x) for x in c])
+
+    def write(name: str, layer: int, x=None, x_rows=None, x_salts=None, port: str = "x") -> None:
+        units = list(range(layer * N, layer * N + N))
+        ports = {**{p: (r, [0], [0] * N) for p, r in regs[layer].items() if p != "x"},
+                 "x": (x or regs[layer].get("x") or tree, list(range(N)), list(range(N))), "o0": (tree, units, list(range(N)))}
+        tables, refs, salts, header, own = {}, {}, {}, {}, {}
+        for p, (r, at, ref) in ports.items():
+            rows, salts[p], header[p] = r.statement(at)
+            tables[p], refs[p], own[p] = np.asarray(rows, np.uint16), ref, r.entry() | RV.schema_entry(V2)
+        if x_rows is not None:
+            tables["x"] = np.asarray(x_rows, np.uint16)
+        if x_salts is not None:
+            salts["x"] = x_salts
+        outs = {"o0": tables.pop("o0")}
+        del refs["o0"]
+        rows = {p: tables[p][refs[p]] for p in tables}
+        st = stager(port)
+        ren = lambda m: {(port if k == "x" else k): v for k, v in m.items()}  # noqa: E731
+        if x_rows is None:
+            st.reference_check(ren(rows), outs)
+        (d / name).mkdir()
+        (d / name / "circuit.txt").write_text(st.text)
+        FC.write(st.text, st.iset, 0, N, d / name / "inst.bin", d / name / "pub.bin", rows=ren(rows), outs=outs, salts=ren(salts),
+                 digests=(st.pin, st.class_sha512), indices=units, share_rows=True, tables=ren(tables), refs=ren(refs),
+                 registered=ren(header), meta=st.meta)
+        if name in ("writers", "honest", "own_root"):
+            (d / f"{'readers' if name == 'honest' else name}.reads.json").write_text(
+                json.dumps({"format": RG.READS_V2, "ports": ren(own)}))
+
+    write("writers", 0)
+    if len(topo) == 1:
+        return
+    honest, salts, _e = tree.statement(range(N))
+    flip = lambda r: tuple(v ^ 0xFFFF for v in r)  # noqa: E731
+    write("honest", 1)
+    write("made_up", 1, x_rows=[flip(r) for r in honest])
+    write("wrong_salt", 1, x_salts=[hm96.SHA512.fresh_salt() for _ in range(N)])
+    write("other_words", 1, x_rows=[flip(honest[0]), *honest[1:]])
+    _edit(d / "honest", d / "other_leaf", "pub.bin", "x", refs={0: 1, 1: 0})
+    write("own_root", 1, x=commit(f"{template}/x", honest))
+    write("no_row", 1, port="y")
 
 
 @pytest.fixture(scope="module")
@@ -196,6 +280,14 @@ def staged(tmp_path_factory):
     d = tmp_path_factory.mktemp("wired")
     flat = tmp_path_factory.mktemp("flat")
     return d, _stage(WIRED, d, True), flat, _stage(FLAT, flat, False)
+
+
+@pytest.fixture(scope="module")
+def templated(tmp_path_factory):
+    d, flat = tmp_path_factory.mktemp("tmpl"), tmp_path_factory.mktemp("tmpl-flat")
+    _tmpl(TWIRED, d)
+    _tmpl(TFLAT, flat)
+    return d, flat
 
 
 def _meta(d: Path) -> dict:
@@ -260,14 +352,22 @@ def test_link_triples_refuse_a_cut_wire_no_link_carries_and_a_partial_read(stage
 
 
 def _lean(*args: str) -> tuple[dict | None, str]:
+    """The statement's setup: its JSON when accepted; refused only with status 1 (any other status is an error)."""
     p = subprocess.run([str(BIN), "statement", *args], capture_output=True, text=True)
+    assert p.returncode in (0, 1), (p.returncode, p.stdout + p.stderr)
     return (json.loads(p.stdout.splitlines()[0]) if p.returncode == 0 else None), p.stdout + p.stderr
 
 
-NO_TREE = "and no tree port (tree) reads it by path"
+def _named(out: str) -> bool:
+    """No panic and no traceback: a refusal by its own name."""
+    return not any(s in out for s in ("PANIC", "index out of bounds", "Traceback"))
+
+
 NOT_OPEN = "does not open"
 NO_ROOTS = "the verifier holds no registered roots"
-NO_READ = "the verifier's program reads no row of"
+NO_PROGRAM = "a port's reads are derived from C, the verifier's program (--program)"
+NO_ROW = "io: C wires UniversalUnit_v1{G=120,N_IN=16,N_OUT=16}'s parameter x from another block, and the block circuit has no row of it"
+CROSSING = "row x of in(S) is committed as UniversalUnit_v1{G=120,N_IN=16,N_OUT=16}/x, and C wires it from"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -287,82 +387,70 @@ def test_a_row_reads_one_output_field_of_its_writer_whole_at_the_positions_c_giv
             CS.field_row(bad, ret)
 
 
-def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_program(staged):
-    d, _st, flat, (_f2, _p2, _q2, tp2, _st2) = staged
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_program(templated):
+    """The templated statements (`_tmpl`) set up by `verity-verify-proof statement`: a reader's x is no port of its own
+    but a row of in(S) C wires (`OneCircuit.io`), opened by path in its writer's output field's tree, so a block circuit
+    with no row of x is refused by io's name (the META links a class statement declared, and its check that a tree port
+    reads every link, are gone from the templated form). The class statement's per-instance rows (``own``) have no
+    templated form: every port is a registered read, x one row per instance already."""
+    d, flat = templated
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
-    bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
 
-    def at(name: str, *extra: str, reads: str | None = "readers.reads.json", n: int = N):
-        return _lean("--circuit", str(d / name / "circuit.txt"), "--public", str(d / name / f"pub-{n}.bin"), *extra,
-                     *(["--registered", str(d / reads)] if reads else []))
+    def at(where: Path, name: str, reads: str | None, program: bool = True):
+        return _lean("--statement", FC.TMPL_STATEMENT, "--circuit", str(where / name / "circuit.txt"),
+                     "--public", str(where / name / "pub.bin"), "--partition", str(where / "partition.json"),
+                     *(["--program", str(where / "program.desc")] if program else []),
+                     *(["--registered", str(where / f"{reads}.reads.json")] if reads else []))
 
-    ok, out = at("writers", *bound, reads="writers.reads.json")
-    print("writers", ok and ok["partition_check"]["note"])
-    assert ok is not None and ok["partition_check"]["units"] == "derived", out
-    for name, reads in (("honest", "readers.reads.json"), ("own", "own.reads.json")):
-        ok, out = at(name, *bound, reads=reads)
-        print(name, ok and ok["partition_check"]["note"])
+    for where, name, reads, note in ((d, "writers", "writers", "no wire between the statement's units"),
+                                     (d, "honest", "readers", f"Linking checked: {N} wire(s)"),
+                                     (flat, "writers", "writers", "no wire between the statement's units")):
+        ok, out = at(where, name, reads)
+        print(where.name, name, ok and ok.get("partition_check"))
         assert ok is not None, out
-        note = ok["partition_check"]["note"]
-        assert ok["partition_check"]["units"] == "derived" and f"Linking checked: {N} cut wire(s)" in note and "unit-class/" in note
-    # each cheat's link rows open no leaf of the registered tree at the writer's position (checkPort), and the moved read's
-    # position is not the one the verifier's program gives (treeReads)
-    for cheat, why in (("made_up", NOT_OPEN), ("wrong_salt", NOT_OPEN), ("other_words", NOT_OPEN),
-                       ("other_leaf", "and the verifier's program reads")):
-        bad, out = at(cheat, *bound)
+        assert ok["partition_check"]["note"].startswith("units derived") and note in ok["partition_check"]["note"], out
+    for cheat, reads, why in (("made_up", "readers", f"port x: table row 0 {NOT_OPEN}"),
+                              ("wrong_salt", "readers", f"port x: table row 0 {NOT_OPEN}"),
+                              ("other_words", "readers", f"port x: table row 0 {NOT_OPEN}"),
+                              ("other_leaf", "readers", "port x: unit 2 reads position 1, and the verifier's program reads 0"),
+                              ("own_root", "own_root", CROSSING),
+                              ("no_row", "readers", NO_ROW)):
+        bad, out = at(d, cheat, reads)
         print(cheat, out.strip().splitlines()[-1])
-        assert bad is None and why in out, (cheat, out)
-    # without registered reads every linked statement is refused, the honest one included: one whose header names
-    # registered rows as reading no root, and one that names none (layers 0 and 1 in one statement) by checkLinked's name
-    for name, why, n in (("honest", NO_ROOTS, N), ("made_up", NO_ROOTS, N), ("wrong_salt", NO_ROOTS, N),
-                         ("mixed", NO_TREE, 2 * N)):
-        bad, out = at(name, *bound, reads=None, n=n)
-        print(name, "without --registered:", out.strip().splitlines()[-1])
-        assert bad is None and why in out, (name, out)
-    bad, out = at("honest", "--partition", str(d / "partition.json"), reads=None)
-    print("no-program", out.strip().splitlines()[-1])
-    assert bad is None and "Linking needs the verifier's own program" in out, out
-    # a one-layer class: staged with Wiring, no cut wire and no links, its units derived; staged without, as before (its
-    # template the size class's own, so its units are taken as stated)
-    k = tp2.population
-    ok, out = _lean("--circuit", str(flat / "honest" / "circuit.txt"), "--public", str(flat / "honest" / f"pub-{k}.bin"),
-                    "--partition", str(flat / "partition.json"), "--program", str(flat / "program.desc"))
-    assert ok is not None and "no cut wire" in ok["partition_check"]["note"], out
-    assert "links" not in _meta(flat / "honest") and not {"links", "definition"} & set(_meta(flat / "plain"))
-    ok, out = _lean("--circuit", str(flat / "plain" / "circuit.txt"), "--public", str(flat / "plain" / f"pub-{k}.bin"),
-                    "--partition", str(flat / "partition.json"))
-    assert ok is not None and ok["partition_check"]["units"] == "as stated", out
+        assert bad is None and why in out and _named(out), (cheat, out)
+    for name, reads, program, why in (("honest", None, True, NO_ROOTS), ("made_up", None, True, NO_ROOTS),
+                                      ("honest", "readers", False, NO_PROGRAM)):
+        bad, out = at(d, name, reads, program)
+        print(name, reads, program, out.strip().splitlines()[-1])
+        assert bad is None and why in out and _named(out), (name, out)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
+def test_the_sampled_proofs_own_setup_refuses_each_cheat(templated):
     """The same statements set up by the sampled proofs' own check (`OneStageZk.sessionAt`, through `spot-difftest`'s
-    `session_setup`), each with the readers' registered reads."""
-    d, *_ = staged
+    `session_setup`), each with its verifier's registered reads."""
+    d, _flat = templated
     subprocess.run(["lake", "build", "spot-difftest"], cwd=SPOT, check=True, capture_output=True)
     program = (d / "program.desc").read_bytes().hex()
     partition = json.loads((d / "partition.json").read_text())
-    lines = []
-    cases = (("honest", "readers"), ("own", "own"), ("made_up", "readers"), ("wrong_salt", "readers"),
-             ("other_leaf", "readers"), ("other_words", "readers"))
-    for name, reads in cases:
-        lines.append(json.dumps({"fn": "session_setup", "input": {
-            "circuit": (d / name / "circuit.txt").read_bytes().hex(), "public": (d / name / f"pub-{N}.bin").read_bytes().hex(),
-            "tables": [], "program": program, "partition": partition,
-            "registered": json.loads((d / f"{reads}.reads.json").read_text()), "draw": None}}))
+    cases = (("writers", "writers", None), ("honest", "readers", None), ("made_up", "readers", f"port x: table row 0 {NOT_OPEN}"),
+             ("wrong_salt", "readers", f"port x: table row 0 {NOT_OPEN}"), ("other_words", "readers", f"port x: table row 0 {NOT_OPEN}"),
+             ("other_leaf", "readers", "port x: unit 2 reads position 1"), ("own_root", "own_root", CROSSING),
+             ("no_row", "readers", NO_ROW))
+    lines = [json.dumps({"fn": "session_setup", "input": {
+        "circuit": (d / name / "circuit.txt").read_bytes().hex(), "public": (d / name / "pub.bin").read_bytes().hex(),
+        "tables": [], "program": program, "partition": partition,
+        "registered": json.loads((d / f"{reads}.reads.json").read_text()), "draw": None}}) for name, reads, _ in cases]
     p = subprocess.run([str(SPOT / ".lake" / "build" / "bin" / "spot-difftest")], input="\n".join(lines) + "\n",
                        capture_output=True, text=True)
+    assert p.returncode == 0 and _named(p.stderr), p.stderr[-2000:]
     got = [json.loads(x) for x in p.stdout.splitlines()]
     assert len(got) == len(cases), p.stdout + p.stderr
-    verdicts = {}
-    for (name, _), g in zip(cases, got):
-        verdicts[name] = g.get("output", {}).get("refused", g)
-        print("session_setup", name, verdicts[name])
-    # its tree ports come with no reads, so every reader is refused by its instances' reads (checkPort), the honest one
-    # included; the cheats' rows open no leaf of the registered tree
-    for name, why in (("honest", NO_READ), ("own", NO_READ), ("made_up", NOT_OPEN), ("wrong_salt", NOT_OPEN),
-                      ("other_leaf", NO_READ), ("other_words", NOT_OPEN)):
-        assert verdicts[name] is not None and why in verdicts[name], (name, verdicts)
+    for (name, _reads, why), g in zip(cases, got):
+        verdict = g.get("output", {"refused": g}).get("refused", g)
+        print("session_setup", name, verdict)
+        assert (verdict is None) if why is None else (isinstance(verdict, str) and why in verdict), (name, g)
 
 
 @pytest.mark.skipif(not (os.environ.get("FLOCK_CIRCUIT") and Path(os.environ["FLOCK_CIRCUIT"]).exists()),

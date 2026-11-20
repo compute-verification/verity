@@ -46,3 +46,14 @@ def test_a_verify_passes_only_on_its_own_answer_and_a_crash_is_no_reject(tmp_pat
     r = subprocess.run(["bash", "-c", f'{fn.group(0)}\nanswered "$1" {status} {want} \'{line}\'', "-", str(tmp_path / "log")],
                        check=False, env={**os.environ, "PYTHONPATH": str(REPO)})
     assert (r.returncode == 0) == ok
+
+
+def test_the_audit_road_places_a_templated_members_unit():
+    """The door lowers each block to a templated circuit, whose unit a5 places at staging with flock-tmpl-unit and
+    refuses without it (`a0.templated`): the audit's records_audit command passes the binary the script built."""
+    text = SCRIPT.read_text().replace("\\\n", " ")
+    audit = [line for line in text.splitlines() if "python benchmarks/prove_path/records_audit.py audit" in line]
+    assert len(audit) == 1 and "--tmpl-unit-bin $UNIT_BIN " in audit[0], (
+        f"{SCRIPT.name}'s audit road gives records_audit.py no --tmpl-unit-bin $UNIT_BIN: every templated member stops at staging")
+    assert "[ -x $UNIT_BIN ]" in text
+    assert '"--tmpl-unit-bin"' in (REPO / "benchmarks" / "prove_path" / "records_audit.py").read_text()

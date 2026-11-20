@@ -30,6 +30,7 @@ public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
+public import Definitions.Pous.Guarantees.StreamedWipeResidual
 public import Definitions.Pouw
 public import Definitions.Certifier
 public import Definitions.Certifier.Guarantees.SampledAudit
@@ -62,7 +63,6 @@ public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
-public import Definitions.Claims.SamplingLevels
 public import Definitions.Claims.SamplingTwoServedX
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.SamplingTable

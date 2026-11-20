@@ -13,12 +13,14 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import door_walls as W  # noqa: E402
+from verity import lean_process as LP  # noqa: E402
 
 COMPOSE_WHY = "no row has a compression before its last block"
 
@@ -227,6 +229,50 @@ def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_r
         "ported: the block reads a registered value (RegisteredInput1_v1), and a parameter does not carry that it is "
         "registered: its rows would be committed afresh")
     assert W.Result(0, (0, 1), (), ported="ported: x").klass == "ported: ported: x"
+
+
+PANIC_LINE = "PANIC at Spot.restrict Spot.Restrict:1:2: index out of bounds"
+#: a stand-in's lines before it writes its answer, its exit, and the refusal's words
+LIES = {"panic": (f"print({PANIC_LINE!r}, file=sys.stderr)\n", 0, f"{LP.LEAN_PANIC}: {PANIC_LINE}"),
+        "undocumented status": ("", 3, f"{LP.LEAN_EXIT}: status 3")}
+
+
+def _lying(tmp_path: Path, lie: str, answer: int) -> Path:
+    """A stand-in that checks the panic switch, writes the lie's lines, writes its answer to its argument ``answer`` (an
+    admission, a template) and exits as the lie says."""
+    before, rc, _why = LIES[lie]
+    exe = tmp_path / "fake-lean"
+    exe.write_text(f"""#!{sys.executable}
+import os, sys
+assert os.environ.get({LP.ABORT_ON_PANIC!r}) == "1"
+{before}open(sys.argv[{answer}], "w").write("written")
+sys.exit({rc})
+""")
+    exe.chmod(0o755)
+    return exe
+
+
+@pytest.mark.parametrize("lie", LIES)
+def test_lean_doors_admission_beside_a_panic_or_an_undocumented_status_is_no_answer_and_a_difference(tmp_path, lie):
+    """`restrict` writes C_S and ends 0 under a panic line, or at a status it doesn't document (`RESTRICT_EXITS`): Lean's
+    door gave no answer, refused by name, and the block is a difference whatever Python's door says."""
+    exe = _lying(tmp_path, lie, -1)
+    door = SimpleNamespace(_dir=None, c=b"{}", lean=lambda: exe, partition={})
+    got = W.Door.lean_door(door, 0)
+    assert got == f"{W.CRASHED}{LIES[lie][2]}"
+    r = W.Result(0, (0, 1), (), lean_door=got)
+    assert r.difference == f"lean's door gave no answer ({LIES[lie][2]})" and r.klass.startswith("lean: crashed: ")
+    door._dir.cleanup()
+
+
+@pytest.mark.parametrize("lie", LIES)
+def test_a_template_lean_lowered_beside_a_panic_or_an_undocumented_status_is_refused_by_name(tmp_path, lie):
+    """`flock-lower-check`'s template mode writes its template under a panic line, or ends at a status it doesn't document
+    (`LOWER_EXITS`): the template is not read, and the row check records the refusal, not `unlowered`."""
+    exe = _lying(tmp_path, lie, 6)
+    with pytest.raises(LP.LeanPanic) as e:
+        W.template_of(b"{}", "T", 1, 1, lambda: exe)
+    assert str(e.value) == LIES[lie][2] and not isinstance(e.value, W.Unchecked)
 
 
 def _drawn(rng: random.Random) -> W.Spec:
