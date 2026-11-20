@@ -33,8 +33,8 @@ The feasible set is not every run: `honest_feasible` puts a one-gate circuit's r
 run claiming size at most 1, and `two_not_feasible` keeps a two-gate circuit's run out of it. `top_blocks_classified`
 records that no top block is in no class (the partitions' `kind` is total), so the degenerate case the reviews found
 cannot be stated; nothing sits inside an inference block, the finest scale here, so the other cannot be stated either.
-`beforeSalt_not_inference` keeps a unit that starts before its epoch's challenge tick out of the inference blocks,
-`freeChild_le` puts a free block's work under the free limit, and `early_block_free` shows both on one run.
+`cls_free_of_before_salt` makes a unit labelled inference that starts before its epoch's challenge tick a free block,
+`freeChild_le` puts a free block's work under the free limit, and `salt_label_free` shows both on one run.
 -/
 
 @[expose] public section
@@ -167,6 +167,36 @@ theorem hidden_work_le (P : Runs L) (r : P.Run) :
   simp only [Runs.hiddenGates, Finset.mem_filter]
   exact ⟨hreg.1, fun X hX hx => Finset.disjoint_left.mp (P.hiddenUnlisted r i hk X hX) hreg.2.1 hx⟩
 
+/-- A unit's class is hidden exactly when its label is: the class changes only a label of inference. -/
+theorem cls_eq_hidden_iff (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) :
+    P.cls r u = Class.hidden ↔ P.label r u = Class.hidden := by
+  unfold Runs.cls
+  split_ifs with h
+  · rw [h.1]; decide
+  · exact Iff.rfl
+
+/-- **A unit's class is hidden exactly when its parent is hidden hardware** (`labelHiddenIff`): a unit labelled
+inference is never under hidden hardware, so the class keeps the label's meaning there. -/
+theorem cls_hiddenIff (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) :
+    P.cls r u = Class.hidden ↔ P.kind r ((P.ref r).parent u) = false :=
+  (cls_eq_hidden_iff P r u).trans (P.labelHiddenIff r u)
+
+/-- **An inference block's window starts at or after its epoch's challenge tick**, by the class's definition. -/
+theorem cls_inference_salt_le (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) (h : P.cls r u = Class.inference) :
+    P.salt r u ≤ (P.winIn r u).start := by
+  unfold Runs.cls at h
+  split_ifs at h with hc
+  · exact absurd h (by decide)
+  · by_contra hlt
+    exact hc ⟨h, by omega⟩
+
+/-- **A unit labelled inference whose window starts before its epoch's challenge tick is a free block**, by the class's
+definition. -/
+theorem cls_free_of_before_salt (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) (hl : P.label r u = Class.inference)
+    (h : (P.winIn r u).start < P.salt r u) : P.cls r u = Class.free := by
+  unfold Runs.cls
+  rw [if_pos ⟨hl, h⟩]
+
 /-- The inference and free blocks directly inside a server-day block are the blocks directly inside it. -/
 theorem children_split (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
     P.children r i = P.infChildren r i ∪ P.freeChildren r i := by
@@ -175,7 +205,7 @@ theorem children_split (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.ki
   constructor
   · intro hp
     have hnh : P.cls r u ≠ Class.hidden := by
-      rw [ne_eq, P.hiddenIff, hp]; simp [hki]
+      rw [ne_eq, cls_hiddenIff, hp]; simp [hki]
     have hcls : P.cls r u = Class.inference ∨ P.cls r u = Class.free := by
       cases h : P.cls r u with
       | inference => exact Or.inl rfl
@@ -476,10 +506,13 @@ theorem check_spec {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run} (hc : I
     (∀ i, P.kind r i = true →
       (P.claimsOut r i).any (InferenceOnly.isInputFrom [.past]) = true ∧
         (P.claimsOut r i).any (InferenceOnly.isInputFrom [.world]) = true ∧
-        claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS) := by
+        claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS) ∧
+    (∀ u, P.cls r u ≠ Class.inference → (P.claimsIn r u).isEmpty = true) ∧
+    (∀ i, P.kind r i = false → (P.claimsOut r i).isEmpty = true) ∧
+    (∀ i, P.kind r i = true → (P.claimsOut r i).all (InferenceOnly.serverClaim (P.capacity r i)) = true) := by
   simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩ := hc
-  exact ⟨h1, h2, h3, h4, h5, h6, h7⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩ := hc
+  exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
 
 theorem check_infClaims {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
     (hc : InferenceOnly.check lim P r = true) (u : Fin (P.nIn r)) (hu : P.cls r u = Class.inference) :
@@ -507,7 +540,22 @@ theorem check_serverInput {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
     (P.claimsOut r i).any (InferenceOnly.isInputFrom [.past]) = true ∧
       (P.claimsOut r i).any (InferenceOnly.isInputFrom [.world]) = true ∧
       claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS :=
-  (check_spec hc).2.2.2.2.2.2 i hki
+  (check_spec hc).2.2.2.2.2.2.1 i hki
+
+theorem check_innerEmpty {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (u : Fin (P.nIn r)) (hu : P.cls r u ≠ Class.inference) :
+    (P.claimsIn r u).isEmpty = true :=
+  (check_spec hc).2.2.2.2.2.2.2.1 u hu
+
+theorem check_hiddenEmpty {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = false) :
+    (P.claimsOut r i).isEmpty = true :=
+  (check_spec hc).2.2.2.2.2.2.2.2.1 i hki
+
+theorem check_serverShape {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    (P.claimsOut r i).all (InferenceOnly.serverClaim (P.capacity r i)) = true :=
+  (check_spec hc).2.2.2.2.2.2.2.2.2 i hki
 
 /-- **The check bounds a server-day block's size**: under the check and `RealizesExcept`, a server-day block's size is at
 most `lim.cS` gates. -/
@@ -766,13 +814,12 @@ noncomputable def demoRuns (n cr tl : ℕ) : Runs Unit where
   nIn _ := 1
   inner _ := Partition.whole (placed n).toCircuit
   ref _ := { parent := id, sub := fun g => by cases (Partition.whole (placed n).toCircuit).unit g <;> simp }
-  cls _ _ := Class.inference
+  label _ _ := Class.inference
   locIn _ _ := {()}
   winIn _ _ := ⟨0, n + 1⟩
   claimsIn _ _ := [.sizeAtMost 1, .inputAtMost [.past, .block, .world] 0]
-  hiddenIff _ _ := by decide
+  labelHiddenIff _ _ := by decide
   salt _ _ := 0
-  inferenceAfterSalt _ _ _ := Nat.zero_le _
   insideOut := fun _ i g hg => by
     rw [Partition.gates, mem_filter] at hg
     have hin : (placed n).isInput g = false := by
@@ -959,7 +1006,7 @@ theorem freeBound_binds :
   · intro a ha; exact absurd ha (Finset.notMem_empty a)
   · simp [demoRuns, Circuit.width]
   · intro u _ hu; exact absurd (Finset.mem_univ u) hu
-  · intro u hu; exact absurd (by simp [demoRuns] : (demoRuns 2 1 1).cls () u = Class.inference) hu
+  · intro u hu; exact absurd (rfl : (demoRuns 2 1 1).cls () u = Class.inference) hu
   · intro i p hp
     fin_cases i
     simp only [demoRuns, List.mem_cons, List.not_mem_nil, or_false] at hp
@@ -970,7 +1017,7 @@ theorem freeBound_binds :
       show (placed 2).blockInput _ _ _ _ ≤ 0
       simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
-  · intro u _; simp [demoRuns]
+  · intro u _; rfl
 
 /-- `demoRuns 1 1 0` with its server-day block's committed input claim from the outside world at `kw` bits. -/
 noncomputable def demoRunsInput (kw : ℕ) : Runs Unit :=
@@ -1099,13 +1146,12 @@ noncomputable def demoCut (cr tl : ℕ) : Runs Unit where
   nIn _ := 2
   inner _ := cutTwo
   ref _ := { parent := id, sub := fun g => by simp }
-  cls _ _ := Class.inference
+  label _ _ := Class.inference
   locIn _ _ := {()}
   winIn _ u := ⟨u.val + 1, 1⟩
   claimsIn _ _ := [.sizeAtMost 1, .inputAtMost [.past, .block, .world] 0]
-  hiddenIff _ _ := by simp
+  labelHiddenIff _ _ := by simp
   salt _ _ := 0
-  inferenceAfterSalt _ _ _ := Nat.zero_le _
   insideOut := fun _ i g hg => by
     rw [Partition.gates, mem_filter] at hg
     have h := cutTwo_gate i g hg.2
@@ -1177,7 +1223,7 @@ theorem cut_multiplies :
   · intro a ha; exact absurd ha (Finset.notMem_empty a)
   · simp [demoCut, Circuit.width]
   · intro u _ hu; exact absurd (Finset.mem_univ u) hu
-  · intro u hu; exact absurd (by simp [demoCut] : (demoCut 1 1).cls () u = Class.inference) hu
+  · intro u hu; exact absurd (by simp [demoCut, Runs.cls] : (demoCut 1 1).cls () u = Class.inference) hu
   · intro i p hp
     simp only [demoCut, List.mem_cons, List.not_mem_nil, or_false] at hp
     fin_cases i <;> rcases hp with rfl | rfl | rfl
@@ -1187,7 +1233,7 @@ theorem cut_multiplies :
       | (show (placed 2).blockInput _ _ _ _ ≤ 0
          simp only [demoCut, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
          decide)
-  · intro u _; simp [demoCut]
+  · intro u _; simp [demoCut, Runs.cls]
   · intro cr tl M ⟨hc, hreal, hfree⟩
     by_cases hM : (⟨0, Nat.one_pos⟩ : Fin ((demoRuns 2 cr tl).nIn ())) ∈ M
     · refine excluded_run cutLimits (demoRuns 2 cr tl) () M ⟨0, Nat.one_pos⟩ rfl ?_ ⟨hc, hfree⟩
@@ -1216,13 +1262,7 @@ inside an inference block that is not a proof block. -/
 theorem top_blocks_classified (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
     P.kind r i = true ∨ P.kind r i = false := by cases P.kind r i <;> simp
 
-/-! ## A unit before its epoch's challenge tick -/
-
-/-- **A unit that starts before its epoch's challenge tick is no inference block**, in any `Runs`
-(`inferenceAfterSalt`). -/
-theorem beforeSalt_not_inference (P : Runs L) (r : P.Run) (u : Fin (P.nIn r))
-    (h : (P.winIn r u).start < P.salt r u) : P.cls r u ≠ Class.inference :=
-  fun hc => absurd (P.inferenceAfterSalt r u hc) (by omega)
+/-! ## A unit labelled inference before its epoch's challenge tick -/
 
 /-- **A free block's work is under the free bound**: under the check and `FreeWorkAtMost`, every free block directly
 inside a server-day block has size at most `lim.freeSize` gates. -/
@@ -1235,35 +1275,34 @@ theorem freeChild_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : 
   have h3 := check_freeSize hc i hki
   omega
 
-/-- `demoRuns 1 0 0` with its one inner block classed free, carrying no claim, and its epoch's challenge tick at tick 1,
-after its window's start at tick 0. -/
-noncomputable def demoEarly : Runs Unit :=
-  { demoRuns 1 0 0 with
-    cls := fun _ _ => Class.free
-    claimsIn := fun _ _ => []
-    hiddenIff := fun _ _ => by decide
-    salt := fun _ _ => 1
-    inferenceAfterSalt := fun _ _ h => absurd h (by decide) }
+/-- `demoRuns 1 1 0` with its epoch's challenge tick at tick `s`: its one unit is labelled inference, its window from
+tick 0. -/
+noncomputable def demoSalt (s : ℕ) : Runs Unit := { demoRuns 1 1 0 with salt := fun _ _ => s }
 
-/-- The early demo's limits: no inference block, at most one free block, the given free work limit (gates), each
-server-day block's size claim at most 1 gate and its input from its own past and the outside world at most 0 bits, no
-hidden hardware. -/
-noncomputable def earlyLimits (freeSize : ℕ) : InferenceOnly.Limits :=
-  { n := 0, c := 0, k := 0, m := 1, freeSize := freeSize, cS := 1, kS := 0, hidden := 0, share := 0, allowance := 0 }
-
-/-- **A unit before its epoch's challenge tick is a free block, its work under the free bound**: in `demoEarly` the one
-inner block's window starts at tick 0, before its epoch's challenge tick at tick 1, so no `Runs` has it as an inference
-block (`beforeSalt_not_inference`). Classed free, its 1 gate of work is under the free bound (capacity 1 gate less
-credited use 0 gates plus tolerance 0 gates), and the check passes it at `freeSize = 1` gate and refuses it at
-`freeSize = 0` gates, every other limit the same. -/
-theorem early_block_free :
-    (demoEarly.winIn () ⟨0, Nat.one_pos⟩).start < demoEarly.salt () ⟨0, Nat.one_pos⟩ ∧
-      demoEarly.cls () ⟨0, Nat.one_pos⟩ = Class.free ∧ demoEarly.sizeIn () ⟨0, Nat.one_pos⟩ = 1 ∧
-      demoEarly.FreeWorkAtMost () ∅ ∧
-      InferenceOnly.check (earlyLimits 1) demoEarly () = true ∧
-      InferenceOnly.check (earlyLimits 0) demoEarly () = false := by
-  refine ⟨by decide, rfl, by decide, ?_, by decide, by decide⟩
-  unfold Runs.FreeWorkAtMost; decide
+/-- **A unit labelled inference before its epoch's challenge tick is a free block, and the free bound reads it**: in
+`demoSalt 1` the one unit is labelled inference and its window starts at tick 0, before its epoch's challenge tick at
+tick 1, so its class is free. Its 1 gate of work is then above its server-day block's capacity (1 gate) less credited use
+(1 gate) plus tolerance (0 gates), so `FreeWorkAtMost` fails for every tolerance set, and the check refuses it at
+`demoLimits 0 1 0`. With the class read from the label, as the class field before this definition was, `demoSalt 1`
+reads as `demoSalt 0` does: an inference block, passing the check with `FreeWorkAtMost` at the empty tolerance set. That
+difference is why the class is derived. -/
+theorem salt_label_free :
+    (demoSalt 1).label () ⟨0, Nat.one_pos⟩ = Class.inference ∧
+      ((demoSalt 1).winIn () ⟨0, Nat.one_pos⟩).start < (demoSalt 1).salt () ⟨0, Nat.one_pos⟩ ∧
+      (demoSalt 1).cls () ⟨0, Nat.one_pos⟩ = Class.free ∧
+      (∀ M, ¬ (demoSalt 1).FreeWorkAtMost () M) ∧
+      InferenceOnly.check (demoLimits 0 1 0) (demoSalt 1) () = false ∧
+      (demoSalt 0).cls () ⟨0, Nat.one_pos⟩ = Class.inference ∧
+      (demoSalt 0).FreeWorkAtMost () ∅ ∧
+      InferenceOnly.check (demoLimits 0 1 0) (demoSalt 0) () = true := by
+  refine ⟨rfl, by decide, by decide, ?_, by decide, by decide, ?_, by decide⟩
+  · intro M h
+    have h1 := h ⟨0, Nat.one_pos⟩ rfl
+    have h2 : ∑ u ∈ (demoSalt 1).freeChildren () ⟨0, Nat.one_pos⟩, (demoSalt 1).sizeIn () u = 1 := by decide
+    have h3 : (demoSalt 1).capacity () ⟨0, Nat.one_pos⟩ - (demoSalt 1).credited () ⟨0, Nat.one_pos⟩ +
+        (demoSalt 1).tol = 0 := by decide
+    omega
+  · unfold Runs.FreeWorkAtMost; decide
 
 /-! ## The chain, with the protocols' rows named as types
 

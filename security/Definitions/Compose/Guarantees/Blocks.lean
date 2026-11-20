@@ -53,8 +53,8 @@ holds for every `M`, so at `M` = every inference block it says the whole credite
 size claims: a block's credit is at most its committed size claim. In an accepted run whose spend clears the claim, for
 every set `M` of `inner`'s units and inside every server-day block `i`, PoUW's credited use `credited r i` (gates at `π`)
 is at most the work of the inference blocks directly inside `i` outside `M`, plus the committed size claims
-(`claimedSize`) of the inference blocks directly inside `i` in `M`. Every inference block's window starts at or after its
-epoch's challenge tick (`inferenceAfterSalt`). The credited use is fixed before the sampling coins, by the registered
+(`claimedSize`) of the inference blocks directly inside `i` in `M`. By the class's definition (`cls`), an inference
+block's window starts at or after its epoch's challenge tick. The credited use is fixed before the sampling coins, by the registered
 claim (the epoch's salt is a live coin that comes before the work); the factor from multiply-accumulates, the spend's
 unit, to gates at `π` is a constant of the scheme and the pricing, assumed. Stated with `+` on the right rather than `−`
 on the left, so no truncated subtraction enters it. -/
@@ -81,21 +81,19 @@ def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 /-! ## The declared blocks run -/
 
 /-- **The declared blocks run** (open, compute-accounting with soundness): every inference block `u` (its window starts
-at or after its epoch's challenge tick, `inferenceAfterSalt`), outside a set `M` of inference blocks whose committed
-size claims summed
-(`∑ u ∈ M, claimedSize (claimsIn u)`, gates) are at most the run's tolerance `P.tol` (gates), implements its declared block
-`f u`, at size at most `c u` gates and input at most `k u` bits from its own past, another block and the outside world,
-except with probability at most `ε`. The declared size of a block is its committed size claim, read from its claims
-list, which the check caps at `lim.c`; it is no parameter of the row. Nothing
-in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it. A unit
-whose window starts before its epoch's challenge tick is no inference block, so it is in no row here: inside a server-day
-block it is a free block, its work under the free bound. The set `M` is the
-tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M` pass
-into correct ones (the injected information) is the `.block` source of the inference blocks' input here. The tolerance
-binds the actual work through `FreeWorkAtMost`: `M`'s inference blocks sit inside the free block, counted at their actual
-size, so `feasible_work_le` reads them. The row gives `.function`,
-`.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is owed where the
-rows become the chain's hypotheses by name (`rows_chain`'s `assemble`). -/
+at or after its epoch's challenge tick, by the class's definition `cls`), outside a set `M` of inference blocks whose
+committed size claims summed (`∑ u ∈ M, claimedSize (claimsIn u)`, gates) are at most the run's tolerance `P.tol`
+(gates), implements its declared block `f u`, at size at most `c u` gates and input at most `k u` bits from its own past,
+another block and the outside world, except with probability at most `ε`. The declared size of a block is its committed
+size claim, read from its claims list, which the check caps at `lim.c`; it is no parameter of the row. Nothing in Verity
+proves that the prover ran the declared circuit: the proofs show committed values consistent with it. A unit labelled
+inference whose window starts before its epoch's challenge tick is a free block, so it is in no row here and its work
+is under the free bound. The set `M` is the tolerance set the chain reads through `RealizesExcept`; the unregistered
+information the incorrect proof blocks in `M` pass into correct ones (the injected information) is the `.block` source
+of the inference blocks' input here. The tolerance binds the actual work through `FreeWorkAtMost`: `M`'s inference blocks
+sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives `.function`,
+`.sizeAtMost` and `.inputAtMost`; that every claim on an inference block is one of these three is
+`InferenceClaimsDeclared`. -/
 def DeclaredBlocksRun (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
     (c k : (r : P.Run) → Fin (P.nIn r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   ExceptWith P.pr P.accepts
@@ -113,8 +111,12 @@ its unregistered input from its own past, and its unregistered input from memory
 placed but three pieces of the model, each a named open `Prop` below owned by memory-accounting or lean. The three
 questions memory-accounting left open now have answers, with their basis: the on-chip state is `2^30` bits in the honest
 device (data sheet: at least `992,061,184`), a floor on every bound at the chip's scale; PoUS holds summed over the ticks
-of the window, for one audit a period (a cut at a single tick stays open); and PoUS and PoUB count information from below,
-which bounds wires from below. -/
+of the window, for one audit a period (a cut at a single tick stays open); and neither PoUS nor PoUB counts information.
+PoUS's `held` (`Schedule.held` in `Registration/Device.lean`, read at the capacity window by `Run.held` in
+`Compose/Joint.lean`) counts the bits of device memory the schedule charges to the account at the end of each tick,
+summed over the window's ticks: bit-ticks of memory occupied. PoUB's `reads` (`Run.reads` in `Poub/Remote/Run.lean`)
+sums, over the node's memory tiers, the bits each tier's port carried to the node's compute over the audited interval.
+`Placed.ingress` counts each distinct gate once, so neither is the placed quantity until a switch ties them. -/
 
 /-- **PoUS: use at least, over the memory-size capacity.** In each server-day block `i`, at least `b r i` of the memory's
 registered content was held, in the quantity `held r i` (wires crossing the ticks of the window at the device's memory
@@ -125,7 +127,10 @@ a server-day block. The guarantee that ties it is `Pous.Period.PeriodHeldDeploye
 held summed over ticks for one audit a period; that statement lives in the properties tree, which the definitions tree
 may not import, so this instance is **untied** here (`held` and `b` are free functions until the switch names it). On-chip
 state is `2^30` bits in the honest device (data sheet: at least `992,061,184`), a floor on every bound at the chip's
-scale; PoUS counts information from below, which bounds wires from below. Open on `DeviceMemoryIsLocation`. -/
+scale. PoUS's own `held` (`Schedule.held` in `Registration/Device.lean`) counts the bits of device memory the schedule
+charges to the account at the end of each tick, summed over the window's ticks, in bit-ticks: memory occupied, neither
+information nor distinct wires, so it is not this row's `held` until the switch ties them. Open on
+`DeviceMemoryIsLocation`. -/
 def PousUseAtLeast (held b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   P.UseAtLeast Capacity.memorySize (fun r _ i => held r i) (fun r _ i => b r i) ε
 
@@ -156,6 +161,33 @@ def DeviceMemoryIsLocation (memCopiesOneValue memChipLatencyBounded chipHasMemor
 /-- **PoUB's guarantee restated on the actual circuit** (open, owner memory-accounting): today PoUB is proved in a
 separate model; this is the premise that its bound holds of the actual circuit, so that `PoubUseAtLeast` reads it. -/
 def PoubOnActualCircuit (G : Prop) : Prop := G
+
+/-- **The registered input gates are at most the registered width** (open, owner proofs with registration): in an
+accepted run, the gates the run counts as registered information (`θ`) have width at most `registered` bits.
+`RegisteredReadsOpenLog` gives that they are input gates, not their width. -/
+def RegisteredWidthAtMost : Prop := ∀ r, P.accepts r → (P.actual r).width (P.θ r) ≤ P.registered
+
+/-- **The pricing charges every computed gate at least 1** (open, owner compute-accounting): in every run, the pricing
+`π`, at which PoUW's credited use and `ComputeRate` are stated, prices every computed gate at least 1. -/
+def PricingChargesEveryGate : Prop := ∀ r, ∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g
+
+/-- **An inference block's claims are the declared row's** (open, owner compute-accounting with soundness): in an
+accepted run, every claim on an inference block `u` is the declared row's function claim `f u`, a size claim of at least
+`c u` gates, or an input claim from its own past, another block and the outside world of at least `k u` bits. -/
+def InferenceClaimsDeclared (f : (r : P.Run) → Fin (P.nIn r) → Circuit) (c k : (r : P.Run) → Fin (P.nIn r) → ℕ) :
+    Prop :=
+  ∀ r, P.accepts r → ∀ u, P.cls r u = Class.inference → ∀ p ∈ P.claimsIn r u,
+    p = .function (f r u) ∨ (∃ s, p = .sizeAtMost s ∧ c r u ≤ s) ∨
+      (∃ s, p = .inputAtMost [.past, .block, .world] s ∧ k r u ≤ s)
+
+/-- **A server-day block's input claims are at least the rows' bounds** (open, owners memory-accounting for its own past
+and network-accounting for the outside world): in an accepted run, every input claim of a server-day block `i` from
+exactly its own past is at least `bPast i` bits, and every one from exactly the outside world at least `bWorld i`
+bits. -/
+def ServerInputClaimsCover (bPast bWorld : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+  ∀ r, P.accepts r → ∀ i, P.kind r i = true → ∀ s,
+    (Property.inputAtMost [.past] s ∈ P.claimsOut r i → bPast r i ≤ s) ∧
+      (Property.inputAtMost [.world] s ∈ P.claimsOut r i → bWorld r i ≤ s)
 
 /-! ## The memory wipe -/
 
@@ -299,8 +331,8 @@ blocks' claims outside a tolerance set, the wipe and network attestation for inp
 between them give that an accepted run realizes its claims outside some tolerance set of inference blocks whose free and
 tolerance work is at most capacity − credited use + tolerance (`FreeWorkAtMost`; each row established except with
 probability at most `ε x`), an accepted run's actual circuit complies with `pol`, except with probability at most
-`∑ x ∈ s, ε x`. A unit that starts before its epoch's challenge tick is no inference block (`inferenceAfterSalt`) but a
-free block, and the tolerance set is counted beside the free blocks, both under that bound. -/
+`∑ x ∈ s, ε x`. A unit labelled inference that starts before its epoch's challenge tick is a free block by the class's
+definition (`cls`), and the tolerance set is counted beside the free blocks, both under that bound. -/
 def Chain {L : Type*} (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
     {κ : Type} (s : Finset κ) (shown : κ → P.Run → Prop) (ε : κ → ℝ≥0∞) : Prop :=
   InferenceOnly.PolicyTheorem check pol → (∀ r, P.accepts r → check P r = true) →

@@ -32,6 +32,13 @@ def isInputFrom (src : List Source) : Property → Bool
   | .inputAtMost s _ => decide (s = src)
   | _ => false
 
+/-- The claim is one a server-day block may carry: a size claim of at least `cap` gates (the block's capacity, which
+bounds its size), or an input claim from exactly its own past or exactly the outside world (any bound). -/
+def serverClaim (cap : ℕ) : Property → Bool
+  | .sizeAtMost s => decide (cap ≤ s)
+  | .inputAtMost src _ => decide (src = [.past]) || decide (src = [.world])
+  | _ => false
+
 /-- **The inference-only policy's limits**, public parameters: the inference blocks' count `n`, size `c` (gates) and
 input `k` (bits); the free blocks' count `m`; `freeSize` (gates), the limit on each server-day block's capacity less
 PoUW's credited use plus the tolerance, which bounds its free blocks' work and the actual work of the inference blocks
@@ -66,9 +73,12 @@ past (`[.past]`, the wipe's row) and one from the outside world (`[.world]`, net
 bounds summed at most `kS` bits. The limit is on the sum because the policy reads one number for a server-day block's
 unregistered input and the block's input from both sources is at most the sum (`serverInput_le`); a limit on each would
 let `2 · kS` bits in. A server-day block's input from another block at its location during its window (`.block`) is in
-no row and under no limit here. The policy has no term for a server-day block's output, so the check compares none. It
-runs at the period's end on the audit's outputs (`credited`) and the registered data (`rate`, `tol`). Coverage,
-disjointness and the nesting are the partitions' own, so the check states none of them. -/
+no row and under no limit here. The policy has no term for a server-day block's output, so the check compares none.
+Three comparisons fix the shape of the committed claims lists: a free block or a hidden unit carries no claim; a hidden
+top block carries no claim; and every claim of a server-day block is a size claim of at least its capacity (gates) or an
+input claim from exactly its own past or exactly the outside world (`serverClaim`). It runs at the period's end on the
+audit's outputs (`credited`) and the registered data (`rate`, `tol`). Coverage, disjointness and the nesting are the
+partitions' own, so the check states none of them. -/
 def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
   decide ((univ.filter fun u => P.cls r u = Class.inference).card ≤ lim.n) &&
     decide (∀ u, P.cls r u = Class.inference →
@@ -81,6 +91,9 @@ def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
       (P.claimsOut r i).any isSize = true ∧ claimedSize (P.claimsOut r i) ≤ lim.cS) &&
     decide (∀ i, P.kind r i = true →
       (P.claimsOut r i).any (isInputFrom [.past]) = true ∧ (P.claimsOut r i).any (isInputFrom [.world]) = true ∧
-        claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS)
+        claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS) &&
+    decide (∀ u, P.cls r u ≠ Class.inference → (P.claimsIn r u).isEmpty = true) &&
+    decide (∀ i, P.kind r i = false → (P.claimsOut r i).isEmpty = true) &&
+    decide (∀ i, P.kind r i = true → (P.claimsOut r i).all (serverClaim (P.capacity r i)) = true)
 
 end InferenceOnly

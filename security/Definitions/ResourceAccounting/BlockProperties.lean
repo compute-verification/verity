@@ -17,7 +17,8 @@ Core/Partition.lean`: every computed gate in exactly one unit, input gates in no
   which, by location: a server-day block is at a location the hardware description lists, hidden hardware's work at
   leaves no listed location holds);
 * the **inference blocks** and **free blocks** refining them, a partition `inner` with `inner.Refines outer`, a class
-  per unit (`cls u`: inference, free, or hidden under a hidden parent);
+  per unit (`cls u`: inference, free, or hidden under a hidden parent), the prover's label (`label u`) except that a
+  unit labelled inference whose window starts before its epoch's challenge tick (`salt u`) is a free block;
 * the **proof blocks** refine the inference blocks; they are the proof layer's own `Verity.Partition` and carry no block
   property here.
 
@@ -148,15 +149,15 @@ def ExceptWith {Ω : Type} (pr : (Ω → Prop) → ℝ≥0∞) (accepts : Ω →
 /-- **A monitoring period's runs**, as accounting reads them: the audit game's probability `pr` (monotone, and
 subadditive over finite unions), the verifier's acceptance, and each run's actual circuit, pricing, registered input
 gates, and the two partitions the prover committed before any coin. `outer` partitions the whole circuit into server-day
-blocks and hidden hardware (`kind`); `inner` refines it into inference blocks, free blocks and hidden units (`cls`), a
-unit being hidden exactly when its server-day-or-hidden parent is hidden hardware (`hiddenIff`). Each block's location
+blocks and hidden hardware (`kind`); `inner` refines it into units the prover labels inference, free or hidden
+(`label`), a unit labelled hidden exactly when its server-day-or-hidden parent is hidden hardware (`labelHiddenIff`).
+Each block's location
 and window are fixed data. `kind` is a fact about location, not the prover's label: a top block is a server-day block
 exactly when its location is one the hardware description lists (`kindIff`), and a hidden block's location shares no
 leaf with a listed one (`hiddenUnlisted`). A server-day block is a listed location and a day, not the prover's cut: its
 window is one of the period's registered days (`winDay`), and no two server-day blocks of a run share a location and a day
-(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). Every inference
-block's window starts at or after its epoch's challenge tick (`inferenceAfterSalt`): a unit inside a server-day block
-that starts before it is a free block, its work under the free bound. -/
+(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). The class every
+definition reads is `cls`, derived from the label and the epoch's challenge tick (`salt`). -/
 structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
@@ -207,18 +208,18 @@ structure Runs (L : Type*) where
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
   ref : (r : Run) → (inner r).Refines (outer r)
-  cls : (r : Run) → Fin (nIn r) → Class
+  /-- **The prover's committed label of each unit**: inference, free or hidden. No definition reads it but `cls`. -/
+  label : (r : Run) → Fin (nIn r) → Class
   locIn : (r : Run) → Fin (nIn r) → Finset L
+  /-- **Each unit's window**, the committed partition's, so the prover's: its start tick is what the prover committed.
+  `insideIn`, a field an instance owes, ties the unit's gates to it. -/
   winIn : (r : Run) → Fin (nIn r) → Window
   claimsIn : (r : Run) → Fin (nIn r) → List Property
-  hiddenIff : ∀ r u, cls r u = Class.hidden ↔ kind r ((ref r).parent u) = false
+  /-- A unit is labelled hidden exactly when its parent is hidden hardware. -/
+  labelHiddenIff : ∀ r u, label r u = Class.hidden ↔ kind r ((ref r).parent u) = false
   /-- **The challenge tick of each unit's epoch**: the tick of the verifier's live coin that opens the epoch (PoUW's
   salt), public. -/
   salt : (r : Run) → Fin (nIn r) → ℕ
-  /-- An inference block's window starts at or after its epoch's challenge tick, so a unit whose window starts before it
-  is not an inference block. Whoever instantiates `Runs` owes it, as a property of the committed partition that the
-  outer proof checks. -/
-  inferenceAfterSalt : ∀ r u, cls r u = Class.inference → salt r u ≤ (winIn r u).start
   /-- **A block is its place and time**: every server-day-or-hidden block's gates are computed at its location during
   its window (main's `Placed.region`), so a server-day block is a `region` and its size is bounded by `ComputeRate`, not
   assumed. -/
@@ -230,6 +231,13 @@ structure Runs (L : Type*) where
 namespace Runs
 
 variable {L : Type*} (P : Runs L)
+
+/-- **The class of unit `u` of `inner` in run `r`**, the one every definition, theorem and the check read: its label,
+except that a unit labelled inference whose window starts before its epoch's challenge tick is a free block. It is a
+function of what the prover committed (the label and the window) and of the verifier's coin's tick; no auditor-side
+source for a unit's start tick is named here, so it bounds only what the prover committed. -/
+def cls (r : P.Run) (u : Fin (P.nIn r)) : Class :=
+  if P.label r u = Class.inference ∧ (P.winIn r u).start < P.salt r u then Class.free else P.label r u
 
 /-- Server-day-or-hidden block `i` of run `r` as a `Verity.Block` (its window and its gates). -/
 def outerBlock (r : P.Run) (i : Fin (P.nOut r)) : Verity.Block (P.actual r).toCircuit :=
