@@ -43,6 +43,8 @@ for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("te
 cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_cases", "test_circuit_h1window"))
 
 SEEDS = range(3)
+#: a case over a real window (about 60 MB, `credit.layout_of` seconds on it) runs at one seed: one case per refusal
+WINDOW_SEEDS = range(1)
 #: a sample root no withheld session opened on: its sampling coin was never sampled after it
 NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
@@ -363,7 +365,7 @@ def test_drawn_mutation(name):
 @pytest.mark.parametrize("name", sorted(WINDOW_EXPECT))
 def test_window_mutation(name):
     code, part = WINDOW_EXPECT[name]
-    for seed in SEEDS:
+    for seed in WINDOW_SEEDS:
         got, refused = _window(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
 
@@ -371,7 +373,7 @@ def test_window_mutation(name):
 @pytest.mark.parametrize("name", sorted(PERIOD_EXPECT))
 def test_period_mutation(name):
     code, part = PERIOD_EXPECT[name]
-    for seed in SEEDS:
+    for seed in WINDOW_SEEDS:
         got, refused = _period(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
 
@@ -400,12 +402,12 @@ def _window_drawn(name: str, seed: int):
 @pytest.mark.parametrize("name", sorted(WINDOW_DRAWN_EXPECT))
 def test_window_drawn_mutation(name):
     code, part = WINDOW_DRAWN_EXPECT[name]
-    for seed in range(5):
+    for seed in WINDOW_SEEDS:
         _d, (got, refused) = _window_drawn(name, seed)
         assert got is None and refused[0] == code and part in refused[1], (seed, refused)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_the_window_draw_is_its_coins(seed):
     """`credit._window_drawn` samples the units `credit.drawn` does at the sampling coin it opens, the window's root as the
     stream, the sample's root as the registration and its receipts, over the strata of the descriptor's layout."""
@@ -425,7 +427,7 @@ def _window(name: str, seed: int):
     return Cr._window_outcomes(*cases.window_args(cases.window_instance(random.Random(f"{name}/{seed}"), name)))
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_an_honest_j10r_window_credits_its_bits(seed):
     """A window over J10-R units (``j10r``, its templates' parameters ending in `credit.SHARED_J10R`) is credited as
     today's is: its layout and strata are the same, and only its public rows differ."""
@@ -603,7 +605,7 @@ def test_a_word_read_at_another_width_refuses():
     """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one Flock's decoder
     refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
     accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
-    for seed in SEEDS:
+    for seed in WINDOW_SEEDS:
         rng = random.Random(f"reinterpret/{seed}")
         lay = cases.layout(rng)
         assert Cr.layout_of(bytes.fromhex(cases.descriptor(rng, lay)))[1] is None
@@ -628,7 +630,7 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
         tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
         desc["program_fn"] = cases.record(tiles, alt)
         assert Cr.layout_of(codec.canonical_json(desc)) == (None, ("layout", Cr.BODY))
-    for seed in SEEDS:
+    for seed in WINDOW_SEEDS:
         d = cases.period_instance(random.Random(f"honest/{seed}"))
         d["windows"][0] = {**d["windows"][0], "layout": lay}
         assert Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify) == (None, ("period", Cr.WINDOWS_FORM))
@@ -649,7 +651,7 @@ def test_window_and_period_credit_are_the_only_entries():
                 "_period_outcomes"} & set(Cr.__all__)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_entries_of_another_registration_refuse(seed):
     """Entries from another registration: A values registered under another window's open root or another circuit,
     their trees under those domains, so the round roots commit them (`_a_link` accepts) and the sampled proof blocks' proofs
@@ -681,7 +683,7 @@ def test_mains_call_tables_are_the_windows_own_and_the_weights_held():
     assert not any(Cr.is_a(v) for v in ("h1/a/x", "h1/a/4096@", "h1/a/@3", "h1/a/4096@3@4", "a/64@-1", 5))
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     """Main's served form: each round's A table of each K ``…/a/<K>@<s>`` committed whole under its round's root and each
     call's z table ``…/zy@<c>``, both under domains that bind the window's open root, and each sampled proof block's proof opening its own
@@ -692,7 +694,7 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     assert refused is None and got == _served(d)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_table_the_served_commit_did_not_commit_refuses(seed):
     """ROOTS1: a round's A table of a K with every row zero, one row off or its rows offset by one call, or a round's
     input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the sampled proof blocks'
@@ -746,7 +748,7 @@ def test_a_hostile_leaf_count_is_refused_before_the_verifier_hashes_any_pad(monk
             d = cases.a_link_instance(random.Random(f"{name}/{seed}"), name)
             refused = Cr._a_link(d["rounds"], d["entries"], d["calls"], d["rows"])
             assert refused is not None and refused[0] == "a-link" and A_LINK_EXPECT[name] in refused[1], (seed, refused)
-    for seed in SEEDS:
+    for seed in WINDOW_SEEDS:
         d = cases.window_instance(random.Random(f"honest/{seed}"))
         for pick, why in ((lambda v: Cr.a_value(v) and Cr.a_value(v)[1] is not None, "the window's layout gives it"),
                           (lambda v: Cr.ids_step(v) is not None, f"is not from 1 to {Cr.MAX_ROWS}")):
@@ -781,7 +783,7 @@ def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past
                        "")[1][0] == "layout"
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
     """A served MoE window lays out its routed experts' calls as H1 names them
     (``prefix.expert.projection``), each expert's down at the intermediate width K, which only expert calls have. With
@@ -801,7 +803,7 @@ def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
         f"the Commit record registers {Cr.commit_rows(gone[0][0], cases.EXPERT_K)} not"), refused
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_round_0s_input_ids_are_inside_its_request_table(seed):
     """ROOTS1's ids@0: the window's open root binds round 0's request root, which is `requests_root` of the request
     table's root and ids@0's, so ids@0's rows are fixed before the salt coin; its domain binds the window's session,
@@ -880,7 +882,7 @@ def test_the_live_program_is_read_from_its_compiled_descriptor():
             (None, ("live", Cr.NOT_LIVE))
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_each_steps_served_rows_are_proved_by_its_live_unit(seed):
     """Each round's live@<s> proof outcome opens ``m@<s>`` at the known rows of the manifest's m_s: a window whose
     serving process stated another m_s than its live unit proved (the statement's m, the count of round s's slots
@@ -893,7 +895,7 @@ def test_each_steps_served_rows_are_proved_by_its_live_unit(seed):
     assert got is None and refused[0] == "window" and "live: round " in refused[1]
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
     """Each round's live@<s> proof outcome opens every ``cap_<i>`` at the known ``caps`` of the max_tokens its period's
     open committed (`live_reads.caps_table`): an honest window is accepted, and one whose live proof was made against the
@@ -922,7 +924,7 @@ def test_the_commit_record_is_bound_under_calls_root():
     assert Cr.calls_root(salt, d["calls"], None, digest) != Cr.calls_root(salt, d["calls"], served, digest)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_call_table_registered_without_the_window_root_refuses(seed):
     """A round's A table registered under a domain that binds no window root (main's h1_prove registration, its synthetic
     window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the sampled proof blocks' proofs
@@ -933,7 +935,7 @@ def test_a_call_table_registered_without_the_window_root_refuses(seed):
     assert got is None and refused[0] == "registration" and OTHER_REGISTRATION in refused[1]
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_proof_verified_against_another_registration_refuses(seed):
     """A sampled proof block's proof is accepted, of a sampled proof block, but its session opened a value against another registration's
     root: the window, and its period, earn nothing."""
@@ -947,7 +949,7 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
     assert got is None and refused[0] == "window" and "registration: drawn unit " in refused[1]
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
     """An opened B entry whose registered root differs from the one the sampled proof blocks' sessions opened is refused before
     any proof is read: its root no longer folds to the weights' root the window's open root binds (`_weights`). The
@@ -957,7 +959,7 @@ def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
     assert got is None and refused == ("weights", Cr.OTHER_WEIGHTS)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_round_log_the_challenger_never_received_refuses(seed):
     """The composed check's counterexample: a round log the challenger never received, its coins carried as if opened
     after its roots and the sample root over it, has every credit bit fixed before the sampling coin (`_credited` credits its
@@ -989,14 +991,14 @@ def test_a_refused_outcome_credits_nothing_though_credited_would():
     assert credited
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_window_is_credited_only_with_every_drawn_unit_accepted(seed):
     d = cases.window_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._window_outcomes(*cases.window_args(d))
     assert refused is None and got == _served(d)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_period_counts_only_closed_and_complete(seed):
     """A closed, complete period earns each window's credit, in its close's order; with no close, a window
     incomplete, missing or out of order, or one of no period among it, it earns nothing."""
@@ -1008,7 +1010,7 @@ def test_a_period_counts_only_closed_and_complete(seed):
         assert _period(name, seed)[0] is None, name
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_window_proving_another_circuit_refuses_the_period(seed):
     """A window whose proofs were verified against a circuit other than the one the period's open committed counts
     toward no period (`challenger.credited_session`), so its period earns nothing, though every window is otherwise
@@ -1026,7 +1028,7 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
     assert got is None and refused[0] == "circuit"
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     """A window whose session ran a commit the host's pins log records but that is off main's first-parent line
     (a branch commit merged into main) counts toward no period (`challenger.credited_session`, the pin before the
@@ -1039,7 +1041,7 @@ def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
     assert refused is None and len(got["windows"]) == len(d["windows"])
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_the_freshness_floor_counts_from_the_open_pin_not_mains_head(seed):
     """A period's open records the commit it opened under (`credit.committed_pin`) and a freshness floor
     (`credit.committed_floor`, first-parent commits, default 0 when the open records no floor). A window counts only when
@@ -1067,7 +1069,7 @@ def _work(layout: dict) -> int:
     return sum(s["work"] * sum(hi - lo for lo, hi in s["units"]) for s in ss)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
     `DELTA` over each window's credited work C, each credited call's m_s·n·K at its m_s served rows (the window's
@@ -1252,7 +1254,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     assert eps == Wd.eps_at(n, Cr.DELTA, total, total, 1) and _worst_miss(drawn, eps, total) <= Cr.DELTA
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_period_open_with_no_k_refuses(seed):
     """K is the proof system's selection, committed in the period-open before any sample: a period whose open commits
     none, or a malformed one, earns nothing."""
@@ -1261,7 +1263,7 @@ def test_a_period_open_with_no_k_refuses(seed):
         assert got is None and refused[0] == "budget" and NO_K in refused[1] and "before any draw" in refused[1]
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_drawn_count_other_than_k_refuses(seed):
     """A window is sampled at its period's committed K: one with fewer units than K (its sample would be sized at N, not
     K) is refused, and so is one whose proofs are of a sample at another K."""
@@ -1377,7 +1379,7 @@ def _b_row(codes: list[int], sw: float) -> list[int]:
     return cases.b_row_words(bytes(c & 0xFF for c in codes), sw)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("seed", WINDOW_SEEDS)
 def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
     """Two windows of one period whose b/<K> differ, one row's s_w changed or every code zero, each registered as the
     served path registers it and each window's open root over its own weights' root, so `_weights` alone accepts

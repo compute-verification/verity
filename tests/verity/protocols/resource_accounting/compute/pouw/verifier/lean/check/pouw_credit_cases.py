@@ -606,12 +606,13 @@ def credit_args(d: dict) -> tuple:
 LINEARS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
-def layout(rng: random.Random, big: bool = False, nks: int | None = None) -> dict:
+def layout(rng: random.Random, big: bool = False, nks: int | None = None, pinned: bool = True) -> dict:
     """A served execution phase's layout, `h1window.program`'s arguments: one to four linears at one or two K (`nks` when given),
     each n whole blocks of the tile's C, called once a step over one to three steps (A block s at step s) in a shuffled
-    order; ``big``, a population past `credit.RECORD_K`."""
-    r, c = rng.choice([(1, 1), (2, 4), (4, 8), (8, 8), (16, 16)])
-    ks = rng.sample([32, 64, 4096, 6144, 14336], rng.randint(1, 2) if nks is None else nks)
+    order; ``big``, a population past `credit.RECORD_K`. `pinned`: the registry's 4 × 8 tile at K that `credit.TILE_PINS`
+    pins (`PINNED_KS`), so `window_desc` encodes its real window; else any tile and K, for what reads no descriptor."""
+    r, c = (4, 8) if pinned else rng.choice([(1, 1), (2, 4), (4, 8), (8, 8), (16, 16)])
+    ks = rng.sample(PINNED_KS if pinned else [32, 64, 4096, 6144, 14336], rng.randint(1, 2) if nks is None else nks)
     names = rng.sample(LINEARS, rng.randint(len(ks), 4))
     linears = [[name, ks[i] if i < len(ks) else rng.choice(ks), c * (rng.randint(1, 4) if not big else 64)]
                for i, name in enumerate(names)]
@@ -621,17 +622,19 @@ def layout(rng: random.Random, big: bool = False, nks: int | None = None) -> dic
     return {"calls": calls, "linears": linears, "m": m, "tile": [r, c]}
 
 
+#: the K at which `credit.TILE_PINS` pins the registry's template over the v1 tile (and J10-R's v5)
+PINNED_KS = [64, 4096]
 #: a MoE layer's routed experts, as H1 names each projection (vllm's `pouw_h1_hooks.expert_names`:
 #: ``prefix.expert.projection``), and their downs' K, the intermediate width, which no other linear of `expert_layout` has
-EXPERTS_PREFIX, EXPERT_K = "model.layers.1.mlp.experts", 32
+EXPERTS_PREFIX, EXPERT_K, EXPERT_H = "model.layers.1.mlp.experts", 4096, 64
 
 
 def expert_layout(rng: random.Random) -> dict:
     """A served MoE execution phase's layout, as vllm's H1 lays one out: a dense linear at K = H, then a MoE layer's two to four
     routed experts, each its gate_up at H then its down at `EXPERT_K`, every one called once a step in that static
     order (an idle expert's call is its empty slots) over one to three steps."""
-    r, c = rng.choice([(1, 1), (2, 4), (4, 8)])
-    h = rng.choice([64, 4096])
+    r, c = 4, 8
+    h = EXPERT_H
     linears = [["model.layers.0.self_attn.qkv_proj", h, c * rng.randint(1, 4)]]
     for e in range(rng.randint(2, 4)):
         linears += [[f"{EXPERTS_PREFIX}.{e}.gate_up", h, c * rng.randint(1, 4)],
@@ -834,8 +837,42 @@ def _unit(defs: dict, key: str) -> None:
             _unit(defs, v["fn"])
 
 
+def _registry_tile(lay: dict, receipt: object, j10r: bool, tile: int | None, unit_fns: dict | None) -> str | None:
+    """The registry's H1 tile (`REGISTRY_TILES`) whose window `window_desc` encodes for `lay`, or None when its window is
+    a stand-in's: a receipt or unit of the case's own, another tile than 4 × 8, or a K `credit.TILE_PINS` pins no
+    template of that tile at."""
+    name = {None: "v5" if j10r else "v1", 1: "v1", 3: "v3", 5: "v5"}.get(tile)
+    if receipt is not None or unit_fns or name is None or lay["tile"] != [4, 8]:
+        return None
+    ks = {k for _n, k, _ in lay["linears"]}
+    return name if all(any(f"PouwH1Tile_{name}{{" in p and p.endswith(f",K={k}}}") for p in Cr.TILE_PINS)
+                       for k in ks) else None
+
+
+@functools.lru_cache(maxsize=2)
+def _real(lay: str, prefix: str, tile: str) -> bytes:
+    """The bytes (`desc_bytes`, without annotations) of `h1window.program`'s window of the layout `lay` (canonical JSON)
+    over the registry's 4 × 8 tile unit at each K over the H1 tile `tile`, its parameters named `prefix`, as
+    `codec.encode_program` writes it: what the served path commits. About 60 MB a K."""
+    from verity.circuits import codec
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+    x = json.loads(lay)
+    definition = {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}[tile]
+    units = {k: HW.tile_unit(k, (4, 8), definition) for k in sorted({k for _n, k, _ in x["linears"]})}
+    p = HW.program(tuple(map(tuple, x["linears"])), tuple(map(tuple, x["calls"])), x["m"], (4, 8), prefix,
+                   unit=lambda k: units[k])
+    return desc_bytes({k: v for k, v in codec.encode_program(p).items() if k != "annotations"})
+
+
+def real_bytes(lay: dict, prefix: str = "", j10r: bool = False, tile: int | None = None) -> bytes | None:
+    """`_real`'s window of `lay` when the registry pins its templates (`_registry_tile`), else None."""
+    name = _registry_tile(lay, None, j10r, tile, None)
+    return None if name is None else _real(_canon(lay), prefix, name)
+
+
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-                tile: int | None = None, unit_fns: dict[int, str] | None = None) -> dict:
+                tile: int | None = None, unit_fns: dict[int, str] | None = None, stand_in: bool = False) -> dict:
     """A served execution phase's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
@@ -844,7 +881,10 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
     (v2 over a J10-R one), as `h1window.program` wraps it. The root's input batches are each K's A and B rows' bits,
     then three of words. `unit_fns`: a K's unit id in place of `_unit_fn`'s (a lanes-form K's zy unit,
-    ``PouwH1TileZy_v1{TILE=…}``, whose TILE `credit.leaf_unit_id` reads)."""
+    ``PouwH1TileZy_v1{TILE=…}``, whose TILE `credit.leaf_unit_id` reads). A layout whose templates the registry pins
+    (`_registry_tile`) is its real window instead (`_real`), unless `stand_in`."""
+    if not stand_in and _registry_tile(lay, receipt, j10r, tile, unit_fns) is not None:
+        return json.loads(real_bytes(lay, prefix, j10r, tile))
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
     units = {k: {"fn": (unit_fns or {}).get(k) or _unit_fn(k, r, c, j10r, tile)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
@@ -932,16 +972,18 @@ def other_body(desc: dict) -> dict:
 
 
 def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-               tile: int | None = None, unit_fns: dict[int, str] | None = None) -> str:
+               tile: int | None = None, unit_fns: dict[int, str] | None = None, stand_in: bool = False) -> str:
     """`window_desc`'s bytes in hex, as an execution phase's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile, unit_fns)).hex()
+    if not stand_in and _registry_tile(lay, receipt, j10r, tile, unit_fns) is not None:
+        return real_bytes(lay, prefix, j10r, tile).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile, unit_fns, stand_in)).hex()
 
 
 def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
     """A J10-R execution phase's descriptor (`descriptor`'s, ``j10r``) whose template at some K is in no one form: its ``call``
     or ``blocks`` dropped, the two swapped, or (an execution phase of two K) that K's template today's while the other's is
     J10-R's; in hex."""
-    desc = window_desc(rng, lay, prefix, j10r=True)
+    desc = window_desc(rng, lay, prefix, j10r=True, stand_in=True)
     tiles = json.loads(dict(Cr._record(desc["program_fn"]))["TILES"])
     _k, tid = rng.choice(tiles)
     params = desc["definitions"][tid["fn"]]["body"]["params"]
@@ -978,8 +1020,87 @@ def _alt_layout(rng: random.Random, lay: dict) -> dict:
         out = json.loads(json.dumps(lay))
 
 
+def _other_template(desc: dict, tid: str) -> dict:
+    """`desc` with the template `tid` over another body (`other_body`'s change, in `tid`'s closure)."""
+    callees, defs = desc["callees"], desc["definitions"]
+    xor, and2 = callees.index("Xor2_v1"), callees.index("And2_v1")
+    todo, seen = [tid], set()
+    while todo:
+        f = todo.pop()
+        if f not in seen:
+            seen.add(f)
+            if defs[f]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[f]["body"]["nodes"]]
+    f = min(f for f in seen if defs[f]["form"] == "composite" and any(x["fn"] == xor for x in defs[f]["body"]["nodes"]))
+    next(x for x in defs[f]["body"]["nodes"] if x["fn"] == xor)["fn"] = and2
+    return desc
+
+
+def _break_real(rng: random.Random, lay: dict, name: str, j10r: bool, tile: int | None) -> str:
+    """`_break_desc` on a layout whose real window the registry pins (`real_bytes`): each break one that leaves the
+    descriptor decoding where `name`'s refusal is past the decoder, the registry's encoder writing any other window."""
+    raw = real_bytes(lay, j10r=j10r, tile=tile)
+    desc = json.loads(raw)
+    fn = desc["program_fn"]
+    tiles = json.loads(dict(Cr._record(fn))["TILES"])
+    tid = rng.choice(tiles)[1]["fn"]
+    match name:
+        case "descriptor-form":
+            return rng.choice([raw + b" ", raw.replace(b",", b", ", 1), b"\xff" + raw, b"[]",
+                               desc_bytes({**desc, "schema": "verity-ir/descriptor/v1"}),
+                               desc_bytes({k: v for k, v in desc.items() if k != "callees"}),
+                               desc_bytes({**desc, "callees": [*desc["callees"], 5]}),
+                               desc_bytes({**desc, "program_fn": None}), b'{"a":NaN}']).hex()
+        case "not-window":
+            pairs = Cr._record(fn)
+            desc["program_fn"] = rng.choice([
+                "PouwH1Window_v2" + fn[len(Cr.WINDOW_FN):],
+                Cr.WINDOW_FN + "{" + ",".join(f"{k}={v}" for k, v in pairs[:-1]) + "}",
+                Cr.WINDOW_FN + "{" + ",".join(f"{k}={v}" for k, v in [pairs[1], pairs[0], *pairs[2:]]) + "}",
+                fn.replace(f"M={lay['m']}", f"M= {lay['m']}"), fn.replace(f"M={lay['m']}", f"M=0{lay['m']}"),
+                fn.replace('PREFIX=""', "PREFIX=5"), record([[t[0], t[1]["fn"]] for t in tiles], lay),
+                record([[0, tiles[0][1]]] + tiles[1:], lay)])
+        case "template":
+            desc = _other_template(desc, tid)
+        case "tile-ks":
+            other = [k for k in PINNED_KS if k not in {k for k, _t in tiles}]
+            if not other:
+                return _break_real(rng, lay, "template", j10r, tile)
+            wide = {**lay, "linears": [*lay["linears"], ["tile_ks", other[0], 8]],
+                    "calls": [*lay["calls"], ["tile_ks", 0]]}
+            desc = json.loads(real_bytes(wide, j10r=j10r, tile=tile))
+            desc["program_fn"] = record(json.loads(dict(Cr._record(desc["program_fn"]))["TILES"]), lay)
+        case "body":
+            desc = json.loads(real_bytes({**lay, "m": 2 * lay["m"]}, j10r=j10r, tile=tile))
+            desc["program_fn"] = fn
+        case "layout-form":
+            lin = lay["linears"]
+            desc["program_fn"] = record(tiles, rng.choice([
+                {**lay, "m": -1}, {**lay, "m": True}, {**lay, "m": None}, {**lay, "calls": []}, {**lay, "linears": []},
+                {**lay, "linears": lin + [["x", 32]]}, {**lay, "calls": lay["calls"] + [[lin[0][0], -1]]},
+                {**lay, "calls": [[5, 0]]}]))
+        case "record-layout":
+            desc["program_fn"] = record(tiles, {**lay, "calls": lay["calls"] + [["lm_head", 0]]})
+        case "alt-layout":
+            desc["program_fn"] = record(tiles, _alt_layout(rng, lay))
+        case "reinterpret":
+            root = desc["definitions"][desc["root"]]["body"]["nodes"]
+            words = [i for i, x in enumerate(root) if Cr._INPUT.fullmatch(desc["callees"][x["fn"]])
+                     and desc["callees"][x["fn"]].endswith("Input16_v1")]
+            x = rng.choice([x for x in root if desc["callees"][x["fn"]] == tid])
+            arg = x["args"][rng.randrange(2)]
+            leaves = sum(n for _w, n in _widths(desc["types"][arg["type"]]))
+            arg["refs"] = {"strided": ["n", rng.choice(words), 0, 1, 0, 0, leaves]}
+        case _:
+            raise ValueError(name)
+    return desc_bytes(desc).hex()
+
+
 def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, tile: int | None = None) -> str:
-    """A descriptor of `lay`'s execution phase broken as `name` says, in hex."""
+    """A descriptor of `lay`'s execution phase broken as `name` says, in hex: on its real window when the registry pins
+    its templates (`_break_real`), but at a K no proof covers (``tile-k``), which no registry template is at."""
+    if name != "tile-k" and real_bytes(lay, j10r=j10r, tile=tile) is not None:
+        return _break_real(rng, lay, name, j10r, tile)
     desc = window_desc(rng, lay, j10r=j10r, tile=tile)
     defs, fn = desc["definitions"], desc["program_fn"]
     root = defs[desc["root"]]["body"]["nodes"]
@@ -1146,7 +1267,7 @@ def _off_k(lay: dict, rng: random.Random) -> dict:
 
 def drawn_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `drawn` case: a sampling coin's arguments and an execution phase's layout, then mutation `name`."""
-    d = {**_draw_args(rng), "layout": layout(rng, big=name == "budget")}
+    d = {**_draw_args(rng), "layout": layout(rng, big=name == "budget", pinned=False)}
     d["k"] = PLAN_K if name == "budget" else _k(rng, d["layout"])
     match name:
         case "honest" | "budget":
@@ -1308,7 +1429,7 @@ def _mutate_proofs(proofs: list[dict], rng: random.Random, name: str, units: lis
 def _partial(rng: random.Random) -> tuple[dict, list[int]]:
     """A sample whose coin leaves some of the execution phase's units unsampled, and its units."""
     while True:
-        d = {**_draw_args(rng), "layout": layout(rng)}
+        d = {**_draw_args(rng), "layout": layout(rng, pinned=False)}
         d["k"] = _k(rng, d["layout"])
         units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
         if len(units) < sum(hi - lo for s in Cr.strata(d["layout"])[0] for lo, hi in s["units"]):
@@ -1322,7 +1443,7 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
         other = {**d, "coin": _hex(rng)}
         chosen, _ = Cr.drawn_twin(*(other[k] for k in DRAWN_KEYS))
         return {**d, "proofs": _proofs(rng, chosen if chosen != units else units[1:] + [max(units) + 1])}
-    d = {**_draw_args(rng), "layout": layout(rng)}
+    d = {**_draw_args(rng), "layout": layout(rng, pinned=False)}
     d["k"] = _k(rng, d["layout"])
     units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
     proofs = _proofs(rng, units)
@@ -1735,6 +1856,8 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     elif name == "j10r":
         lay = layout(rng)
         lay["m"] = 2 * lay["tile"][0]
+    elif name == "tile-ks":
+        lay = layout(rng, nks=1)
     d, s = honest_window(rng, credit, lay=lay, j10r=name == "j10r")
     signed: dict | None = {}
     committed: object = "same"
@@ -2133,8 +2256,9 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
     ``ok-registered`` registers the execution phase's ok rows ``<prefix>ok``, which are the verifier's own. Its templates are
     J10-R's at random (always under ``j10r``), whose public rows the verifier derives each unit's call and blocks for,
-    and ``j10r-form`` gives a J10-R execution phase a template in no one form (`j10r_misformed`)."""
-    lay = layout(rng)
+    and ``j10r-form`` gives a J10-R execution phase a template in no one form (`j10r_misformed`). Its descriptors are
+    stand-ins': `credit.registered_file` reads no template's closure."""
+    lay = layout(rng, pinned=False)
     j10r = name == "j10r" or (name == "honest" and rng.random() < 0.5)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
@@ -2179,7 +2303,7 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
                                   ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)]])
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r), "call": call, "roots": roots, "window": _hex(rng),
+    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r, stand_in=True), "call": call, "roots": roots, "window": _hex(rng),
             "steps": steps, "salt": _hex(rng)}
 
 
@@ -2388,7 +2512,7 @@ def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
     """One `weights` case: an execution phase's registered weights under its open root, then mutation `name`."""
-    lay = layout(rng)
+    lay = layout(rng, pinned=False)
     program, prefix = _hex(rng), rng.choice(["", "h1/w-3/"])
     rows: dict[int, int] = {}
     for _name, k, n in lay["linears"]:
