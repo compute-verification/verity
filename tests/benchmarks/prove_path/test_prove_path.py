@@ -38,6 +38,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import random
 import re
 import shutil
@@ -2204,9 +2205,11 @@ def fused(tmp_path_factory) -> dict:
     window's sealed row dir (``served``), which names no Programs."""
     pytest.importorskip("torch")
     root = tmp_path_factory.mktemp("fused")
-    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", str(root)], cwd=VLLM, capture_output=True, text=True)
+    config = json.dumps({"private": str(tmp_path_factory.mktemp("private"))})
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", str(root)], cwd=VLLM, capture_output=True, text=True,
+                       env={**os.environ, "VERITY_PROTOCOLS_CONFIG": config})
     assert p.returncode == 0, p.stderr[-3000:]
-    return json.loads(p.stdout.strip().splitlines()[-1])
+    return {**json.loads(p.stdout.strip().splitlines()[-1]), "protocols_config": config}
 
 
 @dataclass(frozen=True)
@@ -2276,10 +2279,11 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
 
 @pytest.mark.slow
 @OPT_IN
-def test_a_served_windows_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(fused, tmp_path):
+def test_a_served_windows_forged_unit_passes_every_check_before_the_sample_and_differs_in_one_bit(fused, tmp_path, monkeypatch):
     """The served window committed by `commit1` with member 0's unit 0 forged (`forging`) holds, as the honest window does,
     to the verifier's own window (`window1`, `source1`) and its own public bodies: its rows, commit strings and roots agree
     with the flipped word, so only the proof can refuse it. Its rows differ from the honest window's in exactly one bit."""
+    monkeypatch.setenv("VERITY_PROTOCOLS_CONFIG", fused["protocols_config"])
     a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     bound = AW.binding(compiler, "ad" * 64, 8)
     window, held = PP.window1(a, compiler, [], bound)
