@@ -9,7 +9,8 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
 
 Verity imports no tensor runtime: what the front end asks of one (the table's upload, the plan's buffers and the launches'
-stream) is `H1R`'s `upload`, `empty` and `stream`, which raise here and which the caller's subclass supplies.
+stream) is `H1R`'s `upload`, `empty` and `stream`, which raise here: `H1R` is defined here, and no runtime in the tree
+subclasses it.
 """
 from __future__ import annotations
 
