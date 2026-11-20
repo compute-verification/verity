@@ -1,19 +1,28 @@
-"""What a record says about a lifted Program (`registry.lifted`): the post-EOS lag a run header ATTESTS and the lag a
-Build DECLARED (read through GP-01's one rule, `program.workload.eos_lag_rows_declared`)."""
+"""What a record says about the post-EOS lag: the lag a run header ATTESTS and the lag a Build DECLARED (read through GP-01's one
+rule, `program.workload.eos_lag_rows_declared`)."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from verity_vllm.definitions.registry.lifted import check_lag
 from verity_vllm.program.workload import eos_lag_rows_declared
 
+LAGS_IMPLEMENTED = (0, 1)  # the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
 LAG_FIELD = "RunHeader.profile.engine_kwargs.async_scheduling"  # the ONE attested field GP-01's eos_lag_rows and this LAG both read
 LAG_DECLARED_FIELDS = ("lag.value", "stop_rule.lag", "stop_rule.eos_lag_rows")  # workload_program.json: the current names, then GP-01's older field
 LAG_STATIC_FIELD = "workload_fn"  # the digest-bound source: the `lag=<n>` static of `Workload_v1{requests, shared, lag}` in the Program's own spec id
 _LAG_STATIC_RE = re.compile(r"^Workload_v1\{.*,lag=(\d+)\}$", re.S)  # the LAST binding of the record, at the top level (the static
 # lives in the spec-id string, not in a bindings dict of the Root wrapper)
+
+
+def check_lag(lag: int) -> int:
+    """The declared lag: the serving profile's post-EOS lag is a declared static -- `LAG = 0` (the step after the EOS is never
+    executed) or `LAG = 1` (vLLM async scheduling: the EOS-stopped request is fed forward once more on its EOS token, its sample
+    discarded).  Neither is a default; anything else is refused by name."""
+    if lag not in LAGS_IMPLEMENTED:
+        raise ValueError(f"LAG={lag!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED}; nothing is assumed")
+    return int(lag)
 
 
 def lag_from_header(header: dict) -> tuple[int, str]:

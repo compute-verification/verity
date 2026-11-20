@@ -155,10 +155,7 @@ def _vllm(path: str) -> str:
 REQUEST_CAPS = tuple(_vllm(p) for p in (
     "verity_vllm/program/lifting/continuation.py", "verity_vllm/program/workload.py",
     "verity_vllm/commit/executed_prefix.py", "verity_vllm/commit/served_record.py",
-    "tests/program/test_continuation.py", "tests/program/test_lifted_request.py",
-    "tests/program/test_lifted_request_padrev.py", "tests/program/test_lifted_dense_b1.py",
-    "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_tiny.py",
-    "tests/program/test_lifted_tiny_padrev.py"))
+    "tests/program/test_continuation.py"))
 #: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
 SOFTCAP_CAPS = tuple(_vllm(p) for p in (
