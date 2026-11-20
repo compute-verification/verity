@@ -450,8 +450,8 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
 def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
                  records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
                  split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
-    """`audit` with a recorded run's unverified sample, for replays whose samples are Fiat–Shamir on the commitment
-    (`pearl_c4_replay`): the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
+    """`audit` with a recorded run's unverified sample, for replays whose samples are Fiat–Shamir on the commitment:
+    the recorded round must only exceed `committed_round`.  It supports no claim about the sample."""
     def key_of(digest: bytes) -> tuple[Key | None, str | None]:
         if recorded.round <= committed_round:
             return None, "the draws' recorded round is not after the commitment"
