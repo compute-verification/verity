@@ -5603,7 +5603,7 @@ theorem throughPS_eq (pa : Piece) (len reps : Nat) (shift : Int) (rowed : Bool) 
 
 /-- What `throughPS` gives: the argument's one piece of one row, read at the piece's positions. -/
 theorem throughPS_some {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some bp) :
-    ∃ s pa, ap.segs = #[s] ∧ s.ps = #[pa] ∧ s.reps ≤ 1 ∧ s.lanes = false ∧ pa.rows ≤ 1 ∧ pa.lv = [] ∧
+    ∃ s pa, ap.segs = #[s] ∧ s.ps = #[pa] ∧ s.reps ≤ 1 ∧ s.lanes = false ∧ pa.rows ≤ 1 ∧ pa.lv = [] ∧ q.lv = [] ∧
       bp = { tgt := pa.tgt, base := pa.base + q.base * pa.stride, stride := q.stride * pa.stride, len := q.len,
              rows := q.rows, rowStride := q.rowStride * pa.stride } := by
   obtain ⟨segs, st, n⟩ := ap
@@ -5626,7 +5626,7 @@ theorem throughPS_some {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some 
   simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, not_lt, Bool.not_eq_true, Bool.not_eq_eq_eq_not,
     Bool.not_true, Bool.not_eq_false, List.isEmpty_iff] at hc
   exact ⟨_, pa, rfl, rfl, hc.1.1.1.1, lanes_of_reps (s := ⟨#[pa], len, reps, shift, rowed⟩) hc.1.1.1.1, hc.1.1.1.2,
-    hc.1.1.2, hb⟩
+    hc.1.1.2, hc.2, hb⟩
 
 /-- Agreement at one position of lists indexed alike. -/
 theorem agree_range_get {P : Prog} {sc : Flock.Program.Scope} {n : Nat} {F : Nat → Tgt × Int}
@@ -5689,7 +5689,7 @@ theorem batchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
   obtain ⟨hokA, hposA⟩ := hA k i hk (by rw [hnode]; exact hia)
   rw [hnode, hai'] at hposA
   rw [hnode] at hm1
-  obtain ⟨s, pa, hsegs, hps, hsr, hsw, hpr, hplv, hbpe⟩ := throughPS_some hbp
+  obtain ⟨s, pa, hsegs, hps, hsr, hsw, hpr, hplv, -, hbpe⟩ := throughPS_some hbp
   have hpa : pos pa = (List.range a.seq.count).map fun t => refPos (a.seq.get t) := by
     rw [← hposA, psPos_flat _ hokA (by rw [hsegs]; simpa using hsr)]
     simp [hsegs, hps, posAll]

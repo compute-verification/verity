@@ -1222,7 +1222,7 @@ theorem mem_idxOf_row {b : Nat} {len rows L : Nat} (t : Nat) :
     t ∈ idxOf { tgt := .gate 0, base := (b : Int), stride := 1, len := len, rows := rows, rowStride := (L : Int) } ↔
       ∃ r < rows, ∃ u < len, t = b + r * L + u := by
   unfold idxOf pos
-  simp only [List.mem_map, List.mem_flatMap, List.mem_range]
+  simp only [List.mem_map, List.mem_flatMap, List.mem_range, Desc.Piece.rowOff, List.isEmpty_nil, ↓reduceIte]
   constructor
   · rintro ⟨x, ⟨r, hr, u, hu, rfl⟩, rfl⟩
     exact ⟨r, hr, u, hu, by simp only [Int.mul_one]; omega⟩
@@ -1239,7 +1239,7 @@ theorem rowsAt_nonneg (node : Flock.Program.Node) (i lo hi : Nat) :
     unfold pos at hx
     simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
     obtain ⟨r, -, u, -, rfl⟩ := hx
-    dsimp only
+    simp only [Desc.Piece.rowOff, List.isEmpty_nil, ↓reduceIte]
     positivity
   · split at hq
     · simp at hq
@@ -1252,7 +1252,7 @@ theorem rowsAt_nonneg (node : Flock.Program.Node) (i lo hi : Nat) :
         unfold pos at hx
         simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
         obtain ⟨r, -, u, -, rfl⟩ := hx
-        dsimp only
+        simp only [Desc.Piece.rowOff, List.isEmpty_nil, ↓reduceIte]
         positivity
       · cases hq
   · simp at hq
@@ -1373,7 +1373,7 @@ theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec
   set a := (c.body.nodes[k]!).args[i]! with hadef
   obtain ⟨hokA, hposA⟩ := hA
   rw [← hadef] at hposA
-  obtain ⟨s, pa, hsegs, hps, hsr, hsw, hpr, hplv, hbpe⟩ := throughPS_some h
+  obtain ⟨s, pa, hsegs, hps, hsr, hsw, hpr, hplv, hqlv, hbpe⟩ := throughPS_some h
   have hpa : pos pa = (List.range a.seq.count).map fun t => refPos (a.seq.get t) := by
     rw [← hposA, psPos_flat _ hokA (by rw [hsegs]; simpa using hsr)]
     simp [hsegs, hps, posAll]
@@ -1389,7 +1389,7 @@ theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec
     have hJl : J < pa.len := by rw [hr1, Nat.one_mul] at hcnt; omega
     rw [← hpt J (by unfold Desc.Piece.count; omega)]
     simp only [ppt, Prod.mk.injEq, true_and, Nat.div_eq_of_lt hJl, Nat.mod_eq_of_lt hJl]
-    simp
+    simp [rowOff_flat pa hplv]
   have hpb : pos bp = (pos q).map fun y => (pa.tgt, pa.base + y.2 * pa.stride) := by
     rw [hbpe]
     unfold pos
@@ -1399,7 +1399,7 @@ theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec
     rw [List.map_map]
     apply List.map_congr_left
     intro t _
-    simp only [Function.comp, Prod.mk.injEq, true_and]
+    simp only [Function.comp, Prod.mk.injEq, true_and, Desc.Piece.rowOff, hqlv, List.isEmpty_nil, ↓reduceIte]
     ring
   have hJ : ∀ y ∈ pos q, (pa.tgt, pa.base + y.2 * pa.stride) = refPos (a.seq.get y.2.toNat) ∧
       y.2.toNat < a.seq.count := by
@@ -2108,7 +2108,7 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
               obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
               simp only [pure, Except.pure, Except.ok.injEq] at hy
               set L := ((node.args[i]!).dims.map (·.2)).getD 0 with hL
-              obtain ⟨pp, hpp⟩ : ∃ pp : Piece, pp = ⟨.gate 0, (b : Int), 1, 1, T - e, (L : Int)⟩ := ⟨_, rfl⟩
+              obtain ⟨pp, hpp⟩ : ∃ pp : Piece, pp = ⟨.gate 0, (b : Int), 1, 1, T - e, (L : Int), [], 0⟩ := ⟨_, rfl⟩
               rw [← hpp] at hbp
               have hq0 : ∀ x ∈ pos pp, 0 ≤ x.2 := by
                 intro x hx
@@ -2116,7 +2116,7 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
                 unfold pos at hx
                 simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
                 obtain ⟨r, -, u', -, rfl⟩ := hx
-                dsimp only
+                simp only [Desc.Piece.rowOff, List.isEmpty_nil, ↓reduceIte]
                 positivity
               have hcov : ∀ t, t ∈ idxOf pp ↔ ∃ it j', (it < T - e ∧ j' = 0) ∧ t = upIdx node i it b := by
                 intro t
@@ -2635,19 +2635,21 @@ theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
   have hgo : g ∈ (out.flatMap Seg.split).toList := by
     rw [Array.toList_flatMap]
     exact List.mem_flatMap.2 ⟨g0, hg0, hg⟩
-  obtain ⟨q, hq, rfl⟩ : ∃ q ∈ g0.ps.toList, g = Seg.one q := by
+  obtain ⟨q, rfl⟩ : ∃ q, g = Seg.one q := by
     revert hg hxg
     unfold Desc.Seg.split
     dsimp only
     split
-    · rename_i h1
-      intro hg _
+    · intro hg _
       simp only [Array.toList_map, List.mem_map] at hg
-      obtain ⟨q, hq, rfl⟩ := hg
-      refine ⟨q, ?_, rfl⟩
-      unfold Desc.Seg.alike at hq
-      split at hq <;> exact hq
-    · rename_i h1
+      obtain ⟨q, -, rfl⟩ := hg
+      exact ⟨_, rfl⟩
+    split
+    · intro hg _
+      simp only [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, -, rfl⟩ := hg
+      exact ⟨_, rfl⟩
+    · rename_i hl h1
       intro hg hxg
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
       subst hg
@@ -2662,7 +2664,7 @@ theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
           rw [if_pos h2]
           rfl
         · rfl
-      rw [hal] at h1 hxg
+      rw [hal] at h1 hxg hl
       have hr1 : g0.reps > 1 := by
         have := hrep.1
         simp only [beq_iff_eq] at h1
@@ -2673,7 +2675,7 @@ theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
         rw [hw] at ht
         cases ht
       · unfold Desc.Seg.alike at hal
-        rw [if_pos (by simp [hr1, hsh])] at hal
+        rw [if_pos (by simp [hr1, hsh, hl])] at hal
         have := congrArg Seg.reps hal
         simp only at this
         omega
@@ -2686,7 +2688,7 @@ theorem paramPos_used (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
   have hnn' : ∀ e ∈ Width.elems q, 0 ≤ e := by
     intro e he
     obtain ⟨r', hr', t', ht', rfl⟩ := Width.mem_elems.1 he
-    have hmem : (q.tgt, q.base + (r' : Int) * q.rowStride + (t' : Int) * q.stride) ∈ segPos (Seg.one q) := by
+    have hmem : (q.tgt, q.base + q.rowOff r' + (t' : Int) * q.stride) ∈ segPos (Seg.one q) := by
       rw [segPos_one]
       unfold pos
       simp only [List.mem_flatMap, List.mem_range, List.mem_map]
@@ -2817,18 +2819,20 @@ theorem nodeReads_out (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn :
         rw [if_neg hpr, if_neg hm]
 
 /-- A read of one copy that `Seg.split` makes is one piece of the segment. -/
-theorem split_one {s g : Seg} (hr : s.reps ≠ 0) (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤ 1) :
-    ∃ q ∈ s.ps.toList, g = Seg.one q := by
+theorem split_one {s g : Seg} (hg : g ∈ (Seg.split s).toList) (h1 : g.reps ≤ 1) : ∃ q, g = Seg.one q := by
   revert hg
   unfold Desc.Seg.split
   dsimp only
   split
   · intro hg
     simp only [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, hq, rfl⟩ := hg
-    refine ⟨q, ?_, rfl⟩
-    unfold Desc.Seg.alike at hq
-    split at hq <;> exact hq
+    obtain ⟨q, -, rfl⟩ := hg
+    exact ⟨_, rfl⟩
+  split
+  · intro hg
+    simp only [Array.toList_map, List.mem_map] at hg
+    obtain ⟨q, -, rfl⟩ := hg
+    exact ⟨_, rfl⟩
   · rename_i hne
     intro hg
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
@@ -2866,18 +2870,12 @@ theorem used_nodePos (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc.
   have hgo := hsub g hg
   rw [Array.toList_flatMap, List.mem_flatMap] at hgo
   obtain ⟨s0, hs0, hgs⟩ := hgo
-  obtain ⟨hnn, hr0, hcnt⟩ := hout k hk _ hn s0 (hfrom s0 (Array.mem_toList_iff.1 hs0))
-  obtain ⟨q0, hq0, rfl⟩ := split_one hr0 hgs hg1
+  obtain ⟨hnn, -, -⟩ := hout k hk _ hn s0 (hfrom s0 (Array.mem_toList_iff.1 hs0))
+  obtain ⟨q0, rfl⟩ := split_one hgs hg1
   have e : q = q0 := by simpa [Seg.one] using hq
   subst e
   have hsub' : ∀ y ∈ pos q, y ∈ segPos s0 := fun y hy =>
     (mem_segPos_split s0 y).1 ⟨_, hgs, by rw [segPos_one]; exact hy⟩
-  have hrow : 1 ≤ q.rows := by
-    have := hcnt q hq0
-    unfold Desc.Piece.count at this
-    rcases Nat.eq_zero_or_pos q.rows with h0 | h0
-    · rw [h0, Nat.zero_mul] at this; omega
-    · exact h0
   have hnn' : ∀ e ∈ Width.elems q, 0 ≤ e := by
     intro e he
     obtain ⟨r', hr', t', ht', rfl⟩ := Width.mem_elems.1 he
@@ -3419,7 +3417,7 @@ theorem bodySegs (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.
       cases hp
   have hk := node_lt hn
   rcases hs with ⟨i, lo, hi, q, hq, segs, hd', hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd', hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
-  · refine ⟨?_, hRp.1 q segs hd' s (Array.mem_toList_iff.2 hs)⟩
+  · refine ⟨?_, okIs_segDown _ q hRp.1 segs hd' s (Array.mem_toList_iff.2 hs)⟩
     by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
     · exact argSeg_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
         s (Array.mem_toList_iff.2 hs)
