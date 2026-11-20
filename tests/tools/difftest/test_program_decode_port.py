@@ -97,12 +97,12 @@ def test_lean_takes_what_the_registry_refuses(server, name):
     assert json.loads(server.call("decode", {"descriptor": text})[1])["ok"] is True
 
 
-def codec_encoding(text: str, registry) -> bytes | None:
-    """`codec.descriptor_chunks` of the Program `codec.decode_program` reads from ``text``, or None where it refuses."""
+def codec_encoding(text: str, registry) -> bytes | Exception:
+    """`codec.descriptor_chunks` of the Program `codec.decode_program` reads from ``text``, or its refusal."""
     try:
         program = codec.decode_program(json.loads(text), registry)
-    except Exception:  # noqa: BLE001
-        return None
+    except Exception as e:  # noqa: BLE001
+        return e
     return b"".join(codec.descriptor_chunks(program))
 
 
@@ -116,10 +116,13 @@ def test_encode_writes_the_codecs_bytes(server, name):
     decoded = json.loads(server.call("decode", {"descriptor": text})[1])
     assert lean["ok"] == decoded["ok"], lean.get("message")
     if not lean["ok"]:
+        assert lean["message"] == TEXTS.get(name), REWRITE
         return
     encoded = lean["encoded"].encode()
     python = codec_encoding(text, REGISTRY[text])
-    if python is not None:
+    if name not in LEAN_TAKES:
+        assert isinstance(python, bytes), f"the codec no longer decodes an accepted case, so no bytes were compared: {python!r}"
+    if isinstance(python, bytes):
         assert encoded == python
     again = json.loads(server.call("decode", {"descriptor": lean["encoded"]})[1])
     assert again == {"ok": True, "program_digest": hashlib.sha512(encoded).hexdigest(), "boolean": decoded["boolean"]}
