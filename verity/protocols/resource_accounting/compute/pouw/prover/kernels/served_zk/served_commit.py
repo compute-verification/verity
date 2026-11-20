@@ -756,13 +756,10 @@ LEAN_RUN = "lean-run"
 PUBLIC_HEADER = "public-header"
 
 
-def _header_sha512(pub: bytes) -> str | None:
+def _header_sha512(pub: bytes) -> str:
     """The SHA-512 of a public file's header as the Lean verifier names it (``public_header_sha512``: the canonical JSON
-    of its first line); None when that line is no JSON."""
-    try:
-        return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
-    except ValueError:
-        return None
+    of its first line). A first line that is no JSON raises ``ValueError``."""
+    return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
 
 
 def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
@@ -772,7 +769,8 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
     row's ``session`` record), in the verifier's environment through `lean_child` (`lean_verdict` of what it printed, and
     ``output_sha512`` the SHA-512 of its ``VERDICT`` lines as it printed them, the part of its output a replay
     reproduces byte for byte). ``public_headers`` is each ``VERDICT`` line's ``public_header_sha512``: one that names a
-    header other than the copy's, or an accepting line that names none, is refused by name (`PUBLIC_HEADER`), so the
+    header other than the copy's, or an accepting line that names none, or any verdict on a copy whose header is no
+    JSON, is refused by name (`PUBLIC_HEADER`), so the
     verdict is about the file the opening check reads. The session's digest rests on a host the prover does not
     control: the challenger's, which reads the delivered record itself (`deliver`). Refused by name (`LEAN_RUN`) where
     the run wrote a panic line or ended with a status `verify` does not document: its answer is not read."""
@@ -785,15 +783,18 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
         raise _refused(LEAN_RUN, {"unit": row["unit"], "why": str(e)}) from None
     printed = "".join(f"{x}\n" for x in p.stdout.splitlines() if x.startswith("VERDICT "))
     got = lean_verdict(p.stdout)
+    sha = hashlib.sha512(printed.encode()).hexdigest()
+    if got["accepted"] is None:
+        return {**got, "output_sha512": sha, "public_headers": []}
+    lines = [json.loads(x[8:]) for x in printed.splitlines()]
     try:
-        lines = [json.loads(x[8:]) for x in printed.splitlines()]
-    except ValueError:
-        lines = []
-    want = _header_sha512(pub.read_bytes())
+        want = _header_sha512(pub.read_bytes())
+    except ValueError as e:
+        raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "why": f"the copy's header is no JSON: {e}"}) from None
     named = [x.get("public_header_sha512") if isinstance(x, dict) else None for x in lines]
     if any(h != want and (h is not None or (isinstance(x, dict) and x.get("accepted"))) for x, h in zip(lines, named)):
         raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "copy": want, "named": named})
-    return {**got, "output_sha512": hashlib.sha512(printed.encode()).hexdigest(), "public_headers": named}
+    return {**got, "output_sha512": sha, "public_headers": named}
 
 
 def statement(stage: dict, pub: bytes) -> dict:
