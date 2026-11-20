@@ -130,9 +130,3 @@ def boolean_version() -> tuple[Any, type[Exception]]:
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return boolean_version, NoBooleanVersion
-
-
-def lift_composite(defn: Any) -> Any:
-    from verity_vllm.definitions.registry.lifted import lift_composite
-
-    return lift_composite(defn)

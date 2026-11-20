@@ -69,7 +69,7 @@ SUPPORTED: dict[str, Supported] = {
     "moe_backend": Supported((str, type(None)), None, "vLLM's MoE backend, such as triton (default: vLLM's auto)"),
     "seed": Supported(int, 0, "the engine seed"),
     "protocols": Supported((str, dict, list, tuple), None, "declared schemes attached by name, and protocol options "
-                                                             "installed on the engine: 'pouw:<scheme>' or {name: scheme} "
+                                                             "installed on the engine: 'name:<scheme>' or {name: scheme} "
                                                              "(verity_vllm.protocols); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
@@ -247,12 +247,11 @@ class LLM:
     * ``moe_backend`` (str): vLLM's MoE backend, such as ``"triton"``; default vLLM's ``"auto"``.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
-      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>"`` or ``{"pouw": "<scheme>"}``; default none.
+      (:mod:`verity_vllm.protocols`), ``"name:<scheme>"`` or ``{"name": "<scheme>"}``; default none; a retired protocol is
+      refused by name (`config.RETIRED`).
       A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
-      (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
-      (``protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}}``) gets the engine's
-      model runner and, without a ``challenger``, in-process coins, which credit nothing.
+      (`protocol_options.from_engine`), and one it can't fill there is refused by name.
     * ``protocols_config`` (dict): each enabled protocol's settings, ``{name: {...}}``; never hashed.
 
     ``generate(prompts, sampling_params=None, use_tqdm=True)`` returns vLLM's ``list[RequestOutput]`` unchanged and
@@ -260,7 +259,7 @@ class LLM:
     and ``engine_record`` the engine as built: the ``vllm.LLM`` keyword arguments, the environment flags the profile
     set, and the execution vLLM reports back.  ``protocols`` is the installed
     :class:`~verity_vllm.protocols.Composition` (None without protocols); ``close()`` uninstalls it, and
-    ``reinstall(protocols_config=None)`` installs the same set afresh (H1's next window).  An entry of ``protocols`` that
+    ``reinstall(protocols_config=None)`` installs the same set afresh.  An entry of ``protocols`` that
     is a declared scheme's name (``pearl-plus``, ``pous``) is attached by name on the build instead, with its settings
     under that name, every such entry in its order (`messages.attach_listed`), with `option_settings`, its coins in-process
     unless they name a ``challenger``; ``schemes`` is what each attach returned, and ``close()`` releases them.  The engine is always built
@@ -324,7 +323,7 @@ class LLM:
     def reinstall(self, protocols_config: dict[str, Any] | None = None) -> Any:
         """Close the installed protocol options and install the constructor's ``protocols`` afresh on this engine, with
         ``protocols_config`` in place of the constructor's when given, and return the new composition.  The settings
-        taken from the engine are filled again, with fresh in-process coins of the next epoch: for H1, one window.
+        taken from the engine are filled again, with fresh in-process coins of the next epoch.
         ``ValueError`` without ``protocols``, or naming every refusal of the new settings."""
         opts = {**self._served, **({} if protocols_config is None else {"protocols_config": protocols_config})}
         if not config.parse_protocols(opts["protocols"]):
