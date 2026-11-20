@@ -47,7 +47,7 @@ PY=.venv/bin/python
 rc=0
 for item in $CIRCUITS; do
   IFS=: read -r name blocks units form <<< "$item"; units=${units:-one}; form=${form:-unit}; f=$O/census-$name-$units-$form
-  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form $([ $form = whole ] && echo $PIECE_ARG) --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
+  $PY benchmarks/one_stage/door_walls.py census --circuit $name --blocks $blocks --units $units --form $form $([ $form = whole ] && echo $PIECE_ARG) ${ONLY:+--only "$ONLY"} --one-circuit "${ONE_CIRCUIT:-}" --lower $LOW --json $f.json \
     > $f.log 2>&1
   r=$?; echo "CENSUS $name $blocks $units $form rc $r"; grep -h '^BUILT\|^PLAN\|^CENSUS\|^|' $f.log | cut -c1-600
   [ $r -gt 1 ] && { tail -20 $f.log; rc=1; }

@@ -728,7 +728,8 @@ UNITS = ("one", "floor", "plan")
 
 
 def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, rows: bool = True, units: str = "one",
-           plan: Sequence[tuple[int, int]] | None = None, form: str = "unit", piece: Any = None) -> list[Result]:
+           plan: Sequence[tuple[int, int]] | None = None, form: str = "unit", piece: Any = None,
+           only: str = "") -> list[Result]:
     """Each chosen block through the door's static steps and, with ``rows``, its template's rows (`block_rows`, once
     per template digest and block size). ``units``: ``one``, each chosen unit a block; ``plan``, the block of ``plan``
     (one level of the population) holding each chosen unit, all in that one partition; ``floor``, from each chosen unit
@@ -740,6 +741,10 @@ def census(c: bytes, query: dict, how: str, exe: Callable[[], Path], log=None, r
     from verity.circuits import restrict as R
     chosen = choose(c, query, how)
     tp = PO.TemplatePartition(R.program(c), query)
+    if only:
+        at = {u: t for _k, t, a, n in tp.ranges for u in (a,)}
+        names = sorted(at)
+        chosen = [x for x in chosen if re.search(only, at[names[bisect.bisect_right(names, x[0]) - 1]])]
     seen: dict[tuple, str] = {}
 
     def rows_of(r: Result) -> None:
@@ -1708,6 +1713,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--no-rows", action="store_true")
     a.add_argument("--units", choices=UNITS, default="one")
     a.add_argument("--form", choices=FORMS, default="unit")
+    a.add_argument("--only", default="", help="the chosen blocks whose first unit's template matches this regex")
     a.add_argument("--piece", help="the Spot difftest executable: under --form whole, Lean's restrict piece on each block")
     a.add_argument("--cap", type=int, default=CAP)
     a.add_argument("--one-circuit", default="", help="the one-circuit commit C's tree holds, where the clone has no such ref")
@@ -1747,7 +1753,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from verity_difftest import Server
         server = Server([args.piece])
     results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows, units=args.units,
-                     plan=plan, form=args.form, piece=server)
+                     plan=plan, form=args.form, piece=server, only=args.only)
     rows = table(results, hashlib.sha256(c).hexdigest(), built_at(args.one_circuit))
     sized = floor_table(results) if args.units != "one" else []
     if args.json:
