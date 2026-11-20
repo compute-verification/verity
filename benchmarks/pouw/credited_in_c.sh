@@ -7,7 +7,8 @@
 # each claiming the honest outputs, ok 1), whose prover skips its self-check
 # (FC_ZK_SELF_CHECK=skip) so that its proof reaches the verifiers; each is placed (flock-tmpl-unit), its statement built, proved over a live loopback session
 # (`flock-circuit serve --zk`) and verified by Lean (`verity-verify-proof verify --zk --registered`; the honest one also
-# against a registered file naming another call's public row, and one holding the drawn unit's ok to 0), and a forged proof
+# against a registered file naming another call's public row, one holding the drawn unit's ok to 0, one adding a port of a
+# parameter the drawn template does not have, and one reading a port of one name as another template reads it), and a forged proof
 # Lean must reject: the honest session against the dishonest statement (forged-$BAD); `credited_in_c.py door` then verifies
 # them through `proofs.verify`, with nothing of Pearl+'s. SIZE=K,TM,TN,N,M (256,1,1,1,2); BAD=y|cert|filler|eb (y);
 # READER=1 (default): C holds a reader of y beside its units, so its partition names two templates; READER=0: none.
@@ -102,7 +103,7 @@ for v in honest dishonest; do
   SESS=$(dirname $(ls -1 $S/sessions-$v/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $Ov/serve.log; continue; }
   challenger_audit $Ov/challenger $SESS
   DOOR+=(--session $v $SESS)
-  for r in registered $([ $v = honest ] && echo registered-wrong registered-not-ok); do
+  for r in registered $([ $v = honest ] && echo registered-wrong registered-not-ok && for x in foreign confused; do [ -f $D/registered-$x.json ] && echo registered-$x; done); do
     timed lean-$v-$r $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-$N.bin --tables $D/tables \
       --partition $D/partition.json --program $D/program.json --registered $D/$r.json --session $SESS > $Ov/lean-$r.log 2>&1
     echo "$v $r lean rc $?"; cat $O/time-lean-$v-$r.txt; grep -h '^VERDICT' $Ov/lean-$r.log | head -1 | cut -c1-1500; tail -3 $Ov/lean-$r.log | cut -c1-600
