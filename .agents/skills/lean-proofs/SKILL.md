@@ -39,6 +39,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
   axiom probe's. After editing a file others import, `lake build` its module, then try an importer. Try one that adds
   or renames declarations with `--siblings --on auto` too: a name another module declares otherwise clashes first at
   the package root, an hour into a records run.
+- **Before a merge, `verity lean judge`** (seconds, no build): what the audit refuses before any build.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full

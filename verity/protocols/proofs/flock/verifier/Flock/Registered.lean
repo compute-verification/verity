@@ -546,8 +546,16 @@ def outReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (j : Nat) (r
   let r ← outReadsAt c P indices j reg
   return { reg with readsRel := r.1, readsFrom := r.2 }
 
+/-- The output row port `q` of `c` is: a circuit with hidden outputs declares its input rows (META `input_ports`, which
+`HmOut.checkRows` holds to `HmOut.nIn`), and each port past them is an output row; a circuit that declares none, a
+public-output statement's, has no output row among its ports, whatever its output ports. -/
+def outRow? (c : Circuit) (q : Nat) : Option Nat :=
+  match J.nat c.metaJ "input_ports" "circuit META" with
+  | .ok k => if k ≤ q then some (q - k) else none
+  | .error _ => none
+
 /-- The verifier's registered reads `own` with every port's reads derived at the statement's circuit `c` and public file
-`pub` from C, the verifier's program `program`: an output row (a port past `HmOut.nIn c`) by `outReads`, a row of in(S)
+`pub` from C, the verifier's program `program`: an output row (`outRow?`) by `outReads`, a row of in(S)
 (`OneCircuit.io`) by `treeReads`, a registered value's or a run input's by `OneCircuit.pos`; without the program every
 port is refused, and so is a value named under two roots, domains or row counts (`splitValue?`). -/
 def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
@@ -559,10 +567,9 @@ def withPositions (c : Circuit) (pub : Public) (program : Option ByteArray) (own
   let P ← Program.decode b
   let indices ← unitIndices pub
   let rows ← OneCircuit.io c P
-  let nIn := HmOut.nIn c
   some <$> own.mapM fun reg =>
-    match (List.range c.ports.size).find? fun q => (c.ports.getD q default).name == reg.name with
-    | some q => if q ≥ nIn then outReads c P indices (q - nIn) reg else ins c P indices rows reg
+    match ((List.range c.ports.size).find? fun q => (c.ports.getD q default).name == reg.name).bind (outRow? c) with
+    | some j => outReads c P indices j reg
     | none => ins c P indices rows reg
 where
   ins (c : Circuit) (P : Program.Prog) (indices : Array Nat) (rows : Array (Nat × Nat × Nat)) (reg : Port) : V Port :=
