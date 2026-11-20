@@ -37,7 +37,7 @@ namespace Claims.ZKServer.Loop
 open Claims Claims.ZKMal
 
 /-- A release whose frames sample the tape's samples at the concrete statement (`tapeSamples`), its other fields
-`LoopWitness.rel0`'s. -/
+zero, empty or refusing. -/
 noncomputable def tapeRel : LeanRelease Flock.Wit Tp where
   rep _ _ := 0
   lay _ _ := default

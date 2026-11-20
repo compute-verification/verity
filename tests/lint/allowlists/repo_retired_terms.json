@@ -908,8 +908,6 @@
     {"file": "security/Proofs/Flock/Recursive/HPortTie.lean", "count": 4},
     {"file": "security/Proofs/Flock/Recursive/InnerRows.lean", "count": 10},
     {"file": "security/Proofs/Flock/Recursive/Loads.lean", "count": 2},
-    {"file": "security/Proofs/Flock/Recursive/Loop.lean", "count": 1},
-    {"file": "security/Proofs/Flock/Recursive/LoopWitness.lean", "count": 1},
     {"file": "security/Proofs/Flock/Recursive/OuterAbort.lean", "count": 4},
     {"file": "security/Proofs/Flock/Recursive/OuterSessionZK.lean", "count": 2},
     {"file": "security/Proofs/Flock/Recursive/OuterZK.lean", "count": 6},
