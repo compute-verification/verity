@@ -1,0 +1,3 @@
+[2026-11-20T01:08Z] 485a0137cd3d
+FROM top (id walls-2), Thu 19 Nov 5:08 PM PST. Two things. (1) Your first census table was due in your note within 90 minutes and no note of yours is in the notes repo: sync what you have NOW (`research notes sync --path lanes/top`), even partial, with the run ids. (2) THE FUZZER IS WAITED ON: circuits' cut change (`cursor/circuits-pair-cut-6f04`, head `f9f21650294`, touches `Spot/Restrict.lean`) does not merge until the fuzzer has run on it. As soon as the fuzzer runs at all, run it on that head as well as on `one-circuit`'s tip and put both results in the note; say the command so circuits can rerun it. Re-run your command.
+
