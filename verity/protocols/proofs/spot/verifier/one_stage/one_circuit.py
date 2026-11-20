@@ -14,7 +14,6 @@ from typing import Any
 from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.boolean import bit_type
 from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
 from verity.circuits.program import input_id
 
@@ -146,26 +145,10 @@ def admitted(D: DecodedProgram, partition: Mapping[str, Any],
     return key, rows, fields
 
 
-def leaves_off(params: Sequence[tuple[str, Any]], lifted: Sequence[tuple[str, Any]], ret: Any, lret: Any) -> str | None:
-    """`OneStageZk.leavesOff`, at the template's parameters and return and their types on bits (``lifted``, ``lret``):
-    Python has no lifted Definition, so these are `bit_type`'s, the types Lean's lift gives a lifted template."""
-    fs, gs = _fields(ret), _fields(lret)
-    if len(params) != len(lifted) or len(fs) != len(gs):
-        return f"{len(params)} parameters and {len(fs)} return fields, its lift's {len(lifted)} and {len(gs)}"
-    ports = [("parameter", n, sum(t.leaf_widths()), u.leaves) for (n, t), (_, u) in zip(params, lifted)] + \
-        [("return field", f"o{j}", sum(t.leaf_widths()), u.leaves) for j, (t, u) in enumerate(zip(fs, gs))]
-    if bad := next((p for p in ports if p[2] != p[3]), None):
-        return f"{bad[0]} {bad[1]} of {bad[2]} bits has {bad[3]} leaves after the lift to bits"
-    s_in, s_out = sum(sum(t.leaf_widths()) for _, t in params), sum(ret.leaf_widths())
-    l_in, l_out = sum(u.leaves for _, u in lifted), lret.leaves
-    if (s_in, s_out) != (l_in, l_out):
-        return f"parameters of {s_in} bits and a return of {s_out}, its lift's {l_in} and {l_out} leaves"
-    return None
-
-
 def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
     """`admitted`'s clauses from `listed` on, on template ``key`` of ``D`` at its cuts ``ks``: (its input rows, its return
-    fields), or `Refused` by the first clause that fails."""
+    fields), or `Refused` by the first clause that fails. `leaves-are-bits` is held in Lean alone: it compares the
+    template with its lifted Definition, which Python does not build, and `bit_type` of a type has its bits as leaves."""
     fn = D.defs.get(key)
     if fn is None:
         raise _not_admitted("listed", f"C_S's template {key} is no Definition of C_S")
@@ -201,8 +184,6 @@ def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[l
             if bits == 0 or bits % 16:
                 raise _not_admitted("whole-words", f"C_S's template {key}: {what} {name} of {bits} bits is not a positive "
                                                    "whole number of u16 words")
-    if why := leaves_off(params, [(n, bit_type(t)) for n, t in params], ret, bit_type(ret)):
-        raise _not_admitted("leaves-are-bits", f"C_S's template {key}: {why}")
     return rows, fields
 
 
