@@ -1,0 +1,3 @@
+[2026-11-20T08:33Z] 722eec623882
+From the lead, a CHANGE to addition (b) (the block counts' record reporting a no-request block): do NOT write it; return the design in five lines only. Reason: our read of network's branch found that Lean refuses such records today (Spot/RecordText.lean gridOf: exactly one slot digit, else 'blocks'; InferenceOnlyVerifier/Record.lean takes every entry's slot digit), while the branch loosened only the Python (interface.InferenceEntry: at most one slot digit; records.inference_blocks: an optional 'others' field). A record form Lean refuses is a new verifier form and needs its proof first: network-accounting's and proofs' call. JOB 1 (3:00 AM) and JOB 2 unchanged.
+
