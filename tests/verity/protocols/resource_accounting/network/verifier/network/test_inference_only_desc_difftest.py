@@ -57,7 +57,7 @@ def _forward_refused(inst) -> bool:
     try:
         reference.codec.decode_program(desc, reference.declared(desc))
     except ValueError as e:
-        return str(e).startswith("forward-reference:")
+        return "forward-reference:" in str(e)
     return False
 
 
