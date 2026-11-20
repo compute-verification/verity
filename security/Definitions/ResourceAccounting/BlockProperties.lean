@@ -2,50 +2,41 @@ module
 
 public import Definitions.ResourceAccounting.Actual
 public import Definitions.Core.Blocks
+public import Definitions.Core.CircuitLevels
 
 /-!
 # Blocks and their properties: the interface from accounting to policy
 
-TO BE REPLACED: `Division` is a chain of `Verity.Partition`s under `Refines` with claims per unit. Each scale (the
-server-day blocks; the inference and free blocks refining them, a class per unit; the proof blocks refining the
-inference blocks) is a partition of the actual circuit, so `parent`, `depth`, `Gates.covers`, `children`, `nest` and
-`disjoint` and the check's leaf and forest clauses go, and the claims, `Established`, `UseAtLeast` and the conversion
-read units.
+A block is Core's `Verity.Block`: a window of ticks and the gates of a circuit it computes there (here the actual
+circuit, `Placed`). Accounting establishes that the actual circuit divides into blocks nested by scale, and some of four
+properties for each. The scales are `Verity.Partition`s of the actual circuit's computed gates (`security/Definitions/
+Core/Partition.lean`: every computed gate in exactly one unit, input gates in none), nested by `Verity.Partition.Refines`:
 
-A block is Core's (`Verity.Block`): a window of ticks and the gates of a circuit it computes there. Here the circuit is
-the actual circuit (`Placed`). Its suffix names its scale: a proof block is a unit of a `Verity.Partition` and a
-`Verity.Scheme.Block`; an inference block is a unit of a registered circuit's `𝓘`; a server-day block is a server-time
-block of `Definitions/Core/Blocks.lean`; the whole circuit is a block too.
+* the **server-day blocks** and **hidden hardware's work**, a partition `outer` of the whole circuit (`kind u` says
+  which: a server-day block, or hidden hardware);
+* the **inference blocks** and **free blocks** refining them, a partition `inner` with `inner.Refines outer`, a class
+  per unit (`cls u`: inference, free, or hidden under a hidden parent);
+* the **proof blocks** refine the inference blocks; they are the proof layer's own `Verity.Partition` and carry no block
+  property here.
 
-Accounting establishes that the actual circuit divides into blocks with some of four properties, each built on the
-actual circuit's definitions:
-* **size**: its work at a pricing (`Placed.work`);
+Coverage, disjointness and the tree shape are the partitions' own (`Partition.input_iff`, `Partition.gates` a function,
+`Refines.sub`), so no field and no clause states them. Each block's location and window are fixed data (`locIn`/`winIn`,
+`locOut`/`winOut`), not the run's choice.
+
+The four properties, each built on the actual circuit's definitions:
+* **size**: its work at a pricing (`Placed.work`), in gates;
 * **function**: a circuit that its gates, cut as a circuit (`Placed.cut`), implement (`Verity.Implements`). It is
   extensional: the cut may hold any further gates and input gates, so it bounds neither size nor input;
 * **input** from named sources (`Source`), in bits (width);
 * **output** to the outside world, in bits (width).
 
-**The division** (`Division`) is committed by the prover before any coin and is private under the outer proof: the
-blocks, their classes (server-day, inference and free blocks), how they nest, each block's location and window, the
-registered width, and the properties claimed of each. A run's blocks (`Division.Gates`) are gates of its actual circuit
-that the division's structure fixes: every computed gate is in a top block, every gate of a block with children is in
-one of its children, siblings are disjoint, and each block lies in its location during its window. `FeasibleSet` is the
-feasible set's membership: blocks with every claimed property, at a pricing that charges every computed gate and with
-registered input gates of at most the registered width.
-
-Every accounting statement has one form: for every block of a class, a property holds, except with probability at
-most `ε` (`Division.Runs.Established`); a sampled statement holds outside a set of blocks whose declared use is at
-most the tolerance (`Division.Runs.EstablishedOutside`). `UseAtLeast` states that at least `b` of a capacity was used
-inside every block of a class. One conversion, `FreeBlockAtMost`, turns capacity minus use into a bound on the sum of
-the free blocks' quantities directly inside each block; it alone carries the capacity figure (`CapacityAtMost`) and the premise that declared work does not
-double as other work (`DeclaredWorkExclusive`), which for size follows from the division
-(`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`). The policy's check is in `Definitions/Compose/Blocks.lean`; the
-protocols' instances, the policy's theorem and the chain are in `Definitions/Compose/Guarantees/Blocks.lean`.
-
-**Against `Scheme`.** `Verity.Scheme` is what a protocol hands the proof layer and gets back (`Scheme.GetsBack`); this
-file is the form a block property takes once a scheme's result is read on the actual circuit.
-
-`Placed` is in `ResourceAccounting`, which `Core` may not import, so the form sits beside it.
+A monitoring period's runs (`Runs`) carry, per run, the actual circuit, its pricing and registered input gates, and the
+two partitions the prover committed before any coin. `Realizes` is the feasible-set membership: the run's blocks have
+every property claimed of them. Every accounting statement is `ExceptWith pr accepts shown ε`: the predicate `shown`
+fails on an accepted run with probability at most `ε`. `UseAtLeast` states a lower bound on a used capacity, and the one
+conversion `FreeBlockAtMost` turns capacity minus use into a bound on the sum of the free blocks directly inside each
+server-day block; it alone carries the capacity figure (`CapacityAtMost`, the hardware description, assumed) and the
+premise that declared work does not double as other work (`DeclaredWorkExclusive`).
 -/
 
 @[expose] public section
@@ -65,107 +56,55 @@ inductive Source where
   | world
   deriving DecidableEq
 
-/-- **A property of a block**, its bound in work at a pricing (size) or in bits (input and output). An input or output
-bound counts the block's declared ports too: the division fixes it before any coin. -/
+/-- **A property of a block**, its bound in work at a pricing (size, gates) or in bits (input and output). An input or
+output bound counts the block's declared ports too: the division fixes it before any coin. -/
 inductive Property where
   | sizeAtMost (k : ℕ)
   | function (f : Circuit)
   | inputAtMost (sources : List Source) (k : ℕ)
   | outputAtMost (k : ℕ)
 
-/-- **The division**, committed by the prover before any coin and private under the outer proof (the policy's check
-reads it inside that proof): the blocks `ι`, the server-day, inference and free blocks among them, the block each lies
-inside (`none` for a top block), a depth that grows from a block to each block inside it (so `parent` is a forest),
-each block's location `X` and window `win`, the registered width, and the properties claimed of each. -/
-structure Division (L : Type*) where
-  ι : Type
-  [fintype : Fintype ι]
-  [decEq : DecidableEq ι]
-  serverDay : Finset ι
-  inference : Finset ι
-  free : Finset ι
-  parent : ι → Option ι
-  depth : ι → ℕ
-  depth_lt : ∀ i j, parent i = some j → depth j < depth i
-  X : ι → Finset L
-  win : ι → Window
-  registered : ℕ
-  claims : ι → List Property
+/-- **The class of a unit of `inner`**: an inference block or a free block (inside a server-day block), or hidden (a unit
+inside hidden hardware's work, which has no established property). -/
+inductive Class where
+  | inference
+  | free
+  | hidden
+  deriving DecidableEq
 
-attribute [instance] Division.fintype Division.decEq
+namespace Placed
 
-namespace Division
-
-variable {L : Type*} (Dv : Division L)
-
-/-- The ticks of block `i`'s window. -/
-def ticks (i : Dv.ι) : Set ℕ := Set.Ico (Dv.win i).start ((Dv.win i).start + (Dv.win i).len)
-
-/-- The blocks of the class `K` directly inside block `i`. -/
-def within (K : Finset Dv.ι) (i : Dv.ι) : Finset Dv.ι := K.filter fun j => Dv.parent j = some i
-
-/-- **A division's blocks in an actual circuit**: block `i` is a `Verity.Block` of `A` in its window, lying in its
-location during it. Every computed gate is in a top block, every gate of a block with children is in one of its
-children, a block lies inside its parent, and siblings are disjoint. -/
-structure Gates (A : Placed L) where
-  block : Dv.ι → Verity.Block A.toCircuit
-  win : ∀ i, (block i).win = Dv.win i
-  inside : ∀ i, (block i).gates ⊆ A.region (Dv.X i) (Dv.ticks i)
-  covers : ∀ g ∈ A.computed, ∃ i, Dv.parent i = none ∧ g ∈ (block i).gates
-  nest : ∀ i j, Dv.parent i = some j → (block i).gates ⊆ (block j).gates
-  children : ∀ i j, Dv.parent i = some j → ∀ g ∈ (block j).gates, ∃ i', Dv.parent i' = some j ∧ g ∈ (block i').gates
-  disjoint : ∀ i i', i ≠ i' → Dv.parent i = Dv.parent i' → Disjoint (block i).gates (block i').gates
-
-namespace Gates
-
-variable {Dv} {A : Placed L} (B : Dv.Gates A) (π : Fin A.N → ℕ) (θ : Finset (Fin A.N))
+variable {L : Type*} (A : Placed L)
 
 open Classical in
-/-- The gates of a source, for block `i`. -/
-noncomputable def source (i : Dv.ι) : Source → Finset (Fin A.N)
+/-- The gates of a source, for a block with gates `S`, location `X` and window `win`. -/
+noncomputable def sourceGates (θ S : Finset (Fin A.N)) (X : Finset L) (win : Window) : Source → Finset (Fin A.N)
   | .registered => θ
-  | .block => univ.filter fun g => g ∉ θ ∧ g ∉ (B.block i).gates ∧ A.x g ∈ Dv.X i ∧ A.t g ∈ Dv.ticks i
-  | .past => univ.filter fun g => g ∉ θ ∧ A.x g ∈ Dv.X i ∧ A.t g < (Dv.win i).start
-  | .world => univ.filter fun g => g ∉ θ ∧ A.x g ∉ Dv.X i
-
-/-- **Size** of block `i`: its work at the pricing `π`. -/
-def size (i : Dv.ι) : ℕ := A.work π (B.block i).gates
-
-/-- **Input** of block `i` from `sources`, in bits: the width of the gates of those sources it reads. -/
-noncomputable def input (i : Dv.ι) (sources : List Source) : ℕ :=
-  A.width (A.into (B.block i).gates ∩ sources.toFinset.biUnion (B.source θ i))
+  | .block => univ.filter fun g => g ∉ θ ∧ g ∉ S ∧ A.x g ∈ X ∧ A.t g ∈ win.ticks
+  | .past => univ.filter fun g => g ∉ θ ∧ A.x g ∈ X ∧ A.t g < win.start
+  | .world => univ.filter fun g => g ∉ θ ∧ A.x g ∉ X
 
 open Classical in
-/-- **Output** of block `i` to the outside world, in bits: the width of its gates that a gate placed outside its
-location reads. It counts gates, so it leaves out what the time a gate is read at can carry. -/
-noncomputable def output (i : Dv.ι) : ℕ :=
-  A.width ((B.block i).gates.filter fun g => ∃ h, A.x h ∉ Dv.X i ∧ g ∈ A.reads h)
+/-- **Input** of block `b` (located at `X`) from `sources`, in bits: the width of the gates of those sources it reads. -/
+noncomputable def blockInput (θ : Finset (Fin A.N)) (X : Finset L) (b : Verity.Block A.toCircuit)
+    (sources : List Source) : ℕ :=
+  A.width (A.into b.gates ∩ sources.toFinset.biUnion (A.sourceGates θ b.gates X b.win))
 
-/-- **Reads of registered information** by block `i`, in bits counted with multiplicity: for each of its gates, the
-width of the registered gates it reads. It is a quantity, not one of the four properties. -/
-def registeredReads (i : Dv.ι) : ℕ := ∑ g ∈ (B.block i).gates, A.width (A.reads g ∩ θ)
+open Classical in
+/-- **Output** of block `b` (located at `X`) to the outside world, in bits: the width of its gates that a gate placed
+outside `X` reads. It counts gates, so it leaves out what the time a gate is read at can carry. -/
+noncomputable def blockOutput (X : Finset L) (b : Verity.Block A.toCircuit) : ℕ :=
+  A.width (b.gates.filter fun g => ∃ h, A.x h ∉ X ∧ g ∈ A.reads h)
 
-/-- **Block `i` has the property `p`.** -/
-def Holds (i : Dv.ι) : Property → Prop
-  | .sizeAtMost k => B.size π i ≤ k
-  | .function f => Verity.Implements f (A.cut (B.block i).gates)
-  | .inputAtMost sources k => B.input θ i sources ≤ k
-  | .outputAtMost k => B.output i ≤ k
+/-- **Block `b` (located at `X`) has the property `p`** at pricing `π` and registered input gates `θ`. -/
+noncomputable def Holds (π : Fin A.N → ℕ) (θ : Finset (Fin A.N)) (X : Finset L)
+    (b : Verity.Block A.toCircuit) : Property → Prop
+  | .sizeAtMost k => A.work π b.gates ≤ k
+  | .function f => Verity.Implements f (A.cut b.gates)
+  | .inputAtMost src k => A.blockInput θ X b src ≤ k
+  | .outputAtMost k => A.blockOutput X b ≤ k
 
-/-- **Sizes add over siblings**: the children of block `j` in `S` have work at most `j`'s, at any pricing. Proved by
-`ResourceAccounting.SecurityProofs.BlockProperties.sizeAdds`. -/
-def SizeAdds : Prop :=
-  ∀ (j : Dv.ι) (S : Finset Dv.ι), (∀ i ∈ S, Dv.parent i = some j) → ∑ i ∈ S, B.size π i ≤ B.size π j
-
-end Gates
-
-/-- **The feasible set**: `θ` is input gates of `A` of at most the registered width, the pricing `π` charges every
-computed gate, and `A` has blocks for the division `Dv`, each with every property claimed of it. -/
-def FeasibleSet (A : Placed L) (π : Fin A.N → ℕ) (θ : Finset (Fin A.N)) : Prop :=
-  (∀ a ∈ θ, A.isInput a = true) ∧ A.width θ ≤ Dv.registered ∧ (∀ g ∈ A.computed, 1 ≤ π g) ∧
-    ∃ B : Dv.Gates A, ∀ i, ∀ p ∈ Dv.claims i, B.Holds π θ i p
-
-end Division
+end Placed
 
 /-- **`P` fails on an accepted run with probability at most `ε`**, `pr` the audit game's probability on runs, as
 `Scheme.GetsBack` reads it. -/
@@ -173,9 +112,12 @@ def ExceptWith {Ω : Type} (pr : (Ω → Prop) → ℝ≥0∞) (accepts : Ω →
   pr (fun r => accepts r ∧ ¬ P r) ≤ ε
 
 /-- **A monitoring period's runs**, as accounting reads them: the audit game's probability `pr` (monotone, and
-subadditive over finite unions, as `Scheme.AccountingLayer` takes it), the verifier's acceptance, and each run's actual
-circuit, pricing, registered input gates and, where it has them, its blocks for the division `Dv`. -/
-structure Division.Runs {L : Type*} (Dv : Division L) where
+subadditive over finite unions), the verifier's acceptance, and each run's actual circuit, pricing, registered input
+gates, and the two partitions the prover committed before any coin. `outer` partitions the whole circuit into server-day
+blocks and hidden hardware (`kind`); `inner` refines it into inference blocks, free blocks and hidden units (`cls`), a
+unit being hidden exactly when its server-day-or-hidden parent is hidden hardware (`hiddenIff`). Each block's location
+and window are fixed data. -/
+structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
   mono : ∀ p q : Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q
@@ -184,65 +126,100 @@ structure Division.Runs {L : Type*} (Dv : Division L) where
   actual : Run → Placed L
   π : (r : Run) → Fin (actual r).N → ℕ
   θ : (r : Run) → Finset (Fin (actual r).N)
-  blocks : (r : Run) → Option (Dv.Gates (actual r))
+  registered : ℕ
+  nOut : Run → ℕ
+  outer : (r : Run) → Partition (actual r).toCircuit (nOut r)
+  kind : (r : Run) → Fin (nOut r) → Bool
+  locOut : (r : Run) → Fin (nOut r) → Finset L
+  winOut : (r : Run) → Fin (nOut r) → Window
+  claimsOut : (r : Run) → Fin (nOut r) → List Property
+  nIn : (r : Run) → ℕ
+  inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
+  ref : (r : Run) → (inner r).Refines (outer r)
+  cls : (r : Run) → Fin (nIn r) → Class
+  locIn : (r : Run) → Fin (nIn r) → Finset L
+  winIn : (r : Run) → Fin (nIn r) → Window
+  claimsIn : (r : Run) → Fin (nIn r) → List Property
+  hiddenIff : ∀ r u, cls r u = Class.hidden ↔ kind r ((ref r).parent u) = false
 
-namespace Division.Runs
+namespace Runs
 
-variable {L : Type*} {Dv : Division L} (P : Dv.Runs)
+variable {L : Type*} (P : Runs L)
 
-/-- Block `i` of run `r` has the property `p`: the run has blocks for the division, and its block `i` has `p`. -/
-def Holds (r : P.Run) (i : Dv.ι) (p : Property) : Prop :=
-  ∃ B, P.blocks r = some B ∧ B.Holds (P.π r) (P.θ r) i p
+/-- Server-day-or-hidden block `i` of run `r` as a `Verity.Block` (its window and its gates). -/
+def outerBlock (r : P.Run) (i : Fin (P.nOut r)) : Verity.Block (P.actual r).toCircuit :=
+  ⟨P.winOut r i, (P.outer r).gates i⟩
 
-/-- **Accounting establishes `p i` for every block `i` of the class `K`**, except with probability at most `ε`. -/
-def Established (K : Finset Dv.ι) (p : Dv.ι → Property) (ε : ℝ≥0∞) : Prop :=
-  ExceptWith P.pr P.accepts (fun r => ∀ i ∈ K, P.Holds r i (p i)) ε
+/-- Inference-or-free-or-hidden block `u` of run `r` as a `Verity.Block`. -/
+def innerBlock (r : P.Run) (u : Fin (P.nIn r)) : Verity.Block (P.actual r).toCircuit :=
+  ⟨P.winIn r u, (P.inner r).gates u⟩
 
-/-- **Accounting establishes every claim of `ps i` for every block `i` of `K` outside a set `M` whose declared use
-`use M` is at most the tolerance `tol`**, except with probability at most `ε`: the form a sampled statement gives. -/
-def EstablishedOutside (K : Finset Dv.ι) (ps : Dv.ι → List Property) (use : Finset Dv.ι → ℕ) (tol : ℕ)
-    (ε : ℝ≥0∞) : Prop :=
-  ExceptWith P.pr P.accepts (fun r => ∃ M ⊆ K, use M ≤ tol ∧ ∀ i ∈ K \ M, ∀ q ∈ ps i, P.Holds r i q) ε
+/-- Block `u` of `inner` in run `r` has the property `p`. -/
+noncomputable def HoldsIn (r : P.Run) (u : Fin (P.nIn r)) (p : Property) : Prop :=
+  (P.actual r).Holds (P.π r) (P.θ r) (P.locIn r u) (P.innerBlock r u) p
 
-/-- **The runs fit the division** (open): on every accepted run, `θ` is input gates of at most the registered width
-(registration's row, `RegistrationBinds`, with the log's width), the pricing charges every computed gate, and the run
-has blocks for the division: its computed gates lie in its top blocks' locations and windows. -/
-def FitsDivision : Prop :=
-  ∀ r, P.accepts r → (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ Dv.registered ∧
-    (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧ (P.blocks r).isSome
+/-- Block `i` of `outer` in run `r` has the property `p`. -/
+noncomputable def HoldsOut (r : P.Run) (i : Fin (P.nOut r)) (p : Property) : Prop :=
+  (P.actual r).Holds (P.π r) (P.θ r) (P.locOut r i) (P.outerBlock r i) p
+
+/-- Block `u`'s size in run `r`, its work at the run's pricing, in gates. -/
+def sizeIn (r : P.Run) (u : Fin (P.nIn r)) : ℕ := (P.actual r).work (P.π r) ((P.inner r).gates u)
+
+/-- Block `i`'s size in run `r`, its work at the run's pricing, in gates. -/
+def sizeOut (r : P.Run) (i : Fin (P.nOut r)) : ℕ := (P.actual r).work (P.π r) ((P.outer r).gates i)
+
+/-- The units of `inner` directly inside `outer` block `i`. -/
+def children (r : P.Run) (i : Fin (P.nOut r)) : Finset (Fin (P.nIn r)) :=
+  univ.filter fun u => (P.ref r).parent u = i
+
+/-- The inference blocks directly inside `outer` block `i`. -/
+def infChildren (r : P.Run) (i : Fin (P.nOut r)) : Finset (Fin (P.nIn r)) :=
+  univ.filter fun u => (P.ref r).parent u = i ∧ P.cls r u = Class.inference
+
+/-- The free blocks directly inside `outer` block `i`. -/
+def freeChildren (r : P.Run) (i : Fin (P.nOut r)) : Finset (Fin (P.nIn r)) :=
+  univ.filter fun u => (P.ref r).parent u = i ∧ P.cls r u = Class.free
+
+/-- **The run realizes its claims** (the feasible-set membership for `r`): `θ` is input gates of at most the registered
+width, the pricing charges every computed gate, and every block has each property claimed of it. -/
+noncomputable def Realizes (r : P.Run) : Prop :=
+  (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
+    (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
+    (∀ u, ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧ (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
+
+/-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
+def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
 
 /-- **The protocol's guarantee, read on the period's runs** (open, one per instance): the guarantee `G`, at this
 deployment, bounds by `ε` the probability that an accepted run's own conclusion `shown` fails. -/
 def RunReads (G : Prop) (shown : P.Run → Prop) (ε : ℝ≥0∞) : Prop := G → ExceptWith P.pr P.accepts shown ε
 
-/-- **Use at least**: inside every block `i` of the class `K`, at least `b i` of a capacity was used, in the quantity
+/-- **Use at least**: inside every server-day block `i`, at least `b r i` of a capacity was used, in the quantity
 `use r i`, except with probability at most `ε`. -/
-def UseAtLeast (K : Finset Dv.ι) (use : P.Run → Dv.ι → ℕ) (b : Dv.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
-  ExceptWith P.pr P.accepts (fun r => ∀ i ∈ K, b i ≤ use r i) ε
+def UseAtLeast (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
+  ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → b r i ≤ use r i) ε
 
-/-- **The capacity figure**: every block `i` of the class `K` has at most `cap i` of the resource, in the quantity
+/-- **The capacity figure**: every server-day block `i` has at most `cap r i` of the resource, in the quantity
 `enclosing r i`. It is the hardware description, an assumption nothing in Verity tests (owner none: the hardware
 description). -/
-def CapacityAtMost (K : Finset Dv.ι) (enclosing : P.Run → Dv.ι → ℕ) (cap : Dv.ι → ℕ) : Prop :=
-  ∀ r, ∀ i ∈ K, enclosing r i ≤ cap i
+def CapacityAtMost (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+  ∀ r, ∀ i, P.kind r i = true → enclosing r i ≤ cap r i
 
-/-- **Declared work does not double as other work**: in an accepted run, inside every block `i` of the class `K`, the
-quantities `free r j` of the free blocks `j` of `F` directly inside `i`, summed, and the use inside `i` add up to at
-most `i`'s own quantity. For size, with `use` the sum over inference blocks directly inside `i` and `F` disjoint from
-them, it follows from the division (`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other
-quantities it is open. -/
-def DeclaredWorkExclusive (K F : Finset Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) : Prop :=
-  ∀ r, P.accepts r → ∀ i ∈ K, ∑ j ∈ Dv.within F i, free r j + use r i ≤ enclosing r i
+/-- **Declared work does not double as other work**: in an accepted run, inside every server-day block `i`, the free
+blocks' quantity `free r i` and the use `use r i` add up to at most `i`'s own quantity `enclosing r i`. For size it
+follows from the partitions (`ResourceAccounting.SecurityProofs.BlockProperties.sizeExclusive`); for other quantities it
+is open. -/
+def DeclaredWorkExclusive (free use enclosing : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+  ∀ r, P.accepts r → ∀ i, P.kind r i = true → free r i + use r i ≤ enclosing r i
 
-/-- **The one conversion: capacity minus use bounds the free blocks.** Inside every block `i` of the class `K`: use at
-least `b` inside every block of `K`, the capacity figure and exclusivity give the free blocks of `F` directly inside
-`i`, summed, at most `cap i − b i`, except with the use's probability. Proved by
-`ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
+/-- **The one conversion: capacity minus use bounds the free blocks.** Inside every server-day block `i`: a use lower
+bound, the capacity figure and exclusivity give the free blocks' quantity `free r i` at most `cap r i − b r i`, except
+with the use's probability. Proved by `ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
 def FreeBlockAtMost : Prop :=
-  ∀ (K F : Finset Dv.ι) (free use enclosing : P.Run → Dv.ι → ℕ) (cap b : Dv.ι → ℕ) (ε : ℝ≥0∞),
-    P.UseAtLeast K use b ε → P.CapacityAtMost K enclosing cap → P.DeclaredWorkExclusive K F free use enclosing →
-      ExceptWith P.pr P.accepts (fun r => ∀ i ∈ K, ∑ j ∈ Dv.within F i, free r j ≤ cap i - b i) ε
+  ∀ (free use enclosing cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞),
+    P.UseAtLeast use b ε → P.CapacityAtMost enclosing cap → P.DeclaredWorkExclusive free use enclosing →
+      ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → free r i ≤ cap r i - b r i) ε
 
-end Division.Runs
+end Runs
 
 end ResourceAccounting

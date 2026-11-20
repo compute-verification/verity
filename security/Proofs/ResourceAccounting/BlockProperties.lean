@@ -4,30 +4,137 @@ public import Definitions.Compose.Guarantees.Blocks
 import Mathlib.Tactic
 
 /-!
-# The conversion, sizes over a division, the chain, and the feasible set is not everything
+# The conversion, sizes over the partitions, the chain, and the feasible set is not everything
 
-`freeBlockAtMost` proves `FreeBlockAtMost`. `sizeAdds` proves that siblings' sizes add to at most their parent's, and
-`sizeExclusive` that declared work does not double as the free blocks' for size. `chain` proves `Chain`.
+`freeBlockAtMost` proves `FreeBlockAtMost`. `sizeAdds` proves that the blocks directly inside a server-day block have
+sizes adding to at most it, and `sizeExclusive` that a server-day block's free and inference children's work do not
+double-count. `chain` proves `Chain`.
 
-The policy's check bites: `parent_acyclic` (a division's `parent` is a forest), `oneBlock_fails` (a top block in no
-class fails the check) and `feasible_work_le` (under a passing division, a feasible circuit's total work is at most
-the inference and free blocks' claimed sizes).
+The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
+smaller of its own capacity and its inference and free blocks' claimed sizes, plus the assumed hidden hardware size.
 
-The feasible set is not every actual circuit: `honest_feasible` puts a one-gate circuit in the feasible set of a
-one-block division claiming size at most 1, `two_not_feasible` keeps a two-gate circuit out of it at every pricing and
-every registered input, and `not_every_feasible` is the test that a division with no function claim does not make every
-actual circuit feasible; with blocks the run may leave empty, as before coverage, it fails.
+The feasible set is not every run: `honest_feasible` puts a one-gate circuit's run in the feasible set of a one-block
+run claiming size at most 1, and `two_not_feasible` keeps a two-gate circuit's run out of it. `top_blocks_classified`
+records that no top block is in no class (the partitions' `kind` is total), so the degenerate case the reviews found
+cannot be stated; nothing sits inside an inference block, the finest scale here, so the other cannot be stated either.
 -/
 
 @[expose] public section
+
+namespace Verity.Partition
+
+open Finset
+
+variable {C : Circuit} {n : ℕ} (Q : Partition C n)
+
+/-- Distinct units have disjoint gates. -/
+theorem gates_disjoint (u v : Fin n) (h : u ≠ v) : Disjoint (Q.gates u) (Q.gates v) := by
+  rw [Finset.disjoint_left]
+  intro g hu hv
+  simp only [gates, mem_filter] at hu hv
+  exact h (Option.some_injective _ (hu.2.symm.trans hv.2))
+
+/-- The computed gates are the union of the units' gates. -/
+theorem computed_eq_biUnion : C.computed = univ.biUnion Q.gates := by
+  ext g
+  constructor
+  · intro hg
+    have hc : C.isInput g = false := by simpa [Circuit.computed] using hg
+    have hne : Q.unit g ≠ none := by rw [Q.input_iff]; simp [hc]
+    obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.mp hne
+    exact mem_biUnion.mpr ⟨u, mem_univ u, by simp [gates, hu]⟩
+  · intro hg
+    obtain ⟨u, -, hu⟩ := mem_biUnion.mp hg
+    simp only [gates, mem_filter] at hu
+    have hne : Q.unit g ≠ none := by rw [hu.2]; simp
+    have hc : C.isInput g = false := by
+      cases hb : C.isInput g with
+      | false => rfl
+      | true => exact absurd ((Q.input_iff g).mpr hb) hne
+    simp [Circuit.computed, hc]
+
+end Verity.Partition
 
 namespace ResourceAccounting.SecurityProofs.BlockProperties
 
 open Verity Finset ResourceAccounting
 open scoped ENNReal
 
-theorem freeBlockAtMost {L : Type*} {Dv : Division L} (P : Dv.Runs) : P.FreeBlockAtMost := by
-  intro K F free use enclosing cap b ε huse hcap hex
+variable {L : Type*}
+
+/-! ## Sizes over the partitions -/
+
+/-- A server-day block's gates are the union of the blocks directly inside it. -/
+theorem outer_children_cover (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
+    (P.outer r).gates i = (P.children r i).biUnion (fun u => (P.inner r).gates u) := by
+  ext g
+  simp only [Partition.gates, mem_filter, mem_univ, true_and, mem_biUnion, Runs.children]
+  rw [(P.ref r).sub g]
+  constructor
+  · intro h
+    obtain ⟨u, hu, hpu⟩ := Option.map_eq_some'.mp h
+    exact ⟨u, by simp [hpu], hu⟩
+  · rintro ⟨u, hu, hg⟩
+    simp only [mem_filter, mem_univ, true_and] at hu
+    rw [hg]; simp [hu]
+
+/-- A server-day block's size is the sum of the sizes of the blocks directly inside it. -/
+theorem sizeOut_eq_children_sum (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
+    P.sizeOut r i = ∑ u ∈ P.children r i, P.sizeIn r u := by
+  unfold Runs.sizeOut Runs.sizeIn Placed.work
+  rw [outer_children_cover, Finset.sum_biUnion]
+  exact fun a _ b _ hab => (P.inner r).gates_disjoint a b hab
+
+/-- The whole circuit's work is the sum of the server-day-or-hidden blocks' sizes. -/
+theorem work_eq_outer_sum (P : Runs L) (r : P.Run) :
+    (P.actual r).work (P.π r) (P.actual r).computed = ∑ i, P.sizeOut r i := by
+  unfold Runs.sizeOut Placed.work
+  rw [(P.outer r).computed_eq_biUnion, Finset.sum_biUnion]
+  exact fun a _ b _ hab => (P.outer r).gates_disjoint a b hab
+
+/-- The inference and free blocks directly inside a server-day block are the blocks directly inside it. -/
+theorem children_split (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    P.children r i = P.infChildren r i ∪ P.freeChildren r i := by
+  ext u
+  simp only [Runs.children, Runs.infChildren, Runs.freeChildren, mem_filter, mem_union, mem_univ, true_and]
+  constructor
+  · intro hp
+    have hnh : P.cls r u ≠ Class.hidden := by
+      rw [P.hiddenIff, hp]; simp [hki]
+    rcases (by cases h : P.cls r u <;> simp_all : P.cls r u = Class.inference ∨ P.cls r u = Class.free) with h | h
+    · exact Or.inl ⟨hp, h⟩
+    · exact Or.inr ⟨hp, h⟩
+  · rintro (⟨hp, _⟩ | ⟨hp, _⟩) <;> exact hp
+
+theorem infFree_disjoint (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
+    Disjoint (P.infChildren r i) (P.freeChildren r i) := by
+  rw [Finset.disjoint_left]
+  intro u h1 h2
+  simp only [Runs.infChildren, Runs.freeChildren, mem_filter] at h1 h2
+  rw [h1.2] at h2
+  exact absurd h2.2 (by decide)
+
+/-- The blocks directly inside a server-day block, in `S`, have sizes adding to at most it. -/
+theorem sizeAdds (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (S : Finset (Fin (P.nIn r)))
+    (hS : ∀ u ∈ S, (P.ref r).parent u = i) : ∑ u ∈ S, P.sizeIn r u ≤ P.sizeOut r i := by
+  rw [sizeOut_eq_children_sum]
+  refine Finset.sum_le_sum_of_subset_of_nonneg (fun u hu => ?_) (fun _ _ _ => Nat.zero_le _)
+  simp only [Runs.children, mem_filter, mem_univ, true_and]
+  exact hS u hu
+
+/-- **Declared work does not double as other work, for size**: a server-day block's free and inference children's work
+add up to at most its own size. -/
+theorem sizeExclusive (P : Runs L) :
+    P.DeclaredWorkExclusive (fun r i => ∑ u ∈ P.freeChildren r i, P.sizeIn r u)
+      (fun r i => ∑ u ∈ P.infChildren r i, P.sizeIn r u) P.sizeOut := by
+  intro r _ i hki
+  rw [sizeOut_eq_children_sum, children_split P r i hki, Finset.sum_union (infFree_disjoint P r i)]
+  omega
+
+/-! ## The conversion -/
+
+theorem freeBlockAtMost (P : Runs L) : P.FreeBlockAtMost := by
+  intro free use enclosing cap b ε huse hcap hex
   refine le_trans (P.mono _ _ ?_) huse
   rintro r ⟨ha, hn⟩
   refine ⟨ha, fun hb => hn fun i hi => ?_⟩
@@ -36,51 +143,76 @@ theorem freeBlockAtMost {L : Type*} {Dv : Division L} (P : Dv.Runs) : P.FreeBloc
   have h3 := hex r ha i hi
   omega
 
-theorem sizeAdds {L : Type*} {Dv : Division L} {A : Placed L} (B : Dv.Gates A) (π : Fin A.N → ℕ) : B.SizeAdds π := by
-  intro j S hS
-  unfold Division.Gates.size Placed.work
-  rw [← Finset.sum_biUnion]
-  · refine Finset.sum_le_sum_of_subset_of_nonneg ?_ fun _ _ _ => Nat.zero_le _
-    intro g hg
-    obtain ⟨i, hi, hg⟩ := Finset.mem_biUnion.mp hg
-    exact B.nest i j (hS i hi) hg
-  · intro i hi i' hi' hne
-    exact B.disjoint i i' hne (by rw [hS i hi, hS i' hi'])
+/-! ## The chain -/
 
-theorem sizeExclusive {L : Type*} {Dv : Division L} (P : Dv.Runs) (K F I : Finset Dv.ι) (hF : Disjoint F I) :
-    P.DeclaredWorkExclusive K F P.size (fun r i => ∑ j ∈ Dv.within I i, P.size r j) P.size := by
-  intro r _ i _
-  unfold Division.Runs.size
-  cases h : P.blocks r with
-  | none => simp [h]
-  | some B =>
-    simp only [h]
-    rw [← Finset.sum_union (s₁ := Dv.within F i) (s₂ := Dv.within I i) (Finset.disjoint_filter_filter hF)]
-    exact sizeAdds B (P.π r) i _ fun j hj => by
-      rcases Finset.mem_union.mp hj with hj | hj <;> exact (Finset.mem_filter.mp hj).2
-
-theorem chain {L : Type*} {Dv : Division L} (P : Dv.Runs) (check : Division L → Bool) (pol : InferenceOnly.Policy)
-    {κ : Type} (s : Finset κ) (K : κ → Finset Dv.ι) (p : κ → Dv.ι → Property) (ε : κ → ℝ≥0∞) :
-    Chain P check pol s K p ε := by
-  intro hcheck hthm hfit hcover hest
+theorem chain (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
+    {κ : Type} (s : Finset κ) (shown : κ → P.Run → Prop) (ε : κ → ℝ≥0∞) :
+    Chain P check pol s shown ε := by
+  intro hthm hcheck hcover hest
   have hsub : ∀ r, P.accepts r ∧ ¬ InferenceOnly.Compliant pol (P.actual r) (P.θ r) →
-      ∃ x ∈ s, P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i) := by
+      ∃ x ∈ s, P.accepts r ∧ ¬ shown x r := by
     rintro r ⟨ha, hn⟩
-    obtain ⟨hθ, hw, hπ, hsome⟩ := hfit r ha
-    obtain ⟨B, hB⟩ := Option.isSome_iff_exists.mp hsome
     by_contra hall
-    refine hn (hthm Dv (P.actual r) (P.π r) (P.θ r) hcheck ⟨hθ, hw, hπ, B, fun i q hq => ?_⟩)
-    obtain ⟨x, hx, hi, rfl⟩ := hcover i q hq
-    by_contra hq
-    refine hall ⟨x, hx, ha, fun h => hq ?_⟩
-    obtain ⟨B', hB', hh⟩ := h i hi
-    rw [hB] at hB'
-    cases hB'
-    exact hh
+    push_neg at hall
+    exact hn (hthm P r (hcheck r ha) (hcover r ha fun x hx => hall x hx ha))
   calc P.pr (fun r => P.accepts r ∧ ¬ InferenceOnly.Compliant pol (P.actual r) (P.θ r))
-      ≤ P.pr (fun r => ∃ x ∈ s, P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i)) := P.mono _ _ hsub
-    _ ≤ ∑ x ∈ s, P.pr (fun r => P.accepts r ∧ ¬ ∀ i ∈ K x, P.Holds r i (p x i)) := P.union _ _
-    _ ≤ ∑ x ∈ s, ε x := sum_le_sum fun x hx => hest x hx
+      ≤ P.pr (fun r => ∃ x ∈ s, P.accepts r ∧ ¬ shown x r) := P.mono _ _ hsub
+    _ ≤ ∑ x ∈ s, P.pr (fun r => P.accepts r ∧ ¬ shown x r) := P.union _ _
+    _ ≤ ∑ x ∈ s, ε x := Finset.sum_le_sum fun x hx => hest x hx
+
+/-! ## The check bites -/
+
+/-- A size claim at most `c`, held, bounds the block's size. -/
+theorem sizeIn_le_of_claim (P : Runs L) (r : P.Run) (u : Fin (P.nIn r)) (c : ℕ)
+    (hcl : ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p)
+    (hany : (P.claimsIn r u).any (InferenceOnly.sizeAtMost c) = true) : P.sizeIn r u ≤ c := by
+  obtain ⟨p, hp, hpc⟩ := List.any_eq_true.mp hany
+  cases p with
+  | sizeAtMost sz =>
+    simp only [InferenceOnly.sizeAtMost, decide_eq_true_eq] at hpc
+    have := hcl _ hp
+    simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, Runs.sizeIn] at this ⊢
+    omega
+  | _ => simp [InferenceOnly.sizeAtMost] at hpc
+
+/-- **The check bites**: under a run that passes the inference-only check and realizes its claims, with each server-day
+block's own capacity `serverCap i` (the second cap on the same gates) and the assumed hidden hardware size `lim.hidden`,
+the whole circuit's work is at most, for each server-day block, the smaller of its capacity and its inference and free
+blocks' claimed sizes, plus the hidden hardware size. -/
+theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
+    (serverCap : Fin (P.nOut r) → ℕ) (hc : InferenceOnly.check lim P r = true) (hreal : P.Realizes r)
+    (hserver : ∀ i, P.kind r i = true → P.sizeOut r i ≤ serverCap i)
+    (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
+    (P.actual r).work (P.π r) (P.actual r).computed ≤
+      (∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        min (serverCap i) ((P.infChildren r i).card * lim.c + (P.freeChildren r i).card * lim.freeSize)) +
+        lim.hidden := by
+  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨_, hinf⟩, _⟩, hfree⟩, _⟩ := hc
+  obtain ⟨-, -, -, hcl_in, -⟩ := hreal
+  rw [work_eq_outer_sum, ← Finset.sum_filter_add_sum_filter_not univ (fun i => P.kind r i = true) (P.sizeOut r)]
+  have hfalse : (univ.filter fun i => ¬ P.kind r i = true) = univ.filter fun i => P.kind r i = false := by
+    apply Finset.filter_congr; intro i _; simp [Bool.not_eq_true]
+  rw [hfalse]
+  refine add_le_add ?_ hhidden
+  refine Finset.sum_le_sum fun i hi => ?_
+  simp only [mem_filter] at hi
+  have hki := hi.2
+  refine le_min (hserver i hki) ?_
+  rw [sizeOut_eq_children_sum, children_split P r i hki, Finset.sum_union (infFree_disjoint P r i)]
+  refine add_le_add ?_ ?_
+  · calc ∑ u ∈ P.infChildren r i, P.sizeIn r u ≤ ∑ _u ∈ P.infChildren r i, lim.c :=
+          Finset.sum_le_sum fun u hu => by
+            simp only [Runs.infChildren, mem_filter] at hu
+            exact sizeIn_le_of_claim P r u lim.c (hcl_in u) (hinf u hu.2).1
+      _ = (P.infChildren r i).card * lim.c := by rw [Finset.sum_const, smul_eq_mul]
+  · calc ∑ u ∈ P.freeChildren r i, P.sizeIn r u ≤ ∑ _u ∈ P.freeChildren r i, lim.freeSize :=
+          Finset.sum_le_sum fun u hu => by
+            simp only [Runs.freeChildren, mem_filter] at hu
+            exact sizeIn_le_of_claim P r u lim.freeSize (hcl_in u) (hfree u hu.2)
+      _ = (P.freeChildren r i).card * lim.freeSize := by rw [Finset.sum_const, smul_eq_mul]
+
+/-! ## The feasible set is not everything -/
 
 /-- A circuit of `n + 1` one-bit gates: gate 0 an input, every other gate computed from nothing. -/
 def line (n : ℕ) : Circuit where
@@ -102,158 +234,73 @@ def placed (n : ℕ) : Placed Unit where
   cell _ := 0
   cell_inj a b h := Fin.ext (by simpa using congrArg (fun q => q.2.2) h)
 
-/-- One top server-day block on the one leaf over ticks `[0, 10)`, claimed of size at most 1, no registered width. -/
-def oneBlock : Division Unit where
-  ι := Unit
-  serverDay := {()}
-  inference := ∅
-  free := ∅
-  parent _ := none
-  depth _ := 0
-  depth_lt _ _ h := by cases h
-  X _ := {()}
-  win _ := ⟨0, 10⟩
+open Classical in
+/-- One run: the circuit `A`, no fresh input, one server-day block holding the whole circuit as one inference block,
+claimed of size at most 1 and 0 fresh input, with a size claim on the server-day block. -/
+noncomputable def demoRuns (A : Placed Unit) : Runs Unit where
+  Run := Unit
+  pr _ := 0
+  mono _ _ _ := le_refl 0
+  union _ _ := by simp
+  accepts _ := True
+  actual _ := A
+  π _ _ := 1
+  θ _ := ∅
   registered := 0
-  claims _ := [.sizeAtMost 1]
+  nOut _ := 1
+  outer _ := Partition.whole A.toCircuit
+  kind _ _ := true
+  locOut _ _ := {()}
+  winOut _ _ := ⟨0, 10⟩
+  claimsOut _ _ := [.sizeAtMost 1]
+  nIn _ := 1
+  inner _ := Partition.whole A.toCircuit
+  ref _ := { parent := id, sub := fun g => by cases (Partition.whole A.toCircuit).unit g <;> simp }
+  cls _ _ := Class.inference
+  locIn _ _ := {()}
+  winIn _ _ := ⟨0, 10⟩
+  claimsIn _ _ := [.sizeAtMost 1, .inputAtMost [.past, .block, .world] 0]
+  hiddenIff _ _ := by decide
 
-/-- **The honest witness**: the one-gate circuit is in the feasible set of `oneBlock`, at unit pricing with no
-registered input gates. -/
-theorem honest_feasible : oneBlock.FeasibleSet (placed 1) (fun _ => 1) ∅ := by
-  refine ⟨by simp, by simp [Circuit.width], fun _ _ => le_rfl, ⟨fun _ => ⟨⟨0, 10⟩, (placed 1).computed⟩,
-    fun _ => rfl, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
-  · intro i g hg
-    simp only [Placed.region, Finset.mem_filter]
-    refine ⟨hg, by simp [oneBlock], ?_⟩
-    simp only [Division.ticks, oneBlock, Set.mem_Ico]
-    have hg2 : g.val < 2 := g.isLt
-    exact ⟨Nat.zero_le _, by simp only [placed]; omega⟩
-  · exact fun g hg => ⟨(), rfl, hg⟩
-  · intro i j h; simp [oneBlock] at h
-  · intro i j h; simp [oneBlock] at h
-  · intro i i' h; exact (h rfl).elim
-  · intro i q hq
-    simp only [oneBlock, List.mem_singleton] at hq
-    subst hq
-    show (placed 1).work (fun _ => 1) (placed 1).computed ≤ 1
+/-- **The honest witness**: the one-gate circuit's run realizes the claims of `demoRuns (placed 1)`. -/
+theorem honest_feasible : (demoRuns (placed 1)).Realizes () := by
+  refine ⟨by simp, by simp [demoRuns, Circuit.width], fun _ _ => le_rfl, ?_, ?_⟩
+  · intro u p hp
+    fin_cases u
+    simp only [demoRuns, List.mem_cons, List.mem_singleton, List.not_mem_nil] at hp
+    rcases hp with rfl | rfl
+    · show (placed 1).work _ _ ≤ 1
+      simp only [demoRuns, Runs.innerBlock, Partition.whole, Partition.gates, Placed.work]
+      decide
+    · show (placed 1).blockInput _ _ _ _ ≤ 0
+      simp only [demoRuns, Runs.innerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
+      decide
+  · intro i p hp
+    fin_cases i
+    simp only [demoRuns, List.mem_singleton] at hp
+    subst hp
+    show (placed 1).work _ _ ≤ 1
+    simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]
     decide
 
-/-- **A circuit outside the feasible set**: the two-gate circuit is not in the feasible set of `oneBlock`, at any
-pricing and any registered input gates: both gates are in the one top block, which then has size at least 2. -/
-theorem two_not_feasible (π : Fin (placed 2).N → ℕ) (θ : Finset (Fin (placed 2).N)) :
-    ¬ oneBlock.FeasibleSet (placed 2) π θ := by
-  rintro ⟨-, -, hπ, B, hB⟩
-  have hsize := hB () (.sizeAtMost 1) (by simp [oneBlock])
-  have hc : ∀ g : Fin 3, g ≠ 0 → g ∈ (placed 2).computed := by
-    intro g hg
-    simp only [Circuit.computed, placed, line, decide_eq_false_iff_not, Fin.val_eq_zero_iff]
-    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hg⟩
-  have hin : ∀ g : Fin 3, g ≠ 0 → g ∈ (B.block ()).gates := by
-    intro g hg
-    obtain ⟨i, -, h⟩ := B.covers g (hc g hg)
-    exact h
-  have h12 : ({1, 2} : Finset (Fin 3)) ⊆ (B.block ()).gates := by
-    intro g hg
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hg
-    rcases hg with rfl | rfl
-    · exact hin 1 (by decide)
-    · exact hin 2 (by decide)
-  have hle : ∑ g ∈ ({1, 2} : Finset (Fin 3)), π g ≤ (placed 2).work π (B.block ()).gates :=
-    Finset.sum_le_sum_of_subset_of_nonneg h12 fun _ _ _ => Nat.zero_le _
-  have h1 := hπ (1 : Fin 3) (hc 1 (by decide))
-  have h2 := hπ (2 : Fin 3) (hc 2 (by decide))
-  have hpair : ∑ g ∈ ({1, 2} : Finset (Fin 3)), π g = π (1 : Fin 3) + π (2 : Fin 3) := Finset.sum_pair (by decide)
-  change (placed 2).work π (B.block ()).gates ≤ 1 at hsize
-  omega
+/-- **A run outside the feasible set**: the two-gate circuit's run does not realize the claims of `demoRuns (placed 2)`,
+whose one inference block is then of size at least 2. -/
+theorem two_not_feasible : ¬ (demoRuns (placed 2)).Realizes () := by
+  rintro ⟨-, -, -, hcl_in, -⟩
+  have h := hcl_in 0 (.sizeAtMost 1) (by simp [demoRuns])
+  simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, demoRuns, Partition.whole, Partition.gates,
+    Placed.work] at h
+  revert h
+  decide
 
-/-- **The test**: a division claiming no function does not make every actual circuit feasible. -/
-theorem not_every_feasible :
-    ¬ ∀ (Dv : Division Unit) (A : Placed Unit) (π : Fin A.N → ℕ) (θ : Finset (Fin A.N)),
-      (∀ i, ∀ p ∈ Dv.claims i, ∀ f, p ≠ .function f) → Dv.FeasibleSet A π θ :=
-  fun h => two_not_feasible (fun _ => 1) ∅ (h oneBlock (placed 2) _ _ (by simp [oneBlock]))
+/-- **The test**: not every circuit's run is in the feasible set. -/
+theorem not_every_feasible : ¬ ∀ A : Placed Unit, (demoRuns A).Realizes () :=
+  fun h => two_not_feasible (h (placed 2))
 
-/-- **`parent` is a forest**: no block lies, at any depth, inside itself. -/
-theorem parent_acyclic {L : Type*} (Dv : Division L) (i : Dv.ι) :
-    ¬ Relation.TransGen (fun a b => Dv.parent a = some b) i i := by
-  have hlt : ∀ a b, Relation.TransGen (fun a b => Dv.parent a = some b) a b → Dv.depth b < Dv.depth a := by
-    intro a b h
-    induction h with
-    | single h => exact Dv.depth_lt _ _ h
-    | tail _ h ih => exact lt_trans (Dv.depth_lt _ _ h) ih
-  exact fun h => lt_irrefl _ (hlt i i h)
-
-/-- **The check refuses a top block in no class**: `oneBlock`'s one block has no block inside it and is neither an
-inference nor a free block, so it fails the inference-only check at every limit. -/
-theorem oneBlock_fails (lim : InferenceOnly.Limits) : InferenceOnly.check lim oneBlock = false := by
-  unfold InferenceOnly.check
-  have h : decide (∀ i, (∀ j, oneBlock.parent j ≠ some i) → i ∈ oneBlock.inference ∨ i ∈ oneBlock.free) = false :=
-    decide_eq_false fun h => by
-      rcases h () fun _ => by simp [oneBlock] with h | h <;> exact Finset.notMem_empty _ h
-  rw [h]
-  simp
-
-theorem size_le_of_claim {L : Type*} {Dv : Division L} {A : Placed L} (B : Dv.Gates A) (π : Fin A.N → ℕ)
-    (θ : Finset (Fin A.N)) (i : Dv.ι) (c : ℕ) (hB : ∀ p ∈ Dv.claims i, B.Holds π θ i p)
-    (h : (Dv.claims i).any (InferenceOnly.sizeAtMost c) = true) : B.size π i ≤ c := by
-  obtain ⟨p, hp, hpc⟩ := List.any_eq_true.mp h
-  cases p <;> simp only [InferenceOnly.sizeAtMost, decide_eq_true_eq, Bool.false_eq_true] at hpc
-  exact le_trans (hB _ hp) hpc
-
-/-- **The check bites**: under a division that passes the inference-only check, every actual circuit in the feasible
-set has total work at most `n · c` plus `m · freeSize`, the inference and free blocks' claimed sizes. -/
-theorem feasible_work_le {L : Type*} (lim : InferenceOnly.Limits) (Dv : Division L) (A : Placed L)
-    (π : Fin A.N → ℕ) (θ : Finset (Fin A.N)) (hc : InferenceOnly.check lim Dv = true)
-    (hf : Dv.FeasibleSet A π θ) : A.work π A.computed ≤ lim.n * lim.c + lim.m * lim.freeSize := by
-  obtain ⟨-, -, -, B, hB⟩ := hf
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨⟨hleaf, -⟩, -⟩, hn⟩, hinf⟩, hm⟩, hfree⟩ := hc
-  have hdesc : ∀ k i, Finset.univ.sup Dv.depth - Dv.depth i ≤ k → ∀ g ∈ (B.block i).gates,
-      ∃ l, (∀ j, Dv.parent j ≠ some l) ∧ g ∈ (B.block l).gates := by
-    intro k
-    induction k with
-    | zero =>
-      intro i hi g hg
-      refine ⟨i, fun j hj => ?_, hg⟩
-      have h1 := Dv.depth_lt j i hj
-      have h2 : Dv.depth j ≤ Finset.univ.sup Dv.depth := Finset.le_sup (Finset.mem_univ j)
-      omega
-    | succ k ih =>
-      intro i hi g hg
-      by_cases hl : ∀ j, Dv.parent j ≠ some i
-      · exact ⟨i, hl, hg⟩
-      · simp only [ne_eq, not_forall, not_not] at hl
-        obtain ⟨j, hj⟩ := hl
-        obtain ⟨i', hi', hg'⟩ := B.children j i hj g hg
-        refine ih i' ?_ g hg'
-        have h1 := Dv.depth_lt i' i hi'
-        have h2 : Dv.depth i' ≤ Finset.univ.sup Dv.depth := Finset.le_sup (Finset.mem_univ i')
-        omega
-  have hsub : A.computed ⊆ (Dv.inference ∪ Dv.free).biUnion fun i => (B.block i).gates := by
-    intro g hg
-    obtain ⟨i, -, hgi⟩ := B.covers g hg
-    obtain ⟨l, hl, hgl⟩ := hdesc _ i le_rfl g hgi
-    exact Finset.mem_biUnion.mpr ⟨l, Finset.mem_union.mpr (hleaf l hl), hgl⟩
-  have hbu : ∀ S : Finset Dv.ι, A.work π (S.biUnion fun i => (B.block i).gates) ≤ ∑ i ∈ S, B.size π i := by
-    intro S
-    induction S using Finset.induction_on with
-    | empty => simp [Placed.work]
-    | insert a S ha ih =>
-      rw [Finset.biUnion_insert, Finset.sum_insert ha]
-      have := Finset.sum_union_inter (s₁ := (B.block a).gates) (s₂ := S.biUnion fun i => (B.block i).gates)
-        (f := π)
-      unfold Division.Gates.size Placed.work at ih ⊢
-      omega
-  have hw : A.work π A.computed ≤ A.work π ((Dv.inference ∪ Dv.free).biUnion fun i => (B.block i).gates) :=
-    Finset.sum_le_sum_of_subset_of_nonneg hsub fun _ _ _ => Nat.zero_le _
-  have hs := Finset.sum_union_inter (s₁ := Dv.inference) (s₂ := Dv.free) (f := fun i => B.size π i)
-  have hI : ∑ i ∈ Dv.inference, B.size π i ≤ Dv.inference.card * lim.c := by
-    simpa using Finset.sum_le_card_nsmul Dv.inference (fun i => B.size π i) lim.c
-      fun i hi => size_le_of_claim B π θ i lim.c (hB i) (hinf i hi).1
-  have hF : ∑ i ∈ Dv.free, B.size π i ≤ Dv.free.card * lim.freeSize := by
-    simpa using Finset.sum_le_card_nsmul Dv.free (fun i => B.size π i) lim.freeSize
-      fun i hi => size_le_of_claim B π θ i lim.freeSize (hB i) (hfree i hi)
-  have := hbu (Dv.inference ∪ Dv.free)
-  have h1 := Nat.mul_le_mul_right lim.c hn
-  have h2 := Nat.mul_le_mul_right lim.freeSize hm
-  omega
+/-- **No top block is in no class**: `kind` is total, so the degenerate case of a top block in neither the server-day nor
+the hidden class cannot be stated. Nothing sits inside an inference block, the finest scale here, so neither can a block
+inside an inference block that is not a proof block. -/
+theorem top_blocks_classified (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
+    P.kind r i = true ∨ P.kind r i = false := by cases P.kind r i <;> simp
 
 end ResourceAccounting.SecurityProofs.BlockProperties
