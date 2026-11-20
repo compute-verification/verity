@@ -55,6 +55,28 @@ def wRun : Json :=
 #guard OneStageZk.RUN_OWN_ROOT_WHY "T/c0" "w" 0 == "member T/c0: port w reads C's run input node 0, and the " ++
   "registration holds a root of its own for it: a run input node's rows are committed once, in input/n0"
 
+-- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the node off
+-- `HmLinks.unitAt` and `OneCircuit.regRow`
+#guard (runAt runP #[]).toOption.map (·.map (getD · "tree")) == some #[Json.str (Flock.Registered.freshValue 0)]
+#guard (Flock.OneCircuit.pos runP #[0, 1] Flock.Test.WiredPorts.fresh).toOption.isSome
+#guard (Flock.OneCircuit.pos runP #[0, 1]
+  { Flock.Test.WiredPorts.fresh with value := Flock.Registered.freshValue 1 }).toOption.isNone
+
+/-- `OneStageZk.runInputRootsAt` on `{program, units, roots}`, `program` C's descriptor's text
+(`Spot.Program.parse`), with no root of the member's own: for each unit of `units`, its ports at run input nodes' trees as `[port, tree]`, in its
+Definition's parameter order, at the record's `roots` (`rootsByPort`), or its refusal. -/
+def runInputPiece (j : Json) : Except String Json := do
+  let .str t := getD j "program" | throw "program is not a string"
+  let P ← (Spot.Program.parse t.toUTF8).mapError (s!"program: {·}")
+  let .arr us := getD j "units" | throw "units is not a list"
+  let byPort := OneStageZk.rootsByPort j
+  let out ← us.mapM fun u => do
+    let some n := u.getNat?.toOption | throw "a unit is not a natural"
+    pure (match OneStageZk.runInputRootsAt P.prog "m" n #[] byPort with
+      | .ok rs => Json.arr (rs.map fun r => Json.arr #[getD r "port", getD r "tree"])
+      | .error e => Json.str e)
+  pure (Json.arr out)
+
 def runSlice : Json := Json.mkObj [("population", (2 : Nat)), ("roots", Json.arr #[wRun]), ("scheme", "s")]
 def runHeader : Json := Json.mkObj [("instances", (2 : Nat)), ("scheme", "s"),
   ("frame_v3", Json.mkObj [("roots", Json.mkObj [("w", "77")]), ("domain_ids", Json.mkObj [("w", "d77")])])]
