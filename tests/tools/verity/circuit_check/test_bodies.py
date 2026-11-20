@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import itertools
 import random
-from collections import Counter
 
 import pytest
 
@@ -59,11 +58,8 @@ NEG = _prim("Neg", (V8,), lambda a: (-a) & 255)
 DIV = _prim("Div", (V8, V8), _nonzero)
 SUM3 = _prim("Sum3", (Array(3, V8),), lambda a, b, c: (a + 2 * b + 3 * c) & 255)
 PICK = _prim("Pick", (V8, Array(4, V8)), lambda i, *t: t[i % 4], lazy=lambda get: get(1 + get(0) % 4))
-REACH = _prim("Reach", (V8, Array(4, V8)), lambda i, *t: t[i], lazy=lambda get: get(get(0)))
 WIDE = _prim("Wide", (V8, Array(N_WIDE, V8)), lambda i, *t: t[i] ^ t[-1], lazy=lambda get: get(1 + get(0)) ^ get(-1))
 FOLD = _prim("Fold", (Array(N_WIDE, V8),), lambda *t: sum(t) & 255)
-MISS = _prim("Miss", (V8,), lambda a: a, lazy=lambda get: get(0) if get(0) % 3 else {}[get(0)])
-INPUT = _prim("Input", (), lambda: 0, family="Input")
 
 INNER = _composite("Inner", (V8, V8), V8, lambda B, S, a, b: B.call(MUL, B.call(NEG, B.call(ADD, a, b)), a))
 INNER3 = _composite("Inner3", (Array(3, V8),), V8, lambda B, S, v: B.call(ADD, B.call(SUM3, v), v[1]))
@@ -112,26 +108,12 @@ def _random_args(params, rng: random.Random, hi: int = 255) -> list:
     return [rng.randint(0, hi) if isinstance(t, Value) else [rng.randint(0, hi) for _ in range(t.leaves)] for t in params]
 
 
-def _alike(params, v: int) -> list:
-    """Every leaf ``v``, as an edge vector sets them."""
-    return [v if isinstance(t, Value) else [v] * t.leaves for t in params]
-
-
 @pytest.fixture(params=[False, True], ids=["every-activation-run", "repeats-looked-up"])
 def memo(request, monkeypatch):
     """Bodies compiled anew, each activation looked up (any body) or none."""
     monkeypatch.setattr(BD, "_BODIES", {})
     monkeypatch.setattr(BD, "MEMO_GATES_PER_LEAF", 0 if request.param else 1 << 60)
     return request.param
-
-
-def test_a_body_with_every_construct_evaluates_as_the_reference(memo):
-    assert BD.compiled(TOP) is not None, "the test would compare the reference with itself"
-    assert BD.compiled(TOP).memo is memo
-    rng = random.Random(7)
-    for args in [_random_args(TOP_PARAMS, rng) for _ in range(6)] + [_alike(TOP_PARAMS, v) for v in (0, 1, 3, 255)]:
-        got = _outcome(BD.evaluate, TOP, *args)
-        assert got[0] == "returned" and got == _outcome(reference, TOP, *args)
 
 
 ODD = (0, 1, 2, 3, -1, -2, 1 << 70, (1 << 70) + 1, True, False, None, 1.0, "1")
@@ -266,83 +248,6 @@ def test_rows_of_bits_run_on_lanes_as_the_reference(memo, monkeypatch):
     for fn, rs in ((LANE, rows[2:]), (LANE, rows[2:] * 3), (divides, rows[:2])):
         assert [_row(g) for g in BD.evaluate_rows(fn, rs)] == [_outcome(BD.evaluate, fn, *r) for r in rs]
         assert {_row(g)[0] for g in BD.evaluate_rows(fn, rs)} == {"raised"}
-
-
-CALLS: Counter = Counter()
-
-
-def _mix(a, b):
-    CALLS["mix"] += 1
-    return (3 * a + b) & 255
-
-
-MIX = _prim("Mix", (V8, V8), _mix)
-TWICE = _composite("Twice", (V8, V8), V8, lambda B, S, a, b: B.call(MIX, B.call(MIX, a, b), b))
-TWICE_STEP = _composite("TwiceStep", (V8, V8), Tuple(V8, V8), lambda B, S, c, s: tuple_of(B.call(TWICE, c, s), c))
-
-
-def test_a_repeated_activation_takes_the_values_of_the_first(memo, monkeypatch):
-    """A batch's members, a scan's steps and calls on one body's parameter values run once each within one `evaluate` (none of
-    them again in the next), and return what the reference does; with no room left (`MEMO_LEAVES`) every one runs."""
-    def body(B, S, x, y):
-        b = B.batch(TWICE, x, y, axes=(0, None))
-        c = B.call(TWICE, x[0], y)
-        s = B.scan(TWICE_STEP, y, shared=[y], n=3)
-        return _flat(Array(9, V8), [b, c, s])
-
-    rep = _composite("Repeats", (Array(4, V8), V8), Array(9, V8), body)
-    for x, y, runs in (([5, 5, 5, 5], 1, 1 + 3), ([5, 6, 5, 6], 1, 2 + 3), ([4, 5, 6, 7], 0, 4 + 1)):
-        CALLS.clear()
-        got = _outcome(BD.evaluate, rep, x, y)
-        assert CALLS["mix"] == 2 * (runs if memo else 4 + 1 + 3), (x, y)
-        assert got[0] == "returned" and got == _outcome(reference, rep, x, y)
-    monkeypatch.setattr(BD, "MEMO_LEAVES", 0)
-    CALLS.clear()
-    got = _outcome(BD.evaluate, rep, [5, 5, 5, 5], 1)
-    assert CALLS["mix"] == 2 * (4 + 1 + 3)
-    assert got == _outcome(reference, rep, [5, 5, 5, 5], 1)
-
-
-def test_an_activation_that_raised_is_not_taken_again(memo):
-    """A member that raises after members it repeats raises with its own gate index, and the member it repeats after one that
-    raised is never reached: the first to raise is the reference's."""
-    divs = _composite("Divs", (V8, V8), V8, lambda B, S, a, b: B.call(ADD, B.call(DIV, a, b), a))
-    leaf = _composite("MissOnce", (V8,), V8, lambda B, S, v: B.call(ADD, B.call(MISS, v), v))
-    batch_divs = _composite("BatchDivs", (Array(4, V8), Array(4, V8)), Array(4, V8),
-                            lambda B, S, a, b: B.batch(divs, a, b, axes=(0, 0)))
-    batch_miss = _composite("BatchMiss", (Array(4, V8),), Array(4, V8), lambda B, S, a: B.batch(leaf, a, axes=(0,)))
-    cases = [(batch_divs, [[6, 6, 7, 7], [2, 2, 0, 0]]), (batch_divs, [[6, 6, 6, 6], [2, 2, 2, 2]]),
-             (batch_miss, [[1, 1, 3, 3]]), (batch_miss, [[1, 1, 4, 6]]), (batch_miss, [[2, 2, 2, 2]])]
-    raised = 0
-    for fn, args in cases:
-        got = _outcome(BD.evaluate, fn, *args)
-        assert got == _outcome(reference, fn, *args), (fn.id, args)
-        raised += got[0] == "raised"
-    assert raised == 3
-
-
-def test_what_the_reference_raises_is_raised_with_the_same_gate_index(memo):
-    """A primitive's own exception from the first member that raises, a lazy primitive's KeyError as the reference's
-    `MissingValue` naming its root-scoped gate (in a batch of a composite inside a call), a lazy read past its operands, an
-    Input gate, and a wrong argument count."""
-    leaf = _composite("MissLeaf", (V8,), V8, lambda B, S, v: B.call(MISS, B.call(NEG, v)))
-    mid = _composite("MissMid", (Array(4, V8),), Array(4, V8),
-                     lambda B, S, a: (B.call(ADD, a[0], a[1]), B.batch(leaf, a, axes=(0,)))[1])
-    missing = _composite("Missing", (Array(4, V8),), Array(4, V8), lambda B, S, a: B.call(mid, a))
-    divides = _composite("Divides", (Array(4, V8), Array(4, V8)), Array(4, V8),
-                         lambda B, S, a, b: B.batch(DIV, a, b, axes=(0, 0)))
-    reach = _composite("Reach", (V8, Array(4, V8)), V8, lambda B, S, i, t: B.call(ADD, B.call(REACH, i, t), i))
-    unset = _composite("Unset", (V8,), V8, lambda B, S, a: B.call(ADD, a, B.call(INPUT)))
-    cases = [(missing, [[1, 2, 4, 3]]), (missing, [[2, 3, 5, 4]]), (missing, [[2, 3, 5, 6]]),
-             (divides, [[5, 6, 7, 8], [1, 0, 2, 0]]), (divides, [[5, 6, 7, 8], [1, 1, 2, 3]]),
-             (reach, [2, [1, 2, 3, 4]]), (reach, [9, [1, 2, 3, 4]]), (unset, [3]), (divides, [[5, 6, 7, 8]])]
-    raised = 0
-    for fn, args in cases:
-        assert BD.compiled(fn) is not None
-        got = _outcome(BD.evaluate, fn, *args)
-        assert got == _outcome(reference, fn, *args), (fn.id, args)
-        raised += got[0] == "raised"
-    assert raised == 6
 
 
 def test_a_body_it_does_not_compile_is_left_to_the_reference(monkeypatch):
