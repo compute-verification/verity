@@ -158,6 +158,27 @@ theorem walk_done {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array �
   obtain ⟨bi, hb, hb'⟩ := hw hwn
   exact ⟨bi, hb', hb⟩
 
+/-- At the walk's end, every composite it has seen has its callees seen, each word primitive among them at its Boolean
+Definition in `toB`. -/
+theorem walk_done_at {S : Prog} {d x : ℕ} {seen : Std.HashSet ℕ} {todo : Array ℕ} {at_ : ℕ} {toB : Std.HashMap ℕ ℕ}
+    (h : WalkInv S d seen todo at_ toB) (hge : ¬ at_ < todo.size) (hx : seen.contains x = true)
+    (hpx : (S.defs[x]!).prim = false) :
+    ∀ nd ∈ (S.defs[x]!).body.nodes, seen.contains nd.fn = true ∧
+      (isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
+        ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧ toB[nd.fn]? = some bi) := by
+  obtain ⟨-, -, h3, h4, h5, -⟩ := h
+  intro nd hnd
+  have hin := (h5 x hx).1 hpx nd hnd
+  obtain ⟨j, hj, hjx⟩ := List.getElem_of_mem hin
+  have hj' : j < todo.size := by simpa using hj
+  have hs : seen.contains nd.fn = true := by
+    have := h4 j (by omega)
+    rw [getElem!_pos todo j hj'] at this
+    rw [← hjx, Array.getElem_toList]; exact this
+  refine ⟨hs, fun hwn => ?_⟩
+  obtain ⟨bi, hb, hb'⟩ := (h5 _ hs).2 hwn
+  exact ⟨bi, hb', hb⟩
+
 theorem wordy_init (S : Prog) (d : ℕ) :
     WordyInv S d ∅ ∧ ∀ x ∈ ([] : List ℕ), ((∅ : Std.HashMap ℕ Bool)[x]?).isSome = true :=
   ⟨fun x b h => by simp at h, fun x hx => by simp at hx⟩
