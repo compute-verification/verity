@@ -508,7 +508,7 @@ def throughPS (ap : PS) (q : Piece) : Option Piece :=
 elements of that piece's row `r`. -/
 def Piece.reshape (x : Piece) (rows len : Nat) : Option Piece :=
   if x.rows == rows && x.len == len then some x
-  else if x.rows ≤ 1 && x.lv.isEmpty && x.len == rows * len then
+  else if x.rows == 1 && x.lv.isEmpty && x.len == rows * len then
     some { x with len, rows, rowStride := (len : Int) * x.stride }
   else none
 

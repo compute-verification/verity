@@ -1471,8 +1471,9 @@ theorem ofPart_ok (q : Part) : ∀ g ∈ (Desc.ofPart q).toList, SegOk g := by
       show (posAll (Desc.Seg.copy _ 0)).length = _
       simp only [Desc.Seg.copy, ↓reduceIte]
       rw [posAll_map, List.length_flatMap]
-      simp only [Function.comp_apply, pos_lane_row, List.length_map, List.length_range, List.map_const', List.sum_replicate,
-        Array.length_toList, smul_eq_mul, Nat.mul_comm]
+      simp only [Array.toList_map, List.map_map, Function.comp_def, pos_lane_row, List.length_map,
+        List.length_range]
+      simp [Nat.mul_comm]
 
 theorem partsFold_ok : ∀ (l : List Part) (acc : Array Seg), (∀ g ∈ acc.toList, SegOk g) →
     ∀ g ∈ (l.foldl (fun acc q => acc ++ Desc.ofPart q) acc).toList, SegOk g

@@ -253,9 +253,8 @@ theorem pos_row_sl (q : Piece) (m : Nat) (hm : m < q.rows) :
   rw [pos_eq_rows q, sl_flatMap_range _ q.len (fun r => by rw [pos_row]; simp) q.rows m hm]
 
 /-- `y` reshaped to `rows` rows of `len`: row `m` its positions `[m·len, (m+1)·len)`. -/
-theorem reshape_row (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows len = some p)
-    (hlen : (pos y).length = rows * len) (m : Nat) (hm : m < rows) :
-    pos (p.row m) = sl (pos y) (m * len) ((m + 1) * len) := by
+theorem reshape_row (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows len = some p) (m : Nat)
+    (hm : m < rows) : pos (p.row m) = sl (pos y) (m * len) ((m + 1) * len) := by
   unfold Desc.Piece.reshape at h
   split at h
   · rename_i hc
@@ -266,23 +265,14 @@ theorem reshape_row (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows
     exact pos_row_sl _ m hm
   · split at h
     · rename_i _ hc
-      simp only [Bool.and_eq_true, decide_eq_true_eq, List.isEmpty_iff, beq_iff_eq] at hc
+      simp only [Bool.and_eq_true, List.isEmpty_iff, beq_iff_eq] at hc
       obtain ⟨⟨hr, hlv⟩, hl⟩ := hc
       cases h
-      rcases Nat.eq_zero_or_pos len with h0 | h0
-      · subst h0
-        simp [pos_row, sl]
-      have hc : y.rows = 1 := by
-        rw [pos_length, Desc.Piece.count, hl] at hlen
-        have : 0 < rows * len := Nat.mul_pos (by omega) h0
-        rcases Nat.lt_or_ge y.rows 1 with h | h
-        · have : y.rows = 0 := by omega
-          rw [this, Nat.zero_mul] at hlen; omega
-        · omega
-      rw [pos_eq_rows y, hc, List.range_one, List.flatMap_singleton, pos_row, hl, sl_map_range _ _ _ _ (by
-        rw [Nat.succ_mul]; have : m * len + len ≤ rows * len := by
-          have := Nat.mul_le_mul_right len (Nat.succ_le_of_lt hm); rw [Nat.succ_mul] at this; exact this
-        omega), pos_row, List.range'_eq_map_range, List.map_map]
+      have hb : (m + 1) * len ≤ y.count := by
+        rw [Desc.Piece.count, hr, Nat.one_mul, hl]; exact Nat.mul_le_mul_right _ hm
+      rw [pos_eq_rows y, hr, List.range_one, List.flatMap_singleton, pos_row,
+        sl_map_range _ _ _ _ (by rw [hl, ← Nat.one_mul (rows * len), ← hr]; exact hb), pos_row,
+        List.range'_eq_map_range, List.map_map]
       have hL : (m + 1) * len - m * len = len := by rw [Nat.succ_mul]; omega
       rw [hL]
       apply List.map_congr_left
@@ -292,6 +282,12 @@ theorem reshape_row (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows
       push_cast
       ring
     · cases h
+
+theorem reshape_sub (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows len = some p) (m : Nat)
+    (hm : m < rows) : ∀ x ∈ pos (p.row m), x ∈ pos y := by
+  intro x hx
+  rw [reshape_row y rows len p h m hm] at hx
+  exact List.mem_of_mem_drop (List.mem_of_mem_take hx)
 
 /-- **What `segDown` gives a segment names what `f` gives each of its positions**: related position by position (`R`)
 to `s`'s, where each piece `f` resolves, its positions `s`'s, gives segments so related to its positions, and a rowed
@@ -340,8 +336,7 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
       have hxy := hf q #[x] (hsub q hq) hfr
       rw [segsPos_singleton, single_pos x y hy] at hxy
       have hmq : m < q.rows := by rw [hs hr q hq]; exact List.mem_range.1 hm
-      have hlen : (pos y).length = q.rows * q.len := by rw [hxy.length_eq, pos_length]; rfl
-      rw [reshape_row y q.rows q.len p hre hlen m hmq, pos_row_sl q m hmq]
+      rw [reshape_row y q.rows q.len p hre m hmq, pos_row_sl q m hmq]
       exact forall2_sl hxy _ _
     · obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
       obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
@@ -355,5 +350,126 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
       simp only [Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at hF
       rw [hL]
       exact rel_trace hF fun q hq v hv => hf q v (fun x hx => by rw [hL]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩) hv
+
+theorem reshape_dims (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows len = some p) :
+    p.rows = rows ∧ p.len = len := by
+  unfold Desc.Piece.reshape at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, beq_iff_eq] at hc
+    cases h; exact hc
+  · split at h
+    · cases h; exact ⟨rfl, rfl⟩
+    · cases h
+
+theorem copy_count (s : Seg) (m : Nat) (q : Piece) (hq : q ∈ (s.copy m).toList) :
+    ∃ p ∈ s.ps.toList, q.count = p.count ∨ q.count = p.len := by
+  unfold Desc.Seg.copy at hq
+  split at hq
+  · rw [Array.toList_map, List.mem_map] at hq
+    obtain ⟨p, hp, rfl⟩ := hq
+    exact ⟨p, hp, .inr (by simp [Desc.Piece.count, Desc.Piece.row])⟩
+  · unfold Desc.shiftGates at hq
+    rw [Array.toList_map, List.mem_map] at hq
+    obtain ⟨p, hp, rfl⟩ := hq
+    refine ⟨p, hp, .inl ?_⟩
+    split <;> rfl
+
+theorem forall2_true {α β : Type} : ∀ {l : List α} {m : List β}, l.length = m.length →
+    List.Forall₂ (fun _ _ => True) l m
+  | [], [], _ => .nil
+  | _ :: _, _ :: _, h => .cons trivial (forall2_true (by simpa using h))
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+
+/-- **Each segment `segDown` gives** is one `f` gives a piece of `s`'s copies, of positive count and its positions
+`s`'s; or `s` with its pieces each reshaped from what `f` gives it, each position one `f` gives such a piece, its pieces
+`s`'s counts and its copies `s`'s length. -/
+theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
+    (hs : s.rowed = true → ∀ p ∈ s.ps.toList, p.rows = s.reps) (hpos : ∀ p ∈ s.ps.toList, 0 < p.count)
+    (out : Array Seg) (h : Desc.segDown f s = .ok out) (g : Seg) (hg : g ∈ out.toList) :
+    (∃ q v, 0 < q.count ∧ (∀ x ∈ pos q, x ∈ segPos s) ∧ f q = .ok v ∧ g ∈ v.toList) ∨
+    ((∀ x ∈ segPos g, ∃ q v, 0 < q.count ∧ (∀ x ∈ pos q, x ∈ segPos s) ∧ f q = .ok v ∧ x ∈ segsPos v) ∧
+      (∀ p ∈ g.ps.toList, ∃ q ∈ s.ps.toList, p.count = q.count) ∧ g.reps = s.reps ∧
+      (posAll (g.copy 0)).length = (posAll (s.copy 0)).length) := by
+  have hcopy : ∀ L : List Nat, ∀ q ∈ L.flatMap (fun m => (s.copy m).toList), 0 < q.count := by
+    intro L q hq
+    obtain ⟨m, -, hq⟩ := List.mem_flatMap.1 hq
+    obtain ⟨p, hp, e | e⟩ := copy_count s m q hq
+    · rw [e]; exact hpos p hp
+    · rw [e]; have := hpos p hp; unfold Desc.Piece.count at this; exact Nat.pos_of_mul_pos_left this
+  unfold Desc.segDown at h
+  cases hr : s.rowed
+  · simp only [hr, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rw [← Array.forIn_toList] at ho
+    obtain ⟨outs, hF, rfl⟩ := forIn_trace f _ #[] o ho
+    rcases mem_foldl outs #[] g hg with hg | ⟨v, hv, hgv⟩
+    · simp at hg
+    obtain ⟨q, hq, hfq⟩ := forall2_mem hF v hv
+    have hL : segPos s = ((Array.range s.reps).flatMap s.copy).toList.flatMap pos := by
+      simp only [segPos, posAll, Array.toList_flatMap, Array.toList_range, List.flatMap_assoc]
+    have hq' : q ∈ (List.range s.reps).flatMap fun m => (s.copy m).toList := by
+      simpa only [Array.toList_flatMap, Array.toList_range] using hq
+    exact .inl ⟨q, v, hcopy _ q hq', fun x hx => by rw [hL]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩, hfq, hgv⟩
+  · simp only [hr, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨rs, hrs, h⟩ := Walk.except_bind_ok h
+    have hrs2 := array_mapM_ok _ _ hrs
+    have hsub : ∀ q ∈ s.ps.toList, ∀ x ∈ pos q, x ∈ segPos s := by
+      intro q hq x hx
+      rw [pos_eq_rows q, hs hr q hq] at hx
+      obtain ⟨m, hm, hx⟩ := List.mem_flatMap.1 hx
+      refine List.mem_flatMap.2 ⟨m, hm, ?_⟩
+      rw [copy_rowed s hr, posAll_map]
+      exact List.mem_flatMap.2 ⟨q, hq, hx⟩
+    split at h
+    · rename_i ps hps
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      simp only [List.mem_singleton, Array.toList_singleton] at hg
+      subst hg
+      have hpair := forall2_zip hrs2 (by rw [← Array.toList_zip]; exact array_mapM_some _ _ hps)
+      have hone : ∀ p ∈ ps.toList, ∃ q ∈ s.ps.toList, ∃ x y, f q = .ok #[x] ∧ x.single = some y ∧
+          y.reshape q.rows q.len = some p := by
+        intro p hp
+        obtain ⟨q, -, hq, r, hfr, hone⟩ := forall2_mem hpair.flip p hp
+        rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hone
+        obtain ⟨y, hy, hre⟩ := hone
+        exact ⟨q, hq, x, y, hfr, hy, hre⟩
+      refine .inr ⟨fun x hx => ?_, fun p hp => ?_, rfl, ?_⟩
+      · obtain ⟨m, hm, hx⟩ := List.mem_flatMap.1 hx
+        rw [show ({ s with ps } : Seg).copy m = ps.map (·.row m) from copy_rowed _ hr m, posAll_map] at hx
+        obtain ⟨p, hp, hx⟩ := List.mem_flatMap.1 hx
+        obtain ⟨q, hq, x', y, hfr, hy, hre⟩ := hone p hp
+        have hmq : m < q.rows := by rw [hs hr q hq]; exact List.mem_range.1 hm
+        refine ⟨q, #[x'], hpos q hq, hsub q hq, hfr, ?_⟩
+        rw [segsPos_singleton, single_pos x' y hy]
+        exact reshape_sub y _ _ p hre m hmq x hx
+      · obtain ⟨q, hq, x', y, -, -, hre⟩ := hone p hp
+        obtain ⟨h1, h2⟩ := reshape_dims y _ _ p hre
+        exact ⟨q, hq, by simp [Desc.Piece.count, h1, h2]⟩
+      · rw [show ({ s with ps } : Seg).copy 0 = ps.map (·.row 0) from copy_rowed _ hr 0, copy_rowed s hr,
+          posAll_map, posAll_map]
+        refine List.Forall₂.length_eq (R := fun _ _ => True) (forall2_flatMap (fun p q hpq => ?_) hpair)
+        obtain ⟨-, r, -, hone⟩ := hpq
+        rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hone
+        obtain ⟨y, -, hre⟩ := hone
+        obtain ⟨-, h2⟩ := reshape_dims y _ _ p hre
+        exact forall2_true (by simp [pos_row, h2])
+    · obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
+      obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rw [Std.Legacy.Range.forIn_eq_forIn_range'] at ho
+      obtain ⟨outs, hF, rfl⟩ := forIn_traceG f s.copy _ #[] o ho
+      simp only [Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at hF
+      rcases mem_foldl outs #[] g hg with hg | ⟨v, hv, hgv⟩
+      · simp at hg
+      obtain ⟨q, hq, hfq⟩ := forall2_mem hF v hv
+      have hL : segPos s = ((List.range' 0 s.reps).flatMap fun m => (s.copy m).toList).flatMap pos := by
+        simp only [segPos, posAll, List.flatMap_assoc, List.range_eq_range']
+      exact .inl ⟨q, v, hcopy _ q hq, fun x hx => by rw [hL]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩, hfq, hgv⟩
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
