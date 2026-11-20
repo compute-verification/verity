@@ -174,8 +174,8 @@ params are; round 2 runs no template check.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
-Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
-registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
+Serving's record is not yet the scheme the audit proves: a template audit's stand-in (`stand_in` in
+`benchmarks/one_stage/a0.py`) is a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). The
 served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are

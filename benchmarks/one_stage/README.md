@@ -12,11 +12,11 @@ server and no recursion on that path. The core protocols' path, every prover beh
 attester, where a run has one (`a5_network_attester.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
 input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
-- `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
-  template and window audits, here because they load the adapter, Flock's prover and the benchmarks' scripts
-  (`verity/protocols/proofs/spot/prover/audit/README.md`).
-- `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as
-  `compose_circuit.py` does.
+- `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A5's is SPOT's window audit,
+  here because it loads the adapter, Flock's prover and the benchmarks' scripts
+  (`verity/protocols/proofs/spot/prover/audit/README.md`). `a0.py` drives no run: it holds the steps A5 and the other runs
+  share.
+- `stage_subset.py`: a helper that runs inside the circuit prover's tree (its `verity_flock`), as `compose_circuit.py` does.
 - `a5_tp.sh` (`STANDIN=ENTRY ...`, required): A5 over the stand-in windows below, one entry a stand-in script, on a CPU machine.
   Each session's `circuit.txt` files and lookup tables go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive`
   layout) through `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each
