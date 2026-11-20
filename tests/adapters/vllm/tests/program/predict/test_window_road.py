@@ -87,8 +87,8 @@ def _digests(doc, path=""):
 
 def _plain(d):
     """Every plain digest the window's registration carries (in its record's registration.json and index.json, and the
-    registration's own docket digest), by path: a hiding commitment's root and the registered compiler's digest are
-    public, and none of these may leave."""
+    registration's own docket digest), by path, the registered compiler's digest among them: only a hiding commitment's
+    root may leave."""
     from verity.commitments import docket_digest as DD
 
     record = d / "windows" / "w0" / "record"
@@ -96,13 +96,13 @@ def _plain(d):
     found = {f"registration.json {k}": v for k, v in _digests(reg)}
     found |= {f"index.json {k}": v for k, v in _digests(json.loads((record / "index.json").read_text()))}
     found["the registration's docket digest"] = DD.digest(reg)
-    return {k: v for k, v in found.items() if v != COMPILER["digest"]
-            and not any(w in ("run", "root", "roots") or w.endswith(("_root", "_roots")) for w in re.split(r"[ .\[]", k))}
+    return {k: v for k, v in found.items()
+            if not any(w in ("run", "root", "roots") or w.endswith(("_root", "_roots")) for w in re.split(r"[ .\[]", k))}
 
 
 def _secret(d):
-    """The declared circuit's description as the auditor must not see it: its templates' names and its digests (the
-    registered compiler that builds it is public)."""
+    """The declared circuit's description as the auditor must not see it: its templates' names and its digests, the
+    registered compiler's included."""
     record = d / "windows" / "w0" / "record"
     doc = json.loads((record / "circuit.json").read_text())
     return {str(t) for t, _ in doc["templates"]} | {hashlib.sha512((record / "circuit.json").read_bytes()).hexdigest(),

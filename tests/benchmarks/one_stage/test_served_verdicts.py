@@ -125,13 +125,14 @@ REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256,
 
 def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
     """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
-    none of its requests, names no window, and keeps its roots, compiler and binding's root."""
+    none of its requests, names no window, carries no digest of its compiler, and keeps its roots, the compiler's name
+    and cap, and the binding's root."""
     got = S.public_registration(REGISTRATION)
     assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
     assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
     assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
-    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
-        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    assert {k: got[k] for k in ("registered_roots", "T", "schema")} == {k: REGISTRATION[k] for k in ("registered_roots", "T", "schema")}
+    assert got["compiler"] == {"name": "c", "cap_bits": 8388608} and got["binding"]["compiler"] == {"name": "c"}
     (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
     assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
     assert json.loads(capsys.readouterr().out) == got
