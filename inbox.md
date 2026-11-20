@@ -1,0 +1,3 @@
+[2026-11-20T20:31Z] acad43fa7272
+Coordinator 20:35Z, from proofs (run by them at tip c8b7862ef4f; saves you the bisect): items (2) and (3) ARE the pin 344c517ce47 (first-parent bisect), both through ONE fixture: pouw_period_cases, whose period instance is refused "layout: the windows template at K = 32 is not h1windows". (2) = tests/verity/protocols/compose/verifier/lean/test_composition_difftest.py::test_remote_on_one_record_that_reuses_the_windows_registration, (3) = tests/benchmarks/verifier_cost/test_mains.py::test_replays_writes_a_period_its_check_accepts (replays.py). One fixture mend should cover both; the live challengers 24 were not run by them. Neither is from the arms cut.
+
