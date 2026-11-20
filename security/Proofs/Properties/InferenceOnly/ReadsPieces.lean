@@ -480,7 +480,8 @@ theorem copy_pos (s : Seg) (h : s.lanes = false) (m : Nat) :
   rw [copy_flat s h]; exact shiftGates_pos _ _
 
 theorem segPos_one (q : Piece) : segPos (Seg.one q) = pos q := by
-  simp only [segPos, Seg.one, Desc.Seg.copy, Bool.false_eq_true, ↓reduceIte, List.range_one, List.flatMap_singleton,
+  simp only [segPos, Seg.one, Desc.Seg.copy, Desc.Seg.lanes, Bool.false_and, Bool.false_eq_true, ↓reduceIte,
+    List.range_one, List.flatMap_singleton,
     shiftGates_pos, Int.mul_zero, shiftPos_zero, List.map_id, posAll_singleton]
 
 theorem segsPos_one (ps : Array Piece) : segsPos (ps.map Seg.one) = posAll ps := by
@@ -1424,7 +1425,10 @@ theorem ofPart_grid (run : Nat) (lanes : Array Flock.Program.Lane) (hq : PartNon
         simp
       · obtain rfl : P = 1 := by omega
         simp
-  · simp only [segsPos_singleton, segPos, Desc.Seg.copy, ↓reduceIte, posAll_map, Array.toList_map, List.flatMap_map]
+  · rename_i h
+    have hP : 1 < P := by simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, not_or] at h; omega
+    simp only [segsPos_singleton, segPos, Desc.Seg.copy, Desc.Seg.lanes, Bool.true_and, decide_eq_true_eq, hP,
+      ↓reduceIte, posAll_map, Array.toList_map, List.flatMap_map]
 
 /-- **A part as pieces** names its references, in order. -/
 theorem ofPart_pos (q : Part) (hq : PartNonneg q) :
@@ -1477,11 +1481,14 @@ theorem ofPart_ok (q : Part) : ∀ g ∈ (Desc.ofPart q).toList, SegOk g := by
       rw [Array.toList_map, List.mem_map] at hg
       obtain ⟨l, -, rfl⟩ := hg
       exact segOk_one _
-    · intro g hg
+    · rename_i h
+      have hP : 1 < (lanes[0]?.map Flock.Program.Lane.periods).getD 0 := by
+        simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, not_or] at h; omega
+      intro g hg
       simp at hg
       subst hg
       show (posAll (Desc.Seg.copy _ 0)).length = _
-      simp only [Desc.Seg.copy, ↓reduceIte]
+      simp only [Desc.Seg.copy, Desc.Seg.lanes, Bool.true_and, decide_eq_true_eq, hP, ↓reduceIte]
       rw [posAll_map, List.length_flatMap]
       simp only [Array.toList_map, List.map_map, Function.comp_def, pos_lane_row, List.length_map,
         List.length_range]
