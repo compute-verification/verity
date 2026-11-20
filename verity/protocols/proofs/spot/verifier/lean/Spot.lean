@@ -22,6 +22,7 @@ public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
 public import Spot.MembersWires
 public import Spot.OneStageZk
+public import Spot.PortsOnce
 public import Spot.MembersParse
 public import Spot.Rate
 public import Spot.HiddenSample

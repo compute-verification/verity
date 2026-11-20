@@ -131,12 +131,12 @@ def _form(job: tuple[str, int, int, int]) -> tuple[tuple[str, int, int, int], np
     noise = s.noise(ctx)
     if side == "a":
         data = p.prover.files(p.man["matmuls"][at]["rows"])
-        rows = [VR.f32_row(data, k, i) for i in idx]
+        rows = [VR.PO.f32_row(data, k, i) for i in idx]
         e = [C.sample_line(x, 0, 0, 0) for x in s.row_seeds(ctx, rows, idx)] if s.hashing in C.ROW_SEEDED else None
         formed, _ = s._side(rows, idx, 0, noise.seed_a, noise.seed_b, k, e)
     else:
         data = p.prover.files(p.man["weights"][str(u.weight)]["rows"])
-        formed, _ = s._side([VR.f32_row(data, k, j) for j in idx], idx, 1, noise.seed_b, noise.seed_b, k)
+        formed, _ = s._side([VR.PO.f32_row(data, k, j) for j in idx], idx, 1, noise.seed_b, noise.seed_b, k)
     return job, np.asarray(formed.codes, np.uint8).reshape(len(idx), k)
 
 

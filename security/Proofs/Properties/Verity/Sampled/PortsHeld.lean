@@ -6,6 +6,7 @@ import all Init.Data.Ord.String
 import all Init.Data.String.Legacy
 import Init.Data.String.Lemmas.Pattern.TakeDrop.String
 public import Spot.SecondStage
+public import Spot.PortsOnce
 public import Proofs.Flock.Claims.Complete.Json.Value
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Properties.Verity.Sampled.MemberForm.Passes

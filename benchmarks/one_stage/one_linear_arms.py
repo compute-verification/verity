@@ -5,7 +5,9 @@ names), ``ERROR`` (a crash, a panic, an undocumented status, no record) or ``FAI
 honest arm on ``ACCEPT``; a negative on ``REFUSED`` by the name it expects, or for ``forged-one`` on ``ACCEPT`` when its
 forged unit's block is not drawn. A crash is never a refusal.
 
-    one_linear_arms.py ARM STATUS LOG SUMMARY_JSON   # prints ``ARM <arm> <OUTCOME> <why>``; exits 0 when the arm passes
+    one_linear_arms.py ARM STATUS LOG SUMMARY_JSON [LOG...]   # prints ``ARM <arm> <OUTCOME> <why>``; exits 0 when the arm passes
+
+Every LOG is read whole (the arm's own log holds only the tail of its audit's stderr), and a missing one is skipped.
 """
 from __future__ import annotations
 
@@ -22,8 +24,33 @@ SUBSET_ONLY = "the sampling design is "
 SUBSET_ONLY_TAIL = "which the one-statement audit's soundness statement doesn't cover"
 #: `one_linear.sh`'s ``--forge 1``; a summary's ``draw`` lists the drawn units.
 FORGED_UNIT = 1
+#: The registration's R8 refusal of a run Input two proof blocks read (`docket.SHARED_WHY`). The registered arm's weight
+#: is pinned, not a value the verifier's tie registers, so R8 holds it shared and refuses the honest window before the
+#: draw, and each member's header check refuses its port w, which no tree of the member holds: the arm is a
+#: completeness probe, refused before the draw by either, each by its name. The
+#: members check's refusals on a real window are a5's member negatives'.
+R8_SHARED = "R8-shared-input"
 EXPECTS = {"honest": "ACCEPT", "registered": "REFUSED", "forged-drawn": "REFUSED", "forged-one": "ACCEPT or REFUSED",
            "stratified": "REFUSED"}
+
+
+def refusal(summary: dict) -> str | None:
+    """Why ``summary`` is no accept, or None for an accept: the record's failed checks (`a5`'s ``checks_failed``)."""
+    audit = summary.get("audit") or {}
+    if summary.get("ok") is True and audit.get("accepted") is True:
+        return None
+    failed = audit.get("checks_failed") or {}
+    if failed:
+        return "REJECT at " + ", ".join(sorted(failed)) + ": " + json.dumps(failed, sort_keys=True, default=str)[:600]
+    return "REJECT: " + json.dumps({"refused": summary.get("refused"), "why": audit.get("why")}, default=str)[:600]
+
+
+def _checks_before_draw(log: str) -> dict:
+    """The checks a5 printed when it refused before the draw (its ``A5 {"refused_before_draw": ...}`` line in the audit's
+    log), which records_audit's summary keeps only as booleans. The arm's own log holds a prefix of the line, cut
+    short, so the longest copy is the whole one."""
+    lines = [line for line in log.splitlines() if line.startswith('A5 {"refused_before_draw"')]
+    return (json.loads(max(lines, key=len)[3:]).get("checks") or {}) if lines else {}
 
 
 def _window(log: str) -> dict:
@@ -67,19 +94,28 @@ def judge(arm: str, status: int, log: str, summary: dict | None) -> tuple[str, s
     if arm == "stratified" and SUBSET_ONLY in text and SUBSET_ONLY_TAIL in text:
         return "REFUSED", f"SUBSET_ONLY: {text[text.index(SUBSET_ONLY):][:200]}", True
     members = audit.get("members_lean") or {}
+    checks = summary.get("checks") or _checks_before_draw(log)
+    registration = checks.get("registration") or {}
+    headers = sorted(k for k, v in checks.items() if isinstance(v, dict) and "header" in (v.get("codes") or []))
+    if arm == "registered" and (R8_SHARED in (registration.get("codes") or []) or headers):
+        named = [f"{R8_SHARED} {json.dumps((registration.get('detail') or {}).get(R8_SHARED, {}).get('inputs'))}"
+                 ] if R8_SHARED in (registration.get("codes") or []) else []
+        named += [f"{len(headers)} members at header: {str(checks[headers[0]].get('detail'))[:200]}"] if headers else []
+        return "REFUSED", f"before the draw, a completeness limit: {'; '.join(named)}", True
     if arm == "registered" and members.get("ran") is True and members.get("ok") is False:
         return "REFUSED", f"the members check: {str(members.get('reason') or members.get('codes'))[:300]}", True
     if arm == "forged-one" and audit.get("accepted") is False:
         return "REFUSED", f"the audit record rejects: {json.dumps(audit.get('why'), default=str)[:300]}", True
-    why = summary.get("refused") or audit.get("refused") or audit.get("why")
-    return "REJECT", f"status 1, not {EXPECTS[arm]} by its name: {json.dumps(why, default=str)[:300]}", False
+    why = refusal(summary) or "REJECT"
+    return "REJECT", f"status 1, not {EXPECTS[arm]} by its name: {why[len('REJECT'):].lstrip(': ')[:700]}", False
 
 
 def main(argv: list[str]) -> int:
-    arm, status, log, path = argv
+    arm, status, log, path, *more = argv
     p = Path(path)
     summary = json.loads(p.read_text()) if p.is_file() else None
-    outcome, why, passed = judge(arm, int(status), Path(log).read_text(errors="replace"), summary)
+    text = "\n".join(Path(f).read_text(errors="replace") for f in (log, *more) if Path(f).is_file())
+    outcome, why, passed = judge(arm, int(status), text, summary)
     print(f"ARM {arm} {outcome} {why}")
     return 0 if passed else 1
 
