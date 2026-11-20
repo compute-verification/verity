@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -140,6 +141,42 @@ def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_again
     moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
     bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and bad["registered_sha512"] == digest(moved) != ok["registered_sha512"], bad
+
+
+def test_a_members_reads_of_the_served_tree_at_another_root_value_or_word_are_refused_on_the_verifiers_file(fx, tmp_path):
+    """The member's side changed and the verifier's registered file as `register_served` writes it: the member's paths
+    climbing to another root than the file's (each path's last sibling changed), its header naming another value at
+    the port, and one table row's `b || c` changed (a changed word of the row it commits): each refused by the
+    registered reads' check, by name, before any proof is read."""
+    import served_registered as SR
+
+    _, fx = fx
+    program, query = SR.program()
+    tree, x_tree, out_port = SR.load(fx / "stage")
+    reads = SR.write_registered(SR.registered_file(program, query, tree, x_tree, out_port), tmp_path / "registered.json")
+    pub = (fx / "stage" / "pub-32.bin").read_bytes()
+    nl = pub.index(b"\n")
+    header = json.loads(pub[:nl])
+    cs = header["registered"]["cs"]
+
+    def why(h: dict, body: bytes = pub[nl:], name: str = "pub.bin") -> str:
+        (tmp_path / name).write_bytes(json.dumps(h).encode() + body)
+        bad = _verify(fx, reads, public=tmp_path / name)
+        assert bad["accepted"] is False, bad
+        return bad["why"]
+
+    climbs = [p[:-2] + ("00" if p[-2:] != "00" else "11") for p in cs["paths"]]
+    other_root = why({**header, "registered": {**header["registered"], "cs": {**cs, "paths": climbs}}}, name="root.bin")
+    assert re.search(rf"registered reads: port cs: table row \d+ does not open {SR.VALUE}'s registered root at position "
+                     r"\d+", other_root), other_root
+    other_value = why({**header, "registered": {**header["registered"], "cs": {**cs, "value": "cs_other"}}},
+                      name="value.bin")
+    assert f"registered reads: port cs reads {SR.VALUE}, not another value" in other_value, other_value
+    word = bytes([pub[nl + 1] ^ 1])
+    changed = why(header, pub[nl:nl + 1] + word + pub[nl + 2:], name="word.bin")
+    assert re.search(r"registered reads: port \w+: table row 0 does not open \S+'s registered root at position \d+",
+                     changed), changed
+    print("NEGATIVES", json.dumps({"other_root": other_root, "other_value": other_value, "changed_word": changed}))
 
 
 def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
