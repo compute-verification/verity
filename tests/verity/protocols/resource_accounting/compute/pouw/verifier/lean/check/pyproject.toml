@@ -27,6 +27,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/lean_child.py", "veri
           "tools/difftest", "verity/__init__.py",
           "verity/channel.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/window.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/period_check.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
