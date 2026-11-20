@@ -412,7 +412,7 @@ theorem calleeN_succ (c : Desc.Ctx) (fuel : Nat)
     rw [← Array.forIn_toList] at hone
     have hxg : ∀ g ∈ s.ps.toList, ∀ x ∈ pos g, x ∈ psPos (c.memo[(c.body.nodes[k]!).fn]!).ret := fun g hg x hxm =>
       hx x (by
-        rw [segPos_alike hsh]
+        rw [segPos_alike hsh hnr]
         exact List.mem_flatMap.2 ⟨0, List.mem_range.2 (by omega), List.mem_flatMap.2 ⟨g, hg, hxm⟩⟩)
     obtain ⟨one'', h1'', h2''⟩ := forIn_app (NodeW c.P c.d) _ s.ps.toList (fun g hg r' y' hy' => by
         split at hy'

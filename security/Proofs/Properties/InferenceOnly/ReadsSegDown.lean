@@ -380,13 +380,15 @@ theorem forall2_true {α β : Type} : ∀ {l : List α} {m : List β}, l.length 
   | _ :: _, [], h => by simp at h
 
 /-- **Each segment `segDown` gives** is one `f` gives a piece of `s`'s copies, of positive count and its positions
-`s`'s; or `s` with its pieces each reshaped from what `f` gives it, each position one `f` gives such a piece, its pieces
-`s`'s counts and its copies `s`'s length. -/
+`s`'s; or `s` with its pieces each reshaped from what `f` gives it, each position one `f` gives such a piece, each piece's
+positions those of a piece of one segment `f` gives such a piece, its pieces `s`'s counts and its copies `s`'s length. -/
 theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
     (hpos : ∀ p ∈ s.ps.toList, 0 < p.count)
     (out : Array Seg) (h : Desc.segDown f s = .ok out) (g : Seg) (hg : g ∈ out.toList) :
     (∃ q v, 0 < q.count ∧ (∀ x ∈ pos q, x ∈ segPos s) ∧ f q = .ok v ∧ g ∈ v.toList) ∨
     ((∀ x ∈ segPos g, ∃ q v, 0 < q.count ∧ (∀ x ∈ pos q, x ∈ segPos s) ∧ f q = .ok v ∧ x ∈ segsPos v) ∧
+      (∀ p ∈ g.ps.toList, ∃ q v, 0 < q.count ∧ (∀ x ∈ pos q, x ∈ segPos s) ∧ f q = .ok v ∧
+        ∃ x ∈ v.toList, ∃ y ∈ x.ps.toList, ∀ z ∈ pos p, z ∈ pos y) ∧
       (∀ p ∈ g.ps.toList, ∃ q ∈ s.ps.toList, p.count = q.count) ∧ g.reps = s.reps ∧ g.len = s.len ∧
       g.shift = 0 ∧ (posAll (g.copy 0)).length = (posAll (s.copy 0)).length) := by
   have hcopy : ∀ L : List Nat, ∀ q ∈ L.flatMap (fun m => (s.copy m).toList), 0 < q.count := by
@@ -435,22 +437,25 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
         obtain ⟨q, -, hq, r, hfr, hone⟩ := forall2_mem hpair.flip p hp
         obtain ⟨hrq, x, y, rfl, hy, hre⟩ := one_spec hone
         exact ⟨q, hq, hrq, x, y, hfr, hy, hre⟩
-      refine .inr ⟨fun x hx => ?_, fun p hp => ?_, rfl, rfl, rfl, ?_⟩
+      refine .inr ⟨fun x hx => ?_, fun p hp => ?_, fun p hp => ?_, rfl, rfl, rfl, ?_⟩
       · obtain ⟨m, hm, hx⟩ := List.mem_flatMap.1 hx
-        simp only [Desc.Seg.copy, ↓reduceIte] at hx
-        rw [posAll_map] at hx
+        rw [copy_rowed { s with ps := ps, shift := 0 } hr, posAll_map] at hx
         obtain ⟨p, hp, hx⟩ := List.mem_flatMap.1 hx
         obtain ⟨q, hq, hrq, x', y, hfr, hy, hre⟩ := hone p hp
         have hmq : m < q.rows := by rw [hrq]; exact List.mem_range.1 hm
         refine ⟨q, #[x'], hpos q hq, hsub q hq hrq, hfr, ?_⟩
         rw [segsPos_singleton, single_pos x' y hy]
         exact reshape_sub y _ _ p hre m hmq x hx
+      · obtain ⟨q, hq, hrq, x', y, hfr, hy, hre⟩ := hone p hp
+        refine ⟨q, #[x'], hpos q hq, hsub q hq hrq, hfr, x', by simp, y, single_mem hy, fun z hz => ?_⟩
+        rw [pos_eq_rows p] at hz
+        obtain ⟨m, hm, hz⟩ := List.mem_flatMap.1 hz
+        obtain ⟨h1, -⟩ := reshape_dims y _ _ p hre
+        exact reshape_sub y _ _ p hre m (by rw [← h1]; exact List.mem_range.1 hm) z hz
       · obtain ⟨q, hq, -, x', y, -, -, hre⟩ := hone p hp
         obtain ⟨h1, h2⟩ := reshape_dims y _ _ p hre
         exact ⟨q, hq, by simp [Desc.Piece.count, h1, h2]⟩
-      · rw [copy_rowed s hr]
-        simp only [Desc.Seg.copy, ↓reduceIte]
-        rw [posAll_map, posAll_map]
+      · rw [copy_rowed s hr, copy_rowed { s with ps := ps, shift := 0 } hr, posAll_map, posAll_map]
         refine List.Forall₂.length_eq (R := fun _ _ => True) (forall2_flatMap (fun p q hpq => ?_) hpair)
         obtain ⟨-, r, -, hone⟩ := hpq
         obtain ⟨-, x, y, -, -, hre⟩ := one_spec hone

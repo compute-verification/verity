@@ -521,9 +521,9 @@ theorem copy_length (s : Seg) (m : Nat) : (posAll (s.copy m)).length = (posAll (
 theorem copy_zero (s : Seg) (h : s.lanes = false) : posAll (s.copy 0) = posAll s.ps := by
   rw [copy_pos s h, show ((0 : Nat) : Int) * s.shift = 0 by simp, shiftPos_zero, List.map_id]
 
-theorem segPos_one_rep {s : Seg} (h : s.reps = 1) (hr : s.lanes = false) : segPos s = posAll s.ps := by
+theorem segPos_one_rep {s : Seg} (h : s.reps = 1) : segPos s = posAll s.ps := by
   unfold segPos
-  rw [h, List.range_one, List.flatMap_singleton, copy_pos s hr]
+  rw [h, List.range_one, List.flatMap_singleton, copy_pos s (lanes_of_reps h.le)]
   simp [shiftPos_zero]
 
 theorem copy_copy (s : Seg) (h : s.lanes = false) (lo m : Nat) :
@@ -565,7 +565,7 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
       rcases Nat.lt_or_ge s.reps 1 with h | h
       · rw [hcnt, show s.reps = 0 by omega, Nat.zero_mul] at hb; omega
       · omega
-    have e : segPos s = posAll s.ps := segPos_one_rep hr1 (lanes_of_reps hr)
+    have e : segPos s = posAll s.ps := segPos_one_rep hr1
     rw [← e, segPos_eq_map s hlen, sl_map_range _ _ _ _ hb]
   rw [if_neg hr]
   dsimp only
@@ -1074,13 +1074,19 @@ theorem single_pos (s : Seg) (p : Piece) (h : s.single = some p) : segPos s = po
   unfold Desc.Seg.single at h
   split at h
   · rename_i hc
-    simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_eq_eq_not, Bool.not_true] at hc
-    obtain ⟨⟨hr, hsz⟩, hrw⟩ := hc
-    subst hr hrw
+    simp only [Bool.and_eq_true, beq_iff_eq] at hc
+    obtain ⟨hr, hsz⟩ := hc
+    subst hr
     obtain ⟨a, rfl⟩ := List.length_eq_one_iff.1 (by simpa using hsz)
     have : a = p := by simpa using h
     subst this
-    simp [segPos, Desc.Seg.copy, shiftGates_pos, shiftPos_zero, posAll_singleton]
+    simp [segPos, Desc.Seg.copy, Desc.Seg.lanes, shiftGates_pos, shiftPos_zero, posAll_singleton]
+  · cases h
+
+theorem single_mem {s : Seg} {p : Piece} (h : s.single = some p) : p ∈ s.ps.toList := by
+  unfold Desc.Seg.single at h
+  split at h
+  · exact Array.mem_toList_iff.2 (Array.mem_of_getElem? h)
   · cases h
 
 /-- **`joinWith`** names `out`'s positions then `s`'s, wherever `f`'s joins name their two pieces'. -/
