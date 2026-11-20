@@ -85,7 +85,11 @@ every root of every member's slice (`OneStageZk.Member.slice`, at the roots `One
 the committed record's root for a port `q` (`IsRecordRoot`): the member's own port `<member>/<port>`, the tree the
 slice root names, or, for a wired port, `<writer>/<field>`, the window's tree of the exact output field that a wire
 of C's wiring under the verifier's partition (`OneStageZk.derivedWiring`) into the member (`WireInto`) at that port
-names. -/
+names. Only the verifier writes a slice root's `tree`, and only two kinds: the window's tree `<template>/<field>` of an
+output field of the member's own template (`OneStageZk.fieldTreesOf`, as `OneStageZk.ownFieldsOf` adds it), and
+`input/n<w>` of a run input node `w` the member's Definition reads in C (`Flock.Registered.freshValue`, as
+`OneStageZk.runInputRootsAt` adds it); the member's own roots and its wired roots carry none (`OneStageZk.rootStep`,
+`OneStageZk.fieldRootIn`). -/
 def MembersRootsRecord : Prop :=
   ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
