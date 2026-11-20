@@ -231,9 +231,7 @@ theorem all_of (s : String) (h : s = "1") : s.all Char.isDigit = true := by subs
 theorem toNat_of (s : String) (h : s = "1") : s.toNat! = 1 := by subst h; exact toNat_one
 
 theorem recordFunctionIds_plain (fid : String) (h : fid.toList.contains '{' = false) : recordFunctionIds fid = #[] := by
-  have : fid.contains '{' = false := by
-    rw [String.contains_char_eq]; simpa using h
-  simp [recordFunctionIds, recordPairs, this]
+  unfold recordFunctionIds recordPairs; rw [h]; rfl
 
 /-! ## The root's widths -/
 

@@ -369,7 +369,7 @@ def Prog.bodyOf? (P : Prog) (w : String) : Option Nat := P.boolean[w]? >>= (P.in
 
 /-- The `k=<canonical json>` pairs' keys of a specialization id `Name_vN{k1=..,k2=..}`, in id order (`codec._split_record`). -/
 def recordPairs (fid : String) : Array (String × String) := Id.run do
-  if !(fid.contains '{' && fid.endsWith "}") then return #[]
+  if !(fid.toList.contains '{' && fid.endsWith "}") then return #[]
   let cs := fid.toList
   let some open_ := cs.findIdx? (· == '{') | return #[]
   let rec_ := (cs.drop (open_ + 1)).dropLast ++ [',']

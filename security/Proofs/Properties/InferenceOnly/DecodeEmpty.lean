@@ -104,8 +104,7 @@ theorem parse_empty : JsonParse.parse programEmpty = .ok jE := by
 theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   simp only [String.fromUTF8?, String.toUTF8_eq_toByteArray, s.isValidUTF8, ↓reduceDIte]; rfl
 
-theorem contains_root : "Root_v1".contains '{' = false := by
-  rw [String.contains_char_eq]; decide +kernel
+theorem contains_root : "Root_v1".toList.contains '{' = false := by decide +kernel
 
 theorem toNat_one : "1".toNat! = 1 := by
   have r : Nat.repr 1 = "1" := by apply String.toList_inj.1; rw [Nat.toList_repr]; decide +kernel
