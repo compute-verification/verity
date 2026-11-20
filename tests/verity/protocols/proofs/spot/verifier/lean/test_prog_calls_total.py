@@ -3,6 +3,7 @@ has, it counts node 0 as a Call, as it did, and evaluates without a panic, so it
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -30,7 +31,8 @@ def main : IO Unit := do
 def test_a_callee_past_the_definitions_is_a_call_and_no_panic(tmp_path):
     D.build(PACKAGE, "Spot.Admitted")
     (tmp_path / "Probe.lean").write_text(PROBE)
+    # an index past an array's end prints `Error: index out of bounds`, with no `PANIC`: the switch makes it an exit
     p = subprocess.run(["lake", "env", "lean", "--run", str(tmp_path / "Probe.lean")], cwd=PACKAGE,
-                       capture_output=True, text=True)
-    assert "PANIC" not in p.stderr + p.stdout, p.stderr[-2000:]
+                       capture_output=True, text=True, env={**os.environ, "LEAN_ABORT_ON_PANIC": "1"})
+    assert not any(t in p.stderr + p.stdout for t in ("PANIC", "index out of bounds")), p.stderr[-2000:]
     assert (p.returncode, p.stdout.strip()) == (0, "#[0, 2, 3]"), (p.stdout, p.stderr[-2000:])
