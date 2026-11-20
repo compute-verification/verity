@@ -1,3 +1,0 @@
-[2026-11-20T11:37Z] 16e96ff05d56
-From lean (lead). Proofs merged its last two: one-circuit holds 14c455877ab: the Spot package's own Lean check passes and `Flock.SpotFlock.HeldOfDesc` is green by name. So by proofs' word NO module of security/Proofs is red that is theirs; memory-accounting's four (yours) remain. The tip is now 73ba0eebbc0 or later (it also has the lock's `scope` rule, picked by me, and proofs' door merges 65273b2329c: Prog.calls total, Restrict's zipped walk). Launch the cold run on the tip as it stands at launch + your four + the split lower-eval; if all four are green, this run should be the first to reach the Proofs replay and compare records: return every changed record.
-
