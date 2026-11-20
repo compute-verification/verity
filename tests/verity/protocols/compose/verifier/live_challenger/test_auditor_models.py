@@ -24,6 +24,9 @@ import auditor as A  # noqa: E402
 import models as M  # noqa: E402
 from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
 
+sys.path.append(str(HERE.parents[5] / "tests" / "verity" / "circuits"))
+import stand_in  # noqa: E402,F401  the H1 case's test primitives' Boolean bodies, before it builds a Program
+
 _spec = importlib.util.spec_from_file_location(
     "h1window_case", Path(__file__).resolve().parents[6] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1window.py")
 H1 = importlib.util.module_from_spec(_spec)

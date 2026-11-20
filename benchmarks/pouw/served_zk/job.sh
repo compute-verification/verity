@@ -60,7 +60,7 @@
 #        deliver-again         a second delivery of the same sample                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
-#        outcome-st-<case>     the first unit's Lean verdict a selftest case's: every case                     REJECT
+#        outcome-st-<case>     the first unit's Lean verdict a selftest case's, no roots read: every case      REFUSED
 #        replay                the challenger's requests again from its recorded coins, Lean sampling          SAME
 #        replay-twin           the same, stream_subset (Lean's sample's Python twin) sampling                    SAME
 set -uo pipefail
@@ -374,7 +374,7 @@ expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
   units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
-  control "st-$c" REJECT "$OUT/units-st-$c.json"
+  control "st-$c" REFUSED "$OUT/units-st-$c.json"
 done
 finish
 summary

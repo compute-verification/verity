@@ -22,6 +22,7 @@
 # challenger.json, audit.json), sessions/, audit.json, lean.log, verdict.json (every check, `ok` when all hold; the job
 # exits 1 otherwise) and the logs.
 set -uo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 export HZ_CONFIGS=zk-tree-from HZ_MEM_GB=${TF_MEM_GB:-32}
 [ -n "${TF_CACHE:-}" ] && export HZ_CACHE=$TF_CACHE
 source benchmarks/pouw/hidden_zk/job.sh

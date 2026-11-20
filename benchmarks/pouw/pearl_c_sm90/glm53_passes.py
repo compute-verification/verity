@@ -255,7 +255,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
         fast = scheme.forming == "v1" and scheme.device.g is not None
         _FULL.clear()
         _FULL.update(scheme=scheme, epoch=epoch, transcript=transcript, verifier=verifier, view=view, y=ys,
-                     prover=VR.Opened(man, VR.Files(d), verifier.refs), real={pos: u["real_rows"] for pos, u in enumerate(man["matmuls"])},
+                     prover=VR.prover_of(man, d, verifier.refs), real={pos: u["real_rows"] for pos, u in enumerate(man["matmuls"])},
                      every=every, install=FT.install, undo=FT.install(scheme) if fast else None)
         try:
             todo = range(c["count"])

@@ -24,6 +24,7 @@ proved (`Proofs.Properties.Pous.MemoryChallenger`).
 @[expose] public section
 
 namespace MemoryAttester.Properties
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-- What an accepted verdict establishes about its inputs. -/
 def Accepted (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)

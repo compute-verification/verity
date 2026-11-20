@@ -19,7 +19,7 @@ saw the request (its engine arrival less a frontend delay), and `release_t`, whe
 egress attester.
 
 Needs vLLM importable (`VLLM_TARGET_DEVICE=cpu` without a GPU build) and a model config (`model`: a Hub id or a local
-directory); `python -P vllm_trace.py OUT_DIR` writes `CASES` (`-P`: this directory's `code.py` would shadow the stdlib's).
+directory); `python -P vllm_trace.py OUT_DIR` writes `CASES`.
 """
 
 from __future__ import annotations

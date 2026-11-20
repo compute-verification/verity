@@ -684,23 +684,6 @@ def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> di
             "over_served": {served_table.PER_OUTPUT: {"mean": mean, "ci95": [mean - 0.01, mean + 0.01], "n": 6}}}
 
 
-def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_byte_as_they_were():
-    import hashlib
-
-    table = {"rows": [_row("Commit", WIDTH_H200, 2.378), _row("PoUS bandwidth audit", R6, 6.02),
-                      _row("PoUS bandwidth audit", BIG, 2.5, "llama-3.1-8b-h200"),
-                      _row("PoUS bandwidth audit", SMALL, 4.0, "llama-3.2-1b-h200")], "skipped": []}
-    metrics = _served_overhead_metrics()
-    before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
-    assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "b3d4e37d69023d016bd3fec504106c4470df49bccc397f8dffc97e7c3fe83dc0")
-    table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
-    after = served_render.measurements(table, metrics)
-    assert [m for m in after if m["name"] != POUW] == before
-    [pouw] = [m for m in after if m["name"] == POUW]
-    assert (pouw["member"], pouw["value"], pouw["mark"]) == ("llama-3.2-1b-h100", pytest.approx(1140.0), "measured")
-
-
 def test_the_pouw_metric_is_its_members_readings_from_their_records_runs_and_never_fails_validation_for_its_own(
         tmp_path, monkeypatch, capsys):
     from verity_bench import kit

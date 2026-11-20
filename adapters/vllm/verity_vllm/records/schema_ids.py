@@ -176,7 +176,7 @@ WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
 # --- the quarantine admission
 #: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which gate G4 reads;
-#: the records under `engine/profiles/quarantine/` hold it, and no code of the tree writes one
+#: no code of the tree writes one
 QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
 
 # --- the partial source (`verity_vllm.acquire.sources.partial_source`)

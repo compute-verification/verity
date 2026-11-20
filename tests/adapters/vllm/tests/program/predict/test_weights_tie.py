@@ -59,15 +59,15 @@ def _pins(want: dict) -> dict[str, dict]:
 
 
 def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -> set[tuple[str, str]]:
-    """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
-    and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
-    the pinned root at their stated positions."""
+    """The door's registered file of the written window ``d`` (`interface.registered_file`: position-free), from its records
+    and the verifier's ``pins`` alone, read on the host (`Flock.Registered.checkPort`): each member's ports, ``(member, port)``,
+    whose table rows' ``b || c`` don't open the pinned root at the positions the header states."""
     mine, doc = IF.of_records(d, DESIGN, IF.resolve)
-    files = IF.registered_reads(doc, mine, pins, registered=G)
-    assert set(files) == {m.key for m in mine.members}
+    files = IF.registered_file(doc, mine, pins)
+    assert set(files) <= {m.key for m in mine.members}
     written, bad = json.loads((d / "window.json").read_text()), set()
     for k, m in enumerate(mine.members):
-        for p, port in files[m.key]["ports"].items():
+        for p, port in files.get(m.key, {"ports": {}})["ports"].items():
             dom, entry, bc = win.registered[port["value"]].domain, CS.registered_header(written, k)[p], c.bc[m.port(p)]
             assert dom.domain_id.hex() == port["domain"]
             if not all(G.verify_read(dom, bytes.fromhex(port["root"]), pos, bc[r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES],

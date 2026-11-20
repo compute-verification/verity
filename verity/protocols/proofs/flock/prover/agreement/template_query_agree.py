@@ -7,8 +7,10 @@ For each case: the program's SHA-512, the population, the ranges and every unit'
 refusal: `query-refused` with core's reason; for each malformed query: its parameters refused. Writes DIR/result.json; exits 1
 unless every vector agrees.
 """
-import argparse, json, subprocess, sys
+import argparse, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 
 def main():
@@ -33,7 +35,7 @@ def main():
         case(f"refused{i}", v["descriptors"][d], q, ("refused", why.split(") ", 1)[1]))
     for i, (_label, q, codes) in enumerate(v["malformed"]):
         case(f"malformed{i}", v["descriptors"]["population"], q, ("malformed", codes))
-    p = subprocess.run([a.lean, "template-query", *files], capture_output=True, text=True)
+    p = LR.run([a.lean, "template-query", *files])
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("TEMPLATEQUERY "):

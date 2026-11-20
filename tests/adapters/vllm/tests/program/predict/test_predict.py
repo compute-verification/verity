@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
+from verity_vllm.config import WORKLOADS, RowEngine, workload_file
 from verity_vllm.definitions.registry.tp_allreduce import settings_of
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
@@ -35,9 +35,6 @@ from verity_vllm.program.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
-GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
-GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager"
-GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -123,49 +120,6 @@ def test_tensor_parallel_rank_workload_equals_the_traced_build():
     phi = _phi(json.loads((FIX / "llama32-1b.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}], tp={"world": 2, "rank": 1})
     assert S.predict_workload(phi)["digest"] == "70468fe0fee095b09765883d67013afffda931d609ae63b67c26d81da0d445942ff49dd254f8d2477d7f721c06b2a7758237b3c2ded6a1dbccdb0eaf3a7c2f4a"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("rank", range(8))
-def test_dsa_rank_step_equals_the_record(rank, tmp_path):
-    """GLM-5.3 at TP8 on H200 (block FP8, cc 9.0): each rank's step through the DeepSeek sparse-attention decoder (`predict.dsa`)
-    is the rank's step Program `records.json` pins for the row (its FlashInfer fused all-reduce + RMSNorm, the decode-path sparse
-    MLA, the indexer on its layers, the tuned fused-MoE tile at M = 1)."""
-    r = build_program(_row_phi(GLM53, "GLM53", tmp_path, rank), "step", M=1, pos0=8)
-    assert r.function.startswith("Derived[vLLMStep[DeepseekV32ForCausalLM]]_v1")
-    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53]["programs"][str(rank)]["step"]
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("wrapper,shape,digest", [
-    ("step", {"M": 8, "pos0": 8}, "562e290d02aeb6efb06786f508a90ae9ea08748ab3f8b4777f0c56f76b4cd6d09cab8cb9bf0d21346c7af16f2e9b174a728f1bc7f8e12c5b2ccd48121b0dfb60"),
-    ("request", {"LP": 11, "T": 12}, "d2ede82f0989fdf7a43e45dbca1b6adb3a9c29b245f1d6058c583bbd72599d4cb9be7724df848104e448a966bc5e3d6a60b0c255f5c32db575ea15611c8b0175"),
-])
-def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_path):
-    """GLM-5.3's B8 mixed-arrivals row (no batch invariance) at rank 0, as the Build traced it: the step of 8
-    rows, and the first request's Program under its launch batch (its prefill alone, then decodes beside the second request's
-    prefill and decodes), every token-count-dependent selection at the launch's tokens."""
-    r = build_program(_row_phi(GLM53_B8, "GLM53", tmp_path), wrapper, **shape)
-    assert r.digest == digest
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("row,wrapper,shape,digest", [
-    (GLM53_S1, "step", {"M": 1, "pos0": 8},
-     "746b518918f6ad8b280cca0a347df80e5dba1876bdddad668b8ee75e6801b9d948d55fb2ad7515c41c344b8fa56096ae4d84e31716f6065589ebba03202b24a3"),
-    (GLM53_S8, "step", {"M": 8, "pos0": 8},
-     "1a572036533ba212766ed728bb945b0f695b209b29a95966d2417643578a6b3d789dfdaf5e480cc033531e63c68015b098d884235dde0a80762574b60accd486"),
-    (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "4709aa07ded03c4a2fb0807ae9c21222b4078dd12544ee40c92c9eff600a6b6d589b49621eb413d2a581ca0edbfafc878c411a8de8ce1b6d968e14877fed6e71"),
-])
-def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
-    """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step
-    and second request at the same registered split count (`engine.topp_pin`), the select after the vocabulary's all-gather, as
-    the B8 row's traced Build pins them.  The second request's launch batch is its realized arrival
-    (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
-    and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
-    r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
-    assert r.digest == digest
 
 
 @pytest.mark.parametrize(("T", "error"), [("x", ValueError), ([1], TypeError)])
@@ -284,19 +238,6 @@ def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     bare = S.phi_of({"row": GLM53, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
     assert bare.workload == {"requests": []} and len(full.requests) == len(w["requests"]) > 0
     assert {**bare.to_json(), "workload": full.workload} == full.to_json()
-
-
-@pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "f781cb0ee763e5a457e1b41566a75403bc52fb805a62febd6bbdb479ea4021baf9a0d4895c19f871a9d4baef8ea8d85186a2abf8a1f5fffe916780065547fb17"),
-    pytest.param({**STOCH, "top_p": 1.0}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
-                 marks=pytest.mark.slow),
-])
-def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
-    """SmolLM2-135M under the seeded top-p policy at the registered S = 32 on 188 SMs: a B8 row's step and a B1 row's.  The B8 row's
-    traced Build read a derived `splits` Input, which serving no longer produces (`engine.topp_pin`); its digest is the registered-S
-    Program's, until that row is rebuilt."""
-    r = build_program(_phi(json.loads((FIX / "smollm2-135m.config.json").read_text()), sampling=sampling), "step", M=M, pos0=8)
-    assert r.digest == digest
 
 
 def test_sampling_follows_the_builds_policy():

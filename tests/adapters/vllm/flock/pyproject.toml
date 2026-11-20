@@ -36,6 +36,8 @@ inputs = [
     "tests/verity/protocols/proofs/flock/prover/tmpl_toy.py",
     "tests/verity/protocols/proofs/flock/prover/derive_vectors.json",
     "tests/verity/protocols/proofs/flock/prover/data/captured-101",
+    # the test primitives' Boolean bodies (conftest.py)
+    "tests/verity/circuits/stand_in.py",
 ]
 parallel = true
 # Build outputs the Lean tests run or skip on.
