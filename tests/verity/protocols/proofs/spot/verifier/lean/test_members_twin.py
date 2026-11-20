@@ -56,6 +56,7 @@ from verity.protocols.proofs.spot.prover import docket as DK
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
+from test_header_held_at_difftest import HELD
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, TRIPLE, V2_TABLES, WINDOW, Setup, _challenger_sample,
                            _json)
 
@@ -423,3 +424,33 @@ def test_a_members_own_root_at_a_port_c_wires_into_it_is_refused_by_both(tmp_pat
     assert why.startswith(f"proofs: member {c0}: "), why
     why, (run, refused) = audit("members-twin-wired-own", extra=(f"{c1}/x",)).ask(tmp_path / "own")
     assert run is None and why == M.run_reason(run, refused) == f"proofs: {M.own_root_why(c1, 'x')}", (why, refused)
+
+
+#: `HELD`'s piece, `OneStageZk.headerHeldAt` on a slice and a header
+pieces = D.server_fixture(HELD)
+
+
+def test_a_wired_port_whose_writers_tree_the_record_names_none_of_is_refused_at_its_readers_header(tmp_path, pieces):
+    """`WIRED`'s window with its members named under a template ``g`` that is not C's Definition id: the record's
+    tree of the field is ``g/o0``, so `fieldRoots` (`members._wired_roots`) finds no tree of the writer's field and
+    gives the second member's wired port ``x`` no root, which neither run refuses there (both end at the first member's
+    stand-in public file). The reader's public file must name ``x`` (`Flock.HmRow.checkPublic` reads a root of every
+    port of the block circuit), and its header held to that slice is refused by both by name (`UNWIRED_WHY`:
+    `OneStageZk.headerHeld`'s `unwired`, `members.population_why`)."""
+    units = {f"g/c{k}": u for k, u in enumerate(WIRED.values())}
+    g0, g1 = list(units)[:2]
+    program, query = TI.chain().program()
+    a = Audit("members-twin-wired-unrooted", ports=(f"{g0}/out", f"{g1}/out"), opened=(g0,), closed=(g0,),
+              sampled=(g0, g1), setup=Setup(program, query, names=(f"{g0}/out", f"{g1}/out")), units=units,
+              trees={"g": 8})
+    why, (run, refused) = a.ask(tmp_path / "unrooted")
+    assert run is None and why == M.run_reason(run, refused) and why.startswith(f"proofs: member {g0}: "), (why, refused)
+    got = M.slices(units, a.rec, program=program, query=query)[g1]
+    assert sorted(r["port"] for r in got["roots"]) == ["o0", "out"], got
+    roots = {r["port"]: r["root"] for r in got["roots"]} | {"x": "aa" * 64}
+    domains = {r["port"]: r["domain"] for r in got["roots"]} | {"x": "dd" * 64}
+    h = {"frame_v3": {"domain_ids": domains, "roots": roots}, "instances": 2, "scheme": SCHEME}
+    assert M.population_why(units[g1], P.strata(program, query), h | {"units": {"indices": [2, 3]}}, got) == (
+        M.unwired_why("x"))
+    j = {"reads": [], "registered": None, "slice": got, "header": h}
+    assert pieces.call("header_held_at", j) == ("output", D.canonical(M.unwired_why("x")))
