@@ -3,8 +3,6 @@ module
 public import Definitions.ResourceAccounting.Actual
 public import Definitions.Core.Scheme
 public import Definitions.Pouw.PearlC.TileSample
-public import Definitions.Poub.Guarantees.RateAuditDeployed
-public import Definitions.Pous.Guarantees.StreamedWipe
 public import Definitions.ResourceAccounting.Network.AttesterScheme
 
 /-!
@@ -259,12 +257,12 @@ def ReadsAreInput (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ
     b i ≤ ∑ j ∈ St.within St.inference i, (P.blocks r).input (P.θ r) j [.registered]
 
 /-- **PoUB: use at least, in bits read of registered information.** From
-`ResourceAccounting.Guarantees.RemoteRunConservationDeployed` (proved): every opening passes only while the session's
-tier reads are at least a share of its bits. Open: `RunReads` and `ReadsAreInput`. Its session is one node's, so the
-class it supports is the server-day blocks once the session's windows are cut at the node's wipes. -/
-def PoubUseAtLeast (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
-  Guarantees.RemoteRunConservationDeployed → P.RunReads Guarantees.RemoteRunConservationDeployed shown ε →
-    P.ReadsAreInput K shown b →
+`ResourceAccounting.Guarantees.RemoteRunConservationDeployed` (proved; a guarantee module this layer does not import,
+so the hypothesis `G`): every opening passes only while the session's tier reads are at least a share of its bits.
+Open: `RunReads` and `ReadsAreInput`. Its session is one node's, so the class it supports is the server-day blocks
+once the session's windows are cut at the node's wipes. -/
+def PoubUseAtLeast (G : Prop) (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
+  G → P.RunReads G shown ε → P.ReadsAreInput K shown b →
     P.UseAtLeast K (fun r i => ∑ j ∈ St.within St.inference i, (P.blocks r).input (P.θ r) j [.registered]) b ε
 
 /-- **The device model's held bits are the blocks' state** (open, memory-accounting): in an accepted run whose held
@@ -274,11 +272,11 @@ def HeldIsState (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ) 
   ∀ r, P.accepts r → shown r → ∀ i ∈ K, b i ≤ (P.actual r).stateIn ((P.blocks r).X i) ((P.blocks r).start i) (P.θ r)
 
 /-- **PoUS: use at least, in bits held of registered information.** From `Pous.Period.PeriodHeldDeployed` (proved, in
-the properties tree, which this tree does not read, so the hypothesis `held`): the device held at least a share of the
+the properties tree, which this tree does not read, so the hypothesis `G`): the device held at least a share of the
 claimed bit-ticks at the challenge times. Open: `RunReads` and `HeldIsState`. The class it supports is the windows
 between challenges on one device. -/
-def PousUseAtLeast (held : Prop) (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
-  held → P.RunReads held shown ε → P.HeldIsState K shown b →
+def PousUseAtLeast (G : Prop) (K : Finset St.ι) (shown : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
+  G → P.RunReads G shown ε → P.HeldIsState K shown b →
     P.UseAtLeast K (fun r i => (P.actual r).stateIn ((P.blocks r).X i) ((P.blocks r).start i) (P.θ r)) b ε
 
 /-- **The wipe's information bound gives a width bound** (open, memory-accounting; unsettled point 4): in an
@@ -289,11 +287,12 @@ def WipeInformationGivesWidth (survives : P.Run → Prop) (b : St.ι → ℕ) : 
   ∀ r, P.accepts r → survives r → ∀ i ∈ St.serverDay, P.Holds r i (.inputAtMost [.past] (b i))
 
 /-- **The memory wipe: input at most from its own past, in bits, for every server-day block.** From
-`Pous.Guarantees.StreamedWipeMeets2600GB` (proved), a bound in information on the prior content an accepted wipe
-keeps. Open: `RunReads` and `WipeInformationGivesWidth`. -/
-def WipeInputAtMost (survives : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
-  Pous.Guarantees.StreamedWipeMeets2600GB → P.RunReads Pous.Guarantees.StreamedWipeMeets2600GB survives ε →
-    P.WipeInformationGivesWidth survives b → P.Established St.serverDay (fun i => .inputAtMost [.past] (b i)) ε
+`Pous.Guarantees.StreamedWipeMeets2600GB` (proved; a guarantee module this layer does not import, so the hypothesis
+`G`), a bound in information on the prior content an accepted wipe keeps. Open: `RunReads` and
+`WipeInformationGivesWidth`. -/
+def WipeInputAtMost (G : Prop) (survives : P.Run → Prop) (b : St.ι → ℕ) (ε : ℝ≥0∞) : Prop :=
+  G → P.RunReads G survives ε → P.WipeInformationGivesWidth survives b →
+    P.Established St.serverDay (fun i => .inputAtMost [.past] (b i)) ε
 
 /-- **The attester's record is the blocks' boundary** (open, network-accounting): in an accepted run whose egress
 used exceeds the egress credited by at most the missable cost and the charges, every server-day block `i` reads at

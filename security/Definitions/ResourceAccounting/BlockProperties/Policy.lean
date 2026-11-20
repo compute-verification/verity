@@ -1,7 +1,6 @@
 module
 
 public import Definitions.ResourceAccounting.BlockProperties
-public import Definitions.InferenceOnly
 public import Definitions.Slowdown.ServingBlocks
 
 /-!
@@ -105,12 +104,14 @@ def InferenceOnlyTheorem {L : Type*} (lim : InferenceOnly.Limits) (efficiency : 
 open Classical in
 /-- **The check's inference clauses give `CompliesAtMost`** (open, lean): in the feasible set of a statement that
 passes the check at unit pricing, the inference blocks' gates, cut as a circuit with the registered input gates,
-divide into at most `n` blocks of a `(c, k)`-partition, as `Slowdown.Guarantees.SlowdownRemote` takes them. -/
+divide into at most `n` blocks of a `(c, k)`-partition: `InferenceOnly.CompliesAtMost c k n`, unfolded since this layer
+does not import it, as `Slowdown.Guarantees.SlowdownRemote` takes it. -/
 def InferenceBlocksComply (lim : InferenceOnly.Limits) : Prop :=
   ∀ (St : Statement) {L : Type*} (A : Placed L) (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true)
     (B : St.Gates A), InferenceOnly.check lim St = true → (∀ i, ∀ p ∈ St.claims i, B.Holds (fun _ => 1) θ i p) →
-    _root_.InferenceOnly.CompliesAtMost lim.c lim.k lim.n
-      (.ofCircuit (A.cut (St.inference.biUnion B.gates)) θ fun a ha => by simp [Placed.cut, hθ a ha])
+    let d : RegisteredCircuit :=
+      .ofCircuit (A.cut (St.inference.biUnion B.gates)) θ fun a ha => by simp [Placed.cut, hθ a ha]
+    ∃ nB ≤ lim.n, ∃ Pd : Partition d.D nB, Pd.IsCK d lim.c lim.k
 
 /-- **The free blocks' size gives the residual** (open, training): in the feasible set, the residual's counted
 multiplications `Mr A` are at most `κ/2` per gate of the free blocks, the form `Slowdown.Assumptions.ResidualAtMost`
