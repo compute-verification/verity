@@ -8,10 +8,11 @@ import pytest
 
 from test_proofs import _two_templates
 from verity.circuits import partition_object as PO
+from verity.circuits import restrict as R
 from verity.circuits.boolean import BIT, xor_gate
 from verity.circuits.codec import descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.program import Program
+from verity.circuits.program import Program, input_id
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -22,6 +23,13 @@ NO_TEMPLATE = {"name": "Q_template_instances", "version": 0, "params": {"templat
 def _object(blocks=None, query=None):
     c, part, _ = _two_templates(2, 2)
     return c, PO.build(json.loads(c), query or part["query"], blocks)
+
+
+def _not_listed(c: bytes) -> str:
+    """The reason a query listing no template of C is refused: C's first template node is no instance of the listed one."""
+    D = R.program(c)
+    k, nd = next((k, nd) for k, nd in enumerate(D.root.body.nodes) if input_id(nd.fn.id) is None)
+    return f"E_QUERY: root node {k} is a {nd.form} of {nd.fn.id!r}: an instance is a call or batch of one of ['Nope_v1']"
 
 
 def _refused(f) -> str:
@@ -48,8 +56,7 @@ def test_a_partition_object_with_no_blocks_is_refused():
 
 def test_a_block_of_a_query_naming_no_template_of_c_is_refused_by_the_querys_reason():
     c, part = _object([[(0, 4)]], NO_TEMPLATE)
-    assert _refused(lambda: OC.block(c, part, 0)) == (
-        "E_QUERY: root node 4 is a batch of 'DoorLowerXor2_v0': an instance is a call or batch of one of ['Nope_v1']")
+    assert _refused(lambda: OC.block(c, part, 0)) == _not_listed(c)
 
 
 def test_blocks_ending_short_of_the_population_are_refused():
@@ -72,8 +79,7 @@ def test_cuts_of_a_partition_that_is_no_template_query_are_a_named_hole():
 
 def test_cuts_of_a_query_naming_no_template_of_c_are_refused_by_the_querys_reason():
     c, part = _object([[(0, 4)]], NO_TEMPLATE)
-    assert _refused(lambda: OC.cuts(c, part)) == (
-        "E_QUERY: root node 4 is a batch of 'DoorLowerXor2_v0': an instance is a call or batch of one of ['Nope_v1']")
+    assert _refused(lambda: OC.cuts(c, part)) == _not_listed(c)
 
 
 def test_cuts_of_a_root_reading_a_port_in_rows_no_writer_field_divides_are_refused():
