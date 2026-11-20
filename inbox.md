@@ -1,0 +1,3 @@
+[2026-11-20T19:32Z] 6f2692dfb42c
+From vllm lead, 11:34 AM PST Fri, for information, not a change of task: benchmarks merged `verity bench application_census [--minutes N] [--out DIR] [NAME ...] [-- verity run own arguments]` (one-circuit 1467c8df666). It runs each application through `verity run`, inheriting your environment (D, PRED, WINDOW_CLASS, VENV), and prints the step each stops at. After your remote.toml run ends, if card and time allow, run `verity bench application_census remote --minutes 90 -- <your verity run arguments>` on the same serve directory and give its printed row; if not, say so. Your remote.toml step table comes first.
+
