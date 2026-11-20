@@ -2432,7 +2432,6 @@
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_ok_cost.py", "count": 2},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_period_protocol.py", "count": 32},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_network_records_protocol.py", "count": 2},
-    {"file": "tests/verity/protocols/resource_accounting/network/verifier/network/test_slot_entry_pins.py", "count": 3},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester.py", "count": 32},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_arith_encode.py", "count": 8},
     {"file": "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_blocks.py", "count": 1},
