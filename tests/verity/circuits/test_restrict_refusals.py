@@ -7,6 +7,7 @@ import json
 import pytest
 
 import stand_in  # noqa: F401  (the test primitives' Boolean bodies)
+import test_codec_refusals as TC
 import test_format_spec as spec
 import test_restrict as TR
 from verity.circuits import codec
@@ -124,3 +125,21 @@ def test_a_listing_gate_of_no_known_kind_is_refused():
     with pytest.raises(R.Refused) as e:
         R.evaluate("\n".join(lines).encode(), [0] * int(lines[1].split()[0]))
     assert str(e.value) == "E_KIND: Frob_v1"
+
+
+def test_a_primitive_decoded_from_c_alone_is_not_evaluated():
+    d, _ = TC.tiny()
+    p = R.program(json.dumps(d).encode()).defs["TAdd32_v1"]
+    with pytest.raises(ValueError) as e:
+        p.evaluate(1, 2)
+    assert str(e.value) == "decoded from C for its structure only"
+
+
+def test_a_block_bit_outside_its_inputs_and_gates_names_no_bit_of_c():
+    c, bits = _fanout()
+    b = R.restrict(c, TR.TOY_PARTITION, [(0, 1)], bits)
+    total = len(b.input_bits) + sum(hi - lo for lo, hi in b.gate_ranges)
+    for i, left in ((-1, -1), (total, 0), (total + 5, 5)):
+        with pytest.raises(IndexError) as e:
+            b.to_c_bit(i)
+        assert e.value.args == (left,)
