@@ -899,9 +899,9 @@ def _record_fns(v: Any) -> list:
     return out
 
 
-#: {SHA-512 of a descriptor: whether it decodes}: a real window's decode takes seconds, and one period reads its window's
-#: descriptor many times
-_DECODED: dict[bytes, bool] = {}
+#: {SHA-512 of a descriptor: None when it decodes, else the decoder's refusal}: a real window's decode takes seconds, and
+#: one period reads its window's descriptor many times
+_DECODED: dict[bytes, str | None] = {}
 
 
 def _decodes(descriptor: bytes) -> bool:
@@ -912,10 +912,10 @@ def _decodes(descriptor: bytes) -> bool:
     if key not in _DECODED:
         try:
             restrict.program(descriptor)
-            _DECODED[key] = True
-        except (restrict.Refused, IndexError, AttributeError, RecursionError):
-            _DECODED[key] = False
-    return _DECODED[key]
+            _DECODED[key] = None
+        except (restrict.Refused, IndexError, AttributeError, RecursionError) as e:
+            _DECODED[key] = f"{type(e).__name__}: {e}"
+    return _DECODED[key] is None
 
 
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
