@@ -1127,7 +1127,7 @@ theorem batchAffine_n (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hL : Laid c.
   · cases ha
   rename_i hc
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hc
-  obtain ⟨⟨hrows, hlen⟩, hFG⟩ := hc
+  obtain ⟨⟨⟨hrows, hlen⟩, hFG⟩, hglv⟩ := hc
   simp only [Option.some.injEq] at ha
   subst ha
   rw [e1] at hg0

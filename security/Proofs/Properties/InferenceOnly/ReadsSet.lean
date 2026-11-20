@@ -1371,7 +1371,7 @@ theorem throughPS_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hD : DownSpec
   set a := (c.body.nodes[k]!).args[i]! with hadef
   obtain ⟨hokA, hposA⟩ := hA
   rw [← hadef] at hposA
-  obtain ⟨s, pa, hsegs, hps, hsr, hpr, hbpe⟩ := throughPS_some h
+  obtain ⟨s, pa, hsegs, hps, hsr, hsw, hpr, hplv, hbpe⟩ := throughPS_some h
   have hpa : pos pa = (List.range a.seq.count).map fun t => refPos (a.seq.get t) := by
     rw [← hposA, psPos_flat _ hokA (by rw [hsegs]; simpa using hsr)]
     simp [hsegs, hps, posAll]

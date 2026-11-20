@@ -442,8 +442,8 @@ def Piece.flat (q : Piece) : Piece :=
   else if q.rowStride == q.len * q.stride then { q with len := q.rows * q.len, rows := 1, rowStride := 0 }
   else q
 
-/-- Position `j` of a return, as a piece of one element. -/
-def retAt (r : PS) (j : Nat) : Option Piece := ((r.slice j (j + 1))[0]?).bind (·.ps[0]?)
+/-- Position `j` of a return, as a piece of one element and no levels. -/
+def retAt (r : PS) (j : Nat) : Option Piece := ((r.slice j (j + 1))[0]?).bind fun s => s.ps[0]?.map (·.row 0)
 
 /-- Scan step return position `j` followed back through the iterations: `hist[0] = j`, each next position the carry leaf
 (parameter 0) the one before returns, which the iteration before returns; then `exit`, the piece `hist`'s last position
@@ -485,7 +485,7 @@ def carryRuns (r : PS) (a b : Nat) : Array (Nat × Nat × Bool) := Id.run do
       p := p + s.count
     else
       for q in s.ps do
-        let id := q.tgt == .ref true 0 && q.rows ≤ 1 && q.base == (p : Int) && (q.stride == 1 || q.len ≤ 1)
+        let id := q.tgt == .ref true 0 && q.rows ≤ 1 && q.lv.isEmpty && q.base == (p : Int) && (q.stride == 1 || q.len ≤ 1)
         out := out.push (p, p + q.count, id)
         p := p + q.count
   return out
@@ -496,7 +496,7 @@ def throughPS (ap : PS) (q : Piece) : Option Piece :=
   match ap.segs with
   | #[s] => match s.ps with
     | #[p] =>
-      if s.reps > 1 || p.rows > 1 || q.count == 0 || !q.lv.isEmpty then none else
+      if s.reps > 1 || s.rowed || p.rows > 1 || !p.lv.isEmpty || q.count == 0 || !q.lv.isEmpty then none else
       let first : Int := q.base + (if q.stride < 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
         (if q.rowStride < 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0)
       let hi : Int := q.base + (if q.stride > 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
@@ -569,7 +569,7 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
         if r.segs.size == 1 && r.segs[0]!.reps ≤ 1 && r.segs[0]!.ps.size == 1 then
           let g := r.segs[0]!.ps[0]!
           if let .gate w := g.tgt then
-            if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) then
+            if g.rows ≤ 1 && g.len == L && (L == 1 || G == L * g.stride) && g.lv.isEmpty then
               return #[.one (q.affine w (o + g.base) (if L == 1 then G else g.stride))]
         if q.rows > 1 then byRow ()
         else if q.stride == 1 then
@@ -604,7 +604,8 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
             if let .ref true i := g.tgt then
               if let some (d, Li) := (node.args[i]?.bind (·.dims)) then
                 let lo := g.base.toNat
-                if Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li then
+                if Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li &&
+                    g.lv.isEmpty then
                   let qb := lo / Li
                   let p : Piece := { tgt := .gate 0, base := (((qb * d + m0) * Li + (lo - qb * Li) : Nat) : Int),
                                      stride := 1, len := L, rows := m1 - m0, rowStride := (Li : Int) }
@@ -905,7 +906,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   -- a read's gates are one node's
   return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
     | some q => match q.tgt with
-      | .gate _ => !(lo ≤ q.base && q.base < hi)
+      | .gate _ => !(lo ≤ (q.row 0).base && (q.row 0).base < hi)
       | _ => true
     | none => false
 
@@ -1189,7 +1190,7 @@ def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (r
     | some u => reads[k]!.foldl (fun into s => match s.ps[0]? with
       | none => into
       | some q =>
-        let k' := nodeOf offs q.base.toNat
+        let k' := nodeOf offs (q.row 0).base.toNat
         if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)) into)
     (Array.replicate n #[])
 

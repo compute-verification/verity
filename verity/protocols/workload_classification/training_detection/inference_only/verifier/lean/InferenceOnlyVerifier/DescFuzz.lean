@@ -272,7 +272,7 @@ def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable) (cap 
       if segSize s > cap then return some (Json.mkObj [("skipped", Json.str "a segment past the cap"), ("node", toJson k)])
       let gs := segGates s
       if let some q := s.ps[0]? then
-        let kk := Desc.nodeOf offs q.base.toNat
+        let kk := Desc.nodeOf offs (q.row 0).base.toNat
         if kk ≥ K then return some (fail "a: nodeOf past the root's nodes" [("seg", segJson s)])
         for x in gs do
           if x.1 < 0 then return some (fail "a: a negative gate" [("seg", segJson s), ("gate", toJson x.1)])
