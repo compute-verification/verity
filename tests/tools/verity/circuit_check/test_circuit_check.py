@@ -698,6 +698,157 @@ def test_a_lowering_count_off_its_pin_is_named():
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
 
 
+def _exact(monkeypatch, prim, build):
+    """Test primitive ``prim`` with the Boolean body ``build`` computes (bits least significant first) as its one Boolean
+    Definition, the registered lookup's answer for it while the test runs."""
+    from verity.circuits import boolean as BL
+    from verity.circuits import program as PG
+    from verity.circuits.boolean.trace import definition
+    from verity.circuits.types import Array
+
+    params, ret = prim.signature()
+    body = definition(f"{prim.name}Bits", 1, build, [(n, Array(t.w, BL.BIT)) for n, t in params], Array(ret.w, BL.BIT),
+                      word=prim, register=False)
+    lookup = PG._BODY_LOOKUP[0]
+    monkeypatch.setattr(PG, "_BODY_LOOKUP", [lambda p: body if p.id == prim.id else lookup(p)])
+    return prim
+
+
+def _flip(C, a):
+    from verity.circuits.boolean.forms import NOT
+    return [NOT(a[0]), *a[1:]]
+
+
+def _signed(a, w):
+    return list(a) + [a[-1]] * (w - len(a))
+
+
+def test_a_partial_reference_is_named(monkeypatch):
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
+
+    def finite_only(a):
+        if (a >> 23) & 0xFF == 0xFF:
+            raise ValueError("non-finite")
+        return a
+
+    prim = _exact(monkeypatch, PrimitiveDefinition("CircuitCheckPartial", 1, (("a", Value(32)),), Value(32), finite_only,
+                                                   register=False), lambda C, a: list(a))
+    (f,) = CK.check_definition(prim, OPTS)["failures"]
+    assert f["name"].startswith("correspondence/reference-not-total CircuitCheckPartial_v1 raised on")
+
+
+def test_a_declared_interval_the_reference_leaves_is_named(monkeypatch):
+    """A primitive's declared return interval is a fact the Build takes (`verity.circuits.ports`): checked on operands within
+    its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
+    from verity.circuits.boolean.forms import multiply
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.ports import In, Out, Ports
+    from verity.circuits.types import Value
+
+    def mul(a, b):
+        return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
+
+    def prim(name, hi):
+        return _exact(monkeypatch, PrimitiveDefinition(name, 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul,
+                                                       register=False, ports=Ports(params=s8, ret=Out(interval=(-16256, hi)))),
+                      lambda C, a, b: multiply(C, _signed(a, 32), _signed(b, 32))[:32])
+
+    s8 = {"a": In(bound=(-128, 127)), "b": In(bound=(-128, 127))}
+    e = CK.check_definition(prim("CircuitCheckS8Mul", 16384), OPTS, as_call=False)
+    assert e["ports"] == {"vectors": e["correspondence"]["vectors"], "intervals": [[0, 1, [-16256, 16384]]], "outside": 0}
+    assert not e["failures"]
+    (f,) = CK.check_definition(prim("CircuitCheckS8MulTight", 16383), OPTS, as_call=False)["failures"]
+    assert f["name"].startswith("ports/interval CircuitCheckS8MulTight_v1") and f["examples"][0]["value"] == 16384
+
+
+def test_a_transfer_the_reference_leaves_is_named(monkeypatch):
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
+    intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
+    from verity.circuits.boolean.forms import add as add_bits
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.ports import Ports, as_reading
+    from verity.circuits.types import Value
+
+    def add(a, b):
+        return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
+
+    def transfer(short):
+        def f(a, b):
+            a, b = as_reading(a, 8), as_reading(b, 8)
+            return None if a is None or b is None else (a[0] + b[0], a[1] + b[1] - short)
+        return f
+
+    def prim(name, short):
+        return _exact(monkeypatch, PrimitiveDefinition(name, 1, (("a", Value(8)), ("b", Value(8))), Value(16), add,
+                                                       register=False, ports=Ports(transfer=transfer(short))),
+                      lambda C, a, b: add_bits(C, _signed(a, 16), _signed(b, 16), width=16))
+
+    e = CK.check_definition(prim("CircuitCheckS8Add", 0), OPTS, as_call=False)
+    t = e["ports"]["transfer"]
+    assert t["draws"] == CK.TRANSFER_DRAWS and t["intervals"] > 0 and t["outside"] == 0 and not e["failures"]
+    fails = CK.check_definition(prim("CircuitCheckS8AddShort", 1), OPTS, as_call=False)["failures"]
+    assert fails and all(f["name"].startswith("ports/transfer CircuitCheckS8AddShort_v1") for f in fails)
+
+
+def test_a_kernel_wrong_only_on_edge_words_is_caught(monkeypatch):
+    """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
+    from verity.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation.batch import _KERNELS
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
+
+    prim = _exact(monkeypatch, PrimitiveDefinition("CircuitCheckKernel", 1, (("a", Value(32)),), Value(32), lambda a: a ^ 1,
+                                                   register=False), _flip)
+    nan = lambda a: ((a >> 23) & 0xFF == 0xFF) & ((a & 0x7FFFFF) != 0)  # noqa: E731
+    register_kernel(prim, lambda a: (np.where(nan(a), 0, a ^ 1).astype(np.uint32), None))
+    try:
+        e = CK.check_definition(prim, OPTS)
+    finally:
+        del _KERNELS[prim.id]
+    (f,) = e["failures"]
+    assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
+
+
+def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked(monkeypatch):
+    """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
+    each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
+    from verity.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation.batch import _KERNELS
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
+
+    prim = _exact(monkeypatch, PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1,
+                                                   register=False), _flip)
+    odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
+    register_kernel(prim, lambda a: (a ^ 1, np.ones(a.shape, dtype=bool)), kernel="every")
+    register_kernel(prim, odd, kernel="odd")
+    register_kernel(prim, odd, kernel="odd-partial", partial=True)
+    try:
+        e = CK.check_definition(prim, OPTS)
+    finally:
+        del _KERNELS[prim.id]
+    assert sorted(f["name"].split(":")[0] for f in e["failures"]) == [
+        "correspondence/kernel-compared-nothing CircuitCheckDeclines_v1 [every]",
+        "correspondence/kernel-declined-in-domain CircuitCheckDeclines_v1 [odd]"]
+    via = {r["via"]: r for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
+    assert (via["kernel:every"]["compared"], via["kernel:every"]["fault"]) == (0, "compared-nothing")
+    assert via["kernel:odd-partial"]["compared"] > 0 and "fault" not in via["kernel:odd-partial"]
+
+
+def test_the_cli_fails_a_definition_named_on_the_command_line_by_name(monkeypatch, capsys):
+    """A Definition named on the command line whose lowering differs from its reference: the command exits 1 and prints the
+    failure's name.  Uncached: a cache would trace this test process for good (`cache.trace`)."""
+    from circuit_check import cli
+    from verity_flock import ir_lower as IL
+
+    add = IL.PIECES["F32Add_v1"]
+    monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
+    capsys.readouterr()
+    assert cli.main(["F32Mul_v1", "-q", "--no-cache"]) == 1
+    assert "FAIL correspondence/lowering-mismatch F32Mul_v1 [c-flock]" in capsys.readouterr().out
+
+
 def test_a_proof_blocks_export_counts_its_circuit_types():
     """`checks._export_counts`, which every lowered template's check reads, exports one proof block's circuit through
     `boolean_export` and counts it: four ANDs of 4-bit inputs are one circuit type of 4 ANDs, none shared."""

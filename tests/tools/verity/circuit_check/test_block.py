@@ -43,6 +43,31 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     assert not CK.block_range(fn, F, applies=False)["applies"] and not F.failures
 
 
+def test_a_definition_over_the_cost_target_whose_return_is_past_the_widest_class_is_named():
+    """Over the cost target (``partition_max_gates``) the partition reads its return type's bits in place of its gates: within
+    the widest size class it is checked off the type, and one bit past it is a warning by name
+    (``partition/over-cost-target``), the cost target bounding no proof."""
+    from verity.circuits import boolean as BL
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.partition_v2 import SIZE_CLASS_MAX
+    from verity.circuits.refs import array_of
+    from verity.circuits.types import Array
+
+    def wide(n):
+        return bind(CompositeDefinition(f"CircuitCheckWide{n}", 1, (), lambda S: ((("x", BL.BIT),), Array(n, BL.BIT)),
+                                        lambda B, S, x: array_of([B.call(BL.NOT, B.call(BL.NOT, x))] * n), register=False))
+
+    opts = CK.Options(partition_max_gates=1)
+    for n, over in ((SIZE_CLASS_MAX, False), (SIZE_CLASS_MAX + 1, True)):
+        F = CK.Findings()
+        rec = CK.partition(wide(n), opts, F, {})
+        assert (rec["bound"], rec["out_bits"], rec["checked"]) == (True, n, not over) and not F.failures
+        names = [w["name"] for w in F.warnings]
+        assert len(names) == over and all(
+            x.startswith(f"partition/over-cost-target CircuitCheckWide{n}_v1") and f"holds {n:,} bits, past the widest" in x
+            for x in names)
+
+
 def _rows():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array, Value
