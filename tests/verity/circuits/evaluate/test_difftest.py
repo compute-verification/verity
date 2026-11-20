@@ -183,11 +183,33 @@ def _bind(D, inputs: list) -> reference._TableTrace:
     return t
 
 
+@functools.lru_cache(maxsize=64)
+def _parsed(text: str) -> dict:
+    return json.loads(text)
+
+
+@functools.lru_cache(maxsize=64)
+def _decoded_text(text: str) -> codec.DecodedProgram:
+    return codec.decode_program(json.loads(text), REGISTRY)
+
+
+def decoded(desc: dict) -> codec.DecodedProgram:
+    """``desc`` decoded once per its canonical text, which is what the server reads; a descriptor that text doesn't give back
+    alike (a tuple for a list, a key that isn't a string) is decoded on its own, as it is."""
+    try:
+        text = DT.canonical(desc)
+    except (TypeError, ValueError):
+        text = None
+    if text is not None and _parsed(text) == desc:
+        return _decoded_text(text)
+    return codec.decode_program(copy.deepcopy(desc), REGISTRY)
+
+
 def python_answer(desc: dict, inputs: list) -> dict:
     """What the Lean evaluator must answer: the oracle's outputs over the root's nodes that are not input nodes, or a
     refusal."""
     try:
-        D = codec.decode_program(copy.deepcopy(desc), REGISTRY)
+        D = decoded(desc)
         for f in D.defs.values():
             if isinstance(f, PrimitiveDefinition) and not _in_scope(f):
                 raise ValueError(f"primitive {f.id}: not implemented by the Lean evaluator")
@@ -529,7 +551,7 @@ def _decoded(value: dict, field: str):
     if not (isinstance(value, dict) and set(value) == {"program", field} and isinstance(value["program"], dict)):
         raise DT.Reject(f"input: a program object and {field}")
     try:
-        return codec.decode_program(copy.deepcopy(value["program"]), REGISTRY)
+        return decoded(value["program"])
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise DT.Reject(f"{type(e).__name__}: {e}") from None
 
