@@ -114,8 +114,7 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Standards
 
-The checks in `tests/test_lean_packages.py`, `tests/test_retired_terms.py` and `tests/lint/test_lean_bar.py` print their
-fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
+The checks in `tests/test_lean_packages.py` and `tests/lint/test_lean_bar.py` print their fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
 `"Y"` make each a token, and the parse error lands far from the binder).
 
 ## Before the PR
