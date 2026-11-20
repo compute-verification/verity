@@ -256,6 +256,12 @@ wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its except
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
 cheaper test can't.
 
+**No dishonest runs** (Daniel, 20 Nov). That a cheating prover fails is what the guarantees say and the Lean proofs
+establish; nobody runs a cheating prover end to end to see it. No benchmark, application or served run has a dishonest
+arm, no gate asks for one, and none is a goal. An end-to-end run is one honest run the verifier accepts: a smoke test
+that the code runs together, and a benchmark measures. A verifier's named refusal keeps one small test or Lean `#guard`
+in its package's suite, where it costs seconds. A demo that shows a cheat refused is built when Daniel asks for one.
+
 Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
 paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
 everything that can make a claim false or can't be undone still fail.
