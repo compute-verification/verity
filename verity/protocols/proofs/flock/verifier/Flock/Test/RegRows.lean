@@ -101,6 +101,32 @@ def why (p : Public) (f : Json := file) : String :=
 #guard why (pub [0, 2] [1, 3] (tag := 2)) ==
   "registered reads: port a0: table row 0 does not open h1/a's registered root at position 0"
 #guard !passes (pub [0, 2] [1, 3] (value := "h1/b"))
+#guard why (pub [0, 2] [1, 3] (value := "h1/b")) == "registered reads: port a0 reads h1/a, not another value"
+
+/-- Another domain than the verifier's file names for A. -/
+def dom2 : ByteArray := Sha512.hash "verity/test/registered-domain/b".toUTF8
+
+/-- Row `pos`'s path in a tree of A's own rows under `dom2`: the member's commitment of the right value at another root
+than the verifier's. -/
+def pathOther (pos : Nat) : ByteArray :=
+  let ls := (Array.range 4).map fun r => Registered.leafAs v2 dom2 r (Hm96.Default512.treeLeaf (bc 1 r))
+  let j := pos / 2 ^^^ 1
+  ls[pos ^^^ 1]! ++ Registered.node dom2 0 j ls[2 * j]! ls[2 * j + 1]!
+
+/-- `pub [0, 2] [1, 3]` with each path its row's in that tree. -/
+def pubOther : Public :=
+  let p := pub [0, 2] [1, 3]
+  let entry (ps : List Nat) := Json.mkObj [("value", Json.str "h1/a"), ("positions", Lean.toJson ps),
+    ("paths", Json.arr (ps.map fun q => Json.str (hexOf (pathOther q))).toArray)]
+  { p with header := p.header.setObjVal! "registered" (Json.mkObj [("a0", entry [0, 2]), ("a1", entry [1, 3])]) }
+
+-- A's own rows under a root of the member's, the verifier's file unchanged: no row opens the file's root
+#guard FV3.root dom2 ((Array.range 4).map fun r => Registered.leafAs v2 dom2 r (Hm96.Default512.treeLeaf (bc 1 r)))
+  Sha512.hash != root 1
+#guard why pubOther == "registered reads: port a0: table row 0 does not open h1/a's registered root at position 0"
+-- one word of a row changed, its path unchanged
+#guard why { (pub [0, 2] [1, 3]) with digests := (pub [0, 2] [1, 3]).digests.set! 1 ((bc 1 2).set! 0 0xff) } ==
+  "registered reads: port a0: table row 1 does not open h1/a's registered root at position 2"
 
 /-! A port named twice: `JsonParse.parse` keeps one of the two, so the file reads as naming it once (here as one port, `a1`'s
 reads under `a0`); `verity-verify-proof` refuses the text first (`JsonKeys.dupKey`). -/

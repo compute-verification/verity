@@ -1460,23 +1460,68 @@ private def ownSliceT (roots : List (String × String)) (name : String) : Json :
 
 -- a member of a template of several members: its header's `o0` is its own tree's (Flock's `checkPublic`), held by its
 -- registered read at the template's tree, so its own root is not compared
-#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "aa"), ("o0", "ff")])) == ""
 -- the old header, its own root and no registered read at the shared tree: refused by name
-#guard refusal (headerHeldAt #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
 -- a registered read of `o0` at another tree: not the shared tree's opening, refused by name
-#guard refusal (headerHeldAt #[("o0", "t/o1")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[("o0", "t/o1")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "aa"), ("o0", "ff")])) == SHARED_UNREAD "o0" "t/o0"
 -- a template's one member, its own tree the registration's: compared as before, no read needed
-#guard refusal (headerHeldAt #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "aa"), ("o0", "ee")])) == ""
 -- a header whose `instances` is not the slice's population: refused before any port is dropped
-#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 5 [("x", "aa"), ("o0", "ff")])) == POPULATION_WHY
 -- the member's own input at another root: still compared, and refused as before
-#guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+#guard refusal (headerHeldAt #[("o0", "t/o0")] #[] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "ab"), ("o0", "ff")])) == "public file: not the registration's: roots, domains"
+
+/-- The ports of the registered file `regT ports`. -/
+private def heldT (ports : List (String × String × Char × Nat)) : Array Flock.Registered.Port :=
+  (Flock.Registered.ofJson (regT ports)).toOption.getD #[]
+
+/-- `headerHeldAt` on `t/c0`'s slice and a header of its port `x`, its tree at `o0` and `w`, at `reads` and the
+registered file of `ports`. -/
+private def heldAtT (reads : Array (String × String)) (ports : List (String × String × Char × Nat))
+    (n : Nat := 2) (x : String := "aa") : String :=
+  refusal (headerHeldAt reads (heldT ports) (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+    (headerT n [("x", x), ("o0", "ee"), ("w", "77")]))
+
+-- a port the slice holds no root of, read at a value the verifier's registered file holds there as a registered value:
+-- held by the reads, not compared
+#guard heldAtT #[("w", "h/w")] [("w", "h/w", 'a', 2)] == ""
+-- read at a value the file does not hold at that port, or holds at another port, or holds as a tree's name (a field
+-- tree, a run input's tree, a committed tree): refused by name
+#guard heldAtT #[("w", "h/z")] [("w", "h/w", 'a', 2)] == UNREGISTERED_WHY "w" "h/z"
+#guard heldAtT #[("w", "h/w")] [("v", "h/w", 'a', 2)] == UNREGISTERED_WHY "w" "h/w"
+#guard heldAtT #[("w", "h/w")] [] == UNREGISTERED_WHY "w" "h/w"
+#guard [("t/o0" : String), "u/o1", "input/n3", "committed/w"].all fun v =>
+  heldAtT #[("w", v)] [("w", v, 'a', 2)] == UNREGISTERED_WHY "w" v
+-- no read of it: refused as before
+#guard heldAtT #[] [("w", "h/w", 'a', 2)] == UNWIRED_WHY "w"
+#guard heldAtT #[("v", "h/w")] [("v", "h/w", 'a', 2)] == UNWIRED_WHY "w"
+-- a port the slice holds, read at a registered value: still compared to its root
+#guard heldAtT #[("w", "h/w"), ("x", "h/x")] [("w", "h/w", 'a', 2), ("x", "h/x", 'a', 2)] (x := "ab") ==
+  "public file: not the registration's: roots, domains"
+-- the population first
+#guard heldAtT #[("w", "h/w")] [("w", "h/w", 'a', 2)] (n := 5) == POPULATION_WHY
+
+/-- `Member.populationOn` of member `t/c0` with the registered file of `ports`, on its slice and a public file whose
+header names its units 0 and 1, its port `x`, its tree at `o0` and `w`: the reads and the ports `headerHeldAt` is
+handed are the file's, as `Member.population` reads them. -/
+private def populationT (ports : List (String × String × Char × Nat)) : String :=
+  let m : Member := { memberT "t/c0" #[(0, 2)] with own := { sharedT with registered := some (regT ports) } }
+  let h := (headerT 2 [("x", "aa"), ("o0", "ee"), ("w", "77")]).setObjVal! "units"
+    (Json.mkObj [("indices", Lean.toJson [0, 1])])
+  refusal (m.populationOn (pure #[("t", #[(0, 5)])]) (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+    (h.compress ++ "\n").toUTF8)
+
+#guard populationT [("w", "h/w", 'a', 2)] == ""
+#guard populationT [("w", "committed/w", 'a', 2)] == UNREGISTERED_WHY "w" "committed/w"
+#guard populationT [("w", "input/n3", 'a', 2)] == UNREGISTERED_WHY "w" "input/n3"
+#guard populationT [("v", "h/w", 'a', 2)] == UNWIRED_WHY "w"
 
 /-- A root of the port given at the hex digit `c` repeated, its domain `d`'s, two leaves. -/
 private def hexRootT (port : String) (c : Char) : Json :=

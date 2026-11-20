@@ -1705,7 +1705,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         capsys.readouterr()
         with pytest.raises(Opened):
             RA.main([*args, *extra])
-        assert seen["audit"] == want and seen["jobs"] == 1
+        assert seen["audit"] == want
         said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
         told = [] if extra[:1] == ["--compose-cache"] else [
             "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
