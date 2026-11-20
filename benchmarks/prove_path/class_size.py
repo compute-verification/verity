@@ -7,7 +7,7 @@ projection (`project`) from an exact lowering of one Program of the same docket 
 key block, which the tests hold to the exact lowering at larger classes:
 
 * every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
-  (`placed`: `TokenFeed_v1` a prompt position past the first; `ScanSlots_v4`, at the class's scan state row, and
+  (`placed`: `TokenFeed_v1` a prompt position past the first; `ScanSlots_v5`, at the class's scan state row, and
   `SelectEntry_v1` one a Program; `SelectCollect_v1` one at every other position, its first the first's), read off the
   probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
@@ -44,7 +44,7 @@ FIRSTS = (FIRST, "AttnBlockFirst_v2")
 END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
-SCAN = "ScanSlots_v4"
+SCAN = "ScanSlots_v5"
 #: a position's select with the slot's collector, at every position but the last, and the last's with the slot's entry
 COLLECT = "SelectCollect_v1"
 ENTRY = "SelectEntry_v1"
@@ -92,7 +92,7 @@ def _one(xs: list[Any], what: str) -> Any:
 
 def placed(lab: str, T: int, P: int) -> int | None:
     """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
-    prompt positions past the first, `ScanSlots_v4` at the first, `SelectEntry_v1` at the last and `SelectCollect_v1` at
+    prompt positions past the first, `ScanSlots_v5` at the first, `SelectEntry_v1` at the last and `SelectCollect_v1` at
     each other (its first the first's); None for any other, a fixed count at every position."""
     fam, s = statics(lab)
     if fam == FEED:
@@ -108,7 +108,7 @@ def placed(lab: str, T: int, P: int) -> int | None:
 
 def projected(lab: str, n: int, at: Any, cls: Any, scan: str) -> tuple[str, int]:
     """A template outside the heads, ``n`` units of one Program at the probe's class ``at``, as one Program at class ``cls``
-    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v4` at ``scan``, the label of its
+    has it: a slot's template (`placed`) at the class's prompt and outputs (`ScanSlots_v5` at ``scan``, the label of its
     binding at the class's scan state row, a unit of each of the class's lanes) and
     `placed`'s units there, any other the probe's fixed count a position at each of the class's, refused unless ``n`` is
     the probe's by that rule."""
@@ -182,7 +182,7 @@ MEASURED: dict[str, tuple[int, int, Source]] = {
     "AttnHeadEnd_v1{D=64}": (169_842, 22, None),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, None),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, None),
-    "ScanSlots_v4{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (30, 22, None),
+    "ScanSlots_v5{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (30, 22, None),
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
     "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, None),

@@ -58,6 +58,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.se
 
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
 WORD_BITS = 32
+#: a pass's ``coin_source`` when its salt coin is the auditor device's challenger's, not held in-process
+CHALLENGER = "challenger"
 #: W's version, its ``window`` header's ``version``: 2 registers each weight's B rows; a W that states none is version 1,
 #: written before W registered them, whose values are its calls' alone
 VERSION = 2
@@ -336,6 +338,6 @@ def _committed(scheme: str, e: Mapping[str, Any], words: np.ndarray, salts: list
     return got
 
 
-__all__ = ["KEEP", "NAMING", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value",
+__all__ = ["CHALLENGER", "KEEP", "NAMING", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value",
            "b_entries", "b_value", "coins_of", "entries", "kept_salts", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
            "write", "y_value"]

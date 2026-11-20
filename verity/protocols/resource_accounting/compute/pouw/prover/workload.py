@@ -1,11 +1,11 @@
-"""PoUW's messages between the workload and the prover, H1's and Pearl+'s: what PoUW's prover asks of the workload, and
-what the workload hands it. H1 has no scheme declaration, so its messages live here alone; Pearl+ declares its own of
-them (`PEARL_PLUS.messages`). The parties are SPOT's (`spot.prover.workload`), declared again here because this place
-does not load SPOT's, and the one list of every protocol's messages is `tests/test_workload_messages.py`'s.
+"""PoUW's messages between the workload and the prover: what PoUW's prover asks of the workload, and what the workload
+hands it. Pearl+ declares its own of them (`PEARL_PLUS.messages`). The parties are SPOT's (`spot.prover.workload`),
+declared again here because this place does not load SPOT's, and the one list of every protocol's messages is
+`tests/test_workload_messages.py`'s.
 
 ~~~text
-prover   -> workload   PoUWScheme, H1State, PoUWMonitoringPeriod
-workload -> prover     H1RunCommitment, H1Program, H1Record, H1Registration, PearlPass
+prover   -> workload   PoUWScheme, PoUWMonitoringPeriod
+workload -> prover     PearlPass
 ~~~
 """
 
@@ -24,18 +24,13 @@ BODY = Body(max=(1 << 32) - 1)
 
 MESSAGES = (
     Schema("PoUWScheme", 1, "structure", body=BODY),
-    Schema("H1State", 1, "structure", body=BODY),
     Schema("PoUWMonitoringPeriod", 1, "coins", body=BODY),
-    Schema("H1RunCommitment", 1, "commitment", body=BODY),
-    Schema("H1Program", 1, "structure", body=BODY),
-    Schema("H1Record", 1, "commitment", body=BODY),
-    Schema("H1Registration", 1, "commitment", body=BODY),
     Schema("PearlPass", 1, "private", body=BODY),
 )
 
 CHANNELS = (
-    Channel(PROVER, WORKLOAD, ("PoUWScheme", "H1State", "PoUWMonitoringPeriod")),
-    Channel(WORKLOAD, PROVER, ("H1RunCommitment", "H1Program", "H1Record", "H1Registration", "PearlPass")),
+    Channel(PROVER, WORKLOAD, ("PoUWScheme", "PoUWMonitoringPeriod")),
+    Channel(WORKLOAD, PROVER, ("PearlPass",)),
 )
 
 #: Pearl+'s own (`PEARL_PLUS.channel_schemas`, ``parties`` and ``channels``), stated here because this place may load the
