@@ -26,7 +26,8 @@ the digest the memory attester's signature signs (`memory_attester.LmsSigner`); 
 bytes in byte order, which is how the unit that computes ``m`` must output it.  The bytes are rewired into
 `gates.lms`' words (each word's bytes big-endian, its bits least significant first) without a gate.  At the deployed
 scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1{64,1,20}``: rows of 640, 512 and
-278,048 bits and one output bit, 12 ANDs beside the verifier's.
+278,048 bits and its verdict word, 12 ANDs beside the verifier's.  Each unit's verdict is one u16 word, 1 or 0
+(``VERDICT``), since every field a block returns is whole words.
 
 **The round's unit.** The records are registered two a row, ⌈k/2⌉ rows of 184 bytes (92 u16 words): record j is bytes
 92(j mod 2) to 92(j mod 2) + 91 of row ⌊j/2⌋, the last row zero past the last record when k is odd.  A record is
@@ -64,8 +65,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
-from verity.circuits.population import WordBits
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Tuple, Value
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms as R
 from verity.commitments.gates import frame_v3 as F
 from verity.commitments.gates.lms import DIGEST, IDENT, _check as _lms_params, _group, _value, _words, _Wires, verifier
@@ -98,6 +100,16 @@ def octets(n: int):
     return Array(n, Array(8, BL.BIT))
 
 
+#: a unit's verdict: one u16 word, 1 or 0, since every field a block returns is whole words
+VERDICT = Value(16)
+
+
+def _verdict(B, ok):
+    """The verdict word of the bit ``ok``: ok in its low bit, its other bits 0."""
+    zero = B.call(BL.constant(0)).refs[0]
+    return B.call(bind(BitsWord, W=16), _Wires.coll(bits(16), [ok] + [zero] * 15))
+
+
 def _sig_bytes(S) -> int:
     p = _lms_params(S)
     return 4 + S.N * (1 + p.P + S.H)
@@ -105,7 +117,7 @@ def _sig_bytes(S) -> int:
 
 def _session_sig(S):
     _lms_params(S)
-    return (("key", octets(16 + S.N)), ("m", octets(64)), ("sig", octets(_sig_bytes(S)))), bits(1)
+    return (("key", octets(16 + S.N)), ("m", octets(64)), ("sig", octets(_sig_bytes(S)))), VERDICT
 
 
 def _session_body(B, S, key, m, sig):
@@ -122,12 +134,12 @@ def _session_body(B, S, key, m, sig):
                 X.coll(bits(S.H), q[:S.H]), words(_value(n), C), words(Array(p.P, _value(n)), y),
                 words(Array(S.H, _value(n)), path))
     top = B.call(bind(PousEqual, N=32 - S.H), X.coll(bits(32 - S.H), q[S.H:]), X.coll(bits(32 - S.H), [B.call(BL.constant(0)).refs[0]] * (32 - S.H)))
-    return X.coll(bits(1), X.refs(B.call(BL.AND, BL.operands(ok, top[0]))))
+    return _verdict(B, X.refs(B.call(BL.AND, BL.operands(ok, top[0])))[0])
 
 
 PousSessionSig = CompositeDefinition(
     "PousSessionSig", 1, ("N", "W", "H"), _session_sig, _session_body, conformance="exact-model-tested",
-    doc="1 iff sig, u32be(q) || C || y || path, is an LMS signature (LmsVerify_v1{N, W, H}) of the 64-byte message m under "
+    doc="the verdict word, 1 iff sig, u32be(q) || C || y || path, is an LMS signature (LmsVerify_v1{N, W, H}) of the 64-byte message m under "
         "the public key I || root, with q below 2^H; every input a byte string in byte order; sound under the claim "
         "euf-cma/lms-sha512-n64 at N = 64")
 
@@ -138,7 +150,7 @@ def _round_sig(S):
         raise ValueError(f"PousRound's N is a row's bytes, whole 16-bit words, and its SLOT a record's place in its row, "
                          f"below {RECORDS_PER_ROW}, not N={S.N!r}, SLOT={S.SLOT!r}")
     return (("row", Array(S.N // 2, Value(16))), ("ok", Value(16)), ("records", octets(RECORD_BYTES * RECORDS_PER_ROW)),
-            *((h, Value(32)) for h in _HALVES)), bits(1)
+            *((h, Value(32)) for h in _HALVES)), VERDICT
 
 
 def _round_body(B, S, row, ok, records, *halves):
@@ -155,12 +167,12 @@ def _round_body(B, S, row, ok, records, *halves):
                     X.coll(bits(16), [one] + [zero] * 15))
     low = B.call(bind(PousEqual, N=32), X.coll(bits(32), hb[_HALVES.index("ihi")]), X.coll(bits(32), [zero] * 32))
     both = B.call(BL.AND, BL.operands(same[0], opened[0]))
-    return X.coll(bits(1), X.refs(B.call(BL.AND, BL.operands(both, low[0]))))
+    return _verdict(B, X.refs(B.call(BL.AND, BL.operands(both, low[0])))[0])
 
 
 PousRound = CompositeDefinition(
     "PousRound", 2, ("N", "SLOT"), _round_sig, _round_body, conformance="exact-model-tested",
-    doc="1 iff record SLOT of the records row (two 92-byte memory_attester.Round.value records) begins with u32be(j) || "
+    doc="the verdict word, 1 iff record SLOT of the records row (two 92-byte memory_attester.Round.value records) begins with u32be(j) || "
         "u64be(i), read as its three big-endian 32-bit halves j, ihi, ilo, and holds the sha512/row/v2 digest of the N-byte row, its N/2 words little-endian, "
         "the row's opening verdict word ok is 1 and ihi is 0: R_even at SLOT 0, R_odd at SLOT 1")
 
@@ -170,8 +182,7 @@ def signed_context(I: bytes, session: bytes) -> bytes:
     u64be(40) ‖ u64be(32) ‖ session`` (its context is the session id's field, framed again)."""
     if len(I) != 16 or len(session) != SESSION_BYTES:
         raise ValueError(f"an LMS identifier is 16 bytes and a session id {SESSION_BYTES}")
-    sid = SESSION_BYTES.to_bytes(8, "big") + session
-    return len(_ROLE).to_bytes(8, "big") + _ROLE + I + len(sid).to_bytes(8, "big") + sid
+    return SC.signed_context(I, session)
 
 
 def _message_sig(S):
@@ -222,7 +233,7 @@ def _digest_sig(S):
     row = octets(RECORD_BYTES * RECORDS_PER_ROW)
     rows = tuple((f"r{t}", row) for t in range(records_rows(S.K)))
     return ((("head", octets(head_bytes(S.HEAD))), ("ctx", octets(CTX_BYTES)), *rows),
-            Tuple(bits(1), octets(64), *(row for _ in rows)))
+            Tuple(VERDICT, octets(64), *(row for _ in rows)))
 
 
 def _digest_body(B, S, head, ctx, *rows):
@@ -236,12 +247,12 @@ def _digest_body(B, S, head, ctx, *rows):
     timed = B.call(bind(PousVerdict, K=S.K, M=0, LIMIT=S.LIMIT),
                    X.coll(Array(S.K, bits(8 * RECORD_BYTES)), [x for r in recs for x in r]),
                    X.coll(Array(S.K, bits(512)), [x for r in recs for x in r[8 * _DIGEST[0]:8 * _DIGEST[1]]]))
-    return tuple_of(X.coll(bits(1), X.refs(timed)), X.coll(octets(64), X.refs(m)), *rows)
+    return tuple_of(_verdict(B, X.refs(timed)[0]), X.coll(octets(64), X.refs(m)), *rows)
 
 
 PousSessionDigest = CompositeDefinition(
     "PousSessionDigest", 1, ("K", "HEAD", "LIMIT"), _digest_sig, _digest_body, conformance="exact-model-tested",
-    doc="(ok, m, the records rows): m the digest the session's signature signs, SHA-512(ctx || u64be(64) || record) of the "
+    doc="(ok, m, the records rows): ok a verdict word, m the digest the session's signature signs, SHA-512(ctx || u64be(64) || record) of the "
         "record SHA-512(SESSION_TAG || u64be(HEAD) || head || the sha512/row/v2 digest of the K records as one stream); ok 1 "
         "iff every record names its round, its receipt is not before its send and receipt - send <= LIMIT "
         "(PousVerdict_v1{K, 0, LIMIT} against its own digests); the records rows as read, for the rounds' units to read "

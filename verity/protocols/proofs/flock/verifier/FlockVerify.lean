@@ -790,11 +790,6 @@ def coinTreeCmd (path : String) : IO UInt32 := do
     IO.println s!"COINTREE {line.compress}"
   return (if all then 0 else 1)
 
-/-- `verify`'s refusal of upstream's plain proof files (`--upstream-plain`), which `agree` reports for a session no other
-refusal meets. -/
-def UPSTREAM_PLAIN : String :=
-  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"
-
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default; `Tags.byName?`), and every session of a legacy
 statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`), as is every session of a

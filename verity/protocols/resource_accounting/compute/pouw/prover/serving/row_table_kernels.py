@@ -4,7 +4,8 @@ and compiled from a flat copy of those files, so the compiler is handed no path 
 device's libraries (`host_lib`, `device_lib`); the hm96-sha512 byte tables and prefixes the kernels hash with (`hm_tables`,
 `leaf_prefixes`). A device's copy of a library, with its side streams, is the device adapter's, as are H1's device tables,
 registered rows and receipts, which build on it. The C++ compiler and nvcc are the serving device's (`device.compiler`,
-`device.nvcc`): the configured toolchain's, else the path's."""
+`device.nvcc`): the configured toolchain's, else the path's. The row tables' device code, kept here until proofs decides
+where it lives."""
 from __future__ import annotations
 
 import ctypes

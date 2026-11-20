@@ -47,8 +47,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   unit's place in it, and its public row holds those as credit derives them from the layout (`core_check.j10r_blocks`),
   every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
-  ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt` (h1_prove's
-  registration), which credit registers itself and names at that known content. A unit that computed 0 opens no
+  ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt`, which credit registers itself and names at that known content. A unit that computed 0 opens no
   row of it, and a session that opened ok at another root is refused.
 
 * **The credited set is fixed before the sample** (`_credited`). Each row of the window's manifest (the serving process's
@@ -1153,7 +1152,7 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
 @functools.lru_cache(maxsize=8)
 def ok_table(program: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """`h1window.ok_table`: the window's ok rows ``value`` over its `population` units, their salts and their
-    registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
+    registration: row u the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
     the window's open root `window` and u, registered under the descriptor's SHA-512 `program` binding `window`. Every
     input is public, so the verifier and the prover compute the same root."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
