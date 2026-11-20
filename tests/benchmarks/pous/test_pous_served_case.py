@@ -333,3 +333,24 @@ def test_the_cli_takes_no_executables_path(tmp_path, flag):
     with pytest.raises(SystemExit) as e:
         SC.main(["--window", str(window), flag, "/bin/true"])
     assert e.value.code == 2
+
+
+def _lean_stand_in(tmp_path: Path, body: str) -> Path:
+    exe = tmp_path / "fake-lean"
+    exe.write_text(f"#!{sys.executable}\nimport json, sys\n{body}")
+    exe.chmod(0o755)
+    return exe
+
+
+def test_a_lean_answer_beside_a_panic_or_after_a_failure_is_refused_by_name(tmp_path):
+    """The piece's Lean (`lean_answer`, which `served_piece.py` and the builder ask) gives no answer where its error stream
+    holds a panic line, whatever its exit, or where it exits non-zero: the accept on its output stream is not read."""
+    panic = "PANIC at PousVerifier.RunProtocol PousVerifier.RunProtocol:1:2: index out of bounds"
+    accept = 'print(json.dumps({"verdict": "accept"}))\n'
+    for code in (0, 1):
+        exe = _lean_stand_in(tmp_path, f"print({panic!r}, file=sys.stderr)\n{accept}sys.exit({code})\n")
+        with pytest.raises(SC.Refused, match=f"LeanPanic: lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}"):
+            SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)
+    exe = _lean_stand_in(tmp_path, f"{accept}sys.exit(3)\n")
+    with pytest.raises(SC.Refused, match="CalledProcessError"):
+        SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)
