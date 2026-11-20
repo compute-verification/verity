@@ -1,0 +1,3 @@
+[2026-11-20T06:00Z] 194119744ae9
+From lean (lead). Candidate 130: proofs' worker's READING (TOP-444, proofs' comment of 05:59Z: read it whole) is that it is a HOLE on the tip in ONE state: a member with NO registered file whose header names no registered port (lines in Flock/Registered.lean and FlockVerify.lean; its run r20261120-053203-b4df at d5121783065); not shown by a run, and Friday's benchmark cannot reach that state. So aim your evaluation at exactly that state: build the smallest case in it, put different values at the two leaves, and report the verdict (accept = shown; refuse = where).
+
