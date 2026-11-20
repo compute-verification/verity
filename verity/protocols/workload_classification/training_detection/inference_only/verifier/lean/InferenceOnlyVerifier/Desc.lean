@@ -58,13 +58,13 @@ other leaf a chain of positions to where it leaves the carry or to its cycle, `C
 What has no closed form here is walked one by one up to `WALK` and refused past it (`unwalked`, with what it would have
 walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
 that aren't, a scan's ys read iteration by iteration, chains longer than `WALK`, a grid of several lanes whose
-lanes don't each resolve to one piece of their periods (`segDown`), a lane's piece as intervals (part of a lane row by
-row, and a whole lane's levels, each level's radix times the intervals before it: `Piece.pisWalk`, before a summary's
-`used` and on the root nodes' reads), and a rowed segment's copies period by period (`readsWalk`, before
-`freshWidth`; `Seg.split` leaves none in a read). Still walked unbounded: the leaves of a strided or lane piece taken
-through a parameter (`throughArg`), periodic intervals whose runs don't fill their period, run by run (`PI.emit`: a
-row's elements, or the rows of a strided piece or of a lane of one level, one a period), and segments of copies that
-overlap other reads of the same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
+lanes don't each resolve to one piece of their periods (`segDown`), a piece as intervals (its rows one by one, and a
+whole lane's first row run by run and its levels, each level's radix times the intervals before it: `Piece.pisWalk`,
+before a summary's `used` and on the root nodes' reads), a rowed segment's copies period by period (`readsWalk`;
+`Seg.split` leaves none in a read), and periodic intervals whose runs don't fill their period, run by run (`PI.emit`,
+counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`). Still
+walked unbounded: the leaves of a strided or lane piece taken through a parameter (`throughArg`), and segments of copies
+that overlap other reads of the same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -80,7 +80,8 @@ layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WA
 the root nodes' reads, `readsWalk`; its `message` says what and how many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
-`empty-iu`. `InferenceOnlyCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
+`empty-iu`, then `unwalked` (what `freshWidth` would walk on an inference block's reads, `freshWalk`).
+`InferenceOnlyCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
 
@@ -189,6 +190,9 @@ def PI.emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
   if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
   else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
 
+/-- How many intervals `PI.emit` pushes for `x`. -/
+def PI.emits (x : PI) : Nat := if x.len ≥ x.period then 1 else x.cnt
+
 /-- The periodic intervals of `xs` as intervals. -/
 def PI.ivs (xs : Array PI) : Array (Nat × Nat) := xs.foldl PI.emit #[]
 
@@ -245,6 +249,21 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
   match s.foldl PI.mergeStep (out, none) with
   | (out, some c) => PI.emit out c
   | (out, none) => out
+
+/-- How many intervals `ivsOf qs` gives, counted by `ivsOf`'s sweep without emitting them. -/
+def ivsCount (qs : Array Piece) : Nat :=
+  let xs := (qs.flatMap Piece.pis).filter fun x => !(x.cnt == 0 || x.len == 0)
+  let s := (xs.filter fun x => !(x.cnt == 1 || x.len ≥ x.period)).toList.mergeSort PI.le
+  let step (st : Nat × Option PI) (x : PI) : Nat × Option PI :=
+    match st.2 with
+    | some c =>
+      if c.period == x.period && c.cnt == x.cnt && x.lo ≤ c.lo + c.len then
+        (st.1, some { c with len := max c.len (x.lo + x.len - c.lo) })
+      else (st.1 + c.emits, some x)
+    | none => (st.1, some x)
+  match s.foldl step ((xs.filter fun x => x.cnt == 1 || x.len ≥ x.period).size, none) with
+  | (n, some c) => n + c.emits
+  | (n, none) => n
 
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
 of a batch whose members' return isn't one run, read by whole members. Leaves never shift: `ps` names a leaf with
@@ -437,24 +456,33 @@ def UNWALKED : String := "unwalked: "
 def walkAtMost (what : String) (n : Nat) : Except String Unit :=
   if n > WALK then throw s!"{UNWALKED}{what}: {n} of them, past the {WALK} this verifier walks one by one" else pure ()
 
-/-- `Piece.pis`'s walks of a lane, refused past `WALK`: a part of a lane, row by row, and a whole lane, each level's
+/-- `Piece.pis`'s walks, refused past `WALK`: rows one by one (part of a lane, or rows that are neither runs a row
+step apart nor columns a stride apart), and a whole lane's row 0 run by run (`PI.ivs`) and its levels, each level's
 radix times the intervals before it (`levelIvs`'s copies before they merge). -/
 def Piece.pisWalk (q : Piece) : Except String Unit :=
-  if q.rows ≤ 1 || q.len == 0 || q.lv.isEmpty then pure ()
-  else if q.start == 0 && q.rows == q.lv.foldl (fun a (r, _) => a * r) 1 then
-    let step (st : Nat × Option Ivs) (rd : Nat × Int) : Nat × Option Ivs :=
-      match st.2 with
-      | none => st
-      | some I =>
-        if rd.1 * I.size > WALK then (rd.1 * I.size, none)
-        else (max st.1 (rd.1 * I.size), some (Ivs.norm ((Array.range rd.1).flatMap fun c => I.map fun (a, b) =>
-          (((a : Int) + (c : Int) * rd.2).toNat, ((b : Int) + (c : Int) * rd.2).toNat))))
-    walkAtMost "intervals of a lane's levels, a level's radix times the intervals before it"
-      (q.lv.foldl step (0, some (Ivs.norm (PI.ivs (q.row 0).rowPis)))).1
-  else walkAtMost "rows of part of a lane, as intervals one by one" q.rows
+  if q.rows ≤ 1 || q.len == 0 then pure ()
+  else if !q.lv.isEmpty then
+    if q.start == 0 && q.rows == q.lv.foldl (fun a (r, _) => a * r) 1 then do
+      walkAtMost "runs of a read, as intervals one by one" ((q.row 0).rowPis.foldl (fun n x => n + x.emits) 0)
+      let step (st : Nat × Option Ivs) (rd : Nat × Int) : Nat × Option Ivs :=
+        match st.2 with
+        | none => st
+        | some I =>
+          if rd.1 * I.size > WALK then (rd.1 * I.size, none)
+          else (max st.1 (rd.1 * I.size), some (Ivs.norm ((Array.range rd.1).flatMap fun c => I.map fun (a, b) =>
+            (((a : Int) + (c : Int) * rd.2).toNat, ((b : Int) + (c : Int) * rd.2).toNat))))
+      walkAtMost "intervals of a lane's levels, a level's radix times the intervals before it"
+        (q.lv.foldl step (0, some (Ivs.norm (PI.ivs (q.row 0).rowPis)))).1
+    else walkAtMost "rows of a read, as intervals one by one" q.rows
+  else if q.stride.natAbs == 1 || q.len == 1 then pure ()
+  else if q.rowStride.natAbs == 1 && q.stride.natAbs ≥ q.rows then pure ()
+  else walkAtMost "rows of a read, as intervals one by one" q.rows
 
-/-- The walks of a summary's `used` (`ivsOf`), refused past `WALK`. -/
-def usedWalk (acc : Array (Array Piece)) : Except String Unit := acc.forM fun qs => qs.forM Piece.pisWalk
+/-- The walks of a summary's `used` (`ivsOf`), refused past `WALK`: its pieces' (`Piece.pisWalk`), then the intervals
+`PI.emit` gives (`ivsCount`). -/
+def usedWalk (acc : Array (Array Piece)) : Except String Unit := acc.forM fun qs => do
+  qs.forM Piece.pisWalk
+  walkAtMost "runs of a read, as intervals one by one" (ivsCount qs)
 
 /-- The walks of `freshWidth` on segments of the root nodes' reads, refused past `WALK`: a rowed segment's copies, period
 by period, and its pieces' (`gateIvs`, `Piece.pisWalk`). -/
@@ -1114,6 +1142,19 @@ def freshWidth (segs : Array Seg) : Nat :=
   let fin := (items.toList.mergeSort fun x y => x.1 ≤ y.1).foldl (sweepStep (widthIn ivs frames)) (0, #[], 0)
   if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1
 
+/-- How many intervals `gateIvs qs` gives (`ivsCount` by width). -/
+def gatesCount (qs : Array Piece) : Nat :=
+  let ws := (qs.filterMap fun q => match q.tgt with | .gate w => some w | _ => none).toList.mergeSort (· ≤ ·) |>.eraseDups
+  ws.foldl (fun n w => n + ivsCount (qs.filter (·.tgt == .gate w))) 0
+
+/-- `freshWidth`'s walks of an inference block's segments, refused past `WALK`: the intervals `gateIvs` gives, run by
+run (`gatesCount`), of its segments of one copy, of a rowed segment's copies and of one copy of any other. -/
+def freshWalk (segs : Array Seg) : Except String Unit :=
+  walkAtMost "runs of a read, as intervals one by one" (gatesCount (segs.filter (·.reps ≤ 1) |>.flatMap (·.ps)) +
+    segs.foldl (fun n s => if s.reps ≤ 1 then n
+      else if s.lanes then (Array.range s.reps).foldl (fun n m => n + gatesCount (s.copy m)) n
+      else n + gatesCount s.ps) 0)
+
 /-- An input node: its callee is an input primitive (§5.2). A composite's key may read as an input id (`Input16_v1` is a
 well-formed static-free composite key), and its gates are computed. -/
 def isInputNode (P : Prog) (n : Node) : Bool := let f := P.defs[n.fn]!; f.prim && isInputId f.key
@@ -1256,6 +1297,7 @@ def evaluate (j : Json) : Except String Json := do
   if !(List.range n).all used.contains then throw "empty-iu"
   let size := sizes offs own n
   let into := intoOf offs own theta reads n
+  into.forM freshWalk
   let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
