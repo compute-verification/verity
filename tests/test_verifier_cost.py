@@ -45,7 +45,11 @@ ALLOWED: dict[str, str] = {
         "verifier imports it",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean":
         "InferenceOnlyVerifier.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
-        "which refuses past its limit",
+        "which refuses past its limit. The scan sees only that walk; the module docstring lists every walk the file takes: "
+        "those refused past WALK (walkAtMost, among them a lane's piece as intervals, Piece.pisWalk, and a rowed "
+        "segment's copies, readsWalk), and three still unbounded: the leaves of a strided or lane piece taken through a "
+        "parameter (throughArg), periodic intervals whose runs don't fill their period emitted run by run (PI.emit), and "
+        "copies that overlap other reads of the same inference block expanded copy by copy (freshWidth)",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
         "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
