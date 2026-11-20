@@ -198,6 +198,19 @@ def sha256(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def outcome(results):
+    """The job's one line: the sets that agree, and over the sets run, the sessions the Lean verifier accepts (`verify`
+    alone accepts; `agree --upstream-plain` never does) beside the sessions by the two verdicts as compared."""
+    ran = [r for r in results if "skipped" not in r]
+    agreeing = [r["set"] for r in ran if r["agree"] and not r["disagree"]]
+    def n(k):
+        return sum(r.get(k, 0) for r in ran)
+    return (f"ci: {len(agreeing)} of {len(results)} sets agree: {agreeing}: {n('accepted')} sessions the Lean verifier "
+            f"accepts; as compared, {n('both_accept')} both accept ({n('passed_every_check')} passed every Lean check and "
+            f"were refused last), {n('both_refuse')} both refuse, {n('upstream_alone_accepts')} upstream alone accepts, "
+            f"{n('lean_alone_accepts')} the Lean verifier alone accepts")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lean", required=True)
@@ -226,7 +239,7 @@ def main():
     results = [r for r, _ in done]
     agreeing = [r["set"] for r in results if "skipped" not in r and r["agree"] and not r["disagree"]]
     bad = any(b for _, b in done) or not agreeing
-    print(f"ci: {len(agreeing)} of {len(results)} sets agree: {agreeing}", file=sys.stderr)
+    print(outcome(results), file=sys.stderr)
     (a.work / "result.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
     print(json.dumps(results))
     if a.out:

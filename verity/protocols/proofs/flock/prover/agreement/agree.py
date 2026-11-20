@@ -30,8 +30,10 @@ statement), the verifier's own registered reads (`registered.json`, in place of 
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (`verity-verify-proof --archive`); upstream reads the paths. Writes DIR/agreement.tsv, the two
 logs, DIR/upstream-verdicts.json (`agree`'s `--upstream-verdicts`) and DIR/result.json, whose `accepted` counts the sessions
-`verity-verify-proof verify` accepted (none of upstream's plain files); exits 1 if the verifiers disagree on any session or either
-misses an expectation.
+`verity-verify-proof verify` accepted (none of upstream's plain files), and whose `both_accept`, `both_refuse`,
+`upstream_alone_accepts` and `lean_alone_accepts` count the sessions by the two verdicts as compared (a session refused
+last, once every check has passed, as accepted); exits 1 if the verifiers disagree on any session or either misses an
+expectation.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -273,6 +275,7 @@ def main(argv=None, slots=None, quiet=False):
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
     lean, up = verdicts(a, slots)
     rows, bad, passed = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], [], 0
+    both = {"both_accept": 0, "both_refuse": 0, "upstream_alone_accepts": 0, "lean_alone_accepts": 0}
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
@@ -303,12 +306,16 @@ def main(argv=None, slots=None, quiet=False):
             ok = ok and L["accepted"] == e["accepted"] and any(L["why"].startswith(w) for w in e.get("whys") or [e["why"]])
         if not ok and name not in bad:
             bad.append(name)
+        if L is not None and U is not None:
+            both[("both_accept" if U["accepted"] else "lean_alone_accepts") if L["accepted"] else
+                 ("upstream_alone_accepts" if U["accepted"] else "both_refuse")] += 1
         av = lambda v: "-" if v is None else "A" if v["accepted"] else "R"
         rows.append("\t".join([name, av(e), av(shown), av(U), "yes" if name not in bad else "NO", (shown or {}).get("why", ""),
                                (U or {}).get("why", "")]))
     (a.out / "agreement.tsv").write_text("\n".join(rows) + "\n")
     result = {"statement": a.statement, "sessions": len(a.sessions), "agree": len(a.sessions) - len(bad), "disagree": bad,
-              "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted")), "passed_every_check": passed}
+              "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted")), "passed_every_check": passed,
+              **both}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))
