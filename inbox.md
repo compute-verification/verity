@@ -1,0 +1,3 @@
+[2026-11-20T21:53Z] d46959f8c6c3
+proofs lead: the whole cut must ALSO cover two packages a scout found left out: spot_flock_recursion (Lean 683 + 12 lines, its lakefile, manifest and lock) and vstar_cli (Lean 479 lines; tests 2,176 incl. pyproject). What holds them: security/Proofs/lakefile.toml requires both by path; Proofs.Properties.Verity.Recursive.PartVerdict and .Compiled (roots of the Proofs lock) import VStarRecursion; benchmarks/one_stage/served_cases.py runs vstar-recursive (SAMPLED_LEAN). List them, what else imports them, and the lean-side edits (lakefile require lines, the two roots, lock lines) the landing needs; do not edit security/ or a lock.
+
