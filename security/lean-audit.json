@@ -895,12 +895,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Guarantees.ReleaseReadsNoStop": {
-   "owner": "@proofs",
-   "digest": "43a55a749db93905b3bbf776dafad2c3964de5fde252967de415215d563956f5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "1783605b9327654cb955e2d602749491538a460458bca56a79a52d3ae67ceb9b",
@@ -1126,18 +1120,6 @@
   "FlockSoundness.Discharge.Recursion.InnerSound": {
    "owner": "@proofs",
    "digest": "058a338c9396590e9bcd8a6155feddcc1a9ad585466295cdd10ec343a0f5f7b6",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest": {
-   "owner": "@proofs",
-   "digest": "62a1930d4329d25f835d3cace74d4d81222eefb98a132bb95c4c252a58e68018",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized": {
-   "owner": "@proofs",
-   "digest": "2ddda9c4bf75f10eac65725c2b7a071112fda8fa7ee678112126630d403601d9",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3258,11 +3240,6 @@
   "Flock.SecurityProofs.RecursiveRanRegistered": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.RecursiveZK": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveZKLoop": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
-  "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
   "Flock.SecurityProofs.SampledKSLiveHonest": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
   "Flock.SecurityProofs.SampledKSLivePub": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
   "Flock.SecurityProofs.SampledKSLiveStated": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SampledKSLive`); the door's sessions are template statements and satisfy no hypothesis of it.",
@@ -4114,15 +4091,6 @@
    "nontrivial": "WeightSecurity.SecurityProofs.TheftNontrivial",
    "kind": "exclusion"
   },
-  "Flock.SecurityProofs.RecursiveZKLoop": {
-   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
-   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
-  },
   "Verity.SecurityProofs.ExpandSize": {
    "honest": ["Verity.SecurityProofs.ExpandSize_honest"],
    "nontrivial": "Verity.SecurityProofs.ExpandSize_nontrivial",
@@ -4761,24 +4729,6 @@
   "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
    "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
    "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoop": {
-   "type_hash": "801c4ba493e5fbc8601b27d0f96d173000cb0fc0789a46759017efdc74f4c064",
-   "missing": "honest",
-   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
-   "unfolded_hash": "e5568d83b35d855ba7d91daec2caf465ecdb0e60373b5848b76fcd116b83933a"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
-   "type_hash": "01cd51d8c16d9cf4f07cb4cdb7efb7d094ec2b361289ccb48abe014557549133",
-   "missing": "honest",
-   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
-   "unfolded_hash": "ac8e7475d2865cfc42f3b99b49e6c1c39aafe550c4ecc491fd585d981baec9ea"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-   "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
-   "missing": "honest",
-   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
-   "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
@@ -10507,190 +10457,6 @@
    },
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779",
    "unfolded_hash": "d17a94cf52e2830397a8a65b3ab109e9839c05822c47574bc58b6afa0e91aa12"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoop": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveZKLoop : Flock.Guarantees.RecursiveZKLoop"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Claims.ZKMal.RefSession.Causal",
-     "Claims.ZKMal.RefSession.Complete",
-     "Claims.ZKMal.RefSession.DummyReg",
-     "Claims.ZKMal.RefSession.SwCausalOn",
-     "Claims.ZKMal.RefSession.Tables",
-     "Claims.ZKMal.RefSession.TapeOK",
-     "Flock.Guarantees.ZkServerSends",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
-    ],
-    "reads": []
-   },
-   "type_hash": "801c4ba493e5fbc8601b27d0f96d173000cb0fc0789a46759017efdc74f4c064",
-   "unfolded_hash": "e5568d83b35d855ba7d91daec2caf465ecdb0e60373b5848b76fcd116b83933a"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveZKLoopAnySum : Flock.Guarantees.RecursiveZKLoopAnySum"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Claims.ZKMal.RefSession.Causal",
-     "Claims.ZKMal.RefSession.Complete",
-     "Claims.ZKMal.RefSession.DummyReg",
-     "Claims.ZKMal.RefSession.SwCausalOn",
-     "Claims.ZKMal.RefSession.Tables",
-     "Claims.ZKMal.RefSession.TapeOK",
-     "Flock.Guarantees.ReleaseReadsNoStop",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
-    ],
-    "reads": []
-   },
-   "type_hash": "01cd51d8c16d9cf4f07cb4cdb7efb7d094ec2b361289ccb48abe014557549133",
-   "unfolded_hash": "ac8e7475d2865cfc42f3b99b49e6c1c39aafe550c4ecc491fd585d981baec9ea"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed : Flock.Guarantees.RecursiveZKLoopAnySumDeployed"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Claims.ZKMal.RefSession.SwCausalOn",
-     "Flock.Guarantees.ReleaseReadsNoStop",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-     "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
-    ],
-    "reads": []
-   },
-   "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
-   "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial :",
-    "  Exists fun cut =>",
-    "    Exists fun s₀ =>",
-    "      Exists fun stop =>",
-    "        Exists fun E =>",
-    "          Not",
-    "            (ENNReal.instLE.le",
-    "              (Verity.Game.prCoin fun u =>",
-    "                E",
-    "                  (cut (stop u)",
-    "                    (Flock.Guarantees.anyReal Claims.ZKServer.Loop.finS.honestVals",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.src0",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.sched0 (fun x x_1 x_2 => Option.none) 0 0 0",
-    "                      (fun x x_1 => List.nil) (fun x x_1 => { hid := List.nil })",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.vs0 (fun x x_1 => Unit.unit) u.fst)))",
-    "              (instHAdd.hAdd",
-    "                (instHAdd.hAdd",
-    "                  (instHMul.hMul",
-    "                    (Fintype.card",
-    "                        (Sum",
-    "                          (Fin",
-    "                            (instHAdd.hAdd",
-    "                              (FlockSoundness.Discharge.Recursion.ZkServerTemplate.tmpl",
-    "                                  FlockSoundness.Discharge.Recursion.LoopWitness.sched0",
-    "                                  FlockSoundness.Discharge.Recursion.LoopWitness.sched0.tables).length",
-    "                              1))",
-    "                          Bool)).cast",
-    "                    (Verity.Game.prCoin fun c =>",
-    "                      E",
-    "                        (Flock.Guarantees.sumCut s₀ cut c.fst",
-    "                          (Flock.Guarantees.loopIdeal 1 FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.src0",
-    "                            (Flock.Guarantees.fwFilled FlockSoundness.Discharge.Recursion.LoopWitness.sched0) 0",
-    "                            (fun x x_1 => List.nil) (fun x => Unit) FlockSoundness.Discharge.Recursion.LoopWitness.vs0",
-    "                            (fun x x_1 => Unit.unit) c.snd))))",
-    "                  ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 0 (fun x x_1 => List.nil)",
-    "                        fun x x_1 => { hid := List.nil }).err",
-    "                    Claims.ZKMal.CoinOpen.shaH FlockSoundness.Discharge.Recursion.OuterZK.loopK",
-    "                    ((FlockSoundness.Discharge.Recursion.OuterZK.loopRef",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.src0).swP",
-    "                        Claims.ZKServer.Loop.finS.honestVals).prover",
-    "                    (FlockSoundness.Discharge.Recursion.OuterZK.loopEps",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                      FlockSoundness.Discharge.Recursion.LoopWitness.src0 1)",
-    "                    (instHMul.hMul (instHMul.hMul 4 1) (instHPow.hPow 3 1))",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.vs0 fun x =>",
-    "                    (fun x x_1 => Unit.unit) x.fst x.snd.fst))",
-    "                (instHMul.hMul (Flock.Guarantees.fwHoles FlockSoundness.Discharge.Recursion.LoopWitness.sched0).cast",
-    "                  (ENNReal.ofReal",
-    "                    (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
-    "                      FlockSoundness.Discharge.ZkView.saltHash)))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "32c8bdf6510649ba950ef59ebf347b0770a93163675bdbc57d3c3790e449ba35"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoop_nontrivial :",
-    "  Exists fun cut =>",
-    "    Exists fun stop =>",
-    "      Exists fun E =>",
-    "        Not",
-    "          (ENNReal.instLE.le",
-    "            (Verity.Game.prCoin fun u =>",
-    "              E",
-    "                (cut (stop u)",
-    "                  (Flock.Guarantees.loopReal Claims.ZKServer.Loop.finS.honestVals",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.src0",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.sched (fun x x_1 x_2 => List.nil)",
-    "                    (fun x x_1 i x_2 => i.elim0) 0 (fun x x_1 => List.nil) (fun x x_1 => { hid := List.nil })",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.vs0 (fun x x_1 => Unit.unit) u.fst)))",
-    "            (instHAdd.hAdd",
-    "              (instHAdd.hAdd",
-    "                (instHMul.hMul (Fintype.card Unit).cast",
-    "                  (Verity.Game.prCoin fun c =>",
-    "                    E",
-    "                      (cut c.fst",
-    "                        (Flock.Guarantees.loopIdeal 1 FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.src0 (fun x => List.nil.toArray) 0",
-    "                          (fun x x_1 => List.nil) (fun x => Unit) FlockSoundness.Discharge.Recursion.LoopWitness.vs0",
-    "                          (fun x x_1 => Unit.unit) c.snd))))",
-    "                ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 0 (fun x x_1 => List.nil)",
-    "                      fun x x_1 => { hid := List.nil }).err",
-    "                  Claims.ZKMal.CoinOpen.shaH FlockSoundness.Discharge.Recursion.OuterZK.loopK",
-    "                  ((FlockSoundness.Discharge.Recursion.OuterZK.loopRef",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.src0).swP",
-    "                      Claims.ZKServer.Loop.finS.honestVals).prover",
-    "                  (FlockSoundness.Discharge.Recursion.OuterZK.loopEps",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.rel0",
-    "                    FlockSoundness.Discharge.Recursion.LoopWitness.src0 1)",
-    "                  (instHMul.hMul (instHMul.hMul 4 1) (instHPow.hPow 3 1))",
-    "                  FlockSoundness.Discharge.Recursion.LoopWitness.vs0 fun x => (fun x x_1 => Unit.unit) x.fst x.snd.fst))",
-    "              (instHMul.hMul (Nat.cast 0)",
-    "                (ENNReal.ofReal",
-    "                  (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
-    "                    FlockSoundness.Discharge.ZkView.saltHash)))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "8f779ced6ae5b53ea6584831d95b04ef1639f29493ea756624047832324cf762"
   },
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "owner": "@proofs",
@@ -26220,9 +25986,6 @@
    "Flock.SecurityProofs.RecursiveKSCompiledEvery": "restatable: a probability statement (KSCompiledOn, through RecursiveKSCompiledAtRec at the deployed record) whose event is the compiled recursive verifier's acceptance and then the composite extractor over Compiled.EO recovering no witness, at every statement; KSCompiledOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Flock.SecurityProofs.RecursiveKSEvery": "restatable: a probability statement (KSLinkOn, through RecursiveKSEveryAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the composite extractor recovering no witness, at every statement; KSLinkOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "WeightSecurity.SecurityProofs.Theft": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an arbitrary datacenter, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard) and the premise that what leaves goes through a covert channel (WeightSecurity.Assumptions.LeaksThrough), which the audit's guarantees are to discharge (security/Definitions/WeightSecurity/Assumptions.lean); it reads no function's acceptance.",
-   "Flock.SecurityProofs.RecursiveZKLoop": "frozen (obligation,no-function): It takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), the ZK server's sending the schedule's transcript (ZkServerSends) and V*'s statements' honesty and simulator coins (LoopSessions.Honest, Sized) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Flock.SecurityProofs.RecursiveZKLoopAnySum": "frozen (obligation,no-function): RecursiveZKLoop at any inner worker, with no ZkServerSends: it takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "frozen (obligation,no-function): RecursiveZKLoopAnySum with Tables, Complete, DummyReg, Causal and TapeOK proved at the deployed tables: it takes SwCausal at the workers' values, V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.SecurityProofs.MonitoringPeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.monitoringPeriodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
@@ -48772,12 +48535,6 @@
     "Properties.Spot.SecurityProofs.samplingDesignObj": "54e346b252143e540ae3812339c42adda5ed93d37d012b2d0fda5e9ca90528a6"
    }
   },
-  "Proofs.Flock.Claims.Sampling.Seq": {
-   "digest": "345dc3a5842c5f2d4b6790a58a5174eedd8b4f132f8a267205a2b57d33b38667",
-   "definitions": {
-    "Claims.Sampling.unitTape": "337b4055568c77a1dc07dbfcf775cf0df21f58251c3669b1759de723e9f97272"
-   }
-  },
   "Proofs.Flock.Claims.Sampling.Session": {
    "digest": "d90e08ed5230442db47f68f2841f62ea1d966bb0b855e54244f81c2d21517a23",
    "definitions": {
@@ -49177,12 +48934,6 @@
    "digest": "40b801b7bc414c8f0688607a9fac3fbfe756feac5e820bd903ac104cb1a7cd6a",
    "definitions": {
     "Claims.ZKMal.CoinOpen.shaH": "2e3c16aa63c2a677fc990251bef8044f4c0e3cd6d398eb97c1caf68278714730"
-   }
-  },
-  "Proofs.Flock.Claims.ZK.Compose": {
-   "digest": "bd3ea2edf6b5c439012518b205125b3237c074cdce4e54e60deb42f22ec2f4bf",
-   "definitions": {
-    "Claims.VStar.head": "4ff7c14062bc2350d311b4bf778c568cd33cb8dae346bdf609dee0a77288c549"
    }
   },
   "Proofs.Flock.Claims.ZK.CutSession": {
@@ -50627,85 +50378,6 @@
     "Flock.Guarantees.RecursiveKSAtRec": "ca88239c2b368b390a77951e725d2d00f19fc2b91c5aa78021d56e825618aaba"
    }
   },
-  "Proofs.Flock.Recursive.Loop": {
-   "digest": "cb4feb460bf5bceafe77c59e7141f461f60f480c63336241517d4568f66d06db",
-   "definitions": {
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions": "98531659e6f5336756467d647976160aadcc2daaf5a29fdeb7e30b56eabef735",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest": "62a1930d4329d25f835d3cace74d4d81222eefb98a132bb95c4c252a58e68018",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.SimCoins": "936d2ad05bf86de5595ceed57367ffb29f1ce73cf8fd60fdf6e22bbaece86376",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized": "2ddda9c4bf75f10eac65725c2b7a071112fda8fa7ee678112126630d403601d9",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker": "6a416600b0420d5e81e43205ce6686ef9f73e6eb0c6007634e61777349285429",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.coinsE": "95d48e2ed8c5d417876978af182519f97f1d9fc7c9f0fa48d0995a1b5fe6bc30",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.err": "c7f7b480d8f5a521723839b482bcf072ba7ba99c8c85510d92ca8b0fc7321c7e",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.instFintypeSimCoins": "390a006eeffba9dff86d3c04d78269281b785cf8e0b311fe2873adf74503ffb9",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.lay": "d3e7a1fcf78c714fdbdfd8675c8bd824adff7ca3c498d5671af0df9727ec5dd1",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.m": "99d35b865e7020eef3a77f8cdfee90fe42c557c32e2cc0a1b3b831a1f1828b82",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.nilP": "78e1067036782f9b877bea1a64f5aa72fb59699d679b3540f22d77686fdeb969",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.nilSim": "f036858d4dff2cf7a659355ae61bec67c5844175ed83b56528723f6cab262e8b",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.prover": "1bd238985ac342876cae89896fd8c162652abda1bc6d36e539e5a137461f631d",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.pubOf": "adb851f644424bef4a8422c4e03e0d0dbdd7267d2e697ac20f2253a801d1ef99",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.pubStmts": "6091562fa4f21c66d28a0b20a650a9a59f0f45ffac74e539c8c22f45668e1912",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.rounds": "775496713f7eeebf31d889079d9e4bbeb0ac4a13afea3d470107682f323560b1",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.sim": "85193abe2d50d896749de4cee24be60bea1e02ccb08cd7a92af486669902e61d",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.simAt": "b41c2f5a1ff1326dbc2a64af499fe34dbb8bcb7bd2c3f2ec4bdaf22ce631eb61",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.simCoinsEquiv": "3db8520182b04568d5002cac242d1d14e6107da5ea53057db222634a1d616b62",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.stmt": "d65e3059ff7448537417d08a77590c6b540a00b045726bb0c6de6fec66ccd2e5",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.viewAt": "dbe6f2b907750b47387b24a3b1f8be7422852b146ca9440cf7cb18a270b753d9",
-    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.wit": "ad52d1228d62b4d8aaf97298b72dc6f056e1f9a113ec51de6a93c3c0d7a5e328",
-    "FlockSoundness.Discharge.Recursion.OuterZK.WCtx": "98ca1cd5aec07121f8ac1c21d56be168fbd58ec16f0f7b8a5da17f53a1876a72",
-    "FlockSoundness.Discharge.Recursion.OuterZK.loopEps": "40d41e591eab8edf769c641abc8f44c3560cba4169f4a7ef87643fe45900467e",
-    "FlockSoundness.Discharge.Recursion.OuterZK.loopK": "c60ad9953bfc72c01455fdfa64a0f04bf0e16ee9514a3f838419718f50a0b1fd",
-    "FlockSoundness.Discharge.Recursion.OuterZK.loopRef": "f082554d26ba82daad8465f84efd9f026281befdc73c48735c3631c7c3f479b2",
-    "FlockSoundness.Discharge.Recursion.OuterZK.loopSim": "fedc138a7443130c2747ddbc7becfc82421c8ed518275d32026225e7403bc57c",
-    "FlockSoundness.Discharge.Recursion.OuterZK.wctxAt": "508106fc1ebe5b82ff21f49987a73bc06e37c662eb849145f018e006c1a55dfc"
-   }
-  },
-  "Proofs.Flock.Recursive.LoopAny": {
-   "digest": "510c2990e2e3cbbb905b8d7ed6cccfb54d623451b0482b1bb5e8bc033defcc49",
-   "definitions": {
-    "Flock.Guarantees.RecursiveZKLoopAnySum": "9c04c366da7c6bfa9a82c1afa4761fd7ca7bd69f2f21371c64521a6db04e58e6",
-    "Flock.Guarantees.ReleaseReadsNoStop": "43a55a749db93905b3bbf776dafad2c3964de5fde252967de415215d563956f5",
-    "Flock.Guarantees.anyCtx": "ecf3e9d9ff8ffd66681a9b8479e7c28820fe2c1510278d618cefe5965c818d1e",
-    "Flock.Guarantees.anyReal": "f2d7761be0b8d3afc49f9f68566d5a9d305d256ec81921d41d7a15c36ea6a4e9",
-    "Flock.Guarantees.fwFilled": "b168ed6f4a547ee8c125db8c22f802e510f594f3f533a98112c8624643174d3e",
-    "Flock.Guarantees.fwHoles": "307b4a8431b39d96c0e9779436ba3fc274356f0ae0d974c139dc5a0f03f72111",
-    "Flock.Guarantees.innerCut": "0ffc210a92f1547bfa0a86d7ab9c3e21c4fb32e810fcc05b24214b6f6bcf3e26",
-    "Flock.Guarantees.loopRelease": "cc0f37016c3b068a85cf9b3297bd6e8069f89b0943ecd77bd8ede40662c1aeb2",
-    "Flock.Guarantees.saltsOf": "b2a9df6e907d18fdd2d1cc8f49d95632e6d4a028c5753f563760b5796f019556",
-    "Flock.Guarantees.sentCommits": "911ca75667c013abe9bb96fa4fc46c6a3a1dcbaedf253b27a5fc81d9ad5bef20",
-    "Flock.Guarantees.sumCut": "ef3ac83b3586528c59bd30cc1794f3ad6285e1b1fc1745aa6d10f67cbdcfa470"
-   }
-  },
-  "Proofs.Flock.Recursive.LoopAnyDeployed": {
-   "digest": "f6726ff2e692ce7ab16e153218a33816ac916249e12a92aa524bc44e44b834e4",
-   "definitions": {
-    "Flock.Guarantees.RecursiveZKLoopAnySumDeployed": "5a068b3bb54e15ad33c4b75d471791e6bf997fea997f1f76ec6327ed2bd6ff6f"
-   }
-  },
-  "Proofs.Flock.Recursive.LoopWitness": {
-   "digest": "b27aee402c3627d7ae24e1bf4e7bfb4ff2179e42e9a080111b41b7632acaf0ac",
-   "definitions": {
-    "FlockSoundness.Discharge.Recursion.LoopWitness.hon": "020ec427bd1d88ce6820b8f3eb704267ebeb2be0dc500bd47a275ebc1fa91835",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.honD": "17024ae83377a35b328096829d27d5a4aa17e395b4f6cd1a43ed44b0e8659fbb",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.nA": "cc7d5ba059e4bbd260de93c246a7353406c73475462a62ff010428d6b0082dff",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.nhS": "8a954f5ff6ed40faf3c6a9a87ccb4a86b430f5a6df9323947c60e14e5f7a476b",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.rel0": "bb451f21539ca8350a690f81ff0731baefbf29092cea61dfd093a694bcf51714",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.sched": "fa88418ba0bbda283491228dc4f1ec475f90c84653482d8542c3ed51e98de1ea",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.sched0": "f78337c1e5302e5141f7b7e31c9f80a73f1362be2b61c4f1243d60833a8ae771",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.src0": "7c0cb297a4154ccf72c95b8e2de79862a7003fa8d6e9ac24334f4570a5df4a00",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.top64": "dcab066c172af946353130afeafca75f5511b235375b357310c693e9421f0f80",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.vs0": "b9abe7e64ac93b316515c049cfb142f3d17e77add21d215e3b7a61d2f2c4a1c8",
-    "FlockSoundness.Discharge.Recursion.LoopWitness.wAny": "9cced230d3ebbc287da6de252c4abe0a4816bf84e162a71dee99d45fbf204196"
-   }
-  },
-  "Proofs.Flock.Recursive.LoopZK": {
-   "digest": "d4321e4c43f1d2ae8159d630ef5dcac55c15928044ecb00ad8c82e7a1d440a17",
-   "definitions": {
-    "Flock.Guarantees.RecursiveZKLoop": "2bce940eeb8ebd38c42bcb29ad1aca10a2a63ca324c58271e892445bd2d4fc70",
-    "Flock.Guarantees.loopIdeal": "d20bb086db15228579e9fe08bc22000c78602da962395164a637c62b2866ea9d",
-    "Flock.Guarantees.loopReal": "a01c9ea69de494df17c4084870036f5064b280a010c003041a03f9cadce1729e"
-   }
-  },
   "Proofs.Flock.Recursive.Multi": {
    "digest": "ce63362159c6e4757ed6af7a72330c7951f82b341697a5e71833059d73dec93a",
    "definitions": {
@@ -51151,16 +50823,6 @@
     "Flock.Guarantees.zkServerT": "74d2557ed14323fe3610fe0533c048a784b0c15ac0a0c8f8424782adeee699f0"
    }
   },
-  "Proofs.Flock.Recursive.ZkServerAdaptive": {
-   "digest": "58c0fee519b9300a6e898685c7a96fc3213ea889b98b4387a8eab0d339346314",
-   "definitions": {
-    "FlockSoundness.Discharge.Recursion.ZkServerAdaptive.History": "b1bc50d745c58e35ac958014f215b9a8d00acaaa43d37eb8990dee0b2ac4158a",
-    "FlockSoundness.Discharge.Recursion.ZkServerAdaptive.Worker": "ef8b9b2e7bbb5d9aceb087a102178442fb788b75d80870de88ccb974674193b2",
-    "FlockSoundness.Discharge.Recursion.ZkServerAdaptive.adaptFinished": "58b594fc6dbb99a6932b8b1a816afba69e008033b1ec220a5f8a34074f7b5f19",
-    "FlockSoundness.Discharge.Recursion.ZkServerAdaptive.adaptOut": "2c6f92861ff29020d85e2251839a668400ab57cabb1f2fd63e59d70d23084a92",
-    "FlockSoundness.Discharge.Recursion.ZkServerAdaptive.reads": "d82a182997ae4dd4d4c2681f3432435c26f98fca4a967052e5a00dbed6d9f3c8"
-   }
-  },
   "Proofs.Flock.Recursive.ZkServerHonest": {
    "digest": "0e40e60ae236be5dd9c988239aeb4ff3c7efce5f66ac421e43613190f5467323",
    "definitions": {
@@ -51174,27 +50836,6 @@
     "FlockSoundness.Discharge.Recursion.ZkServerHonest.roundRows": "38b6bb88b285fbd0be927928c623868890d00d44a29794846514edaef67437eb",
     "FlockSoundness.Discharge.Recursion.ZkServerHonest.rowBytes": "54071846fd80397959669069398c9ddd184048596a740a86029b2604930724c1",
     "FlockSoundness.Discharge.Recursion.ZkServerHonest.rowCount": "21d150569275c797fec630692beb4c7840071f1e18dd2f217d9efceb69c29b88"
-   }
-  },
-  "Proofs.Flock.Recursive.ZkServerRun": {
-   "digest": "b120652bbb265d638ccf79995d798418f420f33f2c547d6648f97f6b89f56a8f",
-   "definitions": {
-    "FlockSoundness.Discharge.Recursion.ZkServerRun.fill": "8b14fe26092afc2ae6f971578880852800bf8c1a91e1ba4dfcb562e7d851f1f6",
-    "FlockSoundness.Discharge.Recursion.ZkServerRun.fillAll": "22b75f7f3b1e3d9c0957c7a2c62b845eddef2e10f12dc710c5e3127ab0272c25",
-    "FlockSoundness.Discharge.Recursion.ZkServerRun.fillRoots": "1c0ef3f7fa7be1ab9ae485c9fe6d808c3d86d2b426ad6bd3c284796520338783",
-    "FlockSoundness.Discharge.Recursion.ZkServerRun.fillTops": "afa2a8ee8e54b15674b674ecd41d3d9eb4aa6683d9f3d297844dab9530d3ec3a",
-    "FlockSoundness.Discharge.Recursion.ZkServerRun.holes": "91905d03db4181b52f9597f42dbbe098aa28fc9b67adb1ca8d7dbc79c24875f7"
-   }
-  },
-  "Proofs.Flock.Recursive.ZkServerTemplate": {
-   "digest": "e4c0842a8e6626df69fa1f1d9f62ab1396c5951a62280b83f6ed704a8395a7ea",
-   "definitions": {
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.blanks": "d38712d34295c5267843dba593659890517a52c20ffbfa193941fcb0f5ef6779",
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.commitT": "4f7456d545dc044e37c4b0fb579cd6d6db98cc342f66364be6dbde58c6671dff",
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.openT": "68bf46f31203b9c941b843e41458814b38bd05066dcf7dbd38ad97943d75bbe3",
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.roundT": "204e4390157229bff03c3a3c03b3c1f531dbd5ffb1f66aa39cb32a8975df3680",
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.roundsT": "7f99176966a000e20eb127670f22474d26f558c8c51bd99106a5a68f00cad38e",
-    "FlockSoundness.Discharge.Recursion.ZkServerTemplate.tmpl": "61dae5c713bdcc3c7752a00c77fdc041dd4583a92a9b3c441a5112a32b6f4600"
    }
   },
   "Proofs.Flock.Recursive.ZkServerWire": {
