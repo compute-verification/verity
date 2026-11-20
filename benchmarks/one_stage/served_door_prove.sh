@@ -25,10 +25,10 @@ trap 'rm -rf $S' EXIT
 { hostname; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2; echo "template=$TEMPLATE"; } > $O/host.txt 2>&1; cat $O/host.txt
 timed() { local name=$1; shift; /usr/bin/time -o $O/time-$name.txt -f "TIME $name wall_s=%e maxrss_kb=%M rc=%x" "$@"; }
 answered() {  # LOG STATUS WANT LINE: a step gave its own answer: status WANT and a line matching LINE, with no traceback
-              # and no Lean panic line (lean_child.panic_line); a refusal's status alone is no answer
+              # and no Lean panic line (verity.lean_process.panic_line); a refusal's status alone is no answer
   [ "$2" = "$3" ] && grep -qE "$4" "$1" && ! grep -q '^Traceback (most recent call last):' "$1" \
     && python3 -c 'import sys
-from verity.protocols.proofs.spot.verifier.one_stage.lean_child import panic_line
+from verity.lean_process import panic_line
 sys.exit(panic_line(open(sys.argv[1], errors="replace").read()) is not None)' "$1"
 }
 
