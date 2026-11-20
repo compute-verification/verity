@@ -616,7 +616,8 @@ def _registered(d: Path) -> dict:
 
 
 def _check(rec: dict, mine, publics: dict[str, bytes]):
-    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics))
+    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics),
+                   partition=mine.partition)
 
 
 def _rows(d: Path) -> bytes:
