@@ -1395,7 +1395,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.program.predict.window_circuit import PearlTables, check_provable, window_circuit
+    from verity_vllm.program.predict.window_circuit import PearlTables, check_served, window_circuit
 
     compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
     compile_advice(compiler, data)
@@ -1407,7 +1407,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     t0 = time.time()
     try:
         circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls, tables=tables)
-        check_provable(circuit)
+        check_served(circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
@@ -1451,14 +1451,14 @@ def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     circuit), so it can be written, and a period opened on it, before the serve. -> the record's input count at the pins
     (``--pin``, ``--pins``), and the seconds."""
     from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.window_circuit import PearlTables, check_provable, class_circuit
+    from verity_vllm.program.predict.window_circuit import PearlTables, check_served, class_circuit
 
     serve, pins = json.loads(Path(a.serve).read_text()), pins_of(a.pin, a.pins)
     registered, cls = registered_of_serve(serve, a.hf_config, a.target, a.cap_bits), window_class_of(a.window_class)
     t0 = time.time()
     try:
         circuit = class_circuit(registered, cls, tables=PearlTables(a.pearl_tables) if a.pearl_tables else None)
-        check_provable(circuit)
+        check_served(circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's class circuit refuses φ: {e}") from None
     lowered = time.time() - t0
@@ -1488,7 +1488,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
+        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)[0]),
                          lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
         sources = json.loads((HERE / "sources.json").read_text())
         sizes = {"program": CZ.size(one, sources), "window": CZ.size(one, sources, cls.slots)}
@@ -1704,7 +1704,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
     try:
         compiled = compile_steps(registered, data, compiler.inner.ingress)
         low = WC.lower(registered, cls, requests=WC.takes(compiled, cls))
-        WC.check_provable(low.circuit)
+        alone = WC.check_served(low.circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lap("lower")
@@ -1777,7 +1777,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
             "population": sum(filled.n.values()), "members": len(win.window.members), "sources": sources,
             "scan_state": "stand-in" if state is None else "scanned",
             "registration": {"held": len(held), "free": sorted(set(reg.values) - set(held)), "unrooted": sorted(reg.unrooted)},
-            "seconds": seconds}
+            "unprovable_alone": alone, "seconds": seconds}
 
 
 def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:

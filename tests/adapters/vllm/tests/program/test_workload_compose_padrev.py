@@ -55,16 +55,6 @@ def _derived_like(LP: int, T: int, layer):
     return CompositeDefinition("Derived[PadrevRequest]", 1, ("SRC",), sig, body, register=False).bind(SRC=_SRC)
 
 
-def _component_or_skip(desc, LP, canon):
-    """request_component; a refusal naming the ROOT id is a tree without the exemption -> skip by name (never a silent pass)."""
-    try:
-        return W.request_component(desc, REGISTRY, _WP(LP), canon=canon)
-    except IdentityConflict as e:
-        if desc["root"] in str(e):
-            pytest.skip(f"the request root's exemption from the shared-definition canon is not on this tree: {e}")
-        raise
-
-
 def test_two_identical_requests_are_two_members_of_the_fixed_population_not_one():
     """One digest, ONE component object (the compose cache) -- and TWO members: two component calls, two disjoint address intervals
     partitioning the non-input gates, two chronology rows, Σ bound = 2·bound events; the workload digest differs from the one-request
@@ -112,11 +102,9 @@ def test_the_exemption_is_the_roots_only_a_colliding_callee_in_the_same_compose_
         d3 = encode_program(Program(_derived_like(3, 3, _layer(second))))
         assert d2["root"] == d3["root"]
         canon: dict = {}
-        _component_or_skip(d2, 3, canon)
+        W.request_component(d2, REGISTRY, _WP(3), canon=canon)
         first_obj = canon["PadrevLayer_v1{K=1}"][0]
         with pytest.raises(IdentityConflict) as ei:
             W.request_component(d3, REGISTRY, _WP(3), canon=canon)
-        if "PadrevLayer_v1{K=1}" not in str(ei.value):
-            assert d3["root"] in str(ei.value)                                    # a tree without the exemption refuses the ROOT first: named skip
-            pytest.skip(f"the request root's exemption is not on this tree (the root, not the callee, is what was refused): {ei.value}")
+        assert "PadrevLayer_v1{K=1}" in str(ei.value)                             # the callee is refused, never the root
         assert canon["PadrevLayer_v1{K=1}"][0] is first_obj                       # the first body stays canonical; nothing was replaced

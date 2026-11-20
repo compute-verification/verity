@@ -87,14 +87,12 @@ def test_padded_scope_folds_to_one_moe_ffn_fixed_compute_per_token(M, naive):
 
 
 def test_padded_compute_is_the_frontend_definition_and_its_operand_leaf_counts_are_the_views():
-    """The fold's spec IS the Definition the padded frontend rule binds (vocab kind `moe_ffn_fixed`): one id, one digest, one lift of
-    record (`LMoeFfnL_v1`, hand-registered) -- the global match compares Build and record in that vocabulary."""
-    from verity_vllm.definitions.registry import lifted as L
+    """The fold's spec IS the Definition the padded frontend rule binds (vocab kind `moe_ffn_fixed`): one id, one digest -- the global
+    match compares Build and record in that vocabulary."""
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
     fold_spec = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=8, H=H, I=INTER)
     front_spec = V.kinds["moe_ffn_fixed"](E, TOPK, 8, H, INTER)
     assert fold_spec.id == front_spec.id == FIXED_ID and fold_spec.defn is front_spec.defn and fold_spec.bindings == front_spec.bindings
-    assert L.lift_callee(fold_spec).name == "LMoeFfnL"
     sig, out = fold_spec.signature()
     assert [t.leaves for _, t in sig] == [H, E, E * 2 * INTER * H, E * H * INTER] and out.leaves == H                 # = the operand views' numel
 

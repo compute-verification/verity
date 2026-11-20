@@ -109,7 +109,7 @@
 # $GPU_LEASE_FOREIGN_MIB MiB (default 1024) that is foreign: neither a lease holder's (a lock owner pid among its ancestors, as
 # gpu_adopt.py judges) nor this request's own (one of gpu-lease's ancestors).  Such a GPU is not granted; the request waits (or, without
 # --wait, exits 75), its finding goes to $GPU_LEASE_LOG (default $GPU_LEASE_DIR/lease.log) once per change and to
-# $GPU_LEASE_DIR/<i>.foreign, which `status` shows (`foreign <i> ...`) and node 1's n1_lease.py copies into n1-lease.json.
+# $GPU_LEASE_DIR/<i>.foreign, which `status` shows (`foreign <i> ...`).
 # An nvidia-smi that doesn't answer within $GPU_LEASE_SMI_TIMEOUT_S seconds (default 10), or fails, never holds grants up: the
 # GPUs are granted as before, and the log says `unverified`.  $GPU_LEASE_SMI names the nvidia-smi to ask; where GPU_LEASE_COUNT
 # fakes the GPUs (tests), nothing is asked unless it is set.
