@@ -204,13 +204,18 @@ def honestRound : Round := ⟨0, 0, 0, 0, honestDigest⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
 theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := by
-  have hk : honestCoinKey.size = HM96.keyBytes ∧ honestCoinKey.get! (HM96.keyBytes - 1) &&& 128 = 0 := by
-    refine ⟨by simp [honestCoinKey, ByteArray.size, HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits], ?_⟩
-    have h255 : HM96.keyBytes - 1 = 255 := by simp [HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
+  have hk : honestCoinKey.size = Flock.SessionCoins.HM96.keyBytes ∧
+      honestCoinKey.get! (Flock.SessionCoins.HM96.keyBytes - 1) &&& 128 = 0 := by
+    refine ⟨by simp [honestCoinKey, ByteArray.size, Flock.SessionCoins.HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes,
+      Flock.Hm96.keyBits], ?_⟩
+    have h255 : Flock.SessionCoins.HM96.keyBytes - 1 = 255 := by
+      simp [Flock.SessionCoins.HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
     rw [h255]
     set_option maxRecDepth 100000 in decide
-  have hs : honestSalt.size = HM96.saltBytes := by simp [honestSalt, ByteArray.size, HM96, Flock.Hm96.sha512]
-  simp [coinLeaf, coinDigest, beN, checkKey, checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
+  have hs : honestSalt.size = Flock.SessionCoins.HM96.saltBytes := by
+    simp [honestSalt, ByteArray.size, Flock.SessionCoins.HM96, Flock.Hm96.sha512]
+  simp [coinLeaf, Flock.SessionCoins.coinLeaf, Flock.SessionCoins.coinDigest, Flock.SessionCoins.beN,
+    Flock.SessionCoins.checkKey, Flock.SessionCoins.checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
 
 /-- The commitment of a session of one round over one block, its coin root the one leaf `leaf`. -/
 def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
@@ -219,8 +224,9 @@ def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
 
 theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf) :
     verifyCoin (honestCommitment leaf) honestOpening = true := by
-  simp [verifyCoin, honestCommitment, honestOpening, h]
-  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
+  have h' : Flock.SessionCoins.coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := h
+  simp [verifyCoin, Flock.SessionCoins.verify, honestCommitment, honestOpening, h']
+  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain, Flock.SessionCoins.domain,
     Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Domain.leaf, Flock.FV3.Scheme.hash, Flock.FV3.hash,
     Flock.FV3.Sha512.scheme, Properties.Certifier.Bytes.hash_size]
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
