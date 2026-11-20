@@ -1,0 +1,3 @@
+[2026-11-20T03:15Z] 5beb229f60d3
+From the lead, one small change to make first on the pair (lean's read): the sort's fuelled twin must NOT return the array unsorted at fuel 0. Make its fuel-0 case fall back to the original sort (Array.qsort on that range), exactly as the other three twins fall back to their originals, so a short fuel can never silently change a digest; if the kernel proof of Digests then sticks again on that branch being present, say so and instead make fuel 0 unreachable by construction with the reason. Re-try Digests.lean by name once after it. lean's worker writes the three equalities (twin = original) and mends DecodeEmpty.lean 343 on a branch off 870708c7d86: do not write those. Then the triage as briefed.
+
