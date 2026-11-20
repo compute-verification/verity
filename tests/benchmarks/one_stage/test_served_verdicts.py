@@ -3454,14 +3454,14 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
     assert (rc, lines) == (2, [f"INFERENCE-ONLY POLICY failed (no exception, exit 2): {PRIVATE}"])
 
 
-@pytest.mark.parametrize("n, said", [
-    (40, "BLOCK-COUNTS class 4,32,4 refused (ValueError, exit 1)"),
-    (None, "BLOCK-COUNTS: none, since the run declares no c, k and n"),
+@pytest.mark.parametrize("n, said, want_rc", [
+    (40, "BLOCK-COUNTS class 4,32,4 refused (ValueError, exit 1)", 1),
+    (None, "BLOCK-COUNTS: none, since the run declares no c, k and n", 0),
 ])
-def test_block_counts_refuses_a_window_circuit_no_registration_binds(tmp_path, n, said):
+def test_block_counts_refuses_a_window_circuit_no_registration_binds(tmp_path, n, said, want_rc):
     """`served_verdicts.sh block-counts 0` runs the real `verity-vllm block-counts` on window 0's circuit record at the
-    class beside the window's advice registration, which binds no circuit record: the count is refused and nothing is
-    published or kept; with no policy it says so and judges nothing."""
+    class beside the window's advice registration, which binds no circuit record: the count is refused, nothing is
+    published or kept, and the step exits 1; with no policy it says so, judges nothing and exits 0."""
     from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
@@ -3484,7 +3484,7 @@ def test_block_counts_refuses_a_window_circuit_no_registration_binds(tmp_path, n
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "block-counts", "0"], cwd=tree, env=env,
                         check=False).returncode
     (line,) = (out / "verdicts.txt").read_text().splitlines()
-    assert rc == 0 and line.startswith(said), line
+    assert rc == want_rc and line.startswith(said), (rc, line)
     public, private = out / "block-counts-4-32-4.json", d / "private" / "block-counts-4-32-4.json"
     assert not public.exists() and not private.exists()
     if n is not None:
