@@ -1,8 +1,10 @@
 """The members road's coverage refusals deleted from this tree's Lean verifier one at a time (`OneStageZk.headerHeldAt`'s
-and `headerHeld`'s, and `checkMembersAt`'s null refusals), each mutant's `spot-one-stage-zk` built by `members.check`,
-and a5's member negatives (`a5.run_member_negatives`) run on the case an audit kept (`A5_MEMBERS_NEGATIVES`). A mutant
-survives where every negative's verdict and reason is the honest tree's; one whose build fails is killed by the proof
-or the in-file check that reads it, which the line names. The tree is restored after each mutant.
+and `headerHeld`'s, and the null refusals of `checkMembersAt` and `checkOneAt`), each mutant's `spot-one-stage-zk`
+built by `members.check`, and a5's member negatives (`a5.run_member_negatives`) run on the case an audit kept
+(`A5_MEMBERS_NEGATIVES`). A mutant survives where every negative's verdict and reason is the honest tree's; one whose
+build fails is killed by the proof or the in-file check that reads it, which the line names (`checkOneAt_noRoots`,
+`checkOneAt_noServed` and their `checkMembersAt` pair are the null refusals' negatives over every input). The tree is
+restored after each mutant.
 
     members_mutants.py CASE_DIR
 """
@@ -32,6 +34,10 @@ MUTANTS = [
     ("NO_SESSION_ROOTS", ZK, "  if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else\n",
      "  if false then .reject NO_SESSION_ROOTS else\n"),
     ("NO_SERVED", ZK, "  if e.base.served.isNone then .reject NO_SERVED else\n", "  if false then .reject NO_SERVED else\n"),
+    ("checkOneAt-NO_SESSION_ROOTS", STATEMENT, "  if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else\n",
+     "  if false then .reject NO_SESSION_ROOTS else\n"),
+    ("checkOneAt-NO_SERVED", STATEMENT, "  if e.base.served.isNone then .reject NO_SERVED else\n",
+     "  if false then .reject NO_SERVED else\n"),
 ]
 
 

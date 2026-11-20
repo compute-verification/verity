@@ -73,8 +73,8 @@ SDELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["audit"
 OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && [ "$ML" = ok ] \
   && [ "${RP:-\"\"}" = '""' ] && python3 -c 'import sys; from fractions import Fraction as F; sys.exit(F(sys.argv[1]) != F(sys.argv[2]))' "$SDELTA" "$DELTA" 2>/dev/null && OK=0
 if [ $OK = 0 ]; then
-  echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; Lean's members check ran and accepted the members' files and sessions (members_lean ran true, ok true)"
-  echo "ACCEPT the verifier's audit record bounds at δ = $SDELTA (its wrong_units.delta), the δ the command passed ($DELTA), not yet chosen for the gate"
+  echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; δ not yet chosen for the gate"
+  ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/accept_line.py $B/honest/summary.json $B/c/C.json "$DELTA" ) 2>&1
   echo "ACCEPT the members' files and sessions were checked by Lean against a registration and coins the Python audit handed it; not a statement about a served run"
   echo "ACCEPT the proofs are about the block circuits Lean's lowering derives from the registered circuit; each block is single-range (no block spans two root nodes)"
   echo "ACCEPT no proved statement is about the file the door writes; every accept at the door rests on the lift preserving evaluation, by reading and by the fuzzer"

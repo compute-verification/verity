@@ -1565,12 +1565,13 @@ def case_written(out: Path) -> dict:
 
 
 def members_lean(out: Path, result: dict, pm: dict | str | None,
-                 check: Callable[[dict], tuple[str, str | None]] = MB.case_check) -> None:
+                 check: Callable[[dict], tuple] = MB.case_check_out) -> None:
     """`OneStageZk.checkMembersAt` on the audit's own per-member case (``out/case-v2.json``, `members.case_check`), its
     verdict ``result["checks"]["members_lean"]`` in every audit, ``ran`` whether Lean answered: the audit accepts only
     where Lean accepts too, and where Lean and the Python verdict differ, the check's code is `MEMBERS_DISAGREE` and its
     detail both texts. An audit with no per-member case (``pm`` not `members_proof`'s members) keeps the Python's
-    verdict and says why under ``reason``; one whose case Lean could not read is refused."""
+    verdict and says why under ``reason``; one whose case Lean could not read is refused. Where ``check`` gives the
+    outcome's line as the executable printed it (`members.case_check_out`), the detail holds it and its SHA-512."""
     checks = result.setdefault("checks", {})
     if not isinstance(pm, dict):
         checks["members_lean"] = {"ok": True, "ran": False, "codes": [], "reason": pm or ONE_MEMBER}
@@ -1579,7 +1580,7 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
     try:
         if not case.is_file():
             raise MB.LeanError(f"no per-member case: {case_written(out)['why']}")
-        verdict, why = check(json.loads(case.read_text()))
+        verdict, why, *printed = check(json.loads(case.read_text()))
     except MB.LeanError as e:
         checks["members_lean"] = {"ok": False, "ran": False, "codes": ["lean-not-run"], "reason": str(e)}
         result["accepted"] = False
@@ -1589,7 +1590,9 @@ def members_lean(out: Path, result: dict, pm: dict | str | None,
     ok = verdict == "accept"
     codes = [] if ok == python and ok else [MEMBERS_DISAGREE] if ok != python else [f"lean-{verdict}"]
     checks["members_lean"] = {"ok": ok and python, "ran": True, "codes": codes, "detail": {
-        "lean": {"verdict": verdict, "reason": why},
+        "lean": {"verdict": verdict, "reason": why,
+                 **({"output": printed[0].decode(), "output_sha512": hashlib.sha512(printed[0]).hexdigest()}
+                    if printed else {})},
         "python": {"accepted": python, "failed": failed}}}
     if not ok:
         result["accepted"] = False
@@ -1600,7 +1603,10 @@ def member_negative_cases(case: dict) -> dict[str, tuple[dict, dict | None]]:
     first sampled member's ports, each in turn, held by nothing (its registered read dropped, and no session root names
     it), its run input's read at a root the registration does not hold, the evidence's
     ``session_roots`` null, its ``served`` null, and a session root at the registration's first port other than its
-    root. Each with the parameters the per-member run's Python reads, where the change is the run's."""
+    root. Each with the parameters the per-member run's Python reads, where the change is the run's. Every member,
+    drawn or not, has each port held by `headerHeldAt` (`membersFiles`); for a member not drawn, which registered value
+    its weights port names is held only by `classHeld`, since `Registered.pos` and `withPositions` run only in a
+    session's setup."""
     params, ev = case["params"], json.loads(bytes.fromhex(case["evidence"]))
     k = ev["proofs"]["statements"][0]["member"]
     m = params["proofs"]["members"][k]
