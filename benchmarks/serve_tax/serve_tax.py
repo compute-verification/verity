@@ -405,6 +405,16 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
 }
 
 
+def refused_arm(name: str) -> str | None:
+    """Why ``name`` serves nothing, or None: an arm that commits the two-level serve's boundary (``boundary_rows``)
+    is refused by name until the levels' form takes a serve's boundary."""
+    if name not in ARMS or "boundary_rows" not in ARMS[name].plugin:
+        return None
+    from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
+
+    return f"arm {name}: {TWO_LEVELS_REFUSED}"
+
+
 def stock_of(arm: str) -> str:
     """The stock arm an arm is made from, which its cost is over: the nearest of `STOCK` above it, so an arm at the
     recipe's settings is costed over stock at those settings. `REFERENCE` for an arm with none above it or that this
@@ -1899,7 +1909,9 @@ def run(a: argparse.Namespace) -> int:
     """Serve one arm (`serve`), what it keeps on the node in ``--private``. Where none is given: under the corpus
     client, whose records and plan hold request values, refused before anything starts; under vLLM's client, where the
     arm keeps something (`keeps_private`), a cost's run, which nothing reads those files of afterwards, a fresh
-    directory outside the run's, removed when the arm stops, unless the arm records (`records`), which is refused. Under ``--profile`` the profile's checks come first (`profile_run`)."""
+    directory outside the run's, removed when the arm stops, unless the arm records (`records`), which is refused. Under ``--profile`` the profile's checks come first (`profile_run`). A `refused_arm` serves nothing."""
+    if why := refused_arm(a.arm):
+        raise SystemExit(why)
     if getattr(a, "kv_dir", None):
         outside(Path(a.kv_dir), Path(a.out), "--kv-dir")
     if getattr(a, "profile", None):
@@ -5154,15 +5166,12 @@ def main(argv: list[str] | None = None) -> int:
             arm = ARMS.get(name)
             if arm is None:
                 raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
+            if why := refused_arm(name):
+                raise SystemExit(f"--arms: {why}")
             if arm.attester:
                 certified_loads(name, a.loads)
             elif why := corpus_only(arm):
                 raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's: {why}")
-            if ("boundary_rows" in arm.plugin and not (a.boundary_rows or {}).get("check")
-                    and not (a.model_id and MODELS[a.model_id].check)):
-                raise SystemExit(f"--arms: {name}'s boundary commitment needs a check template, and "
-                                 f"{a.model_id or 'no model'} names none (Model.check): BOUNDARY_ROWS, a JSON object "
-                                 "with check")
             if arm.published:
                 context_of(loads, published_context(name, a.model_id, a.max_model_len))
         context_of(loads, a.max_model_len)

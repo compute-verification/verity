@@ -35,7 +35,7 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   tables its fused blocks open (each held to the verifier's pin), and the parameters and returns round 1's record
   commits as ports (`Input`, `Return`), read at round 1's rows; `interior` takes them, and this module's `__all__`
   lists the names its callers take.
-* `register`: the record on the two-stage stream after its first stage.
+* `register`: the record on the two-stage stream after its first stage, refused by name (`levels.TWO_LEVELS_REFUSED`).
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
 """
@@ -53,6 +53,7 @@ from typing import Any, cast
 import numpy as np
 
 from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 from verity.circuits.codec import program_digest
 from verity.commitments import history as HT
 from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
@@ -789,10 +790,9 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
 
 
 def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
-    """``it`` on the two-stage ``stream`` after its first stage ``first``, with the challenger's ports and leaf layer
-    (``copies`` override them, and pass `Stream.register_interiors`' other copies): its logged registration."""
-    return stream.register_interiors(first, it.record, copies.pop("ports", it.ports),
-                                     leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
+    """Refused by name (`levels.TWO_LEVELS_REFUSED`): an interior registers on a two-level stream after its first
+    stage, and the two-level audit accepts nothing."""
+    raise ValueError(TWO_LEVELS_REFUSED)
 
 
 __all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Input", "Interior", "Link", "Operand",

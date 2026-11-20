@@ -161,16 +161,16 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     seen = []
     monkeypatch.setattr(S, "serve", lambda a, private: seen.append((private, private is None or private.is_dir())) or 0)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
-    out = tmp_path / "run" / "out" / "two-stage"
+    out = tmp_path / "run" / "out" / "canonical-topk"
     for inside in (out / "private", tmp_path / "run" / "private"):
         with pytest.raises(SystemExit, match="which leaves the node"):
-            S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
+            S.run(NS(out=str(out), private=str(inside), arm="canonical-topk"))
         with pytest.raises(SystemExit, match="^--kv-dir .* which leaves the node"):
-            S.run(NS(out=str(out), private=str(tmp_path / "kept"), kv_dir=str(inside), arm="two-stage"))
+            S.run(NS(out=str(out), private=str(tmp_path / "kept"), kv_dir=str(inside), arm="canonical-topk"))
     assert not seen and not (tmp_path / "run").exists()
     kept = tmp_path / "kept"
     (tmp_path / "run").mkdir()
-    assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0
+    assert S.run(NS(out=str(out), private=str(kept), arm="canonical-topk", client=S.CORPUS)) == 0
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
     # the run states what it keeps on the node: each private directory and the names none of its own files has
     assert json.loads((tmp_path / "run" / S.PRIVATE_PATHS).read_text()) == {
@@ -180,17 +180,35 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     # (its step trace, served ids, edges' outputs) is refused, since later stages read what it records
     bench = {"out": str(out), "private": None, "client": S.BENCH}
     assert S.run(NS(arm="canonical-topk", **bench)) == 0 == S.run(NS(arm="compiled", **bench))
-    for records in ("two-stage", "record", "prod-record"):
+    for records in ("record", "prod-record"):
         with pytest.raises(SystemExit, match=rf"arm {records} records its step trace.*--private DIR.*PRIVATE"):
             S.run(NS(arm=records, **bench))
     (fresh, was_there), stock = seen[1], seen[2]
     assert was_there and not fresh.exists() and not fresh.is_relative_to(tmp_path / "run") and stock == (None, True)
     # none given, under the corpus client, whose records hold each request's served ids and whose plan holds the
     # prompts: refused for every arm, one that keeps nothing else too
-    for arm in ("canonical-topk", "boundary-rows", "two-stage", "record", "compiled"):
+    for arm in ("canonical-topk", "record", "compiled"):
         with pytest.raises(SystemExit, match=r"sent by the corpus client.*--private DIR.*PRIVATE"):
             S.run(NS(out=str(out), private=None, arm=arm, client=S.CORPUS))
     assert len(seen) == 3
+
+
+def test_an_arm_of_the_two_level_serve_is_refused_by_name_before_it_serves(tmp_path: Path,
+                                                                          monkeypatch: pytest.MonkeyPatch):
+    """The arms that commit the two-level serve's boundary serve nothing: `run`, and `passes`, which a job runs before
+    it holds a GPU, refuse each by `levels.TWO_LEVELS_REFUSED`."""
+    from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
+
+    served: list = []
+    monkeypatch.setattr(S, "serve", lambda a, private: served.append(a) or 0)
+    refused = [n for n in S.ARMS if S.refused_arm(n)]
+    assert refused == ["boundary-rows", "two-stage", "two-stage-tick"]
+    for name in refused:
+        with pytest.raises(SystemExit, match=re.escape(f"arm {name}: {TWO_LEVELS_REFUSED}")):
+            S.run(NS(out=str(tmp_path / "out"), private=str(tmp_path / "kept"), arm=name, client=S.CORPUS))
+        with pytest.raises(SystemExit, match=re.escape(f"--arms: arm {name}: {TWO_LEVELS_REFUSED}")):
+            S.main(["passes", "--loads", "chat", "--arms", f"compiled {name}", "--model-id", "glm53"])
+    assert not served and S.refused_arm("canonical-topk") is None
 
 
 def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -338,8 +356,6 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
     assert [(x["name"], x["off"]) for x in S.target_parts(glm, "two-stage-tick")] == [
         ("the certified tick", []), ("the canonical top-k", []), ("the snapshot bundle", ["the edge snapshot"]),
         ("the step record", []), ("the boundary commitment", []), ("the history tables", [])]
-    with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
-        S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
 
 
 def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says_what_it_leaves_off():
@@ -1326,7 +1342,7 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
     # the command a job runs before it holds a GPU prints the checked file; `dataset` prints its path alone
     at.write_bytes(data)
     capsys.readouterr()
-    assert S.main(["passes", "--loads", "chat=4+8,long", "--arms", "compiled two-stage", "--model-id", "glm53"]) == 0
+    assert S.main(["passes", "--loads", "chat=4+8,long", "--arms", "compiled canonical-topk", "--model-id", "glm53"]) == 0
     text = capsys.readouterr().out
     assert f"200 prompts a pass at concurrency 4, 8, from {at} (SHA-512 {ds.sha512[:16]}...)" in text
     assert "load long: 8,192 random tokens in and 128 out" in text and "24 prompts a pass at concurrency 1, 2, 4, 8\n" in text
@@ -1344,7 +1360,6 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
     assert S.main(["dataset", "chat"]) == 0 and capsys.readouterr().out == f"{at}\n"
     for argv, why in ((["passes", "--loads", "chat", "--arms", "compiled absent"], "absent"),
                       (["passes", "--loads", "chat", "--arms", "tick"], "corpus client"),
-                      (["passes", "--loads", "chat", "--arms", "two-stage", "--model-id", "moonlight"], "check template"),
                       (["passes", "--loads", "long", "--max-model-len", "4096"], "need a context of 16384"),
                       (["passes", "--loads", "chat", "--arms", "published", "--model-id", "moonlight"], "no recipe for"),
                       (["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
@@ -1357,9 +1372,6 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
         assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
                        "--max-model-len", limit]) == 0
     assert S.main(["passes", "--loads", "long", "--arms", "published", "--model-id", "glm53"]) == 0
-    # a model with no check template of its own takes the job's object
-    assert S.main(["passes", "--loads", "long", "--arms", "two-stage", "--model-id", "moonlight", "--boundary-rows",
-                   '{"check": "t"}']) == 0
 
 
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():

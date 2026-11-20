@@ -17,7 +17,8 @@ directory its files go to, ``private``, the directory on the node for its files 
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,
   ``verdicts``, ``ids``): the
-  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
+  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), refused by name
+  (`levels.TWO_LEVELS_REFUSED`) as the scheduler is built; each window's finished
   requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
   directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
   directory for what never leaves the node (``private``/boundary/), and under ``out`` only where none is named. With
@@ -662,12 +663,9 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         atexit.register(tc.stop)
         done.append(tc)
     if cfg.get("boundary_rows"):
-        from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+        from verity.protocols.proofs.spot.verifier.levels import TWO_LEVELS_REFUSED
 
-        sink = _lines(out / f"boundary.{pid}.jsonl")
-        kept = Path(cfg["private"]) if cfg.get("private") else out
-        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, public=_public(cfg))
-                    .install(sched, hooks))
+        raise ValueError(f"boundary_rows: {TWO_LEVELS_REFUSED}")
     done.append(hooks)
     return done
 
