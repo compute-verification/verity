@@ -342,6 +342,18 @@ def order_runs(nodes: list[tuple[str, int, list[tuple]]]) -> list[tuple[str, int
     return order
 
 
+def provable(fns: dict, cuts: dict) -> None:
+    """Refuse by name (``WINDOW-BLOCK``, `interface.check_proof_block`'s reason) a window whose template's proof block, its
+    rows under its cuts, Flock's composer would refuse: a reader whose every row is within the last SHA-512 block, as
+    `Bf16AddRow_v1{N=1}`'s, would otherwise be a member the audit cannot lower."""
+    from verity.commitments.periods import interface as IF
+    for t, fn in fns.items():
+        try:
+            IF.check_proof_block(fn, cuts.get(t))
+        except ValueError as e:
+            raise SystemExit(f"WINDOW-BLOCK: {e}") from None
+
+
 def _field_starts(t) -> list[int]:
     """Where each output field (`verity.circuits.edges`' fields: a Tuple's or Record's members, else the whole) of a
     return type ``t`` starts, in leaves, and its end."""
@@ -979,6 +991,7 @@ def window(a) -> int:
                 inputs[kk].append(None)
     cuts = {t: {p: c for p, c in cs.items() if c > 1} for t, cs in cuts.items()}
     cuts = {t: cs for t, cs in cuts.items() if cs}
+    provable(fns, cuts)
     order = order_runs([(descriptor_id(nodes[kk].fn), base[kk], [tuple(r) for r in reads[kk]]) for kk in base])
     circuit = IF.Circuit("credited_in_c", tuple((fns[t], c) for t, c in units.items()), external=tuple(sorted(external)),
                          wires=tuple(IF.coalesce(wires)), cuts=cuts, order=tuple(order))
