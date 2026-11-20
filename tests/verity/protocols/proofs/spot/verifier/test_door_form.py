@@ -1,5 +1,5 @@
 """The door's one form: `one_circuit.admitted` is `Spot.OneStageZk.admitted`, case by case. Every `#guard refusedBy` of
-`Spot/OneStageZkStatement.lean` is replayed here on its own descriptor, query and cuts, and the Python refuses it by the
+`Spot/Admitted.lean` is replayed here on its own descriptor, query and cuts, and the Python refuses it by the
 same clause with the same text; the descriptor Lean admits is admitted with the same rows and fields; and Friday's
 benchmark template is admitted."""
 
@@ -19,7 +19,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.program import input_id
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 
-LEAN = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "OneStageZkStatement.lean")
+LEAN = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean")
 GUARD = re.compile(r'^#guard refusedBy \((admitE|lowerE|admitIn|lowerIn|formedIn) (.*)\) "([a-z-]+)" "(.*)"$', re.M)
 STR = r'"((?:[^"\\]|\\.)*)"'
 

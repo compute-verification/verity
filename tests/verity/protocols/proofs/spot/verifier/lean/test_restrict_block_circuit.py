@@ -95,7 +95,7 @@ def door_form():
 
 
 def _through_c():
-    """`Spot/OneStageZkStatement.lean`'s refusals of `admitted` on a C whose root calls the query's one template, at no
+    """`Spot/Admitted.lean`'s refusals of `admitted` on a C whose root calls the query's one template, at no
     cut: the cases C alone gives, through Lean's executable and the door alike."""
     df = door_form()
     return [g for g in df.guards() if not g[3] and g[2] in json.loads(g[1])["definitions"]]
