@@ -15,13 +15,14 @@ from verity.circuits.codec import descriptor_id, lookup_primitive
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.program import is_word_primitive
+from verity_vllm.definitions.registry import RETIRED
 
 ROOTS = ("verity", "verity_vllm", "verity_torch", "verity_flock")
 
 #: one member of each family made on demand, at a served binding where one is served
 ON_DEMAND = (
     "And2_v1", "Const1[0x1]_v1", "Not_v1", "Const32[0x00000000]_v1", "BitOf32x0_v1", "WordOf32_v1", "MoeSelectBf16x128_v1",
-    "GatherBf16x154880_v1", "GatherE4m3x128_v1", "GatherF32x154880_v1", "GatherE2m1Pairx128_v1", "GatherE8m0x128_v1",
+    "GatherBf16x154880_v1", "GatherE4m3x128_v1", "GatherF32x154880_v1",
     "DsaTopKLongRowCheck131072x2048_v1", "DsaTopKThresholdKey131072x2048_v1",
     "DsaTopKCountedThresholdKey131072x2048_v1", "DsaTopKSlot131072x2048_v1",
     "TopPMaskWordx154880_v1", "BitAtx154880_v1", "BitXor_v1", "U32Xor_v1", "SelectBit_v1", "I32ToF32_v1", "NvLogf_v1",
@@ -35,6 +36,8 @@ def _families() -> dict[str, str]:
     """Each family made on demand, by its pattern, to its `ON_DEMAND` member; a family with none fails here."""
     out = {}
     for pat, _ in codec._LAZY_PRIMITIVE_FAMILIES:
+        if pat.pattern == RETIRED:
+            continue  # refuses every member, so it registers no primitive
         named = [f for f in ON_DEMAND if pat.fullmatch(f)]
         assert named, f"no member of the family {pat.pattern} in ON_DEMAND: name one at a served binding"
         out[pat.pattern] = named[0]
