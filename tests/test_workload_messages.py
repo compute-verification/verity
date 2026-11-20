@@ -27,7 +27,7 @@ REVERSED = {
     "RegisteredCompiler": "workload to prover: the adapter hands the prover the registered compiler up front",
     "RegisteredWeights": "workload to prover: the adapter hands the prover the weights up front",
 }
-WORD = re.compile(r"PoU[WSB]|H1|[A-Z][a-z]+")
+WORD = re.compile(r"PoU[WSB]|[A-Z][a-z]+")
 
 
 def _declared():

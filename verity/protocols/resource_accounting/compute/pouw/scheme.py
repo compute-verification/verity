@@ -624,7 +624,7 @@ class Attached:
             run = device.PearlCDeviceRun(scheme, OPTION, kernel, weights, roots, coins, opening, pass_index=k,
                                          schedule=own["schedule"], weight_salts=salts)
         if self.session is not None:
-            run.commits.update(coin_source=SV.H1_CHALLENGER, session=carried)
+            run.commits.update(coin_source=SV.PEARL_C_CHALLENGER, session=carried)
         run.commits["registration"] = registration(scheme, SV.DomainError)
         run.details["max_step_tokens"] = device.step_tokens(run, SV.PEARL_C_CALL_CAPACITY)
         if self.capture:
@@ -669,9 +669,7 @@ def attach(exchange: Any, ctx: Any) -> Attached:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
-    # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
-    # scheme, and H1 has none
-    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
+    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block(TILE, tile_macs),),

@@ -41,16 +41,17 @@ def _run(d, rows: list[list[list[int]]]) -> list[int]:
 def test_the_rows_at_the_deployed_scheme() -> None:
     """The deployed signature's unit reads the 80-byte key, the 64-byte message and the 34,756-byte signature, and the
     round's unit a 2,056-byte row as 1,028 words, its opening's verdict word, a records row of two 92-byte records and the 12 bytes u32 j || u64 i;
-    each outputs one bit."""
+    each outputs one verdict word."""
     p = R.DEPLOYED
     params, ret = resolve(bind(S.PousSessionSig, N=p.N, W=p.W, H=p.H)).signature()
     assert [(n, t.leaves) for n, t in params] == [("key", 640), ("m", 512), ("sig", 8 * p.signature_bytes())]
-    assert ret.leaves == 1
+    assert ret.leaf_widths() == [16]
     params, ret = resolve(bind(S.PousRound, N=2056, SLOT=1)).signature()
     assert [(n, t.leaves, t.leaf_widths()[0]) for n, t in params] == [("row", 1028, 16), ("ok", 1, 16), ("records", 1472, 1),
                                                                         ("j", 1, 32), ("ihi", 1, 32),
                                                                         ("ilo", 1, 32)]
-    assert ret.leaves == 1
+    assert ret.leaf_widths() == [16]
+    assert resolve(bind(S.PousSessionDigest, K=3, HEAD=8, LIMIT=1)).signature()[1].leaf_widths()[0] == 16
     assert len(Round(0, 0, 0, 0, bytes(64)).value()) == S.RECORD_BYTES
 
 
