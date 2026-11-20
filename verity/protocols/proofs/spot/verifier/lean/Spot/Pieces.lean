@@ -166,6 +166,7 @@ public import Spot.LinkPoints
 public import Spot.Edges
 public import Spot.Levels
 meta import Spot.Select
+meta import Spot.Levels
 
 @[expose] public section
 set_option backward.privateInPublic true
