@@ -167,7 +167,7 @@ theorem free_insert {m : Std.TreeMap String String} {fid v : String} (hd : ddefs
     intro x hx
     rw [Finset.mem_filter, Std.TreeMap.contains_insert, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hx
     rw [Finset.mem_erase, Finset.mem_filter]
-    exact ⟨fun e => hx.2.1 (compare_eq_iff_eq.mpr e.symm), hx.1, hx.2.2⟩
+    exact ⟨fun e => hx.2.1 (Std.LawfulEqOrd.compare_eq_iff_eq.mpr e.symm), hx.1, hx.2.2⟩
   have := Finset.card_le_card hsub
   rw [Finset.card_erase_of_mem hmem] at this
   have hpos := Finset.card_pos.mpr ⟨fid, hmem⟩
@@ -263,7 +263,7 @@ theorem digestGo_calls : ∀ (n : Nat) (fid : String) (S : List String) (m : Std
           · have hne : fid ≠ s := fun he => hfS (he ▸ hs)
             rw [Std.TreeMap.contains_insert, hS1 s (List.mem_cons_of_mem _ hs), Bool.or_false,
               beq_eq_false_iff_ne]
-            exact fun e => hne (compare_eq_iff_eq.mp e)
+            exact fun e => hne (Std.LawfulEqOrd.compare_eq_iff_eq.mp e)
           · rw [Std.TreeMap.contains_insert, hmono1 x hx, Bool.or_true]
           · have := free_insert ddefs (v := hexOf (h t.toUTF8)) hdc (hS1 fid List.mem_cons_self)
             omega
