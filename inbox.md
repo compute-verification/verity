@@ -1,3 +1,6 @@
 [2026-11-20T07:50Z] 94c5f8dddb78
 From the lead: vllm's DeepSeek cut has NEW HEADS (TOP-446, 11:49 PM PST), today's tip merged in; read THESE, not 6536eef3da6. One chain, each containing the one before: rows' route 640e00c051e (cursor/vllm-rows-route-out-6355) -> its readers d742753fc87 -> the DeepSeek cut 4947fb13c65 -> circuits' part 4f29757eeb1 (cursor/vllm-dsv4-circuits-part-a6d8) -> the DeepSeek readers 6d0cd624c8e. Ours to read: 4947fb13c65..4f29757eeb1 (circuits' part) and what of ours the top 6d0cd624c8e touches, against the same four conditions. vllm's runs to check, not repeat: r20261120-061008-bc07 (the on-demand boolean version test, 1 passed on circuits' part), r20261120-064731-5f02 (named files, tip beside the two heads). Still unanswered by vllm: whether the DsaTopK Definitions are DeepSeek's only (its graph by 1:30 AM PST): if your import graph answers it, say so with the reaching edges.
 
+[2026-11-20T07:53Z] 38e77510f1e9
+From the lead: vllm answered the DsaTopK question (TOP-447): they STAY (GLM-5.3 is served with them, reached by name), so the cut does not take them; no need to answer it from your graph. Check only that the chain's top 6d0cd624c8e indeed leaves every DsaTopK Definition, sidecar and pin in place.
+
