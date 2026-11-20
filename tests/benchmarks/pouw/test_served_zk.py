@@ -1150,22 +1150,28 @@ def _through(ch, rec, name="honest"):
 @LEAN
 def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     """Each of the execution phase's checks runs Lean's port and Python's reference on one input: the witness holds both verdicts,
-    the same, Lean's of record, and the published items are Lean's.  Undone (`Record(lean=False)`), the references alone
-    give the same outcome and witness no Lean verdict."""
+    the same, Lean's of record, and the published items are Lean's.  R1-R8 and the caller's check have no reference:
+    Lean's is their only verdict.  Undone (`Record(lean=False)`), the references alone give the same outcome and witness
+    no Lean verdict, those two still Lean's."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
     ch = _challenger(params)
     o, pub, _ = _through(ch, rec)
     w = ch.witness["honest"]
+    lean_only = {"registration", "caller"}
     assert [e["check"] for e in w] == ["registered", "pass", "registration", "caller", "public", "draw", "answer"]
-    assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w)
+    assert all(e["same"] and e["of_record"] == "lean" and e["lean"] == e["python"] for e in w if e["check"] not in lean_only)
+    assert all(e["python"] is None and e["same"] is None and e["of_record"] == "lean" and e["lean"]["codes"] == []
+               for e in w if e["check"] in lean_only)
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
     record = ORL.Record(lean=False)
     py = _challenger(params, record=record)
     o2, pub2, _ = _through(py, rec)
-    assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
+    assert o2.accepted and pub2 == pub
+    assert all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"] if e["check"] not in lean_only)
+    assert [e["of_record"] for e in py.witness["honest"] if e["check"] in lean_only] == ["lean", "lean"]
     t = ch.draws["honest"].units[0]
     lean = ORL.Record()
     assert SC.check(params, rec, ch.draws["honest"].draw, t, _unit_pub(advice, priv, t), SC.opening(advice, priv, params, t),
@@ -1178,8 +1184,8 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
 @LEAN
 @pytest.mark.slow
 def test_r1_r6_of_a_window_are_leans(served):
-    """One-stage's R1-R6 of a PoUW registration, honest and with each field changed, through the switch: Lean's codes are
-    Python's, none for the honest record and some for each change."""
+    """One-stage's R1-R6 of a PoUW registration, honest and with each field changed: Lean's codes, the only verdict, none
+    for the honest record and some for each change."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -1190,11 +1196,11 @@ def test_r1_r6_of_a_window_are_leans(served):
     record = ORL.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, sampling_design, S.SCHEME, ports, None, (), [], None, None, None))
+        return record.registration(p, r)
 
     assert codes(rec) == []
     honest = record.witness[0]
-    assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
+    assert honest["python"] is None and honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
                "population": n + 1, "law": {**sampling_design, "k": sampling_design["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
@@ -1203,7 +1209,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     got["leaves"] = codes({**rec, "roots": [{**root, "leaves": root["leaves"] + 1}, *rec["roots"][1:]]})
     got["one-root"] = codes({**rec, "roots": rec["roots"][:1]})
     assert all(got.values()), got
-    assert all(e["same"] for e in record.witness) and len(record.witness) == len(got) + 1
+    assert all(e["of_record"] == "lean" for e in record.witness) and len(record.witness) == len(got) + 1
     record.close()
 
 
@@ -1342,15 +1348,13 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
             with pytest.raises(S.Refused) as e:
                 step(ch)
         assert _codes(e) == {f"{OR.DISAGREE}: {check}"}
-        bad = [x for x in ch.witness["honest"] if not x["same"]]
+        bad = [x for x in ch.witness["honest"] if x["same"] is False]
         assert [x["check"] for x in bad] == [check] and bad[0]["lean"] != bad[0]["python"]
         return ch
 
     disagrees("registered", lambda m: m.setattr(OR, "py_registered", lambda x: {"reason": "forced"}),
               lambda ch: _held(ch, "honest", rec))
     disagrees("pass", lambda m: m.setattr(OR, "py_pass", lambda x: {"how": "forced"}), lambda ch: _held(ch, "honest", rec))
-    disagrees("registration", lambda m: m.setattr(SC.R, "check", lambda *a: SC.Verdict(False, ("R1-law",), {})),
-              lambda ch: _held(ch, "honest", rec))
     disagrees("public", lambda m: m.setattr(SC.S, "check_public", lambda *a: SC.Verdict(False, ("keys",), {})),
               lambda ch: _held(ch, "honest", rec))
     ch = disagrees("draw", lambda m: m.setattr(OR, "py_draw", lambda x: {"refused": ["draw", "forced"]}),
@@ -1506,7 +1510,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert [w["reply"] for w in witness] == [x.split(" ", 1)[0] for x in replies]
     noted = [e for w in witness for e in w["of_record"]]
     assert {e["check"] for e in noted} >= {"registered", "registration", "pass", "draw", "answer"}
-    assert all(e["same"] and e["of_record"] == "lean" for e in noted)
+    assert all((e["same"] or e["python"] is None and e["same"] is None) and e["of_record"] == "lean" for e in noted)
     accepted = [e for w in witness if w["reply"] == "ACCEPT" for e in w["of_record"]]
     assert accepted and all(e in o["of_record"] for e in accepted)
 
