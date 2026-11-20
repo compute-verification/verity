@@ -1,3 +1,0 @@
-[2026-11-20T15:35Z] 4c4a356a79e6
-Two of your runs ENDED BADLY: r20261120-110503-9489 was CANCELLED at its stage timeout (rc 143): THE MUTANTS NEVER RAN (it spent its time on the benchmark): relaunch the mutants ALONE as their own detached job (members_mutants.py on the rule branch, no benchmark in front), with a limit that fits, and tell me its id and ETA; soundness is owed the survivors. And r20261120-145617-9260 (the landable branch's rerun with fixtures fetched) FAILED rc 1: read it: which step or test. Also a correction from me: the clock times I wrote in my last messages to you were ahead of the real clock; it is now 7:35 AM PST; deadlines given as hours stand.
-
