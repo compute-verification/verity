@@ -62,3 +62,45 @@ def test_the_answers_are_read_from_a_process_started_with_the_panic_switch(tmp_p
 def test_a_warning_on_the_error_stream_is_no_panic(tmp_path):
     exe = _fake(tmp_path, "print('warning: slow', file=sys.stderr)\n" + _accepting(False))
     assert period.serve(exe, [{}]) == [{"verdict": "accept"}]
+
+
+#: the runtime's lines with no ``PANIC`` (`verity.lean_process.PANIC`)
+OTHER_PANICS = ["Error: index out of bounds", "Error: invalid `String.Pos` at `String.get!`",
+                "`Task.get` called from a `(sync := true)` task", "Stack overflow detected. Aborting.",
+                "LEAN ASSERTION VIOLATION"]
+
+
+@pytest.mark.parametrize("line", OTHER_PANICS)
+def test_an_accept_beside_a_runtime_line_with_no_panic_word_is_refused_by_name_at_exit_0(tmp_path, line):
+    exe = _fake(tmp_path, f"print({line!r}, file=sys.stderr)\nprint({ACCEPT!r})\n")
+    with pytest.raises(LP.LeanPanic) as e:
+        period.serve(exe, [{}])
+    assert str(e.value) == f"{LP.LEAN_PANIC}: {line}"
+    with pytest.raises(LP.LeanPanic, match=f"^{LP.LEAN_PANIC}: "):
+        TA.run_lean(exe, {}, b"", {})
+
+
+def test_an_accept_before_a_silent_exit_134_or_a_signal_is_refused_by_name(tmp_path):
+    killed = f"print({ACCEPT!r}, flush=True)\nimport signal\nos.kill(os.getpid(), signal.SIGKILL)\n"
+    for serve in (period.serve, lambda exe, cases: TA.run_lean(exe, {}, b"", {})):
+        with pytest.raises(LP.LeanExit, match=f"^{LP.LEAN_EXIT}: status 134 \\(abort\\)"):
+            serve(_fake(tmp_path, _accepting(False, 134)), [{}])
+        with pytest.raises(LP.LeanExit, match=f"^{LP.LEAN_EXIT}: killed by SIGKILL"):
+            serve(_fake(tmp_path, killed), [{}])
+
+
+def test_a_refusal_sentence_that_contains_the_runtimes_text_is_no_panic(tmp_path):
+    sentence = "the case is refused: Error: index out of bounds is what its field says, not the runtime"
+    exe = _fake(tmp_path, f"print({sentence!r}, file=sys.stderr)\n" + _accepting(False))
+    assert period.serve(exe, [{}]) == [{"verdict": "accept"}]
+    assert TA.run_lean(exe, {}, b"", {}) == {"verdict": "accept"}
+
+
+def test_a_status_outside_the_documented_set_is_refused_whatever_it_printed(tmp_path):
+    """`serve` documents 0 (`Cli.lean` `serveLoop`; 70 where an outcome isn't canonical), and the timed audit 0 and 1
+    (`TimedAudit.run`; 2 where its verdict isn't canonical JSON)."""
+    for code in (2, 70):
+        with pytest.raises(LP.LeanExit, match=f"status {code}"):
+            period.serve(_fake(tmp_path, _accepting(False, code)), [{}])
+    with pytest.raises(LP.LeanExit, match="status 2"):
+        TA.run_lean(_fake(tmp_path, _accepting(False, 2)), {}, b"", {})
