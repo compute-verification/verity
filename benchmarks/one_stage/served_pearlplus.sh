@@ -87,10 +87,8 @@
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
 # serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
-# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and then, before the coin,
-# PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# docket R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
-# the commit is what holds the window to its class's fixed load, so without it there is no sample, no verdict and no
+# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and where `retain`
+# wrote no W the piece goes no further: without it there is no sample, no verdict and no
 # Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
 # passes to W, with PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`,
 # which refuses passes that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the
@@ -319,17 +317,9 @@ if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
   say "retain: served_passes.py retain exit $rc: $(grep -m1 '^retain ' "$Q/retain.log" | cut -c1-400)"
   [ "$rc" = 0 ] || [ -z "$TIE" ] || GO=
 fi
-# the window commit tied to W, before Pearl+'s coin
 if [ -n "$GO" ] && [ -n "$TIE" ]; then
   if [ -s "$W" ]; then
     say "W: $(grep -m1 '^retain W: ' "$Q/retain.log" | sed -E 's/^retain W: [^,]*, //' | cut -c1-300)"
-    t=$(date +%s)
-    (cd "$TREE" && bash -c "${PEARLPLUS_TIE_CMD:?served_verdicts.sh sets PEARLPLUS_TIE_CMD}" _ "$SD" "$K" "$W" "$Q/passes") \
-      > "$Q/tie.log" 2>&1
-    rc=$?
-    say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
-    [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
-      "nothing holds the passes to the window's class and no sample or Pearl+ line follows it"; GO=; }
   else
     say "W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ line follows"
     GO=

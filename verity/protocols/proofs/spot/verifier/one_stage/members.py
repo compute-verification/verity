@@ -45,8 +45,8 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
-* **C's wiring** (`OneStageZk.derivedWiring`, whose wired ports read their writers' output field trees, `fieldRoots`):
-  not mirrored; `slices` gives a wired port no root.
+* **C's wiring** (`OneStageZk.derivedWiring`): a wiring Lean refuses raises `Outside` here, whose refusal codes are
+  `edges.edges`'.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import subprocess
 import tempfile
@@ -64,7 +65,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import partition_object as PO
+from verity.circuits import codec, edges as EG, partition_object as PO
 from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
@@ -153,6 +154,13 @@ _HEX = frozenset("0123456789abcdef")
 COMMITTED = "committed/"
 #: `OneStageZk.INPUT_MEMBER`
 INPUT_MEMBER = "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
+
+
+def own_root_why(member: str, port: str) -> str:
+    """`OneStageZk.OWN_ROOT_WHY`: the refusal of a member's root of its own at a port C wires into it."""
+    return (f"member {member}: port {port} is a row of in(S) (C wires it from another block's outputs), and the "
+            "registration holds a root of its own for it: a crossing wire is committed once, in its writer's output "
+            "field's tree")
 
 
 def wired_tree_why(name: str, port: str) -> str:
@@ -615,22 +623,78 @@ def _members_roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> tuple[di
     return {name: _own_fields(ft, name, rs) for name, rs in roots.items()}, ft
 
 
-def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
+                 ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]],
+                 roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.fieldRoots` at C's wiring under the partition's `ranges` (`derivedWiring`), where C's root has an
+    edge (`hasEdge`): each member's roots with, for each wire whose reader units meet its own, its writer's output
+    field's tree under the reader's port, the first wire's of each port. A member's own root at a wired port refuses
+    (`own_root_why`); `Outside` where C's wiring is refused."""
+    if not EG.has_edge(desc):
+        return roots
+    try:
+        got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": EG.io_cuts(desc, ranges)})
+    except ValueError as e:
+        raise Outside(f"C's wiring: {e}") from None
+    if "refusal" in got:
+        raise Outside(f"C's wiring: {got['refusal']}")
+    lbase, seen = [], {}
+    for _k, t, _a, c in ranges:
+        lbase.append(seen.get(t, 0))
+        seen[t] = seen.get(t, 0) + c
+    out = {}
+    for name, m in ms.items():
+        first, n = m["units"][0][0], _count(m)
+
+        def meets(w: Mapping[str, Any]) -> bool:
+            units = max(w["cut"][1], 1)
+            return any(t == w["reader"] and a <= first and first + n <= a + c
+                       and (lo := lbase[j] + first - a) < w["at"] + math.prod(w["radix"]) // units and w["at"] < lo + n
+                       for j, (_k, t, a, c) in enumerate(ranges))
+        own = roots.get(name, [])
+        if (w := next((w for w in got["wires"] if meets(w) and any(r.get("port") == w["port"] for r in own)), None)):
+            raise _Refused(own_root_why(name, w["port"]))
+        mine = list(own)
+        for w in got["wires"]:
+            if meets(w) and not any(r.get("port") == w["port"] for r in mine):
+                e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
+                if e is not None:
+                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],
+                                 "root": e.get("root")})
+        out[name] = mine
+    return out
+
+
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program | None = None,
+           query: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
-    the output ports it has no root of (`OneStageZk.ownFieldsOf`), and the docket's scheme; a program with an edge,
-    whose wired ports Lean derives from C (`OneStageZk.derivedWiring`), is not mirrored here. `population_why` holds a member's
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), and the docket's scheme; with the verifier's
+    `program` and `query`, each wired port at its writer's tree (`_wired`, Lean's `fieldRoots`), which no slice gives
+    without them. `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
     ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
     try:
         _laid(ms, record)
-        roots, _ = _members_roots(ms, record)
+        roots, ft = _members_roots(ms, record)
+        if program is not None:
+            desc = json.loads(json.dumps(codec.encode_program(program)))
+            roots = _wired(program, query or {}, desc, ms, record, roots, ft)
     except _Refused as e:
         raise ValueError(str(e)) from None
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
+
+
+def _wired(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any], ms: Mapping[str, Any],
+           record: Mapping[str, Any], roots: dict[str, list[dict[str, Any]]],
+           ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.membersRootsOf` past `_members_roots`: the window's field trees held to C's (`_field_trees_held`),
+    then each member's wired ports at their writers' trees (`_wired_roots`)."""
+    _field_trees_held(_derived_field_trees(program, query, ms), _templates(ms), record)
+    return _wired_roots(desc, P._template(program, query, "the members' partition").ranges, ms, ft, roots)
 
 
 def _meta(circuit: Path) -> Any:
@@ -964,8 +1028,8 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _laid(ms, record)
         _class(ms)
         _tree_ports_held(ms, record)
-        roots, _ = _members_roots(ms, record)
-        _field_trees_held(_derived_field_trees(program, params["query"], ms), _templates(ms), record)
+        roots, ft = _members_roots(ms, record)
+        roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
@@ -1008,4 +1072,4 @@ __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
            "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
-           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "wired_tree_why"]
+           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why", "wired_tree_why"]
