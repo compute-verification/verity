@@ -30,16 +30,16 @@
   "infra/control/top_watch.py": 1,
   "tools/research/src/research/pods/nebius/common.sh": 1,
   "tools/research/src/research/pods/nebius/vm_setup.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/86-zk-cpu-steps.sh": 1,
-  "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh": 1,
-  "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py": 1,
-  "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh": 1,
-  "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py": 1,
-  "verity/protocols/resource_accounting/compute/pouw/verifier/serving.py": 1,
-  "verity/protocols/resource_accounting/memory/pous/prover/served_weights.py": 1,
-  "verity/protocols/resource_accounting/network/verifier/load_check.py": 1
+  "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh": 1,
+  "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py": 1,
+  "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh": 1,
+  "verity/protocols/accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py": 1,
+  "verity/protocols/accounting/compute/pouw/verifier/serving.py": 1,
+  "verity/protocols/accounting/memory/pous/prover/served_weights.py": 1,
+  "verity/protocols/accounting/network/verifier/load_check.py": 1,
+  "verity/protocols/proof/flock/prover/pod/20-gpu-link.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/70-class-sweep.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/86-zk-cpu-steps.sh": 1
  },
  "lean_old_names": {
   "Claims.Collision": 21,
@@ -89,10 +89,10 @@
   "calibration/attester_timing/run.py": 9,
   "tools/verity/cli/verity_cli/served_table.py": 3,
   "verity/device.py": 1,
-  "verity/protocols/proofs/spot/verifier/parties.py": 8,
-  "verity/protocols/registration/verifier/site_log.py": 1,
-  "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": 1,
-  "verity/protocols/resource_accounting/network/verifier/registered.py": 1
+  "verity/protocols/accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": 1,
+  "verity/protocols/accounting/network/verifier/registered.py": 1,
+  "verity/protocols/proof/spot/verifier/parties.py": 8,
+  "verity/protocols/registration/verifier/site_log.py": 1
  },
  "scheme_package_imports": {
   "benchmarks/attester_load/pacing.py": 3,
@@ -223,11 +223,11 @@
   "benchmarks/replay_ladder/run.sh": 1,
   "infra/vcf/vcf-bench.sh": 1,
   "tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml": 1,
-  "verity/protocols/proofs/flock/prover/cuda_chunk_patch.py": 1,
-  "verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/60-circuit.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh": 3
+  "verity/protocols/proof/flock/prover/cuda_chunk_patch.py": 1,
+  "verity/protocols/proof/flock/prover/pod/20-gpu-link.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/60-circuit.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/61-circuit-cell.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/70-class-sweep.sh": 1,
+  "verity/protocols/proof/flock/prover/pod/74-gemm-hill.sh": 3
  }
 }

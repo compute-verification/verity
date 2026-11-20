@@ -22,7 +22,7 @@ from verity.commitments import docket_digest as DD
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
-VR = importlib.import_module("verity.protocols.proofs.spot.verifier.one_stage.verdict_record")
+VR = importlib.import_module("verity.protocols.proof.spot.verifier.one_stage.verdict_record")
 
 NAMES = {"run": "r-verdict", "serve": "r-serve", "commit": "c0ffee"}
 STOP_RULE = {"ids": [3], "max_model_len": 64, "outputs": 4}

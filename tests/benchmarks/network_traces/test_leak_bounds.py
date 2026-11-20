@@ -33,7 +33,7 @@ import pytest
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.accounting.network.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "calibration" / "census"
 SLOWDOWN = HERE.parents[1] / "benchmarks" / "slowdown" / "data"
@@ -62,7 +62,7 @@ def clog2(x: int) -> int:
 
 
 def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
+    from verity.protocols.accounting.network.verifier import network_attester as W
 
     assert IS.W63 == W63
     cr = _load("chain_record")

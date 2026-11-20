@@ -5,7 +5,7 @@ of that card ([`machine_model/`](../../machine_model/README.md)), which prices e
 times one instruction class in one loop and writes its price row in that census's form.
 
 A rate is only as good as the loop it timed, so nothing is timed before the SASS gate
-(`verity/protocols/resource_accounting/compute/pouw/prover/kernels/gpu_kit/sass_gate.py`) has read the probe's SASS
+(`verity/protocols/accounting/compute/pouw/prover/kernels/gpu_kit/sass_gate.py`) has read the probe's SASS
 and found exactly the instructions the probe declares. A probe that does not pass writes no row. A probe declared
 known-invalid must be refused by the check it names, or nothing is timed at all.
 

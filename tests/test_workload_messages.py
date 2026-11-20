@@ -6,10 +6,10 @@ from __future__ import annotations
 import importlib
 
 MODULES = {
-    "spot": "verity.protocols.proofs.spot.prover.workload",
-    "pouw": "verity.protocols.resource_accounting.compute.pouw.prover.workload",
-    "pous": "verity.protocols.resource_accounting.memory.pous.prover.workload",
-    "certifier": "verity.protocols.resource_accounting.network.prover.workload",
+    "spot": "verity.protocols.proof.spot.prover.workload",
+    "pouw": "verity.protocols.accounting.compute.pouw.prover.workload",
+    "pous": "verity.protocols.accounting.memory.pous.prover.workload",
+    "certifier": "verity.protocols.accounting.network.prover.workload",
 }
 
 

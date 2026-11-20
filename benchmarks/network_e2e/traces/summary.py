@@ -172,7 +172,7 @@ def serving(reqs: list[dict]) -> dict:
 
 
 def tick_log(d: Path) -> dict | None:
-    """What the attested tick's gate logged (``raw/tick.PID.jsonl``, `verity.protocols.resource_accounting.network.prover.admission.TickGate`), None where it logged
+    """What the attested tick's gate logged (``raw/tick.PID.jsonl``, `verity.protocols.accounting.network.prover.admission.TickGate`), None where it logged
     nothing: its admissions (``steps``: the engine steps that added any, ``requests``: how many they added) and its events
     by kind (``unordered``, ``stale``, ``late``, ``skipped``, ``opened``, ... ; none in a run the tick ordered whole)."""
     recs = raw(d, "tick")
@@ -902,7 +902,7 @@ FIELDS = """\
   `prefix_len` in the plan, which `requests.jsonl` takes from it, and the `seed` it sent, if any) and
   the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`,
   `raw/engine.PID.json`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`), the API server's
-  `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `verity.protocols.resource_accounting.network.prover.admission.FrontFeed` wrote
+  `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `verity.protocols.accounting.network.prover.admission.FrontFeed` wrote
   (in `raw/`) and the scheme's log (`raw/tick.PID.jsonl`: the front's releases and watermark ends, and the gate's
   admissions and events);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
@@ -945,7 +945,7 @@ def readme(s: dict) -> str:
         f"{'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "
         f"its Poisson arrival, {sampling_text(s)}, `max_tokens` 64 or 256, no stop strings; a request ends on EOS "
         f"{s.get('eos_token_ids') or list(EOS)} or its cap.", "",
-        *([f"Admission: the certified tick (`--admit tick`, `verity.protocols.resource_accounting.network.prover.admission`), τ_b {tick['bucket_us']} µs, "
+        *([f"Admission: the certified tick (`--admit tick`, `verity.protocols.accounting.network.prover.admission`), τ_b {tick['bucket_us']} µs, "
            f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
            f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
            "network certifier each trace's meta.json `tick.where` names (a network certifier trace's own, the client's stand-in, "

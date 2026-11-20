@@ -103,21 +103,21 @@ fi
 
 [ -n "${STANDIN:-}" ] || { echo "a5_tp.sh: set STANDIN to the stand-ins to run (row-tables, sparse-mla, sparse-mla:units, topp, topp:slots, network_attester[:KIND], tp-gates[:KIND])"; exit 3; }
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock/prover HEAD:verity/protocols/proofs/flock/prover/pod HEAD:verity/protocols/proofs/flock/prover/agreement HEAD:verity/protocols/proofs/flock/prover/tool.py HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proof/flock/prover HEAD:verity/protocols/proof/flock/prover/pod HEAD:verity/protocols/proof/flock/prover/agreement HEAD:verity/protocols/proof/flock/prover/tool.py HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proof/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
-(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+LEAN=$REPO/verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
+(cd verity/protocols/proof/spot/verifier/lean && lake build spot-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
   STAMPED=$($PY benchmarks/one_stage/member_seconds.py wrap $W/stamped $BIN $LEAN $FWL) || exit 9
@@ -125,7 +125,7 @@ if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
 fi
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--zk-server $FWL); fi
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proof/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then

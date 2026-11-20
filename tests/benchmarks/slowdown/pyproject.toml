@@ -30,7 +30,7 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocol.py", "verity/channel.py", "verity/circuits",
-          "verity/protocols/proofs/spot/verifier/profile.py", "calibration/census/deployments.json", "benchmarks/nci/calibrations.json",
-          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py",
+          "verity/protocols/proof/spot/verifier/profile.py", "calibration/census/deployments.json", "benchmarks/nci/calibrations.json",
+          "verity/protocols/__init__.py", "verity/protocols/proof/__init__.py", "verity/protocols/policy/__init__.py", "verity/protocols/policy/training_detection/__init__.py", "verity/protocols/proof/spot/__init__.py", "verity/protocols/proof/spot/verifier/__init__.py",
+          "verity/protocols/policy/training_detection/inference_only/__init__.py",
           "verity/device.py", "calibration/hardware/cards", "benchmarks/slowdown"]

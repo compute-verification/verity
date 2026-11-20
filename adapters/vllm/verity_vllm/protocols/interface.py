@@ -25,7 +25,7 @@ An adapter is one module of this package (`spot`) that defines:
   (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
+(`verity.protocols.proof.spot.verifier`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """
