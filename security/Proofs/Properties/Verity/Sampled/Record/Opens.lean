@@ -6,6 +6,7 @@ public import Proofs.Flock.Bridge.V5.Session
 public import Proofs.Flock.Claims.ZK.MaskedTables
 public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
+import Proofs.Flock.Claims.Complete.Json.Stmt
 import all Init.Data.Array.QSort.Basic
 
 /-!
