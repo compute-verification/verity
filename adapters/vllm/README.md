@@ -97,15 +97,12 @@ finish inside one served window. The parts, in the order they run:
   registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
   one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
   token selection and not the model's layers.
-- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
-  commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
-  challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
-  stage. The verifier accepts a two-stage run whose every check passes (`FORM` in
-  `verity/protocols/proofs/spot/verifier/second_stage.py`), ahead of the soundness proof of that form, and the accept's
-  record says its form is not yet proved.
+- **Two levels are refused by name** (`levels.TWO_LEVELS_REFUSED`): `interior_rows.register`, the serve-tax
+  plugin's `boundary_rows`, and the serve-tax arms that commit the boundary (`boundary-rows`, `two-stage`,
+  `two-stage-tick`), before any GPU is held. The boundary commitment and the interior stay, for the levels' form.
 
-The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
-the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
+The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` is refused by
+name. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
 REPLAY_CAPTURE=ID,...` replays that load's window alone and captures the named requests. A replay block that is a span
 of positions inside a request, and a served prefix-cache hit, are not on this path.
 
