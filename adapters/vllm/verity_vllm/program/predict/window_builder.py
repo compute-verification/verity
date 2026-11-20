@@ -191,13 +191,14 @@ class _Builder:
         self.starts.setdefault(tid, []).append(start)
         return tid, at
 
-    def allocation(self, fn: Any, labels: Sequence[tuple[int, int]]) -> tuple[str, int]:
-        """One allocation of ``fn``, unit i of the slot and step ``labels[i]``: its descriptor id and first unit."""
+    def allocation(self, fn: Any, labels: Sequence[tuple[int, int] | None]) -> tuple[str, int]:
+        """One allocation of ``fn``, unit i of the slot and step ``labels[i]``, None for a unit of no request: its descriptor
+        id and first unit."""
         tid = descriptor_id(fn)
         self.fns.setdefault(tid, fn)
         start = self.units.get(tid, 0)
         self.units[tid] = start + len(labels)
-        self.spans.setdefault(tid, []).extend((start + i, 1, *label) for i, label in enumerate(labels))
+        self.spans.setdefault(tid, []).extend((start + i, 1, *(label or (None, 0))) for i, label in enumerate(labels))
         self.starts.setdefault(tid, []).append(start)
         return tid, start
 
@@ -381,7 +382,8 @@ def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int, int]], axi
     while i < len(groups):
         at, digits, step, slot = groups[i]
         j = i + 1
-        while j < len(groups) and groups[j][1] == digits and groups[j][3] == slot and groups[j][2] == step + (j - i) * delta:
+        while (j < len(groups) and groups[j][1] == digits and groups[j][3] == slot and groups[j][2] == step + (j - i) * delta
+               and groups[j][0] == at + (j - i) * math.prod(r for r, _ in digits)):
             j += 1
         out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step, slot))
         i = j
@@ -391,21 +393,28 @@ def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int, int]], axi
 def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
     """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, consecutive slots'
     runs of one length at one step side by side, are one entry (the slot from the first of them, then the run), and like
-    entries that follow on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused
-    where a run's slot is at or past ``slots``."""
+    entries that follow on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Units of
+    no request (slot None) are entries of no slot digit, a run each. Refused where a run's slot is at or past ``slots``."""
     out = []
     for tid, spans_ in spans.items():
         merged: list[tuple[int, int, int, int]] = []
-        for at, n, slot, step in sorted(spans_):
+        loose: list[list[int]] = []
+        for at, n, slot, step in sorted(spans_, key=lambda s: s[0]):
+            if slot is None:
+                if loose and loose[-1][0] + loose[-1][1] == at:
+                    loose[-1][1] += n
+                else:
+                    loose.append([at, n])
+                continue
             if not 0 <= slot < slots:
                 raise Unexpressible(f"{tid}: units from {at} are slot {slot}'s, not one of the circuit's {slots}")
-            if merged and merged[-1][2:] == (slot, step):
+            if merged and merged[-1][2:] == (slot, step) and merged[-1][0] + merged[-1][1] == at:
                 merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
             else:
                 merged.append((at, n, slot, step))
         runs: list[list[tuple[int, int, int, int]]] = []
         for r in merged:
-            if runs and (p := runs[-1][-1])[2] + 1 == r[2] and (p[1], p[3]) == (r[1], r[3]):
+            if runs and (p := runs[-1][-1])[2] + 1 == r[2] and (p[1], p[3]) == (r[1], r[3]) and p[0] + p[1] == r[0]:
                 runs[-1].append(r)
             else:
                 runs.append([r])
@@ -414,6 +423,7 @@ def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> 
             groups = _follow(groups, axis, delta)
         out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step, slot)
                 for at, d, step, slot in groups]
+        out += [IF.InferenceEntry(tid, at, (n,), ("-",), 0) for at, n in loose]
     return out
 
 
