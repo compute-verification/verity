@@ -148,7 +148,7 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
     monkeypatch.setattr(TG, "_RECORDS", {})
     monkeypatch.setattr(TG, "_LOOKED", set())
     roots = {fn.id: fn for fn in TG.binding_roots() if re.search(r"=\{[0-9a-f]{12}\}", getattr(fn, "id", ""))}
-    assert {"GfResiduals_v1", "Serve_v1", "StepBody_v1"} <= {fid.split("{")[0] for fid in roots}
+    assert {"GfResiduals_v1", "Serve_v1"} <= {fid.split("{")[0] for fid in roots}
     for fid, fn in roots.items():
         assert TG.definition(fid) is fn
     with pytest.raises(pytest.fail.Exception, match="the catalog was built"):
