@@ -64,9 +64,9 @@ before a summary's `used` and on the root nodes' reads), a rowed segment's copie
 `Seg.split` leaves none in a read), and periodic intervals whose runs don't fill their period, run by run (`PI.emit`,
 counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`), the
 leaves of a strided piece taken through a parameter and the rows of a mapped axis a batch member's leaves are taken
-through (`throughArg`), and segments of copies that may overlap or go
-backwards, or that meet other reads of the same inference block, expanded copy by copy (`copiesStep`, `widthIn`:
-`freshWalk`). Serve_v1 meets none of the walks, at word level or on bits.
+through (`throughArg`), the runs of a mapped argument a node's members read (`nodeReads`, `argSpanCount`), and segments
+of copies that may overlap or go backwards, or that meet other reads of the same inference block, expanded copy by copy
+(`copiesStep`, `widthIn`: `freshWalk`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -852,6 +852,13 @@ def argSpans (node : Node) (i m : Nat) (used : Ivs) : Array (Nat × Nat) :=
     else used
   | _ => used
 
+/-- How many runs `argSpans node i m used` gives each member, at most: per used run its rows of a batch's mapped axis
+(`memberSpanCount`), else one. -/
+def argSpanCount (node : Node) (i : Nat) (used : Ivs) : Nat :=
+  match node.form with
+  | .batch => used.foldl (fun n (lo, hi) => n + memberSpanCount node.args[i]! lo hi) 0
+  | _ => used.size
+
 /-- The positions of argument `i` of node `k` its members read, each `used` of its parameter (`argSpans`), all members at
 once: per used run (and row of a batch's mapped axis) one piece of rows, a member a row, as a piece of the body
 (`throughPS`); none when the argument isn't one piece. -/
@@ -966,6 +973,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
     else if !perMember then out := out ++ (← resolve i u)
     else if u.covers lv then out := out ++ (← resolve i (whole i))
     else
+      walkAtMost "runs of a mapped argument a member reads, one by one" (argSpanCount node i u)
       match ← memberRows c node k i u with
       | some ps => for p in ps do out := out ++ (← down c fuel p)
       | none =>

@@ -1098,6 +1098,7 @@ theorem nodeReads_comp (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (hn 
               · exact Or.inl h
               · exact Or.inr (Or.inl ⟨i, b2 s h⟩)
             · rename_i hcv
+              have hy := walkAtMost_bind _ _ _ hy
               obtain ⟨mr, hmr, hy⟩ := Walk.except_bind_ok hy
               rcases mr with _ | ps
               · have hy := walkAtMost_bind _ _ _ hy

@@ -953,6 +953,7 @@ theorem nodeReads_comp_ok (c : Desc.Ctx) (k : Nat) (node : Flock.Program.Node) (
             exact ⟨by rw [if_neg hs, if_neg hpm, if_pos hcv]; exact readLoop_ok c k i _ #[] lift (ok_bind_pure hl),
               _, hy.symm⟩
           · rename_i hcv
+            have hy := walkAtMost_bind _ _ _ hy
             obtain ⟨mr, hmr, hy⟩ := Walk.except_bind_ok hy
             rcases mr with _ | ps
             · have hy := walkAtMost_bind _ _ _ hy
