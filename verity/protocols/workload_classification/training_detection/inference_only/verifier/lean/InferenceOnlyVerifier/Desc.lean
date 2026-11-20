@@ -62,9 +62,9 @@ lanes don't each resolve to one piece of their periods (`segDown`), a piece as i
 whole lane's first row run by run and its levels, each level's radix times the intervals before it: `Piece.pisWalk`,
 before a summary's `used` and on the root nodes' reads), a rowed segment's copies period by period (`readsWalk`;
 `Seg.split` leaves none in a read), and periodic intervals whose runs don't fill their period, run by run (`PI.emit`,
-counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`). Still
-walked unbounded: the leaves of a strided or lane piece taken through a parameter (`throughArg`), and segments of copies
-that overlap other reads of the same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
+counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`), and the
+leaves of a strided piece taken through a parameter (`throughArg`). Still walked unbounded: segments of copies that
+overlap other reads of the same inference block (expanded copy by copy, `freshWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
@@ -777,6 +777,7 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
   | fuel + 1, k, m, i, g => do
     let node ← c.node k
     let some a := node.args[i]? | throw "program"
+    walkAtMost "leaves of a parameter taken through an argument, one by one" (g.rows * if g.stride == 1 then 1 else g.len)
     let ap := c.arg k i
     let one (lo hi : Nat) : Except String (Array Seg) := do
       let mut out := #[]

@@ -47,9 +47,9 @@ ALLOWED: dict[str, str] = {
         "InferenceOnlyVerifier.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit. The scan sees only that walk; the module docstring lists every walk the file takes: "
         "those refused past WALK (walkAtMost, among them a piece as intervals, Piece.pisWalk, a rowed segment's copies, "
-        "readsWalk, and intervals emitted run by run, PI.emit, counted by ivsCount), and two still unbounded: the leaves "
-        "of a strided or lane piece taken through a parameter (throughArg), and copies that overlap other reads of the "
-        "same inference block expanded copy by copy (freshWidth)",
+        "readsWalk, intervals emitted run by run, PI.emit, counted by ivsCount, and the leaves of a strided piece taken "
+        "through a parameter, throughArg), and one still unbounded: copies that overlap other reads of the same "
+        "inference block expanded copy by copy (freshWidth)",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
         "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
