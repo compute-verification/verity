@@ -16,6 +16,7 @@ from verity_cli import served_table as ST
 
 from tests.program.predict.test_close_record import _close
 from tests.program.predict.test_window_rows import RUN as RUN_ROOT
+from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.predict.close_record import Record
 
@@ -24,7 +25,7 @@ COMPILER = {"name": "c", "digest": "cd" * 64}
 #: what a card's serve writes in serve.json of the application's checkpoint (remote's REPO, REV and PRECISION) and of its
 #: device (`serve_seal.target_of`), the default profile standing in for the card's
 SERVED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "precision": "bfloat16",
-          "execution": "bi-eager"}
+          "execution": "bi-eager", "default_seed": DEFAULT_SEED}
 PROGRAM, WORKLOAD = "ab" * 64, "12" * 64
 
 
@@ -93,6 +94,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     (tmp_path / "run").mkdir()
     path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
     rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
+    err = "\n".join(f.read_text()[-2000:] for f in sorted(d.glob("window-circuit-*.err")))
+    log += f"\n(the window circuit's log, which stays on the node:)\n{err}"
     assert "PREFLIGHT" not in log and "ROW" not in log.replace("no ROW read", ""), log
     assert "SEAL: the window's seal" in log and ": PASS" in log.split("SEAL: ")[1].splitlines()[0], log
     assert "COMPILER: the record's registered compiler is predict row's: PASS" in log, log

@@ -1927,11 +1927,11 @@ road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application l
   if ! command -v gpu-lease > /dev/null; then
     for c in "${only[@]}"; do
       owner="memory accounting's"; [ "$c" != pouw ] || owner="compute accounting's"
-      step_refused "$c" "needs a card: its piece takes its own gpu-lease, and this node has none: $owner"
+      step_refused "${c/#pouw/pearl-plus}" "needs a card: its piece takes its own gpu-lease, and this node has none: $owner"
     done
     return 0
   fi
-  if pieces "${only[@]/#/--only=}"; then RAN+=("${only[@]}"); else FAILED+=("${only[@]}"); fi
+  if pieces "${only[@]/#/--only=}"; then RAN+=("${only[@]/#pouw/pearl-plus}"); else FAILED+=("${only[@]/#pouw/pearl-plus}"); fi
 }
 road_wipe() {  # the wipe runs under the serve's lease before its engine loads, so the road only reads what it answered
   [ -n "${WIPE_CMD:-}" ] || return 0
