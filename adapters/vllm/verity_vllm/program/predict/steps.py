@@ -112,12 +112,13 @@ request instead: a refused request's rows and Program leave the compilation, and
 KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
-transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
+transfer gates (the ingress parse and the token selects, each a select by its body: `egress`), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
 --wrapper request`, in class G at the unit's `--launch-context` and `--batched`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
 from __future__ import annotations
 
+import functools
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -125,8 +126,8 @@ from pathlib import Path
 from typing import Any
 
 import verity_vllm.pipeline.advice_code.format as I1
-from verity.circuits.codec import program_digest
-from verity.circuits.defs import bind
+from verity.circuits.codec import definition_digest, definition_entry, program_digest
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity_torch.prune import dead_units
 
 from verity_vllm.definitions.registry import io_shell as IO
@@ -152,8 +153,41 @@ from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
 SCHEMA = COMPILED_STEPS_SCHEMA
-#: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
+#: the token-select families, whose registered composites `egress` holds a unit's body to: its sampled ids are a request
+#: Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
+
+
+@functools.cache
+def _selects() -> tuple[CompositeDefinition, ...]:
+    from verity_vllm.definitions.registry.catalog import load
+
+    reg, errors = load()
+    if errors:
+        raise ValueError(f"the registry's token selects can't be listed: {errors[0]}")
+    return tuple(d for d in reg.defs.values() if isinstance(d, CompositeDefinition) and d.name in EGRESS)
+
+
+def egress(fn: Any) -> bool:
+    """Whether ``fn`` is a token select by its body, whatever its name: some registered `EGRESS` composite bound at ``fn``'s
+    statics has the definition digest (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
+    if not isinstance(fn, SpecializedDefinition):
+        return False
+    mine = None
+    for sel in _selects():
+        if set(sel.statics) != set(fn.bindings):
+            continue
+        try:
+            want = bind(sel, **fn.bindings)
+        except (TypeError, ValueError):
+            continue
+        if want is fn:
+            return True
+        mine = mine or definition_entry(fn)
+        theirs = definition_entry(want)
+        if definition_digest({**mine, "id": theirs["id"]}) == definition_digest(theirs):
+            return True
+    return False
 
 
 @dataclass(frozen=True)
@@ -282,8 +316,8 @@ class Compiled:
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
-        callees = {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes}
-        ids |= {i for i in callees if i.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        callees = {n.fn.id: n.fn for p in self.programs.values() for n in p.fn.body.nodes}
+        ids |= {i for i, fn in callees.items() if egress(fn)}
         return tuple(sorted(ids))
 
     def summary(self) -> dict:
