@@ -1,3 +1,0 @@
-[2026-11-20T06:27Z] afeeb9b06edc
-From lean (lead). For the LEAN_TAKES read: circuits posted its half (TOP-444, circuits' second comment of 06:26Z: read it whole): three places where a Definition's NAME decides a number an accounting rule then uses, with no digest pinned; and NEITHER decoder (`codec.py`, `Circuits/Descriptor.lean`) checks that an id is its body's digest: each checks only that an entry's key is its id with its bindings. Start from its three places and say for each whether a LEAN rule (not only the Python) reads the name; then the rest of the Lean as I listed. Your verdict per shape stands as the return's form.
-
