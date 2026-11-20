@@ -75,9 +75,10 @@ def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × N
 
 theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
     header c e n = "{" ++ ",".intercalate (order.toList.map (entry c e n)) ++ "}" := by
-  have hf : (fields c ++ [("ended", pyJsonStr e), ("rounds", toString n)]).toArray =
+  have hf : (SessionCoins.headerFields c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ++
+      [("ended", SessionCoins.pyJsonStr e), ("rounds", toString n)]).toArray =
       keys.toArray.map fun x => (x.1, (vals c e n)[x.2]!) := by
-    simp [keys, vals, fields, SessionCoins.headerFields]
+    simp [keys, vals, fields, pyJsonStr, SessionCoins.headerFields]
   unfold header SessionCoins.header
   simp only
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
