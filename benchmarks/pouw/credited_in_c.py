@@ -334,17 +334,17 @@ def _field_starts(t) -> list[int]:
     return out
 
 
-def node_outputs(program, values: dict, skip: set[str]) -> dict[int, np.ndarray]:
+def node_outputs(program, values: dict, skip: set[str], at: dict | None = None) -> dict[int, np.ndarray]:
     """Each root node of the laid ``program`` but its inputs and the nodes of ``skip``'s templates, evaluated on C's
     ``values`` one node at a time (`evaluate_batch` of the node's Definition on the leaves each member reads, by C's
-    gates): its members' outputs, one row a member."""
+    gates): its members' outputs, one row a member; ``at``, when given, filled with every gate's value."""
     from verity.circuits.cut import member_refs
     from verity.circuits.evaluation import evaluate_batch
     from verity.circuits.codec import descriptor_id
     from verity.circuits.layout import resolve
     from verity.circuits.program import is_input
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    scope, at = program.circuit.root_scope, {}
+    scope, at = program.circuit.root_scope, {} if at is None else at
     for v, x in values.items():
         gates = REG.parameter_gates(program, v)
         words = _flat(x)
@@ -858,9 +858,154 @@ def door(a) -> int:
     return 0
 
 
+WRITERS = ("PearlPlusTileSeed_v", "PearlPlusTileLine_v", "PearlPlusGramRow_v")
+
+
+def window(a) -> int:
+    """C's laid units as a window (`interface.Window`) for ``records_audit.py audit``, as `one_linear.py window` writes
+    its own: each root unit of the laid C a unit of its template, in C's order (``order``); each port C feeds from other
+    units a wire (`interface.Wire`) of each of its rows from one writer's output field, whole, cut into those rows where
+    there are several (``cuts``); each port C feeds from its parameters a run input the unit commits (``external``),
+    the public row among them. ``--forge writers``: every Seed, Line and Gram row unit's first output word with its
+    lowest bit flipped before the commitment, so every sampled writer holds a forged output. Refused by name where a
+    port reads part of an output field or both a parameter and a unit (``WINDOW-PORT``)."""
+    k, tm, tn, n, m = map(int, a.size.split(","))
+    from verity.circuits import laying as LY
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.cut import member_refs
+    from verity.circuits.layout import resolve
+    from verity.circuits.program import is_input
+    from verity.commitments import docket_digest as DD
+    from verity.commitments.periods import interface as IF
+    from verity.protocols.proofs.spot.prover import docket as DK
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    t0, out = time.perf_counter(), Path(a.out)
+    ln = linear(k, m, n, (tm, tn), a.reader)
+    program = LY.lay(ln.program, fits)
+    params = [v for v, _ in program.fn.signature()[0]]
+    supplied = tuple(v for v in params if v not in PRIVATE)
+    w_reg: dict = {}
+
+    def root_of(w: list) -> bytes:
+        w_reg.update(register(program, rows_of(ln, {"w": w}), supplied))
+        return w_reg["w"].root
+
+    good, _served = honest(k, m, n, ln, 7, "credited-in-c", random.Random("credited-in-c/salt").randbytes(32), root_of)
+    at: dict = {}
+    outs = node_outputs(program, good, set(), at)
+    scope, nodes = program.circuit.root_scope, program.root.body.nodes
+    fns, units, base, order = {}, {}, {}, []
+    for kk, nd in enumerate(nodes):
+        if is_input(nd.fn):
+            continue
+        tid = descriptor_id(nd.fn)
+        fns.setdefault(tid, nd.fn)
+        base[kk] = units.get(tid, 0)
+        units[tid] = base[kk] + (nd.n if nd.form == "batch" else 1)
+        if order and order[-1][0] == tid:
+            order[-1] = (tid, order[-1][1], units[tid] - order[-1][1])
+        else:
+            order.append((tid, base[kk], units[tid] - base[kk]))
+    wires, cuts, external = [], {}, set()
+    inputs: dict[int, list] = {}
+    for kk, nd in enumerate(nodes):
+        if kk not in base:
+            continue
+        tid, count = descriptor_id(nd.fn), outs[kk].shape[0]
+        axes = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
+        inputs[kk] = []
+        for (p, ty), arg, ax in zip(nd.fn.signature()[0], nd.args, axes):
+            rows, fed = [], set()
+            for mm in range(count):
+                rs = member_refs(arg, ax, mm) if nd.form == "batch" else arg.refs
+                got = [tuple(rs[j]) for j in range(rs.count)]
+                wired = [r[0] == "n" and not is_input(nodes[r[1]].fn) for r in got]
+                if any(wired) != all(wired):
+                    raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads both a parameter and a unit")
+                fed.add(all(wired))
+                if not all(wired):
+                    rows.append([at[resolve(scope, r)] for r in got])
+                    continue
+                pieces = []
+                for r in got:
+                    wn = nodes[r[1]]
+                    starts = _field_starts(wn.fn.signature()[1])
+                    mw, off = divmod(r[2], starts[-1])
+                    f = next(i for i in range(len(starts) - 1) if starts[i] <= off < starts[i + 1])
+                    if pieces and pieces[-1][:3] == (r[1], mw, f) and pieces[-1][3] + 1 == off:
+                        pieces[-1] = (r[1], mw, f, off)
+                    elif off == starts[f]:
+                        pieces.append((r[1], mw, f, off))
+                    else:
+                        raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads part of an output field of node {r[1]}")
+                for kw, mw, f, last in pieces:
+                    if last + 1 != _field_starts(nodes[kw].fn.signature()[1])[f + 1]:
+                        raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads part of an output field of node {kw}")
+                c = len(pieces)
+                if cuts.setdefault(tid, {}).setdefault(p, c) != c:
+                    raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads {c} writers' fields at one unit and "
+                                     f"{cuts[tid][p]} at another")
+                for j, (kw, mw, f, _last) in enumerate(pieces):
+                    wires.append(IF.Wire(tid, p, descriptor_id(nodes[kw].fn), f"o{f}", base[kk] + mm, (1,), base[kw] + mw,
+                                         (0,), (j, 1) if c > 1 else (0, 1)))
+            if fed == {False}:
+                external.add(f"{tid}/{p}")
+                inputs[kk].append(np.asarray(rows, dtype=np.int64))
+            else:
+                inputs[kk].append(None)
+    cuts = {t: {p: c for p, c in cs.items() if c > 1} for t, cs in cuts.items()}
+    cuts = {t: cs for t, cs in cuts.items() if cs}
+    circuit = IF.Circuit("credited_in_c", tuple((fns[t], c) for t, c in units.items()), external=tuple(sorted(external)),
+                         wires=tuple(IF.coalesce(wires)), cuts=cuts, order=tuple(order))
+    wprog, wquery = circuit.program()
+    law = S.params_sampling_design(a.rule, wprog, wquery, None)[0]
+    win = IF.Window(circuit, "ab" * 64, law, 1)
+
+    def as_rows(leaves: np.ndarray, ty, port: str, lay) -> np.ndarray:
+        words = dict(lay.rows + lay.outs)[port]
+        width = dict(zip((q for q, _ in lay.rows + lay.outs), lay.widths))[port]
+        return IF.rows_of_leaves(leaves, ty, words).view(f"<u{width // 8}")
+
+    forged = []
+    for kk, nd in enumerate(nodes):
+        if kk not in base:
+            continue
+        lay, (sig, ret) = IF.layout(nd.fn), nd.fn.signature()
+        ins = [None if x is None else as_rows(x, ty, p, lay) for x, (p, ty) in zip(inputs[kk], sig)]
+        starts = _field_starts(ret)
+        fields = [as_rows(outs[kk][:, starts[f]:starts[f + 1]], ty, f"o{f}", lay) for f, ty in enumerate(IF._fields(ret))]
+        tid = descriptor_id(nd.fn)
+        if a.forge == "writers" and tid.startswith(WRITERS):
+            fields[0] = fields[0].copy()
+            fields[0].view("<u2")[:, 0] ^= 1
+            forged += [(tid, base[kk] + mm) for mm in range(fields[0].shape[0])]
+        win.record(nd.fn, ins, fields)
+    if bad := win.mismatches():
+        print("MISMATCHED " + json.dumps({t: us[:8] for t, us in bad.items()}), flush=True)
+    win.supply()
+    out.mkdir(parents=True, exist_ok=True)
+    win.write(win.close(), out, {"credited_in_c": "window"}, registrar=DK)
+    (out / "pins.json").write_text("[]")
+    print("STEP " + json.dumps({"step": "window", "size": {"K": k, "TM": tm, "TN": tn, "N": n, "M": m},
+                                "wall_s": round(time.perf_counter() - t0, 1), "peak_gib": _peak_gib(), "units": units,
+                                "external": sorted(external), "cuts": cuts, "wires": len(circuit.wires), "law": law,
+                                "forge": a.forge, "forged": len(forged), "forged_templates": sorted({t for t, _ in forged}),
+                                "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),
+                                "docket_digest": DD.digest(json.loads((out / "registration.json").read_text()))},
+                               default=str), flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd")
+    wn = sub.add_parser("window")
+    wn.add_argument("--size", default="256,1,1,1,2", help="K,TM,TN,N,M")
+    wn.add_argument("--out", type=Path, required=True)
+    wn.add_argument("--rule", required=True, help="the sampling design over the window's proof blocks")
+    wn.add_argument("--forge", choices=("writers",), default=None)
+    wn.add_argument("--no-reader", dest="reader", action="store_false")
     st = sub.add_parser("stage")
     st.add_argument("--size", default="256,1,1,1,2", help="K,TM,TN,N,M")
     st.add_argument("--lower", required=True, help="flock-lower-check, Lean's lowering")
@@ -885,6 +1030,8 @@ def main() -> int:
     if a.cmd == "door":
         a.session = {t: [s for u, s in a.session if u == t] for t, _ in a.session}
         return door(a)
+    if a.cmd == "window":
+        return window(a)
     return stage(a)
 
 
