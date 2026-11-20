@@ -5,7 +5,9 @@ names), ``ERROR`` (a crash, a panic, an undocumented status, no record) or ``FAI
 honest arm on ``ACCEPT``; a negative on ``REFUSED`` by the name it expects, or for ``forged-one`` on ``ACCEPT`` when its
 forged unit's block is not drawn. A crash is never a refusal.
 
-    one_linear_arms.py ARM STATUS LOG SUMMARY_JSON   # prints ``ARM <arm> <OUTCOME> <why>``; exits 0 when the arm passes
+    one_linear_arms.py ARM STATUS LOG SUMMARY_JSON [LOG...]   # prints ``ARM <arm> <OUTCOME> <why>``; exits 0 when the arm passes
+
+Every LOG is read whole (the arm's own log holds only the tail of its audit's stderr), and a missing one is skipped.
 """
 from __future__ import annotations
 
@@ -96,10 +98,11 @@ def judge(arm: str, status: int, log: str, summary: dict | None) -> tuple[str, s
 
 
 def main(argv: list[str]) -> int:
-    arm, status, log, path = argv
+    arm, status, log, path, *more = argv
     p = Path(path)
     summary = json.loads(p.read_text()) if p.is_file() else None
-    outcome, why, passed = judge(arm, int(status), Path(log).read_text(errors="replace"), summary)
+    text = "\n".join(Path(f).read_text(errors="replace") for f in (log, *more) if Path(f).is_file())
+    outcome, why, passed = judge(arm, int(status), text, summary)
     print(f"ARM {arm} {outcome} {why}")
     return 0 if passed else 1
 

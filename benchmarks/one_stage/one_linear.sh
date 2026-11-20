@@ -29,7 +29,7 @@ except OSError:
 keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "failed_drawn", "forged")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
-  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json | tee $B/$1.arm
+  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json $B/$1/audit.err $B/$1/window.txt | tee $B/$1.arm
 }
 audit honest $RULE "--weights committed" ""; H=$?
 audit registered $RULE "" ""; G=$?

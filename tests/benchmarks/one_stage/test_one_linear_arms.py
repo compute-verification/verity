@@ -86,3 +86,19 @@ def test_the_accept_line_names_the_roots_refusal_and_states_an_accept_without_c(
     assert got[1] == ("ACCEPT one window, 288 units, 4 drawn: except with probability 1/2, at most 45 of its 288 units "
                       "are in blocks that are not correct (no C given, so no AND-gate figure)")
     assert "record = command" in got[2]
+
+
+def test_a_traceback_past_the_logs_tail_is_found_in_the_whole_audit_err(tmp_path):
+    """The arm's log holds the last 3000 bytes of its audit's stderr, which can start after a traceback's header: the
+    judge reads the whole stderr it is given, so a crash whose header only the whole file holds is still an ERROR."""
+    err = TRACEBACK.replace("+ exit 5\n", "") + "x" * 4000 + "\n"
+    (tmp_path / "arm.log").write_text(WINDOW + err[-3000:])
+    (tmp_path / "audit.err").write_text(err)
+    (tmp_path / "summary.json").write_text(json.dumps(NOT_OK))
+    argv = [sys.executable, str(ARMS), "forged-one", "1", str(tmp_path / "arm.log"), str(tmp_path / "summary.json")]
+    tail = subprocess.run(argv, capture_output=True, text=True, check=False)
+    whole = subprocess.run([*argv, str(tmp_path / "audit.err"), str(tmp_path / "missing.txt")], capture_output=True,
+                           text=True, check=False)
+    assert tail.stdout.startswith("ARM forged-one REJECT") and tail.returncode == 1
+    assert whole.stdout.startswith("ARM forged-one ERROR a crash: Traceback (most recent call last):"), whole.stdout
+    assert whole.returncode == 1
