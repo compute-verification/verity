@@ -446,10 +446,7 @@ def _text(bits: Bits, ins: Sequence[int], body, outs: Sequence[int], num: Mappin
     for b in ins:
         k, v = bits.kind[bits.gate_of(b)]
         lines.append(v if k == "input" else WIRE)
-    try:
-        lines += [" ".join([kind, *(str(num[o]) for o in ops)]) for kind, ops in body]
-    except KeyError as e:
-        raise Refused("E_UNREAD", f"a gate reads bit {e.args[0]} of C, which no port carries") from None
+    lines += [" ".join([kind, *(str(num[o]) for o in ops)]) for kind, ops in body]
     lines += [f"out {num[b]}" for b in outs]
     return ("\n".join(lines) + "\n").encode("ascii")
 
