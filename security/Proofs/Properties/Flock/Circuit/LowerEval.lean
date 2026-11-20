@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
+public import Proofs.Properties.Flock.Circuit.LowerEval.PlacesAll
 public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
