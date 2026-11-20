@@ -128,6 +128,15 @@ def test_what_lean_does_not_decode_python_does_not(name, why):
         assert str(e.value) == f"E_DESCRIPTOR: {_unescape(why)}"
 
 
+def test_a_template_wide_on_its_return_alone_is_wide():
+    """Lean's guard on `C32`'s `C_v1` kept to its bit parameter: the lift leaves it wide on its return."""
+    from verity.circuits.codec import lift_shape
+    desc = json.loads(descriptor("C32"))
+    body = desc["definitions"]["C_v1"]["body"]
+    body["params"] = [p for p in body["params"] if p[1] == ["Value", 1]]
+    assert len(body["params"]) == 1 and lift_shape(desc, "C_v1")[1] == ["C_v1"]
+
+
 def test_a_refused_block_reaches_no_executable():
     def never():
         raise AssertionError("built an executable for a C_S the door refuses")
