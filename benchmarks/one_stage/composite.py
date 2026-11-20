@@ -60,7 +60,11 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library and this
+# tree's `lean_child`, whose own imports are the standard library's, only.
 PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.
@@ -316,7 +320,7 @@ def run(a: argparse.Namespace) -> int:
            *blobs]
     rc, verdict, ran = 0, None, None
     if a.exe:
-        p = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        p = LC.run(cmd, check=False, ok_statuses=LC.CHECK_EXITS)
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
         write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
         verdict = outcome(PRODUCTS[a.product], answer)

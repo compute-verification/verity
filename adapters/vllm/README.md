@@ -140,7 +140,7 @@ verity_vllm/
                      of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
-tools/               scripts run by path: advice_compile.py, ratchet_gate.py, suite_parts.py
+tools/               scripts run by path: advice_compile.py, ratchet_gate.py
 ~~~
 
 The suite, `verity-vllm`, is under the root's tests: `tests/adapters/vllm/tests/`, a directory for each subpackage, with the
@@ -157,8 +157,7 @@ vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh`
 path for this user (`${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv`, which the benchmarks' `env.sh` reads), and
 `--record-venv PATH` records one a machine bootstrapped before it already has. The tools read their inputs
 relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
-(`uv run tools/check/suites.py verity-vllm` from the root), and `python3 tools/suite_parts.py launch` splits it into
-parallel `research run` jobs.
+(`uv run tools/check/suites.py verity-vllm` from the root).
 
 To serve on a machine of your own, clone this repository without the history's file contents and run the script from the
 clone's root (`--dry-run` first shows every path and step):

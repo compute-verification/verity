@@ -53,7 +53,7 @@ from pathlib import Path
 import a5
 from composite import canonical, write_private
 
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC, proofs as PF
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 ID = ONE_STAGE_PROTOCOL_V2
@@ -193,8 +193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if not a.exe:
         return 0
-    p = subprocess.run([a.exe, "check", *(str(a.out / f) for f in ("params.json", "commitment.bin", "evidence.json")),
-                        *v2["blobs"]], capture_output=True, text=True, check=False)
+    p = LC.run([a.exe, "check", *(str(a.out / f) for f in ("params.json", "commitment.bin", "evidence.json")),
+                *v2["blobs"]], check=False, ok_statuses=LC.CHECK_EXITS)
     line = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ""
     if not line:
         print(f"V2 no answer (exit {p.returncode})", flush=True)

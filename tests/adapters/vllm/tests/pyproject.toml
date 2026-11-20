@@ -47,7 +47,6 @@ untraced = [
     "program/test_derive_transfer.py",
     "protocols/poub/test_commit_session.py",
     "tools/test_ratchet_gate.py",
-    "tools/test_suite_parts.py",
 ]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
 # which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the

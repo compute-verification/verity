@@ -11,6 +11,7 @@
 # env: CPUS=16  N=16385 (k_log 21 at one VU a block: nbl 15, m 36)  K=16 (nbl 4, m 25)  FLOCK_WORK as 91-plain-hidden.sh's
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 if [ -z "${PH_PINNED:-}" ]; then
   if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
     . verity/protocols/proofs/flock/prover/pod/cpu-slices.sh

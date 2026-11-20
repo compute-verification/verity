@@ -1,8 +1,6 @@
 {
   "rule": "P6 (one CLI; no __main__, heredocs or python -c)",
   "entries": [
-    {"file": "verity_vllm/ops/cov_pod.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY312 <<", "count": 2},
-    {"file": "verity_vllm/ops/cov_pod.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 2},
     {"file": "verity_vllm/ops/pod_bootstrap.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY <<", "count": 2},
     {"file": "verity_vllm/ops/pod_bootstrap.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 5},
     {"file": "verity_vllm/ops/pod_fa2_tap.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY <<", "count": 2},

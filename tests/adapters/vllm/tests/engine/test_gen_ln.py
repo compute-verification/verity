@@ -37,7 +37,7 @@ C = pythia.C
 
 def test_embedded_hf_config_is_the_registered_one():
     if not pythia.HF_CONFIG_PATH.exists():
-        pytest.skip("data/hf_configs is not shipped to pods")
+        pytest.skip("the role's config.json is not shipped to pods")
     assert json.loads(pythia.HF_CONFIG_PATH.read_text()) == pythia.HF_CONFIG
 
 

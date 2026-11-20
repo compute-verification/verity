@@ -72,7 +72,8 @@ from verity.commitments.docket_digest import digest as registration_digest
 from . import one_circuit as OC
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
-from .settings import TMPL_SWITCH, door_tmpl
+from .settings import TMPL_SWITCH, door_tmpl, lean_env
+from . import lean_child as LC
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
@@ -142,8 +143,8 @@ class Finding:
 
 def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
     """The environment `verify` starts the Lean verifier in: ``environ`` (this process's when None) over `VERIFIER_ENV`, so
-    a variable the caller sets keeps the caller's value. `verifier_env.sh` is the same for a shell job."""
-    return {**VERIFIER_ENV, **(os.environ if environ is None else environ)}
+    a variable the caller sets keeps the caller's value, under `lean_env`. `verifier_env.sh` is the same for a shell job."""
+    return lean_env({**VERIFIER_ENV, **(os.environ if environ is None else environ)})
 
 
 @functools.cache
@@ -568,10 +569,10 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
-                            "--public", str(proof.public), "--partition", str(files["partition"]),
-                            "--program", str(files["program"]), *reads,
-                            "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
+        p = LC.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
+                    "--public", str(proof.public), "--partition", str(files["partition"]),
+                    "--program", str(files["program"]), *reads,
+                    "--session", *map(str, proof.sessions)], env=verifier_env(), ok_statuses=LC.VERIFY_EXITS)
         lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         accepted = any(v.get("accepted") is True for v in lines)
         form = ks_form_why(files["circuit"], proof.public) if accepted else None
@@ -708,7 +709,7 @@ def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tu
         paths = (Path(d, "params.json"), Path(d, "evidence.json"))
         for path, x in zip(paths, (params, evidence)):
             path.write_bytes(_canonical(x))
-        p = subprocess.run([str(v2_executable()), "members", *map(str, paths)], capture_output=True, text=True)
+        p = LC.run([str(v2_executable()), "members", *map(str, paths)], ok_statuses=LC.V2_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -734,8 +735,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
         paths[0].write_bytes(_canonical(own))
         paths[1].write_bytes(_canonical(pr))
-        p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
+        p = LC.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], ok_statuses=LC.V2_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
