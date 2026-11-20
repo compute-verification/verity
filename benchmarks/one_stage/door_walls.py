@@ -67,7 +67,6 @@ import argparse
 import bisect
 import hashlib
 import json
-import os
 import random
 import re
 import subprocess
@@ -345,7 +344,7 @@ class Result:
     key: str | None = None
     rows: str = "not reached"
     row_bits: int | None = None
-    gates: int | None = None
+    gates: int | str | None = None
     tried: list = field(default_factory=list)
 
     @property
@@ -357,7 +356,7 @@ def _err(e: BaseException) -> str:
     return f"{type(e).__name__}: {e}"
 
 
-def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | None]:
+def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | str]:
     """C_S's widest row in bits as `one_circuit.lower` hands it to `Compose.compose` (an input port's bits, an output
     port's 16-bit words), and its root's two-input gates (`count`); None where C_S calls other than one template."""
     from verity.circuits import restrict as R
@@ -369,8 +368,8 @@ def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | None]:
     called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
     try:
         gates = count(D)[descriptor_id(D.root)].gates
-    except Exception:  # noqa: BLE001 - a block the count can't walk still gets its row width
-        gates = None
+    except Exception as e:  # noqa: BLE001 - a block the count can't walk still gets its row width
+        gates = f"uncounted: {_err(e)[:120]}"
     if len(called) != 1:
         return None, gates
     params, ret = D.defs[called[0]].signature()
@@ -744,15 +743,15 @@ def render_floor(rows: Sequence[dict]) -> str:
     return "\n".join(lines)
 
 
-def built_at() -> str:
+def built_at(one_circuit: str = "") -> str:
     """The commit of the tree that built C, and the `one-circuit` commit it holds: the merge-base with that ref where the
-    clone has it, else ``ONE_CIRCUIT`` from the environment."""
+    clone has it, else ``one_circuit`` (``--one-circuit``)."""
     def git(*a: str) -> str:
         p = subprocess.run(["git", "-C", str(ROOT), *a], capture_output=True, text=True)
         return p.stdout.strip() if p.returncode == 0 else ""
     head = git("rev-parse", "HEAD") or "unknown"
     oc = next((m for ref in ("origin/one-circuit", "one-circuit") if (m := git("merge-base", "HEAD", ref))),
-              os.environ.get("ONE_CIRCUIT", ""))
+              one_circuit)
     return f"{head} (one-circuit {oc})" if oc else head
 
 
@@ -1491,6 +1490,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.add_argument("--no-rows", action="store_true")
     a.add_argument("--units", choices=UNITS, default="one")
     a.add_argument("--cap", type=int, default=CAP)
+    a.add_argument("--one-circuit", default="", help="the one-circuit commit C's tree holds, where the clone has no such ref")
     b = sub.add_parser("fuzz")
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--cases", type=int, default=100)
@@ -1523,7 +1523,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         say("PLAN " + json.dumps({"by": by, "blocks": len(plan)}))
     results = census(c, q, args.blocks, exe, log=lambda x: say("BLOCK " + x), rows=not args.no_rows, units=args.units,
                      plan=plan)
-    rows = table(results, hashlib.sha256(c).hexdigest(), built_at())
+    rows = table(results, hashlib.sha256(c).hexdigest(), built_at(args.one_circuit))
     sized = floor_table(results) if args.units != "one" else []
     if args.json:
         Path(args.json).write_text(json.dumps({"circuit": args.circuit, "blocks": args.blocks, "units": args.units,
