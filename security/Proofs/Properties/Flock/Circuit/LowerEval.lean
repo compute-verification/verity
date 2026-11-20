@@ -1312,7 +1312,9 @@ theorem doorLengths_of (hWd : UnitWidths) : DoorLengths := by
     | nil => simp
     | cons x ps ih =>
       intro acc
-      simp only [List.foldl_cons, ih, List.flatMap_cons, List.sum_append, sum_foldl_add]
+      simp only [List.foldl_cons]
+      rw [ih]
+      simp only [List.flatMap_cons, List.sum_append, sum_foldl_add]
       omega
   unfold argBits outBits
   rw [portBits_length, portBits_length, hwa, hwo, hpi, hpo, hg', ← hp, ← hr', sum_foldl_add, ← Array.foldl_toList,
