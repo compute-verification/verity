@@ -1078,6 +1078,23 @@ def lift_shape(desc: dict, start: str) -> tuple[list[str], list[str]]:
                                                                    and on_bits(defs[f]["body"]["ret_type"]))))
 
 
+def odd_fields(desc: dict, fid: str) -> list[tuple[str, str, int, bool]]:
+    """Template ``fid``'s fields as the door's block sees them, each parameter and each return field (`fieldsOf`: a tuple's
+    or a record's fields, else the return), whose bits are not a multiple of 16: (``param`` or ``ret``, its name or index,
+    its bits, whether another field of its side follows it)."""
+    def bits(t): return t[1] if t[0] == "Value" else t[1] * bits(t[2]) if t[0] == "Array" else \
+        sum(bits(f) for f in t[1]) if t[0] == "Tuple" else sum(bits(f) for _, f in t[1])
+    d = desc["definitions"][fid]
+    params, ret = (d["params"], d["ret"]) if d["form"] == "primitive" else (d["body"]["params"], d["body"]["ret_type"])
+    rets = list(enumerate(ret[1])) if ret[0] == "Tuple" else ret[1] if ret[0] == "Record" else [(0, ret)]
+    out = []
+    for side, fs in (("param", params), ("ret", rets)):
+        for i, (n, t) in enumerate(fs):
+            if bits(t) % 16:
+                out.append((side, str(n), bits(t), i + 1 < len(fs)))
+    return out
+
+
 def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
     """(the specialization's id, every definition it uses in the codec's v0 form): `encode_program` of a one-node
     Program that calls it, keeping the definitions reachable from it (not the wrapper, its lowered root or their Input gates)."""
