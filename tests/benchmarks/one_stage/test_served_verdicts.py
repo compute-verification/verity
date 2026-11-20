@@ -6607,7 +6607,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               "    echo '{}' > \"$d/windows.jsonl\"; echo '{}' > \"$d/seals.jsonl\"\n"
               "    echo 'SERVE-OPENAI listening'\n"
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
-              "  *serve_load.py*|*verity_vllm.pipeline.send*) echo '4/4 ok'; exit 0 ;;\n"
+              "  *serve_load.py*|*verity_vllm.inputs.sender*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
               "  *'attester_piece.py front '*' --session '*)\n"
               "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
@@ -6655,7 +6655,7 @@ SERVE_LOAD = "{load} " f"--port 18190 --release {RELEASE_RUN} --out TMP/serve/lo
 VARIED_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/serve_load.py --model verity-int8/Llama-3.2-1B-INT8 "
                                      "--varied 4 --rate 1000 --max-tokens 4 --prompt-range 16:24 --seed 1")
 DATASET = {"LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
-DATASET_LOAD = SERVE_LOAD.format(load="-m verity_vllm.pipeline.send --dataset llama32_1b_fixed_4_27_2 --timing at-once")
+DATASET_LOAD = SERVE_LOAD.format(load="-m verity_vllm.inputs.sender --dataset llama32_1b_fixed_4_27_2 --timing at-once")
 REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate local'
 FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
@@ -6795,8 +6795,8 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
                            release="run", jitter_ms=0.0, out=str(out))
     assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
-    assert SL.send.timings_path(out) == tmp_path / "load.timings.json"
-    doc = json.loads(SL.send.timings_path(out).read_text())
+    assert SL.sender.timings_path(out) == tmp_path / "load.timings.json"
+    doc = json.loads(SL.sender.timings_path(out).read_text())
     assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
     assert [set(r) for r in rows] == [{"user", "release", "at_s", "delay_s", "prompt", "max_tokens", "response"}] * 3
     assert [(t["user"], t["release"], t["at_s"]) for t in doc["requests"]] == [(r["user"], r["release"], r["at_s"]) for r in rows]

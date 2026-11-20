@@ -9,7 +9,7 @@
 # (VLLM_BATCH_INVARIANT=1, eager), then LOADS loads of `adapters/vllm/tools/served_run/serve_load.py --varied` with served_verdicts.sh's
 # REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED, each under a release run of its own. With DATASET (unset: the varied load)
 # each load is served_verdicts.sh's LOAD=dataset instead, the input dataset DATASET at TIMING, which DATASET needs, sent by
-# `verity_vllm.pipeline.send` (REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED unused). The first load is the composed run's
+# `verity_vllm.inputs.sender` (REQUESTS, RATE, PROMPTS, MAX_TOKENS and SEED unused). The first load is the composed run's
 # one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
 # the weights registration before the load. Each lifetime's --out is a serve dir on the node, SERVE_ROOT/runs/RUN/<lifetime>:
@@ -49,7 +49,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   local D=$ROOT/runs/${RESEARCH_RUN_ID:-local}/$1 srv up=0 rc=0 j release ws=()
   local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
     --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
-  [ -n "$DATASET" ] && load=(-m verity_vllm.pipeline.send --dataset "$DATASET" --timing "$TIMING")
+  [ -n "$DATASET" ] && load=(-m verity_vllm.inputs.sender --dataset "$DATASET" --timing "$TIMING")
   [ -n "$WINDOW_STEPS" ] && ws=(--window-steps "$WINDOW_STEPS")
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11

@@ -76,7 +76,7 @@ untraced = [
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 # tests/program/predict/test_window_rows.py serves through network accounting's tests' driver (its scan_traffic.py).
 # A TargetProfile that names its card reads the card's architecture file (target_profile.card_facts).
-# The one sender and the door (`pipeline.send`, `serves`) read the input datasets (input_datasets).
+# The one sender and the door (`inputs.sender`, `serves`) read the input datasets (input_datasets).
 inputs_only = true
 inputs = ["adapters/vllm", "verity", "input_datasets", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards",
           "calibration/hardware/architectures", "verity/README.md",

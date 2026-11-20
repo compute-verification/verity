@@ -1,4 +1,4 @@
-"""The one sender (`verity_vllm.pipeline.send`) against serve-openai's endpoint as served_verdicts runs it (``--admit
+"""The one sender (`verity_vllm.inputs.sender`) against serve-openai's endpoint as served_verdicts runs it (``--admit
 release-order --window-requests N``: `serve_openai.Server`, its `ReleaseOrder` and its `EngineLoop`) over a stand-in engine
 on CPU, playing the remote applications' input dataset at once. Request 0 goes out only once every other one is held, so
 every one of the engine's steps runs all of them, the first included; its timings file carries the dataset's identity, on
@@ -15,8 +15,8 @@ from typing import Any
 import input_datasets
 
 from verity.protocols.resource_accounting.network.prover.admission import ReleaseOrder
-from verity_vllm import serves
-from verity_vllm.pipeline import send
+from verity_vllm.inputs import serves
+from verity_vllm.inputs import sender
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as sp
 
@@ -93,7 +93,7 @@ def test_the_dataset_at_once_runs_every_request_at_each_of_the_windows_steps_and
     n, steps = len(records), serves.SERVES.outputs
     out = tmp_path / "load.jsonl"
     with _Endpoint(engine, n) as port:
-        assert send.main(["--port", str(port), "--dataset", DATASET, "--timing", "at-once", "--release", "0f",
+        assert sender.main(["--port", str(port), "--dataset", DATASET, "--timing", "at-once", "--release", "0f",
                           "--out", str(out)], clock=lambda: float(next(ticks)), wall=lambda: 1.7e9,
                          sleep=lambda s: None) == 0
     assert engine.steps == [n] * steps
@@ -104,7 +104,7 @@ def test_the_dataset_at_once_runs_every_request_at_each_of_the_windows_steps_and
     assert [(r["user"], r["release"], r["at_s"], r["max_tokens"]) for r in rows] == \
         [(b["user"], j, 0.0, steps) for j, b in enumerate(records)]
     assert all(r["response"] == {"token_ids": list(range(500, 500 + steps)), "finish_reason": "length"} for r in rows)
-    doc = json.loads(send.timings_path(out).read_text())
+    doc = json.loads(sender.timings_path(out).read_text())
     identity = input_datasets.open(DATASET).timed("at-once").identity
     assert (doc["dataset"], doc["timing"], doc["identity"]) == (DATASET, "at-once", identity)
     assert (doc["release_run"], doc["start_unix"]) == ("0f", 1.7e9)
@@ -118,15 +118,15 @@ def test_the_dataset_at_once_runs_every_request_at_each_of_the_windows_steps_and
 
 def test_a_dataset_the_door_refuses_sends_nothing(tmp_path, monkeypatch, capsys):
     """A refusal by the door, or by the dataset's read, comes before any request: nothing is posted and no line written."""
-    monkeypatch.setattr(send, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sent")))
+    monkeypatch.setattr(sender, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sent")))
     out = tmp_path / "load.jsonl"
-    assert send.main(["--port", "1", "--dataset", "no_such_dataset", "--timing", "at-once", "--out", str(out)]) == 3
+    assert sender.main(["--port", "1", "--dataset", "no_such_dataset", "--timing", "at-once", "--out", str(out)]) == 3
     assert "[send] REFUSED unknown-dataset" in capsys.readouterr().out
-    assert send.main(["--port", "1", "--dataset", DATASET, "--timing", "rate:fast", "--out", str(out)]) == 3
+    assert sender.main(["--port", "1", "--dataset", DATASET, "--timing", "rate:fast", "--out", str(out)]) == 3
     assert "[send] REFUSED timing" in capsys.readouterr().out
     monkeypatch.setattr(serves, "SERVES", serves.Serves(serves.SERVES.model, serves.SERVES.revision,
                                                         serves.SERVES.precision, serves.SERVES.vocab, "4,16,2"))
-    assert send.main(["--port", "1", "--dataset", DATASET, "--timing", "at-once", "--out", str(out)]) == 3
+    assert sender.main(["--port", "1", "--dataset", DATASET, "--timing", "at-once", "--out", str(out)]) == 3
     assert "[send] REFUSED positions: record 0 (fixed.00000): its prompt is 27 ids, past the class 4,16,2's 16" \
         in capsys.readouterr().out
     assert not out.exists()
@@ -169,11 +169,11 @@ def test_a_request_is_timed_at_its_send_its_first_output_id_and_its_end(monkeypa
     lines = _sse({"choices": [{"text": "", "token_ids": None}]}, {"choices": [{"token_ids": [7]}]},
                  {"choices": [{"token_ids": [8], "finish_reason": "length"}]}, b"[DONE]")
     stream = _Response(lines, now, times=(2, 2, 3, 3, 4, 4, 5, 5), end=6.0)
-    monkeypatch.setattr(send.urllib.request, "urlopen", lambda req, timeout=None: stream)
+    monkeypatch.setattr(sender.urllib.request, "urlopen", lambda req, timeout=None: stream)
     times: dict = {}
-    assert send.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
+    assert sender.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
     assert times == {"send": 1.0, "first_token": 3.0, "done": 6.0}
     whole = _Response([json.dumps({"choices": [{"token_ids": [7]}]}).encode()])
-    monkeypatch.setattr(send.urllib.request, "urlopen", lambda req, timeout=None: whole)
+    monkeypatch.setattr(sender.urllib.request, "urlopen", lambda req, timeout=None: whole)
     times = {}
-    assert send.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}
+    assert sender.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}

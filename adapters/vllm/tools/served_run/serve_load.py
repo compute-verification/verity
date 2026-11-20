@@ -19,7 +19,7 @@ endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-
 order, as the network attester numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 
-A varied run is sent by the one sender (`verity_vllm.pipeline.send.play`), which writes its lines and its timings beside
+A varied run is sent by the one sender (`verity_vllm.inputs.sender.play`), which writes its lines and its timings beside
 ``--out`` as it does an input dataset's.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ import time
 import urllib.request
 from collections.abc import Callable
 
-from verity_vllm.pipeline import send
+from verity_vllm.inputs import sender
 
 CHAT_HEAD = "<|start_header_id|>user<|end_header_id|>\n\n"
 CHAT_TAIL = "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
@@ -91,9 +91,9 @@ def run_varied(a: argparse.Namespace, *, clock: Callable[[], float] = time.monot
     reqs = varied(a.port, a.model, a.varied, rate=a.rate, prompt_tokens=(int(lo), int(hi)), max_tokens=a.max_tokens, seed=a.seed)
     jitter = random.Random(f"{a.seed}/jitter")
     delays = [jitter.uniform(0, a.jitter_ms / 1000) if a.release else 0.0 for _ in reqs]
-    got, times, t0, start_unix = send.play(a.port, reqs, release=a.release, delays=delays, clock=clock, wall=wall, sleep=sleep)
-    send.write(a.out, reqs, got, release=a.release, delays=delays)
-    send.timings_path(a.out).write_text(json.dumps(send.timings(reqs, got, times, t0, release=a.release, start_unix=start_unix),
+    got, times, t0, start_unix = sender.play(a.port, reqs, release=a.release, delays=delays, clock=clock, wall=wall, sleep=sleep)
+    sender.write(a.out, reqs, got, release=a.release, delays=delays)
+    sender.timings_path(a.out).write_text(json.dumps(sender.timings(reqs, got, times, t0, release=a.release, start_unix=start_unix),
                                                    indent=1))
     print(f"[serve-load] varied: {sum('error' not in (r or {}) for r in got)}/{len(got)} ok, prompts "
           f"{min(len(q['body']['prompt']) for q in reqs)}…{max(len(q['body']['prompt']) for q in reqs)} tokens", flush=True)
@@ -128,7 +128,7 @@ def main() -> int:
 
     def go(bodies: list[dict], got: list, i: int) -> None:
         try:
-            got[i] = send.post(a.port, bodies[i])
+            got[i] = sender.post(a.port, bodies[i])
         except Exception as e:  # noqa: BLE001  (recorded with the request)
             got[i] = {"error": f"{type(e).__name__}: {e}"}
 

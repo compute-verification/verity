@@ -258,7 +258,7 @@ def _fixed(t0: float, n: int, steps: int, step_s: float) -> list[dict]:
 
 
 def _fixed_timings(at: float, n: int, steps: int, step_s: float) -> dict:
-    """The at-once load's timings document as `verity_vllm.pipeline.send.timings` writes it: every request at 0, released in order."""
+    """The at-once load's timings document as `verity_vllm.inputs.sender.timings` writes it: every request at 0, released in order."""
     req = lambda j: {"user": f"fixed.{j:05d}", "release": j, "at_s": 0.0, "send_s": 0.0, "first_token_s": step_s,  # noqa: E731
                      "done_s": steps * step_s, "tokens": steps, "ok": True}
     return {"clock": "monotonic", "release_run": "r", "start_unix": at, "requests": [req(j) for j in range(n)]}
@@ -293,7 +293,7 @@ case "$*" in
   "-c "*) echo 0123456789abcdef ;;
   *" serve-openai "*) echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
   *serve_load.py*) echo "[serve-load] varied: 4/4 ok, prompts 16…24 tokens" ;;
-  *verity_vllm.pipeline.send*) echo "[send] llama32_1b_fixed_4_27_2 at at-once: 4/4 ok, prompts 27…27 ids; identity i" ;;
+  *verity_vllm.inputs.sender*) echo "[send] llama32_1b_fixed_4_27_2 at at-once: 4/4 ok, prompts 27…27 ids; identity i" ;;
   *"served_overhead.py metrics"*) echo '{}' ;;
 esac
 """
@@ -325,9 +325,9 @@ def test_served_stock_sh_with_a_dataset_sends_it_through_the_one_sender_and_serv
     serve-openai; $OUT gets status lines alone and the load's counts stay in the private dir."""
     p, lines = _stock(tmp_path, "reps", DATASET="llama32_1b_fixed_4_27_2", TIMING="at-once", WINDOW_STEPS="2")
     assert p.returncode == 0, p.stdout + p.stderr
-    serve, load = _argv(lines, " serve-openai "), _argv(lines, "verity_vllm.pipeline.send")
+    serve, load = _argv(lines, " serve-openai "), _argv(lines, "verity_vllm.inputs.sender")
     assert serve[serve.index("--window-steps") + 1] == "2" and serve.count("--window-steps") == 1
-    assert load[:6] == ["-m", "verity_vllm.pipeline.send", "--dataset", "llama32_1b_fixed_4_27_2", "--timing", "at-once"]
+    assert load[:6] == ["-m", "verity_vllm.inputs.sender", "--dataset", "llama32_1b_fixed_4_27_2", "--timing", "at-once"]
     assert load[6] == "--port" and load[load.index("--release") + 1] == "0123456789abcdef"
     assert not {"--varied", "--rate", "--max-tokens", "--prompt-range", "--seed"} & set(load)
     out = tmp_path / "out"

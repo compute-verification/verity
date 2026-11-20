@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Does: serves ONE window of the vLLM adapter's statement (`verity_vllm.serves`: its model, revision, precision and window
-#   class), the input dataset DATASET (default llama32_1b_fixed_4_27_2) at once through its door, through serve-openai with its rows-sha512 Commit, no scheme, and seals it, each
+# Does: serves ONE window of the vLLM adapter's statement (`verity_vllm.inputs.serves`: its model, revision, precision and window
+#   class), the input dataset at the timing APPLICATION names (default applications/remote.toml), through its door, through serve-openai with its rows-sha512 Commit, no scheme, and seals it, each
 #   window's close planning its class circuit and leaving the card's part of its record (the acquired units' strings,
 #   made where they are committed, under the window's key: close_record.Record.handoff) and, with RECORD_IN_LEASE=1, the
 #   record too (RECORD=0: the plan alone); then, the lease released, on this host's processors: opens the sealed bundle
@@ -11,8 +11,9 @@
 # Needs: PY (default the node's /workspace/venv312/bin/python), gpu-lease (it leases one card for the serve alone, at most
 #   LEASE_MIN minutes, default 30), HF_HOME (default /workspace/hf) holding the model; CUDA_HOME (CUDA $TOOLKIT, default
 #   12.9, machine.py's; TOOLKIT=13.0 on the H200, as served_verdicts.sh takes there),
-#   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. WIPE_CMD, set only where the application
-#   lists the wipe, wipes the leased card before serve-openai starts, its answer in the serve's pieces/wipe (unset: no wipe).
+#   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. APPLICATION (applications/NAME.toml),
+#   read once, gives the dataset, the timing and the class `verity run` gives. WIPE_CMD, set only where the application
+#   lists the wipe, and refused without APPLICATION, wipes the leased card before serve-openai starts, its answer in the serve's pieces/wipe (unset: no wipe).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory
 #   (named private in the run's private-paths.json); under $OUT/window, named private too, the window's registration.json
 #   and circuit.json and the deployment registration (it carries the Program digest); under $OUT smoke.txt: the reader's
@@ -21,12 +22,13 @@
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
 [ -z "${PEARLPLUS_TIE:-}" ] || [ "$PEARLPLUS_TIE" = 0 ] || { echo "h100_smoke.sh: PEARLPLUS_TIE is retired (the window commit takes no tie); unset it" >&2; exit 3; }
-[ -z "${CLASS:-}" ] || { echo "h100_smoke.sh: CLASS is retired (the class is the adapter's statement's, verity_vllm.serves); unset it" >&2; exit 3; }
+[ -z "${CLASS:-}" ] || { echo "h100_smoke.sh: CLASS is retired (the class is the adapter's statement's, verity_vllm.inputs.serves); unset it" >&2; exit 3; }
+[ -z "${DATASET:-}" ] || { echo "h100_smoke.sh: DATASET is retired (the dataset is APPLICATION's, applications/NAME.toml); unset it" >&2; exit 3; }
 [ -z "${SCHEME:-}" ] || { echo "h100_smoke.sh: SCHEME is retired (the smoke serves with no scheme; Pearl+ is served_verdicts.sh's POUW=pearlplus); unset it" >&2; exit 3; }
 SELF=adapters/vllm/tools/served_run/h100_smoke.sh
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
-DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} DATASET=${DATASET:-llama32_1b_fixed_4_27_2} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
 # DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class 4,27,2's
@@ -36,9 +38,14 @@ DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_LAW=rate:4/3654200
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
 export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
-# the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's statement
-read -r MODEL REV PRECISION CLASS <<< "$("$PY" -m verity_vllm.serves)"
-[ -n "$CLASS" ] || { echo "SMOKE REFUSED statement: python -m verity_vllm.serves printed no model and class"; exit 3; }
+[ -z "${WIPE_CMD:-}" ] || [ -n "${APPLICATION:-}" ] || { echo "SMOKE REFUSED application: WIPE_CMD is set where an application" \
+  "lists the wipe, so name it: APPLICATION=applications/NAME.toml"; exit 3; }
+APPLICATION=${APPLICATION:-applications/remote.toml}
+# the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's
+# statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
+SAID=$("$PY" -m verity_vllm.inputs.serves application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
+read -r MODEL REV PRECISION CLASS DATASET TIMING <<< "${SAID%%$'\n'*}"
+echo "${SAID#*$'\n'}"
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
 [ $((SLOTS * PROMPT)) -le "$MNBT" ] || { echo "SMOKE REFUSED class: CLASS=$CLASS's $SLOTS prompts of $PROMPT ids are $((SLOTS * PROMPT))" \
   "tokens, past the engine's $MNBT a step (MNBT): its requests would not start in the window's first step together"; exit 3; }
@@ -73,13 +80,10 @@ export VERITY_PROTOCOLS_CONFIG="{\"private\": \"$SR/private\"}"
 WL=adapters/vllm/workloads/$ROW.json
 say() { echo "$1"; [ "$DRY" = 1 ] || echo "$1" > "$OUT/smoke.txt"; }
 
-# the load: DATASET at once, released together under a release run in the network attester's release order, so its
-# requests start in the window's first step (served_verdicts.sh's LOAD=dataset); the door refuses, before the lease, a
-# dataset the class can't take
+# the load: DATASET at TIMING, released under a release run in the network attester's release order, so at once its
+# requests start in the window's first step (served_verdicts.sh's LOAD=dataset)
 RELEASE=${RELEASE:-$(tr -d - < /proc/sys/kernel/random/uuid)}
-LOAD=(-m verity_vllm.pipeline.send --port "$PORT" --dataset "$DATASET" --timing at-once --release "$RELEASE" --out "$SR/load.jsonl")
-DOOR=$("$PY" -m verity_vllm.serves door "$DATASET" at-once) || { echo "SMOKE REFUSED dataset: $DOOR"; exit 3; }
-echo "$DOOR"
+LOAD=(-m verity_vllm.inputs.sender --port "$PORT" --dataset "$DATASET" --timing "$TIMING" --release "$RELEASE" --out "$SR/load.jsonl")
 REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
 [ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "${RECORD:-1}" = 0 ] || [ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)

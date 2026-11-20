@@ -2,8 +2,9 @@
 serves it at and the kind of input dataset it plays; and the door (`door`), which reads a dataset through against it
 before anything is sent. The door reads token ids and never text, so it needs no tokenizer and no engine.
 
-    python -m verity_vllm.serves                      # MODEL REVISION PRECISION CLASS, one line, as the launchers read it
-    python -m verity_vllm.serves door NAME [TIMING]   # the door over the input dataset NAME, refused by name or its identity
+    python -m verity_vllm.inputs.serves                      # MODEL REVISION PRECISION CLASS, one line, as the launchers read it
+    python -m verity_vllm.inputs.serves door NAME [TIMING]   # the door over the input dataset NAME, refused by name or its identity
+    python -m verity_vllm.inputs.serves application FILE     # MODEL REVISION PRECISION CLASS DATASET TIMING, then the door's line
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from typing import Any
 
 class Refused(Exception):
     """A dataset or an application the statement can't take, by ``name``: ``kind``, ``not-served``, ``model``,
-    ``prompt``, ``positions``, ``steps``, ``sampling``, ``slots``, ``timing``."""
+    ``prompt``, ``positions``, ``steps``, ``sampling``, ``slots``, ``timing``, ``application``."""
 
     def __init__(self, name: str, text: str) -> None:
         super().__init__(text)
@@ -59,7 +60,7 @@ def served(model: str, revision: str, precision: str, slots: int, steps: int) ->
                                                                SERVES.slots, SERVES.outputs)
     if said != want:
         raise Refused("not-served", f"the vLLM adapter serves {want[0]} at {want[1]} in {want[2]} with {want[3]} slots and "
-                                    f"{want[4]} window steps (verity_vllm.serves.SERVES), not {said[0]} at {said[1]} in "
+                                    f"{want[4]} window steps (verity_vllm.inputs.serves.SERVES), not {said[0]} at {said[1]} in "
                                     f"{said[2]} with {said[3]} slots and {said[4]} window steps")
     return SERVES
 
@@ -106,28 +107,51 @@ def door(kind: str, records: Iterable[Any], s: Serves | None = None) -> list[dic
     return out
 
 
+def application(path: str) -> tuple[str, str]:
+    """The input dataset and timing an application (``applications/NAME.toml``) names in its ``[workload.params]``, once
+    `served` takes its model and window; refused (``application``) when it names no dataset and timing."""
+    import tomllib
+    try:
+        params = tomllib.loads(open(path, encoding="utf-8").read())["workload"]["params"]
+        served(params["model"], params["revision"], params["precision"], params["slots"], params["window-steps"])
+        return params["dataset"], params["timing"]
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError) as e:
+        raise Refused("application", f"{path} names no model, window, dataset and timing in [workload.params] "
+                                     f"({type(e).__name__}: {e})") from e
+
+
+def _door_line(name: str, said: str) -> str:
+    import input_datasets
+    ds = input_datasets.open(name)
+    rule, parameters = timing(said)
+    timed = ds.timed(rule, **parameters)
+    n = len(door(ds.kind, (b for _, b in timed)))
+    return f"DOOR {name}: {n} records the class {SERVES.window_class} takes; identity {timed.identity}"
+
+
 def main(argv: list[str]) -> int:
     if not argv:
         print(SERVES.model, SERVES.revision, SERVES.precision, SERVES.window_class)
         return 0
-    if argv[0] != "door" or len(argv) not in (2, 3):
+    if not (argv[0] == "door" and len(argv) in (2, 3) or argv[0] == "application" and len(argv) == 2):
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 2
     import input_datasets
     try:
-        ds = input_datasets.open(argv[1])
-        rule, parameters = timing(argv[2] if len(argv) == 3 else "at-once")
-        timed = ds.timed(rule, **parameters)
-        n = len(door(ds.kind, (b for _, b in timed)))
+        if argv[0] == "application":
+            name, said = application(argv[1])
+            line = _door_line(name, said)
+            print(SERVES.model, SERVES.revision, SERVES.precision, SERVES.window_class, name, said)
+        else:
+            line = _door_line(argv[1], argv[2] if len(argv) == 3 else "at-once")
     except (Refused, input_datasets.Refused) as e:
         print(f"REFUSED {e.name}: {e}")
         return 3
-    print(f"DOOR {argv[1]}: {n} records the class {SERVES.window_class} takes; identity "
-          f"{timed.identity}")
+    print(line)
     return 0
 
 
-__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "door", "served", "timing"]
+__all__ = ["SERVES", "TIMINGS", "Refused", "Serves", "application", "door", "served", "timing"]
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))

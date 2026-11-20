@@ -22,7 +22,7 @@
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=dataset (default varied) they are the input dataset
 #     DATASET at TIMING instead, both of which LOAD=dataset needs, sent by the adapter's one sender
-#     (`verity_vllm.pipeline.send`), which reads it through the adapter's door (`verity_vllm.serves`) before it sends any. With
+#     (`verity_vllm.inputs.sender`), which reads it through the adapter's door (`verity_vllm.inputs.serves`) before it sends any. With
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network attester, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
@@ -1076,7 +1076,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
       --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
-    [ "$LOAD" = dataset ] && load=(-m verity_vllm.pipeline.send --dataset "$DATASET" --timing "$TIMING")
+    [ "$LOAD" = dataset ] && load=(-m verity_vllm.inputs.sender --dataset "$DATASET" --timing "$TIMING")
     "$PY" "${load[@]}" --port "$PORT" --release "$release" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     local sent all

@@ -1,7 +1,7 @@
-"""The one sender: an input dataset of the adapter's kind, read through the door (`verity_vllm.serves.door`) before anything
+"""The one sender: an input dataset of the adapter's kind, read through the door (`verity_vllm.inputs.serves.door`) before anything
 is sent, then played at its timing against a `verity-vllm serve-openai` endpoint.
 
-    python -m verity_vllm.pipeline.send --port 18190 --dataset NAME --timing at-once [--release RUN] --out FILE
+    python -m verity_vllm.inputs.sender --port 18190 --dataset NAME --timing at-once [--release RUN] --out FILE
 
 Each record is a `/v1/completions` body, sent at its time from the play's start. With ``--release RUN`` (a run id in hex,
 as `verity.release.release_fields` reads it) request j carries ``x-verity-release: j`` and ``x-verity-release-run: RUN``,
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None, *, clock: Callable[[], float] = time.mon
     a = ap.parse_args(argv)
     import input_datasets
 
-    from verity_vllm import serves
+    from verity_vllm.inputs import serves
     try:
         ds = input_datasets.open(a.dataset)
         rule, parameters = serves.timing(a.timing)
