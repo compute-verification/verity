@@ -200,7 +200,7 @@
  },
  "second_descriptions": {
   "Circuit.ofAudit": 0,
-  "Claims.Sampling (proofs)": 365,
+  "Claims.Sampling (proofs)": 364,
   "Claims.Sampling (read)": 59,
   "CutIsRegistered": 0,
   "EdgeFreeReads": 4,
