@@ -1,5 +1,17 @@
 {
  "definitions": {
+  "EmbeddingReadGuard_v1{V=128256}": {
+   "and": 24,
+   "type": "b7369de97d1b2474402f63906293a220031c17db376ea261f0816babb0773a5018803d195bd675059038261635493980ad32e5b5767813da7e6012e9f51564c8"
+  },
+  "EmbeddingReadGuard_v1{V=131072}": {
+   "and": 15,
+   "type": "6cf33c0eac036fb7a89e5e4e652cc146da5f89eef53c6dea37db411e06e2b59ee7e415747e4ea21f9a45c0d9c9c412acf22be33e1b76b710ec75927ad331474d"
+  },
+  "EmbeddingReadGuard_v1{V=2}": {
+   "and": 31,
+   "type": "05913c4e4d2993a3d9ec9e497693c9657f8284c3680632f6ee981a9659dd033d4287a84ee134eabaec408048ff490caa8c4365832b9428d7c6a04fce7ac923e9"
+  },
   "EmbeddingReadSelect_v1{V=128256,H=2048}": {
    "and": 32792,
    "type": "8d50c6aed456b8191fd921a2c7e03961ae6b89ee721f83ee0d8460464b8ef20806215876bc9ace16d5a561187f6d41b183bae2039f0ee9072e4482352e2ac025"
@@ -11,11 +23,15 @@
   "EmbeddingReadSelect_v1{V=2,H=1}": {
    "and": 47,
    "type": "641dc5e6908aa43ade4ca58529e4b7eb73ec793c20b3b9e6d414e1fbc00f1630fc2ce931347566bfa4c05983466a589916a0f248ea7ec4dbb0ad81ef4147b32d"
+  },
+  "EmbeddingReadWord_v1": {
+   "and": 16,
+   "type": "ebe927d72f7cf4ad680e903a1c2120fbfaae76106fb447ea8b6631ae83c494689b347eefe24d75d669b89d74509b932af110cfe9c7c69aa8f5c484d205fa7009"
   }
  },
  "digests": {
   "EmbeddingRead_v2{V=131072,H=576}": {
-   "sha512": "1534ce561fcaad99eba509fbc787b09209bbf22269b4efc998ece2d322ffa3356063e8036ce93b460e610fa368f3569aa6d1fa48d420da9ff1613f4b0a8c1ee2"
+   "sha512": "e5232daf7eb497827b37d20b7bffa20f84dde12200abe3e781dfb35faa009911cfedb307d94011a4da52044983db4da720894c2644513505f15268f011f31e21"
   }
  }
 }
