@@ -1,3 +1,0 @@
-[2026-11-20T13:13Z] f1825f1cc076
-Addition to Ask 1 (soundness, TOP-444, 5:09 AM PST): 'Item 5: the only source I accept is the VERDICT line of that same run.' So the question is no longer whether but HOW: say exactly which roots the verify --zk run holds (checks its accepted statement against), give the change's shape so the VERDICT line prints those and only those (format, the function, every parser of the line that must follow), and say plainly if the roots compute-accounting needs (the record's entries / W) are NOT among what that run holds, because then printing them would be an echo and I must tell soundness the line cannot carry them as held. Also: network-accounting already said YES to the catalog hunk; your Ask 2 read is still wanted.
-
