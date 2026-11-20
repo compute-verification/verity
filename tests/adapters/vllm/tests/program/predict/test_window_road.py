@@ -26,7 +26,7 @@ COMPILER = {"name": "c", "digest": "cd" * 64}
 #: device (`serve_seal.target_of`), the default profile standing in for the card's
 SERVED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "precision": "bfloat16",
           "execution": "bi-eager", "default_seed": DEFAULT_SEED}
-PROGRAM, WORKLOAD = "ab" * 64, "12" * 64
+PROGRAM, WORKLOAD = "a1" * 64, "12" * 64
 
 
 def _serve_dir(tmp_path, monkeypatch):
@@ -68,11 +68,12 @@ def _road(tmp_path, monkeypatch, application, d, **env):
 
 
 def _secret(d):
-    """The declared circuit's description as the auditor must not see it: its templates' names and its digests."""
+    """The declared circuit's description as the auditor must not see it: its templates' names and its digests (the
+    registered compiler that builds it is public)."""
     record = d / "windows" / "w0" / "record"
     doc = json.loads((record / "circuit.json").read_text())
     return {str(t) for t, _ in doc["templates"]} | {hashlib.sha512((record / "circuit.json").read_bytes()).hexdigest(),
-                                                    PROGRAM, WORKLOAD, COMPILER["digest"]}
+                                                    PROGRAM, WORKLOAD}
 
 
 def _published(out):
