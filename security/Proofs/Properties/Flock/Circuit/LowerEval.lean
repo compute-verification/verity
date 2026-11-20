@@ -28,12 +28,16 @@ theorem refIn_of_decoded {D : Defn} {k : ℕ} {r : Ref} (hpar : D.body.params = 
   unfold tyAt
   cases hp : r.p
   · obtain ⟨hi, hj⟩ := h2 hp
-    simp only [Bool.false_eq_true, if_false, Array.getD, hi, dite_true]
-    rw [hb_widths_size, ← getElem!_pos D.body.nodes r.i hi]; exact hj
+    have e : D.body.nodes.getD r.i default = D.body.nodes[r.i]! := by
+      rw [getElem!_pos D.body.nodes r.i hi]; simp [Array.getD, hi]
+    simp only [Bool.false_eq_true, ite_false]
+    rw [e, hb_widths_size]; exact hj
   · obtain ⟨hi, hj⟩ := h1 hp
     rw [hpar] at hi hj
-    simp only [if_true, Array.getD, hi, dite_true]
-    rw [hb_widths_size, ← getElem!_pos D.params r.i hi]; exact hj
+    have e : D.params.getD r.i default = D.params[r.i]! := by
+      rw [getElem!_pos D.params r.i hi]; simp [Array.getD, hi]
+    simp only [ite_true]
+    rw [e, hb_widths_size]; exact hj
 
 theorem refs_of_decoded {D : Defn} {k : ℕ} {ps : Array Part} (hpar : D.body.params = D.params)
     (h : ∀ t < (Seq.ofParts ps).count, BodiesOk.RefIn D.body ((Seq.ofParts ps).get t))
@@ -45,6 +49,7 @@ theorem refs_of_decoded {D : Defn} {k : ℕ} {ps : Array Part} (hpar : D.body.pa
   rw [Array.length_toList, ← ofParts_count] at ht
   have he : (Seq.ofParts ps).toArray.toList[t] = (Seq.ofParts ps).get t := by
     rw [← ofParts_getD ps ht, Array.getElem_toList, Array.getD, dif_pos (by rw [← ofParts_count]; exact ht)]
+    rfl
   rw [he]
   exact refIn_of_decoded hpar (h t ht) (hk t ht)
 
@@ -58,7 +63,7 @@ theorem batch0Refs : Batch0Refs := by
   obtain ⟨hcal, hnodes, hret, psr, hpsr, -⟩ := hok d hd
   have hpar := (hcal.2 hB.1).1
   refine ⟨fun k hk a ha => ?_, ?_⟩
-  · rw [← getElem!_pos _ k hk] at ha ⊢
+  · rw [← getElem!_pos (P.defs[d]!).body.nodes k hk] at ha
     obtain ⟨a', ha', rfl⟩ := List.getElem_of_mem ha
     rw [Array.length_toList] at ha'
     rw [Array.getElem_toList, ← getElem!_pos _ a' ha']
@@ -764,6 +769,7 @@ theorem lowerBlock_lift {CJ partition : Lean.Json} {cuts : List (String × List 
 theorem restrict_front {P S : Prog} {units : Array ℕ} (h : Spot.Restrict.restrict P units = .ok S) :
     ∃ fr, Spot.BlockFront.front P (units.qsort (· < ·)) = .ok fr := by
   unfold Spot.Restrict.restrict at h
+  dsimp only at h
   cases hf : Spot.BlockFront.front P (units.qsort (· < ·)) with
   | error e => rw [hf] at h; exact absurd h (by intro h; cases h)
   | ok fr => exact ⟨fr, rfl⟩
