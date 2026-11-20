@@ -208,16 +208,19 @@ class _Server:
             proc, self._proc = self._proc, None
             if proc is None:
                 return
+            unread = None
             if proc.poll() is None:
                 try:
                     proc.stdin.close()
-                except BrokenPipeError:
-                    pass
+                except BrokenPipeError as e:
+                    unread = e
                 proc.wait()
             self._proc = proc
             why = self._ended()
             self._proc = None
             if why is not None:
+                if unread is not None:
+                    why += " (its input was closed before what it was handed was written whole)"
                 raise LeanError(f"{self.exe} did not end as documented at its close: {why}")
 
 
