@@ -360,7 +360,7 @@ private def pousRecord : Option ByteArray :=
 private def wipeRecord : Option ByteArray :=
   (MemoryAttester.StreamedWipe.message
     { (default : MemoryAttester.StreamedWipe.Commitment) with session := toyRecord }
-    MemoryAttester.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
+    ⟨Array.replicate MemoryAttester.RECORD_SALT_BYTES 6⟩ MemoryAttester.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
 
 private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.size - 1]! ^^^ 1)
 

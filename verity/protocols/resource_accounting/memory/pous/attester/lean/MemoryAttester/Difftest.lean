@@ -120,13 +120,13 @@ def setupRecordOkFn (j : Json) : V Json := do
   pure (.bool (setupRecordOk (SCHEMES ++ TEST_SCHEMES) (← J.str j "scheme" "input") (← hex j "public_key")
     (← hex j "session") s))
 
-/-- `streamed_wipe.message(commitment, ended, start_mark, fill_start_ns, fill_end_ns, batches)`. -/
+/-- `streamed_wipe.message(commitment, salt, ended, start_mark, fill_start_ns, fill_end_ns, batches)`. -/
 def wipeMessageFn (j : Json) : V Json := do
   let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
   let batches ← (← J.arr j "batches" "input").mapM StreamedWipe.Batch.ofJson
   let intAt := fun (k : String) => do J.asInt (← J.get j k "input") k
-  pure (hexJ (← StreamedWipe.message c (← J.str j "ended" "input") (← hex j "start_mark") (← intAt "fill_start_ns")
-    (← intAt "fill_end_ns") batches))
+  pure (hexJ (← StreamedWipe.message c (← hex j "salt") (← J.str j "ended" "input") (← hex j "start_mark")
+    (← intAt "fill_start_ns") (← intAt "fill_end_ns") batches))
 
 /-- `streamed_wipe.start_message(commitment)`. -/
 def wipeStartMessageFn (j : Json) : V Json := do

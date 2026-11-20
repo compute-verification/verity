@@ -367,15 +367,16 @@ WIPE_MARK = hexed(mostly(st.one_of(st.just(b""), st.binary(min_size=sw.MARK_BYTE
                          st.binary(max_size=70), 5))
 #: A signed session's fields; `MemoryChallenger.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
 WIPE_SIGNED = st.fixed_dictionaries({
-    "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "ended": ENDED, "start_mark": WIPE_MARK,
-    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
+    "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "salt": RECORD_SALT, "ended": ENDED,
+    "start_mark": WIPE_MARK, "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
     "scheme": st.sampled_from([mc.LMS, M.ts.scheme(1), "none", ""]), "public_key": hexed(st.binary(max_size=70)),
     "signature": hexed(st.binary(max_size=140))})
-WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
+WIPE_MESSAGE_KEYS = ("commitment", "salt", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
 
 
 def wipe_message(v) -> str:
-    return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), M.hex_(v, "start_mark"),
+    return sw.message(W.commitment_of(M._get(v, "commitment")), M.hex_(v, "salt"), M._str(v, "ended"),
+                      M.hex_(v, "start_mark"),
                       W.int_(v, "fill_start_ns"), W.int_(v, "fill_end_ns"),
                       [W.batch_of(r) for r in M.list_(v, "batches")]).hex()
 
@@ -393,7 +394,8 @@ def test_wipe_message(server):
     width, start marks of any length, and fill times of either sign; commitments `WipeParams` refuses and
     records past a field's width refused by both."""
     commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)
-    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "start_mark": WIPE_MARK,
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "salt": RECORD_SALT, "ended": ENDED,
+                                                   "start_mark": WIPE_MARK,
                                                    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED,
                                                    "batches": WIPE_BATCHES}))
     stats = D.run(port("wipe_message", wipe_message, inputs), examples=400, server=server)

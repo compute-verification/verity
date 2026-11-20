@@ -134,15 +134,17 @@ theorem pous_record_size {c : MemoryAttester.ChallengePhaseCommitment} {salt : B
   · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 /-- The wipe's session record is a digest. -/
-theorem wipe_record_size {c : MemoryAttester.StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
-    {fillStartNs fillEndNs : Int} {batches : Array MemoryAttester.StreamedWipe.Batch} {r : ByteArray}
-    (h : MemoryAttester.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
+theorem wipe_record_size {c : MemoryAttester.StreamedWipe.Commitment} {salt : ByteArray} {ended : String}
+    {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array MemoryAttester.StreamedWipe.Batch}
+    {r : ByteArray} (h : MemoryAttester.StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok r) :
     r.size = 64 := by
   unfold MemoryAttester.StreamedWipe.message at h
-  cases hr : MemoryAttester.StreamedWipe.recordsRoot c.session batches <;>
-    simp [hr, bind, Except.bind, pure, Except.pure] at h
-  subst h
-  exact hash_size _
+  by_cases hs : salt.size = MemoryAttester.RECORD_SALT_BYTES
+  · cases hr : MemoryAttester.StreamedWipe.recordsRoot c.session batches <;>
+      simp [hs, hr, bind, Except.bind, pure, Except.pure] at h
+    subst h
+    exact hash_size _
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 /-! ## No close record is another subprotocol's -/
 
@@ -160,9 +162,9 @@ theorem closeRecord_ne_pous {lines : Nat} {entries : Array ByteArray} {c : Memor
   closeRecord_ne_digest (pous_record_size h)
 
 theorem closeRecord_ne_wipe {lines : Nat} {entries : Array ByteArray} {c : MemoryAttester.StreamedWipe.Commitment}
-    {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int}
+    {salt : ByteArray} {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int}
     {batches : Array MemoryAttester.StreamedWipe.Batch} {r : ByteArray}
-    (h : MemoryAttester.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
+    (h : MemoryAttester.StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok r) :
     closeRecord lines (chainOf entries) ≠ r :=
   closeRecord_ne_digest (wipe_record_size h)
 
@@ -203,10 +205,10 @@ theorem closePreimage_ne_pous {I I' s s' r : ByteArray} {lines : Nat} {entries :
   closePreimage_ne_digest hI hI' hs hs' (pous_record_size h)
 
 theorem closePreimage_ne_wipe {I I' s s' r : ByteArray} {lines : Nat} {entries : Array ByteArray}
-    {c : MemoryAttester.StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
+    {c : MemoryAttester.StreamedWipe.Commitment} {salt : ByteArray} {ended : String} {startMark : ByteArray}
     {fillStartNs fillEndNs : Int} {batches : Array MemoryAttester.StreamedWipe.Batch}
     (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64)
-    (h : MemoryAttester.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
+    (h : MemoryAttester.StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok r) :
     rolePreimage I s (closeRecord lines (chainOf entries)) ≠ rolePreimage I' s' r :=
   closePreimage_ne_digest hI hI' hs hs' (wipe_record_size h)
 
