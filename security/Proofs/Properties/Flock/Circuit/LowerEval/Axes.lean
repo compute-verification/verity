@@ -177,23 +177,6 @@ theorem removeAxis_widths : ∀ (ax : ℕ) {t E : Ty} {n L : ℕ}, t.removeAxis 
         exact ih he hde m hm r hr
     | _ => simp [Ty.removeAxis] at h
 
-/-- A batch argument's facts on any axis, read at axis 0: its type an array of the parameter's type. -/
-theorem axis0_of_ax {a : Arg} {n i : ℕ} {ps : Array (String × Ty)} {o : Option (Option ℕ)} {ws : List ℕ}
-    (h : ∀ ax, o = some (some ax) → a.ty.removeAxis ax = some (n, (ps.getD i default).2) ∧
-      a.dims = a.ty.axisDims ax ∧ i < ps.size ∧ ws = a.ty.widths.toList) :
-    o = some (some 0) → ∃ E : Ty, a.ty = .array n E ∧ a.dims = some (n, E.leaves) ∧ i < ps.size ∧
-      (ps.getD i default).2 = E ∧ ws = (List.replicate n E.widths.toList).flatten := by
-  intro h0
-  obtain ⟨hrm, hdm, hi, hw⟩ := h 0 h0
-  match hty : a.ty, hrm with
-  | .array n' e, hrm =>
-    simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at hrm
-    obtain ⟨rfl, he⟩ := hrm
-    exact ⟨e, rfl, by rw [hdm, hty]; rfl, hi, he.symm, by rw [hw, hty, widths_array_flat]⟩
-  | .value _, hrm => simp [Ty.removeAxis] at hrm
-  | .tuple _, hrm => simp [Ty.removeAxis] at hrm
-  | .record _, hrm => simp [Ty.removeAxis] at hrm
-
 theorem flatten_replicate_replicate {α : Type} (X : List α) (a b : ℕ) :
     (List.replicate a (List.replicate b X).flatten).flatten = (List.replicate (a * b) X).flatten := by
   induction a with

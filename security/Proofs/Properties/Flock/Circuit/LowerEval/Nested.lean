@@ -2,9 +2,9 @@ module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Axes
 
-/-! `LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates (`Batch0Nested`):
-by strong induction on the reached composite, the lift's copy of each evaluates on bits, at every fuel past its place,
-as the composite does on words. -/
+/-! `LiftWordEval` for a template of batches on any axes over word primitives, gates and earlier such templates
+(`BatchNested`): by strong induction on the reached composite, the lift's copy of each evaluates on bits, at every fuel
+past its place, as the composite does on words. -/
 
 @[expose] public section
 
@@ -179,22 +179,43 @@ theorem leafWidths_range (C : Defn) :
   have hi' : i < C.params.size := by simpa using List.mem_range.1 hi
   simp [Array.getD, List.getD_eq_getElem?_getD, hi']
 
-/-- A batch member's arguments' words, for a composite callee `C` whose parameters the batch's arguments match, have
-`C`'s parameter leaf widths. -/
-theorem batchWords_length {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+/-- Member `m` of an argument batched on any axis, whose references' widths are `o` blocks of `n` copies of `V`, reads
+words of the widths `o` copies of `V`. -/
+theorem axisWords_ax {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
+    {outs : Array (List (List Bool))} (ho : OutsOk D outs) {s : Seq}
+    (hr : ∀ r ∈ s.toArray.toList, RefIn D outs.size r) {o n m : ℕ} (hm : m < n) {V : List ℕ}
+    (hw : s.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+      (List.replicate o (List.replicate n V).flatten).flatten) :
+    ((List.range (o * V.length)).map fun t => Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs
+        (s.toArray.getD (t / V.length * n * V.length + t % V.length + m * V.length) default)).map List.length =
+      (List.replicate o V).flatten := by
+  rw [map_range_mul, List.map_flatMap, show (List.replicate o V).flatten = (List.range o).flatMap fun _ => V by
+    rw [flatMap_flatten_map, List.map_const', List.length_range]]
+  apply List.flatMap_congr
+  intro a ha
+  have hb := axisWords_length hx ho hr (BodiesOk.lt_mul_of a o n m (List.mem_range.1 ha) hm)
+    (hw.trans (flatten_replicate_replicate V o n))
+  refine Eq.trans ?_ hb
+  congr 1
+  apply List.map_congr_left
+  intro c hc
+  have hc' := List.mem_range.1 hc
+  rw [block_index n m hc', Nat.div_eq_of_lt hc', Nat.mod_eq_of_lt hc', Nat.zero_mul, Nat.zero_mul, Nat.zero_add]
+
+/-- A batch member's arguments' words, for a composite callee `C` whose parameters the batch's arguments match on any
+axes, have `C`'s parameter leaf widths. -/
+theorem batchWords_length_ax {D : Defn} {x : List (List Bool)} (hx : x.map List.length = leafWidths D)
     {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ} (hnD : n < D.body.nodes.size)
     (hsz : outs.size = n) {C : Defn}
     (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
       a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
-    (hax : ∀ i < (D.body.nodes[n]).args.size,
-      (D.body.nodes[n]).axes[i]? = some (some 0) ∨ ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax))
     (hbat : ∀ i < (D.body.nodes[n]).args.size,
-      ((D.body.nodes[n]).axes[i]? = some (some 0) → ∃ E : Ty,
-        ((D.body.nodes[n]).args.getD i default).ty = .array (D.body.nodes[n]).n E ∧
-        ((D.body.nodes[n]).args.getD i default).dims = some ((D.body.nodes[n]).n, E.leaves) ∧
-        i < C.params.size ∧ (C.params.getD i default).2 = E ∧
+      (∀ ax, (D.body.nodes[n]).axes[i]? = some (some ax) →
+        ((D.body.nodes[n]).args.getD i default).ty.removeAxis ax = some ((D.body.nodes[n]).n, (C.params.getD i default).2) ∧
+        ((D.body.nodes[n]).args.getD i default).dims = ((D.body.nodes[n]).args.getD i default).ty.axisDims ax ∧
+        i < C.params.size ∧
         ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
-          (List.replicate (D.body.nodes[n]).n E.widths.toList).flatten) ∧
+          ((D.body.nodes[n]).args.getD i default).ty.widths.toList) ∧
       ((∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax)) → ((D.body.nodes[n]).args.getD i default).dims = none))
     (hcb : (D.body.nodes[n]).args.size = C.params.size ∧ ∀ i < (D.body.nodes[n]).args.size,
       (∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax)) →
@@ -213,13 +234,19 @@ theorem batchWords_length {D : Defn} {x : List (List Bool)} (hx : x.map List.len
   obtain ⟨hcnt, hrefs⟩ := hargs _ hmemA
   have hrefs' : ∀ r ∈ ((D.body.nodes[n]).args.getD i default).seq.toArray.toList, RefIn D outs.size r :=
     fun r h => by rw [hsz]; exact hrefs r h
-  rcases hax i hi' with h0 | hn0
-  · obtain ⟨E, -, hdims, -, hpe, hw⟩ := (hbat i hi').1 h0
-    rw [batchArg_some _ _ _ _ _ hdims, hpe]
+  by_cases hax : ∃ ax, (D.body.nodes[n]).axes[i]? = some (some ax)
+  · obtain ⟨ax, hax⟩ := hax
+    obtain ⟨hrm, hdm, -, hw⟩ := (hbat i hi').1 ax hax
+    obtain ⟨o, F, htw, hEw, hdF, -⟩ := removeAxis_blocks ax hrm
+    rw [batchArg_some _ _ _ _ _ (hdm.trans hdF)]
     simp only [Flock.Program.argVals]
-    rw [show E.leaves = E.widths.toList.length by rw [Array.length_toList, hb_widths_size]]
-    exact axisWords_length hx ho hrefs' hm' hw
-  · rw [batchArg_none _ _ _ _ _ ((hbat i hi').2 hn0), argVals_count _ _ hcnt, refWords_length hx ho _ hrefs']
+    generalize (C.params.getD i default).2 = E at hEw ⊢
+    rw [show E.leaves = E.widths.toList.length by rw [Array.length_toList, hb_widths_size],
+      show F.leaves = F.widths.toList.length by rw [Array.length_toList, hb_widths_size], hEw,
+      length_replicate_flatten]
+    exact axisWords_ax hx ho hrefs' hm' (hw.trans htw)
+  · have hn0 : ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax) := fun ax h => hax ⟨ax, h⟩
+    rw [batchArg_none _ _ _ _ _ ((hbat i hi').2 hn0), argVals_count _ _ hcnt, refWords_length hx ho _ hrefs']
     exact hcb.2 i hi' hn0
 
 theorem flatten_map_flatten {α : Type} (l : List (List (List α))) : l.flatten.flatten = (l.map List.flatten).flatten := by
@@ -227,12 +254,12 @@ theorem flatten_map_flatten {α : Type} (l : List (List (List α))) : l.flatten.
   | nil => rfl
   | cons a l ih => rw [List.flatten_cons, List.flatten_append, ih, List.map_cons, List.flatten_cons]
 
-/-- **`LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates**, on
-`NestedTyped`. -/
-theorem liftWordEval_nested_of (hT : NestedTyped) :
+/-- **`LiftWordEval` for a template of batches on any axes over word primitives, gates and earlier such templates**,
+on `NestedTyped`. -/
+theorem liftWordEval_batchNested_of (hT : NestedTyped) :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
       decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
-      d < P.defs.size → Batch0Nested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
+      d < P.defs.size → BatchNested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
       ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
         Prog.evalBool L e x.flatten = (wordEval P d x).flatten := by
   intro bytes P units S d L e h hr hs hd hnd hgd hl x hx
@@ -258,7 +285,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
     rw [getElem!_def, getElem!_def, hLP i hi]
   have hLbP : ∀ k, L.bodyOf? k = P.bodyOf? k := fun k => by rw [hLbody, hbodyS]
   obtain ⟨pl, he, hA, hG, -, hC⟩ := liftPlacesAll hl
-  have key : ∀ y, y < P.defs.size → Batch0Nested P y → Reach P d y →
+  have key : ∀ y, y < P.defs.size → BatchNested P y → Reach P d y →
       ∀ z : List (List Bool), z.map List.length = leafWidths (P.defs[y]!) →
         ∃ ws, wordDef? P (y + 1) y z = some ws ∧ ws.map List.length = (P.defs[y]!).ret.widths.toList ∧
           ∀ f, pl y < f → Flock.Program.evalDef? L f (pl y) z.flatten = some ws.flatten := by
@@ -269,7 +296,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
     have hryS : Reach S d y := (reach_restrict h hr hpre hd hry).2
     have hrwS : ReachesWord S y := reachesWord_of_nested hpre hny hyl
     have hgy : GateBodiesDeep P y := fun z' hz' => hgd z' (reach_trans hry hz')
-    have hfacts := hT bytes P h hr y hyl (batchNested_of_batch0Nested hny) hgy
+    have hfacts := hT bytes P h hr y hyl hny hgy
     cases hny with
     | mk hp1 hform hltn hnest hgate hex =>
     have hgb : GateBodies P y := hgy y .root hp1
@@ -308,16 +335,9 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
           a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D outs.size r := fun a ha => by
         obtain ⟨h1, h2⟩ := hargs n hnD a ha
         exact ⟨h1, fun r hr' => by rw [hsz]; exact h2 r hr'⟩
-      have hax : (D.body.nodes[n]).form = .batch → ∀ i < (D.body.nodes[n]).args.size,
-          (D.body.nodes[n]).axes[i]? = some (some 0) ∨ ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax) := by
-        intro hb
-        rcases hformn with hf | hf | ⟨-, hax⟩
-        · rw [hf] at hb; cases hb
-        · rw [hf] at hb; cases hb
-        · exact hax
       have hform2 : (D.body.nodes[n]).form ≠ .batch → (D.body.nodes[n]).form = .prim ∨ (D.body.nodes[n]).form = .call := by
         intro hb
-        rcases hformn with hf | hf | ⟨hf, -⟩
+        rcases hformn with hf | hf | hf
         · exact Or.inl hf
         · exact Or.inr hf
         · exact absurd hf hb
@@ -356,8 +376,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
           rw [liftDef_params] at hBt
           obtain ⟨b', -, hbo, -, -, hpar, -⟩ := hmap _ hfnP hw
           obtain rfl : b' = fnOf (D.body.nodes[n]).fn := Option.some.inj (hbo.symm.trans hbS)
-          have hY := fun m (hm' : m < (D.body.nodes[n]).n) => batchBits hz ho hnD hnD' hsz hb hpar
-            (hargs n hnD) (hax hb) (fun i hi => ⟨axis0_of_ax (hbat n hnD hb i hi).1, (hbat n hnD hb i hi).2⟩) hm'
+          have hY := fun m (hm' : m < (D.body.nodes[n]).n) => batchBits_ax hz ho hnD hnD' hsz hb hpar (hargs n hnD) (hbat n hnD hb) hm'
           refine ⟨(List.range (D.body.nodes[n]).n).map fun m => Prog.evalBool P (D.body.nodes[n]).fn
               ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
                 batchArg (Flock.Program.refVal z (Flock.Program.paramStarts D.params) outs)
@@ -433,7 +452,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
                 Flock.Program.evalDef? L f' (pl (D.body.nodes[n]).fn) (Am m).flatten = some (vsOf m).flatten := by
               intro m hm'
               obtain ⟨vs, hv1, hv2, hv3⟩ :=
-                IH (Am m) (batchWords_length hz ho hnD hsz (hargs n hnD) (hax hb) (fun i hi => ⟨axis0_of_ax (hbat n hnD hb i hi).1, (hbat n hnD hb i hi).2⟩) hcb hm')
+                IH (Am m) (batchWords_length_ax hz ho hnD hsz (hargs n hnD) (hbat n hnD hb) hcb hm')
               have hvo : vsOf m = vs := by simp only [vsOf, hv1, Option.getD_some]
               rw [hvo]
               exact ⟨hv1, hv2, hv3 f' (by omega)⟩
@@ -450,7 +469,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
               (fun m => (vsOf m).flatten) (List.range (D.body.nodes[n]).n)
               (fun m hm => by
                 try dsimp only
-                rw [batchBits hz ho hnD hnD' hsz hb hpar (hargs n hnD) (hax hb) (fun i hi => ⟨axis0_of_ax (hbat n hnD hb i hi).1, (hbat n hnD hb i hi).2⟩) (List.mem_range.1 hm)]
+                rw [batchBits_ax hz ho hnD hnD' hsz hb hpar (hargs n hnD) (hbat n hnD hb) (List.mem_range.1 hm)]
                 exact (hvs m (List.mem_range.1 hm)).2.2)
             refine ⟨((List.range (D.body.nodes[n]).n).map vsOf).flatten, ?_, ?_, ?_⟩
             · rw [hW, hmsP]
@@ -506,8 +525,7 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
               (outs.map List.flatten) ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) (hf2 hb)
               (by rw [hfn'']; omega) (by rw [hfn'']; exact hcalL)
             rw [liftDef_params] at hBt
-            have hY := fun m (hm' : m < (D.body.nodes[n]).n) => batchBits hz ho hnD hnD' hsz hb hpar
-              (hargs n hnD) (hax hb) (fun i hi => ⟨axis0_of_ax (hbat n hnD hb i hi).1, (hbat n hnD hb i hi).2⟩) hm'
+            have hY := fun m (hm' : m < (D.body.nodes[n]).n) => batchBits_ax hz ho hnD hnD' hsz hb hpar (hargs n hnD) (hbat n hnD hb) hm'
             refine ⟨(List.range (D.body.nodes[n]).n).map fun m => Prog.evalBool P (D.body.nodes[n]).fn
                 ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
                   batchArg (Flock.Program.refVal z (Flock.Program.paramStarts D.params) outs)
@@ -581,5 +599,16 @@ theorem liftWordEval_nested_of (hT : NestedTyped) :
   unfold wordEval Prog.evalBool
   rw [wordDef_fuel P d _ x (by omega), hw1, he, hw3 _ (by omega)]
   rfl
+
+/-- **`LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates**, on
+`NestedTyped`. -/
+theorem liftWordEval_nested_of (hT : NestedTyped) :
+    ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
+      decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S →
+      d < P.defs.size → Batch0Nested P d → GateBodiesDeep P d → Flock.Lift.lift S d = .ok (L, e) →
+      ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
+        Prog.evalBool L e x.flatten = (wordEval P d x).flatten :=
+  fun bytes P units S d L e h hr hs hd hnd =>
+    liftWordEval_batchNested_of hT bytes P units S d L e h hr hs hd (batchNested_of_batch0Nested hnd)
 
 end Flock.Chain
