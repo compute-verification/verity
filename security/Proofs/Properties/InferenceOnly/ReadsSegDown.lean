@@ -41,6 +41,7 @@ gives each element (`forIn_trace`, `forIn_traceG`) are read here too.
 namespace InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
 
 open InferenceOnlyVerifier.Desc (Piece Seg PS Tgt)
+open Flock.Program (Part Seq)
 
 /-- A loop appending what `F` gives each element: the outputs, element by element, after the start. -/
 theorem forIn_trace {β : Type} (F : β → Except String (Array Seg)) :
@@ -270,6 +271,22 @@ theorem reshape_sub (y : Piece) (rows len : Nat) (p : Piece) (h : y.reshape rows
   rw [reshape_row y rows len p h m hm] at hx
   exact List.mem_of_mem_drop (List.mem_of_mem_take hx)
 
+/-- `segDown`'s test that a rowed segment's piece resolves to one piece of its rows. -/
+theorem one_spec {s : Seg} {q : Piece} {r : Array Seg} {p : Piece}
+    (h : (if r.size == 1 && q.rows == s.reps then r[0]!.single.bind (·.reshape q.rows q.len) else none) = some p) :
+    q.rows = s.reps ∧ ∃ x y, r = #[x] ∧ x.single = some y ∧ y.reshape q.rows q.len = some p := by
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, beq_iff_eq] at hc
+    rw [Option.bind_eq_some_iff] at h
+    obtain ⟨y, hy, hre⟩ := h
+    refine ⟨hc.2, r[0]!, y, ?_, hy, hre⟩
+    rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hc ⊢
+  · cases h
+
+theorem range_size (n : Nat) : List.range' 0 [:n].size = List.range' 0 n := by
+  simp [Std.Legacy.Range.size]
+
 /-- **What `segDown` gives a segment names what `f` gives each of its positions**: related position by position (`R`)
 to `s`'s, where each piece `f` resolves, its positions `s`'s, gives segments so related to its positions. -/
 theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Except String (Array Seg)) (s : Seg)
@@ -307,11 +324,12 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
       simp only [segPos]
       apply forall2_flatMap_same
       intro m hm
-      rw [copy_rowed _ hr, copy_rowed s hr, posAll_map, posAll_map]
+      rw [copy_rowed s hr]
+      simp only [Desc.Seg.copy, ↓reduceIte]
+      rw [posAll_map, posAll_map]
       refine forall2_flatMap (fun p q hpq => ?_) hpair
       obtain ⟨hq, r, hfr, hone⟩ := hpq
-      rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hone
-      obtain ⟨hrq, y, hy, hre⟩ := hone
+      obtain ⟨hrq, x, y, rfl, hy, hre⟩ := one_spec hone
       have hxy := hf q #[x] (hsub q hq hrq) hfr
       rw [segsPos_singleton, single_pos x y hy] at hxy
       have hmq : m < q.rows := by rw [hrq]; exact List.mem_range.1 hm
@@ -326,7 +344,7 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
       rw [segsPos_foldl, segsPos_empty, List.nil_append]
       have hL : segPos s = ((List.range' 0 s.reps).flatMap fun m => (s.copy m).toList).flatMap pos := by
         simp only [segPos, posAll, List.flatMap_assoc, List.range_eq_range']
-      simp only [Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at hF
+      rw [range_size] at hF
       rw [hL]
       exact rel_trace hF fun q hq v hv => hf q v (fun x hx => by rw [hL]; exact List.mem_flatMap.2 ⟨q, hq, hx⟩) hv
 
@@ -408,19 +426,19 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
     · rename_i ps hps
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      simp only [List.mem_singleton, Array.toList_singleton] at hg
-      subst hg
+      have := List.mem_singleton.1 hg
+      subst this
       have hpair := forall2_zip hrs2 (by rw [← Array.toList_zip]; exact array_mapM_some _ _ hps)
       have hone : ∀ p ∈ ps.toList, ∃ q ∈ s.ps.toList, q.rows = s.reps ∧ ∃ x y, f q = .ok #[x] ∧
           x.single = some y ∧ y.reshape q.rows q.len = some p := by
         intro p hp
         obtain ⟨q, -, hq, r, hfr, hone⟩ := forall2_mem hpair.flip p hp
-        rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hone
-        obtain ⟨hrq, y, hy, hre⟩ := hone
+        obtain ⟨hrq, x, y, rfl, hy, hre⟩ := one_spec hone
         exact ⟨q, hq, hrq, x, y, hfr, hy, hre⟩
       refine .inr ⟨fun x hx => ?_, fun p hp => ?_, rfl, rfl, rfl, ?_⟩
       · obtain ⟨m, hm, hx⟩ := List.mem_flatMap.1 hx
-        rw [show ({ s with ps, shift := 0 } : Seg).copy m = ps.map (·.row m) from copy_rowed _ hr m, posAll_map] at hx
+        rw [show ({ s with ps, shift := 0 } : Seg).copy m = ps.map (·.row m) from
+          copy_rowed { s with ps, shift := 0 } hr m, posAll_map] at hx
         obtain ⟨p, hp, hx⟩ := List.mem_flatMap.1 hx
         obtain ⟨q, hq, hrq, x', y, hfr, hy, hre⟩ := hone p hp
         have hmq : m < q.rows := by rw [hrq]; exact List.mem_range.1 hm
@@ -430,12 +448,12 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
       · obtain ⟨q, hq, -, x', y, -, -, hre⟩ := hone p hp
         obtain ⟨h1, h2⟩ := reshape_dims y _ _ p hre
         exact ⟨q, hq, by simp [Desc.Piece.count, h1, h2]⟩
-      · rw [show ({ s with ps, shift := 0 } : Seg).copy 0 = ps.map (·.row 0) from copy_rowed _ hr 0, copy_rowed s hr,
+      · rw [show ({ s with ps, shift := 0 } : Seg).copy 0 = ps.map (·.row 0) from
+          copy_rowed { s with ps, shift := 0 } hr 0, copy_rowed s hr,
           posAll_map, posAll_map]
         refine List.Forall₂.length_eq (R := fun _ _ => True) (forall2_flatMap (fun p q hpq => ?_) hpair)
         obtain ⟨-, r, -, hone⟩ := hpq
-        rcases r with ⟨_ | ⟨x, _ | ⟨x2, l⟩⟩⟩ <;> simp at hone
-        obtain ⟨-, y, -, hre⟩ := hone
+        obtain ⟨-, x, y, -, -, hre⟩ := one_spec hone
         obtain ⟨-, h2⟩ := reshape_dims y _ _ p hre
         exact forall2_true (by simp [pos_row, h2])
     · obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
@@ -444,7 +462,7 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
       subst h
       rw [Std.Legacy.Range.forIn_eq_forIn_range'] at ho
       obtain ⟨outs, hF, rfl⟩ := forIn_traceG f s.copy _ #[] o ho
-      simp only [Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one] at hF
+      rw [range_size] at hF
       rcases mem_foldl outs #[] g hg with hg | ⟨v, hv, hgv⟩
       · simp at hg
       obtain ⟨q, hq, hfq⟩ := forall2_mem hF v hv
