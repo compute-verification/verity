@@ -6966,10 +6966,10 @@ def test_glm53s_all_reduce_at_three_rows_is_refused_past_the_widest_class(pieces
     """GLM-5.3's TP8 MNNVL all-reduce at three rows, as `tp_allreduce.circuit-check.py`'s `_glm53_served` binds it
     (`AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}`), returns 294,912 bits: Lean's slots and the Python's partition refuse
     its instance by the widest class."""
-    from verity_vllm.definitions.registry import tp_allreduce as TA
-    c = next(c for c in TA.CAPTURED if (c.N, c.world, c.device, c.route) == (6144, 8, None, "fi_ar_comm"))
-    d, statics = TA.route_binding(c, 8, max(3, c.lo), 6144, 3)
-    unit = bind(d, **statics)
+    from verity_vllm.definitions.registry.catalog import load
+    from verity.commitments.periods import interface as IF
+    load()
+    unit = IF.resolve("AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}")
     query = P.template_instance_query(unit.id)
     why = "commits 294912 bits, more than the widest class, 262144"
     with pytest.raises(P.QueryRefused, match=why):
