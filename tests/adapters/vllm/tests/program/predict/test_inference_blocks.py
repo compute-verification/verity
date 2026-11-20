@@ -85,11 +85,11 @@ def test_the_table_is_the_windows_entries_one_block_a_slot(window):
     assert IB.decode(rs)[:2] == (program, 2)
     entries = IB.decode(rs)[2]
     assert len(rs) == 1 + len(entries)
-    assert entries == [(PV2.id_digest(circuit.template(e.template)), e.at, e.radix, e.axes.index("slot"), e.slot)
-                       for e in circuit.blocks.inference]
+    assert entries == [(PV2.id_digest(circuit.template(e.template)), e.at, e.radix,
+                        e.axes.index("slot") if e.request else None, e.slot) for e in circuit.blocks.inference]
     assert all(len(r) == IB.ROW_BYTES for r in rs)
-    labels, slots = _labels(circuit), _slots(circuit, rs)
-    assert all((slots[t] == labels[t][:, 0]).all() for t in circuit.ids)
+    slots = _slots(circuit, rs)
+    assert all((slots[t] == circuit.blocks.slots_steps(t, 0, n)[0]).all() for t, n in circuit.units.items())
 
 
 def test_every_block_has_c_gates_and_k_fresh_input_bits(window):
@@ -124,7 +124,7 @@ def test_a_served_window_of_equal_requests_has_a_table(full):
     gates, fresh = _unrolled(full, slots)
     c, k = IB.budgets(full)
     assert gates == [c, c] and fresh == [k, k]
-    assert "others" not in IB.commit(full, PROGRAM)[0]
+    assert IB.commit(full, PROGRAM)[0]["others"] == {"gates": 222_852, "fresh": 4548 * 16}
 
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
@@ -149,7 +149,7 @@ def test_the_statement_is_the_budgets_and_padded_counts_under_a_hiding_root(wind
     st, reg = IB.commit(circuit, program)
     rs = IB.rows(circuit, program)
     assert st == {"format": IB.FORMAT, "query": IB.QUERY, "c": IB.budgets(circuit)[0], "k": 2 * 4548 * 16, "blocks": 2,
-                  "rows": PV2.grid(len(rs)), "root": reg.root.hex()}
+                  "rows": PV2.grid(len(rs)), "root": reg.root.hex(), "others": {"gates": 222_852, "fresh": 4548 * 16}}
     assert list(reg.rows[:len(rs)]) == rs and set(reg.rows[len(rs):]) <= {bytes(IB.ROW_BYTES)}
     root = bytes.fromhex(st["root"])
     assert all(AC.verify(root, st["rows"], IB.ROW_BITS, IB.BINDING, reg.open(i)) for i in range(st["rows"]))

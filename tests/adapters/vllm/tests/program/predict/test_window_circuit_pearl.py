@@ -279,7 +279,7 @@ def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pe
     circuit, prog, query = pearl_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_288_566
+    assert prog.fn.gates == 110_511_418
     assert query["params"]["templates"] == circuit.ids
 
 

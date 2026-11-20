@@ -1001,8 +1001,8 @@ def _private(seed: int):
 
 def test_a_windows_labels_are_its_step_slot_and_form_alone():
     """One advice under two sets of private values (`_private`): its rows differ, and `Rows.record` hands the window the
-    same runs under byte-identical labels, each only its step, slot and form. Every unit is in one run, and both forms
-    and both slots are there."""
+    same runs under byte-identical labels, each only its step, slot and form, a unit of no request's (the scan state's
+    `ScanState_v1`) only its step and form. Every unit is in one run, and both forms and both slots are there."""
     (_la, _va, a), (_lb, _vb, b) = _private(3), _private(4)
     assert any(not np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
     ka, kb = _Kept(), _Kept()
@@ -1011,8 +1011,8 @@ def test_a_windows_labels_are_its_step_slot_and_form_alone():
     runs = [(fid, n, lab) for fid, n, lab, *_ in ka.calls]
     assert runs == [(fid, n, lab) for fid, n, lab, *_ in kb.calls]
     labels = [json.loads(lab) for *_, lab in runs]
-    assert all(set(lab) == {"step", "slot", "form"} for lab in labels)
-    assert {lab["form"] for lab in labels} == set(WR.FORMS) and {lab["slot"] for lab in labels} == {0, 1}
+    assert {frozenset(lab) for lab in labels} == {frozenset({"step", "slot", "form"}), frozenset({"step", "form"})}
+    assert {lab["form"] for lab in labels} == set(WR.FORMS) and {lab["slot"] for lab in labels if "slot" in lab} == {0, 1}
     counts: dict[str, int] = {}
     for fid, n, _ in runs:
         counts[fid] = counts.get(fid, 0) + n
