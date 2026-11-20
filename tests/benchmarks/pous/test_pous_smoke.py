@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 
 import pytest
+import settings
 from test_pous_served_piece import RUN_EXE, TEST_PROTOCOL, _run, run_exe, served  # noqa: F401  (fixtures)
 
 from verity.protocols.resource_accounting.memory.pous.verifier import period
@@ -34,7 +34,7 @@ def test_the_honest_case_is_accepted_by_its_lean(
     honest = period.serve(run_exe, [case])[0]
     assert honest["verdict"] == "accept" and honest["protocol"] == TEST_PROTOCOL
     line = f"SMOKE storage honest: {({k: honest[k] for k in ('verdict', 'protocol')})} by {RUN_EXE} sha512 {_digest(run_exe)}"
-    if out := os.environ.get("SMOKE_OUT"):
+    if out := settings.smoke_out():
         with open(out, "a") as f:
             f.write(line + "\n")
 

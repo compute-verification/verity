@@ -115,7 +115,7 @@ SESSION_FIELDS = ("session", "seq", "root", "commitment")
 REPLY_FIELDS = ("host", "port", "peer", "by", "for", "reserve", "opened_by", "secret")
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 _SECRET = re.compile(r"^[0-9a-f]{64}$")
-#: the ε the proof system sets its committed sample size K for (`draw_k`), at core's δ = 2^-40 (`credit.DELTA`), and the
+#: the ε the proof system sets its committed sample size K for (`draw_k`), at core's δ = 2^-40 (`window.DELTA`), and the
 #: share of a window's work it expects credited; the verifier reports the ε a window's sample established, not this one
 DRAW_EPS = Fraction(1, 1000)
 EXPECTED_CREDIT = Fraction(8, 9)
@@ -550,18 +550,18 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
 def draw_k(layout: Any, eps: Fraction = DRAW_EPS, credited: Fraction = EXPECTED_CREDIT) -> int:
     """The K the proof system commits as ``draw_k`` in a period's open, before sampling, for windows of `layout` (the
     period's declared Program's, what `credit.layout_of` reads from its descriptor):
-    `window.k_prime` at `eps` and core's δ (`credit.DELTA`) over the window's work W, the credited work the share
+    `window.k_prime` at `eps` and core's δ (`window.DELTA`) over the window's work W, the credited work the share
     `credited` of it (⌊credited·W⌋, the fraction the service expects credited, unknown at the open), at most the
     window's proof blocks (core's work sampling design samples at most every proof block). It states no ε: the verifier reports what each window's
     sample established (`credit.established`). ValueError when core's `credit.strata` refuses the layout."""
     _ss, why = CR.strata(layout)
     if why is not None:
         raise ValueError(f"{why[0]}: {why[1]}")
-    cw = CR.call_work(layout)
+    cw = Wd.call_work(layout)
     work = sum(size * w for size, w in cw)
     part = Fraction(credited)
-    return min(Wd.k_prime(Fraction(eps), CR.DELTA, part.numerator * work // part.denominator, work, 1),
-               sum(size for size, _w in cw), CR.MAX_K)
+    return min(Wd.k_prime(Fraction(eps), Wd.DELTA, part.numerator * work // part.denominator, work, 1),
+               sum(size for size, _w in cw), Wd.MAX_K)
 
 
 __all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "NO_DRAW_SESSION", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS",

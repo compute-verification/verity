@@ -224,7 +224,8 @@ def test_each_hook_is_read_from_the_one_sidecar_that_defines_it(monkeypatch, nam
     which is then empty."""
     from circuit_check import sidecars as SC
 
-    assert len(SC.handing(name)) == 1, [mod for mod, _m in SC.handing(name)]
+    handed = SC.handing(name)
+    assert len(handed) == 1 or (name in TG.OPTIONAL and not handed), [mod for mod, _m in handed]
     hand = object()
     for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand),
                         ([], dict if name in TG.OPTIONAL else "0 that .* do: none"),
