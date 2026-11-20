@@ -79,7 +79,9 @@ def one(name: str, scratch: Path, seconds: float, keep: Path | None, extra: list
     if limit:
         kind = "time limit"
     elif p.returncode == 0:
-        kind = "accept"
+        said = {json.loads(x[8:])["verdict"] for x in out.splitlines() if x.startswith("VERDICT ")}
+        kind = "accept" if said == {"accept"} else "dry run" if any(x.startswith("DRY ") for x in out.splitlines()) \
+            else "exit 0, no verdict line"
     elif m := REFUSED.search(text):
         kind = f"refused {m.group(1)}"
     else:
