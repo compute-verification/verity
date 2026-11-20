@@ -54,7 +54,7 @@ inputs = ["verity/lean_process.py", "tests/verity/protocols/resource_accounting/
           "tests/verity/protocols/proofs/spot/verifier/fixtures/main-first-parent.txt",
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own
           # canonical JSON, held to the circuits codec's
-          "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",
+          "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/h1_tiles.json",
           # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
           "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py", "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",

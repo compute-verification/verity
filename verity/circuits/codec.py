@@ -620,6 +620,21 @@ def definition_digest(entry: dict, desc: dict | None = None) -> str:
     return hashlib.sha512(canonical_json(canonical_entry(entry, desc))).hexdigest()
 
 
+def closure_digest(desc: dict, key: str) -> str:
+    """Hex SHA-512 of the canonical JSON object mapping each definition `key` reaches in descriptor `desc` (itself, its
+    nodes' callees, theirs, …), by descriptor id, to its `definition_digest` (Lean's `Flock.DefinitionDigest.closureDigest`):
+    another body under `key`'s id, or under any id it reaches, has another digest.  KeyError, IndexError or TypeError on a
+    descriptor whose definitions or callees don't hold what `key` reaches."""
+    defs, callees, seen, todo = desc["definitions"], desc["callees"], {}, [key]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = definition_digest(defs[k], desc)
+            if defs[k]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(canonical_json(seen)).hexdigest()
+
+
 # ---------------------------------------------------------------------------------------------------------
 # Decoding: rebuild specializations with explicit bodies. Primitives are looked up in `registry` by id (their
 # evaluators are code, not data).

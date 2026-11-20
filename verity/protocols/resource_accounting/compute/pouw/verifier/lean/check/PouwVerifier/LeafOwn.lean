@@ -92,7 +92,7 @@ def placeOf (pre : String) (layout : Json) (steps call t : Nat) :
 def leafOwn? (descriptor : ByteArray) (rounds registration produced file : Json) (u : Nat) (k : Option Nat) :
     Except String Unit := do
   let P ← (Credit.programOf descriptor).mapError (·.2)
-  let layout ← (Credit.layoutOf P).mapError (·.2)
+  let layout ← (Credit.layoutOf P descriptor).mapError (·.2)
   let some pre := str? (Credit.prefixOf P) | throw "the window's descriptor names no PREFIX"
   let .arr log := rounds | throw "the round log is not a list"
   let (call, t) ← unitAt layout u

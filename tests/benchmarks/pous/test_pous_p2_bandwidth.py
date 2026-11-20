@@ -164,7 +164,8 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
                 f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio {held_to()}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--registration", str(tmp_path / "toy" / "registration.json"),
-            "--verifier", verifier, "--device", "cpu", "--ref-decode", "--samples", "64", "--window-s", "0.001",
+            "--verifier", verifier, "--device", "cpu", "--ref-decode", "--windows", "2", "--passes", "2", "--samples", "64",
+            "--window-s", "0.001",
             "--deadline-s", "0.001", "--workers", "2", "--chunk", "5"]
     assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
     doc = json.loads((tmp_path / "honest" / "session.json").read_text())
@@ -190,8 +191,8 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
                 f"{held_to()}")
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
                    "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
-                   "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
-                   "--chunk", "5", "--out", str(tmp_path / "fewer"), "--expect", "accept"]) == 0
+                   "--ref-decode", "--windows", "2", "--passes", "2", "--samples", "64", "--window-s", "0.001",
+                   "--deadline-s", "0.001", "--workers", "2", "--chunk", "5", "--out", str(tmp_path / "fewer"), "--expect", "accept"]) == 0
     doc = json.loads((tmp_path / "fewer" / "session.json").read_text())
     a = doc["answer"]
     assert a["verdict"] == "accept" and (a["units"], a["plan_units"], a["receipts"]) == (reg.blocks, 5, 2 * 2 * 5)
