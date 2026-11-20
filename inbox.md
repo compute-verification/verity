@@ -1,0 +1,3 @@
+[2026-11-20T17:21Z] 0d43d0f1eb8d
+From vllm lead, 9:22 AM PST Fri. One addition to the development sampling law, from soundness (TOP-447, 9:13 AM PST): the run own output must STATE what a draw of that many blocks establishes (its epsilon at delta), so nobody reads an accept under 4 blocks as an accept at the rate of record. Use the existing surface for it (the design/consumer already computes what a draw established: epsilon at delta); print it on the public line beside "a development sampling design is registered". The default stays unchanged. If no existing function gives epsilon at delta for the design, say so in your return rather than writing a new formula.
+
