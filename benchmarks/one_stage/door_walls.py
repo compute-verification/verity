@@ -20,7 +20,7 @@ steps are the door's own, in its order (`proofs.verify`): ``partition`` (`partit
 `Lower.lower` and `Compose.compose`, `flock-lower-check compose`) and ``reader`` (`proofs.tmpl_why`, the templated
 reader's head check). It prints one table of refusal classes (the text with numbers, names and digests normalised, so
 that one cause is one class) with the step, the count, the templates hit, an example and a reading of whose wall it is,
-and exits 1 when any chosen block is refused.
+and exits 1 when any chosen block is refused, 2 when the tool itself fails.
 
 ``fuzz`` draws ``N`` Programs from ``S`` (`draw`: word- and bit-typed parameters, calls, nested calls, batches, scans,
 callees whose word parameters reach no word primitive, mixed widths, parts of outputs read by a later unit, run and
@@ -169,6 +169,7 @@ def pearl_plus() -> tuple[bytes, dict]:
     from verity.circuits import laying as LY
     spec = importlib.util.spec_from_file_location("credited_in_c", ROOT / "benchmarks/pouw/credited_in_c.py")
     m = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = m
     spec.loader.exec_module(m)
     program = LY.lay(m.linear(256, 2, 1, (1, 1), True).program, m.fits)
     return _bytes(program), LY.query(program)
@@ -1198,4 +1199,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception:  # noqa: BLE001 - exit 1 is a refused block; a crash of the tool is 2
+        import traceback
+        traceback.print_exc()
+        sys.exit(2)
