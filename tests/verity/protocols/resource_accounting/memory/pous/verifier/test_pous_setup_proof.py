@@ -195,6 +195,17 @@ def test_a_drawn_block_has_exactly_one_accepted_session():
         _drawn(lambda k: [_finding(k, "a"), _finding(k, "b")])
 
 
+def test_a_refusal_of_the_door_is_reported_for_its_block():
+    """A drawn block the door refuses is refused by name, the door's reason and its part beside the block."""
+    params, salt, _ = setup_case()
+    door = lambda proof, **kw: ([_finding(0, "s0")], None) if proof == 0 else (None, ("circuit", "E_FORM: why"))  # noqa: E731
+    with pytest.raises(ValueError, match=r"^setup block 11: the door refused \(circuit\): E_FORM: why$"):
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(V, "bound", lambda *a: None)
+            V.check(lambda *a: None, door, {0: 0, 11: 11}, b"", {}, {"supplied": {V.SALT: V.SALT_MARK}}, DRAW, params,
+                    salt, 16)
+
+
 def test_the_verifier_refuses_at_the_units_constants():
     """The verifier reads the partition's blocks for the proof layer's draw and holds C's salt to the supplied
     ``pous.setup.salt/v1``, then stops where each unit's place and slot are constants of C and its ok held to 1, which
