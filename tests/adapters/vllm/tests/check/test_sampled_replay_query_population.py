@@ -473,7 +473,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
 
 
 def _rule_like_pad(served, *, cap, A, eos):
-    """A stand-in with `executed_prefix_by_rule`'s semantics (program/lifting/continuation.py): the FIRST EOS stops, the lag slot(s)
+    """A stand-in with `executed_prefix_by_rule`'s semantics (check/replay/continuation.py): the FIRST EOS stops, the lag slot(s)
     after it are executed rows without a served token, served past the first EOS / an early stop without EOS / over the cap are problems."""
     eos = set(eos)
     a = len(served)
@@ -533,7 +533,7 @@ def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_o
 def test_r3_a_broken_continuation_unit_fails_the_import_rather_than_falling_back_to_the_arithmetic(monkeypatch):
     """The recurrence is the mechanism whenever a served list is supplied: Continuation_v1 failing to import fails the population's import,
     never a record whose class silently reads 'arithmetic'."""
-    monkeypatch.setitem(sys.modules, "verity_vllm.program.lifting.continuation", None)
+    monkeypatch.setitem(sys.modules, "verity_vllm.check.replay.continuation", None)
     monkeypatch.delitem(sys.modules, "verity_vllm.check.replay.population")
     with pytest.raises(ImportError):
         importlib.import_module("verity_vllm.check.replay.population")
