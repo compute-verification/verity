@@ -111,7 +111,6 @@
       ],
       "linear": "PRF",
       "owns": [
-        "tests/benchmarks/numerical/checker/fixtures/typed-obligation-v0/",
         "security/Proofs/Flock/",
         "security/Proofs/Core/",
         "security/Definitions/Core/",
