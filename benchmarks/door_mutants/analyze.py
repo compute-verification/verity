@@ -64,18 +64,19 @@ def main(argv: list[str]) -> int:
         s["k2"] += r.get("pass2") == "KILLED"
         s["funcs"].add(r["func"])
         s["tests"].update(Path(t).name for t in r.get("tests", []))
-    print("| step | functions | mutants | killed | survived | equivalent | invalid | kill rate | killed only by slow/Lean tests (pass 2) |")
+    print("| step | functions | mutants | killed | of them only by slow/Lean tests (pass 2) | survived | equivalent | invalid "
+          "| kill rate |")
     print("|---|---|---|---|---|---|---|---|---|")
     for k, s in steps.items():
-        valid = s["KILLED"] + s["SURVIVED"]
-        print(f"| {k} | {len(s['funcs'])} | {s['n']} | {s['KILLED']} | {s['SURVIVED']} | {s['EQUIVALENT']} | {s['INVALID']} | "
-              f"{100 * s['KILLED'] / max(1, valid):.0f}% | {s['k2']} |")
+        killed, survived = s["KILLED"] + s["k2"], s["SURVIVED"] - s["k2"]
+        print(f"| {k} | {len(s['funcs'])} | {s['n']} | {killed} | {s['k2']} | {survived} | {s['EQUIVALENT']} | {s['INVALID']} | "
+              f"{100 * killed / max(1, killed + survived):.0f}% |")
     print()
     for k, s in steps.items():
         print(f"- {k}: {', '.join(sorted(s['tests']))}")
     print()
     for r in sorted(rs.values(), key=lambda r: r["id"]):
-        if r["status"] == "SURVIVED":
+        if r["status"] == "SURVIVED" and r.get("pass2") != "KILLED":
             line = (ROOT / r["file"]).read_text().splitlines()[r["line"] - 1].strip()
             p2s = f" pass2={r['pass2']}" if "pass2" in r else ""
             print(f"{r['id']} {Path(r['file']).name}:{r['func']}:{r['line']} [{r['desc']}]{p2s} tests={len(r.get('tests', []))} "
