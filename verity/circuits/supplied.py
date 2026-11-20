@@ -67,10 +67,9 @@ def _fixed(n: int) -> Callable[[Mapping[str, Any]], int]:
 def _bits(f: Callable[[Mapping[str, Any]], int]) -> Callable[[Mapping[str, Any]], int | None]:
     """A value of ``f(args)`` bits, in whole bytes."""
     def nbytes(args: Mapping[str, Any]) -> int | None:
-        try:
-            b = f(args)
-        except TypeError:
+        if not all(type(v) is int for v in args.values()):
             return None
+        b = f(args)
         return b // 8 if type(b) is int and b > 0 and b % 8 == 0 else None
     return nbytes
 

@@ -30,6 +30,7 @@ namespace MemoryAttester.Session.Properties.SecurityProofs
 open ResourceAccounting.Assumptions
 open MemoryAttester.Properties (Observed Recorded)
 open MemoryAttester.Attest.Properties.SecurityProofs (meantRun meantRun_ok)
+open Flock.SessionCoins (COMPLETE)
 
 /-- **The tie**: soundness's record of a round is `roundSeen` on what it reads of the round (`seen`). -/
 theorem round_eq_roundSeen (c : CoinTree) (l b : Nat) (st : Recorded) (o : Observed) :
