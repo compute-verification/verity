@@ -423,8 +423,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
             i2.load(rank, world, [])
     i2.units["d1" * 64] = ST.RequestUnit(1, "d1" * 64, 3, 1, {"kind": "greedy"}, None, 0, "r1", stop={"max_tokens": 2})
     with pytest.raises(ValueError, match=r"request r1: no Build dir under .* holds I2's Program d1d1.*\(its trace: "
-                                         r"build_request_LP3_T1_greedy_s[0-9a-f]{12}/; the Builds there: build_request_LP5_T2 d0d0.*\)"
-                                         r"\. A served window's row dir holds the Builds of I2's Programs once `advice_compile\.py RUN --window K`"):
+                                         r"build_request_LP3_T1_greedy_s[0-9a-f]{12}/; the Builds there: build_request_LP5_T2 d0d0.*\)"):
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
@@ -679,7 +678,7 @@ def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, mon
         PP.serve_window(str(s.run), 2)
 
 
-def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_execution(tmp_path):
+def test_phi_of_a_served_engine_reads_its_target_and_execution(tmp_path):
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager"}, "target": TARGET}
     phi = PP.phi_of_serve(serve)
     assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
@@ -699,27 +698,18 @@ ENGINE = {"execution": "bi-eager", "env_flags": {},
                             "tensor_parallel_size": 1}}
 
 
-def _advice_compile() -> Any:
-    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("advice_compile",
-                                                  HERE.parents[2] / "adapters" / "vllm" / "tools" / "advice_compile.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @pytest.mark.parametrize("label", ["serve.json's", "its engine record's"])
 def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(tmp_path, label):
-    """`advice_compile` writes a served window's row dir's Builds and I2 reads each by the digest of the Program it compiles,
-    so the two read one φ of one ``serve.json`` (`predict.phi.served_phi`), its engine's args and world included, wherever
+    """The prover's φ of a served engine (`predict.phi.served_phi`) and the verifier's (`phi_of_serve`) are one φ of one
+    ``serve.json``, its engine's args and world included, wherever
     it states its execution: a request Program's length rule reads the engine's ``max_model_len``, so under a φ stating
     none I2 compiles, for an engine serving below its model's length, a Program no Build holds. A launch that left the
     length to vLLM states the length its engine fitted on both sides. The bodies the two compile are one too."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 
-    AC = _advice_compile()
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict.phi import served_phi
+
     serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
              "target": TARGET, "engine": ENGINE, **({"execution": "bi-eager"} if label == "serve.json's" else {})}
     (tmp_path / "serve.json").write_text(json.dumps(serve))
@@ -727,8 +717,11 @@ def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(
     (tmp_path / "advice" / "w0" / "registration.json").write_text(json.dumps({"window": 0}))
     reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1")]
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
-    _advice, meta, bodies, _reg = AC.served_inputs(tmp_path, 0)
-    built = AC.phi_of(meta, json.loads(pinned_hf_config(serve["model"], serve["revision"]).read_text()), 0)
+    bodies = ADV.bodies(tmp_path, 0)
+    meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"],
+            "execution": serve.get("execution") or serve["engine"].get("execution"), "default_seed": DEFAULT_SEED,
+            "engine_record": serve["engine"]}
+    built = served_phi(meta, json.loads(pinned_hf_config(serve["model"], serve["revision"]).read_text()), 0)
     phi = PP.phi_of_serve(serve)
     assert phi.to_json() == built.to_json()
     assert phi.engine == {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
@@ -737,11 +730,11 @@ def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(
     assert PP.serve_ingress(PP.serve_requests(tmp_path, 0)) == bodies
     fitted = {**ENGINE, "effective": {"max_model_len": 4032}, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": -1}}
     assert PP.phi_of_serve({**serve, "engine": fitted}).engine == {**phi.engine, "max_model_len": 4032}
-    assert AC.phi_of({**meta, "engine_record": fitted}, phi.hf_config, 0).engine == {**phi.engine, "max_model_len": 4032}
+    assert served_phi({**meta, "engine_record": fitted}, phi.hf_config, 0).engine == {**phi.engine, "max_model_len": 4032}
 
 
-def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
-    """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
+def test_a_served_pins_phi_reads_its_config_of_record():
+    """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`), so an int8
     serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
 
@@ -1124,7 +1117,7 @@ W1 = WA.Advice((QA, QB), ON, (0, 1), (AT_A, AT_B))
 
 def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_holds_none(tmp_path, monkeypatch):
     """At a tied window's close (`serve_tie`, before its sample coin) the row dir holds the seal's commit and no Build:
-    ``advice_compile.py`` writes those once the serve is done. So window-commit's I2 loads each Program from its own Build,
+    so window-commit's I2 loads each Program from its own Build,
     written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
     once it returns, and writes none into the row dir."""
     from verity_vllm.program.predict import window_circuit as WC
