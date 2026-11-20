@@ -3,8 +3,8 @@
 # per W, an honest period of W windows as PoUW's period difftest generates one, and counts the replays its reference
 # (`period_check.case`) makes; the compiled check (`pouw-period serve`, built in the checkout's package) answers the same
 # case under calls.py, which counts its entries into `Spot.Challenger.checked`, the replay. It runs in one-stage's
-# `verifier_env` (a Lean panic aborts it), and a panic line on its stderr (`lean_child.refuse_panic`) or an exit status
-# other than 0 ends the job before its row is written. Run:
+# `verifier_env` (a Lean panic aborts it), and a panic line on its stderr (`lean_child.refuse_panic`), a signal or an exit
+# status other than 0 (`verifier.LEAN_ABORT`) ends the job before its row is written. Run:
 #   research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --pool research --cwd source \
 #     --mem-wait 1800 -- bash benchmarks/verifier_cost/ledger_replay/replays.sh 1 2 3
 # $OUT gets replays.jsonl (one row per W: the ledger's entries and sessions, and each side's verdict and replays),
@@ -31,11 +31,12 @@ for w in "$@"; do
   uv run python - "$w" "$S/reference.jsonl" "$S/reply-$w.json" "$S/calls-$w.json" "$S/stderr-$w.txt" <<'PY' | tee -a "$O/replays.jsonl"
 import json, sys
 from verity.protocols.proofs.spot.verifier.one_stage import lean_child
+from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
 w, reference, reply, calls, stderr = sys.argv[1:]
 lean_child.refuse_panic(open(stderr, encoding="utf-8", errors="replace").read())
 traced = json.load(open(calls))
 if traced["rc"] != 0:
-    sys.exit(f"replays.sh: pouw-period serve exited with status {traced['rc']} at W={w}, so its reply is not read")
+    sys.exit(f"replays.sh: {PV.LEAN_ABORT}: pouw-period serve {PV.ended(traced['rc'])} at W={w}")
 row = next(r for r in map(json.loads, open(reference)) if r["windows"] == int(w))
 print(json.dumps({**row, "compiled_verdict": json.load(open(reply))["verdict"], "compiled_replays": traced["entries"],
                   "compiled_rc": traced["rc"], "threads": traced["threads"]}))

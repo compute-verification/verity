@@ -58,6 +58,16 @@ class LeanError(RuntimeError):
     """The Lean verifier can't be built or run, or answered outside its protocol."""
 
 
+#: the refusal of a Lean verifier that a signal killed or that exited with no verdict's status, whatever it wrote: in
+#: `lean_child.lean_env` a panic aborts, and an out-of-range index's abort writes no panic line
+LEAN_ABORT = "lean-abort: the Lean verifier ended with no verdict's exit status: its answer is not read"
+
+
+def ended(status: int) -> str:
+    """How a process with return code `status` ended, in words."""
+    return f"killed by signal {-status}" if status < 0 else f"exit status {status}"
+
+
 #: the core protocols' executables of `PACKAGE` whose `serve` answers a case (`Core.Protocol.main`): one execution
 #: phase's check (`verity/pouw/v1`) and a credit period's (`verity/pouw/period/v1`)
 SERVE_EXES = ("pouw-verifier", "pouw-period")
@@ -95,10 +105,9 @@ class _Server:
         self._lock = threading.Lock()
 
     def exchange(self, request: Any, what: str) -> Any:
-        """The JSON line `exe` answers to `request`'s canonical line; raises `LeanError` where it ends (naming its exit
-        status), exits with another status than 0 after answering, writes a panic line (`lean_child.LEAN_PANIC`,
-        whatever its answer: it runs in `lean_child`'s `lean_env`, so a panic aborts it), or answers a line that is not
-        JSON."""
+        """The JSON line `exe` answers to `request`'s canonical line; raises `LeanError` where it writes a panic line
+        (`lean_child.LEAN_PANIC`, whatever its answer: it runs in `lean_child`'s `lean_env`, so a panic aborts it), ends
+        before answering or ends with another status than 0 (`LEAN_ABORT`), or answers a line that is not JSON."""
         line = _canonical(request)
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -123,7 +132,7 @@ class _Server:
             self._proc = None
             if (panic := LC.panic_line(err)) is not None:
                 raise LeanError(f"{LC.LEAN_PANIC}: {self.exe} on {what}: {panic}")
-            raise LeanError(f"{self.exe} ended on {what} with exit status {status}: {err[-2000:]}")
+            raise LeanError(f"{LEAN_ABORT}: {self.exe} on {what}: {ended(status)}: {err[-2000:]}")
 
     def _loads(self, reply: str, what: str) -> Any:
         try:

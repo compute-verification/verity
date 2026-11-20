@@ -7,6 +7,8 @@ import ast
 import sys
 from pathlib import Path
 
+import pytest
+
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 
 
@@ -43,6 +45,17 @@ def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_nam
     assert got["refused"][0] == V.DISAGREE and f"{V.LC.LEAN_PANIC}: " in got["refused"][1], got
     assert "PANIC at PouwVerifier.Credit.tileOf" in got["refused"][1], got
     V._server.close()
+
+
+@pytest.mark.parametrize("end", ["os.kill(os.getpid(), signal.SIGABRT)", "sys.exit(3)"])
+def test_a_verifier_killed_by_a_signal_or_ending_with_no_verdict_is_refused_by_name(monkeypatch, tmp_path, end) -> None:
+    fake = tmp_path / "pouw-verifier-difftest"
+    fake.write_text(f"#!{sys.executable}\nimport os, signal, sys\nsys.stdin.readline()\n{end}\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setattr(V, "executable", lambda exe=V.EXE: fake)
+    monkeypatch.setattr(V, "_server", V._Server())
+    got = V.of_record("window", {}, {"verdict": "accept"})
+    assert got["refused"][0] == V.DISAGREE and f"{V.LEAN_ABORT}: " in got["refused"][1], got
 
 
 def test_without_lake_the_refusal_names_the_path_it_searched(monkeypatch, tmp_path) -> None:

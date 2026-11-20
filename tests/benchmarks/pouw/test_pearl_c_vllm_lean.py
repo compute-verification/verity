@@ -204,6 +204,19 @@ def test_a_lean_that_panics_beside_an_agreeing_accept_with_exit_0_is_refused_by_
     assert (rc, answer) == (2, None) and check["reason"].startswith(f"{LC.LEAN_PANIC}: PANIC at "), check["reason"]
 
 
+@pytest.mark.parametrize("end, how", [("kill -ABRT $$", "killed by signal 6"), ("exit 3", "exit status 3")])
+def test_a_lean_killed_by_a_signal_or_with_no_verdicts_exit_status_is_refused_by_name(run, tmp_path, end, how):
+    """A ``pouw-pearlplus`` that prints the Python's own accept, then ends by a signal or with an exit status that is no
+    verdict's (0 accept, 1 reject) gives no answer: `verifier.LEAN_ABORT`, whatever it printed."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
+
+    d, verify, doc = run
+    exe = stub(tmp_path, printout(doc), 0)
+    exe.write_text(exe.read_text().replace("exit 0\n", f"{end}\n"))
+    rc, answer, check = lean(tmp_path, verify, d, exe)
+    assert (rc, answer) == (2, None) and check["reason"].startswith(f"{PV.LEAN_ABORT}: pouw-pearlplus {how}"), check["reason"]
+
+
 def test_the_step_refuses_before_the_lean_without_a_coin_record_the_verdicts_passes_or_an_executable(run, tmp_path):
     """No coin record (nothing pins the Lean's source to the Python's), passes other than those the verdict read (a pass's
     manifest changed since), or no executable: no answer, and the executable never runs."""
