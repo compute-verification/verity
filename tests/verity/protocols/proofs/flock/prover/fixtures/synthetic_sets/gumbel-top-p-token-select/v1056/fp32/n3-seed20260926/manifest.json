@@ -78,7 +78,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "GumbelTopPTokenSelect_v1{V=1056}": "7d57c4e964f8db783882dfa7e9deb8eb9daf8042b151e8e9c72f189d7eb7cb2260fe94e2bf5ea4d28aaf637e041f1c6ea87803c1b17f753eda53653e5a70dc0d"
+   "GumbelTopPTokenSelect_v1{V=1056}": "e486e660f2cab670956b34d277d10b65b484496f79df175d85280adb2e1ee05ee7b797d1506681771afbd664c276eb0dc9a45289e0b812c84af90a21e296d568"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",

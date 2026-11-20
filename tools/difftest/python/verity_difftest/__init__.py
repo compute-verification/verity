@@ -154,6 +154,13 @@ LEAN_EXIT = "lean-exit: the Lean verifier ended with a status it does not docume
 ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
 
 
+def _exit_why(code: int) -> str:
+    """`LEAN_EXIT`, then how a Lean process that did not end with status 0 ended: killed by a signal, or at a status."""
+    if code < 0 and -code in signal.valid_signals():
+        return f"{LEAN_EXIT}: killed by {signal.Signals(-code).name}"
+    return f"{LEAN_EXIT}: status {code}{' (abort)' if code == 128 + signal.SIGABRT else ''}"
+
+
 class Server:
     """One server process, started at the first request and again after it dies, with `ABORT_ON_PANIC` set; requests are
     answered in order, and a request whose reply comes beside a panic line on the process's standard error is refused
@@ -221,9 +228,7 @@ class Server:
         if proc.stdin:
             proc.stdin.close()
         code = proc.wait()
-        self._exit_why = None if code == 0 else (
-            f"{LEAN_EXIT}: killed by {signal.Signals(-code).name}; " if code < 0 and -code in signal.valid_signals() else
-            f"{LEAN_EXIT}: status {code}{' (abort)' if code == 128 + signal.SIGABRT else ''}; ")
+        self._exit_why = None if code == 0 else _exit_why(code) + "; "
         self._stderr.seek(0)
         err = self._stderr.read().decode("utf-8", "replace")
         self._stderr.close()
@@ -232,6 +237,25 @@ class Server:
     def close(self) -> None:
         if self._proc is not None:
             self._dead()
+
+    def close_checked(self) -> None:
+        """End of input, then the process's end, waited for (an event, no clock): refused by name (`ProtocolError`) where
+        the process wrote a panic line while it ended, or ended with a status but 0, whatever it answered before. For a
+        caller that reads a verdict from this server and uses it only once the server has ended cleanly; `close` is for
+        one that does not."""
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        proc.stdin.close()
+        proc.stdout.read()
+        code = proc.wait()
+        self._stderr.seek(0)
+        err = self._stderr.read().decode("utf-8", "replace")
+        self._stderr.close()
+        if (panic := PANIC.search(err)) is not None:
+            raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
+        if code != 0:
+            raise ProtocolError(_exit_why(code))
 
     def __enter__(self) -> Server:
         return self

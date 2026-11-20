@@ -4,8 +4,8 @@ table row against the verifier's own registered root, at the position the verifi
 derived from that program, or the Lean verifier refuses it. The statements are staged here over a hidden-output RoPE d64
 circuit (`HmOut`, the default `verity/flock-circuit`) composed for the `RegisteredRoPE` program and its partition object of
 one block; the verifier's file is Flock's `Registered.FORMAT` (`registered.READS_V2`), whose positions C gives (`statement`: setup, no proof; `verify`: setup of each table,
-with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`, vectors.json's registered-reads
-set) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
+with no proofs). Upstream's proved session over the public-output statement (`FIXTURE`,
+`pod/97-registered-reads.sh`) is held to the same reads. Composing the 56 MB circuit takes about 30 s and each call sets it up (about 8 s), so the
 module is slow; it catches what the Python reference (`tests/verity/protocols/proofs/spot/verifier/test_registered.py`) can't: the
 executable verifier's own refusals, on both statements' setup paths."""
 from __future__ import annotations
@@ -34,7 +34,7 @@ from verity.commitments import registered_value as RV
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
-FIXTURE = "art:bf70d8eb"
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "registered-reads"
 STATEMENT = "verity/flock-circuit"
 UPSTREAM_STATEMENT = "verity/flock-circuit@967b8d06"
 VALUE = "cs_table"
@@ -419,10 +419,9 @@ def rope(tmp_path_factory):
     sys.path.insert(0, str(VERIFIER))
     import ci
 
-    try:
-        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+    assert (FIXTURE / "stage" / "program.json").is_file(), (
+        f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures {FIXTURE.relative_to(FIXTURE.parents[7])}`")
+    root = ci.canonical_tree(FIXTURE, tmp_path_factory.mktemp("store") / "registered-reads")
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return root
 
