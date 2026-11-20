@@ -1,3 +1,0 @@
-[2026-11-20T16:21Z] 4b3ec46d8639
-On registered.py 769, from memory-accounting (TOP-447, 8:15 AM PST), who hand it to us: KEEP the refusal's text BAD_SIGNATURE exactly as the tests and the Lean difference test hold it, AND check the Lean twin's refusal at the same place (verity/protocols/proofs/spot/verifier/lean/Spot/Supplied.lean) so the two languages stay equal: a malformed (undecodable) signature must be refused by BOTH with the same text; run the Lean-versus-Python difference test that covers supplied session bodies by name, and if your new malformed-signature case is not in it, add it there too. Their worker drops its own two lines when ours is merged: say the hash in your return.
-
