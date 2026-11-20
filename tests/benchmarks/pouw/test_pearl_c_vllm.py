@@ -1364,7 +1364,7 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]
     assert "y committed and checked on 2 of 2 calls" in doc["line"]
     assert answer["profile"]["exclusion_tiles"] > 0 and " drawn tiles and the exclusion tiles over 1 passes, " in doc["line"]
-    assert "; 0 MACs credited at ε " in doc["line"] and f"{work['macs']:,}" not in doc["line"]
+    assert "; 0 MACs credited at ε " in doc["line"] and f"{work['checked_macs']:,}" not in doc["line"]
     assert not re.search(r"\d[\d,]* (exclusion tiles|of [\d,]+ MACs)", doc["line"])
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
     bad = bytearray(rows.read_bytes())

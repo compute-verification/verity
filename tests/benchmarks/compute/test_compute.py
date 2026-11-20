@@ -916,7 +916,7 @@ def head_record(tmp_path: Path, real_rows: int = 4, without: int | None = None, 
     for name in (C.ANSWER, C.LEAN):
         doc = json.loads((record / name).read_text())
         work = doc["public"]["work"] if name == C.ANSWER else doc["work"]
-        work.update(macs=totals["checked_macs"], credited=totals["credited"])
+        work.update(checked_macs=totals["checked_macs"], credited=totals["credited"])
         (record / name).write_text(json.dumps(doc))
     return record
 

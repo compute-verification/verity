@@ -41,7 +41,7 @@ def test_block_cost_is_the_credits_macs() -> None:
     for real in (tm, tm - 12):
         record = UnitRecord(Matmul(0, Shape(tm, 1024, tn), 0), real_rows=real, k_kept=1024)
         credit = vr.credit_at_assumption([SimpleNamespace(scheme=scheme, records=[record])], 3, Fraction(1, 100))
-        assert block.cost({"K": 1024, "TM": tm, "TR": real, "TN": tn}) == credit["macs"] == real * tn * 1024
+        assert block.cost({"K": 1024, "TM": tm, "TR": real, "TN": tn}) == credit["checked_macs"] == real * tn * 1024
     assert Fraction(credit["rho"]) == scheme.cap
     assert {c.bound for c in PS.PEARL_PLUS.charges} <= {*credit, *vr.grid_work(credit, credit)}
 
