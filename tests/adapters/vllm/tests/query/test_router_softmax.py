@@ -10,12 +10,9 @@ import pytest
 from verity.circuits import word as W_
 
 from verity_vllm.acquire.sources import router_softmax_source as S
-from verity_vllm.check import oracle_compare as OC
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as PV
 from verity_vllm.query import router_softmax as RS
-from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
 from verity_vllm.query.units import ValueRef
@@ -103,16 +100,6 @@ def test_manifest_layers_refuses_a_layer_under_two_geometries():
     man["identities"].append(dict(row, step=1, width=row["width"] + 9, renormalize=True))
     with pytest.raises(ValueError, match="two geometries"):
         RS.manifest_layers(man)
-
-
-def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.check.replay import coverage
-
-    assert RS.FAMILY in fmt.FAMILIES and RS.FAMILY in coverage.QUERY_FAMILY_MECHANISM
-    entry = {"identity": {"op_path": "moe/L1", "output_member": RS.MEMBER}, "name": f"moe/L1/{RS.MEMBER}"}
-    assert OC._family_of(entry) == "hidden_stream", "the Match record holds no value for the router's softmax: form (B) never compares it"
-    row = {"family": RS.FAMILY, "op_path": "moe/L1", "output_member": RS.MEMBER, "step": 0}
-    assert Binder([row]).bind(0, [f"moe/L1/{RS.MEMBER}"]) == [("moe/L1", RS.MEMBER, 0, "label")]
 
 
 def test_word_check_sees_the_tapped_softmax_as_committed():

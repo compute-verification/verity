@@ -1,36 +1,21 @@
-"""(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
-by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its `not_executed_by_rule` split,
-the seeded stratified sample (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
-per-request phase anchors -- recomputed with `verity_vllm.check.replay`'s own pure functions (`ProgramIndex`, `population`,
-`executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
-rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
-STRONG: a row classified into another family / stratum, a moved phase boundary, a different sample -- each moves a count.
+"""(e') [T1] The sampled-replay PARTITION of record: `commit/sampled_replay_p<k>.json`'s population (the VUs by family, the
+not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its seeded stratified sample and the per-request phase
+anchors, as the record states them, beside a candidate's or a record kept on the node.  The record's own `result` / `grade` are carried
+as facts beside the partition.
 
-What this does NOT recompute: the VU evaluations themselves (the `evaluated` / `equal` / `mismatch` counts and the Q(P) reconciliation
-`query_total` / `sampled_strata` / `uncovered_by_name` need the binding map, `commit/binding_map_p*.json`, 0.5-1.5 GB, vault core tars only).
-The record's own `result` / `grade` are carried as facts beside the partition, not recomputed.
-
-Inputs: `commit/sampled_replay_p0.json` (records), `build_request*/instances.json.gz` (programs; the B=1 Programs are
-0.9-1.7 GB compressed and need 120-250 GB of RAM as Python objects: a big pod; the B>=2 rows' request Programs are small).  Every GREEN
-row and #57 carry a sampled-replay record; the FAIL rows #4, #70, #75 never reached C2.  `sampled_replay_p1/p2.json` are `reused_from`
-p0 on the B=1 rows (the same run root, seed and code): the partition is p0's; the B>=2 rows' further pairs are not compared here.
+Inputs: `commit/sampled_replay_p0.json` (records).  `sampled_replay_p1/p2.json` are `reused_from` p0 on the B=1 rows: the partition is p0's.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
-from collections import Counter
 
 from .. import resolver
 
 NAME = "replay_partition"
 TIER = "T1"
 STRENGTH = "strong"
-INPUTS = ("commit/sampled_replay_p0.json", "build_request*/instances.json.gz")
-
-FACT_KEYS = ("a_r", "a_r_source", "lag", "cap", "arrive", "eos_declared", "served_len_commit", "linked", "lag_attested", "rows_past_stop",
-             "served", "eos_ids", "account_missing")
+INPUTS = ("commit/sampled_replay_p0.json",)
 
 
 def applies(row: resolver.Row) -> str | None:
@@ -74,64 +59,6 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] | None = None) -> dict:
-    """The partition over `programs` (request label -> Program instances doc) with the record's stated parameters -- `sampled_replay`'s
-    population / split / sample, without the evaluations, under the v2 query's address rule (`program_dirs` = the Build dirs whose
-    correspondence the manifest is built with).  A record that predates the v2 rule (no `addresses.rule`: every reference record) was
-    addressed by the retired v1 rule; its partition is recomputed under v2 here (decision `retire-v1` where that moves a count).  Returns a
-    `sampled_replay`-shaped document (`lift` reads it)."""
-    # numpy and the core `verity` load with these three, which only a recomputation needs: the module itself loads neither
-    from verity_vllm.check.replay import index as IX
-    from verity_vllm.check.replay import population as POP
-    from verity_vllm.check.replay import sample as SM
-    smp, sk = sr.get("sample") or {}, sr.get("strata_keys") or {}
-    seed, per_stratum = int(smp["seed"]), int(smp.get("per_stratum") or 2)
-    max_evaluate = int(smp.get("max_evaluate") or 2000)
-    targets = sorted((smp.get("targeted") or {}).keys()) or None
-    ring_slots = (sk.get("lifetime") or {}).get("ring_slots")
-    arrivals = {str(r): int(a) for r, a in (smp.get("picks_by_request_arrival") or {}).items()}
-    ranks = [int(r) for r in (sr.get("applicability") or {}).get("ranks") or [0]]
-    facts = ((sr.get("executed_prefix_of_record") or {}).get("facts_of_record") or {})
-    executed_prefix = {rid: POP.executed_prefix_of_record(rid, **{k: v for k, v in f.items() if k in FACT_KEYS}) for rid, f in facts.items() if isinstance(f, dict)} or None
-    all_vus, anchors = [], {}
-    not_ev: Counter = Counter()
-    not_ev_fam: Counter = Counter()
-    indices: dict = {}
-    for rid, inst in programs.items():
-        pi = indices.get(id(inst))
-        if pi is None:
-            pi = IX.ProgramIndex(inst, program_dir=(program_dirs or {}).get(rid))
-            indices[id(inst)] = pi
-        anchors[rid] = POP.phase_anchor(pi.n_steps, (executed_prefix or {}).get(str(rid)))
-        vus, ne, nef = POP.population(pi, rid, rank=(ranks[0] if len(ranks) == 1 else 0), arrive=arrivals.get(rid, 0), ring_slots=ring_slots,
-                                     addresses=None, last_step=int(anchors[rid]["last_step"]))
-        all_vus.extend(vus)
-        not_ev.update(ne)
-        not_ev_fam.update(nef)
-    pool, not_exec = POP.split_not_executed(all_vus, executed_prefix)
-    picked_all, strata, tgt = SM.sample(pool, per_stratum, seed, targets=targets)
-    n_strat = int(tgt["stratified"])
-    cap = max(max_evaluate, len(strata))
-    picked = picked_all[:min(cap, n_strat)] + picked_all[n_strat:]
-    by_step: dict[str, dict[str, int]] = {}
-    for v in picked:
-        d = by_step.setdefault(str(v["request_id"]), {})
-        d[str(int(v["step"]))] = d.get(str(int(v["step"])), 0) + 1
-    return {"population": {"vus": len(all_vus), "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)),
-                           "not_evaluable_by_family": dict(not_ev_fam), "not_evaluable": dict(not_ev), "strata_n": len(strata),
-                           "not_executed_by_rule": {"vus": len(not_exec), "vus_by_request": dict(Counter(v["request_id"] for v in not_exec)),
-                                                    "strata_excluded": {k: {"population": int(n)} for k, n in sorted(Counter(v["stratum"] for v in not_exec).items())}},
-                           "not_executed_rule": {"requests": {rid: {k: ep.get(k) for k in ("a_r", "lag", "cap", "n_exec", "faults")} for rid, ep in (executed_prefix or {}).items()}}},
-            "sample": {"per_stratum": per_stratum, "seed": seed, "picked": len(picked), "stratified_picked": min(cap, n_strat), "cap_effective": cap,
-                       "max_evaluate": max_evaluate, "targeted_n": int(tgt["added"]), "targeted": tgt["hits"],
-                       "picks_by_request_step": {r: {s: [n] for s, n in sorted(d.items(), key=lambda kv: int(kv[0]))} for r, d in sorted(by_step.items())},
-                       "picks_by_request_arrival": {r: arrivals.get(r, 0) for r in by_step}},
-            "strata": strata,
-            "strata_keys": {"lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "sampled": dict(Counter(v["lifetime"] for v in picked)),
-                                         "ring_slots": ring_slots},
-                            "phase_anchor": anchors}}
-
-
 def actual(row: resolver.Row) -> dict:
     if kept := resolver.kept_on_the_node(row, "commit/sampled_replay_p0.json"):
         return kept
@@ -142,28 +69,7 @@ def actual(row: resolver.Row) -> dict:
         out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
         out["source"] = "candidate"
         return out
-    sr = _body(row.json("commit/sampled_replay_p0.json"))
-    progs_root = row.programs_root()
-    if progs_root is None:
-        raise resolver.NotResolvable(f"{row.key}: no request Programs (build_request*/instances.json.gz) reachable here")
-    programs: dict[str, dict] = {}
-    dirs: dict[str, str] = {}
-    loaded: dict[str, dict] = {}
-    for rid, ent in (sr.get("programs") or {}).items():
-        base = os.path.basename(str((ent or {}).get("dir") or "build_request"))
-        p = str(progs_root / base / "instances.json.gz")
-        if not os.path.isfile(p):
-            raise resolver.NotResolvable(f"{row.key}: request {rid}'s Program {base}/instances.json.gz not under {progs_root}")
-        if p not in loaded:
-            loaded[p] = resolver.read_json(p)
-        programs[str(rid)] = loaded[p]
-        dirs[str(rid)] = str(progs_root / base)
-    doc = recompute(sr, programs, dirs)
-    out = lift(doc)
-    out["record"] = {"result": sr.get("result"), "grade": sr.get("grade")}
-    out["source"] = "recomputed: sampled_replay.{ProgramIndex, population, executed_prefix_of_record, phase_anchor, split_not_executed, sample} over the Programs"
-    return out
-
+    raise resolver.NotResolvable(f"{row.key}: no sampled_replay_p0.json kept or in a candidate; the partition is not recomputed")
 
 def main(argv: list[str] | None = None) -> int:
     """`python -m tests.regression.checks.replay_partition <row-key|row-number> [--out FILE]`: expected vs actual, differences named."""

@@ -39,7 +39,8 @@ class LeanExit(LeanPanic):
 
 
 def lean_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
-    """``environ`` (this process's when None) with `ABORT_ON_PANIC` set."""
+    """The environment a Lean executable whose answer can become a verdict starts in: ``environ`` (this process's when
+    None) with `ABORT_ON_PANIC` set, whatever ``environ`` holds."""
     return {**(os.environ if environ is None else environ), ABORT_ON_PANIC: "1"}
 
 

@@ -129,32 +129,38 @@ theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.
     simp only [hv, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨vs, rfl, h.symm⟩
 
-theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+theorem message_ok {c : StreamedWipe.Commitment} {salt : ByteArray} {e : String} {sm : ByteArray} {fs fe : Int}
     {batches : Array StreamedWipe.Batch} {rec : ByteArray}
-    (h : StreamedWipe.message c e sm fs fe batches = .ok rec) :
-    ∃ root, StreamedWipe.recordsRoot c.session batches = .ok root ∧
-      rec = Sha512.hash (StreamedWipe.SESSION_TAG ++
+    (h : StreamedWipe.message c salt e sm fs fe batches = .ok rec) :
+    salt.size = RECORD_SALT_BYTES ∧ ∃ root, StreamedWipe.recordsRoot c.session batches = .ok root ∧
+      rec = Sha512.hash (StreamedWipe.SESSION_TAG ++ salt ++
         be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
         (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root) := by
   unfold StreamedWipe.message at h
-  cases hr : StreamedWipe.recordsRoot c.session batches with
-  | error _ => simp [hr, bind, Except.bind] at h
-  | ok root =>
-    simp only [hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨root, rfl, h.symm⟩
+  by_cases hs : salt.size = RECORD_SALT_BYTES
+  · refine ⟨hs, ?_⟩
+    cases hr : StreamedWipe.recordsRoot c.session batches with
+    | error _ => simp [hs, hr, bind, Except.bind] at h
+    | ok root =>
+      simp only [hs, ne_eq, not_true_eq_false, if_false, hr, bind, Except.bind, pure, Except.pure,
+        Except.ok.injEq] at h
+      exact ⟨root, rfl, h.symm⟩
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- The wipe's session input, with records roots of one width, determines the header and the root. -/
-theorem signedWipe_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
-    (e : StreamedWipe.SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r =
-      StreamedWipe.SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
-    h = h' ∧ r = r' := by
+/-- The wipe's session input, with salts of one width and records roots of one width, determines the salt, the header
+and the root. -/
+theorem signedWipe_split {s s' h h' r r' : ByteArray} (hs : s.size = s'.size) (hr : r.size = r'.size)
+    (e : StreamedWipe.SESSION_TAG ++ s ++ be64 h.size.toUInt64 ++ h ++ r =
+      StreamedWipe.SESSION_TAG ++ s' ++ be64 h'.size.toUInt64 ++ h' ++ r') :
+    s = s' ∧ h = h' ∧ r = r' := by
   have e := congrArg bs e
   simp only [bs_append] at e
   obtain ⟨e1, e2⟩ := List.append_inj' e (by rw [bs_length, bs_length, hr])
   simp only [List.append_assoc] at e1
   have e1 := List.append_cancel_left e1
+  obtain ⟨es, e1⟩ := split_bytes e1 hs
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
-  exact ⟨bs_inj e1, bs_inj e2⟩
+  exact ⟨es, bs_inj e1, bs_inj e2⟩
 
 theorem tag_byte : (bs SESSION_TAG)[12]? = some 109 := by decide +kernel
 
@@ -165,8 +171,8 @@ theorem tag_size : 12 < SESSION_TAG.size := by decide +kernel
 theorem wipe_tag_size : 12 < StreamedWipe.SESSION_TAG.size := by decide +kernel
 
 /-- **PoUS's session input is never the wipe's**: their tags differ at byte 12 (`memory` against `streamed`). -/
-theorem tags_differ (a b c a' b' c' : ByteArray) :
-    SESSION_TAG ++ a ++ b ++ c ≠ StreamedWipe.SESSION_TAG ++ a' ++ b' ++ c' := by
+theorem tags_differ (s a b c s' a' b' c' : ByteArray) :
+    SESSION_TAG ++ s ++ a ++ b ++ c ≠ StreamedWipe.SESSION_TAG ++ s' ++ a' ++ b' ++ c' := by
   intro e
   have e := congrArg (fun x => (bs x)[12]?) e
   simp only [bs_append, List.append_assoc] at e

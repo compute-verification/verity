@@ -196,8 +196,7 @@ WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.
                  "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
                  "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
                  "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
-                 "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
-                 "sampled_replay*.json": "the replay's executed prefixes", "*.npy": "a value array",
+                 "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows", "*.npy": "a value array",
                  "*.npz": "a value array", "*.pt": "a tensor", "*.safetensors": "a checkpoint's weights"}
 """... by a file's name (`fnmatch`), the first pattern that matches."""
 

@@ -45,9 +45,6 @@ CAPTURE_MAP_SCHEMA = "verity-vllm/capture-map/v0"
 # --- the Commit's driver (`verity_vllm.pipeline`)
 #: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
 COMMIT_PLAN_SCHEMA = "verity-vllm/commit-plan/v1"
-#: a slim keep's `slim.json` (`pipeline.cpu_replay.SLIM_SCHEMA`), which `keep` writes and `open_keep` refuses any other
-#: than
-REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 #: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
 #: `open_bundle` refuses a manifest with any other
 REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
@@ -141,19 +138,13 @@ RANK_COMMIT_BINDING_SCHEMA = "verity/tp2/commit-binding/v1"
 PROGRAM_COMPARE_SCHEMA = "cb-a/compare/v1"
 
 # --- the sampled replay (`verity_vllm.check.replay`)
-#: the sampled replay's record (`check.replay.driver.SCHEMA`), which `check.replay.driver` writes; `pipeline.c2_replay`
-#: and `pipeline.replay_bundle` write it for a replay that did not run
+#: the sampled replay's record, which `pipeline.replay_bundle` writes for a replay that did not run
 SAMPLED_REPLAY_SCHEMA = "verity-sweep/sampled-replay/v1"
-#: the MoE planes' alias check, which `check.replay.population.moe_plane_alias_check` writes
-MOE_PLANE_ALIAS_CHECK_SCHEMA = "verity-sweep/moe-plane-alias-check/v1"
 #: the PoUW circuit's replay, which the deleted ncp-v2 replay (`protocols.pouw.pouw_circuit.replay`) wrote; kept for the
 #: records on disk that carry it
 POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
-#: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay` and
-#: `pipeline.replay_bundle` write it for a linkage that did not run
+#: the boundary linkage's record, which `pipeline.replay_bundle` writes for a linkage that did not run
 BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
-#: the stochastic recompute's report, which `check.replay.stoch_recompute.recompute_run` writes
-STOCH_RECOMPUTE_SCHEMA = "verity-r15/stoch-recompute/v2"
 
 # --- the checks (`verity_vllm.check`)
 #: the Commit's token record, `commit/tokens_p<pair>.json` (`check.commit_tokens.CommitTokens.SCHEMA`), which
