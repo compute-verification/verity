@@ -68,8 +68,6 @@ PUBLIC = {
                                 "SamplingParams and its version",
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
                                       "one, or derived from its window's seed coin and its id) and the windows' seed coins",
-    "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
-                                    "order: its reference, kernels and install",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -231,6 +229,8 @@ PUBLIC = {
                                "no name",
     "verity_vllm.definitions.registry.catalog": "I7: the registry with every module loaded (load) and the packages it "
                                                 "loads by scope (SCOPES), which SPOT's audit and the benchmarks read",
+    "verity_vllm.definitions.registry.boolean_gate_ops": "I7: general word primitives on bits, which a lane outside the adapter "
+                                                         "builds cases from (benchmarks/property_redteam)",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
@@ -333,7 +333,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.dsa_topk",
     "verity_vllm.definitions.registry.dsa_topk_mask",
     "verity_vllm.definitions.registry.dsa_topk_reads",
-    "verity_vllm.definitions.registry.dsv4_qnorm_insert",
     "verity_vllm.definitions.registry.flashmla",
     "verity_vllm.definitions.registry.fp8",
     "verity_vllm.definitions.registry.fp8_moe",
@@ -342,7 +341,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.hopper",
     "verity_vllm.definitions.registry.int8_exact",
     "verity_vllm.definitions.registry.io_shell",
-    "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
     "verity_vllm.definitions.registry.pouw_rows",
     "verity_vllm.definitions.registry.prims",
@@ -410,7 +408,7 @@ _SHARED_WORDS = "until the shared word primitives move below both adapters"
 KNOWN_SITES = {
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
-    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
+    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.tf32_twin"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,

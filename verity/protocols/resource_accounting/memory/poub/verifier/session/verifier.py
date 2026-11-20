@@ -669,10 +669,10 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     try:
         read = lean.call({"op": "init", "source": source.hex(), "registry": registry.to_json(), "chunk": CHECK_BATCH})
     except BaseException:
-        lean.close()
+        lean.close(check=False)
         raise
     if read["registry"] != registry.to_json():
-        lean.close()
+        lean.close(check=False)
         raise ValueError(f"the Lean verifier reads the registry as {read['registry']}, not as audit.Registry does: "
                          f"{registry.to_json()}")
     return lean
@@ -688,6 +688,13 @@ def unset(event: dict, out, coin: bytes | None) -> str | None:
     if event["kind"] == "close":
         return f"window {event['t']}'s openings were drawn without the challenger's coins"
     return None
+
+
+def refuse_unclean(results: list[dict], why: str) -> None:
+    """Every session of ``results`` refused by name (``why``): the Lean verifier that accepted them ended with a panic line
+    or a status but 0, so no answer read from it is used."""
+    for r in results:
+        r["accepted"], r["failure"] = False, why
 
 
 def accepts(failure: dict | None, outcome: dict | None) -> bool:
@@ -1073,8 +1080,10 @@ class Verifier:
                                       + ("" if mine == lv.REFUSED else f" (audit.Registry closed it: {mine})"))
         return got if got == mine else {**got, "python": mine}
 
-    def stop(self) -> None:
-        self.lean.close()
+    def stop(self, check: bool = True) -> None:
+        """The Lean verifier's end (`lv.Lean.close`): `lv.LeanError` by name where it ended unclean, which `main` makes the
+        refusal of every session it accepted."""
+        self.lean.close(check)
 
     def _read(self) -> None:
         try:
@@ -1758,7 +1767,11 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
         lean = start_lean(os.urandom(32), registry, a.lean_exe, lambda m: None)
         closed = registry.close(node).to_json()
         got, kept = lean.call({"op": "close", "node": node.hex()}), lean.call({"op": "registry"})
-        lean.close()
+        try:
+            lean.close()
+        except lv.LeanError as e:
+            print(f"verifier: {e}; {a.registry} is unchanged", flush=True)
+            return 3
         if got != closed:
             print(f"verifier: the verifiers disagree on closing {node.hex()}: Lean {json.dumps(got)}, "
                   f"audit.Registry {json.dumps(closed)}; {a.registry} is unchanged", flush=True)
@@ -1821,7 +1834,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
                                 ingress_bytes_per_s=a.ingress_bytes_per_s)}, indent=1))
         if checks:
             checks.close(wait=True)
-        v.stop()
+        v.stop(check=False)
         return 3
     save_registry(a.registry, v.registry_json())
     print(f"verifier: registered {reg.blocks} blocks, digest {reg.digest.hex()[:16]}, calibration {json.dumps(cal)}",
@@ -1877,7 +1890,15 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None,
     conn.send({"type": "bye"})
     if checks:
         checks.close(wait=True)
-    v.stop()
+    try:
+        v.stop()
+    except lv.LeanError as e:
+        refuse_unclean(results, str(e))
+        record()
+        doc = json.loads((a.out / "verifier.json").read_text())
+        (a.out / "verifier.json").write_text(json.dumps(doc | {"refused": str(e)}, indent=1))
+        print(f"verifier: {e}", flush=True)
+        return 3
     me, kids = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
     out = json.loads((a.out / "verifier.json").read_text()) if (a.out / "verifier.json").exists() else {}
     out["cpu"] = {"self_s": me.ru_utime + me.ru_stime, "workers_s": kids.ru_utime + kids.ru_stime,

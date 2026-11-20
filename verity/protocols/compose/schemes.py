@@ -23,7 +23,7 @@ import json
 import sys
 from collections.abc import Mapping, Sequence
 from importlib import import_module
-from types import MappingProxyType
+from types import MappingProxyType, ModuleType
 
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.scheme import Scheme
@@ -98,6 +98,14 @@ def get(name: str) -> Scheme:
     return S.SCHEMES[name]
 
 
+def catalog(name: str, part: str) -> ModuleType:
+    """The module of the scheme named ``name`` that its ``catalog`` names ``part``, imported; `KeyError` names its parts."""
+    scheme = get(name)
+    if part not in scheme.catalog:
+        raise KeyError(f"{name}'s catalog has no {part!r}; its parts: {', '.join(sorted(scheme.catalog)) or 'none'}")
+    return import_module(scheme.catalog[part])
+
+
 def load() -> Mapping[str, Scheme]:
     """Every declared scheme, by name, once each declaring module is imported."""
     for module in sorted(set(DECLARATIONS.values())):
@@ -126,5 +134,5 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 
 
-__all__ = ["DECLARATIONS", "FIELDS", "KEYS", "LOOKUPS", "WORKLOAD_MESSAGES", "get", "keys", "load", "main", "named",
+__all__ = ["DECLARATIONS", "FIELDS", "KEYS", "LOOKUPS", "WORKLOAD_MESSAGES", "catalog", "get", "keys", "load", "main", "named",
            "workload_messages"]

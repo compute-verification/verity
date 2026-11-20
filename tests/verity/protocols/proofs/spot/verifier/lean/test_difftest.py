@@ -56,7 +56,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from hypothesis import strategies as st
+from hypothesis import note, strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as PR
@@ -3434,7 +3434,9 @@ def run_input_cases(draw) -> dict:
     program = PROGRAMS[PO.program_sha512(case["program"])]
     try:
         n = sum(c for *_, c in PO.TemplatePartition(program, case["query"]).ranges)
-    except (P.QueryRefused, ValueError, KeyError):
+    except PO.QueryInapplicable as e:
+        # `fanout_cases` draws a query that doesn't apply on purpose: the case gets one member of one unit
+        note(f"run_input_cases: the query doesn't apply: {e}")
         n = 1
     cuts = sorted(set(draw(st.lists(st.integers(1, n - 1), max_size=3)))) if n > 1 else []
     bounds = [0, *cuts, max(n, 1)]
@@ -7645,6 +7647,8 @@ def test_a_many_port_registration_agrees(pieces):
 
     assert codes(lambda rs: None) == []
     assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
+    assert codes(lambda rs: rs.insert(0, {**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
     assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]

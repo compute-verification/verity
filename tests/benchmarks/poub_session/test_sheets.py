@@ -102,7 +102,7 @@ def test_a_figures_file_not_the_one_its_pinned_digest_names_is_refused_and_a_rec
         def registry_json(self):
             return {}
 
-        def stop(self):
+        def stop(self, check=True):
             pass
 
     monkeypatch.setattr(V.wire, "listen", lambda host, port: Server())
