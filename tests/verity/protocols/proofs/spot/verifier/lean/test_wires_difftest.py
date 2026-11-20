@@ -530,3 +530,46 @@ def test_a_joined_order_against_a_ranks_own_rise_is_refused_alike(pieces):
     assert reference(j) == refusal("order", 0)
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(refusal("order", 0))), fn
+
+
+# --- the pair by pair overlap check against the sorted sweep ---------------------------------------------------------
+
+
+def _rect(w):
+    c0, c = w.get("cut", [0, 1])
+    units = 1
+    for r in w["radix"]:
+        units *= r
+    return w["reader"], w["port"], w["at"], units // c, c0, c
+
+
+def disjoint_reference(j):
+    """Every pair of wires disjoint: different reader or port, or reader units or cut rows apart, pair by pair."""
+    rs = [_rect(w) for w in j["wires"]]
+    ok = all(a[0] != b[0] or a[1] != b[1] or a[2] + a[3] <= b[2] or b[2] + b[3] <= a[2] or a[4] + a[5] <= b[4] or b[4] + b[5] <= a[4]
+             for i, a in enumerate(rs) for b in rs[i + 1:])
+    return {"pairwise": ok, "fast": ok}
+
+
+@st.composite
+def wire_lists(draw):
+    """Up to twelve wires of two readers and two ports, starting and ending on few units so that most lists overlap, touch,
+    nest or repeat, some cut into rows."""
+    wires = []
+    for _ in range(draw(st.integers(0, 12))):
+        radix = draw(st.lists(st.integers(1, 3), min_size=1, max_size=2))
+        w = {"reader": draw(st.sampled_from(["A", "B"])), "port": draw(st.sampled_from(["x", "y"])), "writer": "G", "out": "o",
+             "at": draw(st.integers(0, 6)), "radix": radix, "base": 0, "step": [0] * len(radix)}
+        if draw(st.booleans()):
+            c = draw(st.integers(1, 2))
+            w["cut"] = [draw(st.integers(0, 3)), c]
+        wires.append(w)
+    return {"wires": wires}
+
+
+DISJOINT = D.Port(PIECES, "wires_disjoint", disjoint_reference, wire_lists(), package=PACKAGE, of_record="lean")
+
+
+def test_the_sweep_and_the_pair_by_pair_check_agree_with_the_reference(pieces):
+    stats = D.run(DISJOINT, examples=3000, server=pieces)
+    assert stats.outputs > 2000, stats

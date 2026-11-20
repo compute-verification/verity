@@ -141,6 +141,134 @@ theorem pairwiseDisjoint_iff : ∀ ws : List Wire, pairwiseDisjoint ws = true �
   | w :: ws => by
     simp [pairwiseDisjoint, List.pairwise_cons, List.all_eq_true, pairwiseDisjoint_iff ws]
 
+/-! ### The fast check is `pairwiseDisjoint` -/
+
+namespace DisjointFast
+
+theorem disjoint_comm (a b : Wire) : disjoint a b = disjoint b a := by
+  unfold disjoint
+  have h1 : (a.reader != b.reader) = (b.reader != a.reader) := bne_comm
+  have h2 : (a.port != b.port) = (b.port != a.port) := bne_comm
+  rw [h1, h2]
+  generalize (b.reader != a.reader) = x1
+  generalize (b.port != a.port) = x2
+  generalize decide (a.start + a.readerUnits ≤ b.start) = x3
+  generalize decide (b.start + b.readerUnits ≤ a.start) = x4
+  generalize decide (a.cut0 + a.cuts ≤ b.cut0) = x5
+  generalize decide (b.cut0 + b.cuts ≤ a.cut0) = x6
+  cases x1 <;> cases x2 <;> cases x3 <;> cases x4 <;> cases x5 <;> cases x6 <;> rfl
+
+theorem disjoint_of_end_le {a b : Wire} (h : a.start + a.readerUnits ≤ b.start) : disjoint a b = true := by
+  simp [disjoint, h]
+
+theorem sweep_iff : ∀ (l act : List Wire), l.Pairwise (fun a b => a.start ≤ b.start) →
+    (∀ a ∈ act, ∀ c ∈ l, a.start ≤ c.start) →
+    (sweep l act = true ↔ l.Pairwise (fun a b => disjoint a b = true) ∧ ∀ a ∈ act, ∀ c ∈ l, disjoint a c = true)
+  | [], act, _, _ => by simp [sweep]
+  | b :: bs, act, hs, hact => by
+    have hsb : ∀ c ∈ bs, b.start ≤ c.start := (List.pairwise_cons.1 hs).1
+    have hbs := (List.pairwise_cons.1 hs).2
+    have hact' : ∀ a ∈ b :: act.filter (fun a => decide (b.start < a.start + a.readerUnits)), ∀ c ∈ bs, a.start ≤ c.start := by
+      intro a ha c hc
+      rcases List.mem_cons.1 ha with rfl | ha
+      · exact hsb c hc
+      · exact hact a (List.mem_filter.1 ha).1 c (List.mem_cons_of_mem _ hc)
+    have ih := sweep_iff bs (b :: act.filter (fun a => decide (b.start < a.start + a.readerUnits))) hbs hact'
+    have ev : ∀ a ∈ act, ¬ b.start < a.start + a.readerUnits → ∀ c ∈ b :: bs, disjoint a c = true := by
+      intro a _ hn c hc
+      rcases List.mem_cons.1 hc with rfl | hc
+      · exact disjoint_of_end_le (by omega)
+      · exact disjoint_of_end_le (by have := hsb c hc; omega)
+    simp only [sweep, Bool.and_eq_true]
+    rw [ih, List.all_eq_true]
+    constructor
+    · rintro ⟨h1, h2, h3⟩
+      refine ⟨List.pairwise_cons.2 ⟨fun c hc => h3 b (List.mem_cons_self ..) c hc, h2⟩, fun a ha c hc => ?_⟩
+      by_cases hn : b.start < a.start + a.readerUnits
+      · rcases List.mem_cons.1 hc with rfl | hc
+        · exact h1 a (List.mem_filter.2 ⟨ha, by simpa using hn⟩)
+        · exact h3 a (List.mem_cons_of_mem _ (List.mem_filter.2 ⟨ha, by simpa using hn⟩)) c hc
+      · exact ev a ha hn c hc
+    · rintro ⟨hp, h3⟩
+      refine ⟨fun a ha => h3 a (List.mem_filter.1 ha).1 b (List.mem_cons_self ..), (List.pairwise_cons.1 hp).2, ?_⟩
+      intro a ha c hc
+      rcases List.mem_cons.1 ha with rfl | ha
+      · exact (List.pairwise_cons.1 hp).1 c hc
+      · exact h3 a (List.mem_filter.1 ha).1 c (List.mem_cons_of_mem _ hc)
+
+theorem groupDisjoint_iff (g : List Wire) :
+    groupDisjoint g = true ↔ g.Pairwise (fun a b => disjoint a b = true) := by
+  unfold groupDisjoint
+  have hperm := List.mergeSort_perm g (fun a b => decide (a.start ≤ b.start))
+  have hsorted : (g.mergeSort fun a b => decide (a.start ≤ b.start)).Pairwise (fun a b => a.start ≤ b.start) := by
+    have := List.pairwise_mergeSort (le := fun a b => decide (a.start ≤ b.start)) (l := g)
+      (by intro a b c hab hbc; simp at *; omega) (by intro a b; simp; omega)
+    simpa using this
+  rw [sweep_iff _ [] hsorted (by simp)]
+  simp only [List.not_mem_nil, false_imp_iff, implies_true, and_true]
+  exact List.Perm.pairwise_iff (R := fun a b => disjoint a b = true) (fun {a b} hab => by rw [disjoint_comm]; exact hab) hperm
+
+theorem pairwiseDisjointFast_iff (ws : List Wire) : pairwiseDisjointFast ws = true ↔ ws.Pairwise (fun a b => disjoint a b = true) := by
+  unfold pairwiseDisjointFast
+  simp only [List.all_eq_true, groupDisjoint_iff, List.mem_eraseDups, List.mem_map]
+  constructor
+  · intro h
+    rw [List.pairwise_iff_forall_sublist]
+    intro a b hab
+    by_cases hk : (a.reader, a.port) = (b.reader, b.port)
+    · have ha : a ∈ ws := hab.subset (by simp)
+      have hg := h (a.reader, a.port) ⟨a, ha, rfl⟩
+      rw [List.pairwise_iff_forall_sublist] at hg
+      apply hg
+      have := hab.filter (fun w => (w.reader, w.port) == (a.reader, a.port))
+      simpa [List.filter_cons, hk] using this
+    · unfold disjoint
+      by_cases hr : a.reader = b.reader
+      · have hp : a.port ≠ b.port := fun hp => hk (by rw [hr, hp])
+        simp [hp]
+      · simp [hr]
+  · intro h k ⟨a, _, hka⟩
+    exact h.sublist (List.filter_sublist)
+
+
+end DisjointFast
+
+/-- **`pairwiseDisjointFast` is `pairwiseDisjoint`**: the sorted sweep accepts exactly the wire lists whose every pair is
+disjoint. -/
+theorem pairwiseDisjointFast_eq (ws : List Wire) : pairwiseDisjointFast ws = pairwiseDisjoint ws := by
+  rw [Bool.eq_iff_iff, DisjointFast.pairwiseDisjointFast_iff, pairwiseDisjoint_iff]
+
+/-! Fixtures: the sweep and the pair by pair check agree where wires overlap, touch, nest, are equal, are cut apart, have no
+reader units, share or split a (reader, port), and where there are none. -/
+
+private def fx (reader port : String) (start units cut0 cuts : Nat) : Wire :=
+  { reader, port, writer := "w", out := "o", start, radix := [units, cuts], base := 0, step := [0, 0], cut0, cuts }
+
+private def agrees (ws : List Wire) (accepted : Bool) : Bool :=
+  pairwiseDisjointFast ws == pairwiseDisjoint ws && pairwiseDisjoint ws == accepted
+
+#guard agrees [] true
+#guard agrees [fx "A" "x" 0 4 0 1] true
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 4 4 0 1] true
+#guard agrees [fx "A" "x" 4 4 0 1, fx "A" "x" 0 4 0 1] true
+#guard agrees [fx "A" "x" 0 10 0 1, fx "A" "x" 3 2 0 1] false
+#guard agrees [fx "A" "x" 3 2 0 1, fx "A" "x" 0 10 0 1] false
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 0 1] false
+#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1] true
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "y" 0 4 0 1] true
+#guard agrees [fx "A" "x" 0 4 0 1, fx "B" "x" 0 4 0 1, fx "A" "x" 2 4 0 1] false
+#guard agrees [fx "A" "x" 0 4 0 2, fx "A" "x" 0 4 2 2] true
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 0 1] false
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 2 1 1 1] false
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 0 4 1 1, fx "A" "x" 4 1 0 1] true
+#guard agrees [fx "A" "x" 0 4 0 1, fx "A" "x" 2 0 0 1] false
+#guard agrees [fx "A" "x" 2 0 0 1, fx "A" "x" 0 4 0 1] false
+#guard agrees [fx "A" "x" 4 0 0 1, fx "A" "x" 0 4 0 1] true
+#guard agrees [fx "A" "x" 0 0 0 1, fx "A" "x" 0 0 0 1] true
+#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 7 1 0 1] false
+#guard agrees [fx "B" "y" 6 2 0 1, fx "A" "x" 0 4 0 1, fx "B" "y" 0 6 0 1, fx "A" "x" 4 4 0 1, fx "B" "y" 8 1 0 1] true
+
 theorem distinctRows_of {ws : List Wire} (hw : ∀ w ∈ ws, 1 ≤ w.cuts ∧ w.units % w.cuts = 0)
     (h : pairwiseDisjoint ws = true) : distinctRows (ws.flatMap Wire.entries) = true := by
   simp only [distinctRows, decide_eq_true_eq]
