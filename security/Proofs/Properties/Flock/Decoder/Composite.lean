@@ -244,6 +244,64 @@ theorem st_throw_bind {α β : Type} {e : String} {f : α → DM β} {s : DecSta
 theorem st_get_bind {β : Type} {f : DecState → DM β} {s : DecState} {r : Except String (β × DecState)}
     (h : (get >>= f : DM β) s = r) : ∃ g, f s = g ∧ g s = r := ⟨_, rfl, h⟩
 
+/-- **A part list the decoder lets through names no node at or after `k`**: where `Part.forwardOf ps k` finds none,
+every node reference of `ps` at a position below its count names a node before `k`. -/
+theorem forwardOf_none {ps : Array Part} {k : ℕ} (h : Part.forwardOf ps k = none) {t : ℕ}
+    (ht : t < (Seq.ofParts ps).count) (hp : ((Seq.ofParts ps).get t).p = false) : ((Seq.ofParts ps).get t).i < k := by
+  obtain ⟨j, hj, h1, h2, hg⟩ := Walk.seq_get ps ht
+  rw [hg] at hp ⊢
+  have hq := Array.findSome?_eq_none_iff.1 h ps[j] (Array.getElem_mem hj)
+  rw [getElem!_pos ps j hj] at h2 hp ⊢
+  have ht' : t - (Seq.ofParts ps).starts[j]! < ps[j].count := by omega
+  generalize t - (Seq.ofParts ps).starts[j]! = u at ht' hp ⊢
+  have hc : ps[j].count ≠ 0 := by omega
+  try dsimp only at hq
+  rw [if_neg (by simpa using hc)] at hq
+  generalize ps[j] = q at hq hp ht' hc ⊢
+  cases q with
+  | affine p i b c =>
+    change p = false at hp
+    change i < k
+    subst hp
+    simp only [Bool.not_false, Bool.true_and] at hq
+    split at hq
+    · cases hq
+    · rename_i hn; simpa using hn
+  | strided p i b inner os is c =>
+    change p = false at hp
+    change i < k
+    subst hp
+    simp only [Bool.not_false, Bool.true_and] at hq
+    split at hq
+    · cases hq
+    · rename_i hn; simpa using hn
+  | explicit it =>
+    change u < it.size at ht'
+    change (it[u]!).p = false at hp
+    change (it[u]!).i < k
+    rw [getElem!_pos it u ht'] at hp ⊢
+    have := Array.findSome?_eq_none_iff.1 hq it[u] (Array.getElem_mem ht')
+    rw [hp] at this
+    simp only [Bool.not_false, Bool.true_and] at this
+    split at this
+    · cases this
+    · rename_i hn; simpa using hn
+  | grid run lanes =>
+    change u < lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0) at ht'
+    have hg : 0 < lanes.size * run := Nat.pos_of_ne_zero fun h => by rw [h, Nat.zero_mul] at ht'; omega
+    have hrun : 0 < run := Nat.pos_of_ne_zero fun h => by simp [h] at hg
+    have hl : u % (lanes.size * run) / run < lanes.size := by
+      rw [Nat.div_lt_iff_lt_mul hrun]; exact Nat.mod_lt _ hg
+    change (lanes[u % (lanes.size * run) / run]!).p = false at hp
+    change (lanes[u % (lanes.size * run) / run]!).i < k
+    rw [getElem!_pos lanes (u % (lanes.size * run) / run) hl] at hp ⊢
+    have := Array.findSome?_eq_none_iff.1 hq _ (Array.getElem_mem hl)
+    rw [hp] at this
+    simp only [Bool.not_false, Bool.true_and] at this
+    split at this
+    · cases this
+    · rename_i hn; simpa using hn
+
 theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec (n + 1) := by
   intro desc fid d form id s defn s' h hs
   unfold composite at h
@@ -313,15 +371,17 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
   have hL := forIn_stateT_inv _ (fun _ _ => False) _
     (fun i (st : Array Node × Array ℕ) s1 => Inv s1 ∧ Pre (DecState.defs s3) (DecState.defs s1) ∧ st.1.size = i ∧
-       NodesOk (DecState.defs s1) outs (leavesOf params outs) st.1 ∧ OffsOk (DecState.defs s1) st.1 st.2)
+       NodesOk (DecState.defs s1) outs (leavesOf params outs) st.1 ∧ OffsOk (DecState.defs s1) st.1 st.2 ∧
+       NodesFwd st.1)
     (nodes0, offsets0) _ _ _
-    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k), rfl, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩
+    ⟨hs3, pre_refl _, rfl, fun k hk => absurd hk (Nat.not_lt_zero k), ⟨rfl, rfl, fun k hk => absurd hk (Nat.not_lt_zero k)⟩,
+      fun k hk => absurd hk (Nat.not_lt_zero k)⟩
     ?step hloop
   case step =>
-    rintro i hi ⟨nodes1, offsets1⟩ s1 t s2 ⟨hs1, hp1, hsz1, hn1, ho1⟩ h
+    rintro i hi ⟨nodes1, offsets1⟩ s1 t s2 ⟨hs1, hp1, hsz1, hn1, ho1, hf1⟩ h
     simp only [List.length_range', Std.Legacy.Range.size] at hi
     simp (config := { zeta := false }) only [List.getElem_range', Nat.one_mul, Nat.zero_add] at h
-    dsimp only at hsz1 hn1 ho1
+    dsimp only at hsz1 hn1 ho1 hf1
     replace h := st_bind h; obtain ⟨fname, s3', h1, h⟩ := h
     replace h1 := st_liftV h1; obtain ⟨hfn, rfl⟩ := h1
     rcases fname with _ | _ | _ | fname | _ | _
@@ -426,7 +486,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     have hasz : args.size = ajs.size := array_mapM_size _ _ _ hmap
     have hel : ∀ a < args.size, ∃ ty ps, args[a]! = ({ ty, seq := Seq.ofParts ps } : Arg) ∧
         (∀ q ∈ ps, Walk.PartValid (leavesOf params outs) q) ∧ (∀ q ∈ ps, PartNonneg q) ∧
-        (Seq.ofParts ps).count = ty.leaves ∧ ∀ q ∈ ps, PartInner q := by
+        (Seq.ofParts ps).count = ty.leaves ∧ (∀ q ∈ ps, PartInner q) ∧ Part.forwardOf ps i = none := by
       intro a ha
       have h1 := array_mapM_get _ _ _ hmap a (by omega) ha
       beta_reduce at h1
@@ -445,8 +505,9 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
         split at h2
         · obtain ⟨u, h3, -⟩ := Walk.except_bind_ok h2
           exact absurd h3 (by intro h; injection h)
+        rename_i hfw
         injection h2 with h2
-        refine ⟨ty, ps, by rw [getElem!_pos args a ha, ← h2], ?_, ?_, by simpa using hc, ?_⟩
+        refine ⟨ty, ps, by rw [getElem!_pos args a ha, ← h2], ?_, ?_, by simpa using hc, ?_, by simpa using hfw⟩
         · exact Walk.parsePartsIn_valid _ _ (earlier_ok' _ _ _ _ hn1) _ _ _ hps
         · exact parsePartsIn_nonneg _ _ (earlier_nonneg _ _ _ _ hn1) _ _ _ hps
         · exact parsePartsIn_inner _ _ (earlier_inner _ _ _ _ hn1) _ _ _ hps
@@ -456,14 +517,27 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       (fun e => by have := hnxs e; omega)
       (fun a ha => by obtain ⟨ty, ps, e, -⟩ := hel a ha; rw [e])
     dsimp only
-    refine ⟨hs4, pre_trans hp1 hp4, by simp [hsz1], fun k hk => ?_, ?_⟩
+    refine ⟨hs4, pre_trans hp1 hp4, by simp [hsz1], fun k hk => ?_, ?_, ?fwd⟩
+    case fwd =>
+      intro k hk a ha t ht hp
+      simp only [Array.size_push] at hk
+      rcases Nat.lt_succ_iff_lt_or_eq.1 hk with hk | rfl
+      · rw [getElem!_push_lt _ _ hk] at ha ht hp ⊢
+        exact hf1 k hk a ha t ht hp
+      · rw [getElem!_push_eq] at ha ht hp ⊢
+        dsimp only at ha ht hp ⊢
+        obtain ⟨c1, c2⟩ := b2 a (by omega)
+        obtain ⟨ty, ps, e, -, -, -, -, hfw⟩ := hel a (by omega)
+        rw [c2, e] at ht hp ⊢
+        rw [hsz1]
+        exact forwardOf_none hfw ht hp
     swap
     · refine offsOk_push _ _ (offsOk_mono hp4 (fun k hk => (hn1 k hk).1) ho1) ?_
       by_cases hF : F = Form.prim
       · subst hF
         have hcp : ((DecState.defs s4)[ci]!).prim = true := by
           revert hprim; cases ((DecState.defs s4)[ci]!).prim <;> simp <;> decide
-        have hg1 : ((DecState.defs s4)[ci]!).gates = 1 := (hs4.2.2 ci hci).1 hcp
+        have hg1 : ((DecState.defs s4)[ci]!).gates = 1 := (hs4.2.2.1 ci hci).1 hcp
         simp only [Node.members]
         change 1 = 1 * ((DecState.defs s4)[ci]!).gates
         rw [hg1]
@@ -478,7 +552,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       · exact b1.trans b3
       · dsimp only at ha ⊢
         obtain ⟨c1, c2⟩ := b2 a (by omega)
-        obtain ⟨ty, ps, e, -, -, hc, -⟩ := hel a (by omega)
+        obtain ⟨ty, ps, e, -, -, hc, -, -⟩ := hel a (by omega)
         rw [c1, c2, e]; exact hc
       · dsimp only at e; subst e
         revert hprim; cases (DecState.defs s4)[ci]!.prim <;> simp
@@ -488,13 +562,13 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       · rw [hsz1]; exact ty_not_beq (by simpa using hout)
       · dsimp only at ha ⊢
         obtain ⟨c1, c2⟩ := b2 a (by omega)
-        obtain ⟨ty, ps, e, hv, hnn, -, hin⟩ := hel a (by omega)
+        obtain ⟨ty, ps, e, hv, hnn, -, hin, -⟩ := hel a (by omega)
         refine ⟨ps, ?_, hv, hnn, hin⟩
         rw [c2, e]
   simp only [List.length_range', Std.Legacy.Range.size] at hL
-  rcases hL with ⟨hs5, hp5, hsz5, hn5, ho5⟩ | hL
+  rcases hL with ⟨hs5, hp5, hsz5, hn5, ho5, hf5⟩ | hL
   swap; · exact hL.elim
-  dsimp only at hsz5 hn5 ho5 h
+  dsimp only at hsz5 hn5 ho5 hf5 h
   replace h := st_bind h; obtain ⟨st, s7, h1, h⟩ := h
   obtain ⟨rfl, rfl⟩ := st_get h1
   rw [leavesFor_false] at h
@@ -527,7 +601,7 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   have hsz : nodes.size = outs.size := by omega
   have hout : ∀ k < nodes.size, (nodes[k]!).out = outs[k]! := fun k hk => (hn5 k hk).2.2.1
   refine ⟨inv_congr ?_ ?_ hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩,
-    fun h => absurd h (by simp), fun _ => ?_⟩
+    ⟨fun h => absurd h (by simp), fun _ => ?_⟩, hf5⟩
   · rfl
   · rfl
   · simpa using hcnt

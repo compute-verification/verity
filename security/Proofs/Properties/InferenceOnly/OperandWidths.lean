@@ -66,7 +66,7 @@ theorem decoded_laid (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
     (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) : ∀ d < P.defs.size, Walk.LaidOut P d := by
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_full bytes P h hr
   intro d hd hp
-  have hl := hinv.2.2 d (by rw [← hP]; exact hd)
+  have hl := hinv.2.2.1 d (by rw [← hP]; exact hd)
   rw [← hP] at hl
   obtain ⟨-, h0, hg, hk⟩ := hl.2 hp
   exact ⟨h0, hg, fun k hk' => (hk k hk').2⟩
