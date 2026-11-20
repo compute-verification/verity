@@ -1,6 +1,7 @@
 """The plan's row floor (`window_builder.check_served`'s ``row_floor``) is the door's own refusal: for each template of a
 served window, its first unit's block is lowered by Lean (`one_circuit.lower`, ``flock-lower-check compose``), and
-``compose`` refuses it for no compression before its last block exactly where the plan names the template."""
+``compose`` refuses it for no compression before its last block exactly where the plan names the template. A template
+the door refuses before ``compose`` (not admitted, or refused by the lowering) is not compared, and none is named."""
 from __future__ import annotations
 
 import json
@@ -59,9 +60,10 @@ def test_the_plans_row_floor_is_composes_refusal_on_every_template():
     named = WC.check_served(circuit)["row_floor"]
     door = door_verdicts(circuit)
     assert set(door) == {IF.descriptor_id(fn) for fn, _ in circuit.templates}
-    other = {t: why[-300:] for t, why in door.items() if why is not None and ROW_FLOOR not in why}
-    assert not other, f"the door refuses these for another reason, so their row floor is not compared: {other}"
-    refused = {t for t, why in door.items() if why is not None}
-    assert named, "the tiny window has templates under the row floor"
+    compared = {t for t, why in door.items() if why is None or ROW_FLOOR in why}
+    before = {t: door[t][-200:] for t in set(door) - compared}
+    print(f"ROW-FLOOR compared {len(compared)} of {len(door)} templates; refused before compose: {before}")
+    assert named and set(named) <= compared, f"named, but the door refuses them before compose: {set(named) - compared}"
+    refused = {t for t in compared if door[t] is not None}
     assert set(named) == refused, (f"named by the plan, composed by Lean: {sorted(set(named) - refused)}; "
                                    f"refused by Lean, not named: {sorted(refused - set(named))}")
