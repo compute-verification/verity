@@ -166,7 +166,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "clear"))
 import fast_tile as FT
 import clear_work as CW
-from clear_audit import Transcript, Verifier
+from clear_audit import TileOpening, Transcript, Verifier
 
 settings = of(__file__)
 DRAWS = 3
@@ -350,7 +350,13 @@ def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, man: 
     verifier = Verifier(CW._TileRuleView(scheme), epoch)
     if len(verifier.refs) != c["count"]:
         raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
-    return Pass(path, man, salt, scheme, epoch, records, transcript, verifier, Opened(man, Files(path.parent), verifier.refs))
+    return Pass(path, man, salt, scheme, epoch, records, transcript, verifier, prover_of(man, path.parent, verifier.refs))
+
+
+def prover_of(man: dict, d: Path, refs) -> Opened:
+    """The prover's openings of the pass in directory ``d`` (`Opened`): salted where its scheme commits under hm96, each
+    tile's opening the `clear_audit.TileOpening` this file's `Verifier` reads."""
+    return Opened(man, Files(d), refs, pouw_schemes.get(man["scheme"]).commitment_hash == HM96, TileOpening)
 
 
 _JOB: dict = {}

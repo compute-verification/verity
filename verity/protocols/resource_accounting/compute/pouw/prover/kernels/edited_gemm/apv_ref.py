@@ -2,7 +2,7 @@
 checked_strip's own construction (`calibration/pouw/theory/checked_strip.py`'s `pv_words` and `pv_served`).
 
 From the key (meta.json's four big-endian words): b (tag 7, NS 1's patch layout over V^T, kvh 128 x s) and U (tag 14:
-row q, block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) + 1, negated where bit 6 is set; egemm_ref.u_rows' map).
+row q, block q / 2, digest byte (q % 2) 32 + rho, U = (byte & 63) + 1, negated where bit 6 is set; egemm.cu's U rows' map).
 A tile (h, qt, kvh) is 128 queries 128 qt .. by 128 channels over keys 0 .. 128 (qt + 1) - 1; its warp row w is the 32-query
 block j = 4 qt + w with b_l = j, and M = [1 <= key <= q] (key 0 is its own P block). For each warp row, in Lean coordinates
 (P = P_prob - 64, the queries' rows; V the keys x channels, key 0's row of V and b zeroed: the block is keys 1 .. q):
