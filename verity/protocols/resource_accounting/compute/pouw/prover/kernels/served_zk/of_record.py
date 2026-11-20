@@ -37,6 +37,7 @@ from typing import Any
 from verity.circuits import codec
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 
 REPO = Path(__file__).resolve().parents[8]
 POUW = REPO / "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check"
@@ -99,7 +100,7 @@ def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] 
                    draw: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
     the float is it) and its sample."""
-    base = {"protocol": CC.ONE_STAGE, "commitment": registration}
+    base = {"protocol": Wd.ONE_STAGE, "commitment": registration}
     if accepted:
         d = profile["delta"]
         d = d if isinstance(d, str) else (delta if float(Fraction(delta)) == d else str(Fraction(d).limit_denominator(10**9)))

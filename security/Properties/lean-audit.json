@@ -49,6 +49,7 @@
   "Properties.Spot.Wires",
   "Properties.Spot.Edges",
   "Properties.Spot.Tables",
+  "Properties.Spot.PortsHeld",
   "Properties.Spot.HistoryTable",
   "Properties.Spot.Rate",
   "Properties.Spot.MonitoringPeriod",
@@ -2603,7 +2604,8 @@
     "Properties.Spot.Wires",
     "Properties.Spot.Members",
     "Properties.Spot.HistoryTable",
-    "Properties.Spot.MonitoringPeriodLedger"
+    "Properties.Spot.MonitoringPeriodLedger",
+    "Properties.Spot.PortsHeld"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib, and of `security` only the core's label and challenger log (Definitions.Core.Label, Definitions.Core.Challenger), which import nothing, read with the wire they name (Circuits.Wire)"
   },
@@ -2951,6 +2953,11 @@
    "imports": ["Spot.Edges"],
    "except": [],
    "why": "the wires the Program's root states are stated against the derivation's own functions (`Spot.Edges`) and the Program's references (`Flock.Program`), never a proof"
+  },
+  "Properties.Spot.PortsHeld": {
+   "imports": ["Spot", "Properties.Spot"],
+   "except": [],
+   "why": "what the members check's accept holds of each member's ports and roots (`MembersPortsHeld`, `MembersRootsRecord`) is stated against the check's own functions (`Spot.OneStageZk`) and the accept's vocabulary (`Properties.Spot`), never a proof"
   },
   "Properties.Flock.Circuit.Chain": {
    "imports": [

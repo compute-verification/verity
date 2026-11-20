@@ -26,7 +26,7 @@ def test_a_change_in_any_one_changes_it(change):
 
 
 def test_the_runner_gets_it_as_ROW_ID_from_the_workload_alone():
-    w = T.SERVED.default_params
+    w = {**T.SERVED.default_params, "load": "varied"}
     cfg = {"workload": {"params": w}, "service": {"law": "x"}}
     got = T._serve(cfg, {}, {}, {})
     assert got["ROW_ID"] == T.row_id(w["model"], w["precision"], w["slots"])
