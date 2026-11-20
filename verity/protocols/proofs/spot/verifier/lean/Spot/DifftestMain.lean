@@ -11,6 +11,7 @@ public import Spot.BlockFile
 public import Spot.Restrict
 public import Spot.Supplied
 public import Spot.HeaderHeldAt
+public import Spot.RegistrationCommitment
 
 @[expose] public section
 
@@ -19,4 +20,5 @@ def main : IO Unit :=
     ("boundary_written", Spot.BoundaryWritten.piece), ("boundary_written_unrolled", Spot.BoundaryWritten.pieceRef),
     ("certified_rows", Spot.CertifiedRows.piece), ("second_window", Spot.SecondWindow.piece),
     ("block_front", Spot.BlockFront.piece), ("block_file", Spot.BlockFile.piece), ("restrict", Spot.Restrict.piece),
-    ("supplied_marks", Spot.Supplied.piece), ("header_held_at", Spot.HeaderHeldAt.piece)]))
+    ("supplied_marks", Spot.Supplied.piece), ("header_held_at", Spot.HeaderHeldAt.piece),
+    ("registration_commitment", Spot.RegistrationCommitment.piece)]))
