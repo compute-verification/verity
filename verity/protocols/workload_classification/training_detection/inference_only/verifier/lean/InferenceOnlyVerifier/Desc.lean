@@ -350,10 +350,6 @@ def PS.slice (s : PS) (lo hi : Nat) : Array Seg := Id.run do
     if en > lo then out := out ++ g.slice (max lo st - st) (min hi en - st)
   return out
 
-/-- Positions `[lo, hi)` as pieces, copy by copy. -/
-def PS.pieces (s : PS) (lo hi : Nat) : Array Piece :=
-  (s.slice lo hi).flatMap fun g => (Array.range g.reps).flatMap g.copy
-
 /-- Lane `l` of a grid of runs of `run`, its `P` periods: one piece of a row a period, row `t` at the lane's levels'
 offset at period `t` (one level as a row step). -/
 def lanePiece (run P : Nat) (l : Lane) : Piece :=
