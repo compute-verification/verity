@@ -1,0 +1,236 @@
+{
+ "steps": [
+  {
+   "name": "lower",
+   "cap": 80,
+   "targets": [
+    {
+     "file": "verity/protocols/proofs/flock/prover/python/verity_flock/struct_lower.py",
+     "funcs": [
+      "_live",
+      "_last_reads",
+      "_column_order",
+      "_pattern",
+      "_operand_bits",
+      "_SlotRead.__init__",
+      "_Lowerer._piece",
+      "_Lowerer.reads_table",
+      "_Lowerer.is_call",
+      "_Lowerer.call",
+      "_Lowerer._generic",
+      "_Lowerer._lower",
+      "_Lowerer._returned_last",
+      "_Lowerer._finish",
+      "_parity",
+      "_read_rows",
+      "_segs",
+      "_runs",
+      "lower",
+      "evaluate"
+     ]
+    },
+    {
+     "file": "verity/protocols/proofs/spot/verifier/one_stage/one_circuit.py",
+     "funcs": [
+      "lower",
+      "_listed"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/protocols/proofs/flock/prover/test_struct_lower.py",
+    "tests/verity/protocols/proofs/flock/prover/test_tmpl.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_tmpl.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_tmpl_stager.py",
+    "tests/verity/protocols/proofs/flock/prover/test_struct_slots.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/tools/verity/circuit_check/test_structural.py",
+    "tests/adapters/vllm/flock/test_tmpl_statement.py",
+    "tests/adapters/vllm/flock/test_rolled_lowering.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
+   ]
+  },
+  {
+   "name": "tmpl",
+   "cap": 45,
+   "targets": [
+    {
+     "file": "verity/protocols/proofs/flock/prover/python/verity_flock/tmpl.py",
+     "funcs": [
+      "Flat.row",
+      "parse",
+      "write",
+      "canon",
+      "unroll",
+      "_ports",
+      "_hi",
+      "_seg_ordered",
+      "_def_ordered",
+      "_fits",
+      "ordered",
+      "_cut",
+      "legalize",
+      "_seg_ok",
+      "pack",
+      "_out_groups",
+      "out_ports"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/protocols/proofs/flock/prover/test_struct_lower.py",
+    "tests/verity/protocols/proofs/flock/prover/test_tmpl.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_tmpl.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_tmpl_stager.py",
+    "tests/verity/protocols/proofs/flock/prover/test_struct_slots.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/tools/verity/circuit_check/test_structural.py",
+    "tests/adapters/vllm/flock/test_tmpl_statement.py",
+    "tests/adapters/vllm/flock/test_rolled_lowering.py"
+   ]
+  },
+  {
+   "name": "lift",
+   "cap": 30,
+   "targets": [
+    {
+     "file": "verity/circuits/ops/boolean/versions.py",
+     "funcs": [
+      "_bits",
+      "bit_offsets",
+      "_substitute",
+      "_bit_replayer",
+      "_sigma_callees",
+      "lift_body",
+      "lift",
+      "boolean_table",
+      "block_circuit"
+     ]
+    },
+    {
+     "file": "verity/circuits/codec.py",
+     "funcs": [
+      "lift_shape",
+      "odd_fields"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/circuits/test_lift_shape.py",
+    "tests/verity/circuits/ops/test_boolean_block_circuit.py",
+    "tests/verity/circuits/ops/test_boolean_words.py",
+    "tests/verity/circuits/test_count.py",
+    "tests/verity/circuits/test_restrict.py",
+    "tests/verity/protocols/proofs/flock/prover/test_struct_lower.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/verity/protocols/proofs/flock/verifier/sigma/test_sigma_difftest.py",
+    "tests/tools/verity/circuit_check/test_units.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py"
+   ]
+  },
+  {
+   "name": "cut",
+   "cap": 65,
+   "targets": [
+    {
+     "file": "verity/circuits/restrict.py",
+     "funcs": [
+      "*"
+     ]
+    },
+    {
+     "file": "verity/protocols/proofs/spot/verifier/one_stage/one_circuit.py",
+     "funcs": [
+      "block",
+      "restrict",
+      "cuts",
+      "Decoded.get"
+     ]
+    },
+    {
+     "file": "verity/circuits/edges.py",
+     "funcs": [
+      "io_cuts"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/circuits/test_restrict.py",
+    "tests/verity/circuits/test_laying.py",
+    "tests/verity/circuits/test_partition_blocks.py",
+    "tests/verity/circuits/ops/test_product.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_members_run.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_proofs.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_edges_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_members_twin.py"
+   ]
+  },
+  {
+   "name": "compose",
+   "cap": 25,
+   "targets": [
+    {
+     "file": "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
+     "funcs": [
+      "compose"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/adapters/vllm/flock/test_circuit.py",
+    "tests/adapters/vllm/flock/test_class_statement.py",
+    "tests/adapters/vllm/flock/test_tmpl_statement.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_verifier.py",
+    "tests/verity/protocols/proofs/flock/prover/test_read_slots.py",
+    "tests/verity/protocols/proofs/flock/prover/test_lean_lower.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py"
+   ]
+  },
+  {
+   "name": "decode",
+   "cap": 40,
+   "targets": [
+    {
+     "file": "verity/circuits/codec.py",
+     "funcs": [
+      "descriptor_id",
+      "canonical_entry",
+      "definition_digest",
+      "_split_record",
+      "_record_function_ids",
+      "_lookup_primitive",
+      "_decode_refs",
+      "_int",
+      "_nat",
+      "_checked_refs",
+      "_type",
+      "_at",
+      "_check_node",
+      "_build_node",
+      "_record_value",
+      "definition_decoder",
+      "decode_program",
+      "_decode_boolean"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/circuits/test_codec.py",
+    "tests/verity/circuits/test_codec_stream.py",
+    "tests/verity/circuits/test_codec_digest_gc.py",
+    "tests/verity/circuits/test_format_spec.py",
+    "tests/verity/circuits/test_restrict.py",
+    "tests/verity/circuits/test_lift_shape.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_difftest.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py"
+   ]
+  }
+ ]
+}
