@@ -240,9 +240,10 @@ def unitGates (j : Json) : V Json := do
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
 /-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
-parameters a verifier expects registered, to `{"fanout", "shared"}`: its fan-out and the run Input nodes outside `held`
-its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another query or one
-that doesn't apply. -/
+parameters a verifier expects registered, to `{"fanout", "shared", "reads"}`: its fan-out, the run Input nodes outside
+`held` its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`), and `[first, count, node]`
+for each range reading a run Input inside `held` (`Partition.heldReads`); refused for another query or one that doesn't
+apply. -/
 def fanout (j : Json) : V Json := do
   let .obj _ := getD j "program" | throw "program is not an object"
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
@@ -257,7 +258,9 @@ def fanout (j : Json) : V Json := do
     | _ => throw "held is not a list of [first, count]"
   let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
   return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
-    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
+    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held)),
+    ("reads", Json.arr ((Partition.heldReads p.prog rs held).map fun (r, i) =>
+      Json.arr #[Lean.toJson r.first, Lean.toJson r.count, Lean.toJson i]))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
