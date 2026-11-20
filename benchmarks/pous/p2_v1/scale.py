@@ -251,10 +251,12 @@ def setup_check_cmd(a: argparse.Namespace) -> int:
                    + b"".join(len(b).to_bytes(4, "big") + b for b in blocks))
     doc["evidence_bytes"] = ev.stat().st_size
     if a.lean_exe:
+        from verity import lean_process as LC
+
         runs = []
         for _ in range(a.lean_reps):
             t0 = time.perf_counter()
-            r = subprocess.run([a.lean_exe, "check", str(params), str(comm), str(ev)], capture_output=True, text=True)
+            r = LC.run([a.lean_exe, "check", str(params), str(comm), str(ev)])
             runs.append({"s": time.perf_counter() - t0, "rc": r.returncode, "stdout": r.stdout.strip()[:2000],
                          "stderr": r.stderr.strip()[-2000:]})
         doc["lean_check"] = runs

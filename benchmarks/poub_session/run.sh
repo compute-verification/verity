@@ -181,6 +181,7 @@
 case "${1:-}" in -h | --help) sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;; esac
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 refuse() { echo "run.sh: refused: $*"; exit 3; }
 first_of() { # first_of TEST PATH...: the first PATH that `test TEST PATH` holds of
   local t=$1 p; shift

@@ -39,6 +39,8 @@ import copy
 import fcntl
 import functools
 import json
+import os
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
@@ -139,8 +141,19 @@ def build(package: Path, exe: str) -> Path:
     return package / ".lake" / "build" / "bin" / exe
 
 
+#: a line Lean's runtime writes on a panic (``PANIC at DECL MODULE:LINE:COL: MSG``, or the C runtime's ``PANIC: MSG`` and
+#: ``INTERNAL PANIC: MSG``), and the runtime's switch that ends the process on one where it would print it, return a
+#: default value and carry on: the shared launcher of every Lean verifier a verdict reads, as the one-stage door's
+#: `one_stage/lean_child.py` is for the door's
+PANIC = re.compile(r"^(?:INTERNAL )?PANIC\b.*$", re.M)
+ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
+LEAN_PANIC = "lean-panic: the Lean verifier wrote a panic: its answer is not read"
+
+
 class Server:
-    """One server process, started at the first request and again after it dies; requests are answered in order."""
+    """One server process, started at the first request and again after it dies, with `ABORT_ON_PANIC` set; requests are
+    answered in order, and a request whose reply comes beside a panic line on the process's standard error is refused
+    (`LEAN_PANIC`)."""
 
     def __init__(self, argv: Sequence[str]):
         self.argv = list(argv)
@@ -148,9 +161,9 @@ class Server:
         self._stderr = None
 
     def _start(self) -> subprocess.Popen:
-        self._stderr = tempfile.TemporaryFile()
+        self._stderr = tempfile.TemporaryFile("a+b")
         self._proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._stderr,
-                                      text=True, encoding="utf-8")
+                                      text=True, encoding="utf-8", env={**os.environ, ABORT_ON_PANIC: "1"})
         return self._proc
 
     def exchange(self, request: Any) -> dict:
@@ -163,6 +176,11 @@ class Server:
             reply = proc.stdout.readline()
         except BrokenPipeError:
             reply = ""
+        self._stderr.seek(0)
+        if (panic := PANIC.search(self._stderr.read().decode("utf-8", "replace"))) is not None:
+            proc.kill()
+            self._dead()
+            raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
         if not reply.endswith("\n"):
             raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._dead()}")
         reply = reply[:-1]

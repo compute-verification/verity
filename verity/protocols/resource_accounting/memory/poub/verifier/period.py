@@ -33,7 +33,6 @@ import functools
 import hashlib
 import json
 import os
-import subprocess
 import time
 from collections.abc import Callable, Sequence
 from fractions import Fraction
@@ -41,6 +40,7 @@ from typing import Any, Protocol
 
 from verity.protocols.resource_accounting.memory.pous.verifier.period import Run
 from verity.commitments.identity import canonical_json_bytes
+from verity import lean_process as LC
 
 from . import audit, codec, pooled
 from . import coins as C
@@ -256,7 +256,8 @@ def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: 
 def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """`EXE serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
     lines = "".join(canonical_json_bytes(c).decode() + "\n" for c in cases)
-    p = subprocess.run([str(exe), "serve"], input=lines, capture_output=True, text=True, check=True)
+    p = LC.run([str(exe), "serve"], input=lines)
+    p.check_returncode()
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

@@ -53,7 +53,6 @@ import resource
 import shutil
 import socket
 import struct
-import subprocess
 import sys
 import tempfile
 import time
@@ -61,6 +60,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity import lean_process as LC
 from verity.protocols.resource_accounting.memory.pous.verifier import audit as pous_audit
 from verity.protocols.resource_accounting.memory.pous.verifier import protocol, schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.band import BandParams
@@ -441,7 +441,7 @@ def run_lean(exe: str | os.PathLike, ready: Any, leaves: bytes, doc: Any) -> dic
         files[0].write_text(json.dumps(ready))
         files[1].write_bytes(leaves)
         files[2].write_text(json.dumps(doc))
-        p = subprocess.run([str(exe), *map(str, files)], capture_output=True, text=True)
+        p = LC.run([str(exe), *map(str, files)])
     if p.returncode not in (0, 1):
         raise RuntimeError(f"{Path(exe).name} failed ({p.returncode}): {p.stderr}")
     return json.loads(p.stdout)
