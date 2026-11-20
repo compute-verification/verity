@@ -1129,12 +1129,10 @@ def checkOneBody (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
 
 /-- The refusal of evidence with no session roots object: `Record.checks` skips its `roots` check on a null. -/
 def NO_SESSION_ROOTS : String := "roots: the evidence names no session roots object"
-
 /-- The refusal of evidence with no served units: `Record.checks` skips its `served` check on a null. -/
 def NO_SERVED : String := "served: the evidence names no served units"
 
-/-- The one statement's check at the coins `ξ`: evidence naming no session roots object (`NO_SESSION_ROOTS`) or no
-served units (`NO_SERVED`) refused, then `checkOneBody`. -/
+/-- The one statement's check at `ξ`: no session roots (`NO_SESSION_ROOTS`) or served units (`NO_SERVED`), then `checkOneBody`. -/
 def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else
@@ -1154,14 +1152,12 @@ theorem checkOneAt_body {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} 
 
 /-- The one statement's check refuses evidence naming no session roots object, whatever else it names. -/
 theorem checkOneAt_noRoots {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
-    (h : e.base.sessionRoots = none) : checkOneAt p c ξ e bs = .reject NO_SESSION_ROOTS := by
-  simp [checkOneAt, h]
+    (h : e.base.sessionRoots = none) : checkOneAt p c ξ e bs = .reject NO_SESSION_ROOTS := by simp [checkOneAt, h]
 
 /-- The one statement's check refuses evidence naming session roots and no served units, whatever else it names. -/
 theorem checkOneAt_noServed {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {roots : Lean.Json} (hr : e.base.sessionRoots = some roots) (h : e.base.served = none) :
-    checkOneAt p c ξ e bs = .reject NO_SERVED := by
-  simp [checkOneAt, hr, h]
+    checkOneAt p c ξ e bs = .reject NO_SERVED := by simp [checkOneAt, hr, h]
 
 /-! ## The per-member form (module docstring, **per member**) -/
 

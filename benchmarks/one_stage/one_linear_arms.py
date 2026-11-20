@@ -56,15 +56,10 @@ def refusal(summary: dict) -> str | None:
 
 def _checks_before_draw(log: str) -> dict:
     """The checks a5 printed when it refused before the draw (its ``A5 {"refused_before_draw": ...}`` line in the audit's
-    log), which records_audit's summary keeps only as booleans. The arm's own log holds the line cut short, which is
-    skipped for the whole one."""
-    for line in log.splitlines():
-        if line.startswith('A5 {"refused_before_draw"'):
-            try:
-                return json.loads(line[3:]).get("checks") or {}
-            except ValueError:
-                continue
-    return {}
+    log), which records_audit's summary keeps only as booleans. The arm's own log holds a prefix of the line, cut
+    short, so the longest copy is the whole one."""
+    lines = [line for line in log.splitlines() if line.startswith('A5 {"refused_before_draw"')]
+    return (json.loads(max(lines, key=len)[3:]).get("checks") or {}) if lines else {}
 
 
 def _window(log: str) -> dict:
