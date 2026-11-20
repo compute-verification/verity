@@ -472,24 +472,6 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
   exact ⟨∅, _, ⟨y⟩⟩
 
-/-- `HmIn` reads a circuit unrolled as the circuit: its ports, not its nets or template. -/
-theorem hmInParse_unrolled (c : Flock.Circuit) : Flock.HmIn.parse (Flock.HmOut.unrolled c) = Flock.HmIn.parse c := by
-  unfold Flock.HmOut.unrolled
-  split
-  · split
-    · rfl
-    · rfl
-  · rfl
-
-theorem hmInLoad_unrolled (t : Flock.Tags) (c : Flock.Circuit) (pi : Flock.HmIn.Ports) (f : ByteArray) :
-    Flock.HmIn.loadPublic t (Flock.HmOut.unrolled c) pi f = Flock.HmIn.loadPublic t c pi f := by
-  unfold Flock.HmOut.unrolled
-  split
-  · split
-    · rfl
-    · rfl
-  · rfl
-
 open FlockSoundness.Discharge.Composed (inputsJ) in
 /-- **The session's circuit names no public input port, and its public file loads with none**: the setup `verify --zk`
 makes without the verifier's public inputs refuses a circuit naming one (`checkOwn_none`), so its ports are the empty
@@ -521,8 +503,11 @@ theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc}
     FlockSoundness.Discharge.Hidden.parse_empty s.ports (FlockSoundness.Discharge.Hidden.checkOwn_none hown)
   have hpp := s.ports
   rw [hpi] at hpp hlp
-  rw [← hmInParse_unrolled, ← hc] at hpp
-  rw [← hmInLoad_unrolled, ← hc] at hlp
+  have hC := FlockSoundness.Discharge.Hidden.committed_of_commit
+    (FlockSoundness.Discharge.Hidden.setupHidden_parseCommit hst)
+  have hty := (FlockSoundness.Discharge.ZkExec.zkTags_typed I).trans ht
+  rw [← FlockSoundness.Discharge.Hidden.parseIn_commit hty hC, ← hc] at hpp
+  rw [← FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC, ← hc] at hlp
   have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
   exact ⟨hpp, pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
 
@@ -667,13 +652,10 @@ theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD :
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
   obtain ⟨D, cT, pubO, hDp, hU, hpubO, hcD, hDu⟩ := desc_of_ports hAc.tmpl htyp hAc.ports
-  have hports : Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags _) _ = .ok () := by
-    have h := hAc.ports
-    rw [hcD] at h
-    rw [hDu]
-    unfold Flock.PortRoots.checkOf at h ⊢
-    rw [checkWith_unrolled]
-    exact h
+  have hports := hAc.ports
+  rw [hcD] at hports
+  unfold Flock.PortRoots.checkOf at hports
+  rw [← checkWith_unrolled, ← hDu] at hports
   have hscD : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true := by
     rw [hDu]
     exact scopeH_of_form htyp hcD hAc.tmpl.2 hAc.form
