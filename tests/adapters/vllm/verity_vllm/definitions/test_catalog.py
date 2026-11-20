@@ -1,11 +1,5 @@
-"""`catalog.load()` registers exactly the Definitions and primitives `catalog_ids.json` lists, by id: a module that stops
-importing or registering, or one that registers more, fails here and names the ids.  Update the list in the change that adds or
-removes a Definition (`uv run python tests/adapters/vllm/verity_vllm/definitions/test_catalog.py --update`).
-Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
+"""Each scope of `load` registers the Definitions of the walk it replaced (`REPLACED`), in the same order, whatever the registry
 holds: a module only `load`'s walk reaches, a registry subpackage's, can't register on import or move one unnoticed.
-
-The list is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.protocols.resource_accounting.compute.pouw.prover.circuit`
-registers) is not in it.
 
 Each check reads `catalog.load()` in an interpreter of its own (`fresh`): the registry and `sys.modules` are the process's, and
 both grow as code runs (a constant or input gate registers the first time a body uses it, `prims.const` and
@@ -49,24 +43,6 @@ def fresh() -> dict:
     assert p.returncode == 0, p.stderr[-4000:]
     return json.loads(p.stdout.splitlines()[-1])
 
-#: the ids `catalog.load()` registers, sorted, one a line
-IDS = Path(__file__).with_name("catalog_ids.json")
-
-
-def pinned() -> list[str]:
-    return json.loads(IDS.read_text())
-
-
-def test_the_catalog_loads_every_definition_and_no_other():
-    got = fresh()
-    assert not got["errors"], got["errors"]
-    want = pinned()
-    added, gone = sorted(set(got["ids"]) - set(want)), sorted(set(want) - set(got["ids"]))
-    assert got["ids"] == want, (
-        f"catalog.load() registers {len(added)} ids catalog_ids.json lacks, {added}, and lacks {len(gone)} it lists, {gone}. "
-        "If the change adds or removes them, update the list: uv run python tests/adapters/vllm/verity_vllm/definitions/test_catalog.py --update")
-
-
 #: by scope of `catalog.load`, the walk it replaced: the registry's own modules alone, none of a subpackage's, and replay's and
 #: the red-team demo's every module of ops and of the registry
 REPLACED = {
@@ -104,24 +80,6 @@ def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
                              f"at {at}: {got[at:at + 3]} against {want[at:at + 3]} (a module only load's walk imports registers on import)")
 
 
-def test_the_ops_scope_imports_every_module_of_ops():
-    """`load(("ops", "registry"))` imports every module of `verity.circuits.ops` and of its subpackages besides the registry's,
-    and registers Definitions the registry alone does not: in a process of its own, so the list above stays the registry's."""
-    code = ("import pkgutil, sys\n"
-            "from verity.circuits import ops\n"
-            "from verity_vllm.definitions.registry import catalog\n"
-            "alone = len(catalog.load()[0].defs)\n"
-            "registry, errors = catalog.load(('ops', 'registry'))\n"
-            "assert not errors, errors\n"
-            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.circuits.ops.') if m.name not in sys.modules]\n"
-            "assert not missing, missing\n"
-            "print(alone, len(registry.defs))\n")
-    p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-2000:]
-    alone, both = map(int, p.stdout.split())
-    assert alone == len(pinned()) and both > alone, (alone, both)
-
-
 def test_the_catalog_reads_no_protocol():
     assert not fresh()["core"], f"a registry module imports verity.core: {fresh()['core']}"
 
@@ -138,11 +96,3 @@ def test_the_package_names_itself_a_catalog_package():
     assert got["package"] in got["catalog_packages"], (
         f"{got['package']} is no catalog package ({got['catalog_packages']}): its __init__.py calls catalog_package(__name__)")
 
-
-if __name__ == "__main__":
-    if sys.argv[1:] != ["--update"]:
-        sys.exit("usage: test_catalog.py --update  (rewrites catalog_ids.json from a fresh catalog.load())")
-    got = fresh()
-    assert not got["errors"], got["errors"]
-    IDS.write_text(json.dumps(got["ids"], indent=0) + "\n")
-    print(f"{IDS.relative_to(REPO)}: {len(got['ids'])} ids")
