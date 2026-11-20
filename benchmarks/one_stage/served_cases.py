@@ -620,7 +620,8 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = LC.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())])
+        p = LC.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
+                   ok_statuses=LC.CHECK_EXITS)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
