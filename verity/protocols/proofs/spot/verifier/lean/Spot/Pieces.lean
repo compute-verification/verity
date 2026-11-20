@@ -1209,7 +1209,7 @@ private def twoStageRule : Json :=
 
 #guard (verifier.filter (·.1 == "run")).length == 1
 #guard match (verifier.lookup "run").map (· (Json.mkObj [("rule", twoStageRule)])) with
-  | some (.error e) => e == Levels.TWO_LEVELS_REFUSED
+  | some (Except.error e) => e == Levels.TWO_LEVELS_REFUSED
   | _ => false
 
 end Spot.Pieces
