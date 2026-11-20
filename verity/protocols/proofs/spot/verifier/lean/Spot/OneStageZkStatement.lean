@@ -1444,7 +1444,7 @@ checks on the header as parsed, before it drops any port. -/
 def POPULATION_WHY : String := "public file: not the registration's: population"
 
 /-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
-the template shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
+the template shares or a run input node's `input/n<w>` that every unit reading the node shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
 the registration's (`headerHeldAt`). -/
 def SHARED_UNREAD (p tree : String) : String :=
   s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++
