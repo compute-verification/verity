@@ -2002,9 +2002,9 @@ road_sampled() {  # step 3 on the window's road: the window's record audited fro
   git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
     || { step_refused sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
   m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
-  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+  (cd "$TREE" && env -u PYTHONPATH DEVELOPMENT=1 RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
-    --circuit "$(sha512sum "$rec/circuit.json" | cut -c1-128)" --prover-circuit --run "$run" --registered "$WREG" \
+    --prover-circuit --run "$run" --registered "$WREG" \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
     --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$unit" \
     --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
@@ -2024,9 +2024,14 @@ audit = row.get("audit") or {}
 lean = audit.get("members_lean") or {}
 accepted = audit.get("accepted") is True and row.get("ok") is True
 bad = sorted(u for u in draw for x in (inner.get("unlowered") or {}).values() if x["base"] <= u < x["base"] + x["n"])
+verdict = ((lean.get("detail") or {}).get("lean") or {}) if isinstance(lean.get("detail"), dict) else {}
+wrong = audit.get("wrong_units") if isinstance(audit.get("wrong_units"), dict) else {}
 public = {"ok": row.get("ok"), "audit": {"accepted": audit.get("accepted"),
-                                         "members_lean": {k: lean.get(k) for k in ("ok", "ran", "codes")} if lean else None},
-          "sampled": len(draw), "drawn": draw, "unprovable_drawn": bad, "compiled": "not checked",
+                                         "members_lean": {**{k: lean[k] for k in ("ok", "ran", "codes") if k in lean},
+                                                          "detail": {"lean": {k: verdict[k] for k in ("verdict", "output_sha512")
+                                                                              if k in verdict}}} if lean else None,
+                                         **({"wrong_units": {k: wrong[k] for k in ("bound", "delta") if k in wrong}} if wrong else {})},
+          "sampled": len(draw), "draw": draw, "unprovable_drawn": bad, "compiled": row.get("compiled", "not stated by the audit"),
           "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
 Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
 if not draw:
@@ -2089,9 +2094,11 @@ EOF
   road_network
   if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
   else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
-  if [[ " ${RAN[*]} " = *" sampled-proofs "* ]]; then step_refused record "served_verdicts.py record reads V3c's audit or a served arm's (sampled_of_record), and the road's audit is neither"
-  else step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"; fi
-  step_refused composite "V3c, the composite and the hand-off read the record, which was not made"
+  if [[ " ${RAN[*]} " != *" sampled-proofs "* ]]; then
+    step_refused record "its verdict of record is Lean's members check in the sampled proofs' audit summary ($OUT/summary.json), and that step did not run"
+  elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
+  else FAILED+=(record); say "record: $rec"; fi
+  step_refused composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, under POUW=pearlplus, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made"
   road_end 20
 }
 

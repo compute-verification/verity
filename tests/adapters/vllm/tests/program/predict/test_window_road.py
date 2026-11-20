@@ -160,10 +160,10 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert summary["compiled"] == "not checked" and summary["unprovable_drawn"] == [], summary
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
             "compute accounting's") in log, log
-    assert "record: not run:" in log and "composite: not run:" in log, log
+    assert [x for x in lines.splitlines() if x.startswith("WINDOW-RECORD accept: ")] and "composite: not run:" in log, log
     end = _end(log)
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
-    assert "sampled-proofs" in end.split("; refused ")[0] and "no verdict stands for a step that did not run" in end
+    assert {"sampled-proofs", "record"} <= set(end.split("; refused ")[0].split("(")[1].rstrip(")").split(",")) and "no verdict stands for a step that did not run" in end
     assert end.endswith("this line states no δ or ε of the sampled proofs that ran; the circuit digest is kept private and NO public value fixes it before the coins"), end
     assert [x for x in lines.splitlines() if x.startswith("CLASS ")] == [
         "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
