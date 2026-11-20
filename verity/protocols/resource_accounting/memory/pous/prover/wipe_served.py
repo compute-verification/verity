@@ -22,8 +22,8 @@ of a ``cuda`` store's card in use that counts as idle), and:
   premise never holds (`wipe_party.placement`: a key the run made, or a challenger on the developer's node, reads
   rehearsal), so it never reads as a wipe.
 
-The scheme hands it ``party``, the memory challenger's party name (``MEMORY_ATTESTER``), so that this prover file
-loads no verifier file. What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and
+The scheme hands it ``party``, the memory challenger's party name (``MEMORY_ATTESTER``), and ``development_of``
+(`period.development_of`, why a run is a development run), so that this prover file loads no verifier file. What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and
 the facts:
 
 - ``side_of``: the runtime's `Side.of`, which no protocol imports;
@@ -61,7 +61,6 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_store
-from verity.protocols.resource_accounting.memory.pous.verifier import period as pous_period
 
 NAME = "wipe"
 SMI = "nvidia-smi"
@@ -229,6 +228,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     """One wipe of this node as ``ctx["settings"]`` say, with what its launcher handed in ``ctx`` (`LAUNCHER`)."""
     if why := refusals(ctx):
         raise ValueError(f"{NAME}: {'; '.join(why)}")
+    development_of = ctx["development_of"]
     s = {**ctx["settings"], **facts_of(ctx)[0]}
     card = card_of(s["device"]) if s["store"] == "cuda" else None
     if card and (why := busy(card, s["idle_mib"])):
@@ -256,7 +256,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     (private / "wipe.case.json").chmod(0o600)
     pin = pin_of(pins, ctx["party"])
     served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin else "run",
-              "development": pous_period.development_of(key, {pin} - {None}, [k for k in DEVELOPMENT if s[k]])}
+              "development": development_of(key, {pin} - {None}, [k for k in DEVELOPMENT if s[k]])}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return Wiped(answer, record)

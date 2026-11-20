@@ -17,6 +17,7 @@ import verity_difftest as D
 import wipe_cases as W
 from hypothesis import strategies as st
 
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import session_proofs as SP
@@ -155,7 +156,7 @@ COMMITMENT = st.fixed_dictionaries({
     "blocks": st.integers(0, 2 ** 70), "k": st.integers(0, 2 ** 70), "limit_ns": st.integers(0, 2 ** 70),
     "block_bytes": st.integers(0, 2 ** 70), "binding": hexed(st.binary(max_size=8))})
 #: Any text: the header's JSON writes every character past ASCII as `\uXXXX`, those past the BMP as a surrogate pair.
-ENDED = st.one_of(st.sampled_from([mc.COMPLETE, mc.LATE]), st.text(max_size=12))
+ENDED = st.one_of(st.sampled_from([SC.COMPLETE, SC.LATE]), st.text(max_size=12))
 
 
 def header(v) -> str:
