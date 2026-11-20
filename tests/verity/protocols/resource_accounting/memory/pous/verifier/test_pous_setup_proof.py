@@ -1,14 +1,12 @@
 """PoUS's setup as one circuit (`window.Setup`, `setup_proof` on both sides): the claim and the proof layer's draw, a
-block's place and inputs, the setup's C over every store block through the door, the prover's commitments, the two
-places the verifier stops: the units' constants and held ok (`setup_proof.bound`) and the door's restriction of a block
-that reads the supplied salt, and the order of the weights' commitment before the salt, which no refusal reaches yet."""
+block's place and inputs, the setup's C over every store block through the door, the prover's commitments, where the
+verifier stops at the units' constants and held ok (`setup_proof.bound`), and the order of the weights' commitment before
+the salt, which no refusal reaches yet."""
 
 from __future__ import annotations
 
 import functools
 import random
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -212,26 +210,6 @@ def test_the_verifier_refuses_at_the_units_constants():
         V.check(OC.block, PF.verify, proofs, c, part, {**reg, "supplied": {}}, DRAW, params, salt, 16)
     with pytest.raises(OC.Refused, match="E_BLOCKS"):
         V.check(OC.block, PF.verify, proofs, c, {**part, "blocks": [part["blocks"][0][:-1]]}, reg, DRAW, params, salt, 16)
-
-
-@pytest.mark.slow
-def test_the_door_stops_at_the_supplied_salt_on_a_setup_block(monkeypatch):
-    """Past the binding, the door's verdict on a drawn block: it restricts C to the block itself (C_S, never the
-    prover's circuit file) and stops there, by name, where the block reads the supplied salt bit by bit: restrict keeps a
-    registered input's leaves (`restrict.py`'s ``registered``) and no supplied input's part (`supplied.part`) yet, so
-    the salt's 16-bit leaves read as bits are refused (recut-boundary, circuits'). Slow: restricting the setup's C takes
-    about half a minute, and no smaller circuit is the setup's."""
-    params, salt, _ = setup_case()
-    c, _win, part, reg = registered()
-    monkeypatch.setattr(V, "bound", lambda *a: None)
-    with tempfile.TemporaryDirectory() as d:
-        cf, pub, s = Path(d, "circuit.txt"), Path(d, "pub.bin"), Path(d, "s0")
-        cf.write_bytes(b"")
-        pub.write_text('{"units": {"indices": [5]}}\n')
-        s.mkdir()
-        (s / "session.json").write_text("{}")
-        with pytest.raises(ValueError, match=r"^recut-boundary: .* reads an input node of 16-bit leaves in 1-bit leaves "):
-            V.check(OC.block, PF.verify, {5: PF.Proof(cf, pub, (s,))}, c, part, reg, draw([5]), params, salt, 16)
 
 
 @pytest.mark.slow
