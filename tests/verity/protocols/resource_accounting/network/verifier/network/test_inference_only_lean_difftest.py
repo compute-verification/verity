@@ -55,7 +55,8 @@ def test_the_generator_covers_what_it_says():
     assert {m["shape"] for m in made} == set(vectors.SHAPES)
     assert {m["theta_kind"] for m in made} == {"none", "all", "registered", "random"}
     assert {m["division"] for m in made} == {"single", "singletons", "runs", "random"}
-    assert {r.get("error") for r in results} == set(vectors.MALFORMED) | {None}
+    # the decoder refuses a node's read of itself or a later node first, as `program`
+    assert {r.get("error") for r in results} == set(vectors.MALFORMED) - {"not-topological"} | {None}
     good = [(m["instance"], r) for m, r in zip(made, results, strict=True) if "error" not in r]
     assert {r["failure"][1] for _, r in good if r["failure"]} == {"size", "nci"}
     assert any(r["complies"] for _, r in good) and any(r["failure"] and r["failure"][0] > 0 for _, r in good)

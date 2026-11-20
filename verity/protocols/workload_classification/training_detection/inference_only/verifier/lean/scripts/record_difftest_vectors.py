@@ -81,7 +81,7 @@ port the record cuts and a partial row (`wires`), a row of another width, and an
 into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
 mismatches a wire's leaves were refused for (`program`: no Program states them), an edge from an output of two
 widths into a row of the same two (`leaf-widths`), ingress or a registered read onto an edge's row (`inputs`), and
-a reference to a later node (`not-topological`).
+a reference to a later node (`program`: the decoder refuses it as a forward reference).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -130,8 +130,7 @@ V2 = "verity/registration/v2"
 BROKEN = {
     "instance": ["no-field", "program-type", "record-type", "pins-type"],
     "params": ["gamma", "alpha", "pin-value"],
-    "program": ["program-text"],
-    "not-topological": ["forward"],
+    "program": ["program-text", "forward"],
     "recut-unread": [],
     "record": ["record-text", "record-list"],
     "trusted": ["trusted-keys", "chain", "run-unknown"],
@@ -1962,7 +1961,7 @@ def _unlisted(case: dict, c: Circuit, fn) -> None:
 
 
 def _forward(inst: dict) -> bool:
-    """A gate of some template redirected to read itself (`not-topological`)."""
+    """A gate of some template redirected to read itself, which the decoder refuses as a forward reference (`program`)."""
     desc = json.loads(inst["program"])
     for key in sorted(desc["definitions"]):
         d = desc["definitions"][key]
@@ -2158,7 +2157,7 @@ EDGED = {
         "params": {"weights/w": 8}, "tables": [], "roots": [], "openings": [],
         "reads": [{"reader": "EdgeB_v1", "port": "y", "param": "weights/w", "at": 1, "radix": [1], "base": 0,
                    "step": [0]}]}), "inputs"),
-    "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "not-topological"),
+    "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "program"),
     "an edge read through a grid, each run twice": (lambda: _ab(_mapped),
                                                     _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 4]]]]], 3, form="grid"),
                                                     None, "wires"),
