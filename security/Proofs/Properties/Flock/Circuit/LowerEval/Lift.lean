@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Keeps
+public import Proofs.Properties.Flock.Circuit.LowerEval.Gates
 
 /-! `UnitWidths` and `UnitComputes` from their parts, and `LiftWordEval` for templates of word-primitive calls and axis-0
 batches. -/
@@ -927,17 +928,20 @@ def Batch0 (P : Prog) (d : ℕ) : Prop :=
       (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
     isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **A template of axis-0 batches over word primitives and earlier such templates**: `Batch0`, at least one node, but a
-node may also call, as a primitive, call or batch node, an earlier Definition (a smaller index) that is itself such a
-template. -/
+/-- **A template of axis-0 batches over word primitives, gates and earlier such templates**: `Batch0`, but a node may
+also call, as a primitive, call or batch node, a gate or a constant bit (`GateCallee`), or an earlier Definition (a
+smaller index) that is itself such a template; some node calls a word primitive or such a template. -/
 inductive Batch0Nested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false → 0 < (P.defs[d]!).body.nodes.size →
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
       (∀ nd ∈ (P.defs[d]!).body.nodes,
         nd.form = .prim ∨ nd.form = .call ∨
           (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → nd.fn < d) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false →
-        Batch0Nested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → Batch0Nested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
       Batch0Nested P d
 
 theorem reach_batch0 {P : Prog} {d y : ℕ} (h : Batch0 P d) (hy : Reach P d y) : y = d ∨ (P.defs[y]!).prim = true := by
@@ -960,9 +964,11 @@ theorem gateBodiesDeep_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) : GateBodies
 
 theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (P.defs[d]!).body.nodes.size) :
     Batch0Nested P d :=
-  .mk h.1 hn (fun nd hnd => (h.2 nd hnd).1)
-    (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
-    (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
+  .mk h.1 (fun nd hnd => (h.2 nd hnd).1)
+    (fun nd hnd hp => absurd (h.2 nd hnd).2 (by simp [isWordPrim, hp]))
+    (fun nd hnd hp => absurd (h.2 nd hnd).2 (by simp [isWordPrim, hp]))
+    (fun nd hnd _ hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
+    ⟨_, Array.getElem_mem hn, Or.inr (h.2 _ (Array.getElem_mem hn)).2⟩
 
 /-- **`LiftCalls`**: the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
 Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node

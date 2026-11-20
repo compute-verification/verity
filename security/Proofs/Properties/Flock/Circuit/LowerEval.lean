@@ -320,7 +320,7 @@ theorem lowerGateBodies : LowerGateBodies := by
     have hb' : P.index[v]? = some b := hbo
     rw [Std.HashMap.contains_eq_isSome_getElem?, hidx v b hb']
     rfl
-  obtain ⟨pl, he, hA, -, hC⟩ := liftPlacesAll hl
+  obtain ⟨pl, he, hA, -, -, hC⟩ := liftPlacesAll hl
   have hG' : ∀ y, Reach S a.d y → (S.defs[y]!).prim = false → ReachesWord S y → GateDef L (pl y) := by
     intro y hy
     induction hy with
@@ -1298,6 +1298,44 @@ theorem outWidths_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
     simp only [Node.members, hf]
     rfl
 
+/-- A node calling a gate callee outputs one bit for each member. -/
+theorem outWidths_gate {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {d : ℕ} (hd : d < P.defs.size) {k : ℕ}
+    (hk : k < (P.defs[d]!).body.nodes.size)
+    (hform : ((P.defs[d]!).body.nodes[k]).form = .prim ∨ ((P.defs[d]!).body.nodes[k]).form = .call ∨
+      ((P.defs[d]!).body.nodes[k]).form = .batch)
+    (hgc : GateCallee P ((P.defs[d]!).body.nodes[k]).fn)
+    (ys : List (List Bool)) (hys : ys.length = ((P.defs[d]!).body.nodes[k]).members) :
+    ((P.defs[d]!).body.nodes[k]).out.widths.toList =
+      ys.map fun y => (Prog.evalBool P ((P.defs[d]!).body.nodes[k]).fn y).length := by
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hlt, hno, -⟩ := (hok d hd).2.1 k hk
+  rw [getElem!_pos _ k hk] at hlt hno
+  generalize (P.defs[d]!).body.nodes[k] = X at hlt hno hys hform hgc ⊢
+  have hfP : X.fn < P.defs.size := by omega
+  obtain ⟨-, -, hret, -, g, hgo⟩ := gateCallee_facts h hr hfP hgc
+  have hmap' : ys.map (fun y => (Prog.evalBool P X.fn y).length) = List.replicate ys.length 1 := by
+    simp only [evalBool_gate hfP hgc.1 hgo, List.length_singleton, List.map_const']
+  rw [hmap', hys]
+  have hsh := hno.2.2.2.2.1
+  rcases hform with hf | hf | hf
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hret, show (Ty.value 1).widths.toList = [1] by simp [Ty.widths]]
+    simp only [Node.members, hf]
+    rfl
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hret, show (Ty.value 1).widths.toList = [1] by simp [Ty.widths]]
+    simp only [Node.members, hf]
+    rfl
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hret, widths_array_value]
+    simp only [Node.members, hf]
+    rfl
+
 /-- **`Batch0OutWidths`** holds. -/
 theorem batch0OutWidths : Batch0OutWidths := fun _ _ h hr _ hd hb hgb _ hk ys hys =>
   outWidths_word h hr hd hgb hk (Or.imp_right (Or.imp_right And.left) (hb.2 _ (Array.getElem_mem hk)).1) (hb.2 _ (Array.getElem_mem hk)).2 ys hys
@@ -1412,7 +1450,7 @@ word-primitive callee's Boolean body evaluates through gates alone (`GateBodiesD
 theorem nestedTyped : NestedTyped := by
   intro bytes P h hr d hd hn hgd
   cases hn with
-  | mk hp _ hform _ hnest =>
+  | mk hp hform _ _ hgate _ =>
   obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   refine ⟨(refs_comp h hr hd hp).1, (refs_comp h hr hd hp).2, ret_widths h hr hd hp, fun nd hnd => ?_,
@@ -1423,17 +1461,13 @@ theorem nestedTyped : NestedTyped := by
   · obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hnd
     rw [← getElem!_pos _ k hk]
     exact ((hok d hd).2.1 k hk).1
-  · have hwp : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
-        (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).key = true := by
-      cases hwv : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
-          (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).key with
-      | true => rfl
-      | false =>
-        cases hnest _ (Array.getElem_mem hk) hwv with
-        | mk hp' _ _ _ _ => rw [hpt] at hp'; cases hp'
-    exact outWidths_word h hr hd (hgd d .root hp) hk (hform _ (Array.getElem_mem hk)) hwp ys hys
+  · by_cases hwp : isWordPrim (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).prim
+        (P.defs[((P.defs[d]!).body.nodes[k]).fn]!).key = true
+    · exact outWidths_word h hr hd (hgd d .root hp) hk (hform _ (Array.getElem_mem hk)) hwp ys hys
+    · exact outWidths_gate h hr hd hk (hform _ (Array.getElem_mem hk))
+        (hgate _ (Array.getElem_mem hk) hpt (by simpa using hwp)) ys hys
 
-/-- **`LiftWordEval` for a template of axis-0 batches over word primitives and earlier such templates**: the lift of a
+/-- **`LiftWordEval` for a template of axis-0 batches over word primitives, gates and earlier such templates**: the lift of a
 template of a C `decode` accepts whose root has no recut, each of whose reached Boolean Definitions evaluates through gates
 alone, computes its words. -/
 theorem liftWordEval_nested :
@@ -1566,7 +1600,7 @@ theorem refOf_refOk_comp {P : Prog} {d n : ℕ} (hB : Resolve.BodyOk P d) (hn : 
     rw [hf] at hup
     exact (hB.1 n hn).2.1 i _ hup
 
-/-- **The words of an activation's walk**: in activation `sc` of a template of axis-0 batches over word primitives and
+/-- **The words of an activation's walk**: in activation `sc` of a template of axis-0 batches over word primitives, gates and
 earlier such templates, each of whose reached Boolean Definitions evaluates through gates alone, and whose gates the
 trace computes, the walk on words, each the word at the gate its parameter leaf resolves to, returns at each return leaf
 the word at the gate that leaf resolves to. -/
@@ -1591,7 +1625,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
   | _ d ih =>
   intro sc hscd hsc hN0 hgd hlo hhi x hx
   cases hN0 with
-  | mk _ _ hform0 _ hnest =>
+  | mk _ hform0 _ hnest hgate _ =>
   subst hscd
   obtain ⟨hdl, hp⟩ := Resolve.good_d P hroot hB sc hsc
   obtain ⟨-, hK, hnodes⟩ := hL _ hdl hp
@@ -1634,8 +1668,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     have hcntL := fun hf => cntOf_params (P := P) (nd := ((P.defs[sc.d]!).body.nodes[n]!)) hnok hf
     obtain ⟨hsz, -, hprimp, hcallp, hsh, -, -⟩ := hnok
     cases hpf : (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim
-    · have hnw : isWordPrim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).key = false := by simp [isWordPrim, hpf]
-      have hnc : Batch0Nested P ((P.defs[sc.d]!).body.nodes[n]!).fn := hnest _ hmemn hnw
+    · have hnc : Batch0Nested P ((P.defs[sc.d]!).body.nodes[n]!).fn := hnest _ hmemn hpf
       have hgdc : GateBodiesDeep P ((P.defs[sc.d]!).body.nodes[n]!).fn := fun y hy => hgd y (reach_trans (.callee .root hp hmemn) hy)
       obtain ⟨hbpc, hcntc, holc⟩ := (hD _ hfnP).1.2 hpf
       have hf : ((P.defs[sc.d]!).body.nodes[n]!).form = .call ∨ ((P.defs[sc.d]!).body.nodes[n]!).form = .batch := by
@@ -1746,17 +1779,21 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
             rw [hms]; simp [List.getD_eq_getElem?_getD, hdn.1, hws]
           rw [hfl, hmsj]
           exact hwr _ hjr q h1 hqN
-    · have hwp : isWordPrim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).key = true := by
-        cases hwv : isWordPrim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).key with
-        | true => rfl
-        | false =>
-          cases hnest _ hmemn hwv with
-          | mk hp' _ _ _ _ => rw [hpf] at hp'; cases hp'
-      obtain ⟨-, hg1, hol, w0, hret⟩ := (hD _ hfnP).1.1 hpf
-      have hkey := (FlockSoundness.DecodeBoolean.word_ids hwp).1
-      obtain ⟨b, -, hbo, -⟩ := hmap ((P.defs[sc.d]!).body.nodes[n]!).fn hfnP hwp
-      have hw : ∀ y, (Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y).length = w0 :=
-        evalBool_word_length hd hr hfnP hwp hret hbo (hgb _ hmemn b hbo)
+    · obtain ⟨-, hg1, hol, w0, hret⟩ := (hD _ hfnP).1.1 hpf
+      have hkw : isInputId (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).key = false ∧
+          ∀ y, (Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y).length = w0 := by
+        by_cases hwp : isWordPrim (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).prim
+            (P.defs[((P.defs[sc.d]!).body.nodes[n]!).fn]!).key = true
+        · obtain ⟨b, -, hbo, -⟩ := hmap ((P.defs[sc.d]!).body.nodes[n]!).fn hfnP hwp
+          exact ⟨(FlockSoundness.DecodeBoolean.word_ids hwp).1,
+            evalBool_word_length hd hr hfnP hwp hret hbo (hgb _ hmemn b hbo)⟩
+        · obtain ⟨hin, -, hret1, -, g, hgo⟩ := gateCallee_facts hd hr hfnP (hgate _ hmemn hpf (by simpa using hwp))
+          have hw1 : w0 = 1 := by
+            have h1 := hret.symm.trans hret1
+            injection h1
+          subst hw1
+          exact ⟨hin, fun y => by rw [evalBool_gate hfnP hpf hgo]; rfl⟩
+      obtain ⟨hkey, hw⟩ := hkw
       have hev : ∀ y, wordDef? P sc.d ((P.defs[sc.d]!).body.nodes[n]!).fn y = some [Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y.flatten] := fun y => by
         rw [wordDef_fuel P _ _ y hfnlt]; exact wordDef_prim hfnP hpf y
       have hf : ((P.defs[sc.d]!).body.nodes[n]!).form = .prim ∨ ((P.defs[sc.d]!).body.nodes[n]!).form = .batch := by
@@ -1837,7 +1874,7 @@ theorem scope_words {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
     rw [hget]
     exact refVal_word_res ho hx' ((hB sc hsc).2 l hl) hq hqN
 
-/-- **`UnitWordComputes` for a template of axis-0 batches over word primitives and earlier such templates**: where C is
+/-- **`UnitWordComputes` for a template of axis-0 batches over word primitives, gates and earlier such templates**: where C is
 topological, its gates are located, unit `g` resolves and each Boolean Definition its callee's reached composites lead to
 evaluates through gates alone. -/
 theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
@@ -1870,7 +1907,7 @@ theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode byte
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu
   have hc0 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := by
     cases hn with
-    | mk hp _ _ _ _ => exact hp
+    | mk hp _ _ _ _ _ => exact hp
   have hgood : Resolve.Good P (P.child P.rootScope k m) :=
     Resolve.good_child P (parent := P.rootScope) ⟨rfl, rfl, rfl⟩ hk rfl hc0 hmem rfl
   obtain ⟨hdl, hpc⟩ := Resolve.good_d P hroot hB _ hgood
@@ -1966,7 +2003,7 @@ theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode byte
       simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1']
     rw [hwsl, hwr l hlc q hretq hqN, portWord_lt Y hqN, portWord_lt Y hqN]
 
-/-- **`UnitComputes` for a template of axis-0 batches over word primitives and earlier such templates**: each unit of the
+/-- **`UnitComputes` for a template of axis-0 batches over word primitives, gates and earlier such templates**: each unit of the
 block computes, bit for bit, the lift of the template `admitted` gives, where that template is in `Batch0Nested`. The
 Boolean bodies' fact is the lowering's (`lowerGateBodies`). -/
 theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
@@ -2002,7 +2039,7 @@ theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Jso
   rw [ho, liftWordEval_nested bytes P units S a.d L e hd hr hs hlt hn hgb hl _ hw]
 
 /-- **`BlockEvalDoor` for a block whose template is in `Batch0Nested`**: `BlockEvalDoor`'s conclusion, under its
-hypotheses and that the template `admitted` gives is of axis-0 batches over word primitives and earlier such templates. -/
+hypotheses and that the template `admitted` gives is of axis-0 batches over word primitives, gates and earlier such templates. -/
 theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
     (cuts : List (String × List (String × ℕ))) (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit)
     (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl) (hd : decode bytes = .ok P)

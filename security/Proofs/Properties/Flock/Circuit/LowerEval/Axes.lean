@@ -44,21 +44,23 @@ theorem flatten_getElem?_sum {α : Type} : ∀ (L : List (List α)) {i j : ℕ} 
 section BatchAxes
 open InferenceOnlyVerifier.Properties.SecurityProofs
 
-/-- **A template of batches on any axes over word primitives and earlier such templates**: `Batch0Nested`, but a batch
-node may map each argument along any axis of its type (`AxesOk`: the argument's type with axis `ax` removed is the
-node's length and its parameter's type). -/
+/-- **A template of batches on any axes over word primitives, gates and earlier such templates**: `Batch0Nested`, but
+a batch node may map each argument along any axis of its type. -/
 inductive BatchNested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false → 0 < (P.defs[d]!).body.nodes.size →
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
       (∀ nd ∈ (P.defs[d]!).body.nodes, nd.form = .prim ∨ nd.form = .call ∨ nd.form = .batch) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → nd.fn < d) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false →
-        BatchNested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → BatchNested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
       BatchNested P d
 
 theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
   induction h with
-  | mk hp hn hform hlt _ ih =>
-    refine .mk hp hn (fun nd hnd => ?_) hlt ih
+  | mk hp hform hlt _ hgate hex ih =>
+    refine .mk hp (fun nd hnd => ?_) hlt ih hgate hex
     rcases hform nd hnd with h | h | ⟨h, -⟩
     · exact Or.inl h
     · exact Or.inr (Or.inl h)
