@@ -4,8 +4,8 @@ registration's root, and `model-key` hands a lane the key."""
 
 from __future__ import annotations
 
+import functools
 import hashlib
-import importlib.util
 import json
 import struct
 import sys
@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.circuits import codec
@@ -24,29 +25,31 @@ import auditor as A  # noqa: E402
 import models as M  # noqa: E402
 from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
 
-sys.path.append(str(HERE.parents[5] / "tests" / "verity" / "circuits"))
-import stand_in  # noqa: E402,F401  the H1 case's test primitives' Boolean bodies, before it builds a Program
-
-_spec = importlib.util.spec_from_file_location(
-    "h1window_case", Path(__file__).resolve().parents[6] / "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_circuit_h1window.py")
-H1 = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(H1)
-
 ROLE = "TINY_INT8"
 L0 = "model.layers.0."
 QKV, O, GU, DOWN = (L0 + m for m in M.DECODER)
-LINEARS = ((QKV, 32, 48), (O, 32, 32), (GU, 32, 128), (DOWN, 64, 32))
+LINEARS = ((QKV, 64, 48), (O, 64, 32), (GU, 64, 128), (DOWN, 64, 32))
 CALLS = tuple((name, 0) for name, _k, _n in LINEARS)
-PARTS = {L0 + "self_attn.q_proj": (32, 32), L0 + "self_attn.k_proj": (8, 32), L0 + "self_attn.v_proj": (8, 32),
-         L0 + "self_attn.o_proj": (32, 32), L0 + "mlp.gate_proj": (64, 32), L0 + "mlp.up_proj": (64, 32),
+PARTS = {L0 + "self_attn.q_proj": (32, 64), L0 + "self_attn.k_proj": (8, 64), L0 + "self_attn.v_proj": (8, 64),
+         L0 + "self_attn.o_proj": (32, 64), L0 + "mlp.gate_proj": (64, 64), L0 + "mlp.up_proj": (64, 64),
          L0 + "mlp.down_proj": (32, 64)}
 KEY = bytes(range(32))
 
 
-def descriptor(prefix: str = "h1/", linears=LINEARS) -> bytes:
+@functools.cache
+def descriptor(linears=LINEARS) -> bytes:
+    """The window of `linears` (each at K = 64) over the registry's 4 × 8 tile unit (`h1window.tile_unit`), whose
+    template `credit.TILE_PINS` pins: half a minute and some GB to build, so once a process."""
     calls = tuple((name, 0) for name, _k, _n in linears)
-    desc = codec.encode_program(H1.HW.program(linears, calls, 8, H1.TILE, prefix=prefix, unit=H1.unit))
+    unit = HW.tile_unit(64, (4, 8))
+    desc = codec.encode_program(HW.program(linears, calls, 8, (4, 8), prefix="h1/", unit=lambda _k: unit))
     return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
+
+
+def laid_out(monkeypatch, linears) -> None:
+    """`models.layout` reading `linears` from any descriptor: a window of other linears than the fixture's, without a
+    build of each (the pinned template's read is the fixture's own descriptor's)."""
+    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", list(linears)))
 
 
 def safetensors(path: Path, tensors: dict[str, np.ndarray]) -> None:
@@ -89,7 +92,7 @@ def pinned(tmp_path, parts, window, split, config=None, role=ROLE, manifest=M.MA
     pin = M.checkpoint_sha512({p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in ck.iterdir()})
     (tree / M.PINS).parent.mkdir(parents=True)
     (tree / M.PINS).write_text(json.dumps({role: {"checkpoint_sha512": pin}}))
-    d = descriptor(linears=window)
+    d = descriptor(window)
     (tmp_path / "desc.json").write_bytes(d)
     return {"ckpt": ck, "tree": tree, "tensors": ts, "descriptor": d, "circuit": hashlib.sha512(d).hexdigest(),
             "desc_path": tmp_path / "desc.json", "pin": pin, "role": role, "entry": entry}
@@ -120,8 +123,7 @@ def test_a_registration_commits_the_pinned_checkpoints_rows_for_the_descriptors_
     assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
     assert line["weights_root"] == Wt.weights_root(roots).hex()
     assert line["prefix"] == CR.shape_of(model["descriptor"])["prefix"] == "h1/" and line["model"] == ROLE and line["circuit"] == model["circuit"]
-    assert line["entries"] == [Wt.entry(model["circuit"], "h1/", 32, 208, roots[32]),
-                               Wt.entry(model["circuit"], "h1/", 64, 32, roots[64])]
+    assert line["entries"] == [Wt.entry(model["circuit"], "h1/", 64, 240, roots[64])]
     assert line["checkpoint_sha512"] == model["pin"]
     assert line["key_sha512"] == hashlib.sha512(KEY).hexdigest()
     assert set(line["checkpoint"]) == {p.name for p in model["ckpt"].iterdir()}
@@ -138,7 +140,7 @@ def test_a_registration_refuses_a_checkpoint_or_descriptor_that_isnt_the_pinned_
         M.register(model["tree"], ROLE, "ab" * 64, model["descriptor"], model["ckpt"], KEY, pinned=PIN, now="t")
     with pytest.raises(M.Refused, match="one role"):
         M.register(model["tree"], "OTHER", model["circuit"], model["descriptor"], model["ckpt"], KEY, pinned=PIN, now="t")
-    other = descriptor("h1/w-2/")
+    other = descriptor(MLP)
     with pytest.raises(M.Refused, match="not --circuit"):
         M.register(model["tree"], ROLE, model["circuit"], other, model["ckpt"], KEY, pinned=PIN, now="t")
 
@@ -175,7 +177,7 @@ def test_a_checkpoint_that_isnt_core_s_pin_or_that_another_user_can_write_is_ref
 
 def test_a_shard_outside_the_pin_never_shadows_a_pinned_tensor(model):
     """An extra safetensors file in DIR is never opened, and a tensor in two pinned shards is refused."""
-    extra = {f"{L0}self_attn.q_proj.weight": np.zeros((32, 32), np.int8)}
+    extra = {f"{L0}self_attn.q_proj.weight": np.zeros((32, 64), np.int8)}
     safetensors(model["ckpt"] / "zz.safetensors", extra)
     roots = expected_roots(model["tensors"], model["circuit"])
     assert reg(model)["weights_root"] == Wt.weights_root(roots).hex()
@@ -187,18 +189,19 @@ def test_a_shard_outside_the_pin_never_shadows_a_pinned_tensor(model):
 @pytest.mark.parametrize("linears", [
     (LINEARS[1], LINEARS[0], LINEARS[2], LINEARS[3]),
     LINEARS[:3],
-    LINEARS + (("model.layers.1.self_attn.qkv_proj", 32, 48),),
-    (("model.layers.0.self_attn.kqv_proj", 32, 48),) + LINEARS[1:],
+    LINEARS + (("model.layers.1.self_attn.qkv_proj", 64, 48),),
+    (("model.layers.0.self_attn.kqv_proj", 64, 48),) + LINEARS[1:],
 ])
-def test_a_descriptor_whose_linears_arent_the_models_decoder_layers_in_order_is_refused(model, linears):
+def test_a_descriptor_whose_linears_arent_the_models_decoder_layers_in_order_is_refused(model, monkeypatch, linears):
     """A descriptor that permutes, drops, adds or renames a linear would sign the pinned checkpoint's root for a function
     the model doesn't compute."""
+    laid_out(monkeypatch, linears)
     with pytest.raises(M.Refused, match="decoder layers"):
-        reg(model, descriptor(linears=linears))
+        reg(model)
 
 
 UP, DN = "model.layers.0.mlp.up_proj", "model.layers.1.mlp.down_proj"
-MLP = ((UP, 32, 64), (DN, 64, 32))
+MLP = ((UP, 64, 64), (DN, 64, 32))
 #: a role whose entry declares its linears (an MLP's), its files aside
 MLP_ROLE = "MLP_H128_W8A8"
 MLP_ENTRY = {
@@ -213,7 +216,7 @@ def mlp(tmp_path):
     """An MLP role: a two-layer MLP in vLLM's manifest, whose entry declares its linears, up_proj then down_proj, and
     whose checkpoint has no config.json."""
     (tmp_path / "mlp").mkdir()
-    return pinned(tmp_path / "mlp", {UP: (64, 32), DN: (32, 64)}, MLP, 2, role=MLP_ROLE, **MLP_ENTRY)
+    return pinned(tmp_path / "mlp", {UP: (64, 64), DN: (32, 64)}, MLP, 2, role=MLP_ROLE, **MLP_ENTRY)
 
 
 def test_a_role_that_declares_its_linears_commits_each_unmerged_module_as_itself(mlp):
@@ -253,18 +256,19 @@ def test_an_unreadable_or_missing_manifest_is_refused(mlp):
 @pytest.mark.parametrize("linears", [
     (MLP[1], MLP[0]),
     MLP[:1],
-    MLP + (("model.layers.2.mlp.up_proj", 32, 64),),
+    MLP + (("model.layers.2.mlp.up_proj", 64, 64),),
     LINEARS,
 ])
-def test_a_descriptor_whose_linears_arent_the_roles_declared_ones_in_order_is_refused(mlp, linears):
+def test_a_descriptor_whose_linears_arent_the_roles_declared_ones_in_order_is_refused(mlp, monkeypatch, linears):
     """Reordered, missing, extra, or the decoder's: the declared list is the whole of what the role's root may sign."""
+    laid_out(monkeypatch, linears)
     with pytest.raises(M.Refused, match="the role's declared linears"):
-        reg(mlp, descriptor(linears=linears))
+        reg(mlp)
 
 
 @pytest.mark.parametrize("declared", [[], [UP, UP], "model.layers.0.mlp.up_proj", [UP, 3], {"0": UP}])
 def test_a_role_whose_declared_linears_are_malformed_is_refused(tmp_path, declared):
-    m = pinned(tmp_path, {UP: (64, 32), DN: (32, 64)}, MLP, 2, linears=declared)
+    m = pinned(tmp_path, {UP: (64, 64), DN: (32, 64)}, MLP, 2, linears=declared)
     with pytest.raises(M.Refused, match="not a nonempty list of distinct module names"):
         reg(m)
 
@@ -274,19 +278,19 @@ def test_a_role_that_declares_no_linears_keeps_the_decoder_rule(model, tmp_path)
     refused for it, and so is a checkpoint with no config.json."""
     assert M.declared_linears(M.manifest_entry(model["tree"], ROLE)) is None
     with pytest.raises(M.Refused, match="decoder layers"):
-        reg(model, descriptor(linears=MLP))
+        reg(model, descriptor(MLP))
     (tmp_path / "bare").mkdir()
-    bare = pinned(tmp_path / "bare", {UP: (64, 32), DN: (32, 64)}, MLP, 2)
+    bare = pinned(tmp_path / "bare", {UP: (64, 64), DN: (32, 64)}, MLP, 2)
     with pytest.raises(M.Refused, match="no readable config.json"):
         reg(bare)
 
 
 def test_a_linear_the_checkpoint_shapes_otherwise_is_refused(model, monkeypatch):
-    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [(QKV, 32, 40), *LINEARS[1:]]))
+    laid_out(monkeypatch, [(QKV, 64, 40), *LINEARS[1:]])
     with pytest.raises(M.Refused, match="gave 48 rows"):
         reg(model)
-    monkeypatch.setattr(M, "layout", lambda d, c: ("h1/", [(QKV, 64, 48), *LINEARS[1:]]))
-    with pytest.raises(M.Refused, match="not n × 64"):
+    laid_out(monkeypatch, [(QKV, 4096, 48), *LINEARS[1:]])
+    with pytest.raises(M.Refused, match="not n × 4096"):
         reg(model)
 
 

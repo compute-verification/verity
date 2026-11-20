@@ -8,6 +8,7 @@ dependencies = [
     "verity-config",
     "numpy>=1.26",
     "verity-torch",
+    "input-datasets",
 ]
 
 [project.scripts]
@@ -35,6 +36,7 @@ packages = [
 ]
 
 [tool.uv.sources]
+input-datasets = { workspace = true }
 research = { workspace = true }
 verity = { workspace = true }
 verity-config = { workspace = true }
