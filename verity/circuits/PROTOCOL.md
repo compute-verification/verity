@@ -538,7 +538,8 @@ So a storage round's index, its session's header and context, the setup's salt, 
 PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one kind
 of input, with no case per scheme.
 
-**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
+**What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (a mark's form is `supplied.mark_of`'s; a mark's
+function and nodes are `Spot/Supplied.lean`'s `markOf` and `marks`; no verifier checks a held output yet):
 
 - `E_SUPPLIED_MARK`: an entry's third element is not a mark of exactly these four keys of these forms;
 - `E_INPUTS_MIXED`: a marked parameter's nodes are not all supplied-input nodes, or an unmarked one's include one. So a
