@@ -52,7 +52,7 @@ import verity.circuits
 from verity.circuits import codec
 from verity.circuits import program as ir
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.refs import Affine, Coll, tuple_of
+from verity.circuits.refs import Affine, Coll, Grid, lane_bounds, spell, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
 HERE = Path(__file__).resolve().parent
@@ -127,6 +127,7 @@ class Program:
         self._tidx: dict[str, int] = {}
         self.composites: list[str] = []
         self.n = 0
+        self.grids = False
 
     def ty(self, t) -> int:
         k = json.dumps(tj(t))
@@ -232,6 +233,10 @@ class Body:
         cs = self.colls(bias)
         if not cs:
             return None
+        if self.P.grids and rng.random() < 0.5:
+            g = self.grid(L, cs)
+            if g is not None:
+                return g
         r = rng.random()
         if r < 0.08:
             same = [(k, a) for k, cnts in enumerate(self.argcounts) for a, c in enumerate(cnts) if c == L]
@@ -266,6 +271,32 @@ class Body:
         if rng.random() < 0.2:
             parts.insert(rng.randint(0, len(parts)), {"affine": ["n", 0, 0, 0]})
         return {"concat": parts}
+
+    def grid(self, L: int, cs) -> dict | None:
+        """`L` references as a grid part that no affine, strided or explicit part spells, its lanes in `cs`, or none."""
+        rng = self.rng
+        for _ in range(12):
+            g, run = rng.choice([1, 1, 2, 3]), rng.choice([1, 1, 2, 3])
+            if L % (g * run):
+                continue
+            P, rads = L // (g * run), []
+            while P > 1 and len(rads) < 3:
+                r = rng.choice([d for d in range(2, P + 1) if P % d == 0])
+                rads.append(r)
+                P //= r
+            if P > 1 or not rads or (g == 1 and len(rads) < 2):
+                continue
+            lanes = []
+            for _j in range(g):
+                s, i, N, _ = rng.choice(cs)
+                e, lv = rng.randint(-2, 3), tuple((r, rng.randint(-5, 6)) for r in rads)
+                lo, hi = lane_bounds(run, (s, i, 0, e, lv))
+                if hi - lo >= N:
+                    break
+                lanes.append((s, i, rng.randint(-lo, N - 1 - hi), e, lv))
+            if len(lanes) == g and isinstance(p := spell(run, lanes), Grid):
+                return p.to_json()
+        return None
 
     def push(self, node: dict, out, counts: list[int], gates: int, kind: str) -> None:
         self.nodes.append(node)
@@ -418,10 +449,12 @@ def composite(P: Program, budget: int, scale: int = 1) -> None:
     P.composite(body, t, r, rng.choice([None] * 15 + ["Input8_v1"]) if "Input8_v1" not in P.defs else None)
 
 
-def program(seed: int, scale: int = 1) -> str:
-    """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`)."""
+def program(seed: int, scale: int = 1, grids: bool = False) -> str:
+    """`random`'s Program; with `scale`, that many times the Definitions, nodes per body and root nodes (`big`); with
+    `grids`, half its references grid parts where one fits (`GRID`)."""
     rng = random.Random(seed)
     P = Program(rng)
+    P.grids = grids
     budget = rng.choice([8, 32, 128, 512])
     for _ in range(rng.choice([0, 1, 2, 3, 4, 6, 8]) * scale):
         composite(P, budget, scale)
@@ -935,6 +968,31 @@ def programs():
                 yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
 
 
+#: Programs reading grid parts, apart from `programs()` and the data the audit pins.
+GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 600), 0.3, 1),
+        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 60), 0.3, 1))
+
+
+def grid_programs():
+    for fam, make, seeds_, mut, k in GRID:
+        for s in seeds_:
+            text, given = make(s)
+            yield _line(f"{fam}-{s}", fam, text, given, k)
+            rng = random.Random(~s)
+            if rng.random() < mut:
+                yield _line(f"{fam}-mutant-{s}", f"{fam}-mutant", mutate(rng, text), given, k)
+
+
+def write_grid(out: Path) -> dict[str, Path]:
+    """`grid_programs()` under ``out/desc_fuzz/grid.jsonl``."""
+    path = out / "desc_fuzz" / "grid.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        for x in grid_programs():
+            f.write(json.dumps(x, separators=(",", ":"), sort_keys=True) + "\n")
+    return {"desc_fuzz/grid.jsonl": path}
+
+
 def write(out: Path) -> dict[str, Path]:
     """`programs()` under ``out/desc_fuzz/programs.jsonl``."""
     path = out / "desc_fuzz" / "programs.jsonl"
@@ -953,11 +1011,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("verity", type=Path, help="the checkout whose verity.circuits builds the shared vectors")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--grid", action="store_true", help="write the grid Programs (`GRID`) instead")
     a = ap.parse_args()
     here = Path(verity.circuits.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
         raise SystemExit(f"verity.circuits comes from {here}, not from the checkout {a.verity}")
-    write(a.out)
+    (write_grid if a.grid else write)(a.out)
 
 
 if __name__ == "__main__":

@@ -179,6 +179,11 @@ def Piece.rowPis (q : Piece) : Array PI :=
     let lo := (if q.stride > 0 then q.base else q.at (q.len - 1)).toNat
     if q.stride.natAbs == 1 then #[⟨lo, q.len, 1, 1⟩] else #[⟨lo, 1, q.stride.natAbs, q.len⟩]
 
+/-- `x`'s set as intervals: one when its runs meet, else one per run. -/
+def PI.emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
+  if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
+  else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
+
 /-- The periodic intervals of `xs` as intervals. -/
 def PI.ivs (xs : Array PI) : Array (Nat × Nat) := xs.foldl PI.emit #[]
 
@@ -209,11 +214,6 @@ def Piece.pis (q : Piece) : Array PI :=
       let col := rlo q.rowStride q.rows q.base
       #[⟨rlo q.stride n col, q.rows, q.stride.natAbs, n⟩]
     else q.rowsOf.flatMap one
-
-/-- `x`'s set as intervals: one when its runs meet, else one per run. -/
-def PI.emit (out : Array (Nat × Nat)) (x : PI) : Array (Nat × Nat) :=
-  if x.len ≥ x.period then out.push (x.lo, x.lo + (x.cnt - 1) * x.period + x.len)
-  else (Array.range x.cnt).foldl (fun o c => o.push (x.lo + c * x.period, x.lo + c * x.period + x.len)) out
 
 /-- By period, then count, then first run (`List.mergeSort`'s order, which Lean core proves sorts). -/
 def PI.le (x y : PI) : Bool :=
