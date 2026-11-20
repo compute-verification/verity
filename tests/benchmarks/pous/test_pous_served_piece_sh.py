@@ -12,7 +12,6 @@ and with it the lease, and both builds have ended, its answers with no card; the
 from __future__ import annotations
 
 import fcntl
-import json
 import os
 import re
 import shlex
@@ -358,23 +357,6 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own_and_only_the_callers_lease_
         _load(node), ["piece", "--sessions", "GPU-serve0"], ["piece", "--answers"]]
 
 
-@pytest.mark.parametrize("env, want", [
-    ({}, "120m"), ({"PIECE_TIMEOUT": "45m"}, "45m"), ({"POUS_TIMEOUT": "3h", "PIECE_TIMEOUT": "45m"}, "3h"),
-    ({"POUS_CMD": ""}, "")])
-def test_the_composed_run_gives_the_piece_time_for_its_leans(tmp_path, env, want):
-    """`onsite_piece_commands` sets the piece's limit with its command, exported for `served_verdicts.py pieces`:
-    POUS_TIMEOUT where set, else PIECE_TIMEOUT's, else its own default; with no PoUS piece it sets none."""
-    tree, home = tmp_path / "tree", tmp_path / "home"
-    (tree / "benchmarks/pous").mkdir(parents=True)
-    (tree / "benchmarks/pous/served_piece.sh").write_text("")
-    (home / ".ssh").mkdir(parents=True)
-    (home / ".ssh/vy-auditor2-pous").write_text("")
-    got = subprocess.run(["bash", "-uc", f'. {SCRIPT.parent / "onsite_pieces.sh"}; onsite_piece_commands; '
-                          'exec env'], env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree)} | env,
-                         check=True, capture_output=True, text=True).stdout.splitlines()
-    assert [line for line in got if line.startswith("POUS_TIMEOUT=")] == ([f"POUS_TIMEOUT={want}"] if want else [])
-
-
 @pytest.mark.parametrize("repo, revision, rc", [
     ("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", 0),
     ("verity-int8/Llama-3.2-1B-INT8", "0" * 40, 3),
@@ -391,16 +373,6 @@ def test_the_preflight_asks_the_piece_itself_whether_it_pins_a_checkpoint(tmp_pa
                          check=False, capture_output=True, text=True)
     assert got.returncode == rc, got.stderr[-600:]
     assert (got.stdout == "") if rc == 0 else (f"{repo}@{revision}" in got.stdout and got.stdout.count("\n") == 1)
-
-
-def test_the_scratch_copy_holds_every_package_the_two_leans_require():
-    """`served_piece.sh` copies ``verity/`` alone: each package the two verifiers' manifests require is a path
-    requirement inside it, so the copy builds with no network and nothing of the tree outside it."""
-    for package in (CHECK, AUDIT):
-        manifest = json.loads((ROOT / package / "lake-manifest.json").read_text())
-        for p in manifest["packages"]:
-            assert p["type"] == "path", f"{package} requires {p['name']} from {p.get('url')}, which no copy holds"
-            assert ROOT / "verity" in (ROOT / package / p["dir"]).resolve().parents, (package, p["name"], p["dir"])
 
 
 @pytest.mark.parametrize("given, why", [

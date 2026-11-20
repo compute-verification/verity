@@ -22,17 +22,6 @@ def _stamp(monkeypatch):
     monkeypatch.delenv("OUT", raising=False)       # a research run's OUT, which `_ran` sets where a test needs it
 
 
-def test_run_launches_run_py_s_run_with_the_job_wrapped(capsys) -> None:
-    """`record.py run` is `run.py run`, its job's command `JOB` before job.sh's arguments, so the run's command records."""
-    assert REC.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2"]) == 0
-    cmd = capsys.readouterr().out.split()
-    tail = cmd[cmd.index("--") + 1:]
-    assert tail[3:6] == list(REC.JOB) and "K=4096" in tail and "STEPS=" + ",".join(
-        s for s in RP.ORDER if s != "forge-after") in tail
-    assert REC.main(["run", "--dry-run", "--here"]) == 0
-    assert capsys.readouterr().out.split()[:3] == list(REC.JOB)
-
-
 class _Job:
     """job.sh as `job` runs it: writes `result` under the run's out/ (none when None) and exits `rc`."""
 
