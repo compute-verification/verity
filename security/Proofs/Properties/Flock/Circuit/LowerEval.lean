@@ -276,6 +276,218 @@ leaves times the width. -/
 def HomoBits : Prop :=
   ∀ (t : Ty) (w : ℕ), Widths.homo t = some w → t.widths.foldl (· + ·) 0 = t.leaves * w
 
+theorem hb_foldl_append_size {α : Type} (l : List α) (g : α → Array ℕ) (a : Array ℕ) :
+    (l.foldl (fun a t => a ++ g t) a).size = a.size + (l.map fun t => (g t).size).sum := by
+  induction l generalizing a with
+  | nil => simp
+  | cons x l ih => simp only [List.foldl_cons, ih, Array.size_append, List.map_cons, List.sum_cons]; omega
+
+theorem hb_foldl_add {α : Type} (l : List α) (g : α → ℕ) (a : ℕ) :
+    l.foldl (fun a t => a + g t) a = a + (l.map g).sum := by
+  induction l generalizing a with
+  | nil => simp
+  | cons x l ih => simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons]; omega
+
+theorem hb_mem_foldl_append {α : Type} (l : List α) (g : α → Array ℕ) (a : Array ℕ) (x : ℕ)
+    (h : x ∈ l.foldl (fun a t => a ++ g t) a) : x ∈ a ∨ ∃ t ∈ l, x ∈ g t := by
+  induction l generalizing a with
+  | nil => exact .inl h
+  | cons y l ih =>
+    rcases ih _ h with h | ⟨t, ht, hx⟩
+    · rcases Array.mem_append.1 h with h | h
+      · exact .inl h
+      · exact .inr ⟨y, List.mem_cons_self .., h⟩
+    · exact .inr ⟨t, List.mem_cons_of_mem _ ht, hx⟩
+
+theorem hb_sizeOf_toList {α : Type} [SizeOf α] (fs : Array α) : sizeOf fs = 1 + sizeOf fs.toList := by
+  cases fs; simp
+
+theorem hb_lt_mem {α : Type} [SizeOf α] {fs : Array α} {f : α} (h : f ∈ fs.toList) : sizeOf f < 1 + sizeOf fs := by
+  have := List.sizeOf_lt_of_mem h; have := hb_sizeOf_toList fs; omega
+
+theorem hb_lt_mem2 {fs : Array (String × Ty)} {f : String × Ty} (h : f ∈ fs.toList) : sizeOf f.2 < 1 + sizeOf fs := by
+  have := hb_lt_mem h; obtain ⟨k, t⟩ := f; simp only [Prod.mk.sizeOf_spec] at *; omega
+
+theorem hb_widths_size : ∀ t : Ty, t.widths.size = t.leaves
+  | .value _ => by simp [Ty.widths, Ty.leaves]
+  | .array n e => by
+    have ih := hb_widths_size e
+    rw [Ty.widths, Ty.leaves]
+    simp only [← Array.foldl_toList, hb_foldl_append_size, ih, Array.size_empty, Array.toList_range, List.map_const',
+      List.sum_replicate, smul_eq_mul, List.length_range]
+    omega
+  | .tuple fs => by
+    rw [Ty.widths, Ty.leaves, ← Array.foldl_toList, ← Array.foldl_toList, hb_foldl_append_size, hb_foldl_add]
+    simp only [Array.size_empty, Nat.zero_add]
+    congr 1
+    exact List.map_congr_left fun f hf => hb_widths_size f
+  | .record fs => by
+    rw [Ty.widths, Ty.leaves, ← Array.foldl_toList, ← Array.foldl_toList, hb_foldl_append_size, hb_foldl_add]
+    simp only [Array.size_empty, Nat.zero_add]
+    congr 1
+    exact List.map_congr_left fun f hf => hb_widths_size f.2
+termination_by t => t
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (have := hb_lt_mem (by assumption); omega)
+    | (have := hb_lt_mem2 (by assumption); omega)
+
+theorem hb_tuple_fold (T : ℕ) (l : List Ty) (acc : List ℕ) (o : ℕ) (hT : o + (l.map Ty.leaves).sum ≤ T) :
+    (∀ x ∈ acc, x ∈ (l.foldl (fun (acc : List ℕ × ℕ) f =>
+      (if acc.2 + f.leaves ≤ 0 || T ≤ acc.2 then acc.1
+        else acc.1 ++ Widths.rangeWidths f (0 - acc.2) (min T (acc.2 + f.leaves) - acc.2), acc.2 + f.leaves))
+      (acc, o)).1) ∧
+    ∀ f ∈ l, 0 < f.leaves → ∀ x ∈ Widths.rangeWidths f 0 f.leaves, x ∈ (l.foldl (fun (acc : List ℕ × ℕ) f =>
+      (if acc.2 + f.leaves ≤ 0 || T ≤ acc.2 then acc.1
+        else acc.1 ++ Widths.rangeWidths f (0 - acc.2) (min T (acc.2 + f.leaves) - acc.2), acc.2 + f.leaves))
+      (acc, o)).1 := by
+  induction l generalizing acc o with
+  | nil => exact ⟨fun x hx => hx, fun f hf => by simp at hf⟩
+  | cons g l ih =>
+    simp only [List.map_cons, List.sum_cons] at hT
+    have ih' := ih (if o + g.leaves ≤ 0 || T ≤ o then acc
+      else acc ++ Widths.rangeWidths g (0 - o) (min T (o + g.leaves) - o)) (o + g.leaves) (by omega)
+    simp only [List.foldl_cons]
+    have hsub : ∀ x ∈ acc, x ∈ (if o + g.leaves ≤ 0 || T ≤ o then acc
+        else acc ++ Widths.rangeWidths g (0 - o) (min T (o + g.leaves) - o)) := by
+      intro x hx; split
+      · exact hx
+      · exact List.mem_append_left _ hx
+    refine ⟨fun x hx => ih'.1 x (hsub x hx), fun f hf hpos x hx => ?_⟩
+    rcases List.mem_cons.1 hf with rfl | hf
+    · apply ih'.1
+      have hc : ¬ ((decide (o + f.leaves ≤ 0) || decide (T ≤ o)) = true) := by
+        simp only [Bool.or_eq_true, decide_eq_true_eq, not_or]; omega
+      rw [if_neg hc]
+      apply List.mem_append_right
+      have h1 : 0 - o = 0 := Nat.zero_sub o
+      have h2 : min T (o + f.leaves) - o = f.leaves := by omega
+      rw [h1, h2]; exact hx
+    · exact ih'.2 f hf hpos x hx
+
+theorem hb_record_fold (T : ℕ) (l : List (String × Ty)) (acc : List ℕ) (o : ℕ)
+    (hT : o + (l.map fun f => f.2.leaves).sum ≤ T) :
+    (∀ x ∈ acc, x ∈ (l.foldl (fun (acc : List ℕ × ℕ) f =>
+      (if acc.2 + f.2.leaves ≤ 0 || T ≤ acc.2 then acc.1
+        else acc.1 ++ Widths.rangeWidths f.2 (0 - acc.2) (min T (acc.2 + f.2.leaves) - acc.2), acc.2 + f.2.leaves))
+      (acc, o)).1) ∧
+    ∀ f ∈ l, 0 < f.2.leaves → ∀ x ∈ Widths.rangeWidths f.2 0 f.2.leaves, x ∈ (l.foldl (fun (acc : List ℕ × ℕ) f =>
+      (if acc.2 + f.2.leaves ≤ 0 || T ≤ acc.2 then acc.1
+        else acc.1 ++ Widths.rangeWidths f.2 (0 - acc.2) (min T (acc.2 + f.2.leaves) - acc.2), acc.2 + f.2.leaves))
+      (acc, o)).1 := by
+  induction l generalizing acc o with
+  | nil => exact ⟨fun x hx => hx, fun f hf => by simp at hf⟩
+  | cons g l ih =>
+    simp only [List.map_cons, List.sum_cons] at hT
+    have ih' := ih (if o + g.2.leaves ≤ 0 || T ≤ o then acc
+      else acc ++ Widths.rangeWidths g.2 (0 - o) (min T (o + g.2.leaves) - o)) (o + g.2.leaves) (by omega)
+    simp only [List.foldl_cons]
+    have hsub : ∀ x ∈ acc, x ∈ (if o + g.2.leaves ≤ 0 || T ≤ o then acc
+        else acc ++ Widths.rangeWidths g.2 (0 - o) (min T (o + g.2.leaves) - o)) := by
+      intro x hx; split
+      · exact hx
+      · exact List.mem_append_left _ hx
+    refine ⟨fun x hx => ih'.1 x (hsub x hx), fun f hf hpos x hx => ?_⟩
+    rcases List.mem_cons.1 hf with rfl | hf
+    · apply ih'.1
+      have hc : ¬ ((decide (o + f.2.leaves ≤ 0) || decide (T ≤ o)) = true) := by
+        simp only [Bool.or_eq_true, decide_eq_true_eq, not_or]; omega
+      rw [if_neg hc]
+      apply List.mem_append_right
+      have h1 : 0 - o = 0 := Nat.zero_sub o
+      have h2 : min T (o + f.2.leaves) - o = f.2.leaves := by omega
+      rw [h1, h2]; exact hx
+    · exact ih'.2 f hf hpos x hx
+
+theorem hb_mem_range : ∀ (t : Ty) (x : ℕ), x ∈ t.widths → x ∈ Widths.rangeWidths t 0 t.leaves
+  | .value w, x, hx => by
+    simp only [Ty.widths, Array.mem_singleton] at hx
+    subst hx; simp [Widths.rangeWidths, Ty.leaves]
+  | .array n e, x, hx => by
+    rw [Ty.widths] at hx
+    simp only [← Array.foldl_toList] at hx
+    rcases hb_mem_foldl_append _ _ _ _ hx with h | ⟨_, hi, hx⟩
+    · simp at h
+    have hn : 0 < n := by simp at hi; omega
+    have hL : 0 < e.leaves := by
+      rw [← hb_widths_size e]; exact Array.size_pos_of_mem hx
+    have ih := hb_mem_range e x hx
+    rw [Widths.rangeWidths, Ty.leaves]
+    simp only [Nat.min_self]
+    have h0 : ¬ (e.leaves == 0 || n * e.leaves ≤ 0) = true := by
+      simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, not_or]
+      exact ⟨by omega, by have := Nat.mul_pos hn hL; omega⟩
+    rw [if_neg h0]
+    simp only [Nat.zero_div, Nat.zero_mul, Nat.sub_zero]
+    split
+    · rename_i hab
+      have hb : (n * e.leaves - 1) / e.leaves = 0 := by simpa using (beq_iff_eq.1 hab).symm
+      have h1 : n = 1 := by
+        rw [Nat.div_eq_zero_iff] at hb
+        rcases hb with hb | hb
+        · omega
+        · have : n * e.leaves < 2 * e.leaves := by omega
+          have := Nat.lt_of_mul_lt_mul_right this
+          omega
+      subst h1; simpa using ih
+    · exact List.mem_eraseDups.2 (List.mem_append_left _ (List.mem_append_left _ ih))
+  | .tuple fs, x, hx => by
+    rw [Ty.widths] at hx
+    simp only [← Array.foldl_toList] at hx
+    rcases hb_mem_foldl_append _ _ _ _ hx with h | ⟨f, hf, hx⟩
+    · simp at h
+    have hpos : 0 < f.leaves := by rw [← hb_widths_size f]; exact Array.size_pos_of_mem hx
+    have ih := hb_mem_range f x hx
+    rw [Widths.rangeWidths]
+    apply List.mem_eraseDups.2
+    rw [← Array.foldl_toList]
+    have hT : 0 + (fs.toList.map Ty.leaves).sum ≤ (Ty.tuple fs).leaves := by
+      rw [Ty.leaves, ← Array.foldl_toList, hb_foldl_add] <;> omega
+    exact (hb_tuple_fold _ fs.toList [] 0 hT).2 f hf hpos x ih
+  | .record fs, x, hx => by
+    rw [Ty.widths] at hx
+    simp only [← Array.foldl_toList] at hx
+    rcases hb_mem_foldl_append _ _ _ _ hx with h | ⟨f, hf, hx⟩
+    · simp at h
+    have hpos : 0 < f.2.leaves := by rw [← hb_widths_size f.2]; exact Array.size_pos_of_mem hx
+    have ih := hb_mem_range f.2 x hx
+    rw [Widths.rangeWidths]
+    apply List.mem_eraseDups.2
+    rw [← Array.foldl_toList]
+    have hT : 0 + (fs.toList.map fun f => f.2.leaves).sum ≤ (Ty.record fs).leaves := by
+      rw [Ty.leaves, ← Array.foldl_toList, hb_foldl_add] <;> omega
+    exact (hb_record_fold _ fs.toList [] 0 hT).2 f hf hpos x ih
+termination_by t => t
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (have := hb_lt_mem (by assumption); omega)
+    | (have := hb_lt_mem2 (by assumption); omega)
+
+theorem hb_foldl_const (l : List ℕ) (w c : ℕ) (h : ∀ x ∈ l, x = w) : l.foldl (· + ·) c = c + l.length * w := by
+  induction l generalizing c with
+  | nil => simp
+  | cons y l ih =>
+    simp only [List.foldl_cons, List.length_cons]
+    rw [ih (c + y) fun x hx => h x (List.mem_cons_of_mem _ hx), h y (List.mem_cons_self ..)]
+    rw [Nat.succ_mul]; omega
+
+/-- `HomoBits` holds. -/
+theorem homoBits : HomoBits := by
+  intro t w h
+  unfold Widths.homo at h
+  split at h
+  · rename_i w' hw
+    have hw' : w' = w := by simpa using h
+    have hall : ∀ x ∈ t.widths.toList, x = w' := fun x hx => by
+      have := hb_mem_range t x (Array.mem_toList_iff.1 hx)
+      rw [hw] at this; simpa using this
+    rw [← Array.foldl_toList, hb_foldl_const _ w' 0 hall, Array.length_toList, hb_widths_size, hw']; omega
+  · cases h
+
 theorem foldl_snd_eq (l : List (String × ℕ)) (a : ℕ) :
     l.foldl (fun x y => x + y.2) a = a + (l.map Prod.snd).sum := by
   induction l generalizing a with
@@ -413,8 +625,8 @@ theorem count_fst_le (ps : List (String × Ty)) (n : String) :
     · simp [hx]; omega
     · simp [hx]; omega
 
-/-- **`AdmitLeaves`**, from `admitted_walk` and `HomoBits`. -/
-theorem admitLeaves (hH : HomoBits) : AdmitLeaves := by
+/-- **`AdmitLeaves`**, from `admitted_walk` and `homoBits`. -/
+theorem admitLeaves : AdmitLeaves := by
   intro partition cuts S a Q e ha hq
   obtain ⟨fn, L, dl, l, -, hlift, hl, hoff, hins, hfields, -, -, hcut, hnames⟩ := admitted_walk ha
   rw [hlift] at hq
@@ -483,13 +695,13 @@ theorem admitLeaves (hH : HomoBits) : AdmitLeaves := by
       simp [hw] at hc
       have hk' : p.2.leaves % k = 0 := by omega
       simp only
-      rw [hH _ _ hw]
+      rw [homoBits _ _ hw]
       exact Dvd.dvd.mul_right (Nat.dvd_of_mod_eq_zero hk') w
   · rw [hfields, bitsOf_fields, hr]
 
-/-- **`LowerEvalDoor`**, on `HomoBits`. -/
-theorem lowerEvalDoor (hH : HomoBits) : LowerEvalDoor :=
-  lowerEvalDoor_of admitWhole (admitLeaves hH)
+/-- **`LowerEvalDoor`**. -/
+theorem lowerEvalDoor : LowerEvalDoor :=
+  lowerEvalDoor_of admitWhole admitLeaves
 
 /-! ## `restrict` keeps C's Boolean Definitions -/
 
