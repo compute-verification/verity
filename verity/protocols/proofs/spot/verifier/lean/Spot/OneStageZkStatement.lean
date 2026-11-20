@@ -16,6 +16,7 @@ public import Circuits.DefinitionDigest
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
+public import Std.Data.HashSet
 import all Init.Util
 meta import Flock
 meta import Spot.Restrict
@@ -151,24 +152,6 @@ def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array 
   #[("x#0", 256), ("x#1", 256), ("x#2", 256), ("x#3", 256), ("w", 256)]
 #guard cutRows [] #[("x", 1024)] == #[("x", 1024)]
 
-/-- The refusal of a block whose rows the lowering would misread: each row and port starts at a whole u16 word, while
-`Flock.Lower.lower` lays the leaves one after another, so the leaves after a row of bits not a multiple of 16 sit in
-its padding. -/
-def NOT_WHOLE : String := "is not whole u16 words, and the lowering lays the leaves after it in its padding"
-
-/-- `rows`, a block circuit's input rows or return fields `(name, bits)`, refused under `NOT_WHOLE` where one has bits
-not a multiple of 16. -/
-def wholeWords (key what : String) (rows : Array (String × Nat)) : V Unit :=
-  match rows.toList.find? (·.2 % 16 != 0) with
-  | some (n, b) => throw s!"lower: C_S's template {key}: {what} {n} of {b} bits {NOT_WHOLE}"
-  | none => pure ()
-
-#guard (wholeWords "E_v1" "input row" #[("x", 3), ("y", 1)] matches .error _)
-#guard (wholeWords "E_v1" "return field" #[("o0", 2047), ("o1", 1)] matches .error _)
-#guard (wholeWords "E_v1" "input row" #[("x", 16), ("y", 1)] matches .error _)
-#guard (wholeWords "E_v1" "input row" #[("x#0", 256), ("x#1", 256), ("w", 16)] matches .ok ())
-#guard (wholeWords "E_v1" "input row" #[] matches .ok ())
-
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
 as the bytes `--program` reads), the partition object, the public file's committed SHA-512 (the commitment) and theta's
 registration (the registered file, which states no position), and the first unit of the statement's block. -/
@@ -199,18 +182,65 @@ def listedOf (partition : Json) : Option (Array String) :=
     | _ => none
   | _ => none
 
-/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, lowered at its one template (the Definition
-its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
-input rows the template's parameters as bit rows, each cut as in(S)'s cuts `cuts` give for the template (`ioCuts`,
-`cutRows`), output ports its return fields `o{j}` in whole u16 words, META's `program_digests` the template's
-`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates, and one with a row or a
-return field not whole u16 words (`wholeWords`), by name. -/
-def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
-    V ByteArray := do
+/-- The prefix of every refusal of `admitted`, which names its clause after it. -/
+def NOT_ADMITTED : String := "lower: not the one form the door lowers (Spot.OneStageZk.admitted)"
+
+/-- A refusal by `admitted`'s clause `clause`. -/
+def notAdmitted {α : Type} (clause detail : String) : V α := throw s!"{NOT_ADMITTED}, {clause}: {detail}"
+
+/-- What `admitted` accepts: the block's template `key`, its index `d` in C_S, and its block circuit's input rows and
+return fields `(name, bits)`, in the order `Flock.Lower.lower` lays their leaves. -/
+structure Admit where
+  key : String
+  d : Nat
+  ins : Array (String × Nat)
+  fields : Array (String × Nat)
+
+/-- The composite Definitions Definition `d` of `P` reaches, itself included, whose parameter or return leaves are not
+all one bit (`Flock.Lower.onBits`), by key, ascending. Its work is the Definitions reached, each once, with their nodes. -/
+def wideFrom (P : Flock.Program.Prog) (d : Nat) : Array String := Id.run do
+  let bound := P.defs.foldl (fun n x => n + x.body.nodes.size + 1) 2
+  let mut seen : Std.HashSet Nat := {}
+  let mut todo := #[d]
+  let mut at_ := 0
+  let mut wide : Array String := #[]
+  for _ in [0:bound] do
+    if h : at_ < todo.size then
+      let i := todo[at_]
+      at_ := at_ + 1
+      if seen.contains i then continue
+      seen := seen.insert i
+      let some x := P.defs[i]? | continue
+      if x.prim then continue
+      if !Flock.Lower.onBits x then wide := wide.push x.key
+      todo := todo ++ x.body.nodes.map (·.fn)
+    else break
+  return wide.qsort (· < ·)
+
+/-- A port name the block circuit's file and `flock-lower-check compose`'s `name:bits,…` carry as written. -/
+def plainName (n : String) : Bool := !n.isEmpty && n.all fun c => !",:# \t\r\n".contains c
+
+/-- **The one form the door lowers**: C_S's block, its root calling one template, admitted only where every clause holds,
+else refused under `NOT_ADMITTED` by the first that fails. Each clause makes the block circuit's rows, laid in whole u16
+words a row (`Flock.Compose.compose`), agree with the leaves `Flock.Lower.lower` lays one after another from column 0:
+* `one-template`: the root's non-input nodes call one Definition, the template;
+* `listed`: the partition's template query lists it, and it is a Definition of C_S;
+* `port-names`: its parameters' names are plain (`plainName`), and its rows (`cutRows`) and fields `o{j}` are named
+  once each;
+* `on-bits`: the template lifted to bits (`Flock.Lift.lift`) reaches no composite with a leaf wider than one bit
+  (`wideFrom`), so no word is read as one column (`Flock.Lower.WIDE` never refuses what this admits);
+* `cut-rows`: a cut of in(S)'s (`cuts`) names a parameter, at least two ways, whose leaves are of one width and divide
+  by the cut, so its rows are its leaves in equal runs of equal bits;
+* `whole-words`: there is a return field (`fieldsOf`), and every input row and return field is a positive whole number of
+  u16 words, so each starts at the column of its first leaf and no column follows its last;
+* `leaves-are-bits`: the rows' bits are the lifted template's parameter leaves and the fields' its return leaves, so no
+  input or output column is past a leaf.
+A function of the partition, `cuts` and C_S, in the template's description. -/
+def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) : V Admit := do
   let some listed := listedOf partition
     | throw (Flock.OneCircuit.notDerived
         "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
-  let some root := S.defs[S.root]? | throw "lower: C_S's root is not one of its Definitions"
+  let some root := S.defs[S.root]? | notAdmitted "one-template" "C_S's root is not one of its Definitions"
   let mut called : Array String := #[]
   for k in [0:root.body.nodes.size] do
     if Spot.Edges.isInputNode S k then continue
@@ -218,29 +248,80 @@ def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (Stri
     if !called.contains key then called := called.push key
   let keys := called.qsort (· < ·)
   let #[key] := keys
-    | throw s!"lower: C_S's root calls {keys.toList}, and a block's units are instances of one template"
-  if !listed.contains key then throw s!"lower: C_S's template {key} is not one the partition's query lists"
-  let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
-  let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
+    | notAdmitted "one-template" s!"C_S's root calls {keys.toList}, and a block's units are instances of one template"
+  if !listed.contains key then notAdmitted "listed" s!"C_S's template {key} is not one the partition's query lists"
+  let some d := S.index[key]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
+  let some fn := S.defs[d]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
+  let cs := (cuts.lookup key).getD []
   let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
-  let ins := cutRows ((cuts.lookup key).getD []) (fn.params.map fun (n, t) => (n, bits t))
+  let ins := cutRows cs (fn.params.map fun (n, t) => (n, bits t))
   let fields := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", bits f)
-  wholeWords key "input row" ins
-  wholeWords key "return field" fields
-  let outs := fields.map fun (n, b) => (n, (b + 15) / 16)
+  if let some (n, _) := fn.params.find? (!plainName ·.1) then
+    notAdmitted "port-names" s!"C_S's template {key}: parameter '{n}' is empty or holds ',', ':', '#' or a space"
+  let names := ins.map (·.1) ++ fields.map (·.1)
+  if let some n := names.find? fun n => (names.filter (· == n)).size > 1 then
+    notAdmitted "port-names" s!"C_S's template {key}: port {n} is named twice"
+  let (L, dl) ← match Flock.Lift.lift S d with
+    | .ok r => pure r
+    | .error e => notAdmitted "on-bits" s!"the lift to bits refuses C_S's template {key}: {e}"
+  if let some w := (wideFrom L dl)[0]? then
+    notAdmitted "on-bits" s!"C_S's template {key} reaches {w}, whose leaves are not all one bit after the lift to bits"
+  for (p, k) in cs do
+    let some (_, t) := fn.params.find? (·.1 == p)
+      | notAdmitted "cut-rows" s!"C_S's template {key}: a cut names {p}, which is no parameter"
+    if k < 2 || (Flock.Program.Widths.homo t).isNone || t.leaves % k != 0 then
+      notAdmitted "cut-rows" s!"C_S's template {key}: parameter {p} of {t.leaves} leaves cut {k} ways, not into equal runs of leaves of one width"
+  if fields.isEmpty then notAdmitted "whole-words" s!"C_S's template {key} returns no field"
+  for (what, rs) in [("input row", ins), ("return field", fields)] do
+    if let some (n, b) := rs.find? fun (_, b) => b == 0 || b % 16 != 0 then
+      notAdmitted "whole-words" s!"C_S's template {key}: {what} {n} of {b} bits is not a positive whole number of u16 words"
+  let some l := L.defs[dl]? | notAdmitted "leaves-are-bits" s!"C_S's template {key} has no lift to bits"
+  let sIn := ins.foldl (· + ·.2) 0
+  let sOut := fields.foldl (· + ·.2) 0
+  if sIn != l.paramLeaves || sOut != l.outLeaves then
+    notAdmitted "leaves-are-bits" s!"C_S's template {key}: rows of {sIn} bits and fields of {sOut}, its lift's {l.paramLeaves} parameter and {l.outLeaves} return leaves"
+  return { key, d, ins, fields }
+
+/-- **The door admits C_S**: `admitted` accepts it. The hypothesis of every statement about the block circuit the door
+lowers. -/
+def Admitted (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) : Prop :=
+  (admitted partition cuts S).toOption.isSome = true
+
+instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+    Decidable (Admitted partition cuts S) := inferInstanceAs (Decidable (_ = true))
+
+/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, refused unless `admitted`, then lowered at its
+one template by `Flock.Lower.lower` and written by `Flock.Compose.compose` at the rows and fields `admitted` gives:
+output ports its return fields `o{j}` in u16 words, META's `program_digests` the template's `definitionDigest` read off
+`CJ`, C's descriptor. -/
+def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
+    V ByteArray := do
+  let a ← admitted partition cuts S
+  let outs := a.fields.map fun (n, b) => (n, b / 16)
   let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
   let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
-    ((CJ.getObjValD "definitions").getObjValD key)
-  let nIn := ins.foldl (fun a p => a + (p.2 + 15) / 16) 0
+    ((CJ.getObjValD "definitions").getObjValD a.key)
+  let nIn := a.ins.foldl (fun n p => n + p.2 / 16) 0
   let nOut := outs.foldl (· + ·.2) 0
-  let t ← Flock.Lower.lower S d (Array.replicate nIn 16) (Array.replicate nOut 16)
-  Flock.Compose.compose { name := s!"unit/{key}", body := .tmpl t LAYOUT, ins, outs, programDigests := [(key, digest)] }
+  let t ← Flock.Lower.lower S a.d (Array.replicate nIn 16) (Array.replicate nOut 16)
+  Flock.Compose.compose
+    { name := s!"unit/{a.key}", body := .tmpl t LAYOUT, ins := a.ins, outs, programDigests := [(a.key, digest)] }
     ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
 
 /-- E(x : Array n (Value 1), y : Value 1) = (x, Not y), at n = 3 and 2047: the one-stage path would read `y` from x's
 padding and leave the second output's word without a row. -/
 def E3 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",3,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,3]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":3,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,3]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,4]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",3,["Value",1]],["Tuple",[["Array",3,["Value",1]],["Value",1]]]]}"#
 def E2047 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2047]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2048]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]],["Tuple",[["Array",2047,["Value",1]],["Value",1]]]]}"#
+
+/-- C(a : Value 32, b : Value 1) = (a, Not b), which reaches no word primitive, so `Flock.Lift.lift` leaves `a` a word
+(`Flock.Test.LowerBad.PASS`). -/
+def C32 : String := r#"{"annotations":{},"boolean":{},"callees":["Input32_v1","Input1_v1","Not_v1","C_v1"],"definitions":{"C_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":1}],"fn":2,"form":"primitive","out":1}],"params":[["a",["Value",32]],["b",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,1]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Value",32],["Value",1]]]},"form":"composite","id":"C_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Input32_v1":{"form":"primitive","id":"Input32_v1","params":[],"ret":["Value",32]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[CProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"fn":0,"form":"primitive","out":0},{"args":[],"fn":1,"form":"primitive","out":1},{"args":[{"refs":{"affine":["n",0,0,1]},"type":0},{"refs":{"affine":["n",1,0,1]},"type":1}],"fn":3,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2]},"ret_type":["Tuple",[["Value",32],["Value",1]]]},"form":"composite","id":"Root[CProg_v1]_v1"}},"program_fn":"CProg_v1","root":"Root[CProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",32],["Value",1],["Tuple",[["Value",32],["Value",1]]],["Array",2,["Value",32]],["Array",2,["Value",1]],["Array",2,["Tuple",[["Value",32],["Value",1]]]]]}"#
+
+/-- `admitted` on unit 0 of the descriptor `d`, the query listing template `t`, at the template's cuts `cs`. -/
+def admitE (d : String) (t : String := "E_v1") (cs : List (String × Nat) := []) : V Admit := do
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", t)])]
+  admitted (Json.mkObj [("query", q)]) [(t, cs)] (← Spot.Restrict.restrict P #[0])
 
 /-- `lowerBlock` on unit 0 of the descriptor `d`, its template `E_v1`. -/
 def lowerE (d : String) : V ByteArray := do
@@ -249,8 +330,27 @@ def lowerE (d : String) : V ByteArray := do
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
   lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0])
 
-#guard (match lowerE E3 with | .error e => e == s!"lower: C_S's template E_v1: input row x of 3 bits {NOT_WHOLE}" | _ => false)
-#guard (match lowerE E2047 with | .error e => e == s!"lower: C_S's template E_v1: input row x of 2047 bits {NOT_WHOLE}" | _ => false)
+/-- Whether `r` is refused by `admitted`'s clause `clause` with detail `detail`. -/
+def refusedBy {α : Type} (r : V α) (clause detail : String) : Bool :=
+  match r with | .error e => e == s!"{NOT_ADMITTED}, {clause}: {detail}" | .ok _ => false
+
+#guard refusedBy (lowerE E3) "whole-words" "C_S's template E_v1: input row x of 3 bits is not a positive whole number of u16 words"
+#guard refusedBy (lowerE E2047) "whole-words" "C_S's template E_v1: input row x of 2047 bits is not a positive whole number of u16 words"
+#guard refusedBy (admitE C32 "C_v1") "on-bits" "C_S's template C_v1 reaches C_v1, whose leaves are not all one bit after the lift to bits"
+#guard refusedBy (admitE E3 "F_v1") "listed" "C_S's template E_v1 is not one the partition's query lists"
+#guard refusedBy (admitE (E3.replace "[[\"x\"," "[[\"o0\",")) "port-names" "C_S's template E_v1: port o0 is named twice"
+#guard refusedBy (admitE (E3.replace "[[\"x\"," "[[\"x:1\",")) "port-names" "C_S's template E_v1: parameter 'x:1' is empty or holds ',', ':', '#' or a space"
+#guard refusedBy (admitE E3 "E_v1" [("z", 3)]) "cut-rows" "C_S's template E_v1: a cut names z, which is no parameter"
+#guard refusedBy (admitE E3 "E_v1" [("x", 2)]) "cut-rows" "C_S's template E_v1: parameter x of 3 leaves cut 2 ways, not into equal runs of leaves of one width"
+#guard refusedBy (admitE E3 "E_v1" [("x", 3)]) "whole-words" "C_S's template E_v1: input row x#0 of 1 bits is not a positive whole number of u16 words"
+
+/-- E(x y : Array 16 (Value 1)) = (x, map Not y): two rows and two fields of one word each. -/
+def E16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,16]},{"affine":["n",0,0,16]}]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,32]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]]}"#
+
+#guard match admitE E16 with
+  | .ok a => a.key == "E_v1" && a.ins == #[("x", 16), ("y", 16)] && a.fields == #[("o0", 16), ("o1", 16)]
+  | .error _ => false
+#guard refusedBy (admitE E16 "E_v1" [("x", 2)]) "whole-words" "C_S's template E_v1: input row x#0 of 8 bits is not a positive whole number of u16 words"
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
