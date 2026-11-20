@@ -9,7 +9,8 @@
 #   bash benchmarks/pous/smoke/bandwidth.sh
 #
 # It builds `poub-p2-protocol` and asks it three cases, printing each answer: the honest session (accept), a prover that
-# skips a layer (reject, for its receipts) and the honest session under a party that trusts another key (refused, by name).
+# skips a layer (reject, for its receipts) and the honest session's case with the trusted key another's, as the served piece
+# derives it (`p2_case.trusting`): refused, by name.
 set -o pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$ROOT"
@@ -51,7 +52,9 @@ def run(name: str, trusted: str, more: list[str], expect: str) -> tuple[int, dic
 
 honest = run("honest", T.AT_LEAF, [], "accept")[1]
 cheat = run("cheat", T.AT_LEAF, ["--skip-layer", "1"], "reject")[1]
-swapped = run("swapped", "00" * 64, [], "accept")[1]
+case = json.loads((tmp / "private" / "honest" / "case.json").read_text())
+swapped = T.p2_case.serve(exe, [T.p2_case.trusting(case, "00" * 64)])[0]
+print(f"trusted key not the pinned one: the Lean says {({k: swapped.get(k) for k in ('verdict', 'reason')})}", flush=True)
 sys.exit(0 if (honest or {}).get("verdict") == "accept" and (cheat or {}).get("verdict") == "reject"
-         and (swapped or {}).get("verdict") != "accept" else 1)
+         and swapped["verdict"] == "reject" else 1)
 PY
