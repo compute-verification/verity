@@ -405,7 +405,7 @@ def test_a_step_names_a_step_the_manifest_has_and_holds_only_its_nodes(stepped):
 
 LOCKOUT_ORDER = ["vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-14", "vy-nebius-cpu-8", "vy-nebius-cpu-3", "vy-nebius-cpu-6",
                  "vy-nebius-cpu-12", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-1", "vy-nebius-cpu-5", "vy-nebius-cpu-4",
-                 "vy-nebius-cpu-2", "vy-nebius-cpu-10", "vy-nebius-cpu-17", "vy-nebius-cpu-13", "vy-nebius-cpu-7"]
+                 "vy-nebius-cpu-2", "vy-nebius-cpu-17", "vy-nebius-cpu-13", "vy-nebius-cpu-7"]
 
 
 def test_every_cpu_machine_takes_the_lock_out_only_as_step_lockout_in_the_order_it_goes():
