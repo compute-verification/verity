@@ -1781,12 +1781,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "RecDeploy.HonestFixture": {
-   "owner": "@proofs",
-   "digest": "9f236d7208c7c6c8365525dd5495834b574960c4715df32cee79b9da2a47bb9c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "ResourceAccounting.Additive": {
    "owner": "@memory-accounting",
    "digest": "f5bf2fd7347bddfa91dc2c8fe80e5999b6efba1e073e109e084e31b4bf59a6d7",
@@ -3221,28 +3215,15 @@
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record `flock-verify --zk` reads is the one its challenger wrote, and the draw file the one `flock-verify draw` printed; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling",
    "Verity.Assumptions.TrustedDevice": "the honest verifier server's auditor-trusted devices (trusted-device): each network certifier and the memory challenger runs its stated code on a host the prover doesn't control, which never restores its state; part of the honest verifier server, not a further trust assumption; provisional: a default, not yet a ruling"
   },
-  "extra": {
-   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
-   }
-  }
+  "extra": {}
  },
  "deployed": [
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
-  "Flock.SecurityProofs.SampledKSLiveV3",
-  "Flock.SecurityProofs.SampledKSLiveV5",
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted",
   "Pous.SecurityProofs.StreamedWipe",
   "ResourceAccounting.SecurityProofs.Remote.AuditRO",
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed"
  ],
  "trust_gap": {
-  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
-   "Claims.ZKMal.RefSession.SwCausalOn",
-   "Flock.Guarantees.ReleaseReadsNoStop",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
-  ],
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed": [
    "ResourceAccounting.Assumptions.SketchHashRandom",
@@ -3251,6 +3232,53 @@
    "ResourceAccounting.Remote.Sketch.Assumptions.Present",
    "ResourceAccounting.Remote.Sketch.Assumptions.Receipted"
   ]
+ },
+ "scope": {
+  "Flock.SecurityProofs.EndToEndHidden": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.EndToEndHiddenSampled": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.EndToEndRegisteredRows": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityBlock": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityBlockCarried": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityBlocks": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityMonitoringPeriod": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityMonitoringPeriodLog": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityPooled": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityPooledBlocks": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.IntegrityPooledCarried": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointPooledV5": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.MemberV5`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointSampledV5": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.MemberV5`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointShareV5": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.MemberV5`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointStratified": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.StratifiedBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointStratifiedMT": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.StratifiedBlockMT`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointStratifiedPooled": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.StratifiedBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.JointStratifiedPooledMT": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.StratifiedBlockMT`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveCircuitIndist": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveCircuitPrivate": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveRanRegistered": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveRanRegisteredExec": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZK": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZKLoop": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": "About the old recursion's sessions, which the verifier refuses by name (`Flock.RecSetup.notRecursive`); no served session satisfies a hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLiveHonest": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLivePub": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLiveStated": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SampledKSLive`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLiveV2": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLiveV3": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SampledKSLiveV5Honest": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Bridge.Assumptions.ServedFilesParseV5`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.ServedRowsLinked": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "Flock.SecurityProofs.SoundAtBridge": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.Bridge.IntegrityOfIntegrityMonitoringPeriod": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.Guarantees.SamplingBlock`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.CheckedSessionSound": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.HeldSessionSound": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.LeafGroupSound": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.LeafLanesSound": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.SessionSoundAt": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it.",
+  "ResourceAccounting.SecurityProofs.TS.TileSessionSound": "About sessions whose statement is the flat circuit statement (`Flock.Desc.parse`, through `Flock.SoundAtBridge.RowsSession`); the door's sessions are template statements and satisfy no hypothesis of it."
  },
  "meaning": [
   "Definitions.Core",
@@ -3506,6 +3534,143 @@
    "Claims.ZKmalRx": {
     "fails": "Claims.ZKmalRx_fails",
     "meets": ["Claims.Sampling.masked_meets_zk"]
+   },
+   "Claims.Recursion.Bits": {
+    "fails": "Claims.Witness.Recursion.Bits_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.BitsFlock": {
+    "fails": "Claims.Witness.Recursion.BitsFlock_fails",
+    "meets": ["Claims.Witness.Recursion.BitsFlock_meets"]
+   },
+   "Claims.Recursion.Complete": {
+    "fails": "Claims.Witness.Recursion.Complete_fails",
+    "meets": ["Claims.Witness.Recursion.Complete_meets", "Claims.Witness.Recursion.Complete_meets_deployed"]
+   },
+   "Claims.Recursion.Efficient": {
+    "fails": "Claims.Witness.Recursion.Efficient_fails",
+    "meets": ["Claims.Witness.Recursion.Efficient_meets"]
+   },
+   "Claims.Recursion.Inner.KS": {
+    "fails": "Claims.Witness.Recursion.Inner.KS_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KS_meets", "Claims.Witness.Recursion.Inner.KS_meets_trim"]
+   },
+   "Claims.Recursion.Inner.KSAbort": {
+    "fails": "Claims.Witness.Recursion.Inner.KSAbort_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KS": {
+    "fails": "Claims.Witness.Recursion.KS_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSFlock": {
+    "fails": "Claims.Witness.Recursion.KSFlock_fails",
+    "meets": ["Claims.Witness.Recursion.KSFlock_meets", "Claims.Witness.Recursion.KSFlock_meets_trim"]
+   },
+   "Claims.Recursion.KSPriv": {
+    "fails": "Claims.Witness.Recursion.KSPriv_fails",
+    "meets": ["Claims.Witness.Recursion.KSPriv_meets"]
+   },
+   "Claims.Recursion.Nontrivial": {
+    "fails": "Claims.Witness.Recursion.Nontrivial_fails",
+    "meets": ["Claims.Witness.Recursion.Nontrivial_meets"]
+   },
+   "Claims.Recursion.ScopeMatches": {
+    "fails": "Claims.Witness.Recursion.ScopeMatches_fails",
+    "meets": ["Claims.Witness.Recursion.ScopeMatches_meets"]
+   },
+   "Claims.Recursion.ZK": {
+    "fails": "Claims.Witness.Recursion.ZK_fails",
+    "meets": ["Claims.Witness.Recursion.ZK_meets"]
+   },
+   "Claims.Recursion.ZKPriv": {
+    "fails": "Claims.Witness.Recursion.ZKPriv_fails",
+    "meets": ["Claims.Witness.Recursion.ZKPriv_meets"]
+   },
+   "Claims.Sampling.Binding": {
+    "fails": "Claims.Sampling.Binding_fails",
+    "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
+   },
+   "Claims.Sampling.BitsLin": {
+    "fails": "Claims.Sampling.BitsLin_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.Sampling.Complete": {
+    "fails": "Claims.Sampling.Complete_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Nontrivial": {
+    "fails": "Claims.Sampling.Nontrivial_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.ScopeMatches": {
+    "fails": "Claims.Sampling.ScopeMatches_fails",
+    "meets": ["Claims.Sampling.scope_meets"]
+   },
+   "Claims.Sampling.Universal": {
+    "fails": "Claims.Sampling.Universal_fails",
+    "meets": ["Claims.Sampling.universal_meets"]
+   },
+   "Claims.Sampling.ZK": {
+    "fails": "Claims.Sampling.ZK_fails",
+    "meets": ["Claims.Sampling.masked_meets_zk"]
+   },
+   "Claims.ScopeMatches": {
+    "fails": "Claims.ScopeMatches_fails",
+    "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
+   },
+   "Claims.ZKmalR": {
+    "fails": "Claims.ZKmalR_fails",
+    "meets": ["Claims.Flock.masked_meets_zk"]
+   },
+   "Claims.Sampling.KSLinOn": {
+    "fails": "Claims.Sampling.KSLinOn_fails",
+    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
+   },
+   "Claims.ZKmalRx": {
+    "fails": "Claims.ZKmalRx_fails",
+    "meets": [
+     "Claims.Witness.Recursion.ZKStop_meets",
+     "Claims.Sampling.masked_meets_zk",
+     "Claims.Witness.Recursion.ZK_meets",
+     "Claims.Witness.Recursion.ZKPriv_meets"
+    ]
+   },
+   "Claims.Recursion.KSBound": {
+    "fails": "Claims.Witness.Recursion.KSBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.KSPrivBound": {
+    "fails": "Claims.Witness.Recursion.KSPrivBound_fails",
+    "meets": ["Claims.Witness.Recursion.KSPrivBound_meets"]
+   },
+   "Claims.Recursion.ZKStop": {
+    "fails": "Claims.Witness.Recursion.ZKStop_fails",
+    "meets": ["Claims.Witness.Recursion.ZKStop_meets", "Claims.Witness.Recursion.ZKStop_meets_ready"]
+   },
+   "Claims.Recursion.BitsLin": {
+    "fails": "Claims.Witness.Recursion.BitsLin_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
+   "Claims.Recursion.KSLin": {
+    "fails": "Claims.Witness.Recursion.KSLin_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSBoundLin": {
+    "fails": "Claims.Witness.Recursion.KSBoundLin_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.KSFlockLin": {
+    "fails": "Claims.Witness.Recursion.KSFlockLin_fails",
+    "meets": ["Claims.Witness.Recursion.Inner.KSAbort_meets", "Claims.Witness.Recursion.Inner.KSAbort_meets_trim"]
+   },
+   "Claims.Recursion.KSLin2": {
+    "fails": "Claims.Witness.Recursion.KSLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Claims.Recursion.BitsLin2": {
+    "fails": "Claims.Witness.Recursion.BitsLin2_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
    },
    "Pous.Claims.StreamedWipeMeetsReadsTight": {
     "fails": "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
@@ -3994,15 +4159,12 @@
    "kind": "exclusion"
   },
   "Flock.SecurityProofs.RecursiveZKLoop": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoop_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
   },
   "Verity.SecurityProofs.ExpandSize": {
@@ -4643,6 +4805,24 @@
   "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
    "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
    "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoop": {
+   "type_hash": "801c4ba493e5fbc8601b27d0f96d173000cb0fc0789a46759017efdc74f4c064",
+   "missing": "honest",
+   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
+   "unfolded_hash": "e5568d83b35d855ba7d91daec2caf465ecdb0e60373b5848b76fcd116b83933a"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
+   "type_hash": "01cd51d8c16d9cf4f07cb4cdb7efb7d094ec2b361289ccb48abe014557549133",
+   "missing": "honest",
+   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
+   "unfolded_hash": "ac8e7475d2865cfc42f3b99b49e6c1c39aafe550c4ecc491fd585d981baec9ea"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
+   "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
+   "missing": "honest",
+   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
+   "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
@@ -10307,65 +10487,6 @@
    "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
    "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
   },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :",
-    "  Exists fun y =>",
-    "    Exists fun w =>",
-    "      And Claims.ZKServer.Loop.finS.Tables",
-    "        (And (Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse))",
-    "          (And Claims.ZKServer.Loop.finS.DummyReg",
-    "            (And Claims.ZKServer.Loop.finS.Causal",
-    "              (And",
-    "                (Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)",
-    "                  Claims.ZKServer.Loop.finS.honestVals)",
-    "                (And Claims.ZKServer.Loop.finS.TapeOK",
-    "                  (And",
-    "                    (∀",
-    "                      (u :",
-    "                        Prod (Prod Unit Unit)",
-    "                          (Fin",
-    "                              (instHAdd.hAdd",
-    "                                (Flock.Guarantees.fwHoles FlockSoundness.Discharge.Recursion.LoopWitness.sched) 0) →",
-    "                            Fin 192 → Fin 256)),",
-    "                      Eq",
-    "                        (FlockSoundness.Discharge.Recursion.ZkServerAdaptive.adaptFinished",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          (FlockSoundness.Discharge.Recursion.LoopWitness.wAny u.fst.fst u.fst.snd)",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.nA (Flock.Guarantees.saltsOf u.snd))",
-    "                        Bool.true)",
-    "                    (And",
-    "                      ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y) fun x x_1 =>",
-    "                            w).Honest",
-    "                        (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse) fun u =>",
-    "                        Flock.Guarantees.anyCtx FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.wAny",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.nA 0 u.val.fst.fst u.val.fst.snd u.val.snd)",
-    "                      (And",
-    "                        (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)",
-    "                          (src :",
-    "                            Claims.Msg →",
-    "                              Claims.Flock.Wit →",
-    "                                Claims.ZKServer.Loop.Tp →",
-    "                                  Nat → Flock.V (Prod (Array Flock.F128) (Prod ByteArray (Array ByteArray))))",
-    "                          (t : Nat),",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y)",
-    "                                fun x x_1 => w).Sized",
-    "                            (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t) fun x =>",
-    "                            (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t).C y)",
-    "                        (∀ (n : Nat) (M : Fin n → Nat),",
-    "                          Flock.Guarantees.ReleaseReadsNoStop (Flock.Guarantees.loopRelease M) Option.none)))))))))"
-   ],
-   "assumptions": ["RecDeploy.HonestFixture"],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Claims.Flock.R"],
-    "open": ["Claims.ZKServer.Loop.SwOk", "RecDeploy.HonestFixture"],
-    "reads": ["RecDeploy.TopsAt"]
-   },
-   "type_hash": "0fa33524f3837d0d4163b2a2c1b80ebec6f34b79144481438caa31aa88aa10c9"
-  },
   "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -10431,61 +10552,6 @@
     "reads": []
    },
    "type_hash": "32c8bdf6510649ba950ef59ebf347b0770a93163675bdbc57d3c3790e449ba35"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoop_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :",
-    "  Exists fun y =>",
-    "    Exists fun w =>",
-    "      And Claims.ZKServer.Loop.finS.Tables",
-    "        (And (Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse))",
-    "          (And Claims.ZKServer.Loop.finS.DummyReg",
-    "            (And Claims.ZKServer.Loop.finS.Causal",
-    "              (And",
-    "                (Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)",
-    "                  Claims.ZKServer.Loop.finS.honestVals)",
-    "                (And Claims.ZKServer.Loop.finS.TapeOK",
-    "                  (And",
-    "                    (Flock.Guarantees.ZkServerSends FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                      (fun x x_1 x_2 x_3 x_4 x_5 =>",
-    "                        Flock.ZkServer.honestReqs FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.hon)",
-    "                      (fun x x_1 x_2 =>",
-    "                        FlockSoundness.Discharge.Recursion.ZkServerHonest.honestMsgs",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.honD Unit.unit Unit.unit Unit.unit)",
-    "                      (Flock.Guarantees.zkServerT FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                        FlockSoundness.Discharge.Recursion.LoopWitness.sched.tables))",
-    "                    (And",
-    "                      ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y) fun x x_1 =>",
-    "                            w).Honest",
-    "                        (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse) fun u =>",
-    "                        FlockSoundness.Discharge.Recursion.OuterZK.wctxAt",
-    "                          (FlockSoundness.Discharge.Recursion.ZkServerHonest.honestMsgs",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                            FlockSoundness.Discharge.Recursion.LoopWitness.honD Unit.unit Unit.unit Unit.unit)",
-    "                          u.fst.fst u.fst.snd u.snd)",
-    "                      (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)",
-    "                        (src :",
-    "                          Claims.Msg →",
-    "                            Claims.Flock.Wit →",
-    "                              Claims.ZKServer.Loop.Tp →",
-    "                                Nat → Flock.V (Prod (Array Flock.F128) (Prod ByteArray (Array ByteArray))))",
-    "                        (t : Nat),",
-    "                        (FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y)",
-    "                              fun x x_1 => w).Sized",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t) fun x =>",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t).C y))))))))"
-   ],
-   "assumptions": ["RecDeploy.HonestFixture"],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Claims.Flock.R"],
-    "open": ["Claims.ZKServer.Loop.SwOk", "RecDeploy.HonestFixture"],
-    "reads": ["RecDeploy.TopsAt"]
-   },
-   "type_hash": "74a7ce8bc710dd6b5305a7eb974de24d370b2c13ccb97028fa9cefed07ed9476"
   },
   "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": {
    "owner": "@proofs",
@@ -47553,13 +47619,6 @@
    "digest": "2177b0b538bec0f730f17282492af9fa909831c89a625b515846410a1b9e3daa",
    "definitions": {
     "Claims.Flock.Numbers.innerUp": "8e2feb107494dd001ab2b3f72158295a5fcd7ff112b4035abd45c1fafd7a4f7e"
-   }
-  },
-  "Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture": {
-   "digest": "bbd03da4d31ec1fc6c802dd6ad5b7dd2c61af44f0babe49aa27331d8c6616de8",
-   "definitions": {
-    "RecDeploy.HonestFixture": "9f236d7208c7c6c8365525dd5495834b574960c4715df32cee79b9da2a47bb9c",
-    "RecDeploy.TopsAt": "e0bc47598164dd14e1ae4b658dbdc8ab7a76f6d30eebefa826b7241f561e9aa5"
    }
   },
   "Proofs.Flock.Claims.Recursion.Assumptions.KSFixture": {
