@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -96,7 +97,7 @@ def _plain(d):
     found |= {f"index.json {k}": v for k, v in _digests(json.loads((record / "index.json").read_text()))}
     found["the registration's docket digest"] = DD.digest(reg)
     return {k: v for k, v in found.items() if v != COMPILER["digest"]
-            and not any(w in ("run", "root", "roots") or w.endswith(("_root", "_roots")) for w in k.replace("[", ".").split("."))}
+            and not any(w in ("run", "root", "roots") or w.endswith(("_root", "_roots")) for w in re.split(r"[ .\[]", k))}
 
 
 def _secret(d):
