@@ -211,6 +211,20 @@ noncomputable def Realizes (r : P.Run) : Prop :=
     (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
     (∀ u, ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧ (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
 
+/-- **The run realizes its claims outside a tolerance set** `M` of inference blocks (the feasible-set membership with a
+tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, and every
+inference block outside `M` holds its claims. The sampled proofs and `DeclaredBlocksRun` give the inference claims only
+outside such an `M` (declared use at most the tolerance), so the chain reads this, not `Realizes`. `M` is counted in the
+free block's work (`DeclaredWorkExclusive` over the free quantity that includes it) and the injected information the
+incorrect proof blocks in `M` pass into correct ones is a term of the inference blocks' input (a `.block` source), so an
+accepted run with an incorrect proof block stays inside the chain. `Realizes` is `RealizesExcept ∅`. -/
+noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
+  (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
+    (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
+    (∀ u, P.cls r u = Class.inference → u ∉ M → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
+    (∀ u, P.cls r u ≠ Class.inference → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
+    (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
+
 /-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
 def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
 

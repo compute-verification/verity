@@ -182,11 +182,25 @@ theorem chain (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : Infe
     rintro r ⟨ha, hn⟩
     by_contra hall
     push_neg at hall
-    exact hn (hthm P r (hcheck r ha) (hcover r ha fun x hx => hall x hx ha))
+    obtain ⟨M, hM⟩ := hcover r ha fun x hx => hall x hx ha
+    exact hn (hthm P r M (hcheck r ha) hM)
   calc P.pr (fun r => P.accepts r ∧ ¬ InferenceOnly.Compliant pol (P.actual r) (P.θ r))
       ≤ P.pr (fun r => ∃ x ∈ s, P.accepts r ∧ ¬ shown x r) := P.mono _ _ hsub
     _ ≤ ∑ x ∈ s, P.pr (fun r => P.accepts r ∧ ¬ shown x r) := P.union _ _
     _ ≤ ∑ x ∈ s, ε x := Finset.sum_le_sum fun x hx => hest x hx
+
+/-- `Realizes` is `RealizesExcept` with an empty tolerance set: an honest run realizes every claim, so it is in the
+chain at the empty tolerance. -/
+theorem realizes_iff (P : Runs L) (r : P.Run) : P.Realizes r ↔ P.RealizesExcept r ∅ := by
+  unfold Runs.Realizes Runs.RealizesExcept
+  constructor
+  · rintro ⟨h1, h2, h3, h4, h5⟩
+    exact ⟨h1, h2, h3, fun u _ _ => h4 u, fun u _ => h4 u, h5⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6⟩
+    refine ⟨h1, h2, h3, fun u => ?_, h6⟩
+    by_cases hc : P.cls r u = Class.inference
+    · exact h4 u hc (Finset.notMem_empty u)
+    · exact h5 u hc
 
 /-! ## The check bites -/
 

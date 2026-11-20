@@ -209,11 +209,15 @@ def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) 
   ∃ h : ∀ a ∈ θ, A.isInput a = true, pol (.ofCircuit A.toCircuit θ h)
 
 /-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check and realize their
-claims has a compliant actual circuit. The policy needs no new theorem for PoUS and PoUB: its bound already takes any
-family of blocks that have a size and an unregistered input, so placing the free block's input from its own past (PoUS)
-and from memory (PoUB) adds terms to the same bound and states no new theorem here. -/
+claims outside a tolerance set `M` of inference blocks (`RealizesExcept`, the tolerance path the reviews found missing)
+has a compliant actual circuit. `M` is any set the sampled proofs may miss; its declared use is counted in the free block
+and the injected information it passes into correct blocks is a term of their input, so compliance follows all the same.
+The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an
+unregistered input, so placing the free block's input from its own past (PoUS) and from memory (PoUB) adds terms to the
+same bound and states no new theorem here. -/
 def PolicyTheorem {L : Type*} (check : (P : Runs L) → P.Run → Bool) (pol : Policy) : Prop :=
-  ∀ (P : Runs L) (r : P.Run), check P r = true → P.Realizes r → Compliant pol (P.actual r) (P.θ r)
+  ∀ (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))),
+    check P r = true → P.RealizesExcept r M → Compliant pol (P.actual r) (P.θ r)
 
 /-- **The inference-only policy** at the limits `lim`, with training efficiency `efficiency` (open on a declaration): a
 declaration complies when its training efficiency is at most `share + allowance`. -/
@@ -229,15 +233,17 @@ end InferenceOnly
 
 namespace ResourceAccounting
 
-/-- **The chain**: over a monitoring period, with the policy's theorem, the check passing on every accepted run, and
-accounting statements `shown x` that between them give that an accepted run realizes its claims (each established except
-with probability at most `ε x`), an accepted run's actual circuit complies with `pol`, except with probability at most
-`∑ x ∈ s, ε x`. An inference block no row covers (before its epoch's salt) is free work the partition declares a free
-block. -/
+/-- **The chain**: over a monitoring period, with the policy's theorem, the check passing on every accepted run, and the
+protocols' rows `shown x` (PoUW through the conversion for the free block's size, `DeclaredBlocksRun` for the inference
+blocks' claims outside a tolerance set, the wipe and network attestation for input and output, registration for `θ`) that
+between them give that an accepted run realizes its claims outside some tolerance set of inference blocks (each row
+established except with probability at most `ε x`), an accepted run's actual circuit complies with `pol`, except with
+probability at most `∑ x ∈ s, ε x`. An inference block no row covers (before its epoch's salt), and the tolerance set the
+sample misses, are free work the partition declares a free block. -/
 def Chain {L : Type*} (P : Runs L) (check : (P : Runs L) → P.Run → Bool) (pol : InferenceOnly.Policy)
     {κ : Type} (s : Finset κ) (shown : κ → P.Run → Prop) (ε : κ → ℝ≥0∞) : Prop :=
   InferenceOnly.PolicyTheorem check pol → (∀ r, P.accepts r → check P r = true) →
-    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → P.Realizes r) →
+    (∀ r, P.accepts r → (∀ x ∈ s, shown x r) → ∃ M, P.RealizesExcept r M) →
     (∀ x ∈ s, ExceptWith P.pr P.accepts (shown x) (ε x)) →
     ExceptWith P.pr P.accepts (fun r => InferenceOnly.Compliant pol (P.actual r) (P.θ r)) (∑ x ∈ s, ε x)
 
