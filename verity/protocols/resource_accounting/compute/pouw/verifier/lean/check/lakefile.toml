@@ -36,10 +36,16 @@ name = "models"
 path = "models.json"
 text = true
 
+# and the H1 window templates' pins (`h1_tiles.json`, `test_h1_tile_pins.py` writes it)
+[[input_file]]
+name = "h1_tiles"
+path = "h1_tiles.json"
+text = true
+
 [[lean_lib]]
 name = "PouwVerifier"
 roots = ["PouwVerifier", "PouwVerifier.Difftest", "PouwVerifier.CreditDifftest", "PouwVerifier.VerifiedDifftest"]
-needs = ["models"]
+needs = ["models", "h1_tiles"]
 
 [[lean_exe]]
 name = "pouw-verifier"

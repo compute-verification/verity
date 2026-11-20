@@ -4,7 +4,7 @@
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
     bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
-                 [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
+                 [--windows 6] [--passes 4] [--samples 1024] [--window-s 20] [--deadline-s 1]
                  [--skip-layer L | --cache] [--expect accept|reject] [--device cuda] [--ref-decode]
                  [--case-dir DIR [--case-exe EXE]]
 
@@ -1129,11 +1129,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     to.add_argument("--party", help="the shell command (ssh to the auditor's gate) that starts p2_parties --listen there")
     s.add_argument("--party-host", help="with --party: the address its port is reached at from here")
     s.add_argument("--out", type=Path, required=True)
-    s.add_argument("--windows", type=int, default=2)
-    s.add_argument("--passes", type=int, default=2)
-    s.add_argument("--samples", type=int, default=1024)
-    s.add_argument("--window-s", type=float, default=1.0)
-    s.add_argument("--deadline-s", type=float, default=1.0)
+    held = p2_parties.SESSION
+    s.add_argument("--windows", type=int, default=held["windows"], help="default the auditor's (`p2_parties.SESSION`)")
+    s.add_argument("--passes", type=int, default=held["passes"])
+    s.add_argument("--samples", type=int, default=held["samples"])
+    s.add_argument("--window-s", type=float, default=held["window_ns"] / 1e9)
+    s.add_argument("--deadline-s", type=float, default=held["deadline_ns"] / 1e9)
     cheat = s.add_mutually_exclusive_group()
     cheat.add_argument("--skip-layer", type=int, help="the cheat that neither reads nor decodes layer L's tensors")
     cheat.add_argument("--cache", action="store_true", help="the cheat that replays the first pass's σ every later pass")

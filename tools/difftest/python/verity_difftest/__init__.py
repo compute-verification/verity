@@ -138,8 +138,18 @@ def build(package: Path, exe: str) -> Path:
         except FileNotFoundError:
             raise BuildError(f"lake is not on the PATH, so {exe} in {package} cannot be built") from None
     if p.returncode != 0:
-        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}):\n{p.stdout}{p.stderr}")
+        raise BuildError(f"lake build {exe} in {package} failed ({p.returncode}); the last {BUILD_TAIL} bytes of its stdout:\n"
+                         f"{_tail(p.stdout)}\nand of its stderr:\n{_tail(p.stderr)}")
     return package / ".lake" / "build" / "bin" / exe
+
+
+#: how much of each of Lake's output streams a failed build's error keeps, from its end
+BUILD_TAIL = 4000
+
+
+def _tail(text: str) -> str:
+    raw = text.encode("utf-8", "replace")
+    return raw.decode("utf-8", "replace") if len(raw) <= BUILD_TAIL else "…" + raw[-BUILD_TAIL:].decode("utf-8", "replace")
 
 
 #: a line Lean's runtime writes on a panic or an abort: ``PANIC at DECL MODULE:LINE:COL: MSG`` (`mkPanicMessageWithDecl`),

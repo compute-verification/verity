@@ -239,7 +239,7 @@ def verified (j : Json) : R Json := do
     | .str s => if isHexBytes s then hex? (.str s) else none
     | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let P ← programOf descriptor
-  let layout ← layoutOf P
+  let layout ← layoutOf P descriptor
   let program := Flock.hexOf (Flock.Sha512.hash descriptor)
   let shape := shapeOf P
   let some units := (Json.getArr? (get j "units")).toOption.bind (·.toList.mapM nat?)

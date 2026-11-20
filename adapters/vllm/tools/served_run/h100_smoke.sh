@@ -29,6 +29,10 @@ MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
 DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} CLASS=${CLASS:-4,27,2} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
+# DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class 4,27,2's
+#   proof blocks), which each record says, with what an accept of it establishes at δ
+DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_LAW=rate:4/3654200
+[ "$DEVELOPMENT_DESIGN" = 1 ] && LAW=${LAW:-$DEV_LAW}
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
 # the window class (S,P,O[,LANES,EVERY]: slots, prompt ids, outputs) the serve's arena is sized from and the load fills
@@ -77,6 +81,7 @@ LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODE
 REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
 [ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "${RECORD:-1}" = 0 ] || [ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)
+[ "${RECORD:-1}" = 0 ] || [ "$DEVELOPMENT_DESIGN" != 1 ] || REC_ARGS+=(--development-design)
 # the fixed load's requests start in the window's first step only in the network attester's release order, which the serve
 # reads under the name of the scheme that provides admission
 ADMIT=$("$PY" - <<'EOF'
@@ -94,6 +99,7 @@ SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT"
 LEASE=(gpu-lease 1 --wait --max-min "$LEASE_MIN" --mem-gb "$LEASE_MEM_GB" -- bash "$TREE/$SELF" card)
 WREG=$D/weights_registration.json DREG=$D/deployment-registration.json VW=$SR/window
 FIN=(-m verity_vllm.program.predict.close_record --class "$CLASS" --sampling-design "$LAW" --checkpoint-dir "$SNAP")
+[ "$DEVELOPMENT_DESIGN" != 1 ] || FIN+=(--development-design)
 window_commit_of() {  # WC: window $1's commit as its class circuit's units, served_verdicts.sh's window_commit() command
   WC=(benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" --window "$1" --row-dir "$D/windows/w$1"
     --advice "$D/advice/w$1/private/advice.bin" --class "$CLASS" --registration "$WREG" --checkpoint-dir "$SNAP"
@@ -133,6 +139,9 @@ vs = "no window-commit to compare" if wc is None else (
     f"window-commit's {wc.get('members')}, {wc.get('population')}")
 print(f"WINDOW-RECORD window {k} at the serve's close: members {r['members']}, population {r['population']} ({vs}); "
       f"seconds {json.dumps(r['seconds'])}")
+if d := r.get("design", {}).get("development"):
+    print(f"a development sampling design is registered: an accept of it establishes at most {d['incorrect_at_most']} incorrect "
+          f"of the window's {d['of']} proof blocks at δ {d['delta']} (ε {d['epsilon']:.3g}), not the rate of record")
 EOF
 }
 # SR holds the keys and salts, and $OUT/window the circuit's description, which is the auditor's secret, with the
