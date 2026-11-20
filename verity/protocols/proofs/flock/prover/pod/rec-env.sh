@@ -1,6 +1,7 @@
 # Sourced by the rec-v0 jobs (80-rec-inner.sh, 87-rec-c3-open.sh, 88-rec-c3-inner.sh) after their CPU pinning: the run's
 # directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, and $ZK_SERVER_BIN beside it, built in the background: wait $LP), the
 # prover build ($B, 60-circuit.sh's, keyed by its sources) and the job's Python ($REPO's packages on PYTHONPATH).
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-v0-job}/out; mkdir -p $O
 [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/rec-v0
 FW=${FLOCK_WORK:-/workspace}; W=$FW/flock-circuit; mkdir -p $W || exit 1

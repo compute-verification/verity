@@ -286,7 +286,7 @@ def test_a_batch_dispatch_request_program_needs_its_batch(tmp_path):
     for launch in (None, TG.parse_launch_context([65, 187]), TG.parse_launch_context("conflict")):
         res = run(str(tmp_path / "b"), 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=65, T=1, launch=launch, batch_dispatch=True)
         assert res["ok"] is False and res["unsupported"]["reason"] == "launch_context", res.get("unsupported")
-        assert "verity-vllm launch-context <workload> 65 1" in res["unsupported"]["hint"]
+        assert "cli.run(launch_context) <workload> 65 1" in res["unsupported"]["hint"]
 
 
 def test_the_batch_is_an_applicability_condition_only_when_declared():

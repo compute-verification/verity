@@ -102,7 +102,8 @@ def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None)
     """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
     ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
     node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
-    divides."""
+    divides, or where a template of C has no gate (`Partition.checkTemplates`, which Lean's runs only on a C with an
+    edge: this refuses at least what Lean's does)."""
     if _listed(partition.get("query") or {}) is None:
         raise NotDerived(LOWER)
     D = (decoded or Decoded(c)).get()
@@ -110,6 +111,8 @@ def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None)
         ranges = PO.TemplatePartition(D, partition["query"]).ranges
     except PO.QueryInapplicable as e:
         raise Refused("E_QUERY", str(e)) from e
+    if t := next((t for k, t, _a, n in ranges if n and D.root.body.nodes[k].fn.gates == 0), None):
+        raise Refused("E_QUERY", f"query-refused: template {t} has no gate")
     try:
         return EG.io_cuts(D.desc, ranges)
     except ValueError as e:
@@ -251,7 +254,7 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
         src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
         src.write_bytes(c_s)
         p = LC.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
-                    PO.digest(partition), digests, str(dst)])
+                    PO.digest(partition), digests, str(dst)], ok_statuses=LC.COMPOSE_EXITS)
         if p.returncode != 0:
             raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
         return dst.read_bytes()

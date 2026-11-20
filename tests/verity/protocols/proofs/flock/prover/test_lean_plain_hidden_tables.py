@@ -20,7 +20,7 @@ VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proof
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: plain_hidden.py's 32 instances, two loopback sessions of J = 2 tables at `--draw subset:16`, and their challenger's
 #: record and release log
-FIXTURE = "art:8e0fd487e4f5853cb77664d09397f9aea25cfc937a4a293bece2b73d6bced855"
+FIXTURE = "art:f6add7afb8c30aae8ad4712c7a377272adc7c25a83f962f5bc49740093afb44c"
 N = 32
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

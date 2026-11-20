@@ -13,6 +13,7 @@
 # Kept in $OUT: fixture/ (stage/{circuit.txt,pub-16.bin,pub-32.bin} and sessions/, the tree to put as fixture/v1), lean.log
 # (Lean's verdicts on the honest selftest session and each served one) and the logs; never an inst file.
 set -uo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC: a Lean panic ends the process
 export HZ_CONFIGS=zk-sessions HZ_MEM_GB=${ZS_MEM_GB:-32}
 [ -n "${ZS_CACHE:-}" ] && export HZ_CACHE=$ZS_CACHE
 source benchmarks/pouw/hidden_zk/job.sh

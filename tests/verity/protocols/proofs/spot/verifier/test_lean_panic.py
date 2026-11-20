@@ -1,4 +1,5 @@
-"""A Lean verifier's answer is read only where it wrote no panic, and the door starts it with the runtime's panic switch."""
+"""A Lean verifier's answer is read only where it wrote no panic and ended at a status its caller documents, and the door
+starts it with the runtime's panic switch."""
 
 from __future__ import annotations
 
@@ -51,6 +52,72 @@ def test_the_child_starts_with_the_panic_switch(tmp_path, monkeypatch):
 
 
 def test_a_clean_answer_is_read(tmp_path):
-    exe = _fake(tmp_path, "print('warning: slow', file=sys.stderr)\nprint('VERDICT {}')\nsys.exit(3)\n")
+    exe = _fake(tmp_path, "print('warning: slow', file=sys.stderr)\nprint('VERDICT {}')\n")
     p = LC.run([str(exe)])
-    assert (p.returncode, p.stdout) == (3, "VERDICT {}\n")
+    assert (p.returncode, p.stdout) == (0, "VERDICT {}\n")
+
+
+def test_a_refusal_at_a_status_its_caller_documents_is_read(tmp_path):
+    exe = _fake(tmp_path, "print('{\"refused\": \"an error in the evidence\"}')\nsys.exit(1)\n")
+    assert LC.run([str(exe)], ok_statuses=LC.V2_EXITS).returncode == 1
+    with pytest.raises(LC.LeanExit, match=f"^{LC.LEAN_EXIT}: status 1$"):
+        LC.run([str(exe)])
+
+
+#: what Lean's runtime writes on a panic or an abort with no ``PANIC`` in it (`object.cpp`, `stack_overflow.cpp`, `debug.cpp`)
+UNPREFIXED = ["Error: index out of bounds", "Error: invalid `String.Pos` at `String.get!`",
+              "`Task.get` called from a `(sync := true)` task", "Stack overflow detected. Aborting.", "LEAN ASSERTION VIOLATION"]
+
+
+@pytest.mark.parametrize("line", [*UNPREFIXED, "INTERNAL PANIC: out of memory", "PANIC: Promise.result!: dropped"])
+def test_each_line_the_runtime_writes_on_a_panic_is_one(line):
+    assert LC.panic_line(f"warning: slow\n{line}\nbacktrace:\n") == line
+
+
+@pytest.mark.parametrize("text", ["refused: Error: index out of bounds", "an error: index out of bounds",
+                                  "Error: index out of bounds of the table", "error: Stack overflow detected. Aborting."])
+def test_a_refusal_that_names_those_words_is_no_panic(text):
+    assert LC.panic_line(text) is None
+
+
+def test_an_accept_beside_an_index_past_the_end_is_refused_by_name(tmp_path):
+    exe = _fake(tmp_path, "print('Error: index out of bounds', file=sys.stderr)\nprint('VERDICT ' + json.dumps({'accepted': True}))\n")
+    with pytest.raises(LC.LeanPanic, match=f"^{LC.LEAN_PANIC}: Error: index out of bounds$"):
+        LC.run([str(exe)])
+
+
+def test_a_served_answer_beside_an_index_past_the_end_is_refused_by_name(tmp_path, monkeypatch):
+    exe = _fake(tmp_path, """for line in sys.stdin:
+    print('Error: index out of bounds', file=sys.stderr, flush=True)
+    print(json.dumps({"output": {"accepted": True}}), flush=True)
+""")
+    monkeypatch.setattr(V, "executable", lambda *_: exe)
+    server = V._Server("fake-lean", tmp_path)
+    try:
+        with pytest.raises(V.LeanError, match=f"^{LC.LEAN_PANIC}: Error: index out of bounds$"):
+            server.call("verify", {})
+    finally:
+        server.close()
+
+
+def test_an_abort_that_wrote_nothing_is_refused_by_name(tmp_path):
+    exe = _fake(tmp_path, "print('VERDICT ' + json.dumps({'accepted': True}))\nsys.exit(134)\n")
+    with pytest.raises(LC.LeanExit, match=f"^{LC.LEAN_EXIT}: status 134 \\(abort\\)$"):
+        LC.run([str(exe)], ok_statuses=range(256))
+
+
+def test_a_process_killed_by_a_signal_is_refused_by_name(tmp_path):
+    exe = _fake(tmp_path, "import signal\nprint('VERDICT ' + json.dumps({'accepted': True}), flush=True)\nos.kill(os.getpid(), signal.SIGKILL)\n")
+    with pytest.raises(LC.LeanExit, match=f"^{LC.LEAN_EXIT}: killed by SIGKILL$"):
+        LC.run([str(exe)], ok_statuses=range(256))
+
+
+def test_a_served_process_that_dies_answers_no_call(tmp_path, monkeypatch):
+    exe = _fake(tmp_path, "import signal\nsys.stdin.readline()\nos.kill(os.getpid(), signal.SIGABRT)\n")
+    monkeypatch.setattr(V, "executable", lambda *_: exe)
+    server = V._Server("fake-lean", tmp_path)
+    monkeypatch.setattr(V, "_server", server)
+    try:
+        assert V.lean("verify", {})["answered"] is False
+    finally:
+        server.close()
