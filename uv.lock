@@ -685,18 +685,18 @@ wheels = [
 [[package]]
 name = "input-datasets"
 version = "0.1.0"
-source = { editable = "input_datasets" }
+source = { editable = "library/datasets" }
 
 [[package]]
 name = "input-datasets-tests"
 version = "0.0.0"
-source = { virtual = "tests/input_datasets" }
+source = { virtual = "tests/library/datasets" }
 dependencies = [
     { name = "input-datasets" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "input-datasets", editable = "input_datasets" }]
+requires-dist = [{ name = "input-datasets", editable = "library/datasets" }]
 
 [[package]]
 name = "jinja2"
@@ -3035,7 +3035,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "input-datasets", editable = "input_datasets" },
+    { name = "input-datasets", editable = "library/datasets" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

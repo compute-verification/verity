@@ -42,7 +42,7 @@ inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/
           "benchmarks/pous/served_piece.py", "benchmarks/pous/run_attester.sh",
           "benchmarks/pous/served_case.py", "applications/onsite_full.toml", "applications/onsite_compute.toml",
           "applications/onsite_network.toml", "applications/onsite_network_front.toml",
-          "applications/remote.toml", "input_datasets/input_datasets", "input_datasets/definitions",
+          "applications/remote.toml", "library/datasets/input_datasets", "library/datasets/definitions",
           "adapters/vllm/verity_vllm/inputs", "tests/tools/verity/lean/fixtures/judge",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/errors.py"]
 
