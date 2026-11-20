@@ -1597,10 +1597,9 @@ and a day, leaves its prior content under its bound except with probability at m
 where all of them do has every server-day block's input from its own past under `pastBound E k` (bits), then that fails
 on an accepted run with probability at most `|Ls| · nDays · (2^-s + adv)`: the union bound over the wipes (`Runs.union`).
 -/
-theorem wipeInputAtMost (P : Runs L) (G : Prop) (Ls : Finset (Finset L))
-    (survives : Finset L → Fin P.nDays → P.Run → Prop)
+theorem wipeInputAtMost (P : Runs L) (Ls : Finset (Finset L)) (survives : Finset L → Fin P.nDays → P.Run → Prop)
     (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) :
-    P.WipeInputAtMost G Ls survives E k memEnclosing memCap adv := by
+    P.WipeInputAtMost Ls survives E k memEnclosing memCap adv := by
   intro hG hread _ _ _ _ hinfo
   classical
   let e := Ls.equivFin
@@ -1748,7 +1747,7 @@ theorem rows_chain (P : Runs L)
         (fun r _ i => bPous r i) enclosingPous capPous εpous pous hcapPous hexclPous
     · exact (freeBlockAtMost P) Capacity.linkCapacity (fun r _ i => freePoub r i) (fun r _ i => readsB r i)
         (fun r _ i => bPoub r i) enclosingPoub capPoub εpoub poub hcapPoub hexclPoub
-    · exact wipeInputAtMost P Pous.Guarantees.StreamedWipeResidual Ls survives P.wipeEgress P.wipeChallenges memEnclosing memCap adv
+    · exact wipeInputAtMost P Ls survives P.wipeEgress P.wipeChallenges memEnclosing memCap adv
         PousStreamedWipe.streamed_wipe_residual hwipeRead hwipeCap hwipeCover (wipeApplies_of_check hcheck) hLs
         hwipeInfo
     · exact netIn hatt fun _ _ _ _ => le_rfl

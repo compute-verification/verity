@@ -6129,7 +6129,8 @@
     "Definitions.Registration.Assumptions",
     "Definitions.Poub.Guarantees",
     "Definitions.Compose.Guarantees",
-    "Definitions.Registration.Guarantees"
+    "Definitions.Registration.Guarantees",
+    "Definitions.Pous.Guarantees.StreamedWipeResidual"
    ],
    "except": [],
    "sealed": true,
