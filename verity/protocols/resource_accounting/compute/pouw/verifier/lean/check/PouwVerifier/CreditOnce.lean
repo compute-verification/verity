@@ -220,7 +220,7 @@ def executionPhaseLayoutWith (replay : Replay)
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let P ← programOf d
-  let layout ← layoutOf P
+  let layout ← layoutOf P d
   let some t := (nat? rows).filter (1 ≤ ·) | layoutRefuse ROWS_FORM
   let r := (match get layout "tile" with
     | .arr a => (nat? (a.getD 0 .null)).getD 0

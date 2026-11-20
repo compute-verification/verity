@@ -121,7 +121,7 @@ def registeredFileOf (j : Json) : Except String Json := do
   let got : PouwVerifier.R Json := do
     let some d := bytes | Credit.layoutRefuse Credit.DESCRIPTOR_HEX
     let P ← Credit.programOf d
-    let layout ← Credit.layoutOf P
+    let layout ← Credit.layoutOf P d
     let shape := Credit.shapeOf P
     let program := Flock.hexOf (Flock.Sha512.hash d)
     let file ← Credit.registeredFile program layout shape ((PouwVerifier.nat? call).getD 0) roots

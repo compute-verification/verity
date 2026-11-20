@@ -36,7 +36,6 @@ PUBLIC = {
     "OUT/main.txt": "main's first-parent line, the commits a challenger session pins on",
     "OUT/weights_registration.txt": "the deployment record's digest line alone",
     "OUT/registration.json": "the window's registration record",
-    "OUT/compiler.txt": "the registered compiler's digest",
     "OUT/serve/serve.json": MIRROR,
     "OUT/serve/windows.jsonl": MIRROR,
     "OUT/serve/seals.jsonl": MIRROR,
@@ -112,8 +111,6 @@ PUBLIC.update({f"D/{SERVED_ARM}/{p[4:]}": w for p, w in list(PUBLIC.items())
 #: Our tools' refusals that are one fixed sentence, with no path, host or value, by name: a refusal's name from this list
 #: may leave (`refusal`); its free text, and every other line of a tool's log, stays in the private directory
 REFUSALS = {
-    "serve-json-no-target-profile": "serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: --target F gives it",
-    "serve-json-no-execution-label": "serve.json records no execution label (execution, engine.execution), so φ can't be read",
     "advice-no-capped-compiler": "verity_vllm.pipeline.advice registers no capped compiler (its registered_compiler wraps none)",
     "advice-not-canonical": "the advice's bytes are not its canonical encoding",
     "scan-reader-not-passed": "a window's scan reads the network attester run its serve kept, or that it kept none, by the caller's reader, since SPOT imports neither the attester nor a benchmark: run this from a caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)",
@@ -137,6 +134,7 @@ REFUSALS = {
     "pearlplus-period-open-name": "pearlplus-period open needs --name",
     "pearlplus-period-rule-arguments": "pearlplus-period rule needs --lane and --coin",
     "pearlplus-period-close-arguments": "pearlplus-period close takes --lane and --windows together",
+    "single-gpu-window-rows-route-retired": "a single-GPU window is a served one (--serve-run): the rows route's Commit is retired",
 }
 _BY_SENTENCE = {v: k for k, v in REFUSALS.items()}
 #: what a tool prints before its refusal: its name and command, or the exception's class, and a colon

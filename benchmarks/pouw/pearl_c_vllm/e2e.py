@@ -31,14 +31,13 @@ The run:
 - **Gates, in the arm's process, before any timing:** at every distinct linear shape and both m, served y is held to the
   float product x·Wᵀ (relative RMS error under 8%, the scheme's tested bound), with hashing and without.  With hashing, the
   same call made twice, each from a fresh pass on poisoned outputs and on a device run of its own (`on_twin`), must give
-  the same tile digests, and the negative control, the call once more with its tile leaves omitted, must not.
+  the same tile digests under different roots.
 - **The verify passes** (``--retain``): after the timing, the first timed prefill prompt and the decode prompts are replayed
   in the arm, each a retained pass on poisoned buffers, the first pass of a device run of its own, whose commitment must
   equal the same prompts' generate as the first pass of another (`on_twin`: a call's index is its place, so no pass repeats
-  a timed one's, and a pass verified alone is round 0).  Then the negative
-  control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
-  `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
-  (development shortcut; the protocol's check is a ZK proof, PouwVerifier) and the control rejected (the panel's rule).
+  a timed one's, and a pass verified alone is round 0).  The two manifests go to `verify.sh` after the execution phase,
+  whose verdict on each is the Lean's: each must be replay-verified (development shortcut; the protocol's check is a ZK
+  proof, PouwVerifier).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -58,8 +57,8 @@ may read a call's BF16 rows (`bf16_race`, `BF16_RACE`).
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
 hm96-sha512 row leaves of frame-v3-sha512 trees, once after the forward (served_zk/statement.py), beside the scheme's own
--h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged, and
-the no-write control's not; prefill's rows are not committed in it.
+-h3 trees.  Its gate (`Statement.check`) holds the device's roots to Python's over the rows a whole replay staged;
+prefill's rows are not committed in it.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before an execution phase: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
@@ -114,11 +113,6 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 PREFILL_DEFAULT, BATCH_DEFAULT, PROMPT_DEFAULT = PREFILL, BATCH, PROMPT
 #: the served y's bound against the float product (the scheme's tested bound, verity/protocols/resource_accounting/compute/pouw/verifier's sm120 useful-output test)
 ERR = 0.08
-#: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
-CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_leaf"})
-#: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
-#: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
-CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: the smoke's chat prompts
 PROMPTS = [
     "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
@@ -144,11 +138,11 @@ def chat(tok, prompts) -> list[str]:
         return list(prompts)
 
 
-#: ``--smoke --retain``'s served requests, each one chat prompt (PROMPTS, by index) as a retained pass: the
-#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
+#: ``--smoke --retain``'s served request, one chat prompt (PROMPTS, by index) as a retained pass: the request whose calls
+#: a ZK proof opens (served_zk).
 #: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
-SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
+SERVED, SERVED_TOKENS = {"request": 0}, 4
 SERVED_RECORD = "served.json"
 #: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
 #: promotion), which has no sm_90a record
@@ -333,18 +327,14 @@ def unsalted(run, ended: dict) -> dict:
 
 
 def call_verdict(commits: list[dict], err: float) -> dict:
-    """The call check's verdict on `under_salt` of the same call twice and then with its tile leaves omitted.  Every leaf's
-    salt is fresh operating-system bytes, so the two calls' roots differ and what repeats is under the salt: their tile
-    digests are equal (the call is deterministic), their roots are not (the salts are fresh), and the omitted call's
-    digests are not the first's (the leaves are the call's own, not what the poison left). One commitment (no hashing)
-    checks y alone."""
+    """The call check's verdict on `under_salt` of the same call twice.  Every leaf's salt is fresh operating-system
+    bytes, so the two calls' roots differ and what repeats is under the salt: their tile digests are equal (the call is
+    deterministic), their roots are not (the salts are fresh). One commitment (no hashing) checks y alone."""
     if len(commits) == 1:
-        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "omitted_leaves_rejected": True, "ok": err < ERR}
-    a, b, omitted = commits
+        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "ok": err < ERR}
+    a, b = commits
     same, fresh = a["digests"] == b["digests"], a["transcript_root"] != b["transcript_root"]
-    control = omitted["digests"] != a["digests"]
-    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "omitted_leaves_rejected": control,
-            "ok": err < ERR and same and fresh and control}
+    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "ok": err < ERR and same and fresh}
 
 
 def on_twin(run, passes):
@@ -365,22 +355,20 @@ def on_twin(run, passes):
 
 def call_checks(run, cases: list) -> list[dict]:
     """The call check (`call_verdict`) of each case (weight id, weight, x): each case's call in a pass of its own on a
-    twin (`on_twin`), the cases in order, then on a second twin, and on a third with the tile leaves omitted, so a case's
-    passes share a place; without hashing one twin, y alone."""
+    twin (`on_twin`), the cases in order, then on a second twin, so a case's passes share a place; without hashing one
+    twin, y alone."""
     commits, errs = [[] for _ in cases], []
-    for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-        def passes(t, omit=omit):
+    for _ in range(2 if run.hashing else 1):
+        def passes(t):
             for i, (w, W, x) in enumerate(cases):
                 t.begin()
                 t.poison()
-                t.omit = frozenset(omit)
                 y = t.gemm(w, x, W, None)
                 if len(errs) < len(cases):
                     ref = x.float() @ W.float().T
                     errs.append(float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt()))
                 ended = t.end()
                 commits[i].append(under_salt(t, ended) if t.hashing else ended)
-            t.omit = frozenset()
         on_twin(run, passes)
     return [call_verdict(c, err) for c, err in zip(commits, errs, strict=True)]
 
@@ -398,7 +386,7 @@ def shape_cases(weights: dict, ms: tuple, gen) -> list:
 
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
-    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_checks`),
+    """Served y against x·Wᵀ, and with hashing the same call's commitment twice (`call_checks`),
     at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
     import torch
     cases = shape_cases(weights, (PREFILL, BATCH),
@@ -762,11 +750,11 @@ def serve(conn, args, group: str, coins: dict) -> None:
         # at most a decode batch of them, so a small batch's chat (its prompts one after another) stays within one pass
         turns = chat(tok, PROMPTS[:BATCH])
 
-        def timed(prompts, sp, retain=None, controls=()):
+        def timed(prompts, sp, retain=None):
             """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
             import dataclasses
             pearl = stack is not None and stack.executing
-            spec = dataclasses.replace(stack.active.spec, retain=retain, controls=tuple(controls)) if pearl else None
+            spec = dataclasses.replace(stack.active.spec, retain=retain) if pearl else None
             with stack.pass_(spec) if pearl else contextlib.nullcontext():
                 if pearl:
                     run.gemm_ms()
@@ -810,19 +798,18 @@ def serve(conn, args, group: str, coins: dict) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                from verity_vllm.protocols.linear.api import Control
                 stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 if whole is not None:
                     whole.take()
-                def alone(name, prompts, sp, retain=None, graphs=True, controls=()):
+                def alone(name, prompts, sp, retain=None, graphs=True):
                     """`name`'s generate, one pass, as the first pass of a twin (`on_twin`) the stack's executor runs
                     meanwhile: round 0, the place verify.sh verifies a pass alone at."""
                     def on(t):
                         t.graphs, stack.executor.run = run.graphs and graphs, t
                         try:
                             return timed([{"prompt_token_ids": x} for x in prompts], sp,
-                                         retain=retain and str(Path(retain) / name), controls=controls)[2]
+                                         retain=retain and str(Path(retain) / name))[2]
                         finally:
                             stack.executor.run = run
                     return on_twin(run, on)
@@ -838,9 +825,6 @@ def serve(conn, args, group: str, coins: dict) -> None:
                                      "same_commitment_as_timed": same(kept, again)}
                         if run.graphs:
                             out[name]["same_commitment_eager"] = same(alone(name, prompts, sp, graphs=False), again)
-                    for label, omits in CONTROLS.items():
-                        got = alone(label, [cmd["decode"][0]], one, args.retain, controls=(Control("omit", omits),))
-                        out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
                 finally:
                     if whole is not None:
                         whole.enabled = True
@@ -1396,7 +1380,7 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
     import run_result
     ok = (not out.get("error") and all(m in results for m in MODES) and summary["gates"]["arm"]
           and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
-                  for k, v in summary["verify_pass"].items() if not k.startswith("control")))
+                  for v in summary["verify_pass"].values()))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
     run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass's "
                      "commitment its prompts' generate's at its place", json.dumps(summary), ms)

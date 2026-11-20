@@ -40,7 +40,7 @@
    "data": {
     "desc_difftest/expanded.jsonl": "889b21cdf0dda02c2031333b6762df787d8ee611d4685ffbb5ee5cdd69373384",
     "desc_difftest/instances.jsonl": "bce9097b89c86be648807ba8778823403f048d719daccb750be3f3265d02a57c",
-    "desc_difftest/python.jsonl": "ff6648d1179bf34ffc2d79f294160266deab1e6f9db36ec5848130d75ae708ed"
+    "desc_difftest/python.jsonl": "d31203ed76a38070b59d5f9da338665648440ddb237a99e107f3f1f59f3e72bb"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
