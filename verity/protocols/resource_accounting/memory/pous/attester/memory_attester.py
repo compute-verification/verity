@@ -218,8 +218,8 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return SC.header_fields(self.session, self.coin_root, self.coin_key, self.binding, self.blocks, self.k, self.limit_ns,
-                                self.block_bytes)
+        return SC.header_fields(self.session, self.coin_root, _sha512(self.coin_key), self.binding, self.blocks, self.k,
+                                self.limit_ns, self.block_bytes)
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -269,8 +269,8 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
 
 def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
     """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
-    head = SC.header(commitment.session, commitment.coin_root, commitment.coin_key, commitment.binding, commitment.blocks,
-                     commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
+    head = SC.header(commitment.session, commitment.coin_root, _sha512(commitment.coin_key), commitment.binding,
+                     commitment.blocks, commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 

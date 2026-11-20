@@ -164,7 +164,7 @@ def pyJsonStr (s : String) : String := SessionCoins.pyJsonStr s
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds. -/
 def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
-  SessionCoins.header c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
+  SessionCoins.header c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
 def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do

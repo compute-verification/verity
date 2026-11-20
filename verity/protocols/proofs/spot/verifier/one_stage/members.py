@@ -58,7 +58,6 @@ import hashlib
 import json
 import math
 import os
-import subprocess
 import tempfile
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -74,6 +73,7 @@ from . import closing as CL, docket as DK, one_circuit as OC, partition as P, pr
 from verity.commitments import registered_value as RV
 from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
+from . import lean_child as LC
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
 EXITS = {"accept": 0, "reject": 1, "undecided": 2}
@@ -89,8 +89,7 @@ def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: 
         canonical = json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
         for path, b in zip(paths, (canonical, commitment, evidence)):
             path.write_bytes(b)
-        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
+        p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)])
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -404,8 +403,8 @@ def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Progra
     tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
     try:
         reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
-    except P.QueryRefused:
-        return
+    except P.QueryRefused as e:
+        raise _Refused(f"held reads: {e}") from e
     for name, m in ms.items():
         if m.get("registered") is None:
             for units, i in reads:
@@ -874,9 +873,8 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
-        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
-                            "--public", str(public), "--tables", d], capture_output=True, text=True,
-                           env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
+                    "--public", str(public), "--tables", d], env=PF.verifier_env())
     out = p.stdout.removesuffix("\n")
     if not out.startswith("KS-FORM ") or p.returncode != (0 if out == "KS-FORM ok" else 1):
         raise Outside(f"the verifier answered no form check for the files (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
@@ -924,7 +922,11 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
                          cut=OC.cuts(descriptor, partition, decoded),
                          formed=OC.formed_in(decoded, partition, m["units"]))
-        except (OC.NotDerived, OC.Refused) as e:
+        except OC.Refused as e:
+            if str(e).startswith(f"{e.code}: {OC.NOT_ADMITTED}"):
+                raise _Refused(str(e).removeprefix(f"{e.code}: ")) from None
+            raise _Refused(f"restrict: {e}") from None
+        except OC.NotDerived as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
         circuit.write_bytes(c)
@@ -974,10 +976,10 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         if st.registered is not None:
             (at / "registered.json").write_text(json.dumps(st.registered))
             reads = ["--registered", str(at / "registered.json")]
-        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
-                            "--public", str(st.public), "--tables", str(at / "tables"),
-                            "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
-                            "--session", str(at / "s")], capture_output=True, text=True, env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
+                    "--public", str(st.public), "--tables", str(at / "tables"),
+                    "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
+                    "--session", str(at / "s")], env=PF.verifier_env())
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if len(lines) != 1 or not isinstance(lines[0], dict):
         raise Outside(f"the verifier answered no verdict for the session (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")

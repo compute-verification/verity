@@ -12,7 +12,7 @@
 // on the tensor cores (cuBLASLt: U V^T and W Z^T with inner dimension r, then A~ Z and B~ V with r outputs).
 // The GEMM: cuBLASLt (int8 -> s32, E4M3 -> f32), or fgemm.cu's mainloop (128 x 128 tiles, 16 warps) with receipts duo or
 // TB4C at L = 32 or 64 over the first k columns. Every arm forms both sides per call (fresh masks per call).
-//   mgemm gate DIR M N K SEED        every arm at one small shape, inputs and outputs to DIR for mref.py
+//   mgemm gate DIR M N K SEED        every arm at one small shape, inputs and outputs to DIR
 //   mgemm bench REPS SHAPE...        interleaved timing, one JSON line a shape (SHAPE = name:m:n:k); MG_ARMS selects arms
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a mgemm.cu -lcuda -lcublasLt -lnvidia-ml
 #ifndef FG_LIB
