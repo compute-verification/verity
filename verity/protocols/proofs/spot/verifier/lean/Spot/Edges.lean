@@ -179,7 +179,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   return out
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
-cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
+cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. The wires are
+accumulated last first, so each part costs its own wires. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
   if !partsOk P then throw "edge-parts"
   let fu := firstUnits rs
@@ -194,8 +195,8 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       let s := node.args[i]!.seq
       for qi in [0:s.parts.size] do
-        out := out ++ (← partWires P fu W k i s.parts[qi]! s.starts[qi]!)
-  return out
+        out := (← partWires P fu W k i s.parts[qi]! s.starts[qi]!).reverse ++ out
+  return out.reverse
 
 /-! ## Examples: the A, B, A layout -/
 
