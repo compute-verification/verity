@@ -475,22 +475,24 @@ theorem rows_chain (P : Runs L)
     (poub : P.PoubUseAtLeast readsB bPoub εpoub)
     (hcapPoub : P.CapacityAtMost Capacity.linkCapacity enclosingPoub capPoub)
     (hexclPoub : P.DeclaredWorkExclusive freePoub readsB enclosingPoub)
-    -- The memory wipe.
-    (Gwipe : Prop) (survives : P.Run → Prop) (Ewipe : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞)
-    (wipe : P.WipeInputAtMost Gwipe survives Ewipe adv) (hGwipe : Gwipe)
+    -- The memory wipe (with its memory-size capacity hypothesis).
+    (Gwipe : Prop) (survives : P.Run → Prop) (Ewipe memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ)
+    (adv : ℝ≥0∞)
+    (wipe : P.WipeInputAtMost Gwipe survives Ewipe memEnclosing memCap adv) (hGwipe : Gwipe)
     (hwipeRead : P.RunReads Gwipe survives (2⁻¹ ^ 40 + adv))
+    (hwipeCap : P.CapacityAtMost Capacity.memorySize memEnclosing memCap)
     (hwipeInfo : P.WipeInformationGivesWidth survives (fun r i => Ewipe r i + 8600000000))
-    -- Network attestation, input.
+    -- Network attestation, input (covert inside the attester's assumption).
     (ingressN egressN bIn covert : (r : P.Run) → Fin (P.nOut r) → ℕ)
     (netIn : P.NetworkInputAtMost ingressN egressN bIn covert)
-    (hatt : P.AttesterOnEveryLink ingressN egressN)
+    (hatt : P.AttesterOnEveryLink ingressN egressN covert)
     (hingress : ∀ r, P.accepts r → ∀ i, P.kind r i = true → ingressN r i ≤ bIn r i)
     -- Network attestation, output.
-    (shownNet : P.Run → Prop) (bOut ingressN' egressN' : (r : P.Run) → Fin (P.nOut r) → ℕ) (εnet : ℝ≥0∞)
-    (netOut : P.NetworkOutputAtMost shownNet egressN bOut ingressN' egressN' εnet)
+    (shownNet : P.Run → Prop) (bOut ingressN' egressN' covert' : (r : P.Run) → Fin (P.nOut r) → ℕ) (εnet : ℝ≥0∞)
+    (netOut : P.NetworkOutputAtMost shownNet egressN bOut ingressN' egressN' covert' εnet)
     (hphase : NetTiming.Attester.PhaseGetsBack)
     (hnetRead : P.RunReads NetTiming.Attester.PhaseGetsBack shownNet εnet)
-    (hrecord : P.RecordIsOutput shownNet egressN bOut) (hatt' : P.AttesterOnEveryLink ingressN' egressN')
+    (hrecord : P.RecordIsOutput shownNet egressN bOut) (hatt' : P.AttesterOnEveryLink ingressN' egressN' covert')
     -- Registration.
     {Root : Type} (log : Finset Root) (opensAt : (r : P.Run) → Fin (P.actual r).N → Root → Prop)
     (reg : P.RegistrationBinds log opensAt) (hregsound : Verity.Guarantees.RegistrationSound)
@@ -542,7 +544,7 @@ theorem rows_chain (P : Runs L)
         pous hcapPous hexclPous
     · exact (freeBlockAtMost P) Capacity.linkCapacity freePoub readsB enclosingPoub capPoub bPoub εpoub
         poub hcapPoub hexclPoub
-    · exact wipe hGwipe hwipeRead hwipeInfo
+    · exact wipe hGwipe hwipeRead hwipeCap hwipeInfo
     · exact netIn hatt hingress
     · exact netOut hphase hnetRead hrecord hatt'
   exact chain P check pol Finset.univ shownV εV hthm (fun r ha => hcheck r ha) hcover hest

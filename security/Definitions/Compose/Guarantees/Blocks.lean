@@ -90,16 +90,22 @@ def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P
 PoUW, PoUS and PoUB are the three instances of `UseAtLeast`, over the three capacities of the hardware graph (compute
 rate, memory size, link capacity). Each feeds the one conversion `FreeBlockAtMost`, which gives the free block's size,
 its unregistered input from its own past, and its unregistered input from memory. What is still open is not how they are
-placed but three pieces of the model, each a named open `Prop` below owned by memory-accounting or lean. Three questions
-stay in these docstrings, owner memory-accounting: the on-chip state in bits, a floor on every bound at the chip's scale;
-whether PoUS holds at one tick or only on average over audits (a cut needs one tick); and whether PoUS and PoUB count
-information or wires. -/
+placed but three pieces of the model, each a named open `Prop` below owned by memory-accounting or lean. The three
+questions memory-accounting left open now have answers, with their basis: the on-chip state is `2^30` bits in the honest
+device (data sheet: at least `992,061,184`), a floor on every bound at the chip's scale; PoUS holds summed over the ticks
+of the window, for one audit a period (a cut at a single tick stays open); and PoUS and PoUB count information from below,
+which bounds wires from below. -/
 
 /-- **PoUS: use at least, over the memory-size capacity.** In each server-day block `i`, at least `b r i` of the memory's
-registered content was held, in the quantity `held r i` (wires crossing a tick at the device's memory location, `Memory`
-in `Registration/Physical.lean`). Through `FreeBlockAtMost` it bounds the free block's unregistered input from its own
-past: what a server's memory can hold that is not registered information at any moment, which bounds the input, from its
-own past, of a time slice of a server-day block. Open on `DeviceMemoryIsLocation`; a cut at one tick is open (above). -/
+registered content was held, in the quantity `held r i` (wires crossing the ticks of the window at the device's memory
+location, `Memory` in `Registration/Physical.lean`), summed over the ticks of the window, not at one moment; a cut at one
+tick is open (above). Through `FreeBlockAtMost` it bounds the free block's unregistered input from its own past: what a
+server's memory can hold that is not registered information, which bounds the input, from its own past, of a time slice of
+a server-day block. The guarantee that ties it is `Pous.Period.PeriodHeldDeployed` (`Properties.Pous.PeriodDeployed`),
+held summed over ticks for one audit a period; that statement lives in the properties tree, which the definitions tree
+may not import, so this instance is **untied** here (`held` and `b` are free functions until the switch names it). On-chip
+state is `2^30` bits in the honest device (data sheet: at least `992,061,184`), a floor on every bound at the chip's
+scale; PoUS counts information from below, which bounds wires from below. Open on `DeviceMemoryIsLocation`. -/
 def PousUseAtLeast (held b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   P.UseAtLeast Capacity.memorySize held b ε
 
@@ -107,8 +113,12 @@ def PousUseAtLeast (held b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ�
 r i` of what the processors read from memory was registered information, in the quantity `reads r i` (wires crossing the
 link from the device's memory to its chip in the block's span, `Links` in `Registration/Physical.lean`). Through
 `FreeBlockAtMost` it bounds the free block's unregistered input from memory, an input only when memory is a location
-outside the block. Open on `DeviceMemoryIsLocation` and `PoubOnActualCircuit` (today PoUB is proved in a separate
-model). -/
+outside the block. The guarantee that ties it is `Poub.Remote.RemoteRunConservationDeployed` (the link capacity, bits
+read); this instance is left **untied** (`reads` and `b` free) until the switch names it. PoUB has **two** proved results,
+not one: bits read (`RemoteRunConservationDeployed`, the link capacity, this row) and registered blocks held over time
+(`Poub.Guarantees.RemoteHeld.HeldOverTimeLinks`, an instance of the memory-size capacity beside PoUS), the second stated
+and listed, not shown to say anything at the served node, its clock unread. Open on `DeviceMemoryIsLocation` and
+`PoubOnActualCircuit` (today PoUB is proved in a separate model). -/
 def PoubUseAtLeast (reads b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   P.UseAtLeast Capacity.linkCapacity reads b ε
 
@@ -140,13 +150,15 @@ block's input is to be stated in information is open. -/
 def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → survives r → ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (b r i))
 
-/-- **The memory wipe: input at most from its own past, for every server-day block**, at `E i + 8,600,000,000` bits, `E
-i` the bits that leave the boundary during the wipe that opens block `i`. From the streamed-label wipe's guarantee (a
-layer this one may not import, so the hypothesis `G`), over a uniform prior, at `2⁻⁴⁰` plus the PRF distinguisher's
-advantage `adv`. Open: `RunReads` and `WipeInformationGivesWidth`. A shape: its content is its premises. -/
+/-- **The memory wipe: input at most from its own past, for the attested boundary** (the server-day block its one-server
+case), at `E i + 8,600,000,000` bits, `E i` the bits that leave the boundary during the wipe that opens block `i`. From
+the streamed-label wipe's guarantee (a layer this one may not import, so the hypothesis `G`), over a uniform prior, at
+`2⁻⁴⁰` plus the PRF distinguisher's advantage `adv`. The guarantee is at "the fill is the whole memory" (`M = N·512`), so
+the memory size from the hardware description is a hypothesis of this row (`CapacityAtMost Capacity.memorySize`, keeping a
+device at each server). Open: `RunReads` and `WipeInformationGivesWidth`. A shape: its content is its premises. -/
 def WipeInputAtMost (G : Prop) (survives : P.Run → Prop) (E : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (adv : ℝ≥0∞) : Prop :=
-  G → P.RunReads G survives (2⁻¹ ^ 40 + adv) →
+    (memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
+  G → P.RunReads G survives (2⁻¹ ^ 40 + adv) → P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
     P.WipeInformationGivesWidth survives (fun r i => E r i + 8600000000) →
       ExceptWith P.pr P.accepts
         (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (E r i + 8600000000)))
@@ -154,12 +166,15 @@ def WipeInputAtMost (G : Prop) (survives : P.Run → Prop) (E : (r : P.Run) → 
 
 /-! ## Network attestation -/
 
-/-- **Every link passes through an attester** (assumed, about the site): in an accepted run, every server-day block `i`
-reads from the outside world at most the attester's ingress count `ingress r i` bits, and its output to the outside world
-is at most the attester's egress count `egress r i`. It is that no link of the audited server bypasses one. -/
-def AttesterOnEveryLink (ingress egress : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+/-- **Every link of the attested boundary passes through an attester** (assumed, about the site): the block is everything
+behind one attester, the server-day block its one-server case — not a per-server figure where servers behind one attester
+are joined by links it does not see. In an accepted run, that block reads from the outside world at most the attester's
+ingress count `ingress r i` plus `covert r i`, an assumed number of bits for the covert channels the attester does not
+see, and its output to the outside world is at most the attester's egress count `egress r i`. It is that no link across
+the attested boundary bypasses one. -/
+def AttesterOnEveryLink (ingress egress covert : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → ∀ i, P.kind r i = true →
-    P.HoldsOut r i (.inputAtMost [.world] (ingress r i)) ∧ P.HoldsOut r i (.outputAtMost (egress r i))
+    P.HoldsOut r i (.inputAtMost [.world] (ingress r i + covert r i)) ∧ P.HoldsOut r i (.outputAtMost (egress r i))
 
 /-- **The record's unexplained bits are the block's undeclared output** (open, network-accounting): in an accepted run
 whose egress record the declared computation explains up to the missable cost and the charges, every server-day block's
@@ -167,25 +182,31 @@ egress count is at most `bOut i`. -/
 def RecordIsOutput (shown : P.Run → Prop) (egress bOut : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true → egress r i ≤ bOut r i
 
-/-- **Network attestation: input at most from the outside world, for every server-day block**, from `AttesterOnEveryLink`
-and the attester's ingress count at most `bIn i`, plus `covert i`, an assumed number of bits for the covert channels the
-attester does not see, with no sampled proof behind it. The covert channels are an assumed number of the adversary
-resource model's list, not zero: a bound with `covert = 0` would assume its own conclusion. A shape. -/
+/-- **Network attestation: input at most from the outside world, for the attested boundary** (the server-day block its
+one-server case), from `AttesterOnEveryLink` and the attester's ingress count at most `bIn i`. The `covert i` term, an
+assumed number of bits for the covert channels the attester does not see, lives **inside** the assumption
+(`AttesterOnEveryLink` bounds input by the ingress count plus `covert`), not added on here: covert channels are an assumed
+number of the adversary resource model's list, not zero, and the assumption is exactly the one that assumes them. A
+shape. -/
 def NetworkInputAtMost (ingress egress bIn covert : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  P.AttesterOnEveryLink ingress egress → (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r i ≤ bIn r i) →
+  P.AttesterOnEveryLink ingress egress covert →
+    (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r i ≤ bIn r i) →
     ExceptWith P.pr P.accepts
       (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))) 0
 
-/-- **Network attestation: output at most to the outside world, for every server-day block**: a width bound that leaves
-the timing channel out. From `NetTiming.Attester.PhaseGetsBack`, which bounds how much of an execution phase's egress
-record the declared computation does not explain. Its channel term, the log of how many timing and failure patterns the
-operator can choose, is no width of any gate; whether the output is stated in information for that part is open for
-training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape. -/
-def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut ingress egress' : (r : P.Run) → Fin (P.nOut r) → ℕ)
+/-- **Network attestation: output at most to the outside world, for the attested boundary** (the server-day block its
+one-server case): a width bound that leaves the timing channel out. From `NetTiming.Attester.PhaseGetsBack`, which bounds
+how much of an execution phase's egress record the declared computation does not explain. The fold from one execution
+phase to the monitoring period — that the state each phase reads is the fold of the earlier ones (`PhasesFoldToPeriod`) —
+is carried by `RunReads` here, which reads the phase guarantee on the period's runs; it is not a separate named def on this
+head, and restoring it as its own premise is ours with lean. Its channel term, the log of how many timing and failure
+patterns the operator can choose, is no width of any gate; whether the output is stated in information for that part is
+open for training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape. -/
+def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut ingress egress' covert' : (r : P.Run) → Fin (P.nOut r) → ℕ)
     (ε : ℝ≥0∞) : Prop :=
   NetTiming.Attester.PhaseGetsBack →
     P.RunReads NetTiming.Attester.PhaseGetsBack shown ε → P.RecordIsOutput shown egress bOut →
-    P.AttesterOnEveryLink ingress egress' →
+    P.AttesterOnEveryLink ingress egress' covert' →
       ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ε
 
 /-! ## Registration -/
