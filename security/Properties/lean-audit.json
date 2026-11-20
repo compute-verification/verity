@@ -2314,7 +2314,8 @@
   },
   "Properties.Spot.acceptMeans": {
    "type_hash": "b7d2aff59405ac1b720a066292f250b0402c66cb19974912ca3186b42657ea90",
-   "unfolded_hash": "b44857bccf291b73d2d54bc43b14356c2247602d4adc49fa72c54db2f4fd96cd"
+   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and an accept computes the record's digest, the coins, the program's hash and each member's sessions. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
+   "unfolded_hash": "b3ad1f7c9db00161977c0943e27eb63b5caf5f89aead35fa42bed12766749b93"
   },
   "Properties.Spot.bernoulliBounds": {
    "type_hash": "6a855723692662564bcc83199cf3197623dff74c1450e16bd35be59d172fd757",
