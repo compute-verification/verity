@@ -39,8 +39,9 @@ open Flock.Test.WiredPorts (runP regP)
 
 def n0 : Json := Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "input/n0"), ("root", "ee")]
 def runRec : Json := Json.mkObj [("roots", Json.arr #[n0])]
+def runRs : Array Flock.TemplateQuery.TRange := #[⟨1, "T", 0, 2⟩, ⟨2, "T", 2, 1⟩]
 def runAt (P : Flock.Program.Prog) (own : Array Json) (rec : Json := runRec) : Except String (Array Json) :=
-  OneStageZk.runInputRootsAt P "T/c0" 0 own (OneStageZk.rootsByPort rec)
+  OneStageZk.runInputRootsAt P runRs "T/c0" 0 own (OneStageZk.rootsByPort rec)
 def wRun : Json :=
   Json.mkObj [("domain", "dee"), ("leaves", (4 : Nat)), ("port", "w"), ("root", "ee"), ("tree", "input/n0")]
 

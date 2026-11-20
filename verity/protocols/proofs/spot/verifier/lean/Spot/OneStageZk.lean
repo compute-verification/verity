@@ -757,14 +757,15 @@ def RUN_OWN_ROOT_WHY (member port : String) (w : Nat) : String :=
 
 /-- **A member's ports at C's run input nodes' trees**: the member `name` whose first unit is `u`, its roots `own` and
 the record's roots by port `byPort` (`rootsByPort`): for each parameter of the Definition of `u`'s root node in C
-(`HmLinks.unitAt`) that `u` reads at a run input node `w` (`OneCircuit.regRow`, `Registered.runNode`), the record's root
-of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which `headerHeldAt` holds as it holds a field
-tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a registered input, at another block's
-output or in a form `regRow` refuses gets none, and so does one whose tree the record holds no root of; where the record
-holds it, a root of the member's own at the port refuses by name (`RUN_OWN_ROOT_WHY`). -/
-def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Array Json)
-    (byPort : Std.HashMap String Json) : V (Array Json) := do
-  let some (k, j) := Flock.HmLinks.unitAt (Flock.HmLinks.nodes P) u | return own
+(`TemplateQuery.locate` over the partition's ranges `rs`) that `u` reads at a run input node `w` (`OneCircuit.regRow`,
+`Registered.runNode`), the record's root of `input/n<w>` (`Registered.freshValue`) under the port, with that tree, which
+`headerHeldAt` holds as it holds a field tree every member of a template shares (`SHARED_UNREAD`). A parameter read at a
+registered input, at another block's output or in a form `regRow` refuses gets none, and so does one whose tree the
+record holds no root of; where the record holds it, a root of the member's own at the port refuses by name
+(`RUN_OWN_ROOT_WHY`). -/
+def runInputRootsAt (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (name : String) (u : Nat)
+    (own : Array Json) (byPort : Std.HashMap String Json) : V (Array Json) := do
+  let some (k, j, _) := Flock.TemplateQuery.locate rs u | return own
   let some node := (Flock.Registered.rootNodes P)[k]? | return own
   let some f := P.defs[node.fn]? | return own
   f.params.foldlM (fun (got : Array Json) (p, _) => do
@@ -776,14 +777,14 @@ def runInputRootsAt (P : Flock.Program.Prog) (name : String) (u : Nat) (own : Ar
     return got.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str p),
       ("root", getD r "root"), ("tree", .str t)])) own
 
-/-- `runInputRootsAt` for each member of `ms`, at its first unit, over the roots `roots` and the record `rec`. Its cost
-is the members' number times their Definitions' parameters. -/
-def runInputRoots (P : Flock.Program.Prog) (ms : Array Member) (rec : Json)
+/-- `runInputRootsAt` for each member of `ms`, at its first unit, over the partition's ranges `rs`, the roots `roots` and
+the record `rec`. Its cost is the members' number times their Definitions' parameters. -/
+def runInputRoots (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) (ms : Array Member) (rec : Json)
     (roots : Std.HashMap String (Array Json)) : V (Std.HashMap String (Array Json)) :=
   let byPort := rootsByPort rec
   ms.foldlM (fun acc m => match m.units[0]? with
     | none => pure acc
-    | some (u, _) => return acc.insert m.name (← runInputRootsAt P m.name u (acc.getD m.name #[]) byPort)) roots
+    | some (u, _) => return acc.insert m.name (← runInputRootsAt P rs m.name u (acc.getD m.name #[]) byPort)) roots
 
 /-- **The registration's roots each member's statement reads**: `rootsOf`'s, the window's trees of its templates'
 output fields held to the ones C and the partition give (`fieldTreesHeld`, `derivedFieldTrees`), each member's own
@@ -799,7 +800,7 @@ def membersRootsWired (p : Params) (ms : Array Member) (rec : Json) : V (Std.Has
   let rs ← Partition.evaluate P (getD p.own.partition "query")
   fieldTreesHeld (← derivedFieldTrees P.prog rs ms) ts rec
   let roots := ms.foldl (fun acc m => acc.insert m.name (ownFieldsOf ft m.name (acc.getD m.name #[]))) roots
-  let roots ← runInputRoots P.prog ms rec roots
+  let roots ← runInputRoots P.prog rs ms rec roots
   if !hasEdge P.prog then return roots
   let W ← derivedWiring P.prog rs
   fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots
