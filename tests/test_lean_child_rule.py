@@ -13,9 +13,9 @@ HOMES = ("verity/lean_process.py",
          "verity/protocols/proofs/flock/prover/python/verity_flock/lean_child.py",
          "verity/protocols/proofs/flock/prover/agreement/lean_run.py")
 SERVER = "tools/difftest/python/verity_difftest/__init__.py"
-SERVER_RULE = ("PANIC", "LEAN_PANIC")
-RULE = ("PANIC", "LEAN_PANIC", "LEAN_EXIT", "OK", "ABORTED", "LeanPanic", "LeanExit", "panic_line", "refuse_panic",
-        "exit_why", "refuse_exit", "run")
+SERVER_RULE = ("ABORT_ON_PANIC", "PANIC", "LEAN_PANIC")
+RULE = ("ABORT_ON_PANIC", "lean_env", "PANIC", "LEAN_PANIC", "LEAN_EXIT", "OK", "ABORTED", "LeanPanic", "LeanExit",
+        "panic_line", "refuse_panic", "exit_why", "refuse_exit", "run")
 
 
 def rule(path: str) -> dict[str, str]:
