@@ -123,7 +123,8 @@ theorem comma_pyJsonStr {s : String} (hs : Plain s) : ',' ∉ (pyJsonStr s).toLi
   rw [pyJsonStr_toList s hs]
   simpa using comma_plain hs
 
-theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS := by
+theorem plain_const : Plain SessionCoins.CLOCK ∧ Plain SessionCoins.COIN_TREE ∧ Plain SessionCoins.PROTOCOL ∧
+    Plain SessionCoins.RECORDS := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> intro c hc <;> revert c <;> decide
 
 theorem plain_keys : ∀ x ∈ keys, Plain x.1 := by
@@ -235,8 +236,8 @@ theorem header_inj {c c' : ChallengePhaseCommitment} {e e' : String} {n n' : Nat
   exact ⟨hx v0, toString_inj v1, toString_inj v2, hx v4, hx v5, toString_inj v7, toString_inj v8, hx v11,
     pyJsonStr_inj he he' v12, toString_inj v13⟩
 
-theorem plain_complete : Plain COMPLETE := by intro c hc; revert c; decide
+theorem plain_complete : Plain SessionCoins.COMPLETE := by intro c hc; revert c; decide
 
-theorem plain_late : Plain LATE := by intro c hc; revert c; decide
+theorem plain_late : Plain SessionCoins.LATE := by intro c hc; revert c; decide
 
 end MemoryAttester.Properties.SecurityProofs.Header
