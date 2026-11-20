@@ -13,7 +13,9 @@ double-count. `conversion_le` is the conversion for size as one inequality, `fre
 `FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `chain` proves `Chain`.
 
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
-smaller of its own capacity and its inference and free blocks' claimed sizes, plus the assumed hidden hardware size.
+smaller of the server-day size limit and its inference and free blocks' limits, plus the assumed hidden hardware size;
+`serverInput_le` bounds a server-day block's input from its own past and the outside world by the input limit, and
+`input_claim_binds` shows that limit refusing a claim of `2^60` bits.
 
 The feasible set is not every run: `honest_feasible` puts a one-gate circuit's run in the feasible set of a one-block
 run claiming size at most 1, and `two_not_feasible` keeps a two-gate circuit's run out of it. `top_blocks_classified`
@@ -312,25 +314,92 @@ theorem sizeIn_le_claimedSize (P : Runs L) (r : P.Run) (u : Fin (P.nIn r))
     P.sizeIn r u ≤ claimedSize (P.claimsIn r u) :=
   work_le_claimedSize _ _ _ (P.innerBlock r u) _ hcl hany
 
+/-- A claims list with an input claim from exactly `src` holds its committed input claim from `src`. -/
+theorem claimedInput_mem (src : List Source) : ∀ (l : List Property),
+    l.any (InferenceOnly.isInputFrom src) = true → Property.inputAtMost src (claimedInput src l) ∈ l
+  | [], h => by simp at h
+  | p :: t, h => by
+    cases p with
+    | inputAtMost s k =>
+      by_cases hs : s = src
+      · subst hs
+        simp [claimedInput]
+      · simp only [claimedInput, hs, ite_false, List.any_cons, InferenceOnly.isInputFrom, decide_false,
+          Bool.false_or] at h ⊢
+        exact List.mem_cons_of_mem _ (claimedInput_mem src t h)
+    | _ =>
+      simp only [claimedInput, List.any_cons, InferenceOnly.isInputFrom, Bool.false_or] at h ⊢
+      exact List.mem_cons_of_mem _ (claimedInput_mem src t h)
+
+/-- A block's input from its own past and the outside world together is at most its input from each, summed. -/
+theorem blockInput_past_world_le {A : Placed L} (θ : Finset (Fin A.N)) (X : Finset L) (b : Verity.Block A.toCircuit) :
+    A.blockInput θ X b [.past, .world] ≤ A.blockInput θ X b [.past] + A.blockInput θ X b [.world] := by
+  unfold Placed.blockInput Circuit.width
+  simp only [List.toFinset_cons, List.toFinset_nil, insert_empty_eq, Finset.biUnion_insert,
+    Finset.singleton_biUnion, Finset.inter_union_distrib_left]
+  have := Finset.sum_union_inter (f := A.w)
+    (s₁ := A.into b.gates ∩ A.sourceGates θ b.gates X b.win .past)
+    (s₂ := A.into b.gates ∩ A.sourceGates θ b.gates X b.win .world)
+  omega
+
+/-- **The check bounds a server-day block's size**: under the check and `RealizesExcept`, a server-day block's size is at
+most `lim.cS` gates. -/
+theorem serverSize_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
+    (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M) (i : Fin (P.nOut r))
+    (hki : P.kind r i = true) : P.sizeOut r i ≤ lim.cS := by
+  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, hsz⟩, -⟩ := hc
+  obtain ⟨-, -, -, -, -, hout, -⟩ := hreal
+  exact (work_le_claimedSize _ _ _ (P.outerBlock r i) _ (hout i) (hsz i hki).1).trans (hsz i hki).2
+
+/-- **The limits bind what comes in**: under the check and `RealizesExcept`, a server-day block's input from its own
+past and the outside world together is at most `lim.kS` bits. Its input from another block at its location during its
+window (`.block`) is not bounded here. -/
+theorem serverInput_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
+    (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M) (i : Fin (P.nOut r))
+    (hki : P.kind r i = true) :
+    (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past, .world] ≤ lim.kS := by
+  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, -⟩, hin⟩ := hc
+  obtain ⟨-, -, -, -, -, hout, -⟩ := hreal
+  obtain ⟨hp, hw, hsum⟩ := hin i hki
+  have h1 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past] ≤
+      claimedInput [.past] (P.claimsOut r i) := hout i _ (claimedInput_mem _ _ hp)
+  have h2 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.world] ≤
+      claimedInput [.world] (P.claimsOut r i) := hout i _ (claimedInput_mem _ _ hw)
+  have := blockInput_past_world_le (P.θ r) (P.locOut r i) (P.outerBlock r i)
+  omega
+
+/-- **A server-day block claiming more input than `kS` fails the check**, whatever the rest of the run: its committed
+input claims from its own past and from the outside world, summed, above `lim.kS` bits. -/
+theorem serverInput_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
+    (hki : P.kind r i = true)
+    (hbig : lim.kS < claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i)) :
+    InferenceOnly.check lim P r = false := by
+  by_contra hc
+  simp only [Bool.not_eq_false, InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, -⟩, hin⟩ := hc
+  exact absurd (hin i hki).2.2 (by omega)
+
 /-- **The check bites, on the path the chain reads**: under a run that passes the inference-only check and realizes its
-claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with each server-day block's own capacity
-`serverCap i` and the assumed hidden hardware size `lim.hidden`, the whole circuit's work is at most, for each server-day
-block, the smaller of its capacity and the count of its inference blocks **outside** `M` at the size cap `lim.c` (each
-block's committed size claim, which the check caps at `lim.c`) plus the
-free-block limit `lim.freeSize`. The bound is in the limits alone: the free blocks and `M`'s inference blocks sit inside
-the committed claim `P.claimedFree r i` (the hypothesis `FreeClaimHolds`), which the check caps at `lim.freeSize` (its
-fourth conjunct). The tolerance `M` is a bounded term here, not an unbounded quantifier: `M`'s blocks are counted inside
-the free limit, not as inference credit. -/
+claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with the assumed hidden hardware size
+`lim.hidden`, the whole circuit's work is at most, for each server-day block, the smaller of the server-day size limit
+`lim.cS` (its committed size claim, which the check caps at `lim.cS`) and the count of its inference blocks **outside**
+`M` at the size cap `lim.c` (each block's committed size claim, which the check caps at `lim.c`) plus the free-block limit
+`lim.freeSize`. The bound is in the limits alone: the free blocks and `M`'s inference blocks sit inside the committed
+claim `P.claimedFree r i` (the hypothesis `FreeClaimHolds`), which the check caps at `lim.freeSize`. The tolerance `M` is
+a bounded term here, not an unbounded quantifier: `M`'s blocks are counted inside the free limit, not as inference
+credit. -/
 theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
-    (M : Finset (Fin (P.nIn r))) (serverCap : Fin (P.nOut r) → ℕ)
+    (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (hfree : P.FreeClaimHolds r M)
-    (hserver : ∀ i, P.kind r i = true → P.sizeOut r i ≤ serverCap i)
     (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
     (P.actual r).work (P.π r) (P.actual r).computed ≤
       (∑ i ∈ univ.filter (fun i => P.kind r i = true),
-        min (serverCap i) (((P.infChildren r i).filter (fun u => u ∉ M)).card * lim.c + lim.freeSize)) +
+        min lim.cS (((P.infChildren r i).filter (fun u => u ∉ M)).card * lim.c + lim.freeSize)) +
         lim.hidden := by
+  have hserver := serverSize_le lim P r M hc hreal
   simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
   obtain ⟨⟨⟨⟨⟨-, hinf⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
   obtain ⟨-, -, -, hcl_out, -, -, -⟩ := hreal
@@ -360,15 +429,14 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
 outside `M`), so the conclusion names no `M`. From `feasible_work_le` by monotonicity (`(infChildren i).filter (· ∉ M) ⊆
 infChildren i`). The count of inference blocks the bound reads is capped by `lim.n` in the check. -/
 theorem feasible_work_le_total (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
-    (M : Finset (Fin (P.nIn r))) (serverCap : Fin (P.nOut r) → ℕ)
+    (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (hfree : P.FreeClaimHolds r M)
-    (hserver : ∀ i, P.kind r i = true → P.sizeOut r i ≤ serverCap i)
     (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
     (P.actual r).work (P.π r) (P.actual r).computed ≤
       (∑ i ∈ univ.filter (fun i => P.kind r i = true),
-        min (serverCap i) ((P.infChildren r i).card * lim.c + lim.freeSize)) + lim.hidden := by
-  refine le_trans (feasible_work_le lim P r M serverCap hc hreal hfree hserver hhidden) (add_le_add ?_ le_rfl)
+        min lim.cS ((P.infChildren r i).card * lim.c + lim.freeSize)) + lim.hidden := by
+  refine le_trans (feasible_work_le lim P r M hc hreal hfree hhidden) (add_le_add ?_ le_rfl)
   refine Finset.sum_le_sum fun i _ => min_le_min le_rfl (add_le_add (Nat.mul_le_mul_right _ ?_) le_rfl)
   exact Finset.card_le_card (Finset.filter_subset _ _)
 
@@ -396,8 +464,8 @@ def placed (n : ℕ) : Placed Unit where
 
 open Classical in
 /-- One run of the circuit `placed n` at a free-block capacity `fc`: no fresh input, one server-day block holding the
-whole circuit as one inference block, claimed of size at most 1 and 0 fresh input, with a size claim and an input claim on
-the server-day block (so the check's two server-day conjuncts can bite). Its window covers every tick of `placed n`, so
+whole circuit as one inference block, claimed of size at most 1 and 0 fresh input, with a size claim and input claims
+from its own past and from the outside world on the server-day block (so the check's server-day conjuncts can bite). Its window covers every tick of `placed n`, so
 its one block is its region (`insideOut`), and its committed free-capacity claim is `fc`. -/
 noncomputable def demoRuns (n : ℕ) (fc : ℕ) : Runs Unit where
   Run := Unit
@@ -414,7 +482,7 @@ noncomputable def demoRuns (n : ℕ) (fc : ℕ) : Runs Unit where
   kind _ _ := true
   locOut _ _ := {()}
   winOut _ _ := ⟨0, n + 1⟩
-  claimsOut _ _ := [.sizeAtMost n, .inputAtMost [.world] 0]
+  claimsOut _ _ := [.sizeAtMost n, .inputAtMost [.past] 0, .inputAtMost [.world] 0]
   claimedFree _ _ := fc
   nIn _ := 1
   inner _ := Partition.whole (placed n).toCircuit
@@ -469,11 +537,12 @@ theorem honest_feasible : (demoRuns 1 0).Realizes () := by
   · intro i p hp
     fin_cases i
     simp only [demoRuns, List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl
+    rcases hp with rfl | rfl | rfl
     · show (placed 1).work _ _ ≤ 1
       simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]
       decide
-    · show (placed 1).blockInput _ _ _ _ ≤ 0
+    all_goals
+      show (placed 1).blockInput _ _ _ _ ≤ 0
       simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
 
@@ -506,11 +575,18 @@ not only `Realizes`. -/
 theorem two_not_realizesExcept : ¬ (demoRuns 2 0).RealizesExcept () ∅ :=
   fun h => two_not_feasible (realizesExcept_empty_realizes _ _ h)
 
+/-- The demos' limits: one inference block of size claim at most 1 gate and fresh input claim at most 0 bits, no free
+block, no hidden hardware, and the given free-claim limit (gates), server-day size limit (gates) and server-day input
+limit (bits). -/
+noncomputable def demoLimits (freeSize cS kS : ℕ) : InferenceOnly.Limits :=
+  { n := 1, c := 1, k := 0, m := 0, freeSize := freeSize, cS := cS, kS := kS, hidden := 0, share := 0, allowance := 0 }
+
 /-- **The honest run passes the check and realizes at the empty tolerance**: `demoRuns 1 0` at honest limits (one
-inference block of size and input at most 1 and 0, no free block, committed free claim 0) passes `check` and is in the
-feasible set with no tolerance. -/
+inference block of size at most 1 gate and fresh input at most 0 bits, no free block, committed free claim 0 gates, the
+server-day block's size at most 1 gate and input at most 0 bits) passes `check` and is in the feasible set with no
+tolerance. -/
 theorem honest_checks :
-    InferenceOnly.check ⟨1, 1, 0, 0, 0, 0, 0, 0⟩ (demoRuns 1 0) () = true ∧
+    InferenceOnly.check (demoLimits 0 1 0) (demoRuns 1 0) () = true ∧
       (demoRuns 1 0).RealizesExcept () ∅ :=
   ⟨by decide, realizes_realizesExcept _ _ honest_feasible⟩
 
@@ -536,7 +612,7 @@ in `M` cannot pass the check with its claim holding, for any committed claim val
 check reads, so no choice of it rescues the run. -/
 theorem excluded_run_demo (fc : ℕ) (M : Finset (Fin ((demoRuns 2 fc).nIn ())))
     (hM : (⟨0, Nat.one_pos⟩ : Fin ((demoRuns 2 fc).nIn ())) ∈ M) :
-    ¬ (InferenceOnly.check ⟨1, 1, 0, 0, 0, 0, 0, 0⟩ (demoRuns 2 fc) () = true ∧
+    ¬ (InferenceOnly.check (demoLimits 0 2 0) (demoRuns 2 fc) () = true ∧
         (demoRuns 2 fc).FreeClaimHolds () M) := by
   refine excluded_run _ _ _ M ⟨0, Nat.one_pos⟩ rfl ?_
   have hmem : (⟨0, Nat.one_pos⟩ : Fin ((demoRuns 2 fc).nIn ())) ∈
@@ -559,8 +635,8 @@ on its claim conjunct — with `freeSize = 0` the check is false, and with `free
 true. The committed claim, not a free field, is the number the check reads. -/
 theorem claim_binds :
     (demoRuns 2 2).RealizesExcept () Finset.univ ∧ (demoRuns 2 2).FreeClaimHolds () Finset.univ ∧
-      InferenceOnly.check ⟨1, 1, 0, 0, 0, 0, 0, 0⟩ (demoRuns 2 2) () = false ∧
-      InferenceOnly.check ⟨1, 1, 0, 0, 2, 0, 0, 0⟩ (demoRuns 2 2) () = true := by
+      InferenceOnly.check (demoLimits 0 2 0) (demoRuns 2 2) () = false ∧
+      InferenceOnly.check (demoLimits 2 2 0) (demoRuns 2 2) () = true := by
   refine ⟨⟨?_, ?_, fun _ _ => le_rfl, ?_, ?_, ?_, ?_⟩, ?_, by decide, by decide⟩
   · intro a ha; exact absurd ha (Finset.notMem_empty a)
   · simp [demoRuns, Circuit.width]
@@ -569,10 +645,11 @@ theorem claim_binds :
   · intro i p hp
     fin_cases i
     simp only [demoRuns, List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl
+    rcases hp with rfl | rfl | rfl
     · show (placed 2).work _ _ ≤ 2
       simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]; decide
-    · show (placed 2).blockInput _ _ _ _ ≤ 0
+    all_goals
+      show (placed 2).blockInput _ _ _ _ ≤ 0
       simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
   · intro u _; simp [demoRuns]
@@ -580,6 +657,33 @@ theorem claim_binds :
     rw [demo_freeChildren_empty, Finset.sum_empty, zero_add,
       Finset.filter_true_of_mem (fun u _ => Finset.mem_univ u)]
     fin_cases i
+    decide
+
+/-- `demoRuns 1 0` with its server-day block's committed input claim from the outside world at `kw` bits. -/
+noncomputable def demoRunsInput (kw : ℕ) : Runs Unit :=
+  { demoRuns 1 0 with claimsOut := fun _ _ => [.sizeAtMost 1, .inputAtMost [.past] 0, .inputAtMost [.world] kw] }
+
+/-- **The input limit bites, at one bit**: the one-gate run whose server-day block claims `2^60` bits of input from the
+outside world realizes its claims (its block reads nothing), and the check refuses it at `kS = 2^60 − 1` bits and passes
+it at `kS = 2^60` bits, every other limit the same. -/
+theorem input_claim_binds :
+    (demoRunsInput (2 ^ 60)).Realizes () ∧
+      InferenceOnly.check (demoLimits 0 1 (2 ^ 60 - 1)) (demoRunsInput (2 ^ 60)) () = false ∧
+      InferenceOnly.check (demoLimits 0 1 (2 ^ 60)) (demoRunsInput (2 ^ 60)) () = true := by
+  refine ⟨?_, serverInput_excluded (demoLimits 0 1 (2 ^ 60 - 1)) (demoRunsInput (2 ^ 60)) () ⟨0, Nat.one_pos⟩ rfl
+    (by decide), by decide⟩
+  obtain ⟨h1, h2, h3, h4, -⟩ := honest_feasible
+  refine ⟨h1, h2, h3, h4, ?_⟩
+  intro i p hp
+  fin_cases i
+  simp only [demoRunsInput, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl
+  · show (placed 1).work _ _ ≤ 1
+    simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]
+    decide
+  all_goals
+    show (placed 1).blockInput _ _ _ _ ≤ _
+    simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
     decide
 
 /-- **The conversion bites, at one gate**: the two-gate run `demoRuns 2 fc` with its one inference block (work 2 gates,

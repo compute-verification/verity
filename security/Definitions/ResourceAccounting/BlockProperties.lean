@@ -73,6 +73,14 @@ def claimedSize : List Property → ℕ
   | .sizeAtMost k :: _ => k
   | _ :: t => claimedSize t
 
+/-- **A block's committed input claim from exactly the sources `src`**, in bits: the bound of the first `inputAtMost src`
+in its claims list, `0` when the list has none (the check refuses a server-day block with none from `[.past]` or from
+`[.world]`). -/
+def claimedInput (src : List Source) : List Property → ℕ
+  | [] => 0
+  | .inputAtMost s k :: t => if s = src then k else claimedInput src t
+  | _ :: t => claimedInput src t
+
 /-- **The class of a unit of `inner`**: an inference block or a free block (inside a server-day block), or hidden (a unit
 inside hidden hardware's work, which has no established property). -/
 inductive Class where
