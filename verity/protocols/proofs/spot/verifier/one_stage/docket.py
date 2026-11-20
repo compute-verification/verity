@@ -253,14 +253,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           certified: Mapping[str, Mapping[str, Any]] | None = None,
           verdicts: Mapping[str, bool] | None = None,
           coins: Mapping[str, str] | None = None, released: Mapping[str, int] | None = None,
-          commitments: Mapping[str, str] | None = None) -> Verdict:
+          commitments: Mapping[str, str] | None = None, attester_keys: Sequence[str] = ()) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`; and C's supplied inputs, by their
     marks under its `coins` and `commitments` (`{function: hex}`: what it holds of each function as a coin and as a released
     commitment), `registered.marked_rows`, held to the order rule at `released`, its place of each coin,
-    `registered.order`) and the roots it held before the
+    `registered.order`, the storage session's key read only when its SHA-512 is one of `attester_keys`, hex, the
+    configuration's pins of the memory attester) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
     ones that are outputs of an earlier run or reuse an earlier record's registered value (`outputs`: `{parameter:
     {"record", "port" | "value"}}`, or `{parameter: {"port"}}`, that port of the log's last record); and
@@ -326,7 +327,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     supplied = with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
-    sup = {**sup, **G.marked_rows(program, registered or {}, sup, coins, commitments, released, len(log))}
+    sup = {**sup, **G.marked_rows(program, registered or {}, sup, coins, commitments, released, len(log),
+                                  [bytes.fromhex(k) for k in attester_keys])}
     if supplied is not None and not registered:
         raise ValueError("supplied values are registered values: the verifier expects none registered")
     cert = _certified(certified, registered or {}, sup)

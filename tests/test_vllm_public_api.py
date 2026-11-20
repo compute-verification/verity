@@ -306,7 +306,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.derived_rows",
     "verity_vllm.definitions.numerics.fp8_moe_rows",
     "verity_vllm.definitions.numerics.glm53_rows",
-    "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",

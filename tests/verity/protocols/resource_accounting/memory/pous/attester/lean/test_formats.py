@@ -172,13 +172,18 @@ def test_header(server):
     assert stats.outputs > 100, stats
 
 
+#: a session record's salt: its 64 bytes, else one short or long, which both sides refuse
+RECORD_SALT = hexed(mostly(st.binary(min_size=64, max_size=64), st.sampled_from([b"", bytes(63), bytes(65)]), 19))
+
+
 def message(v) -> str:
-    return mc.message(M.commitment_of(M._get(v, "commitment")), M._str(v, "ended"),
+    return mc.message(M.commitment_of(M._get(v, "commitment")), M.hex_(v, "salt"), M._str(v, "ended"),
                       [M.round_of(r) for r in M.list_(v, "rounds")]).hex()
 
 
 def test_message(server):
-    inputs = with_malformed(st.fixed_dictionaries({"commitment": COMMITMENT, "ended": ENDED, "rounds": ROUNDS}))
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": COMMITMENT, "salt": RECORD_SALT, "ended": ENDED,
+                                                   "rounds": ROUNDS}))
     stats = D.run(port("message", message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
 
@@ -363,15 +368,16 @@ WIPE_MARK = hexed(mostly(st.one_of(st.just(b""), st.binary(min_size=sw.MARK_BYTE
                          st.binary(max_size=70), 5))
 #: A signed session's fields; `MemoryChallenger.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
 WIPE_SIGNED = st.fixed_dictionaries({
-    "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "ended": ENDED, "start_mark": WIPE_MARK,
-    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
+    "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "salt": RECORD_SALT, "ended": ENDED,
+    "start_mark": WIPE_MARK, "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
     "scheme": st.sampled_from([mc.LMS, M.ts.scheme(1), "none", ""]), "public_key": hexed(st.binary(max_size=70)),
     "signature": hexed(st.binary(max_size=140))})
-WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
+WIPE_MESSAGE_KEYS = ("commitment", "salt", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
 
 
 def wipe_message(v) -> str:
-    return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), M.hex_(v, "start_mark"),
+    return sw.message(W.commitment_of(M._get(v, "commitment")), M.hex_(v, "salt"), M._str(v, "ended"),
+                      M.hex_(v, "start_mark"),
                       W.int_(v, "fill_start_ns"), W.int_(v, "fill_end_ns"),
                       [W.batch_of(r) for r in M.list_(v, "batches")]).hex()
 
@@ -389,10 +395,11 @@ def test_wipe_message(server):
     width, start marks of any length, and fill times of either sign; commitments `WipeParams` refuses and
     records past a field's width refused by both."""
     commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)
-    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "start_mark": WIPE_MARK,
+    inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "salt": RECORD_SALT, "ended": ENDED,
+                                                   "start_mark": WIPE_MARK,
                                                    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED,
                                                    "batches": WIPE_BATCHES}))
-    stats = D.run(port("wipe_message", wipe_message, inputs), examples=400, server=server)
+    stats = D.run(port("wipe_message", wipe_message, inputs), examples=500, server=server)
     assert stats.outputs > 100 and stats.rejects > 30, stats
 
 
@@ -409,7 +416,7 @@ def test_wipe_end_message(server):
     """The end message over sampled signed sessions, their signatures of any length; a start mark neither empty nor 64
     bytes, a commitment `WipeParams` refuses and a record past a field's width refused by both."""
     inputs = with_malformed(st.fixed_dictionaries({"signed": mostly(WIPE_SIGNED, malformed(WIPE_SIGNED), 5)}))
-    stats = D.run(port("wipe_end_message", wipe_end_message, inputs), examples=300, server=server)
+    stats = D.run(port("wipe_end_message", wipe_end_message, inputs), examples=600, server=server)
     assert stats.outputs > 80 and stats.rejects > 30, stats
 
 
@@ -445,23 +452,27 @@ def clear_reasons(v) -> list[str]:
     """`session_proofs.clear_reasons` on the registered store `{"root", "leaves"}` at the deployed schemes."""
     store = {"root": M.hex_(v, "store_root").hex(), "leaves": M.nat(v, "store_blocks")}
     return list(SP.clear_reasons(M.commitment_of(M._get(v, "commitment")), [M.opening_of(o) for o in M.list_(v, "openings")],
-                                 M._str(v, "scheme"), M.hex_(v, "public_key"), store=store,
-                                 trusted=set(M.hexes(v, "trusted")), schemes=mc.SCHEMES))
+                                 M._str(v, "scheme"), M.hex_(v, "public_key"), M.hex_(v, "message"), M.hex_(v, "signature"),
+                                 store=store, pinned={p.hex() for p in M.hexes(v, "pinned")}, schemes=mc.SCHEMES))
 
 
 @st.composite
 def clear_reasons_inputs(sample) -> dict:
-    """The honest case (the session's own binding and rows, key, scheme and openings), and each refusal: another root, another
-    block count, a store of fewer blocks than an opening's index (past it, with and without the count agreeing), an untrusted
-    key, an unknown scheme, a missing opening, a coin that doesn't open, and the three at once."""
+    """The honest case (the session's own binding and rows, pinned key, scheme, message, signature and openings), and each
+    refusal: another root, another block count, a store of fewer blocks than an opening's index (past it, with and without
+    the count agreeing), a key not pinned (another signer's, its own signature verifying), an unknown scheme, a missing
+    opening, a coin that doesn't open, the three at once, the message under another salt, and the message without one."""
     s = sample(M.sessions())
-    c, key = s.commitment, s.signed.public_key
+    c, signed = s.commitment, s.signed
     openings = list(s.openings)
-    case = {"commitment": c.to_json(), "openings": openings, "scheme": mc.LMS, "public_key": key, "trusted": [key],
-            "store_root": c.binding, "store_blocks": c.blocks}
+    signer = M.AtLeaf(M.deployed_key(), 0, mc.LMS)
+    key = signer.public_key
+    case = {"commitment": c.to_json(), "openings": openings, "scheme": mc.LMS, "public_key": key,
+            "pinned": [hashlib.sha512(key).digest()], "message": signed.message(),
+            "signature": signer.sign(c.session, signed.message()), "store_root": c.binding, "store_blocks": c.blocks}
     top = max(o.index for o in openings)
     x = sample(st.integers(0, 2 ** 16))
-    edit = sample(st.sampled_from(range(9)))
+    edit = sample(st.sampled_from(range(11)))
     if edit == 1:
         case["store_root"] = M._flip(c.binding, x)
     elif edit == 2:
@@ -472,7 +483,9 @@ def clear_reasons_inputs(sample) -> dict:
     elif edit == 4:
         case["store_blocks"] = top
     elif edit == 5:
-        case["trusted"] = [bytes(80)]
+        other = M.AtLeaf(M.deployed_key(M.STRANGER), 0, mc.LMS)
+        case["public_key"] = other.public_key
+        case["signature"] = other.sign(c.session, case["message"])
     elif edit == 6:
         case["scheme"] = "test/x"
     elif edit == 7:
@@ -480,10 +493,14 @@ def clear_reasons_inputs(sample) -> dict:
     elif edit == 8:
         o = openings[x % len(openings)]
         case["openings"] = [dataclasses.replace(o, salt=M._flip(o.salt, x)) if q is o else q for q in openings]
-        case["store_root"], case["trusted"] = M._flip(c.binding, x), []
+        case["store_root"], case["pinned"] = M._flip(c.binding, x), []
+    elif edit == 9:
+        case["message"] = mc.message(c, M._flip(signed.salt, x), signed.ended, signed.rounds)
+    elif edit == 10:
+        case["message"] = M.unsalted(c, signed.ended, signed.rounds)
     return {**case, "openings": [o.to_json() for o in case["openings"]],
-            "public_key": case["public_key"].hex(), "trusted": [t.hex() for t in case["trusted"]],
-            "store_root": case["store_root"].hex()}
+            "public_key": case["public_key"].hex(), "pinned": [p.hex() for p in case["pinned"]],
+            "message": case["message"].hex(), "signature": case["signature"].hex(), "store_root": case["store_root"].hex()}
 
 
 def test_clear_reasons(server):
