@@ -456,7 +456,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
     `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
     `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
     a decoded C can reach refuses: each refusal of `admitted` and `admittedBlock` is reached or is `UNREACHED`'s. A C
-    refused before the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
+    refused outside the predicate (`RC16`, `IB16`) is refused by both doors alike, `lower` reading Lean's
     `flock-lower-check`."""
     from verity.circuits import partition_object as PO
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -476,14 +476,14 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
         q = _q(ts[0]) if len(ts) == 1 else PO.template_instances_query(list(ts))
         cases.append((what, c, q, blocks, None, clause))
     for case, c, q, blocks, doc, want in cases:
-        exe = stub if doc else lower
+        exe = lower if want in ("recut-gates", "input-body") else stub
         door = W.Door(c, q, blocks, lambda: exe)
         for k, (lo, hi) in enumerate(blocks):
             r = door.run(k, lo, hi)
             py = _predicate(r.text)
             run = _lean_restrict(lean, tmp_path, c, door.partition, lo)
             assert _predicate(run.stderr) == py, (case, k, doc, run.stderr[-600:], py)
-            if py is None and r.step is not None and doc is None:
+            if py is None and exe == lower:
                 assert run.returncode == 1, (case, k, run.stdout[-600:])
                 assert W.clause(f"refused: {run.stderr}") == W.clause(f"refused: {r.text}"), (case, run.stderr, r.text)
                 got = _outside(r.text)
