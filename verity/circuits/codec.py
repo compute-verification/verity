@@ -1043,10 +1043,48 @@ def _input_body(desc: dict, built: dict[str, Any], fid: str, bid: str) -> str:
     return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is an input primitive, a value no claim registers"
 
 
+def _root_in_body(root: Any, body: Any, rid: str, fid: str, bid: str) -> str | None:
+    """§5.2 read through word ``fid``'s body ``bid``: no definition calls the root, so a body is not the root and reaches no
+    call of it, else it would read the root's input nodes (`Descriptor.rootInBody`; the caller walks only where the root's
+    primitives are all Boolean, as there `reach` is)."""
+    if body is root:
+        return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is the root, which no Definition calls"
+    seen, stack = {id(body)}, [body]
+    while stack:
+        d = stack.pop()
+        if isinstance(d, PrimitiveDefinition):
+            continue
+        for n in d.body.nodes:
+            if n.fn is root:
+                return f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} calls the root {rid}, which no Definition calls"
+            if id(n.fn) not in seen:
+                seen.add(id(n.fn))
+                stack.append(n.fn)
+    return None
+
+
+def _boolean_primitives(fn: Any) -> bool:
+    """Whether every primitive ``fn`` reaches is a gate, a constant bit or a 1-bit input (`Descriptor.extendReach`)."""
+    from .boolean import is_boolean
+    seen, stack = {id(fn)}, [fn]
+    while stack:
+        d = stack.pop()
+        if isinstance(d, PrimitiveDefinition):
+            if not is_boolean(d):
+                return False
+            continue
+        for n in d.body.nodes:
+            if id(n.fn) not in seen:
+                seen.add(id(n.fn))
+                stack.append(n.fn)
+    return True
+
+
 def _decode_boolean(desc: dict, get: Callable[[str], Any], built: dict[str, Any]) -> dict[str, FunctionDefinition]:
     """``desc``'s Boolean map, each body read from ``desc`` alone (PROTOCOL.md §4.9): its keys exactly the word primitives
     among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them, no input primitive
-    (`_input_body`), with the bit form of its word's signature (`E_BODY_NOT_BOOLEAN`)."""
+    (`_input_body`), not the root and no call of it (`_root_in_body`), with the bit form of its word's signature
+    (`E_BODY_NOT_BOOLEAN`)."""
     from .boolean import bit_type, is_boolean
     bm = desc.get("boolean")
     if not isinstance(bm, dict) or not all(isinstance(v, str) for v in bm.values()):
@@ -1058,6 +1096,7 @@ def _decode_boolean(desc: dict, get: Callable[[str], Any], built: dict[str, Any]
     if extra := sorted(set(bm) - word):
         raise ValueError(f"E_BODY_KEY: `boolean` names {extra[:4]}, which are no word primitive among `definitions`")
     out: dict[str, FunctionDefinition] = {}
+    root, root_boolean = get(desc["root"]), None
     for fid in sorted(bm):
         bid = bm[fid]
         if bid not in ddefs:
@@ -1065,6 +1104,10 @@ def _decode_boolean(desc: dict, get: Callable[[str], Any], built: dict[str, Any]
         body, (params, ret) = get(bid), get(fid).signature()
         if is_input(body):
             raise ValueError(_input_body(desc, built, fid, bid))
+        if root_boolean is None:
+            root_boolean = _boolean_primitives(root)
+        if root_boolean and (why := _root_in_body(root, body, desc["root"], fid, bid)):
+            raise ValueError(why)
         bparams, bret = body.signature()
         if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
             raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is not a Boolean Definition of its bit signature")

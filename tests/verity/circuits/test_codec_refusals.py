@@ -128,6 +128,19 @@ def bit_word(body: str = "input", inside: bool = False) -> tuple[dict, Definitio
     return json.loads(_bit_word(body, inside)), TBIT_REG
 
 
+def _body_calls_root(d: dict) -> None:
+    """`bit_word("const")` with its root reading `Input1_v1` instead of calling `TBit1_v1`, and `TBit1_v1`'s Boolean body
+    `TCallsRoot_v1`, a composite whose one node calls the root: a Boolean body that would read the root's input."""
+    d["callees"] += ["Input1_v1", d["root"]]
+    d["definitions"]["Input1_v1"] = {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]}
+    _root(d)["nodes"][0]["fn"] = 1
+    d["definitions"]["TCallsRoot_v1"] = {
+        "bindings": {}, "form": "composite", "id": "TCallsRoot_v1",
+        "body": {"nodes": [{"args": [], "fn": 2, "form": "call", "out": 0}], "params": [], "ret": {"affine": ["n", 0, 0, 1]},
+                 "ret_type": ["Value", 1]}}
+    d["boolean"]["TBit1_v1"] = "TCallsRoot_v1"
+
+
 V1, V8 = Value(1), Value(8)
 _Id8 = spec._comp("TId8", (), lambda S: ((("a", V8),), V8), lambda B, S, a: a)
 _Bits = spec._comp("TBits16", (), lambda S: ((("a", Array(16, V1)),), Array(16, V1)), lambda B, S, a: a)
@@ -264,6 +277,8 @@ DECODER = [
     ("an input primitive as the Boolean body of a word a Definition calls", functools.partial(bit_word, inside=True),
      lambda d: None,
      "definition 'TBitUser_v1' node 0: an input node (Input1_v1, the Boolean body of TBit1_v1) appears only in the root's body"),
+    ("a Boolean body that calls the root", functools.partial(bit_word, "const"), _body_calls_root,
+     "E_BODY_NOT_BOOLEAN: TBit1_v1's body TCallsRoot_v1 calls the root Root[TBitRootConst_v1]_v1, which no Definition calls"),
 ]
 
 

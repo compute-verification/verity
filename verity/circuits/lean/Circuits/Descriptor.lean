@@ -1536,6 +1536,29 @@ private def inputBody (defs : Array Defn) (rootKey : String) (w b : String) (bi 
     | some (key, k) => s!"definition '{key}' node {k}: an input node ({b}, the Boolean body of {w}) appears only in the root's body"
     | none => s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} is an input primitive, a value no claim registers"
 
+/-- §5.2 read through word `w`'s body `b` at place `bi`: no Definition calls the root, so a body is not the root and reaches
+no call of it, else it would read the root's input nodes. A body that reaches the root is Boolean only where the root is
+(`reach`), so the walk runs only then; each place enters it once. -/
+private def rootInBody (defs : Array Defn) (index : Std.HashMap String Nat) (rootKey : String) (reach : Array Bool)
+    (w b : String) (bi : Nat) : Option String := Id.run do
+  let some ri := index[rootKey]? | return none
+  if !(reach[ri]?.getD false) then return none
+  if bi == ri then return some s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} is the root, which no Definition calls"
+  let mut seen : Std.HashSet Nat := ({} : Std.HashSet Nat).insert bi
+  let mut todo := #[bi]
+  for _ in [0:defs.size + 1] do
+    let some i := todo.back? | return none
+    todo := todo.pop
+    let d := defs[i]!
+    if d.prim then continue
+    for x in d.body.nodes do
+      if x.fn == ri then
+        return some s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} calls the root {rootKey}, which no Definition calls"
+      if !seen.contains x.fn then
+        seen := seen.insert x.fn
+        todo := todo.push x.fn
+  return none
+
 /-- `reach` extended to every Definition of `defs`: whether each primitive it reaches through node callees is a gate, a
 constant bit or a 1-bit input (§9). A callee has a smaller place than its callers, so one pass in order suffices. -/
 private def extendReach (defs : Array Defn) (reach : Array Bool) : Array Bool := Id.run do
@@ -1586,10 +1609,12 @@ def booleanKeys (defs : Array Defn) (index : Std.HashMap String Nat) (prims : Ar
   return pairs
 
 /-- `E_BODY_NOT_BOOLEAN` for the body of word `w` at place `bi`, just decoded: no input node from place `lo` on, and no
-input primitive as the body (§5.2, `inputBody`), Boolean (`reach`, its primitives gates, constant bits or 1-bit inputs) and of its word's bit signature. -/
+input primitive as the body (§5.2, `inputBody`), not the root and no call of it (`rootInBody`), Boolean (`reach`, its
+primitives gates, constant bits or 1-bit inputs) and of its word's bit signature. -/
 def checkBody (defs : Array Defn) (index : Std.HashMap String Nat) (rootKey : String) (lo : Nat) (reach : Array Bool)
     (w b : String) (bi : Nat) : V Unit := do
-  if let some e := inputOutsideRoot defs rootKey lo <|> inputBody defs rootKey w b bi then throw e
+  if let some e := inputOutsideRoot defs rootKey lo <|> inputBody defs rootKey w b bi <|>
+      rootInBody defs index rootKey reach w b bi then throw e
   let bd := defs[bi]!
   let wd := defs[index[w]?.getD 0]!
   let boolean := if bd.prim then isBooleanPrim bd.key

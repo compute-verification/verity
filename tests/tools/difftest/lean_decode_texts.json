@@ -90,6 +90,7 @@
  "refusal: E_SCHEMA other": "E_SCHEMA: unexpected descriptor schema 'verity-ir/descriptor/v9' (this verifier reads verity-ir/descriptor/v2)",
  "refusal: E_SCHEMA v0": "E_SCHEMA: unexpected descriptor schema 'verity-ir/descriptor/v0' (this verifier reads verity-ir/descriptor/v2)",
  "refusal: E_SCHEMA v1": "E_SCHEMA: unexpected descriptor schema 'verity-ir/descriptor/v1' (this verifier reads verity-ir/descriptor/v2)",
+ "refusal: a Boolean body that calls the root": "E_BODY_NOT_BOOLEAN: TBit1_v1's body TCallsRoot_v1 calls the root Root[TBitRootConst_v1]_v1, which no Definition calls",
  "refusal: a Boolean body that is a word Definition": "E_BODY_NOT_BOOLEAN: TAdd32_v1's body Root[TTiny_v1]_v1 is not a Boolean Definition of its bit signature",
  "refusal: a Boolean body that is an input primitive": "E_BODY_NOT_BOOLEAN: TBit1_v1's body Input1_v1 is an input primitive, a value no claim registers",
  "refusal: a Boolean body that is no definition": "E_BODY_NOT_BOOLEAN: TAdd32_v1's body 'Absent_v1' is no definition",
