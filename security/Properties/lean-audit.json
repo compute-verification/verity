@@ -1473,6 +1473,7 @@
    "nontrivial": "Properties.Spot.SecurityProofs.historyRootIsModel_nontrivial"
   },
   "Properties.Spot.SecurityProofs.tablesRegistered": {
+   "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
   },
   "Properties.NetworkPeriod.rowsCapPublished": {
@@ -2310,12 +2311,6 @@
   "Properties.Spot.SecurityProofs.sampleMisses": {
    "type_hash": "3f87a355ae74af656383010355fd73d01ba49126bc986f32fe55c0b1b87d2d0f",
    "unfolded_hash": "66e517579a3fe102af3a9855df35f6955639e35dce8dbe08ae7184d53f38247a"
-  },
-  "Properties.Spot.SecurityProofs.tablesRegistered": {
-   "type_hash": "d89dfaa9fb4585e06a1be4a2f55a76528c71ecfbed8da42f979c2d201cf6a51f",
-   "missing": "honest",
-   "why": "no honest instance in Lean: the kernel does not reduce SHA-512, and the circuit file an instance derives (Spot.lowerBlock) carries the Definition's and the partition's SHA-512 digests. tablesRegistered_honest is a conditional lemma over any p whose derived file is honestCircuit, not an honest witness. The honest accept is the compiled verifier's, on the benchmark's honest arm at the entry's head.",
-   "unfolded_hash": "a50d982b662e2e57c32e150c9082e27783287a046365596bf8d83947bfff16ba"
   },
   "Properties.Spot.acceptMeans": {
    "type_hash": "b7d2aff59405ac1b720a066292f250b0402c66cb19974912ca3186b42657ea90",
