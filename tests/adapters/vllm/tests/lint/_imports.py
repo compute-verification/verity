@@ -11,7 +11,7 @@ is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``; ``protocols.linear``, the linear site ``engine.kv_blocks`` attaches, sits in ``engine``.  ``OPTIONAL`` names the packages a
-tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
+tree may hold or not (a private protocol's driver).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
 the environment's registry, ``messages``, the schemes' exchange, and ``log``, the logger, import nothing from the package
 but ``settings`` and sit in ``core`` so every layer may call them.  Peers in one layer
@@ -57,12 +57,11 @@ LAYER = {
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
-    "verity_vllm.commitments": "core",                         # the commitment scheme's reference; imports nothing else from verity_vllm
     "verity_vllm.engine.served_seed": "core",                  # the served seed rule's functions; imports only engine.hooks
 }
 
-#: the packages a tree may not hold, the commitment scheme's reference: placed where present
-OPTIONAL = ("verity_vllm.commitments",)
+#: the packages a tree may not hold: placed where present
+OPTIONAL: tuple[str, ...] = ()
 
 #: the packages whose modules are graph nodes
 LIBRARY_PACKAGES = ("verity_vllm",)

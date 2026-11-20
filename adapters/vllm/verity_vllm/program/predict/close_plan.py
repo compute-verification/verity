@@ -8,11 +8,13 @@ import json
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
 
+from verity_vllm.config import option
 from verity_vllm.pipeline import advice as ADV
 
 from . import window_circuit as WC
@@ -30,7 +32,7 @@ class ClosePlan:
     Program written beside the window's seal (`naming.write_build`, under `steps.trace_dir`'s name); without it the outcome
     names the circuit's templates and units alone. Given a ``record``, its card's part (`Record.handoff`: the acquired units'
     strings, made where they are committed) runs at the close, and its record there too only ``in_lease``; else
-    `close_record.finish` makes it once the card is released, and the outcome says so by name. Either names, in ``unprovable``, each template `check_served` finds the door
+    `finish` (`verity-vllm close-record`) makes it once the card is released, and the outcome says so by name. Either names, in ``unprovable``, each template `check_served` finds the door
     cannot prove, by reason, with its units; they stay in the circuit and its sample. A window whose advice is pending or refused, or that
     the class doesn't take, has no circuit and says why."""
 
@@ -104,7 +106,7 @@ class ClosePlan:
             if "error" in got["handoff"]:
                 got["record"] = {"error": f"not made: the card's part failed ({got['handoff']['error'][:200]})"}
             elif not self.in_lease:
-                got["record"] = {"pending": "not made at the close (no --record-in-lease): close_record's finish makes it "
+                got["record"] = {"pending": "not made at the close (no --record-in-lease): `verity-vllm close-record` makes it "
                                             "from the handoff once the card is released"}
             else:
                 try:
@@ -144,3 +146,67 @@ def served_slots(low: Any, cls: Any, compiled: Any, binding: Any, builds: Path, 
         pi = ProgramIndex(MF.load_program(dirs[u.digest])["instances"], program_dir=dirs[u.digest])
         out.append(Served.of_record(pi, store, u.id, u.first_step))
     return out
+
+
+def finish(serve: Path, window: int, record: Record, cls: Any) -> dict[str, Any]:
+    """Window ``window``'s record after the card is released, on the processor, from what the serve under ``serve`` left: its
+    sealed bundle opened against its record (`deferred_rows.of_record`), its served values read from it, its circuit
+    compiled again from the advice its close committed, and closed with the card's strings (`Record.handoff`'s directory).
+    -> `Record.make`'s outcome, with the seconds of its own parts."""
+    from types import SimpleNamespace
+
+    from verity_vllm.check.oracle_compare import OpenedReader
+    from verity_vllm.pipeline import deferred_rows as DR
+
+    t0, serve = time.perf_counter(), Path(serve)
+    wdir = serve / "windows" / f"w{window}"
+    r = DR.of_record(json.loads((wdir / "commit" / "verdict.json").read_text())["replay_deferred"]["bundles"][0]["path"], str(wdir))
+    plan = ClosePlan(serve, cls, record=record)
+    plan.compiler = ADV.registered_compiler()
+    advice = (serve / "advice" / f"w{window}" / "private" / "advice.bin").read_bytes()
+    compiled, low = WC.served_lowering(plan._registered(), cls, advice, ADV.bodies(serve, window), plan.grain, named=True)
+    opened = time.perf_counter()
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    binding = SimpleNamespace(rc=r.run, com=None, bmap=bmap, aliases=r.aliases)
+    served = served_slots(low, cls, compiled, binding, wdir, OpenedReader(r.store, r.run))
+    units = Plan(low, served)
+    planned = time.perf_counter()
+    got = record.make(plan, window, compiled, low, units, served, binding, handoff=wdir / "handoff")
+    got["seconds"] = {"open_and_lower": round(opened - t0, 3), "served_and_plan": round(planned - opened, 3), **got["seconds"]}
+    return got
+
+
+@dataclass
+class Options:
+    """A served window's record after the card is released (`finish`), from the handoff its close left: one WINDOW-RECORD
+    line."""
+    serve_run: Path = option("--serve-run", type=Path)
+    window: int = option("--window", type=int)
+    cls: str = option("--class", help="the window class S,P,O[,LANES,EVERY] the serve declared")
+    sampling_design: str = option("--sampling-design")
+    checkpoint_dir: str = option("--checkpoint-dir")
+    out: Path = option("--out", type=Path, help="the record's outcome, as JSON")
+    development_design: bool = option("--development-design", action="boolean_optional", default=False,
+                                      help="the sampling design is a development one")
+    checkpoints: str | None = option("--checkpoints", default=None)
+    cap: int = option("--cap", type=int, default=64)
+    workers: int = option("--workers", type=int, default=8)
+    twin_ports: int = option("--twin-ports", type=int, default=8)
+    parse_only: bool = option("--parse-only", action="boolean_optional", default=False,
+                              help="parse, print the arguments and stop")
+
+
+def main(a: Options) -> int:
+    from dataclasses import asdict
+
+    from .window_class import WindowClass
+
+    if a.parse_only:
+        print(json.dumps({"parsed": sorted(k for k, v in asdict(a).items() if v not in (None, False))}))
+        return 0
+    rec = Record(a.sampling_design, a.checkpoint_dir, a.serve_run / "private" / "salt_stream", checkpoints=a.checkpoints,
+                 cap=a.cap, workers=a.workers, sample=a.twin_ports, development=a.development_design)
+    out = finish(a.serve_run, a.window, rec, WindowClass(*(int(x) for x in a.cls.split(","))))
+    a.out.write_text(json.dumps(out) + "\n")
+    sys.stderr.write("WINDOW-RECORD " + json.dumps({"window": a.window, **out}) + "\n")
+    return 0
