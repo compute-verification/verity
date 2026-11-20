@@ -1217,7 +1217,6 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
@@ -1244,7 +1243,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
             if not p.get("units"):
                 continue
             _salt, refused = CC.live_salt(live["key"], live["ledger"], live["pins"], live["main"], live["session"],
-                                          json.loads(Path(p["manifest"]).read_text()), Wd.lms_verify)
+                                          json.loads(Path(p["manifest"]).read_text()), CC.lms_verify)
             got["passes"] += 1
             if refused is not None:
                 got["reason"] = f"pass {p.get('pass')}: {refused[0]}: {refused[1]}"[:600]
