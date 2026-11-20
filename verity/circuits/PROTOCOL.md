@@ -491,14 +491,17 @@ list names whose body is not there yet.
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
 The storage session's four functions read what the memory attester released after the session, which the verifier holds
-by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key, message}`, the session
-commitment, how the session ended and its rounds, the LMS public key's hex and the signed message's) and, for the round coin, as a coin (`coins`: JSON
+by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key, message, signature}`, the session
+commitment, how the session ended and its rounds, the LMS public key's hex, the signed message's and its signature's) and, for the round coin, as a coin (`coins`: JSON
 `{openings}`). A commitment is registered before any coin, so the order rule counts `coins` alone. `pous.session.round_coin/v1`
 is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
 commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused);
 `pous.session.header/v1` is the header of a session that ended complete with all `k` rounds, which the commitment's `ended`
 and `rounds` are compared with, so a late or short session has no statement; `pous.session.context/v1` is the 106 bytes the
-signature's message hashes before the record; `pous.session.message/v1` is the 64-byte message m the signature signs. Each number they read is a canonical natural (no sign, fraction, exponent or
+signature's message hashes before the record, of a key whose SHA-512 is one the verifier's `attester_keys` pin (the
+configuration's pins of the memory attester); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only
+when the signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
+signatures the attester has made. Each number they read is a canonical natural (no sign, fraction, exponent or
 leading zero) within its field's width. Each refuses, by the name "no statement", what the held commitment or coin lacks or the
 arguments don't fit. Nothing reads these bodies through the door yet.
 
