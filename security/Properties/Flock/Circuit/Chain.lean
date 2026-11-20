@@ -536,21 +536,26 @@ def ReadAloneOneReader : Prop :=
       RunInputOutside Pp.prog (Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier) g.val →
       g ∈ (partOf Pp.prog blocks).io u.castSucc → g ∈ (partOf Pp.prog blocks).io u'.castSucc → u = u'
 
-/-- **`HeldReadersCarryFiles`** (placeholder, open until the door refuses its negation by name): on an accept, a
-member whose block reads a gate of a parameter the verifier holds or of a tied value carries its file
-(`Own.registered`). -/
-def HeldReadersCarryFiles : Prop :=
+/-- **`HeldReadsAtRegisteredTree`** (placeholder, open until the checks that give it are named): on an accept, each read
+by a member of a gate of a parameter the verifier holds or of a tied value is a port of the member's file
+(`Own.registered`, laid by `Flock.OneCircuit.pos`), whose value is the tree of the run Input node holding the gate
+(`Flock.Registered.freshValue`) or a registered value the verifier names. -/
+def HeldReadsAtRegisteredTree : Prop :=
   ∀ p ms c Pp rs, MembersAccept p ms c Pp rs →
-    ∀ m ∈ ms, ∀ (fr : Spot.BlockFront.Front) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size),
-      Spot.BlockFront.front Pp.prog m.indices = .ok fr → BlockIs Pp.prog blocks u fr →
-      ∀ g ∈ (partOf Pp.prog blocks).io u.castSucc,
-        (∃ fc ∈ Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier,
-          fc.1 ≤ g.val ∧ g.val < fc.1 + fc.2) → m.own.registered.isSome
+    ∀ m ∈ ms, ∀ (a : Spot.OneStageZk.Admit) (j x g : ℕ) (row : String) (s : ℕ),
+      admOf Pp.prog m = some a → j < m.indices.size →
+      ((unitArgs Pp.prog m.indices[j]!)[x]?).map Spot.BlockFront.Port.gate = some g →
+      (∃ fc ∈ Spot.Docket.heldGates p.base.verifier ++ Spot.Docket.tiedGates p.base.verifier,
+        fc.1 ≤ g ∧ g < fc.1 + fc.2) →
+      rowAt a.ins.toList (argOff Pp.prog m.indices[j]! x) = some (row, s) →
+      ∃ q, readsOf Pp.prog m row = some (.registered q) ∧
+        ((∃ i, Flock.OfProgram.rootNode Pp.prog g = some i ∧ q.value = Flock.Registered.freshValue i) ∨
+          p.base.verifier.registered.any (·.1 == q.value) = true)
 
 /-- **`TreeMapOneOfReadAlone`** (stated, open): one reader for every committed run Input gate outside the held and
-tied gates (`ReadAloneOneReader`), and a file for every member reading one inside them (`HeldReadersCarryFiles`),
-give `TreeMapOne`. -/
-def TreeMapOneOfReadAlone : Prop := ReadAloneOneReader → HeldReadersCarryFiles → TreeMapOne
+tied gates (`ReadAloneOneReader`), and every read of one inside them a port of the reader's file at the one tree
+(`HeldReadsAtRegisteredTree`), give `TreeMapOne`. -/
+def TreeMapOneOfReadAlone : Prop := ReadAloneOneReader → HeldReadsAtRegisteredTree → TreeMapOne
 
 /-- **`TreeMapInjective`**: on an accept, two gates of C at one tree leaf are one gate. -/
 def TreeMapInjective : Prop :=
