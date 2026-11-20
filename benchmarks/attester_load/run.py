@@ -54,7 +54,9 @@ SESSION_LOG = "warden.json"
 
 def schedule(scan_class: str, overrides: dict[str, int]) -> dict[str, int]:
     """The scan class's schedule, its network attester's integer fields (`network_attester.W63`, `W63K4`), with `overrides` in place."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
+    from verity.protocols.compose import schemes
+
+    W = schemes.catalog("network-attester", "attester")
 
     params = {"w63": W.W63, "w63k4": W.W63K4}[scan_class]
     return {k: getattr(params, k) for k in W.INTEGER_FIELDS} | {k: v for k, v in overrides.items() if v is not None}

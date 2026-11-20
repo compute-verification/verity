@@ -787,6 +787,8 @@ def attach(exchange: Any, ctx: Any) -> Attached:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
+    catalog={part: f"verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_{part}"
+             for part in ("credited", "tile")},
     messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",

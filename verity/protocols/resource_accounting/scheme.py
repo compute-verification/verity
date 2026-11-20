@@ -368,7 +368,9 @@ class Scheme:
     parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
     what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
     says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
-    is checked, and the line says nothing for it.
+    is checked, and the line says nothing for it. ``catalog``, by a part's name, each module of the scheme's package that
+    a reader outside it reaches (`verity.protocols.compose.schemes.catalog`): one that registers Definitions as it
+    loads, or holds a parameter set.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -424,6 +426,7 @@ class Scheme:
     reads: Mapping[str, Mapping[str, tuple[str, str]]] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
     unchecked: Mapping[str, str] = field(default_factory=dict)
+    catalog: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):

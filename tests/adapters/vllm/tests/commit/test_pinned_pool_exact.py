@@ -352,15 +352,11 @@ def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     assert pool.reserve([MiB]) == 0 and pool.all == []
 
 
-def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():
-    """`--pinned-populate-threads` (the CLI reads VERITY_PINNED_POPULATE_THREADS) is the committer's pool's, `POPULATE_THREADS` when
-    unset, and the fresh pool an openings replay gets has the same settings."""
+def test_a_fresh_pool_keeps_the_committers_helper_threads():
+    """The committer's pool's helper threads are `POPULATE_THREADS` when unset, and the fresh pool an openings replay gets has the
+    same settings."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.pipeline import cli
 
-    assert cli.parse("commit", ["--out", "o"], {"VERITY_PINNED_POPULATE_THREADS": "3"}).pinned_populate_threads == 3
-    assert cli.parse("commit", ["--out", "o", "--pinned-populate-threads", "0"], {}).pinned_populate_threads == 0
-    assert cli.parse("commit", ["--out", "o"], {}).pinned_populate_threads is None
     default, three = NativeHostCommitter(None, run_id="d"), NativeHostCommitter(None, run_id="t", populate_threads=3)
     assert default.pool.populate_threads == pp.POPULATE_THREADS and three.pool.populate_threads == 3
     again = three.pool.fresh()

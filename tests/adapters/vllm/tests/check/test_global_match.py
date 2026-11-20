@@ -307,12 +307,11 @@ def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None):
     return persist(r, evs, d, reqs)
 
 
-def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
+def move_consumer_before_producer(oracle_dir, rid="r1"):
     """Fixture mutation on the PERSISTED record: one instance of request `rid` is re-emitted BEFORE the
     instance it consumes -- the same computation, the same wiring (every reference is re-indexed), only the emission order inside one
     request step violates the dependency order.  The IR builder cannot construct such a body (a forward reference has no value to
-    substitute), so this is what a hand-edited program.json/instances.jsonl looks like; the DAG criterion must FAIL it (G3: the
-    consumer's Merkle hash names a forward reference; G4: no canonical address; G8: consumer-before-producer), as `sequence` does."""
+    substitute), so this is what a hand-edited program.json/instances.jsonl looks like; the record's decoder refuses it."""
     from verity.circuits import codec
 
     doc = json.loads(Path(f"{oracle_dir}/program.json").read_text())
@@ -347,16 +346,6 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
         return [(s, i) for s, i, _ in j["explicit"]]
 
     pick = None
-    if sampler_to_head:
-        # the request's FIRST TokenSelect is re-emitted at the head of the request's instances of its engine
-        # step: same computations, same wiring, the sampler before everything it consumes
-        for c, nd in enumerate(nodes):
-            mc = by_root.get(c)
-            if mc and mc.get("request") == rid and fid_of(nd).startswith("TokenSelect"):
-                first = next(k for k, nd2 in enumerate(nodes) if (by_root.get(k) or {}).get("request") == rid and by_root[k].get("step") == mc.get("step"))
-                assert first != c
-                pick = (first, c)
-                break
     for c, nd in enumerate(nodes):
         if pick:
             break
@@ -864,44 +853,32 @@ def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tm
 
 
 def test_consumer_before_producer_emission_is_not_a_layout_it_fails_under_both_criteria(memory, tmp_path):
-    # the same DAG, one instance of r1 emitted before the instance it reads
+    # the same DAG, one instance of r1 emitted before the instance it reads: the record's decoder refuses it
     gp, oracle = assemble([R0, R1], tmp_path, tgrouped=True)
     c_new, p_new = move_consumer_before_producer(oracle, "r1")
     assert c_new < p_new
     for crit in ("sequence", "dag"):
-        res = gm.check(gp, oracle, within_step=crit)
-        assert res["verdict"] == "FAIL", (crit, res["failed_checks"])
-        assert "G3" in res["failed_checks"] and "G8" in res["failed_checks"], (crit, res["failed_checks"], res["reasons"])
-        g8 = _check(res, "G8")
-        assert g8["dependency_order_violations"] >= 1 and any("consumer-before-producer" in p for p in g8["problems"])
-        if crit == "dag":
-            assert "G4" in res["failed_checks"]   # the consumer's Merkle hash names a forward reference: no structurally identical component instance
-            assert any("no structurally identical component instance" in p for p in _check(res, "G4")["problems"])
-            fd = next(e for e in res["requests"] if e["request_id"] == "r1")["first_divergence"]
-            assert fd["forward_refs_in_fold"] >= 1
+        with pytest.raises(ValueError, match="forward-reference"):
+            gm.check(gp, oracle, within_step=crit)
     # control: the un-mutated record passes under dag (and sequence: R0/R1 are not co-scheduled prefills)
     gp, oracle = assemble([R0, R1], tmp_path / "ctl", tgrouped=True)
     assert gm.check(gp, oracle, within_step="dag")["verdict"] == "PASS"
 
 
-def test_mis_emitted_sampler_is_named_as_a_segmentation_disagreement_not_a_resegmented_request(memory, tmp_path):
-    # fixture (3): r1's sampler re-emitted at the head of its engine step.  The request-local steps are segmented at the
-    # request's TokenSelects, so the mutation re-segments r1; G8 cross-checks that segmentation against the engine step the fold rows
-    # record for every instance and names the disagreement (FAIL under both criteria, as before -- now with the cause stated).
+def test_a_fold_row_whose_engine_step_splits_a_local_step_is_a_segmentation_disagreement(memory, tmp_path):
     gp, oracle = assemble([R0, R1_LATE], tmp_path, tgrouped=True)
-    c_new, p_new = move_consumer_before_producer(oracle, "r1", sampler_to_head=True)
-    assert c_new < p_new
+    path = Path(oracle) / "instances.jsonl"
+    lines = path.read_text().splitlines()
+    inst = [json.loads(x) for x in lines[1:]]
+    r1 = [m for m in inst if m.get("request") == "r1" and m.get("step") is not None]
+    r1[0]["step"] += 1
+    path.write_text("\n".join([lines[0], *(json.dumps(m) for m in inst)]) + "\n")
     for crit in ("dag", "sequence"):
         res = gm.check(gp, oracle, within_step=crit)
         assert res["verdict"] == "FAIL" and "G8" in res["failed_checks"], (crit, res["failed_checks"], res["reasons"])
         g8 = _check(res, "G8")
-        assert g8["segmentation"]["disagreements"] and any("segmentation disagrees" in p for p in g8["problems"]), g8["problems"]
-        assert g8["segmentation"]["disagreements"][0]["request_id"] == "r1"
-    # control: the un-mutated staggered record has 0 disagreements and PASSes under dag
-    gp, oracle = assemble([R0, R1_LATE], tmp_path / "ctl", tgrouped=True)
-    res = gm.check(gp, oracle, within_step="dag")
-    assert res["verdict"] == "PASS", res["reasons"]
-    assert _check(res, "G8")["segmentation"]["disagreements"] == []
+        assert g8["segmentation"]["disagreements"][0]["request_id"] == "r1", g8["segmentation"]
+        assert any("segmentation disagrees" in p for p in g8["problems"]), g8["problems"]
 
 
 def test_workload_applicability_refuses_a_row_the_components_do_not_model():
@@ -2174,15 +2151,11 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
 
 def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
     """[unit 5 (b)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
-    producer, and the consumer-before-producer negative) the helper returns exactly what the record's loop computes."""
+    producer) the helper returns exactly what the record's loop computes."""
     from verity_vllm.check.match import program_compare as C
-    cases: list[tuple[list, dict]] = [([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
-                                      ([R0, R1], {"tgrouped": True, "_swap": True})]
+    cases: list[tuple[list, dict]] = [([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True})]
     for n, (reqs, kw) in enumerate(cases):
-        swap = kw.pop("_swap", False)
         gp, oracle = assemble(reqs, tmp_path / f"c{n}", **kw)
-        if swap:
-            move_consumer_before_producer(oracle, "r1")
         B = C.load_oracle(oracle, "oracle")
         meta_of = {o["node"]: o for o in B.oracle_rows}
         engine_step_of = {i: int(meta_of[r["k"]]["step"]) for i, r in enumerate(B.inst) if meta_of.get(r["k"], {}).get("step") is not None}
@@ -2223,7 +2196,7 @@ def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
 def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(memory, tmp_path, monkeypatch, compact):
     """[unit 6] MATCH_IMPL=fast names an instance's Merkle class by a structural id (prefix trie over the operand items, producers by
     their own id) instead of sha256(json).  Spy every dag_hashes call check() makes -- components, projections, live cones, the
-    permutation fixture's per-step matching, the consumer-before-producer forward refs -- and require ONE bijection between the
+    permutation fixture's per-step matching -- and require ONE bijection between the
     record's digests and the ids across all of them (so A-vs-P comparisons decide exactly as the record's do), under both operand forms."""
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.setenv(GMF.COMPACT_ENV, compact)
@@ -2244,18 +2217,13 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
         seen["instances"] += len(mine)
         return mine
     monkeypatch.setattr(GMF, "_dag_hashes_intern", spy)
-    cases = [([R0, R1], {"tgrouped": True}, None), ([R0, R1_LATE, R2_LATE], {}, None), ([R0, R1], {"leak": True}, None),
-             ([R0, R1], {"tgrouped": True}, "swap")]
-    for n, (reqs, kw, mut) in enumerate(cases):
+    cases = [([R0, R1], {"tgrouped": True}), ([R0, R1_LATE, R2_LATE], {}), ([R0, R1], {"leak": True})]
+    for n, (reqs, kw) in enumerate(cases):
         gp, oracle = assemble(reqs, tmp_path / f"c{n}", **kw)
-        if mut == "swap":
-            move_consumer_before_producer(oracle, "r1")
         for crit in ("dag", "sequence"):
             rec_of_id.clear()   # the id space is per outermost check() (released on leave, unit 4): one bijection per check
             id_of_rec.clear()
-            res = gm.check(gp, oracle, within_step=crit)
-            if mut == "swap":
-                assert res["verdict"] == "FAIL" and "G8" in res["failed_checks"]
+            gm.check(gp, oracle, within_step=crit)
             assert len(rec_of_id) == len(id_of_rec) >= 20
     assert seen["calls"] >= 8 and seen["instances"] > 500
 

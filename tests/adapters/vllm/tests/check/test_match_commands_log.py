@@ -98,14 +98,14 @@ def test_batch_decomp_exits_4_on_a_shape_that_is_not_derived_and_3_on_a_failure(
 
 def test_batch_decomp_reads_the_capture_log_that_its_log_option_names(memory, tmp_path, derived_is_a_fold):
     d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
-    args = ["batch-decomp", "--oracle", d, "--derived", e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"),
+    args = ["--oracle", d, "--derived", e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"),
             "--derived", e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
     in_place, named = tmp_path / "in_place.json", tmp_path / "named.json"
-    assert cli.main([*args, "--out", str(in_place)]) == 0
+    assert cli.run(bd, [*args, "--out", str(in_place)]) == 0
     log = _kept_elsewhere(d, tmp_path, "log.jsonl.gz")
     with pytest.raises(FileNotFoundError, match="capture/log.jsonl.gz"):        # the default path, which no longer has it
-        cli.main([*args, "--out", str(tmp_path / "unread.json")])
-    assert cli.main([*args, "--log", log, "--out", str(named)]) == 0
+        cli.run(bd, [*args, "--out", str(tmp_path / "unread.json")])
+    assert cli.run(bd, [*args, "--log", log, "--out", str(named)]) == 0
     a, b = json.loads(in_place.read_text()), json.loads(named.read_text())
     assert (a["log"], b["log"]) == (os.path.join(d, "capture", "log.jsonl.gz"), log) and a["verdict"] == b["verdict"] == "PASS"
     varies = ("log", "utc", "seconds")                                         # the path given, and when and how long each run was
@@ -170,11 +170,11 @@ def test_global_match_reads_the_capture_log_and_the_tokens_file_that_its_options
     gp, oracle = tgm.assemble([tgm.R0, tgm.R1], tmp_path / "record")
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))
-    args = ["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-alternate"]
+    args = ["--oracle", oracle, "--global-program", str(gpp), "--no-alternate"]
 
     def run(name: str, *options: str) -> tuple[int, dict]:
         out = tmp_path / f"{name}.json"
-        rc = cli.main([*args, *options, "--out", str(out)])
+        rc = cli.run(gm, [*args, *options, "--out", str(out)])
         return rc, json.loads(out.read_text())
     rc, in_place = run("in_place")
     assert rc == 0 and in_place["verdict"] == "PASS" and tgm._check(in_place, "G6")["tokens_json"] is True, in_place["reasons"]
