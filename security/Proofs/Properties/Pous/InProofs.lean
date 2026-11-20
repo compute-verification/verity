@@ -43,6 +43,7 @@ namespace MemoryAttester.Properties.InProofs
 
 open Verity.InProofs Verity.Game
 open scoped ENNReal
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA COMPLETE)
 
 /-- **The values at a session's proof block's ports**, each kind reading its own: the signature's the digest `m` and the
 signature `sig`; the signed digest's `m`, how the session ended (`ended`) and its rounds; a round's its record

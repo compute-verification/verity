@@ -39,8 +39,8 @@ def test_python_reads_the_tags_from_the_table_and_the_attester_has_the_moved_nam
     for name in ("coin_digest", "coin_leaf"):
         assert getattr(MA, name) is getattr(SC, name)
     assert MA._domain is SC.domain
-    assert (MA.PROTOCOL, MA.COIN_TREE, MA.RECORDS, MA.COIN_TAG, MA.COIN_BINDING, MA.COIN_SCHEMA, MA.COMPLETE, MA.LATE) == (
-        SC.PROTOCOL, SC.COIN_TREE, SC.RECORDS, SC.COIN_TAG, SC.COIN_BINDING, SC.COIN_SCHEMA, SC.COMPLETE, SC.LATE)
+    assert not any(hasattr(MA, n) for n in ("PROTOCOL", "COIN_TREE", "RECORDS", "COIN_TAG", "COIN_BINDING", "COIN_SCHEMA",
+                                            "COMPLETE", "LATE")), "the attester reads the commitments' names, never a second one"
 
 
 def session():
