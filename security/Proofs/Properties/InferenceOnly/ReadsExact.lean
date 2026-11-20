@@ -36,7 +36,7 @@ its gates read. Its proof reads each piece, segment and sequence of segments as 
 gates of one width) and an index, and holds each of `Desc`'s operations on them to the positions it means:
 
 * a slice of pieces, of a segment or of a sequence of segments is its positions `[a, b)` (`slice_pos`,
-  `slicePieces_pos`, `segSlice_pos`, `psSlice_pos`, `pieces_pos`), and `shiftGates` moves gate positions
+  `slicePieces_pos`, `segSlice_pos`, `psSlice_pos`), and `shiftGates` moves gate positions
   (`shiftGates_pos`);
 * `Desc.coalesce` names a return's positions in the same order, each segment it gives one it was given or one piece
   of positive count (`coalesce_pos`, `coalesce_mem`);
@@ -9015,10 +9015,6 @@ theorem ctxOf_arg_ge (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
     rfl
   · rw [Array.getElem?_map, Array.getElem?_eq_none (by omega), Option.map_none, Option.bind_none, Option.getD_none]
     rfl
-
-theorem pieces_empty {s : Desc.PS} (h : s.segs = #[]) (lo hi : Nat) : s.pieces lo hi = #[] := by
-  unfold Desc.PS.pieces Desc.PS.slice
-  simp [h]
 
 theorem slice_empty {s : Desc.PS} (h : s.segs = #[]) (lo hi : Nat) : s.slice lo hi = #[] := by
   unfold Desc.PS.slice

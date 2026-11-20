@@ -827,20 +827,6 @@ theorem psSlice_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : segsPos (s.slice lo h
     rw [List.flatMap_append, sl_append, hlen, sl_empty ((s.segs.toList.take a).flatMap segPos) lo _
       (Or.inr (by rw [hlen]; exact hpre)), List.nil_append]
 
-theorem posAll_flatMap {β : Type} (xs : Array β) (f : β → Array Piece) :
-    posAll (xs.flatMap f) = xs.toList.flatMap fun x => posAll (f x) := by
-  simp [posAll, Array.toList_flatMap, List.flatMap_assoc]
-
-/-- **A sequence's pieces `[lo, hi)`** are its positions `[lo, hi)`. -/
-theorem pieces_pos (s : PS) (hs : PSOk s) (lo hi : Nat) : posAll (s.pieces lo hi) = sl (psPos s) lo hi := by
-  rw [← psSlice_pos s hs lo hi]
-  unfold Desc.PS.pieces
-  rw [posAll_flatMap]
-  unfold segsPos
-  congr 1; funext g
-  rw [posAll_flatMap, Array.toList_range]
-  rfl
-
 theorem of_fold (l : List Seg) : ∀ (A : Array Nat) (c : Nat),
     l.foldl (fun (acc : Array Nat × Nat) s => (acc.1.push acc.2, acc.2 + s.count)) (A, c) =
       (A ++ ((List.range l.length).map fun i => c + ((l.take i).map Seg.count).sum).toArray,
