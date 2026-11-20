@@ -1,5 +1,5 @@
-"""The fixture of `verify --zk`'s form refusals (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`): honest
-M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
+"""The staged sessions the members twin reads (`tests/verity/protocols/proofs/spot/verifier/lean/test_members_twin.py`):
+honest M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
 `forged_proofs.py` stages them, differing in the statement's form:
 
     honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)               verify --zk accepts

@@ -282,8 +282,7 @@ def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_b
     any session.
 
     Each row parses the staged circuit, the smallest the fixture holds, in Lean's check and in the twin's form check,
-    so the test takes minutes. What it catches that the form check's own tests
-    (``tests/test_form_refusals.py``) can't: that Lean's files pass makes the check for a member no session samples,
+    so the test takes minutes. What it catches that `Flock.Test.PortRoots`'s guards can't: that Lean's files pass makes the check for a member no session samples,
     and that the twin's reason is Lean's there."""
     assert (STAGED / "pub-4.bin").is_file(), (
         f"{STAGED.parent} is not fetched: `uv run research data fetch-fixtures "

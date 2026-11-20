@@ -189,8 +189,8 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 proof block (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
-- `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
-  (`tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+- `form_refusals.sh`: the staged circuit and public file the members twin holds a member's files to
+  (`tests/verity/protocols/proofs/spot/verifier/lean/test_members_twin.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that proof block flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
