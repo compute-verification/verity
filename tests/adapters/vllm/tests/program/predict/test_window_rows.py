@@ -385,7 +385,7 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     def bits(words) -> list[int]:
         return [int(w) >> j & 1 for w in words for j in range(16)]
 
-    assert list(filled.outs[owner][1][0]) == list(rows[0])
+    assert bits(filled.outs[owner][1][0]) == list(rows[0])
     prog = [b for P in sorted(low.programs, key=lambda P: P.lane) for b in bits(filled.outs[P.entry_unit[0]][0][P.entry_unit[1]])]
     sin = list(rows[0])
     for t in range(T):
