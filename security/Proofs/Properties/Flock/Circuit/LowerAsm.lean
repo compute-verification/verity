@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Flock.Circuit.LowerDef
+public import Proofs.Properties.Flock.Circuit.LowerDef.BatchScan
 
 /-!
 # `lowerDef`'s template Definition computes its Definition, by induction on fuel
