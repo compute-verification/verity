@@ -290,6 +290,12 @@ def Admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
 instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
     Decidable (Admitted partition cuts S) := inferInstanceAs (Decidable (_ = true))
 
+/-- The template `lowerBlock` lowers C_S's block to at what `admitted` gives `a`: its template on bits, every input row
+and return field in u16 words. -/
+def blockTmpl (S : Flock.Program.Prog) (a : Admit) : V Flock.Tmpl.Tmpl :=
+  Flock.Lower.lower S a.d (Array.replicate (a.ins.foldl (fun n p => n + p.2 / 16) 0) 16)
+    (Array.replicate (a.fields.foldl (fun n p => n + p.2 / 16) 0) 16)
+
 /-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, refused unless `admitted`, then lowered at its
 one template by `Flock.Lower.lower` and written by `Flock.Compose.compose` at the rows and fields `admitted` gives:
 output ports its return fields `o{j}` in u16 words, META's `program_digests` the template's `definitionDigest` read off
@@ -301,9 +307,7 @@ def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (Stri
   let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
   let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
     ((CJ.getObjValD "definitions").getObjValD a.key)
-  let nIn := a.ins.foldl (fun n p => n + p.2 / 16) 0
-  let nOut := outs.foldl (· + ·.2) 0
-  let t ← Flock.Lower.lower S a.d (Array.replicate nIn 16) (Array.replicate nOut 16)
+  let t ← blockTmpl S a
   Flock.Compose.compose
     { name := s!"unit/{a.key}", body := .tmpl t LAYOUT, ins := a.ins, outs, programDigests := [(a.key, digest)] }
     ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
