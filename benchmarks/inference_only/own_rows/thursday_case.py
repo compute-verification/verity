@@ -10,6 +10,7 @@ argv: TREE OUT [LAYERS [R,P,O]]: the model's layers (its config's, 16, by defaul
 import collections
 import hashlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -101,6 +102,8 @@ for name, nodes in (("thursday", False), ("thursday-nodes", True)):
     print(name, "changed:", changed, "declared nodes:", len(decl),
           dict(collections.Counter(("run" if (d.get("param") in run_values) else "param" if "param" in d else "table")
                                    for d in decl)), flush=True)
+    if os.environ.get("NO_REFERENCE"):
+        continue
     t = time.perf_counter()
     got = SRC.verdicts(case, explain=True)
     print(name, "reference seconds:", round(time.perf_counter() - t, 1), flush=True)

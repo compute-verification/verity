@@ -113,6 +113,8 @@ def declared(program, desc: dict, doc: dict) -> list[dict]:
         w = ref._homo(body[n].out)
         hit = None
         for r in reg.get("reads", []):
+            if r["param"] in reg.get("values", []):  # a run value is no θ parameter: `nodes_held` refuses a node declared over one
+                continue
             if r["reader"] == tid and r["port"] == port:
                 C = int(r.get("cut", [0, 1])[1]) if isinstance(r.get("cut"), list) else 1
                 c0 = int(r.get("cut", [0, 1])[0]) if isinstance(r.get("cut"), list) else 0
