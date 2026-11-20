@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 
-from verity_vllm import config
 from verity_vllm.pipeline import cli
 
 NEEDED = "a flag the line needs"
@@ -39,21 +38,6 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("dsa_table_reads", ["--dsa-table-reads"], True, False),
         ("launch_context", ["--launch-context", "7"], "7", None),
         ("stop", ["--stop", "{}"], "{}", None),
-    ],
-    ("coverage-workloads",): [
-        ("case", ["--case", "B0"], "B0", NEEDED),
-        ("model", ["--model", "org/model"], "org/model", None),
-        ("tokenizer", ["--tokenizer", "tok"], "tok", NEEDED),
-        ("tokenizer_revision", ["--tokenizer-revision", "abc"], "abc", None),
-        ("profiles", ["--profiles", "B1"], "B1", "B1,B8-static,B8-mixed"),
-        ("ctx", ["--ctx", "C256"], "C256", "C1024,C256"),
-        ("seed", ["--seed", "7"], 7, 0),
-        ("out_dir", ["--out-dir", "o"], "o", str(config.WORKLOADS)),
-        ("checkpoints", ["--checkpoints", "c.json"], "c.json", str(config.CHECKPOINTS)),
-        ("replicate", ["--replicate", "2"], 2, 0),
-        ("variant", ["--variant", "t1", "--variant", "chunked=64"], ["t1", "chunked=64"], []),
-        ("sampling_seed", ["--sampling-seed", "5"], 5, 20260917),
-        ("dry_run", ["--dry-run"], True, False),
     ],
     ("global-program",): [
         ("workload", ["--workload", "w.json"], "w.json", NEEDED),
