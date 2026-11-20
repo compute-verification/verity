@@ -46,7 +46,7 @@ namespace Verity.SampledTwo.MemberChecks
 
 open Lean (Json)
 open Flock (V)
-open Verity.Recursive.BaseSetup (bind_ok)
+open FlockDeploy.BaseSetup (bind_ok)
 open Verity.Sampled.Record (SessionMatch)
 open Flock.PartCong (PartSame)
 

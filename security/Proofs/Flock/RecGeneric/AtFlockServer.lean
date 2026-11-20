@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.Claims.Recursion.BoundBridge
-public import Proofs.Flock.Claims.Recursion.HonestIVStarR
 
 /-!
 # The Flock instance's server: hm96 at the bound key (F1, F2)

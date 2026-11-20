@@ -17,7 +17,7 @@ coins are another family's, and a prover that reads a sample and commits again h
 of a verifier that names the family and the window's root itself, which nothing here can check: a verifier that read either
 from a file the prover wrote would give the prover its pick among the families it reserved.  So a caller that builds its
 stream again from a prover's hand-off names both from the docket's record and layout and refuses a hand-off that
-names another, as the two-stage commands do (`two_stage.resume`, `stop_audit.resume`).  vLLM's legacy replay
+names another.  vLLM's legacy replay
 challenge derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain
 `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
@@ -407,8 +407,7 @@ def coins_reason(key: ChallengerKey, main: Any, coins: Any, window: str, label: 
     another family is refused, so a prover that reserved several families picks none of them after reading. Both are
     the caller's to keep: this function holds the evidence to the `window` and `label` it is given and cannot tell a
     verifier's own from a prover's, so a caller that builds its stream again from a prover's hand-off names them from
-    the docket's record and layout and refuses a hand-off that names another (`two_stage.resume`,
-    `stop_audit.resume`). The session must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the
+    the docket's record and layout and refuses a hand-off that names another. The session must be a withheld one (`withheld_on`). `service.Stream.outcome` hands the
     evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
     (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
     try:

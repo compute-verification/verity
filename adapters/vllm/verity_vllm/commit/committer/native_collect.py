@@ -653,7 +653,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def step_targets(self, step: int) -> bytes:
         """The digest of the sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`, b"" for none:
-        part of its plan key.  Kept per step while the sources are the same: H1's int8 source names every linear at every step."""
+        part of its plan key.  Kept per step while the sources are the same: an int8 source names every linear at every step."""
         srcs = tuple(src for src in self.sources if hasattr(src, "targets_at"))
         if getattr(self, "_targets_of", None) != srcs:
             self._targets_of = srcs

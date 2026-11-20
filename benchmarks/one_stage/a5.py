@@ -2480,7 +2480,7 @@ def main() -> int:
     try:
         LV.command(of(__file__).raw(LV.ENV), (1,), 1)
     except LV.Refused as e:
-        ap.error(f"{e} (two levels: two_stage.py)")
+        ap.error(LV.TWO_LEVELS_REFUSED if e.reason == "levels-no-path" else str(e))
     if not (a.bundle and a.row_dir and a.window):
         ap.error("give --bundle, --row-dir and --window (a deferred Commit's)")
     a.coins, a.rule, a.window_root, a.plain = None, None, None, False
