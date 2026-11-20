@@ -66,10 +66,10 @@ def staged(tmp_path_factory):
     regs = {v: RV.Registered.commit(prog, v, rng.integers(0, 1 << 16, (rows, WORDS)).tolist(), schema=SCHEMAS[v])
             for v, rows in ((VALUE, TABLE_ROWS), ("x", N))}
     roots = {v: r.root.hex() for v, r in regs.items()}
-    own = G.reads_file(program, query, values, roots, schemas=SCHEMAS)
+    own = G.reads_file(program, query, values, roots, schemas=SCHEMAS, positions=False)
     assert own["ports"]["x"]["row_schema"] == G.SCHEMA_V2 and own["ports"]["cs"]["row_schema"] == G.SCHEMA_SEG
     out = _out(prog, rng)
-    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2, "reads": list(range(N))}
+    own["ports"]["out"] = {**out.entry(), "word_bits": 16, "row_schema": G.SCHEMA_V2}
     (d / "own.json").write_text(json.dumps(own))
     st = SimpleNamespace(dir=d, text=text, regs=regs, out=out, own=own, bound=["--partition", str(d / "partition.json"),
                                                                       "--program", str(d / "program.json")])
@@ -273,7 +273,7 @@ def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
     assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
     own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
                        {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},
-                       domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS)
+                       domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS, positions=False)
     assert own["ports"]["cs"]["domain"] == cs.domain.domain_id.hex()
     own["ports"]["out"] = staged.own["ports"]["out"]
     (staged.dir / "own-pearl.json").write_text(json.dumps(own))
