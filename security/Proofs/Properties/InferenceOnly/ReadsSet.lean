@@ -356,17 +356,17 @@ theorem argCount_eq {c : Desc.Ctx} {k i : Nat} (hA : ArgOk c k i) :
   rw [hl, List.length_map, List.length_range] at h2
   rw [h1, h2]
 
-/-- `throughArg`'s read of an argument's span, `oneOf`, names what `down` gives each of its pieces. -/
+/-- `throughArg`'s read of an argument's span, `oneOf`, names what `segDown` gives each of its segments. -/
 theorem oneOf_pos (c : Desc.Ctx) (k i lo hi : Nat) {out : Array Seg}
     (h : oneOf c Flock.Steps.FUEL k i lo hi = .ok out) :
-    segsPos out = ((c.arg k i).pieces lo hi).toList.flatMap (downPos c) := by
+    segsPos out = ((c.arg k i).slice lo hi).toList.flatMap (segDownPos c) := by
   unfold oneOf at h
   dsimp only at h
   rw [← Array.forIn_toList] at h
-  obtain ⟨h1, -⟩ := forIn_pm (downPos c) (fun _ _ => True) _ (fun q r y hy => by
+  obtain ⟨h1, -⟩ := forIn_pm (segDownPos c) (fun _ _ => True) _ (fun q r y hy => by
     obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
     simp only [pure, Except.pure, Except.ok.injEq] at hy
-    exact ⟨r ++ segs, hy.symm, by rw [segsPos_append, downPos, hs], fun s _ => Or.inr trivial⟩) _ #[] out
+    exact ⟨r ++ segs, hy.symm, by rw [segsPos_append, segDownPos, hs], fun s _ => Or.inr trivial⟩) _ #[] out
     (ok_bind_pure h)
   rw [h1, segsPos_empty, List.nil_append]
 
@@ -495,9 +495,10 @@ theorem bind_pure_ok_of {α : Type} {x : Except String α} (h : ∃ y, x = .ok y
   obtain ⟨y, rfl⟩ := h
   exact ⟨y, rfl⟩
 
-/-- `oneOf` succeeds where `down` does on each piece of the span. -/
+/-- `oneOf` succeeds where `segDown` does on each segment of the span. -/
 theorem oneOf_ok (c : Desc.Ctx) (k i lo hi : Nat)
-    (h : ∀ q ∈ ((c.arg k i).pieces lo hi).toList, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs) :
+    (h : ∀ g ∈ ((c.arg k i).slice lo hi).toList, ∃ segs,
+      Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs) :
     ∃ out, oneOf c Flock.Steps.FUEL k i lo hi = .ok out := by
   unfold oneOf
   dsimp only
@@ -511,21 +512,22 @@ theorem oneOf_ok (c : Desc.Ctx) (k i lo hi : Nat)
 /-- `nodeReads`' read of argument `i` over `spans`, succeeding, succeeds span by span. -/
 theorem readLoop_ok (c : Desc.Ctx) (k i : Nat) (spans : Array (Nat × Nat)) (acc out : Array Seg)
     (h : forIn spans acc (fun (x : Nat × Nat) __s => do
-        let __s ← forIn ((c.arg k i).pieces x.1 x.2) __s fun q __s => do
-          let __do_lift ← Desc.down c Flock.Steps.FUEL q
+        let __s ← forIn ((c.arg k i).slice x.1 x.2) __s fun g __s => do
+          let __do_lift ← Desc.segDown (Desc.down c Flock.Steps.FUEL) g
           pure (ForInStep.yield (__s ++ __do_lift))
         pure (ForInStep.yield __s)) = .ok out) :
     ReadsOk c k i spans := by
   rw [← Array.forIn_toList] at h
   intro x hx
   refine oneOf_ok c k i x.1 x.2 (forIn_each _
-    (fun x => ∀ q ∈ ((c.arg k i).pieces x.1 x.2).toList, ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs)
+    (fun x => ∀ g ∈ ((c.arg k i).slice x.1 x.2).toList, ∃ segs,
+      Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs)
     (fun x r y hy => ?_) _ _ _ h x hx)
   obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
   simp only [pure, Except.pure, Except.ok.injEq] at hy
   refine ⟨fun q hq => ?_, r', hy.symm⟩
   rw [← Array.forIn_toList] at hr'
-  exact forIn_each _ (fun q => ∃ segs, Desc.down c Flock.Steps.FUEL q = .ok segs) (fun q r y hy => by
+  exact forIn_each _ (fun g => ∃ segs, Desc.segDown (Desc.down c Flock.Steps.FUEL) g = .ok segs) (fun q r y hy => by
     obtain ⟨segs, hs, hy⟩ := Walk.except_bind_ok hy
     simp only [pure, Except.pure, Except.ok.injEq] at hy
     exact ⟨⟨segs, hs⟩, _, hy.symm⟩) _ _ _ hr' q hq
@@ -3395,7 +3397,7 @@ theorem param_lt (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
 /-! ## Segments, widths and `UsedExact` of every reached Definition from the decoder's facts -/
 
 /-- **Every segment a body node's read splits is as `down` gives it** (`ShapeOk`, `RepsOk`), in a decoded Definition
-whose callees' summaries hold `RetOk`: `rootShape` in any body (`piece_shape`, `throughPS_shape`,
+whose callees' summaries hold `RetOk`: `rootShape` in any body (`argSeg_shape`, `throughPS_shape`,
 `carriesRead_shape`), with `reps_fuel` through `carriesRead_of`. -/
 theorem bodySegs (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.size) (hDec : Decoded P)
     (hBd : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P r d).node k = .ok node → RetOk P r node.fn)
@@ -3419,9 +3421,9 @@ theorem bodySegs (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.
   rcases hs with ⟨i, lo, hi, q, hq, segs, hd', hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd', hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
   · refine ⟨?_, hRp.1 q segs hd' s (Array.mem_toList_iff.2 hs)⟩
     by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
-    · exact piece_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
+    · exact argSeg_shape _ _ hSh.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
         s (Array.mem_toList_iff.2 hs)
-    · rw [pieces_empty (ctxOf_arg_ge P r d k i hi')] at hq
+    · rw [slice_empty (ctxOf_arg_ge P r d k i hi')] at hq
       simp at hq
   · refine ⟨?_, hRp.1 p segs hd' s (Array.mem_toList_iff.2 hs)⟩
     obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
@@ -3475,9 +3477,9 @@ theorem bodyW (P : Prog) (r : Array Desc.Summary) {d : Nat} (hd : d < P.defs.siz
   have hk := node_lt hn
   rcases hs with ⟨i, lo, hi, q, hq, segs, hd', hs⟩ | ⟨i, u, ps, hmr, p, hp, segs, hd', hs⟩ | ⟨hfs, hn2, segs, hc, hs⟩
   · by_cases hi' : i < ((ctxOf P r d).body.nodes[k]!).args.size
-    · exact piece_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
+    · exact argSeg_w _ _ hW.1 (hA k i hk hi') (ctxOf_argCount P r d k i hk hi') ((hBd.1 k hk).2.1 i) hq hd'
         s (Array.mem_toList_iff.2 hs)
-    · rw [pieces_empty (ctxOf_arg_ge P r d k i hi')] at hq
+    · rw [slice_empty (ctxOf_arg_ge P r d k i hi')] at hq
       simp at hq
   · obtain ⟨p', hp'⟩ := memberRows_mem _ node k i u hmr p (Array.mem_toList_iff.2 hp)
     exact hPS k node i p' p segs hn hp' hd' s (Array.mem_toList_iff.2 hs)

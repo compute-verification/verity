@@ -9033,7 +9033,7 @@ theorem throughPS_empty {s : Desc.PS} (h : s.segs = #[]) (p : Piece) : Desc.thro
   rw [h]
   rfl
 
-/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: `ShapeOk` segments. -/
+/-- A segment of a slice of argument `i` of node `k`, through `segDown`: `ShapeOk` segments. -/
 theorem argSeg_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
     (hR : ∀ t < ((c.body.nodes[k]!).args[i]!).seq.count,
@@ -9597,6 +9597,7 @@ theorem split_nodes {P : Prog} {c : GateTable} {s g : Seg} (hs : SegNodes P c s)
     · simp only [ha, ↓reduceIte] at hr
       simp at hr
     · simp only [ha, Bool.false_eq_true, ↓reduceIte] at hr h0 hl ⊢
+      simp only [beq_iff_eq] at hr
       have h1 : 1 < s.reps := by
         rcases Nat.lt_or_ge 1 s.reps with h | h
         · exact h
@@ -11706,7 +11707,7 @@ theorem w_of_locW {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g w : N
     (h : LocW P P.root g w) : w = c.w[g]! :=
   locW_unique h (locW_root hc hg)
 
-/-- A piece argument `i` of node `k` gives (`PS.pieces`), through `down`: segments naming the body's gates with their
+/-- A segment of a slice of argument `i` of node `k`, through `segDown`: segments naming the body's gates with their
 widths, the argument naming references. -/
 theorem argSeg_w (c : Desc.Ctx) (fuel : Nat) (hD : DownWAt c fuel) {k i : Nat} (hA : ArgOk c k i)
     (hP : ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
