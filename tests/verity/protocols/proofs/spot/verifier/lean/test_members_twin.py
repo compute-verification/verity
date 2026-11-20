@@ -57,8 +57,8 @@ from verity.protocols.proofs.spot.prover import docket as DK
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_header_held_at_difftest import HELD
-from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, TRIPLE, V2_TABLES, WINDOW, Setup, _challenger_sample,
-                           _json)
+from test_difftest import (LEAF, PAIR16 as PAIR, RECEIVED, SCHEME, TRIPLE16 as TRIPLE, V2_TABLES, WINDOW, Setup,
+                           _challenger_sample, _json)
 
 #: slow: the first of them builds the executable, and each row runs it
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
@@ -91,7 +91,7 @@ def _never(_):
 
 
 class Audit:
-    """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its docket's two roots
+    """A window of the members `A` and `B` (two instances of `PAIR16`, three of `TRIPLE16`, the door's u16 form), its docket's two roots
     named `ports` beside its templates' field trees `<template>/o0`, audited on a challenger session that releases
     the sample and then opens one coin tree a member of `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
