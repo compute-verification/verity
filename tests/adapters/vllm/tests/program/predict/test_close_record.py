@@ -104,12 +104,10 @@ def test_the_records_words_hold_the_rotary_table_the_serve_served(tmp_path, monk
         WW.record_words(None, "ck", tables=served_tables(tmp_path))
 
 
-def test_a_development_design_says_what_an_accept_of_its_draw_establishes():
-    """A development design's record says DEVELOPMENT and its bound at δ: four uniform draws of 100 proof blocks leave at
-    most 15 incorrect at δ 1/2 (escape C(85,4)/C(100,4) >= 1/2 > C(84,4)/C(100,4)); a stratified design is refused."""
+def test_a_development_design_says_its_draw():
+    """A development design's record says DEVELOPMENT and its draw; a stratified design is refused."""
     d = development_of({"law": "subset", "k": 4}, 100)
-    assert d["says"].startswith("DEVELOPMENT") and (d["draws"], d["of"], d["incorrect_at_most"], d["delta"]) == (4, 100, 15, 0.5)
-    assert d["epsilon"] == 0.15
+    assert d == {"says": d["says"], "draws": 4, "of": 100} and d["says"].startswith("DEVELOPMENT")
     with pytest.raises(ValueError, match="uniform draw"):
         development_of({"law": "stratified", "k": 4}, 100)
 
@@ -177,7 +175,7 @@ def test_the_launchers_strings_line_prints_the_cards_handed_strings(tmp_path, ca
 
 def test_the_launcher_runs_the_cards_parts_under_the_lease_and_the_record_after_it():
     """``h100_smoke.sh``: under the lease (its ``card`` phase) the serve alone, whose close leaves the handoff; after the
-    lease, the record from it (close_record's finish), before the advice is written again and window-commit runs; the
+    lease, the record from it (verity-vllm close-record), before the advice is written again and window-commit runs; the
     record runs at the close only under ``RECORD_IN_LEASE=1``."""
     text = (Path(__file__).parents[6] / "adapters/vllm/tools/served_run/h100_smoke.sh").read_text()
     card = text[text.index('if [ "${1:-}" = card ]'):]
