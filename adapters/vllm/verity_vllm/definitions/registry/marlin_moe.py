@@ -96,6 +96,7 @@ from verity.circuits.types import Array, Tuple, Value
 
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry.dsa import I32Sub
+from verity_vllm.definitions.registry.boolean_gate_ops import I32Div, I32Mul, I32Rem, i32_divrem  # noqa: F401
 from verity_vllm.definitions.registry.prims import BF16, F32, I32, Bf16MulBf16, F32Add
 
 M32 = 0xFFFFFFFF
@@ -147,41 +148,6 @@ def E2m1ToBf16(q: int) -> int:
 def E8m0DequantBf16(s: int) -> int:
     """`dequant_fp8_scales<nv_bfloat162, kFE8M0fnu>` on one byte: `e8m0_to_bf16`."""
     return e8m0_to_bf16(s)
-
-
-def _signed(a: int) -> int:
-    a &= M32
-    return a - (1 << 32) if a & 0x80000000 else a
-
-
-def i32_divrem(a: int, b: int) -> tuple[int, int]:
-    """C `int` a / b and a % b (truncating toward zero, the remainder a's sign), modulo 2^32; INT_MIN / -1 wraps to INT_MIN with
-    remainder 0, and b = 0 gives (-1, a)."""
-    sa, sb = _signed(a), _signed(b)
-    if sb == 0:
-        return M32, a & M32
-    q = abs(sa) // abs(sb)
-    if (sa < 0) != (sb < 0):
-        q = -q
-    return q & M32, (sa - q * sb) & M32
-
-
-@primitive("I32Mul", 1, [("a", I32), ("b", I32)], I32, conformance="exact-model-tested")
-def I32Mul(a: int, b: int) -> int:
-    """`mul.lo.s32`: a * b modulo 2^32."""
-    return (a * b) & M32
-
-
-@primitive("I32Div", 1, [("a", I32), ("b", I32)], I32, conformance="exact-model-tested")
-def I32Div(a: int, b: int) -> int:
-    """`div.s32` (C `int` /): `i32_divrem`'s quotient."""
-    return i32_divrem(a, b)[0]
-
-
-@primitive("I32Rem", 1, [("a", I32), ("b", I32)], I32, conformance="exact-model-tested")
-def I32Rem(a: int, b: int) -> int:
-    """`rem.s32` (C `int` %): `i32_divrem`'s remainder."""
-    return i32_divrem(a, b)[1]
 
 
 @primitive("E2m1x2Lo", 1, [("b", E2M1X2)], E2M1, conformance="exact-model-tested")

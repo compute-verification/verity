@@ -46,7 +46,7 @@ by 448 and `__nv_log2f`), nor the DeepSeek-V4 indexer's MXFP4 path; `IndexerQFp8
 """
 from __future__ import annotations
 
-from verity.circuits.defs import bind, composite, primitive
+from verity.circuits.defs import bind, composite
 from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
 from verity.circuits.ops.mufu import RsqrtApprox
 from verity.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, const
@@ -57,8 +57,8 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import flashmla as F
-from verity_vllm.definitions.registry.flashmla import E8M0, WORD_T
-from verity_vllm.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry.boolean_gate_ops import F32ToU32RzByte
+from verity_vllm.definitions.registry.flashmla import WORD_T
 
 M32 = 0xFFFFFFFF
 LANES = 32
@@ -66,7 +66,6 @@ LANES = 32
 _CONF = ("model-untested: read from vLLM d9105ea80's fused q-norm/RoPE/KV-insert CUDA kernel and the CuTe DSL "
          "IndexerQFp8Kernel (fused_indexer_q_cutedsl.py), the files the module docstring names, and their cc 9.0 SASS; "
          "tests/properties/dsv4_qnorm_insert_capture_gpu.py is its hardware check")
-_PTX = "model-untested: as the PTX ISA defines it; tests/properties/dsv4_qnorm_insert_capture_gpu.py is its hardware check"
 
 F_448, F_NEG448, F_127, F_255 = 0x43E00000, 0xC3E00000, 0x42FE0000, 0x437F0000
 #: the indexer's `Float32(1.0 / 448.0)`, and its scale's round-up addend, exponent mask and inverse's exponent base
@@ -77,30 +76,6 @@ F_INV448, ROUND_UP, EXP_MASK, INV_BASE = 0x3B124925, 0x007FFFFF, 0x7F800000, 0x7
 DSV4_INSERT = {"NH": 16, "NHP": 64, "DN": 448, "DR": 64, "QB": 64, "EPS": 1e-6}
 #: the indexer's 64 heads of 128 (replicated at every rank), RoPE 64, `softmax_scale * head_scale` = 128^-0.5 * 64^-0.5
 DSV4_INDEXER = {"H": 64, "D": 128, "DR": 64, "SCALE": 128 ** -0.5 * 64 ** -0.5}
-
-
-def _nan(u: int) -> bool:
-    return (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) != 0
-
-
-def f32_to_u32_rz_byte(x: int) -> int:
-    """The low byte of `cvt.rzi.u32.f32` (SASS `F2I.U32.TRUNC.NTZ`): x truncated toward zero and saturated to [0, 2^32 - 1] (a
-    NaN, every negative and -0 to 0; +inf and every x >= 2^32 to 0xFFFFFFFF)."""
-    x &= M32
-    e = (x >> 23) & 0xFF
-    if _nan(x) or x >> 31 or e < 127:
-        return 0
-    if e >= 127 + 32:
-        return 0xFF
-    m, k = (x & 0x7FFFFF) | 0x800000, e - 127
-    return ((m << (k - 23)) if k >= 23 else (m >> (23 - k))) & 0xFF
-
-
-@primitive("F32ToU32RzByte", 1, [("x", F32)], E8M0, conformance=_PTX)
-def F32ToU32RzByte(x: int) -> int:
-    """`static_cast<uint8_t>(float)` as nvcc compiles it: `cvt.rzi.u32.f32` and `st.global.u8` of its low byte
-    (`f32_to_u32_rz_byte`)."""
-    return f32_to_u32_rz_byte(x)
 
 
 DSV4_QNORM_INSERT_PRIMITIVES = [F32ToU32RzByte]

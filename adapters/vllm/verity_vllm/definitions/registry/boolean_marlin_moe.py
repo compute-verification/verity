@@ -70,6 +70,7 @@ from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.definitions.registry.boolean_attention import _Bits
+from verity_vllm.definitions.registry.boolean_gate_ops import divrem
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -155,36 +156,6 @@ MarlinMxfp4StepFromZeroActivation, MarlinMxfp4StepFromZeroColumn = EW.shared_spe
     MM.step_sig(True, E2M1, E8M0, BF16, F32), 0,
     ("the gates of MarlinMxfp4StepFromZero_v2 that read only one word of x: once per pair and x word of k-tile 0",
      "MarlinMxfp4StepFromZero_v2 from x's own gates xd: once per column"), element=CUT, by_element=True)
-
-
-def _neg_if(C, c, w):
-    """c ? -w : w on 32 bits."""
-    return add(C, [b ^ c for b in w], [c], width=32)
-
-
-def divrem(C, a, b):
-    """`marlin_moe.i32_divrem` on bits: |a| / |b| by restoring division (|b| <= 2^31, so the partial remainder fits 32 bits), the
-    quotient negated when the signs differ and the remainder when a is negative, and a zero divisor's quotient -1 (its remainder is
-    then a, the division's own)."""
-    sa, sb = a[31], b[31]
-    ua, ub = _neg_if(C, sa, a), _neg_if(C, sb, b)
-    r, q = [ZERO] * 32, [ZERO] * 32
-    for i in reversed(range(32)):
-        r = [ua[i]] + r[:31]
-        d, borrow = sub(C, r, ub, 32)
-        q[i] = NOT(borrow)
-        r = mux(C, q[i], d, r)
-    zero = NOT(or_reduce(C, b))
-    q = _neg_if(C, sa ^ sb, q)
-    return [x ^ C.AND(zero, NOT(x)) for x in q], _neg_if(C, sa, r)
-
-
-I32Div = definition("I32Div", 2, lambda C, a, b: divrem(C, a, b)[0], (("a", I32), ("b", I32)), I32, word=MM.I32Div,
-                    doc="div.s32 on bits: I32Div_v1, `divrem`'s quotient")
-I32Rem = definition("I32Rem", 2, lambda C, a, b: divrem(C, a, b)[1], (("a", I32), ("b", I32)), I32, word=MM.I32Rem,
-                    doc="rem.s32 on bits: I32Rem_v1, `divrem`'s remainder")
-I32Mul = definition("I32Mul", 2, lambda C, a, b: multiply(C, a, b)[:32], (("a", I32), ("b", I32)), I32, word=MM.I32Mul,
-                    doc="mul.lo.s32 on bits: I32Mul_v1, the product's low 32 bits")
 
 
 def e2m1_to_bf16(C, q):

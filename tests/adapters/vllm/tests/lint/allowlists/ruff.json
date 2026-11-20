@@ -37,7 +37,6 @@
     {"file": "verity_vllm/definitions/registry/boolean_norms.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.boolean.forms.ONE` imported but unused"},
     {"file": "verity_vllm/definitions/registry/boolean_norms.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.boolean.forms.ZERO` imported but unused"},
     {"file": "verity_vllm/definitions/registry/boolean_norms.py", "kind": "F841", "symbol": "RMSNormVectorLanesCuda", "detail": "Local variable `T` is assigned to but never used"},
-    {"file": "verity_vllm/definitions/registry/dsv4_qnorm_insert.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.definitions.registry.prims.BF16` imported but unused"},
     {"file": "verity_vllm/definitions/registry/fa2_split.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.tuple_of` imported but unused"},
     {"file": "verity_vllm/definitions/registry/fp8.py", "kind": "F401", "symbol": "<module>", "detail": "`types` imported but unused"},
     {"file": "verity_vllm/definitions/registry/fp8.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.definitions.registry.prims.I32` imported but unused"},
