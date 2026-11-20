@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.RecGeneric.Sampled
 public import Proofs.Flock.SampledGeneric.JointTransfers
 public import Proofs.Flock.Claims.Bridge.Transport
+public import Definitions.Flock.Recursive.Generic
 
 /-!
 # B1's proof

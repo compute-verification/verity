@@ -6,7 +6,7 @@ import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.DeployReads
 
 /-! # The two-instance statement before the masked verifier
 
