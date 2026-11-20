@@ -1834,7 +1834,7 @@ road_stop() { FAILED+=("$1"); say "STOP at $1 (exit $2)"; road_end "$2"; }
 window_preflight() {  # K the close's window with a record (WINDOW's, else plans.jsonl's last); each thing absent refused by name
   local miss=() f why
   [ -e "$PY" ] || miss+=("PY, python under VENV")
-  [ -n "${APPLICATION_PROTOCOLS+set}" ] || miss+=("APPLICATION_PROTOCOLS, the application's list, which `verity run` sets")
+  [ -n "${APPLICATION_PROTOCOLS+set}" ] || miss+=("APPLICATION_PROTOCOLS, the application's list, which verity run sets")
   [ -n "${WINDOW_CLASS:-}" ] || miss+=("WINDOW_CLASS, the class the serve took (its --window-class), which serve.json doesn't record")
   if [ ! -f "$D/plans.jsonl" ]; then miss+=("D/plans.jsonl, the close's plan of each window")
   elif ! K=$("$PY" - "$D/plans.jsonl" "${WINDOW:-}" 2>&1 <<'EOF'

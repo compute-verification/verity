@@ -146,7 +146,7 @@ def test_the_window_road_refuses_by_name_each_thing_its_record_lacks(tmp_path):
     """An empty serve dir: the preflight names every file it wanted, and nothing named ROW."""
     rc, out = _preflight(tmp_path, POUW="pearlplus")
     assert rc == 3, out
-    assert ("PREFLIGHT: the window's record lacks APPLICATION_PROTOCOLS, the application's list, which `verity run` sets; "
+    assert ("PREFLIGHT: the window's record lacks APPLICATION_PROTOCOLS, the application's list, which verity run sets; "
             "WINDOW_CLASS, the class the serve took (its --window-class), which serve.json doesn't record; D/plans.jsonl, "
             "the close's plan of each window; PRED/predicted.json, predict row's Build before the lease") in out, out
     assert "ROW" not in out
