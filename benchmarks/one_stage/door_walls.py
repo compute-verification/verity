@@ -370,7 +370,7 @@ class Result:
     gates: int | str | None = None
     tried: list = field(default_factory=list)
     cut: dict = field(default_factory=dict, repr=False)
-    tmpl_gates: int | None = None
+    tmpl_gates: int | str | None = None
     ported: str = ""
     piece: str = ""
     ports: tuple = field(default=((), ()), repr=False)
@@ -410,9 +410,9 @@ def sizes(c_s: bytes, cut: dict) -> tuple[int | None, int | str]:
     return max(rows, default=0), gates
 
 
-def template_gates(c_s: bytes) -> int | None:
+def template_gates(c_s: bytes) -> int | str | None:
     """The two-input gates (`count`) of the one Definition C_S's root calls, the template the door lowers; None where it
-    calls other than one or the count can't walk it."""
+    calls other than one, and why where the count can't walk it."""
     from verity.circuits import restrict as R
     from verity.circuits.codec import descriptor_id
     from verity.circuits.count import count
@@ -421,8 +421,8 @@ def template_gates(c_s: bytes) -> int | None:
     called = sorted({descriptor_id(nd.fn) for nd in D.root.body.nodes if input_id(nd.fn.id) is None})
     try:
         return count(D)[called[0]].gates if len(called) == 1 else None
-    except Exception:  # noqa: BLE001 - a template the count can't walk has no gate count, and the census goes on
-        return None
+    except Exception as e:  # noqa: BLE001 - a template the count can't walk has no gate count, and the census goes on
+        return f"uncounted: {_err(e)[:120]}"
 
 
 FORMS = ("unit", "whole")
