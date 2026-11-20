@@ -911,6 +911,9 @@ theorem restrictBodyAgreesDecoded :
       (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S :=
   restrictBodyAgrees_decode restrictShape
 
+/-- **`RestrictBodyAgrees`**. -/
+theorem restrictBodyAgrees : RestrictBodyAgrees := restrictBodyAgreesDecoded
+
 /-! ## `BlockEvalDoor`, on its four open premises -/
 
 /-- Unit `g`'s gates in C: the gates of its member scope (`Prog.child` of the root at its node and member). -/

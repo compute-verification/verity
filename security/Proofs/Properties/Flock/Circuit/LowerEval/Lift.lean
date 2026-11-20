@@ -39,7 +39,7 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComput
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl hG hRs blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf _ hl hG hRs blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
@@ -49,7 +49,7 @@ theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
 
 /-- **`DoorLengths`** holds. -/
 theorem doorLengths : DoorLengths := by
-  intro bytes P partition cuts units S a fr hd hr hs ha hab hf hG hRs X g hg
+  intro bytes P partition cuts units S a fr hd hr hs ha hab hf _ hG hRs X g hg
   obtain ⟨k, m, hu, -⟩ := frontUnitRanges P units fr hf g hg
   have hda := admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu
   obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hG g k m hu (hRs g hg)

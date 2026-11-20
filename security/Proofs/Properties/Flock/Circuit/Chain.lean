@@ -39,7 +39,7 @@ theorem portBits_congr {P : Prog} {X Y : (ofProgram P).Trace} {ports : Array Spo
 port hypotheses, or two messages the openings hashed collide. -/
 theorem portsBind : PortsBind := by
   classical
-  intro P units fr t α Sc H enc blocks u c X π π' z _ _ henc hio hbind hR hO
+  intro P units fr t α Sc H enc blocks u c X π π' z _ _ _ henc hio hbind hR hO
   obtain ⟨Y, hYi, hYo, hYop⟩ := hO
   by_cases hall : ∀ q ∈ fr.ins ++ fr.outs, ∀ hq : q.gate < (ofProgram P).N, X ⟨q.gate, hq⟩ = Y ⟨q.gate, hq⟩
   · left
