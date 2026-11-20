@@ -504,8 +504,6 @@ PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window a
 H1_KEY_OF_RECORD=27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc  # vy-challenger-1's
 H1_KEY_SHA512=${H1_KEY_SHA512:-$H1_KEY_OF_RECORD}
 POUW=${POUW:-}
-# window: every step on a window's serve's record in D (window_road); rows: the ROW's serve under the lease, then its steps
-ROAD=${ROAD:-window}
 H1_PEER=${H1_PEER:-vy-dc-h200}
 LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
 if [ "$POUW" = pearlplus ]; then
@@ -572,10 +570,15 @@ case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: 
 case $POUW in
   pearlplus) ;;
   h1) say "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"; exit 3 ;;
-  # Pearl+'s hooks set POUW wherever the application lists compute accounting, so with none listed it is empty
   '') ;;
   *) say "PREFLIGHT: POUW is pearlplus, not $POUW"; exit 3 ;;
 esac
+if [ -n "${APPLICATION_PROTOCOLS+x}" ]; then  # the application's list, as verity run hands it the runner
+  case " $APPLICATION_PROTOCOLS " in
+    *" pearl-plus "*) [ -n "$POUW" ] || { say "PREFLIGHT: the application lists compute accounting (pearl-plus), and POUW names no scheme: run it under its application's hooks (verity run), which set POUW=pearlplus"; exit 3; } ;;
+    *) [ -z "$POUW" ] || { say "PREFLIGHT: POUW=$POUW names a compute-accounting scheme, and the application lists no compute accounting: unset POUW, or run an application that lists pearl-plus"; exit 3; } ;;
+  esac
+fi
 for v in H1_GATE H1_TIE H1_CIRCUITS H1_STATEMENTS H1_LIVE_EVIDENCE H1_RECEIPTS H1_PROTOCOLS_CONFIG; do
   [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is PoUW H1's setting, and PoUW H1 is deleted"; exit 3; }
 done
@@ -1113,7 +1116,8 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
       head+=" (the record PEARLPLUS-CIRCUIT built before the serve: $(cmp -s "$f" "$PEARLPLUS_CIRCUIT" && echo the same || echo ANOTHER))"
     fi
     say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
-      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
+      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp"
+    keep "$head: record $(sha256sum "$f" | cut -c1-64), $(stat -c %s "$f") bytes"
   elif [ "$rc" = 124 ]; then
     say "$head timed out after $2 (exit 124): no count"
   else
@@ -1159,7 +1163,7 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   c=$(io_class)
   [ -n "$c" ] || { say "INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"; return 0; }
   [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
-  [ "$ROAD" != window ] || phi=(--serve "$D/serve.json")  # the window's serve's own φ, after it served
+  [ "${1:-}" != window ] || phi=(--serve "$D/serve.json")  # the window's serve's own φ, after it served
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
     --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" "${phi[@]}" --out "$IO_POLICY" \
     2> "$D/inference-only-policy.err")
@@ -1816,13 +1820,13 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" "$@" \
   --product "$PRODUCT" 2>&1 | publish_lines
 }
-# The window's road (ROAD=window): the steps on what a window's serve left in D, after the lease, serving nothing and
+# The window's road, a plain run's: the steps on what a window's serve left in D, after the lease, serving nothing and
 # reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
 # seal and the advice. A step the record holds nothing for refuses, naming what it lacks and whose it is.
 RAN=() REFUSED=() FAILED=()
 step_refused() { REFUSED+=("$1"); say "$1: not run: $2"; }
 road_end() {
-  say "ROAD END (the window's record): ran $(IFS=,; echo "${RAN[*]:-none}"); refused $(IFS=,; echo "${REFUSED[*]:-none}"); failed $(IFS=,; echo "${FAILED[*]:-none}"); no verdict stands for a step that did not run"
+  say "ROAD END (the window's record): ran ${#RAN[@]} ($(IFS=,; echo "${RAN[*]:-}")); refused ${#REFUSED[@]} ($(IFS=,; echo "${REFUSED[*]:-}")); failed ${#FAILED[@]} ($(IFS=,; echo "${FAILED[*]:-}")); no verdict stands for a step that did not run"
   exit "$1"
 }
 road_stop() { FAILED+=("$1"); say "STOP at $1 (exit $2)"; road_end "$2"; }
@@ -1891,41 +1895,87 @@ if found(reg, "circuit") != hashlib.sha512((w / "record" / "circuit.json").read_
 compiler, p = found(reg, "compiler") or {}, predicted.get("compiler")
 same = bool(compiler) and compiler.get("digest") == (p.get("digest") if isinstance(p, dict) else p)
 print(f"SEAL: the window's seal, run root {str(v.get('run_root'))[:16]}…, and its record: {'PASS' if not why else 'FAIL (' + '; '.join(why) + ')'}")
-print(f"COMPILER: the record's {compiler.get('name')} {str(compiler.get('digest'))[:16]}…, predict row's {str(p)[:80]}: "
-      f"{'PASS' if same else 'FAIL'}")
-print(f"BOUND-PROGRAM: the commit's bound Program digest {str((c.get('binding') or {}).get('program_digest'))[:16]}…, "
-      f"the predicted workload digest {str(predicted.get('workload_digest'))[:16]}…")
+print(f"COMPILER: the record's registered compiler is predict row's: {'PASS' if same else 'FAIL'}")
+(d / "private").mkdir(mode=0o700, exist_ok=True)
+with open(d / "private" / "verdicts.txt", "a") as kept:
+    kept.write(f"COMPILER: the record's {compiler.get('name')} {compiler.get('digest')}, predict row's {p}\n"
+               f"BOUND-PROGRAM: the commit's bound Program digest {(c.get('binding') or {}).get('program_digest')}, "
+               f"the predicted workload digest {predicted.get('workload_digest')}\n")
 sys.exit(0 if same and not why else 1)
 EOF
 return "${PIPESTATUS[0]}"
 }
+ROAD_PRIVATE='["plans.jsonl", "handoff/", "card.npz", "key.bin", "circuit.json", "predicted.json", "window-circuit-w*.json", "verdicts.txt"]'
+road_private() {  # the plan, the handoff, the circuit and anything naming a template or the description's digest: names
+  # no file of the run may have, in its private-paths.json as prove_path/run.sh writes it
+  [ -d "${RESEARCH_RUN_DIR:-}" ] || return 0
+  python3 - "$RESEARCH_RUN_DIR/private-paths.json" "$ROAD_PRIVATE" <<'EOF'
+import json, pathlib, sys
+f, names = pathlib.Path(sys.argv[1]), json.loads(sys.argv[2])
+doc = json.loads(f.read_text()) if f.is_file() else {}
+f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": list(doc.get("private", [])),
+                         "names": sorted({*doc.get("names", []), *names})}, indent=1) + "\n")
+EOF
+}
+road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application lists them: each through its owner's
+  # launcher as step 4 runs it, each taking its own gpu-lease; on a node with no card, each refused as needing one
+  local only=() c owner
+  [ "$POUW" != pearlplus ] || only+=(pouw)
+  [ -z "${POUS_CMD:-}" ] || only+=(pous)
+  [ -z "${BANDWIDTH_CMD:-}" ] || only+=(bandwidth)
+  [ ${#only[@]} -gt 0 ] || return 0
+  if ! command -v gpu-lease > /dev/null; then
+    for c in "${only[@]}"; do
+      owner="memory accounting's"; [ "$c" != pouw ] || owner="compute accounting's"
+      step_refused "$c" "needs a card: its piece takes its own gpu-lease, and this node has none: $owner"
+    done
+    return 0
+  fi
+  if pieces "${only[@]/#/--only=}"; then RAN+=("${only[@]}"); else FAILED+=("${only[@]}"); fi
+}
+road_wipe() {  # the wipe runs under the serve's lease before its engine loads, so the road only reads what it answered
+  [ -n "${WIPE_CMD:-}" ] || return 0
+  if [ -f "$D/pieces/wipe/answer.json" ]; then
+    mkdir -p "$OUT/pieces/wipe" && cp "$D/pieces/wipe/answer.json" "$OUT/pieces/wipe/"
+    [ ! -f "$D/pieces/wipe/summary.json" ] || cp "$D/pieces/wipe/summary.json" "$OUT/pieces/wipe/"
+    say "WIPE: the card launcher's, under the serve's lease (D/pieces/wipe/answer.json)"; RAN+=(wipe)
+  else
+    step_refused wipe "D/pieces/wipe/answer.json is absent: the card launcher did not run the wipe under the serve's lease (vllm's h100_smoke.sh)"
+  fi
+}
+road_network() {  # the network attester's own piece, called as step 4 or 6 calls it; its refusal is its own text
+  local cmd=${CERTIFIER_CMD:-${CERTIFIER_CHAIN_CMD:-}} dir=$OUT/pieces/certifier
+  [ -n "$cmd" ] || return 0
+  mkdir -p "$dir"
+  local rc=0
+  (cd "$TREE" && bash -c "$cmd" _ "$D" "$K" "$dir" "${VW:-}") > "$dir/road.log" 2>&1 || rc=$?
+  if [ -f "$dir/refused.txt" ]; then REFUSED+=(network-attester); say "network-attester: $(head -c 600 "$dir/refused.txt")"
+  elif [ "$rc" = 0 ]; then RAN+=(network-attester)
+  else FAILED+=(network-attester); say "network-attester: $(failed "$rc" "$dir/road.log")"; fi
+}
 window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
-  [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE is the rows' road's tie (ROAD=rows); the window's road ties nothing"; exit 3; }
+  [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE ties a window to a ROW's serve, and the window's road serves none: it ties nothing"; exit 3; }
   say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
+  road_private || road_stop private 2
   RAN+=(preflight)
   say "PREDICT, SERVE: the window's serve's, before and under its lease (PRED/predicted.json, D)"
   if window_seal; then RAN+=(seal); else road_stop seal 11; fi
   mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
     || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
   KN=$K CLASSES=$WINDOW_CLASS
-  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took ($CLASSES)"
+  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took"
   RAN+=(window)
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
     || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
   say "ADVICE: the close's registration (D/advice/wK), compiled at the close"
   RAN+=(advice)
-  if inference_policy; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
+  if inference_policy window; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
   if circuits; then RAN+=(circuits); block_counts; RAN+=(block-counts)
   else FAILED+=(circuits); step_refused block-counts "it counts the circuits step's window circuit, which failed"; fi
   step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
-  if [ "$POUW" = pearlplus ]; then
-    step_refused pearl-plus "Pearl+'s piece serves its own passes on a card (POUW_CMD's served_pearlplus.sh), and this road runs after the lease: compute accounting's"
-  fi
-  [ -z "${WIPE_CMD:-}" ] || step_refused wipe "the wipe runs on the served card's memory, which this road runs without: memory accounting's"
-  [ -z "${POUS_CMD:-}" ] || step_refused pous "PoUS's piece answers from the served card's memory, which this road runs without: memory accounting's"
-  [ -z "${BANDWIDTH_CMD:-}" ] || step_refused bandwidth "the bandwidth audit reads the served card's links, which this road runs without: memory accounting's"
-  [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ] \
-    || step_refused network-attester "its front stamps the requests during the serve, and its chain and period are on V3c's committed window, which this road doesn't make: network's"
+  road_pieces
+  road_wipe
+  road_network
   if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
   else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
   step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
@@ -2012,38 +2062,10 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
     || { say "PREFLIGHT: the compose follow-on holds no witness of the served run, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no python under VENV (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
-elif [ "$ROAD" = window ]; then
+else
   window_preflight || exit 3
   logs_dir
   window_road
-elif [ "$ROAD" != rows ]; then
-  say "PREFLIGHT: ROAD is window or rows, not $ROAD"; exit 3
-else
-  host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3
-  for f in ROW/manifest.json ROW/build_summary.json HIDDEN_SO PY; do
-    fp=${f%%/*} && fp=${!fp}${f#"${f%%/*}"} && [ -e "$fp" ] || { say "PREFLIGHT: no $f"; exit 3; }
-  done
-  command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
-  if [ -n "$PEARLPLUS_TIE" ] && [ "$PEARLPLUS_INODES" != 0 ]; then  # the tied window's commit goes to the serve dir's filesystem
-    at=$D; until [ -e "$at" ]; do at=$(dirname "$at"); done
-    read -r itotal ifree fs < <(df --output=itotal,iavail,target "$at" 2>/dev/null | tail -1)
-    [[ ${itotal:-} =~ ^[0-9]+$ && ${ifree:-} =~ ^[0-9]+$ && $PEARLPLUS_INODES =~ ^[0-9]+$ ]] \
-      || { say "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES ($PEARLPLUS_INODES): df says ${ifree:-nothing} free of ${itotal:-nothing} on $at"; exit 3; }
-    # a filesystem with no inode table (none in all) makes its inodes as it needs them
-    if [ "$itotal" != 0 ] && [ "$ifree" -lt "$PEARLPLUS_INODES" ]; then
-      short=$((PEARLPLUS_INODES - ifree))
-      kept_windows "$short"
-      if [ -z "$KEPT" ]; then held="No other serve dir under $ROOT keeps a tied window (v3c-w*/window), so what holds them is elsewhere on $fs"
-      else
-        held="Other serve dirs' tied windows under $ROOT hold them, the largest first: $KEPT"
-        [ "$KEPT_N" -ge "$short" ] || held+="; together they hold $KEPT_N, so $((short - KEPT_N)) more are elsewhere on $fs"
-      fi
-      say "PREFLIGHT: the serve dir's filesystem has $ifree inodes free, $short short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two commits of the tied window at three files a member. $held. Remove enough, each with its retention record's owner's yes and none that a deferred V3c audit still reads: \`research retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES\` is the dry run, and \`--apply\` deletes; or set SERVE_ROOT on another filesystem"
-      exit 3
-    fi
-  fi
-  [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
-    || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
 fi
 front_ok || exit 3
 [ -n "$FOLLOW$COMPOSE" ] || [ "${1:-}" = v3c ] || pous_pins_ok || exit 3  # the serve's run, which starts PoUS's piece
@@ -2211,160 +2233,3 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   private_pieces
   exit "$rc"
 fi
-
-PEARLPLUS="PoUW: Pearl+'s own served run on this card after the window's (POUW=pearlplus)"
-[ -z "$PEARLPLUS_TIE" ] || PEARLPLUS="PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
-LIVE_GATE= LIVE_LANE=${H1_LANE:-vllm} LEAD=
-if [ "$POUW" = pearlplus ] && [ -n "$PEARLC_CHALLENGER_GATE" ]; then
-  LIVE_GATE=$PEARLC_CHALLENGER_GATE LIVE_LANE=$PEARLC_CHALLENGER_LANE
-  PP_CREDIT="it credits nothing"
-  [ -z "$PEARLPLUS_TIE" ] || PP_CREDIT="which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it"
-  PW_COINS="$PEARLPLUS, its epoch's salt coin a live session's of its own on vy-challenger-1's gate (peer $PEARLC_CHALLENGER_PEER, lane $PEARLC_CHALLENGER_LANE), each pass's salt checked by core_check.live_salt in its piece, its serve inside a Pearl-C period of that lane's own, and its replay's draws a draw session's coin on that gate, reserved withheld once the period closed and opened on the run's commitment, taken once before the replay, checked against the signed ledger in its piece and cited by store id in the POUW line's coin; a development piece, $PP_CREDIT"
-elif [ "$POUW" = pearlplus ]; then
-  LEAD="Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "
-  PW_COINS="$PEARLPLUS, its epoch's coins an in-process challenger's (PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by store id in the POUW line's coin; a development piece, it credits nothing"
-fi
-if [ -n "$LIVE_GATE" ]; then
-  if [ -n "${MAIN_FILE:-}" ]; then
-    [ -s "$MAIN_FILE" ] || { say "PREFLIGHT: MAIN_FILE is missing or empty"; exit 3; }
-    [ "$MAIN_FILE" -ef "$OUT/main.txt" ] || cp "$MAIN_FILE" "$OUT/main.txt"
-    export MAIN_FILE=$OUT/main.txt
-  elif [ -n "$MAIN_SHA" ]; then
-    git -C "$TREE" rev-list --first-parent "$MAIN_SHA" > "$OUT/main.txt" || { say "PREFLIGHT: MAIN_SHA $MAIN_SHA not in this tree"; exit 3; }
-    export MAIN_FILE=$OUT/main.txt
-  fi
-  "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$LIVE_GATE" --lane "$LIVE_LANE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
-    | publish_lines
-  [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
-fi
-if [ "$SP_CHALLENGER" != local ]; then
-  COINS="the challenger ${SP_CHALLENGER%%@*} (peer ${PP_PEER:-?})"
-elif [ "${PP_CHALLENGER:-local}" != local ]; then
-  COINS="a local development challenger session on the served node, for step 3, a development check, since V3c's audit's live session takes the window's run root, which the gate opens once, ever"
-else
-  COINS="a local development challenger session on the served node, not an auditor's (PP_CHALLENGER local)"
-fi
-COINS+="; $PW_COINS;"
-[ -z "$V3C" ] || COINS+=" V3c's audit: $(v3c_coins);"
-say "COINS ${LEAD}sampled proofs: $COINS the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"
-
-# 0. B: the row's Build of record from its declared inputs, before the lease; the traced Build only its cross-check
-predict
-[ -n "$PEARLPLUS_TIE" ] || inference_policy  # under PEARLPLUS_TIE in serve(), once serve-phi states φ on the card
-if [ -n "$PEARLPLUS_TIE" ]; then  # Pearl-C's sm_90 cubin, which the serve's engine and Pearl+'s piece read
-  pearl_cubin
-fi
-
-# 1-2. the endpoint and its requests, under the GPU lease
-export D OUT PRED
-GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-128}" \
-  -- bash "$TREE/benchmarks/one_stage/served_verdicts.sh" serve
-rc=$?
-[ "$rc" = 0 ] || stop serve "$rc"
-seal
-
-# 3. SPOT: the window, its advice and Programs, V3b's window circuit, then Flock --zk and the Lean verifier
-window
-CERT=
-if [ -n "${CERTIFIER_CMD:-}" ]; then  # network attestation's chain is the longest piece, so it starts once the window is picked
-  # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
-  CERT_TASKSET=(); NCPU=$(nproc)
-  command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
-  ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$KN" --out "$OUT/pieces" \
-    --product "$PRODUCT" --only certifier > "$LOGS/pieces-certifier.txt" 2>&1 &
-  CERT=$!
-fi
-advice
-wc_ok=0
-circuits && wc_ok=1
-block_counts
-wait "$BUILD"; rc=$?
-inference_only &  # beside SPOT, which it doesn't read; the record waits for it
-IOV=$!
-[ "$rc" = 0 ] || { echo "BUILD $(failed "$rc" "$LOGS/build.log")"; wait "$IOV"; stop build "$rc"; }
-export PP_PARTITION PP_SETS=${PP_SETS:-}
-SP=$D/$SERVED_ARM
-rm -rf "$SP"
-env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
-  PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
-  PP_KEEP="$LOGS/sampled-proofs/keep" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
-rc=$?
-(cd "$OUT/sampled-proofs" 2>/dev/null && mkdir -p "$LOGS/sampled-proofs" \
-  && find . -maxdepth 1 \( -name machine.txt -o -name '*.log' -o -name '*.err' -o -name m0-build \) -exec mv -t "$LOGS/sampled-proofs" {} +)
-# run.sh keeps the served arm in $SP; where it published it under OUT instead, it goes to $SP before anything reads it
-[ -d "$SP" ] || [ ! -d "$OUT/sampled-proofs/served" ] || { (umask 077; mkdir -p "${SP%/*}") && mv "$OUT/sampled-proofs/served" "$SP" \
-  && (cd "$SP" && find . -name '*.json' | sed 's|^\./||') | "$SAY_PY" "$SV" rebase "$SP" "$OUT/sampled-proofs/served"; }
-# run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
-# (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone
-SR=$OUT/sampled-proofs/served-records
-rm -f "$SR/windows.jsonl" "$SR/serve.json"
-if [ -f "$SR/registration.json" ]; then
-  "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$SR/registration.json" > "$SR/registration.public.json" \
-    && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
-fi
-say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
-  --partition "$PP_PARTITION" --challenger "$SP_CHALLENGER" --summary "$SP/summary.json" 2>&1 | cut -c1-3000)$(
-  grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
-sampled_coins || stop sampled-proofs 20
-
-# 6. here with the split attester, whose period check reads V3c's period.json: its piece then reads the answer it wrote
-if [ -n "$SPLIT" ]; then
-  if ! v3c_commit; then why=$(commit_unread)
-  elif ! v3c_proved; then why="V3c's audit of its committed window wrote no period.json, which the split network attester's period check reads (v3c-audit/ in the run's out)"
-  else why=; fi
-  mkdir -p "$OUT/pieces/certifier"
-  [ -z "$why" ] || piece_unread "$why"
-  export CERTIFIER_CMD=true
-fi
-
-# 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
-pieces ${CERT:+--skip certifier}
-[ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$LOGS/pieces-certifier.txt"; }
-# under PEARLPLUS_TIE, once Pearl+'s piece wrote W: the served compare, whose line the record names
-SC=() sc=0
-if [ -n "$PEARLPLUS_TIE" ]; then served_compare || sc=1; SC=(--served-compare "$SERVED_COMPARE"); fi
-
-# 6. here under PEARLPLUS_TIE, the commit Pearl+'s piece tied to W: the record reads the audit's tie to W
-WT=() P3C=
-if [ -n "$PEARLPLUS_TIE" ]; then  # on a node short of the audit's memory, step 6's deferral below holds the tie
-  WT=(--window-tie "$(pearl_dir)/tie")
-  [ -n "$DEFER" ] || { v3c_commit && v3c_proved; window_tie; P3C=1; }
-fi
-
-# 5. one record of every verdict
-wait "$IOV"
-LEFT=
-if [ "$COMPOSE_OFF_NODE" = 1 ]; then
-  LEFT="$HANDED_WHAT, composed off this node, on COMPOSE_NODE, from its compose hand-off"
-  [ -z "$DEFER" ] || LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which writes the compose hand-off: $DEFER; and $LEFT"
-elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"; fi
-"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
-  --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --deploy-manifest "$DEPLOY_MANIFEST" \
-  ${LEFT:+--deferred "$LEFT"} 2>&1 | publish_lines
-rec=${PIPESTATUS[0]}
-private_pieces
-# 6. V3c after the record, each step within its limit: it gates nothing. On a node short of the audit's memory, the
-# tie held here, the audit and the composite are deferred to a follow-on. Under COMPOSE_OFF_NODE=1 the compose hand-off
-# comes last, after V3c in every run, so the composite composed from it reads V3c's audit's cases.
-v3c_done=$SPLIT$P3C left=0
-if [ -n "$DEFER" ]; then v3c_commit; defer "$DEFER" || left=1; v3c_done=1
-fi
-comp=0
-fixed_limits
-[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
-  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
-if [ -z "$DEFER" ] && [ "$COMPOSE_OFF_NODE" = 0 ] && [ -n "${COMPOSITE-1}" ] && ! hold_placement; then
-  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-    --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
-    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --composite "$OUT/composite" \
-    2>&1 | publish_lines
-  rec=${PIPESTATUS[0]}
-fi
-if [ -n "$v3c_done" ]; then :
-elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
-else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
-[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 0 ] || handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
-echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] && [ "$sc" = 0 ] || exit 1
-exit "$rec"

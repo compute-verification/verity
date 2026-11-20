@@ -828,14 +828,14 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
 
 
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
-    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    """The served window's runner with every listed piece's hooks, the application's list (``APPLICATION_PROTOCOLS``)
+    and no composite unless the caller asks for one (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
     ``D`` and ``SERVE_ROOT``, from the environment). The bindings' table for the workload (``[workers.served-window]``)
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
     theirs."""
     node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
     env = {**os.environ, **node, **variables(cfg, bindings)}
-    env |= {**composite(env), "OUT": str(state / "out")}
+    env |= {**composite(env), "OUT": str(state / "out"), "APPLICATION_PROTOCOLS": " ".join(cfg["protocols"])}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
