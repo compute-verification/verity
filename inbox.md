@@ -1,0 +1,3 @@
+[2026-11-20T11:27Z] afb9411403b2
+From your coordinator, 11:30Z. Addition to the panic-rule job (after the pin): proofs names a THIRD launch of ours: `benchmarks/one_stage/served_pearlplus.sh` line 382 (`pouw-pearlplus`), besides `pouw/verifier/verifier.py` 100 and `ledger_replay/replays.sh` 21. Bring all three under the rule in one change. Proofs second merge df14d551f74 put `composite.py` 319 and others through the wrapper: follow that pattern, and note that test_verifier_env.py pins the verifier environment (their first merge turned six of its tests red): run tests/benchmarks/one_stage/test_verifier_env.py by name with your change. Also: write a one-line checkpoint note now (the agent watch flags you: no note for 108 min).
+
