@@ -324,6 +324,9 @@ def test_restrict_of_spot_one_stage_zk_decides_and_a_difference_is_reported_as_o
     assert other.difference == "lean admits, python refuses at lower (operands-outside)"
     row, = W.table([other])
     assert (row["class"], row["decider"], row["differences"]) == ("through", W.LEAN_DOOR, 1)
+    big = "unit/Block_v1: an instance needs a block of 2^31 bits (at most 2^27)"
+    assert W.clause(f"refused: restrict: {big}") == W.clause(
+        f"refused: Refused: E_LOWER: flock-lower-check compose (1): flock-lower-check compose: {big}")
     plain, = W.census(c, q, "0-2", lambda: exe, rows=False)
     assert plain.decider == "python's steps" and not plain.lean_door and not plain.difference
 

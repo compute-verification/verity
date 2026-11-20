@@ -451,7 +451,7 @@ def clause(text: str) -> str:
     if i >= 0:
         return text[i + len(OC.NOT_ADMITTED):].lstrip(", ").split(":")[0]
     t = text.removeprefix("refused: ").strip()
-    t = re.sub(r"^(Refused: )?(E_LOWER: )?", "", t)
+    t = re.sub(r"^(Refused: )?(E_LOWER: )?(restrict: )?", "", t)
     t = re.sub(r"^flock-lower-check compose \(\d+\): (flock-lower-check compose: )?", "", t)
     return normalise(t.splitlines()[0] if t else t)
 
