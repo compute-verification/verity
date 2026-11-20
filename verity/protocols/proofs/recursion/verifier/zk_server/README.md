@@ -36,7 +36,8 @@ GPU servers ──data diode──▶ CPU servers ──releases──▶ verifi
   workers or the ZK server computed, so no soundness statement reads either's honesty
   (`Flock.ZkServer.Contract.ZkServerComputes` bears on zero knowledge only), and no zero-knowledge statement reads the
   workers' honesty: `Flock.zk_server_blind` holds at every pad-blind worker, and
-  `Flock.Guarantees.RecursiveZKLoopAnySum` takes no premise on them.
+  `Flock.Guarantees.SessionLoopZKAnyDeployed` holds at every worker the transport's trusts
+  (`LeanRelease.TrustsStop`) hold for.
 - **The workers send only through a data diode, to the ZK server.** The one link between the GPU servers and the
   ZK server is a one-way device: bytes cross from the workers to the ZK server, and nothing crosses back.
   *Realizes:* the workers' messages are fixed without the ZK server's salts that commit them: in
@@ -112,7 +113,7 @@ That is an open choice, not a decision.
 - **The stop channel is bounded, not removed.** Whether a release fails is the workers' to choose, so a failing
   session shows that it failed. Within one Π_out session the ZK server defers every stop to its `Finish`, so the
   session reveals one bit (`Flock.zk_server_blind`); a recursive session's stop shows where it fell, at most
-  `log₂(1 + Σ_p (M_p + 1))` bits (§10.5, `Flock.Guarantees.RecursiveZKLoopAnySum`), and a stream's failure budget
+  `log₂(1 + Σ_p (M_p + 1))` bits (§10.5; no guarantee of the lock states that count), and a stream's failure budget
   bounds their sum. No element above changes that count.
 
 ### Today
