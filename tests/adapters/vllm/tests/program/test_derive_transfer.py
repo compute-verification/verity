@@ -1,7 +1,6 @@
 """The transfer test's audit probe on the vLLM adapter's S3 claim: `GreedyServe(B0, steps=15)` derives, the family rule
 claims `Serve_v1`, the digest is the certificate of record's, and the KV-ownership oracle holds on the derived program.
-The transfer cases themselves, a second model family through the frozen importer, are the PyTorch adapter's
-`tests/frontend/test_derive_transfer.py`, but for its two in the `b1-eager` profile, which are here."""
+The two transfer cases in the `b1-eager` profile are here."""
 
 from __future__ import annotations
 
