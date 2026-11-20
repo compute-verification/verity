@@ -1,15 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainSimR
-public import Proofs.Flock.Claims.Recursion.InnerAtCoins
-public import Proofs.Flock.Claims.Recursion.InnerExtras
-public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-public import Proofs.Flock.Claims.Recursion.OutTopRows
-public import Proofs.Flock.Claims.Recursion.ResLowerDD
-public import Proofs.Flock.Claims.Recursion.SideCapPos
-public import Proofs.Flock.Claims.Recursion.SlotsPorted
-public import Proofs.Flock.Claims.Recursion.VerdictRowEFree
+public import Proofs.Core.QSort
+public import Proofs.Flock.C3.RegLevels.OutRegs
 public import Proofs.Flock.Recursive.KSStatement
 public import Proofs.Flock.Recursive.KSV
 import Mathlib.Algebra.Order.Floor.Extended
@@ -43,8 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.KSDec
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 
 /-!
 # `RecursiveKSAt` from its open premises

@@ -18,7 +18,7 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   protocol starts it (`ProtocolDef.starts`: from the configuration, the piece's bindings and the party's state
   directory, its request and its capabilities, the auditor's signer refused first unless the configuration pins it), and
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
-  request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
+  request, the party key) raises `NotImplementedError` (`NOT_YET`), which `live` refuses (``unwritten``) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
   composed verdict is the period's; under remote, the record the compose answer holds, else the
   served node's own over its composite (`remote_check`). PoUW's row
@@ -1050,15 +1050,23 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here, and each listed component's as `attested` reads
     it (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
-    binding is missing, and raised while a runtime party's `held` does, before anything starts."""
+    binding is missing, and ``unwritten`` (naming the goal) while a runtime party's start, `held` or the registration is not written, before anything starts."""
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
     if missing := unbound(cfg, bindings) if WORKERS in here else list(dict.fromkeys(
             k for x in runtime for k in x.unbound(bindings))):
         raise Refused("unbound", f"the deploy bindings (verity run --bindings) don't bind {', '.join(missing)}")
-    ready = [(x, prepare(cfg, state, bindings, x)) for x in runtime]
+    ready = []
+    for x in runtime:
+        try:
+            ready.append((x, prepare(cfg, state, bindings, x)))
+        except NotImplementedError as e:
+            raise Refused("unwritten", f"{x.party}'s {x.component} party start is not written ({e})") from None
     if ready:
-        registration(cfg, state)
+        try:
+            registration(cfg, state)
+        except NotImplementedError as e:
+            raise Refused("unwritten", f"the run's registration is not written ({e})") from None
     out: dict[str, dict[str, Any]] = {}
 
     def done(x: Piece, got: Mapping[str, Any]) -> None:

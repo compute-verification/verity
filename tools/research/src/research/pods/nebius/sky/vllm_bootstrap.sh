@@ -9,7 +9,7 @@
 # skips the bootstrap without taking the lock. The key is re-read inside the lock, since another job may have just finished it. A
 # different tree, role or mode, or any change to the venv's packages, means a new key and a real bootstrap.
 #
-# A leased job's pod has no GPU of its own (GPU_LEASE set, dispatch.py's `lease: self`): a real GPU-mode bootstrap takes one from the
+# A leased job's pod has no GPU of its own (GPU_LEASE set): a real GPU-mode bootstrap takes one from the
 # lease, and takes it before the host-wide lock, never while holding it. A bootstrap that held the lock while it waited for a GPU
 # would stop every other bootstrap on the host, CPU ones included, for as long as its pool had none to give: on vy-nebius-1 the
 # circuits pool's holders queue in deployments-gpu behind the very GPU-stage pods whose bootstraps wait. Taken in this

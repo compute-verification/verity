@@ -1,7 +1,7 @@
 """The periods' chain (`test_interface.chain`: eight ``Gemm_v2{K=16, N=16}`` units, one wire) through the served
 verifier's door, stage by stage: C (the wired Program) registered with theta (each layer's weight a registered read), the
 trace committed, a proof block drawn, its proof on the processor prover, the Python door and the Lean door, then the
-three cheats (a crossing value, a block that is not C's, a block left out). Each stage is a test of its own; a stage
+four cheats (a crossing value, a block that is not C's, a block left out, a block holding a unit and the unit it reads). Each stage is a test of its own; a stage
 that reaches a named hole (`one_circuit.NotDerived`, Lean's `notDerived`) or a missing piece xfails with where it
 stopped, so the suite stays green and the first line of each xfail is the stop.
 
@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 import socket
+import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -102,7 +103,8 @@ def python_door(member: Any, circuit_file: bytes = b"", public: bytes | None = N
         cf.write_bytes(circuit_file)
         k = [m.base for m in r["window"].window.members].index(member.base)
         try:
-            units = [u for lo, hi in OC.block(r["C"], r["partition"], k) for u in range(lo, hi)]
+            units = [u for lo, hi in OC.block(r["C"], r["partition"] if partition is None else partition, k)
+                     for u in range(lo, hi)]
         except OC.Refused:
             units = [member.base]
         pub.write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n" if public is None else public)
@@ -231,7 +233,9 @@ def prove_block(member: Any) -> dict[str, Any]:
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(IL, "_lower_gate", _hand_piece)
-            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable).decode()
+            text = OC.lower(block.descriptor, r["partition"], PF.lower_executable,
+                            cut=OC.cuts(r["C"], r["partition"]),
+                            formed=OC.formed_in(r["C"], r["partition"], [(member.base, member.base + member.n)])).decode()
     except (OC.NotDerived, OC.Refused) as e:
         raise Stop(f"prove: C_S derived {rec}; its statement is the door's one_circuit.lower ({OC.__file__}:lower): {e}") from e
     meta = FC.meta_of(text)
@@ -243,7 +247,7 @@ def prove_block(member: Any) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as d:
         d = Path(d)
         (d / "circuit.txt").write_text(text)
-        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta["unit"], inputs=[], outputs=[]))
+        iset = SimpleNamespace(name=f"block-{member.base}", subcircuit=SimpleNamespace(id=meta.get("unit", f"block-{member.base}"), inputs=[], outputs=[]))
         FC.write(text, iset, 0, n, d / f"inst-{n}.bin", d / f"pub-{n}.bin", indices=list(range(member.base, member.base + n)),
                  rows=rows, outs=outs)
         with socket.socket() as s:
@@ -270,12 +274,27 @@ def stage_python_door() -> str:
 
 
 def stage_lean_door() -> str:
-    """The Lean door built (`spot-one-stage-zk`): its own `#guard`s hold that a member's statement refuses at
-    `restrict`."""
-    PF.v2_executable()
-    text = LEAN_DOOR.read_text().splitlines()
-    at = next(i for i, x in enumerate(text, 1) if 'HOLE_T == "restrict: ' in x)
-    raise Stop(f"lean door: built; every statement refuses at Spot.OneStageZk.restrict ({LEAN_DOOR}:{at})")
+    """The Lean door (`spot-one-stage-zk restrict`): the drawn block's circuit file as Lean's `OneStageZk.restrict`
+    derives it from C and the partition, byte for byte the Python door's (`one_circuit.lower` of `one_circuit.restrict`)."""
+    r = registered()
+    m = drawn(committed()[0])
+    k = [x.base for x in r["window"].window.members].index(m.base)
+    try:
+        units = OC.block(r["C"], r["partition"], k)
+        want = OC.lower(OC.restrict(r["C"], r["partition"], units), r["partition"], PF.lower_executable,
+                        cut=OC.cuts(r["C"], r["partition"]), formed=OC.formed_in(r["C"], r["partition"], units))
+    except (OC.NotDerived, OC.Refused) as e:
+        raise Stop(f"lean door: the Python door derives no C_S for block {k} ({OC.__file__}): {e}") from e
+    with tempfile.TemporaryDirectory() as d:
+        c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
+        c.write_bytes(r["C"])
+        p.write_text(json.dumps(r["partition"], sort_keys=True, separators=(",", ":")))
+        run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), str(units[0][0]), str(out)],
+                             capture_output=True, text=True)
+        assert run.returncode == 0, f"lean door: Lean's restrict refused block {k} ({LEAN_DOOR}): {run.stderr[-600:]}"
+        got = out.read_bytes()
+    assert got == want, f"lean door: Lean's C_S for block {k} ({len(got)} bytes) is not the Python door's ({len(want)})"
+    return f"block {k} at unit {units[0][0]}: Lean's C_S is the Python door's, {len(got)} bytes"
 
 
 def stage_crossing() -> str:
@@ -309,9 +328,37 @@ def stage_left_out() -> str:
     return f"refused: {why}"
 
 
+def in_block() -> dict:
+    """The registered partition with C's first two blocks one, ``[0, 4)``: units 2 and 3 read units 0 and 1 inside it."""
+    part = registered()["partition"]
+    return {**part, "blocks": [[[0, 4], *[b for b in part["blocks"][0] if b[0] >= 4]]]}
+
+
+def stage_in_block() -> str:
+    """(d) a block holding a unit and the unit it reads, at the door: refused by `operands-outside` before any proof."""
+    win, _c = committed()
+    _f, why = python_door(win.window.members[0], partition=in_block())
+    assert why is not None and "operands-outside" in why[1], f"cheat (d): the door did not refuse an in-block read: {why}"
+    return f"refused: {why}"
+
+
+def stage_in_block_lean() -> str:
+    """(d) at Lean's door (`spot-one-stage-zk restrict`): block 0 of `in_block`'s partition refused, in Python's words."""
+    r = registered()
+    with tempfile.TemporaryDirectory() as d:
+        c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
+        c.write_bytes(r["C"])
+        p.write_text(json.dumps(in_block(), sort_keys=True, separators=(",", ":")))
+        run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), "0", str(out)],
+                             capture_output=True, text=True)
+    assert run.returncode != 0 and "operands-outside" in run.stderr, f"cheat (d): Lean's door: {run.returncode} {run.stderr[-600:]}"
+    return f"refused: {run.stderr.strip()[-400:]}"
+
+
 STAGES = [("register", stage_register), ("commit", stage_commit), ("draw", stage_draw), ("prove", stage_prove),
           ("python door", stage_python_door), ("lean door", stage_lean_door), ("cheat a: crossing value", stage_crossing),
-          ("cheat b: block not C's", stage_not_cs), ("cheat c: block left out", stage_left_out)]
+          ("cheat b: block not C's", stage_not_cs), ("cheat c: block left out", stage_left_out),
+          ("cheat d: in-block read", stage_in_block), ("cheat d at Lean's door", stage_in_block_lean)]
 
 
 def _run(fn) -> str:
@@ -358,9 +405,18 @@ def test_cheat_block_left_out():
     _run(stage_left_out)
 
 
+def test_cheat_in_block_read():
+    _run(stage_in_block)
+
+
+@pytest.mark.slow
+def test_cheat_in_block_read_at_leans_door():
+    _run(stage_in_block_lean)
+
+
 if __name__ == "__main__":
     for name, fn in STAGES:
-        if name == "lean door" and "--lean" not in sys.argv:
+        if name in ("lean door", "cheat d at Lean's door") and "--lean" not in sys.argv:
             print(f"{name}: skipped (--lean)")
             continue
         try:

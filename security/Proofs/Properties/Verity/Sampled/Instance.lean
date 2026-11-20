@@ -161,13 +161,13 @@ structure LiveSpec (V : Vocab d α) (b : SessionBound) (θ : ByteArray) (R : Arr
     _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
   lb : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
-  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
+  tags : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
   stratified : A.I.stratified = none
   closure : A.I.closure = none
   own : A.own = none
-  circuit : A.I.circuitFile = V.circuitFile θ R
+  circuit : A.I.circuitFile = circuitFileOf θ
   publicFile : A.I.publicFile = V.publicFile θ R
   read : V.read θ R = Verity.ExecutionPhaseFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
@@ -480,9 +480,9 @@ noncomputable def stage : Vocab d α :=
     delta := I.deltaOf
     loss := I.lossOf }
 
-/-- A session set up at one vocabulary is set up at another with the same families, files, reading and share. -/
+/-- A session set up at one vocabulary is set up at another with the same families, public file, reading and share. -/
 theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live}
-    (hf : V'.families θ = V.families θ) (hc : V'.circuitFile θ F = V.circuitFile θ F)
+    (hf : V'.families θ = V.families θ)
     (hp : V'.publicFile θ F = V.publicFile θ F) (hr : V'.read θ F = V.read θ F)
     (he : (V'.certOf θ).ε = (V.certOf θ).ε) (h : SetsUp V θ F A) : SetsUp V' θ F A where
   params := by rw [hf]; exact h.params
@@ -492,7 +492,7 @@ theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   stratified := h.stratified
   closure := h.closure
   own := h.own
-  circuit := h.circuit.trans hc.symm
+  circuit := h.circuit
   publicFile := h.publicFile.trans hp.symm
   read := hr.trans h.read
   share := he.trans h.share
@@ -603,7 +603,7 @@ and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`):
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.pinned I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) :
     Deployed (I.vocab K) (I.lift K) I.sessions where
-  setsUp θ F A h := setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2.1
+  setsUp θ F A h := setsUp_congr (V := I.base) rfl rfl rfl rfl (I.sessions_some h).2.1
   coinsRead _ := rfl
   finder θ F c σ := (hKr θ F c σ).symm
   forger θ F c σ := (hKf θ F c σ).symm
@@ -776,7 +776,7 @@ theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration
         (I.liftStage (I.constructionsAt K₀ k reg record recordDigest)) A θ F := fun θ F A h =>
   couplingTargetAt_counts (V := I.stage (I.constructionsAt K₀ k reg record recordDigest))
     (I.stageOf (I.constructionsAt K₀ k reg record recordDigest) K₀) I.pinned I.deployment reg record recordDigest
-    (I.signer θ) (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2.1)
+    (I.signer θ) (setsUp_congr (V := I.base) rfl rfl rfl rfl (I.sessions_some h).2.1)
     (digestsAt_of (I.stage (I.constructionsAt K₀ k reg record recordDigest)) I.pinned I.programDigest I.publicDigest
       I.read θ)
     (I.lb_of_sessions h) (hO θ F A h)

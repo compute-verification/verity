@@ -20,7 +20,7 @@ from verity.circuits.evaluation import bits as EB
 from verity.circuits.defs import bind
 from verity.commitments import registered_value as RV
 from verity.commitments.crypto import lms as R
-from verity.commitments.gates.embedding import MAX_V, read as table_read
+from verity.commitments.gates.embedding import MAX_V, opening
 from verity.commitments.periods.interface import Circuit, Read, Registered, Table, TableOpening, TableRead, Window, Wire
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
@@ -164,16 +164,17 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
 
         PousSessionDigest_v1{k, head, limit_ns}  1 unit    (head, ctx, the records rows) -> (ok, m, the records rows)
         PousSessionSig_v1{N, W, H}               1 unit    key: the registered key; m: the digest's m by wire
-        EmbeddingRead_v2{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
-        PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row from opening j
+        EmbeddingRead_v3{blocks, block_bytes/2}  k units   round j's opening of the store's table at its index
+        PousRound_v2{block_bytes, 0}             ⌈k/2⌉     round j = 2u: records row u by wire, row and verdict from opening j
         PousRound_v2{block_bytes, 1}             ⌊k/2⌋     round j = 2u + 1: the same, at the record's second slot
 
     The store (`store_table`, the setup's one) and the key are registered values; the coins' are `coin_bound`'s. An
-    index past the store's blocks opens a row of 0x7FFF words with a verdict of 1 (`gates.embedding`), so the verifier
-    holds every round's index below the store's blocks in the clear (`session_proofs.clear_reasons`)."""
+    index past the store's blocks, or a row that doesn't open, gives its opening a verdict word of 0 (`gates.embedding`),
+    which the round requires to be 1; the verifier also holds every round's index below the store's blocks in the clear
+    (`session_proofs.clear_reasons`)."""
     dig = bind(session_circuit.PousSessionDigest, K=k, HEAD=head, LIMIT=limit_ns)
     sig = bind(session_circuit.PousSessionSig, N=params.N, W=params.W, H=params.H)
-    opener = table_read(blocks, block_bytes // 2)
+    opener = opening(blocks, block_bytes // 2)
     slots = [(bind(session_circuit.PousRound, N=block_bytes, SLOT=s), (k - s + 1) // 2) for s in (0, 1)]
     slots = [(t, n) for t, n in slots if n]
     d, g, o = (descriptor_id(t) for t in (dig, sig, opener))
@@ -181,7 +182,7 @@ def session_units(k: int, head: int, limit_ns: int, block_bytes: int, blocks: in
     for s, (t, n) in enumerate(slots):
         r = descriptor_id(t)
         wires += [Wire(r, "records", d, f"o{2 + u}", u, (1,), 0, (0,)) for u in range(n)]
-        wires.append(Wire(r, "row", o, "o0", 0, (n,), s, (2,)))
+        wires += [Wire(r, "row", o, "o0", 0, (n,), s, (2,)), Wire(r, "ok", o, "o1", 0, (n,), s, (2,))]
     coins, reads, marks, formats = coin_bound(k, head, [descriptor_id(t) for t, _ in slots], o, d)
     registered = Registered(
         {STORE: blocks * block_bytes // 2, ATTESTER_KEY: (16 + params.N) // 2, **coins},

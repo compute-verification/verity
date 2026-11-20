@@ -1,5 +1,5 @@
-"""The proof-block census of a served Commit: every Program row of every rank and request step (`m1_families.py`'s census
-of each rank, sized with ``--estimate``) cut into proof blocks, and the proof blocks counted per Definition, for the prefill
+"""The proof-block census of a served Commit: every Program row of every rank and request step (a census of each rank's
+families, sized with `m1_families.py --estimate`) cut into proof blocks, and the proof blocks counted per Definition, for the prefill
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):

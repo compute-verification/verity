@@ -62,8 +62,8 @@ def test_every_copy_of_ours_into_an_output_directory_goes_through_the_filter() -
 
 
 def test_no_launcher_writes_staged_values_under_its_output() -> None:
-    """The a9 and a10 launchers keep the staged units' values outside `$OUT`."""
-    for name in ("a9.sh", "a10.sh"):
+    """The a9 launcher keeps the staged units' values outside `$OUT`."""
+    for name in ("a9.sh",):
         text = (ROOT / "benchmarks" / "one_stage" / name).read_text()
         assert not re.search(r'\$OUT/(a9/saved|saved-)', text), name
         assert "tar -cf" not in text, name

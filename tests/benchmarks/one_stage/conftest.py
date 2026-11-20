@@ -24,9 +24,36 @@ _stand_in()
 
 
 @pytest.fixture(autouse=True)
+def _stand_in_lookup():
+    """The stand-in bodies' lookup again after each test: `door_walls` registers the catalog's (`_catalog`), which
+    replaces the process's one lookup, and every later test on that worker would build its Programs without them."""
+    from verity.circuits import program as PG
+    saved = list(PG._BODY_LOOKUP)
+    yield
+    PG._BODY_LOOKUP[:] = saved
+
+
+@pytest.fixture(autouse=True)
 def _no_run_result(monkeypatch):
     """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
     where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
     unset, and a test that writes as a run sets its own (`tests/test_tests_write_no_measurement.py`)."""
     for name in ("RESEARCH_RUN_DIR", "OUT"):
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _poow_named(monkeypatch):
+    """`served_verdicts.sh` requires POUW named, and Pearl+ is the one scheme left: a test that runs it without POUW
+    runs it under POUW=pearlplus, and one that sets POUW itself keeps its own."""
+    import subprocess
+
+    run = subprocess.run
+
+    def named(argv, *a, **kw):
+        env = kw.get("env")
+        if isinstance(argv, (list, tuple)) and any(str(x).endswith("served_verdicts.sh") for x in argv) and isinstance(env, dict):
+            kw["env"] = {"POUW": "pearlplus", **env}
+        return run(argv, *a, **kw)
+
+    monkeypatch.setattr(subprocess, "run", named)

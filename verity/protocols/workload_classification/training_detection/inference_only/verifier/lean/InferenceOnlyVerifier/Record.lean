@@ -2,7 +2,7 @@ module
 
 public import InferenceOnlyVerifier.Theta
 public import Spot.RecordText
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 public import Spot.Wires
 public import Flock.TemplateQuery
 
@@ -601,7 +601,7 @@ def formatsHeld (T : Theta.Trusted) (doc : Json) (params : List (String × Nat))
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
 def pinOf (desc : Json) (pins : Array String) (tid : String) : Option String :=
-  match InferenceOnlyVerifier.DefinitionDigest.closureDigest desc tid with
+  match Flock.DefinitionDigest.closureDigest desc tid with
   | .ok d => if pins.contains d then some d else none
   | .error _ => none
 

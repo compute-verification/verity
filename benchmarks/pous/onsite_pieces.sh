@@ -3,9 +3,12 @@
 # ONSITE_PIECES names it (an onsite run's launch sets it), with the tree as cwd, and call:
 #
 #   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set to it or empty (none); a
-#                           command of the caller's own in one is refused by name (PREFLIGHT, exit 3):
-#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; that
-#                      piece trusts the one challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's
+#                           command of the caller's own in one is refused by name (PREFLIGHT, exit 3). The ONSITE_*
+#                           below are the one place that names them: `verity run`'s hooks read theirs from here
+#                           (`memory/pous/scheme.py`'s `onsite_command`), so a launch's own is the tree's by construction:
+#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it, or
+#                      that with ` --run-keys` (a development run's, its attester on this node); that piece trusts the
+#                      one challenger key WIPE_KEY_SHA512 pins, by default the configuration's (VERITY_PINS)
 #       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
@@ -51,7 +54,7 @@ onsite_piece_commands() {
   local v own
   for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD; do
     own=ONSITE_$v
-    if [ -n "${!v:-}" ] && [ "${!v}" != "${!own}" ]; then
+    if [ -n "${!v:-}" ] && [ "${!v}" != "${!own}" ] && { [ "$v" != WIPE_CMD ] || [ "${!v}" != "${!own} --run-keys" ]; }; then
       echo "PREFLIGHT: $v names a command of its own: an onsite piece runs only the tree's ($own in" \
         "benchmarks/pous/onsite_pieces.sh), whose answer its own Lean decides; unset it for the tree's, or set it" \
         "empty for none" >&2

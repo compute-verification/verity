@@ -643,7 +643,7 @@ theorem stepMember_all {slice : Spot.OneStageZk.Member → Json}
   unfold Spot.OneStageZk.stepMember at h
   have h := mapErrorOk h
   unfold Spot.OneStageZk.runFrom at h
-  obtain ⟨a, ha', h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨a, ha', h⟩ := FlockDeploy.BaseSetup.bind_ok h
   obtain ⟨circuitB, pubB, rd, tables, -, -, -, -, -, rfl⟩ := MemberChecks.statement_ok (hst a ha')
   rw [← Array.foldlM_toList] at h
   obtain ⟨har, hs⟩ := MemberChecks.foldl_all _ r r' h ha
@@ -665,7 +665,7 @@ theorem foldl_members {slice : Spot.OneStageZk.Member → Json}
     exact ⟨ha, fun _ hz => by simp at hz⟩
   | z :: l, r, r', hst, h, ha => by
     rw [List.foldlM_cons] at h
-    obtain ⟨r₁, h₁, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+    obtain ⟨r₁, h₁, h⟩ := FlockDeploy.BaseSetup.bind_ok h
     obtain ⟨ha₁, hl⟩ := foldl_members l r₁ r' (fun z' hz' => hst z' (List.mem_cons_of_mem _ hz')) h ha
     obtain ⟨har, hz⟩ := stepMember_all (hst z (by simp)) h₁ ha₁
     refine ⟨har, fun z' hz' => ?_⟩
@@ -684,11 +684,11 @@ theorem runMembers_sessions {slice : Spot.OneStageZk.Member → Json} {ms : Arra
         (Spot.OneStageZk.StepAt.ofOwn z.2.own Flock.Tags.circuit circuitB pubB tables rd
           (z.2.population (slice z.2) pubB)) bs s := by
   unfold Spot.OneStageZk.runMembers at h
-  obtain ⟨held, hheld, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨files, hfiles, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨r₁, hfold, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
-  obtain ⟨_, -, h⟩ := Verity.Recursive.BaseSetup.bind_ok h
+  obtain ⟨held, hheld, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨files, hfiles, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨r₁, hfold, h⟩ := FlockDeploy.BaseSetup.bind_ok h
+  obtain ⟨_, -, h⟩ := FlockDeploy.BaseSetup.bind_ok h
   have e : r₁ = r := Except.ok.inj h
   rw [e] at hfold
   rw [← Array.foldlM_toList] at hfold
@@ -777,7 +777,7 @@ theorem accepted_spec {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {l
   obtain ⟨coinKeys, b, text, hg, hu, hv⟩ := hacc
   obtain ⟨proofs, spec, tabs, rest, -, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
   obtain ⟨sess, hd⟩ := Verity.Sampled.zkVerify_decode hzk
-  have htag : Flock.Tags.find? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
+  have htag : Flock.Tags.byName? Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
   have hh : (Flock.Witness.zkTags
       (Spot.OneStageZk.StepAt.ofOwn own Flock.Tags.circuit circuitB pubB lt rd pop).I).hiddenOutputs = true :=
     (Verity.Sampled.statement_zkTags htag _ _).1

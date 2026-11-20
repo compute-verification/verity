@@ -94,6 +94,11 @@ ALLOWED: dict[str, str] = {
         "unrolls to, which the soundness statements read; no check runs it: verify sets up on and "
         "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
         "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
+    "verity/protocols/proofs/flock/verifier/Flock/Compose.lean":
+        "open: zeroOutputsT, the template's output on the zero input that compose pins, evaluates the root through "
+        "colsOf, which writes every copy of every CALL's columns: the unrolled columns, where only the root's return "
+        "columns are needed (a region of copies with equal bound values is one callee's output repeated); owner proofs, "
+        "until PRF-645 (due Wed 25 Nov) computes them once per Definition and deletes this entry",
     "verity/protocols/proofs/flock/verifier/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
     "verity/protocols/proofs/flock/verifier/Flock/TmplFold.lean":
@@ -168,6 +173,8 @@ INNER = re.compile(r"\bStmt\.setup\w*\s+(?:\w+\.)*innerTags\b")
 COMB = re.compile(r"\.(?:folded|foldedPartial)\b(?![\w'])")
 #: V*'s circuit text emitted from outside V*'s namespace: the unit laid out and written again
 EMIT = re.compile(r"(?<![\w'.])VStar\.emitCircuit(?:Of|Holo)?\b(?![\w'])")
+#: a template's output on the zero input (`Compose.zeroOutputsT`), which `colsOf` computes writing every copy's columns
+ZERO = re.compile(r"(?<![\w'.])(?:Compose\.)?zeroOutputsT\b(?![\w'])")
 #: a range mapped unit by unit (`(Array.range pop).mapM fun u =>`), and the body it maps: the rest of its line and two more
 UNIT_MAP = re.compile(r"\b(?:List|Array)\.range\b[^\n]*?\bfun\s+(\w+)\s*=>([^\n]*(?:\n[^\n]*){0,2})")
 
@@ -194,6 +201,7 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         hits += [(m.start(), "a template query's units' gates asked one by one (TemplateQuery.unitGates reads them a "
                   "range at a time)") for m in UNIT_MAP.finditer(src) if _unit_gates(m.group(1)).search(m.group(2))]
         hits += [(m.start(), "a member's key program built, every unit laid out") for m in KEYPROG_BUILT.finditer(src)]
+        hits += [(m.start(), "a template's zero output, every copy's columns written") for m in ZERO.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
     hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
     for b in BOUND.finditer(src):

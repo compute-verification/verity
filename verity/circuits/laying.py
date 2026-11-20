@@ -13,14 +13,17 @@ a batch of one primitive as its one gate): only the root's nodes, and so the uni
 primitive and does not fit, or a body that holds a scan, is refused (`Unlaid`).
 
 **Packing** (`pack`). The root units in order, a block closed when the next unit would take it past ``fits``: the block's
-ports are its in(S) and out(S), so a wire between two of its units is no port of it.
+ports are its in(S) and out(S), so a wire between two of its units is no port of it. A block closes at each of ``ends``
+(a coarser level's ends, which the blocks then refine). With a floor ``enough(ins, outs, ands, units)``, a block under it
+(it took every unit the limit and the next end let it) joins the block before it where that block, so grown, still fits
+and is not at an end; elsewhere `pack` is refused (`pack-floor`) and returns nothing.
 """
 
 from __future__ import annotations
 
 import bisect
 import heapq
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Sequence
 
 from . import partition_object as PO
 from .count import count
@@ -32,6 +35,7 @@ from .restrict import _spell
 from .types import Value, axis_runs
 
 Fits = Callable[[tuple[int, ...], tuple[int, ...], int], bool]
+Enough = Callable[[tuple[int, ...], tuple[int, ...], int, int], bool]
 
 
 class Unlaid(ValueError):
@@ -123,7 +127,9 @@ def _subst(refs: Any, look: Callable[[str, int], Any]) -> Any:
             todo.extend(reversed(p.parts))
             continue
         if isinstance(p, Affine):
-            out.append(look(p.space, p.idx).slice(p.base, p.base + p.count))
+            t = look(p.space, p.idx)
+            out.append(p if isinstance(t, Affine) and (t.space, t.idx, t.base) == (p.space, p.idx, 0)
+                       else t.slice(p.base, p.base + p.count))
             continue
         if isinstance(p, Strided) and isinstance(t := look(p.space, p.idx), Affine):
             out.append(Strided(t.space, t.idx, t.base + p.base, p.inner, p.outer_stride, p.inner_stride, p.count))
@@ -213,39 +219,45 @@ class Measure:
         k, m = self.units[u]
         node = self.root.nodes[k]
         for x, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
+            rw = x.type.homogeneous_width()
             if ax is None:
-                yield from self._refs(x.refs)
+                yield from self._refs(x.refs, None, rw)
             elif ax == 0:
                 L = x.type.elem.leaves
-                yield from self._refs(x.refs.slice(m * L, (m + 1) * L))
+                yield from self._refs(x.refs.slice(m * L, (m + 1) * L), None, rw)
             else:
-                yield from self._refs(x.take(ax, m).refs)
+                yield from self._refs(x.take(ax, m).refs, None, rw)
 
-    def _refs(self, refs: Any, owner: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
+    def _refs(self, refs: Any, owner: int | None = None,
+              rw: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
         todo = [refs]
         while todo:
             p = todo.pop()
             if isinstance(p, Concat):
                 todo.extend(p.parts)
             elif isinstance(p, Affine):
-                yield from self._leaves(p.idx, p.base, p.base + p.count, owner)
+                yield from self._leaves(p.idx, p.base, p.base + p.count, owner, rw)
             elif isinstance(p, Strided) and p.outer_stride == 0 and p.inner_stride == 0:
-                yield from self._leaves(p.idx, p.base, p.base + 1, owner)
+                yield from self._leaves(p.idx, p.base, p.base + 1, owner, rw)
             elif isinstance(p, Strided) and p.inner_stride == 1:
                 for q in range(-(-p.count // p.inner)):
                     b = p.base + q * p.outer_stride
-                    yield from self._leaves(p.idx, b, b + min(p.inner, p.count - q * p.inner), owner)
+                    yield from self._leaves(p.idx, b, b + min(p.inner, p.count - q * p.inner), owner, rw)
             elif isinstance(p, Grid):
                 todo.extend(p.lane_parts())
             else:
                 for _s, i, j in p:
-                    yield from self._leaves(i, j, j + 1, owner)
+                    yield from self._leaves(i, j, j + 1, owner, rw)
 
-    def _leaves(self, k: int, lo: int, hi: int, owner: int | None) -> Iterator[tuple[int, int, int, str, int | None]]:
+    def _leaves(self, k: int, lo: int, hi: int, owner: int | None,
+                rw: int | None = None) -> Iterator[tuple[int, int, int, str, int | None]]:
         node, off = self.root.nodes[k], self.root.offsets[k]
         fn, first = node.fn, self.first.get(k)
         if isinstance(fn, PrimitiveDefinition):
             inp = input_id(fn.id)
+            if inp and rw and _width(fn) > rw:
+                q = _width(fn) // rw
+                lo, hi = lo // q, -(-hi // q)
             if first is None or owner is not None:
                 yield (off + lo, off + hi, _width(fn), inp[0] if inp else RUN, owner)
             else:
@@ -446,22 +458,45 @@ def _merge(runs: list) -> list[tuple[int, int, int, str]]:
     return out
 
 
-def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None) -> list[tuple[int, int]]:
+def pack(program: Any, fits: Fits, q: Any = None, m: Measure | None = None, enough: Enough | None = None,
+         ends: Sequence[int] = ()) -> list[tuple[int, int]]:
     m = m or Measure(program, q or query(program))
     n, out, a = len(m.units), [], 0
+    stops = sorted(set(ends))
+    if any(not 0 < e <= n for e in stops):
+        raise Unlaid("pack-ends", f"ends {stops}: each a unit number in (0, {n}]")
     while a < n:
         if not fits(*m.block(a, a + 1)):
             k = m.units[a][0]
             raise Unlaid("lay-primitive" if isinstance(m.root.nodes[k].fn, PrimitiveDefinition) else "pack-unit",
                          f"unit {a} (root node {k}, {descriptor_id(m.root.nodes[k].fn)}) alone does not fit: `lay` it first")
-        b = a
+        e = next((x for x in stops if x > a), n)
+        b, got = a, None
         for c, cost in m.grow(a):
-            if not fits(*cost):
+            if c > e or not fits(*cost):
                 break
-            b = c
-        out.append((a, b))
+            b, got = c, cost
+        if enough is not None and not enough(*got, b - a):
+            lo = out[-1][0] if out and a not in stops else None
+            j = None if lo is None else m.block(lo, b)
+            if j is None or not fits(*j) or not enough(*j, b - lo):
+                raise Unlaid("pack-floor", f"units [{a}, {b}) are under the floor, the next unit does not join them within "
+                             "the limit or past an end, and the block before does not take them")
+            out[-1] = (lo, b)
+        else:
+            out.append((a, b))
         a = b
     return out
 
 
-__all__ = ["Fits", "Measure", "Unlaid", "lay", "pack", "query"]
+ZK_M_MIN = 25
+
+
+def zk_min_units(k_log: int, g: int) -> int:
+    """The fewest units of ``2^k_log`` rows, ``g`` a VU, that a zero-knowledge Flock statement holds (``m = k_log +
+    max(3, ⌈log₂⌈n/g⌉⌉) >= 25``); `flock-circuit`'s ``zk_min_units`` is its twin."""
+    g = max(g, 1)
+    return 1 if k_log + 3 >= ZK_M_MIN else (g << (ZK_M_MIN - 1 - k_log)) + 1
+
+
+__all__ = ["Enough", "Fits", "Measure", "Unlaid", "lay", "pack", "query", "zk_min_units"]

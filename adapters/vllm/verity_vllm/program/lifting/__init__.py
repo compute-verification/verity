@@ -1,1 +1,0 @@
-"""verity_vllm.program.lifting: what a record says about the lifted workload Program (`lifted_records`), the padded Program's continuation logic (`continuation`) and the reference evaluator's assignment of it (`dump`)."""

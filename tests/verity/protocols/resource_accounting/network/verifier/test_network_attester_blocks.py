@@ -192,7 +192,7 @@ def test_refuses_a_load_at_an_external_port():
 def test_refuses_a_read_that_is_not_whole_rows_of_the_value():
     c = circuit(reads=(IF.Read(DOT, "a", SCAN_STATE, 0, (S, O), 0, (NP + 1, 0)), IF.Read(DOT, "b", "w", 0, (S, O), 0, (0, 8)),
                        IF.Read(DOT, "acc", "bias", 0, (S * O,), 0, (0,))))
-    with pytest.raises(ValueError, match="'w': read .* isn't whole rows of 16 words"):
+    with pytest.raises(ValueError, match="'param': 'w'.*: a read cut, or not of whole registered rows of the port's 16 words"):
         BK.check(record(c), layouts(c))
 
 

@@ -19,7 +19,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.protocols.proofs.spot.prover import docket as DK
 
 import fake_challenger as FC
@@ -68,14 +68,6 @@ def _spec(registered=(STATE,)) -> S.Spec:
     return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.SamplingDesign("rate:1/3"),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS, registered),
                   b"outputs-test")
-
-
-def _two_stage_spec(registered=(STATE,)) -> S.Spec:
-    values = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR),
-              *registered)
-    return S.Spec(values, S.TwoStage(GRAIN, "rate:1/2", K),
-                  S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0),
-                  _public(BOUNDARY + INTERIOR, registered), b"outputs-two-stage-test")
 
 
 def _stream(spec: S.Spec | None = None, **kwargs) -> S.Stream:
@@ -242,57 +234,3 @@ def test_a_stream_holds_a_certified_value_to_a_reported_read():
         assert checks["certified"] == {"ok": False, "codes": ["certified"],
                                        "detail": {"certified": [ROWS.name], "unread": [ROWS.name]}}
         assert "run" not in checks and "registered" not in checks
-
-
-def _two_stage(spec: S.Spec):
-    """A two-stage stream of `spec` past its first-stage sample: the stream, its boundary record, which leaves its replay
-    blocks' state at port `carry`, that docket, the sample, the interior's `outputs` naming that port, and the
-    interior's record and ports registering the entries it is given."""
-    stream = _stream(spec, replay=BLOCK)
-    m = Q * N_RHO
-    boundary, bports = _record(PN.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
-                               {"law": "subset", "k": Q}, 0, None)
-    reg = stream.register(boundary, bports)
-    first = stream.select(reg)
-
-    def interior(registered):
-        return _record(PN.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                       0, reg.digest, registered, interior=True, replay_sample=D.proved(first.draw))
-    return stream, boundary, reg, first, {"state": {"record": reg.digest, "port": "carry"}}, interior
-
-
-def test_an_interior_registration_takes_no_certified_entries():
-    """`register_interiors` takes no certified entries: an interior record that registers a link's certified rows beside
-    the state its boundary left is refused (`R7-values`), where the same record without the rows is accepted."""
-    stream, boundary, _, first, out, interior = _two_stage(_two_stage_spec((STATE, ROWS)))
-    with_rows, iports = interior([_left(boundary, "carry"), ROWS_ENTRY])
-    assert _refused(lambda: stream.register_interiors(first, with_rows, iports, registered={"state": 2},
-                                                      outputs=out)) == ("R7-values",)
-    with pytest.raises(TypeError):
-        stream.register_interiors(first, with_rows, iports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
-    own, iports = interior([_left(boundary, "carry")])
-    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == DD.digest(own)
-
-
-def test_an_interior_registration_reads_a_port_of_its_boundary():
-    """Under a two-stage design the interior docket's registered `state` is the boundary docket's port
-    `carry`, the state its replay blocks leave: R7 takes it in the interior docket, the interior's copies carry
-    it to the run of record, which agrees on the outcome binding both dockets. Its one failure is round 2's
-    (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
-    them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
-    reads `state` from the registered value instead. Registered with no output named, it is refused under its own
-    domain."""
-    stream, boundary, reg, first, out, record = _two_stage(_two_stage_spec())
-    assert stream.n_rho == N_RHO
-    interior, iports = record([_left(boundary, "carry")])
-    assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
-    ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
-    assert stream._entries[reg.order].interior_copies[-1] == out
-    second = stream.select(ireg)
-    assert stream.deliver(second, [SESSION]) is None
-    (honest,) = stream.statements(second)
-    outcome = stream.outcome(second, _lean({"state": _left(boundary, "carry")["root"]}, honest), {"statement": "stub"},
-                             statements=[honest])
-    checks = stream.records[-1]["audit"]["checks"]
-    assert not outcome.accepted and outcome.verdict.detail["reject"]["checks"] == ["statements"]
-    assert checks["statements"]["codes"] == ["second-read"] and "run" not in checks
