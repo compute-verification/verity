@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 
 import pytest
@@ -25,7 +26,7 @@ def _digest(exe) -> str:
 
 @pytest.mark.slow
 def test_the_honest_case_is_accepted_and_the_same_case_under_another_key_is_refused_by_its_lean(
-        served, tmp_path, monkeypatch, run_exe, capsys):
+        served, tmp_path, monkeypatch, run_exe):
     answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(run_exe))
     assert answer["verdict"] == "accept", answer["reason"]
     doc = json.loads((served.out / "pous.json").read_text())
@@ -36,7 +37,8 @@ def test_the_honest_case_is_accepted_and_the_same_case_under_another_key_is_refu
     other = case | {"params": case["params"] | {"trusted": ["00" * 64]}}
     refused = period.serve(run_exe, [other])[0]
     assert refused["verdict"] == "reject" and refused["reason"]
-    with capsys.disabled():
-        print("SMOKE storage honest:", {k: honest[k] for k in ("verdict", "protocol")},
-              "dishonest (trusted key swapped):", {k: refused[k] for k in ("verdict", "reason")},
-              "by", RUN_EXE, "sha512", _digest(run_exe)[:32], flush=True)
+    line = (f"SMOKE storage honest: {({k: honest[k] for k in ('verdict', 'protocol')})} dishonest (trusted key swapped): "
+            f"{({k: refused[k] for k in ('verdict', 'reason')})} by {RUN_EXE} sha512 {_digest(run_exe)}")
+    if out := os.environ.get("SMOKE_OUT"):
+        with open(out, "a") as f:
+            f.write(line + "\n")
