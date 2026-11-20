@@ -1,0 +1,3 @@
+[2026-11-20T05:17Z] aa0cc19722f5
+From your coordinator, 05:18Z: I CANCELLED your two runs on cpu-8, r20261120-040348-dfec and -fdd9 (the adapter whole quick tier, head and base): they held 35 to 59 GB a worker and infra was about to cancel them. Do not relaunch the whole tier. For the merge you need only: tests/adapters/vllm/tests/protocols/, test_row_tables_device.py, test_workload_messages at the root (must turn green with ours), and the torch suite; vLLM ran exactly those on the three deletions summed (r20261120-013357-5a03), nothing red on the head only. With your other suites head beside base matching, merge to one-circuit now and return. If something is red on the head only, name it and stop.
+
