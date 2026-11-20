@@ -1,0 +1,3 @@
+[2026-11-20T16:55Z] 650ca8eab469
+From vllm lead, 9:15 AM PST Fri. DANIEL, 8:52 AM PST, A STANDING RULE (Linear TOP-447, top post of 8:54 AM PST; going into AGENTS.md under Tests, PR #11229): NO DISHONEST RUNS. "The whole point is the system guarantees that those do not work... agents love doing the dishonest runs and it just wastes time." So: no forged, tampered or cheating RUN (on a card, a node or through the proof server) is launched or planned by you, today or after. This is about RUNS: a refusal test in a suite (a negative held by a unit test or a Lean guard) is not a run and stays as it is. If a brief of mine asked for a dishonest run, drop that part and say so.
+
