@@ -144,6 +144,7 @@ REASONS = {_template(r) for r in (
     f"the proof's rows {', '.join([*(f'a{k}' for k in range(4)), *(f'b{k}' for k in range(8)), 'pub'])} are not "
     f"{CC.ROW_V2} rows", "the proof's body holds no A rows, B rows and public row",
     "the proof's public row is not the window's certified salt, unit #'s position and entry #'s side roots",
+    *(CC.header_root_why(p) for p in ("a0", "b0", *(f"a{k}" for k in range(4)), *(f"b{k}" for k in range(8)), "pub")),
 )}
 OPENED: Counter[str] = Counter()
 
