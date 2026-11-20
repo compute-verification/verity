@@ -44,20 +44,20 @@ def test_each_unit_is_the_schemes_block_whose_amount_is_its_credited_macs() -> N
 
 
 def test_the_nodes_top_level_is_maps_over_its_noise_and_one_wired_core_and_its_cut_is_them() -> None:
-    """The node's body is one seed, a map of the line over eb's TN indices one a unit and over F's eight groups of K/8
-    for fa and fb, a Call of the Gram row for each of F_B's 32 columns, and the wired core, its noise crossing as values;
-    `cut` is those Definitions with their counts, and their ANDs add up to the node's: nothing of the node is outside its
+    """The node's body is one seed, which writes eb's TN lines, a map of the line over F's eight groups of K/8 for fa and
+    fb, a Call of the Gram row for each of F_B's 32 columns, and the wired core, its noise crossing as values; `cut` is
+    those Definitions with their counts, and their ANDs add up to the node's: nothing of the node is outside its
     units."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import ands
     node = PC.credited_product(SCHEME, K, 1, 1, 2)
     top = [(n.fn, n.n if n.form == "batch" else 1) for n in node.body.nodes]
-    assert [n.form for n in node.body.nodes] == ["call", "batch", "batch", "batch", *["call"] * 32, "call"]
+    assert [n.form for n in node.body.nodes] == ["call", "batch", "batch", *["call"] * 32, "call"]
     assert top == PC.cut(node)
-    assert [u.defn.id for u, _n in top] == ["PearlPlusTileSeed_v3", *["PearlPlusTileLine_v4"] * 3,
+    assert [u.defn.id for u, _n in top] == ["PearlPlusTileSeed_v4", *["PearlPlusTileLine_v4"] * 2,
                                              *["PearlPlusGramRow_v5"] * 32, "PearlPlusTileCoreWired_v2"]
-    assert [u.bindings["P"] for u, _n in top[4:36]] == list(range(32))
-    assert [n for _u, n in top] == [1, 1, PT.F_ROWS, PT.F_ROWS, *[1] * 32, 1]
-    assert [u.bindings["G"] for u, _n in top[1:4]] == [1, K // PT.F_ROWS, K // PT.F_ROWS]
+    assert [u.bindings["P"] for u, _n in top[3:35]] == list(range(32))
+    assert [n for _u, n in top] == [1, PT.F_ROWS, PT.F_ROWS, *[1] * 32, 1]
+    assert [u.bindings["G"] for u, _n in top[1:3]] == [K // PT.F_ROWS, K // PT.F_ROWS]
     assert sum(n * ands(u) for u, n in top) == ands(node)
 
 
@@ -85,10 +85,11 @@ def test_the_node_reads_its_place_and_no_noise_and_writes_ok_as_one_word() -> No
     assert [p for p, _t in params] == ["a", "b", "cert", *PC.PUBLIC] and PC.PUBLIC == ("salt", "root", "unit", "rows", "col")
     assert ret.fields[2] == Value(16)
     assert "PearlPlusTileCoreWords_v4" in REGISTRY.defs and "PearlPlusTileCoreWords_v2" not in REGISTRY.defs
-    assert {"PearlPlusTileSeed_v3", "PearlPlusTileLine_v4", "PearlPlusGramRow_v5", "PearlPlusTileCoreWired_v2"} <= set(REGISTRY.defs)
+    assert {"PearlPlusTileSeed_v4", "PearlPlusTileLine_v4", "PearlPlusGramRow_v5", "PearlPlusTileCoreWired_v2"} <= set(REGISTRY.defs)
     assert not {"PearlPlusTileNoise_v1", "PearlPlusTileNoise_v2", "PearlPlusTileKey_v1", "PearlPlusTileSeed_v1",
                 "PearlPlusGramRow_v2", "PearlPlusGramRow_v3", "PearlPlusTileLine_v2", "PearlPlusTileCoreWired_v1",
-                "PearlPlusTileCoreWords_v3", "PearlPlusTileSeed_v2", "PearlPlusTileLine_v3", "PearlPlusGramRow_v4"} & \
+                "PearlPlusTileCoreWords_v3", "PearlPlusTileSeed_v2", "PearlPlusTileSeed_v3", "PearlPlusTileLine_v3",
+                "PearlPlusGramRow_v4"} & \
         set(REGISTRY.defs)
 
 

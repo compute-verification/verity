@@ -1,5 +1,5 @@
 """The vectors of the noise a credited unit derives inside from its public row (the eb, fa, fb and g of
-`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v3`, `PearlPlusTileLine_v4` and
+`pearl_plus_credited.PearlPlusTileCoreWords_v4`, its units `PearlPlusTileSeed_v4`, `PearlPlusTileLine_v4` and
 `PearlPlusGramRow_v5`): ``fixtures/pearl_plus_public_row.json``, regenerated here from the reference functions
 (`pearl_plus_credited.row_eb` …) and compared byte for byte, and the units, on their words and on bits, held to them.
 
@@ -83,8 +83,8 @@ def test_the_vectors_cover_two_devices_two_columns_and_full_bytes():
 
 def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
     """The case's noise as the node's units derive it, wired as the node wires them: the seed (key and line indices),
-    one line per index, one Gram row per F_B column; on their word bodies, or on 16-bit words (the seed's, each line
-    unit's (eb's one line, F's K/8) and each row's, bit-sliced through their gates).  eb's, fa's and fb's codes, then g's FP32
+    one line per index, one Gram row per F_B column; on their word bodies, or on 16-bit words (the seed's, which writes
+    eb's lines itself, each line unit's (F's K/8) and each row's, bit-sliced through their gates).  eb's, fa's and fb's codes, then g's FP32
     words little-endian, as the reference's bytes: on 16-bit words, each word's two bytes little-endian."""
     k, tn, dev = c["k"], c["tn"], c["dev"]
     salt, root = bytes.fromhex(c["salt"]), bytes.fromhex(c["root_b"])
@@ -99,6 +99,7 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
         s = evaluate_batch(seed, *(np.asarray(x, dtype=np.int64) for x in ([list(salt)], [list(root)], [[c["col"]]])))
         s = s.reshape(-1).tolist()
         key, ebi, fi = s[:32], [[i] for i in s[32:32 + tn]], [[i] for i in s[32 + tn:]]
+        eb = go(line("eb", 1), [key] * tn, ebi)
     else:
         seed, line, row, per = PT.seed(k, tn), PT.line, lambda p: PT.gram_row(k, dev, p), k // PT.F_ROWS
 
@@ -107,9 +108,8 @@ def noise_units(c: dict, *, bits: bool) -> dict[str, bytes]:
 
         s = go(seed, [PC.le16(salt)], [PC.le16(root)], [[c["col"]]])
         s = s.reshape(-1).tolist()
-        key, ebi, fi = s[:16], [s[16 + 2 * j:18 + 2 * j] for j in range(tn)], [s[16 + 2 * (tn + t):18 + 2 * (tn + t)]
-                                                                             for t in range(k)]
-    eb = go(line("eb", 1), [key] * tn, ebi)
+        key, eb = s[:16], np.asarray(s[16:16 + 16 * tn]).reshape(tn, 16)
+        fi = [s[16 + 16 * tn + 2 * t:18 + 16 * tn + 2 * t] for t in range(k)]
     fg = [sum(fi[t:t + per], []) for t in range(0, k, per)]
     fa, fb = (go(line(kind, per), [key] * len(fg), fg) for kind in ("fa", "fb"))
     g = np.concatenate([go(row(p), [fb.reshape(-1)], [fa.reshape(-1)]) for p in range(32)])
@@ -132,7 +132,7 @@ def test_the_units_noise_on_words_is_the_vectors():
 
 @pytest.mark.slow
 def test_the_units_noise_on_bits_is_the_vectors():
-    """Slow: the noise units on 16-bit words (the seed, TN + 16 line units and 32 Gram rows) at every case, bit-sliced
+    """Slow: the noise units on 16-bit words (the seed with eb's TN lines, 16 line units and 32 Gram rows) at every case, bit-sliced
     through their gates (`evaluate_lowered`): the only check that the units the node Calls and maps derive the vectors' bytes bit for bit."""
     for c in json.loads(PATH.read_text())["cases"]:
         assert _agrees(c, noise_units(c, bits=True)), c
