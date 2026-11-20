@@ -2,12 +2,15 @@ module
 
 public import Properties.Spot.PortsHeld
 import all Lean.Data.Json.Basic
-import Proofs.Properties.Verity.Sampled.MemberForm.Passes
-import Proofs.Properties.Verity.Sampled.Window.Members
-import Proofs.Flock.SpotFlock.OwnReads
-import Proofs.Flock.SpotFlock.ParamsWf
-import Proofs.Flock.SpotFlock.RunsAs.Outcome
-import Proofs.Flock.Claims.JsonNorm
+public import Spot.SecondStage
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Json.Record
+public import Proofs.Properties.Verity.Sampled.MemberForm.Passes
+public import Proofs.Properties.Verity.Sampled.Window.Members
+public import Proofs.Flock.SpotFlock.OwnReads
+public import Proofs.Flock.SpotFlock.ParamsWf
+public import Proofs.Flock.SpotFlock.RunsAs.Outcome
+public import Proofs.Flock.Claims.JsonNorm
 
 /-! # Proof that the per-member form holds every port of every member's statement (`Properties.Spot.MembersPortsHeld`) -/
 
@@ -95,15 +98,6 @@ theorem isObj_of_mem_entries {j : Json} {k : String} {v : Json} (h : (k, v) ∈ 
   | obj m => exact ⟨m, rfl⟩
   | _ => simp [entries] at h
 
-theorem isObj_of_mem_entries_getD {j : Json} {key k : String} {v : Json} (h : (k, v) ∈ entries (getD j key)) :
-    ∃ m, j = .obj m := by
-  cases j with
-  | obj m => exact ⟨m, rfl⟩
-  | _ =>
-    have : getD _ key = Json.null := rfl
-    rw [this] at h
-    simp [entries] at h
-
 theorem distinct_drop {j : Json} (hj : Wf j) (q : String) :
     FlockComplete.JsonRT.Distinct ((entries j).filter (·.1 != q)).toList := by
   rw [Array.toList_filter]
@@ -161,15 +155,14 @@ theorem find_push_filter (acc : Entries) (p' p : String) (r : Json) :
   rw [Array.find?_push, Array.find?_filter]
   by_cases h : p' = p
   · subst h
-    have : acc.find? (fun a => decide ((a.1 != p') = true ∧ (a.1 == p') = true)) = none := by
-      rw [Array.find?_eq_none]; intro a _; simp
-    simp [this]
-  · have : acc.find? (fun a => decide ((a.1 != p') = true ∧ (a.1 == p) = true)) = acc.find? (·.1 == p) := by
-      congr 1; funext a
-      by_cases ha : a.1 = p
-      · simp [ha, Ne.symm h]
-      · simp [ha]
-    simp [this, h]
+    simp
+    rw [show Array.find? (fun _ : String × Json => false) acc = none from Array.find?_eq_none.2 (by simp)]
+    rfl
+  · simp [h]
+    congr 1; funext a
+    by_cases ha : a.1 = p
+    · simp [ha, Ne.symm h]
+    · simp [ha]
 
 /-- What a step of `Record.byPort`'s fold does: a root naming a port replaces that port's entry, any other is skipped. -/
 def StepSpec (F : Entries → Json → Entries) : Prop :=
@@ -190,18 +183,6 @@ theorem byPort_spec :
   · unfold Record.byPort
     generalize getD rec "roots" = j
     cases j <;> rfl
-
-theorem find_step {F : Entries → Json → Entries} (hF : StepSpec F) (acc : Entries) (r : Json) (p : String) :
-    (F acc r).find? (·.1 == p) =
-      if getD r "port" = .str p then some (p, r) else acc.find? (·.1 == p) := by
-  by_cases hs : ∃ p', getD r "port" = .str p'
-  · obtain ⟨p', hp'⟩ := hs
-    rw [(hF acc r).1 p' hp', find_push_filter, hp']
-    by_cases h : p' = p
-    · subst h; simp
-    · simp [h]
-  · have hn : ∀ p', getD r "port" ≠ .str p' := fun p' h => hs ⟨p', h⟩
-    rw [(hF acc r).2 hn, if_neg (hn p)]
 
 def Good (acc : Entries) : Prop := ∀ e ∈ acc, acc.find? (·.1 == e.1) = some e
 
@@ -230,22 +211,29 @@ theorem byPort_good (rec : Json) : Good (Record.byPort rec) := by
   rw [he, ← Array.foldl_toList]
   exact good_fold hF _ _ (by intro e he; simp at he)
 
-theorem fold_find_filter {F : Entries → Json → Entries} (hF : StepSpec F) {p q : String} (hpq : p ≠ q) :
-    ∀ (l : List Json) (acc1 acc2 : Entries), acc1.find? (·.1 == p) = acc2.find? (·.1 == p) →
-      ((l.filter fun r => getD r "port" != .str q).foldl F acc1).find? (·.1 == p) = (l.foldl F acc2).find? (·.1 == p)
-  | [], _, _, h => h
-  | r :: l, acc1, acc2, h => by
-    rw [List.filter_cons]
-    by_cases hr : getD r "port" = .str q
-    · have : (getD r "port" != Json.str q) = false := by simp [hr]
-      rw [this]
-      apply fold_find_filter hF hpq l acc1 (F acc2 r)
-      rw [find_step hF, hr, if_neg (fun h' => hpq (Json.str.inj h').symm)]
+theorem fold_mem {F : Entries → Json → Entries} (hF : StepSpec F) (S : Json → Prop) :
+    ∀ (l : List Json) (acc : Entries), (∀ e ∈ acc, S e.2 ∧ getD e.2 "port" = .str e.1) → (∀ r ∈ l, S r) →
+      ∀ e ∈ l.foldl F acc, S e.2 ∧ getD e.2 "port" = .str e.1
+  | [], _, h, _ => h
+  | r :: l, acc, h, hl => by
+    refine fold_mem hF S l _ ?_ (fun r' hr' => hl r' (List.mem_cons_of_mem _ hr'))
+    by_cases hs : ∃ p', getD r "port" = .str p'
+    · obtain ⟨p', hp'⟩ := hs
+      rw [(hF acc r).1 p' hp']
+      intro e he
+      rcases Array.mem_push.1 he with he | rfl
+      · exact h e (Array.mem_filter.1 he).1
+      · exact ⟨hl r List.mem_cons_self, hp'⟩
+    · rw [(hF acc r).2 (fun p' h' => hs ⟨p', h'⟩)]
       exact h
-    · have : (getD r "port" != Json.str q) = true := by simp [hr]
-      rw [this]
-      apply fold_find_filter hF hpq l (F acc1 r) (F acc2 r)
-      rw [find_step hF, find_step hF, h]
+
+/-- An entry `byPort` keeps is one of the record's roots, under the port it names. -/
+theorem byPort_mem (rec : Json) :
+    ∀ e ∈ Record.byPort rec, e.2 ∈ (match getD rec "roots" with | .arr rs => rs | _ => #[]) ∧
+      getD e.2 "port" = .str e.1 := by
+  obtain ⟨F, hF, he⟩ := byPort_spec
+  rw [he, ← Array.foldl_toList]
+  exact fold_mem hF _ _ _ (by intro e he; simp at he) (fun r hr => Array.mem_toList_iff.1 hr)
 
 /-! ## What `dropPort` keeps -/
 
@@ -256,18 +244,15 @@ def HInv (R0 Dom0 : Json) (D : List String) (hc : Json) : Prop :=
     (∀ k, k ∉ D → field? (getD (getD hc "frame_v3") "roots") k = field? R0 k) ∧
     (∀ k, k ∉ D → getD (getD (getD hc "frame_v3") "domain_ids") k = getD Dom0 k)
 
-/-- The slice `rc` after the drops `D`: an object whose `byPort` finds every port outside `D` as the slice `S`'s does. -/
-def RInv (S : Json) (D : List String) (rc : Json) : Prop :=
+/-- The slice `rc` after drops: an object whose roots are among the slice `S`'s. `dropPort` filters roots by
+`BEq Json`, a `partial def` no proof reads, so which roots it keeps is not known beyond that. -/
+def RInv (S : Json) (rc : Json) : Prop :=
   (∃ m : Std.TreeMap.Raw String Json compare, rc = .obj m ∧ m.WF) ∧
-    ∀ k, k ∉ D → (Record.byPort rc).find? (·.1 == k) = (Record.byPort S).find? (·.1 == k)
+    ∀ r ∈ (match getD rc "roots" with | .arr rs => rs | _ => #[]), r ∈ (match getD S "roots" with | .arr rs => rs | _ => #[])
 
 theorem hinv_mono {R0 Dom0 : Json} {D D' : List String} {hc : Json} (hD : ∀ k, k ∉ D' → k ∉ D)
     (h : HInv R0 Dom0 D hc) : HInv R0 Dom0 D' hc :=
   ⟨h.1, h.2.1, h.2.2.1, fun k hk => h.2.2.2.1 k (hD k hk), fun k hk => h.2.2.2.2 k (hD k hk)⟩
-
-theorem rinv_mono {S : Json} {D D' : List String} {rc : Json} (hD : ∀ k, k ∉ D' → k ∉ D)
-    (h : RInv S D rc) : RInv S D' rc :=
-  ⟨h.1, fun k hk => h.2 k (hD k hk)⟩
 
 theorem hinv_step {R0 Dom0 : Json} {D : List String} {rc hc : Json} (q : String) (h : HInv R0 Dom0 D hc) :
     HInv R0 Dom0 (q :: D) (OneStageZk.dropPort rc hc q).2 := by
@@ -277,7 +262,7 @@ theorem hinv_step {R0 Dom0 : Json} {D : List String} {rc hc : Json} (q : String)
   have hDw : Wf (getD (.obj mf) "domain_ids") := wf_getD hfv _
   unfold OneStageZk.dropPort
   dsimp only
-  rw [hmf, SpotFlock.RunsAs.Outcome.setObjVal_obj, setObjVal_eq_setKey, setObjVal_eq_setKey]
+  rw [hmf, SpotFlock.RunsAs.setObjVal_obj, setObjVal_eq_setKey, setObjVal_eq_setKey]
   have hfv1 : Wf (.obj (mf.insert "roots" (Json.mkObj ((entries (getD (.obj mf) "roots")).filter (·.1 != q)).toList))) :=
     SpotFlock.ReadsJson.wf_setKey hfv (wf_drop hRw q) "roots"
   have hfv2 := SpotFlock.ReadsJson.wf_setKey hfv1 (wf_drop hDw q) "domain_ids"
@@ -297,29 +282,24 @@ theorem hinv_step {R0 Dom0 : Json} {D : List String} {rc hc : Json} (q : String)
     have hkD : k ∉ D := fun e => hk (List.mem_cons_of_mem _ e)
     rw [hself, getD_setKey_self hfv1, getD_drop hDw hkq, ← hDm k hkD, hmf]
 
-theorem rinv_step {S : Json} {D : List String} {rc hc : Json} (q : String) (h : RInv S D rc) :
-    RInv S (q :: D) (OneStageZk.dropPort rc hc q).1 := by
+theorem rinv_step {S : Json} {rc hc : Json} (q : String) (h : RInv S rc) :
+    RInv S (OneStageZk.dropPort rc hc q).1 := by
   obtain ⟨⟨m, rfl, hm⟩, hf⟩ := h
   unfold OneStageZk.dropPort
   dsimp only
-  rw [SpotFlock.RunsAs.Outcome.setObjVal_obj]
-  refine ⟨⟨_, rfl, Std.TreeMap.Raw.WF.insert hm⟩, fun k hk => ?_⟩
-  have hkq : k ≠ q := fun e => hk (e ▸ List.mem_cons_self)
-  have hkD : k ∉ D := fun e => hk (List.mem_cons_of_mem _ e)
-  rw [← hf k hkD]
-  obtain ⟨F, hF, he⟩ := byPort_spec
-  rw [he, he, getD_obj (m.insert _ _), Std.TreeMap.Raw.getElem?_insert_self hm]
-  dsimp only [Option.getD]
+  rw [SpotFlock.RunsAs.setObjVal_obj]
+  refine ⟨⟨_, rfl, Std.TreeMap.Raw.WF.insert hm⟩, fun r hr => ?_⟩
+  rw [getD_obj (m.insert _ _), Std.TreeMap.Raw.getElem?_insert_self hm] at hr
+  dsimp only [Option.getD] at hr
+  revert hf hr
   generalize getD (.obj m) "roots" = j
+  intro hf hr
   cases j with
-  | arr rs =>
-    dsimp only
-    rw [← Array.foldl_toList, ← Array.foldl_toList, Array.toList_filter]
-    exact fold_find_filter hF hkq _ _ _ rfl
-  | _ => rfl
+  | arr rs => exact hf r (Array.mem_filter.1 hr).1
+  | _ => simp at hr
 
 theorem dropAll_inv {R0 Dom0 S : Json} : ∀ (D : List String) (s : Json × Json) (E : List String),
-    HInv R0 Dom0 E s.2 → RInv S E s.1 → HInv R0 Dom0 (D ++ E) (dropAll s D).2 ∧ RInv S (D ++ E) (dropAll s D).1
+    HInv R0 Dom0 E s.2 → RInv S s.1 → HInv R0 Dom0 (D ++ E) (dropAll s D).2 ∧ RInv S (dropAll s D).1
   | [], _, _, h1, h2 => ⟨h1, h2⟩
   | q :: D, s, E, h1, h2 => by
     obtain ⟨g1, g2⟩ := dropAll_inv D (OneStageZk.dropPort s.1 s.2 q) (q :: E)
@@ -329,7 +309,7 @@ theorem dropAll_inv {R0 Dom0 S : Json} : ∀ (D : List String) (s : Json × Json
       apply hk
       simp only [List.mem_cons, List.mem_append] at h ⊢
       tauto
-    exact ⟨hinv_mono hm g1, rinv_mono hm g2⟩
+    exact ⟨hinv_mono hm g1, g2⟩
 
 /-! ## What `headerHeld` and `headerHeldAt` accept -/
 
@@ -386,6 +366,12 @@ def Dropped (reads : Array (String × String)) (held : Array Flock.Registered.Po
     ∃ t, getD r "tree" = .str t ∧ (q, t) ∈ reads) ∨
   ((∀ x ∈ Record.byPort slice, x.1 ≠ q) ∧ ∃ v, (q, v) ∈ reads ∧ OneStageZk.registeredAt held q v = true)
 
+theorem ite_ok {c : Prop} [Decidable c] {α : Type} {x y z : α} (h : (if c then x else y) = z) :
+    (c ∧ x = z) ∨ (¬c ∧ y = z) := by
+  by_cases hc : c
+  · exact Or.inl ⟨hc, by rwa [if_pos hc] at h⟩
+  · exact Or.inr ⟨hc, by rwa [if_neg hc] at h⟩
+
 theorem headerHeldAt_drops {reads : Array (String × String)} {held : Array Flock.Registered.Port} {rec h : Json}
     (hh : OneStageZk.headerHeldAt reads held rec h = .ok ()) :
     ∃ D, (∀ q ∈ D, Dropped reads held rec q) ∧
@@ -401,17 +387,13 @@ theorem headerHeldAt_drops {reads : Array (String × String)} {held : Array Floc
   obtain ⟨D1, hD1, rfl⟩ := forIn_drops_arr (Dropped reads held rec) _ _ (by
     intro ⟨p, t, r⟩ ha s s' hf
     dsimp only at hf
-    split at hf
-    · rename_i hc
-      cases hf
+    rcases ite_ok hf with ⟨hc, hf⟩ | ⟨-, hf⟩
+    · cases hf
       refine Or.inr ⟨p, Or.inl ?_, rfl⟩
       obtain ⟨r0, hr0, hfm⟩ := Array.mem_filterMap.1 ha
-      split at hfm
-      · rename_i p' t' hp ht
-        cases hfm
-        exact ⟨r0, hr0, hp, t, ht, Array.contains_iff_mem.1 hc⟩
-      · cases hfm
-    · split at hf
+      cases hp : getD r0 "port" <;> cases ht : getD r0 "tree" <;> rw [hp, ht] at hfm <;> cases hfm
+      exact ⟨r0, hr0, hp, _, ht, Array.contains_iff_mem.1 hc⟩
+    · rcases ite_ok hf with ⟨-, hf⟩ | ⟨-, hf⟩
       · first
           | (simp only [throw, throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at hf; done)
           | cases hf
@@ -420,15 +402,13 @@ theorem headerHeldAt_drops {reads : Array (String × String)} {held : Array Floc
   obtain ⟨D2, hD2, rfl⟩ := forIn_drops_arr (Dropped reads held rec) _ _ (by
     intro ⟨p, v⟩ ha s s' hf
     dsimp only at hf
-    split at hf
-    · rename_i hc
-      dsimp only at hf
-      split at hf
+    rcases ite_ok hf with ⟨hc, hf⟩ | ⟨-, hf⟩
+    · dsimp only at hf
+      rcases ite_ok hf with ⟨-, hf⟩ | ⟨hr, hf⟩
       · first
           | (simp only [throw, throwThe, MonadExceptOf.throw, bind, Except.bind, reduceCtorEq] at hf; done)
           | cases hf
-      · rename_i hr
-        cases hf
+      · cases hf
         refine Or.inr ⟨p, Or.inr ⟨fun x hx hxp => ?_, v, ha, _root_.Verity.Sampled.PerMember.of_not_bnot hr⟩, rfl⟩
         have hany : (Record.byPort rec).any (·.1 == p) = true := Array.any_eq_true'.2 ⟨x, hx, by simp [hxp]⟩
         rw [hany] at hc
@@ -475,9 +455,9 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   obtain ⟨m, hm⟩ := isObj_of_getD hmf
   have hinit : HInv (getD (getD hd "frame_v3") "roots") (getD (getD hd "frame_v3") "domain_ids") [] hd :=
     ⟨hw, ⟨m, hm⟩, ⟨mf, hmf⟩, fun _ _ => rfl, fun _ _ => rfl⟩
-  have rinit : RInv slice [] slice := ⟨hs, fun _ _ => rfl⟩
+  have rinit : RInv slice slice := ⟨hs, fun _ h => h⟩
   obtain ⟨hI, rI⟩ := dropAll_inv D (slice, hd) [] hinit rinit
-  rw [List.append_nil] at hI rI
+  rw [List.append_nil] at hI
   obtain ⟨hw', -, -, hR', hDom'⟩ := hI
   obtain ⟨hu, hc⟩ := headerHeld_ok hfin
   generalize dropAll (slice, hd) D = s at hR' hDom' hw' rI hu hc
@@ -498,7 +478,7 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   obtain ⟨r, hr, hrp⟩ := Array.any_eq_true'.1 hany'
   have hrp' : r.1 = p := by simpa using hrp
   have hfind' : (Record.byPort rec').find? (·.1 == p) = some r := by rw [← hrp']; exact byPort_good rec' r hr
-  have hfind : (Record.byPort slice).find? (·.1 == p) = some r := (rI.2 p hpD).symm.trans hfind'
+  obtain ⟨hmem, hport⟩ := byPort_mem rec' r hr
   unfold Record.matchesPublic at hc
   obtain ⟨hroots, hdoms⟩ := matchesPublic_ok hc
   obtain ⟨⟨k', v'⟩, he', he1, he2⟩ := hroots r hr
@@ -510,7 +490,7 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   have hgood := byPort_good rec' pr' hpr'
   rw [← hd1, hrp', hfind'] at hgood
   cases hgood
-  refine ⟨r, hfind, he2, ?_⟩
+  refine ⟨r.2, rI.2 _ hmem, by rw [hport, hrp'], he2, ?_⟩
   rw [hrp', hDom' p hpD] at hd2
   exact hd2
 

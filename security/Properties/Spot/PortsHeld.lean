@@ -15,8 +15,9 @@ holds its public file's header there (`OneStageZk.headerHeldAt`). `MembersPortsH
   registered reads name the port at that tree;
 * **at a registered value**: the slice holds no root of the port, and the member's registered reads name the port at a
   value the verifier's registered file holds at it as a registered value (`OneStageZk.registeredAt`);
-* **at the slice's root**: the slice's root of the port (`Spot.Record.byPort`, the last of its roots) is the header's
-  root there, and its domain the header's domain there.
+* **at the slice's root**: a root of the slice naming the port is the header's root there, and its domain the header's
+  domain there. Where the slice names a port more than once, this is one of its roots there, not necessarily the last,
+  which `Spot.Record.byPort` keeps: `headerHeldAt` drops roots by `BEq Json`, a `partial def` no proof reads.
 
 It names the read that holds a port of the first two kinds and does not say that the read opened: that each row of it
 opens under the registration's root at the leaf C gives is the session's (`Flock.Registered.checkPort`), which runs
@@ -33,15 +34,15 @@ namespace Properties.Spot
 
 /-- **A port `p` of a member's public file's header `h`, at the root `x` there, is held** at the member's slice `slice`
 of the registration, at its registered reads `reads` and the verifier's registered file's ports `held`: by a registered
-read at the slice's tree of the port, at a registered value where the slice holds no root of it, or at the slice's
-root and domain of it. -/
+read at the slice's tree of the port, at a registered value where the slice holds no root of it, or at a root and
+domain the slice gives it. -/
 def PortHeld (reads : Array (String × String)) (held : Array Flock.Registered.Port) (slice h : Json) (p : String)
     (x : Json) : Prop :=
   (∃ r ∈ (match getD slice "roots" with | .arr rs => rs | _ => #[]), getD r "port" = .str p ∧
     ∃ t, getD r "tree" = .str t ∧ (p, t) ∈ reads) ∨
   ((∀ q ∈ Record.byPort slice, q.1 ≠ p) ∧ ∃ v, (p, v) ∈ reads ∧ OneStageZk.registeredAt held p v = true) ∨
-  ∃ r, (Record.byPort slice).find? (·.1 == p) = some r ∧ jeq (getD r.2 "root") x = true ∧
-    jeq (getD (getD (getD h "frame_v3") "domain_ids") p) (getD r.2 "domain") = true
+  ∃ r ∈ (match getD slice "roots" with | .arr rs => rs | _ => #[]), getD r "port" = .str p ∧
+    jeq (getD r "root") x = true ∧ jeq (getD (getD (getD h "frame_v3") "domain_ids") p) (getD r "domain") = true
 
 /-- **Every port of the header `h`'s `frame_v3` roots is held** (`PortHeld`). -/
 def PortsHeld (reads : Array (String × String)) (held : Array Flock.Registered.Port) (slice h : Json) : Prop :=
