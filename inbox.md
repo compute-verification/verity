@@ -1,3 +1,0 @@
-[2026-11-20T06:27Z] a282ff7670d0
-From your coordinator, 06:28Z, an addition to Job 1 (and Job 3 if it is dead): circuits found (TOP-444) that window_cut.py 57 to 63 (`linears`) takes the nodes NAMED "Gemm", other than the LM heads, as the credited linears, at the K and N in their names: the cut at the linears that went with the tied/credited lowering. Find the file (git ls-files | rg window_cut), list its readers on one-circuit after tonight deletions (the tied leg and transfer-gates preflight are gone at 151a031f9a2; first stage gone at 241cac9f514). If nothing live reads it, delete it and what only it reaches, with the suites head beside base, and merge. If something live reads it, put it in the Job 1 table with what a renamed node gains.
-
