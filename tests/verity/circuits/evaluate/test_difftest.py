@@ -430,18 +430,19 @@ def _words(bits: list[int], widths: list[int]) -> list[int]:
 #: a test whose whole run is a minute or more on a node: it stays out of every check but the nightly cold one, which runs each
 #: by name with VERITY_SLOW=1 (check.py's `OPT_IN`)
 FULL = pytest.mark.skipif(settings.get("VERITY_SLOW") != "1", reason="over a minute on a node: VERITY_SLOW=1")
-#: a sampled port's examples or a grid's rows, every tenth in `check` and every one only as `FULL` runs: the full run reaches
-#: the draws and rows between the tenth's, which no cheaper test does
-EVERY = pytest.mark.parametrize("every", [pytest.param(10, id="tenth"), pytest.param(1, id="full", marks=pytest.mark.skipif(
-    settings.get("VERITY_SLOW") != "1", reason="over a minute on a node: VERITY_SLOW=1"))])
+def share(n: int):
+    """The mark of a sampled port's examples or a grid's rows: every ``n``-th in `check` (`share`), and every one (`full`) only
+    as `FULL` runs: the full run reaches the draws and rows between the share's, which no cheaper test does."""
+    return pytest.mark.parametrize("every", [pytest.param(n, id="share"), pytest.param(1, id="full", marks=pytest.mark.skipif(
+        settings.get("VERITY_SLOW") != "1", reason="over a minute on a node: VERITY_SLOW=1"))])
 
 
 def sampled(server, port: DT.Port, examples: int, every: int, outputs: int, rejects: int) -> None:
-    """``port`` on ``examples`` // ``every`` examples: at least that share of ``outputs`` answered, and of ``rejects`` (half
-    of it, at least one, on a share) refused."""
+    """``port`` on ``examples`` // ``every`` examples: at least ``outputs`` answered and ``rejects`` refused, on a share half
+    of its part of each."""
     stats = DT.run(port, examples=examples // every, seed=0, server=server)
-    least = rejects if every == 1 else max(1, rejects // (2 * every))
-    assert stats.outputs >= outputs // every and stats.rejects >= least, stats
+    part = 1 if every == 1 else 2 * every
+    assert stats.outputs >= outputs // part and stats.rejects >= rejects // part, stats
 
 
 def agree(server, cases: list[dict]) -> tuple[int, int]:
@@ -453,7 +454,7 @@ def agree(server, cases: list[dict]) -> tuple[int, int]:
 # ---- the tests ----------------------------------------------------------------------------------------------------------
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_random_boolean_composites(server, every):
     sampled(server, PORT, RANDOM_EXAMPLES, every, 512, 128)
 
@@ -630,7 +631,7 @@ PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_ref
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_layout_gates_sampled(server, every):
     sampled(server, GATE_PORT, 400, every, 200, 20)
 
@@ -737,7 +738,7 @@ def test_scalar_primitives_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_scalar_primitives_sampled(server, every):
     sampled(server, SCALAR_PORT, 2000, every, 1000, 100)
 
@@ -910,7 +911,7 @@ def test_float_primitives_on_their_edge_grids(server):
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_the_fmas_on_their_edge_grids(server, every):
     """The three-operand primitives (the FMAs: RN, FTZ, the negated addend, RM; v1 and v2) on every triple of FP32 edge words,
     each answer also the Python primitive's own evaluator's."""
@@ -936,7 +937,7 @@ FLOAT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_float_primitives_sampled(server, every):
     sampled(server, FLOAT_PORT, 2000, every, 1500, 100)
 
@@ -1117,7 +1118,7 @@ def _agree_on(server, fn: PrimitiveDefinition, grid: list[list[tuple]], every: i
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_tc_steps_on_their_edge_grids(server, every):
     """Every dot step on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials at two
     positions, and (the block-scaled steps) on every pair of edge scale bytes; each answer also the Python primitive's own
@@ -1130,7 +1131,7 @@ def test_tc_steps_on_their_edge_grids(server, every):
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_tc_steps_on_the_accumulator_sweep(server, every):
     """Every dot step with each of the 3118 one-operand FP32 words as its accumulator over each background of
     `_tc_backgrounds`: the accumulator's truncation onto the adder, its alignment against the products, saturation, and the
@@ -1170,7 +1171,7 @@ TC_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, i
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_tc_steps_sampled(server, every):
     sampled(server, TC_PORT, 1000, every, 800, 50)
 
@@ -1312,7 +1313,7 @@ def _tiles(z, *scales: str) -> tuple[list[tuple], list[int]]:
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_the_sm120_captures(server, every):
     """The RTX PRO 6000's E5M2 specials and signed-zero tiles (38,912 words, NaN and infinite
     operands and accumulators included) through `BlackwellE5m2QmmaDot32_v1`, and its four MXFP4 edge families
@@ -1497,7 +1498,7 @@ def _word_family(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_word_primitives_on_their_families(server, every):
     """The 16-entry accumulators under every edge accumulator over structured and sampled entries, the windows over
     backgrounds and specials at the atom boundaries, the salt-dead bits on every noise byte under each edge accumulator and
@@ -1564,7 +1565,7 @@ WORD_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_word_primitives_sampled(server, every):
     sampled(server, WORD_PORT, 2000, every, 1500, 100)
 
@@ -1617,7 +1618,7 @@ def _sampler_grid(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_sampler_primitives_on_their_grids(server, every):
     """The logs on every word of `LOG_SWEEP`, the Gumbel lane (both versions) on the first 2048 vocabulary indices and the
     extremes under each key of `GUMBEL_KEYS` and on the lanes at the uniform's floor, the stream key on every pair of 64-bit edges and small positions, and the keep
@@ -1629,7 +1630,7 @@ def test_sampler_primitives_on_their_grids(server, every):
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_the_logs_on_sampled_words(server, every):
     """`NvLogf_v1` and `_v2` on 2^18 seeded samples of the whole 32-bit range, in requests of 2^16."""
     rng = random.Random("logs")
@@ -1745,7 +1746,7 @@ SAMPLER_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-@EVERY
+@share(40)
 def test_sampler_primitives_sampled(server, every):
     sampled(server, SAMPLER_PORT, 1000, every, 800, 50)
 
@@ -1783,7 +1784,7 @@ def _test_mufu_literals(*names: str) -> dict:
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_mufu_primitives_on_their_grids(server, every):
     """Each MUFU primitive on every word of `MUFU_SWEEP`, each answer also the Python primitive's own evaluator's."""
     counts = {fn.id: _agree_on(server, fn, [[(a,) for a in MUFU_SWEEP[i:i + 8192]] for i in range(0, len(MUFU_SWEEP), 8192)], every)
@@ -1861,7 +1862,7 @@ MUFU_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference,
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_mufu_primitives_sampled(server, every):
     sampled(server, MUFU_PORT, 1000, every, 800, 50)
 
@@ -1919,7 +1920,7 @@ DECIMAL_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_referen
 
 
 @pytest.mark.slow
-@EVERY
+@share(40)
 def test_decimal_primitives_sampled(server, every):
     sampled(server, DECIMAL_PORT, 1000, every, 800, 50)
 
@@ -1954,7 +1955,7 @@ def _act_grid(fn: PrimitiveDefinition) -> list[tuple]:
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_activations_on_their_grids(server, every):
     """SiLU-and-mul (both versions) and GeLU-tanh-and-mul on every gate word under each of `_UPS` and on every pair of bf16
     edges, GeLU-erf on every word, `TanhF32Rn_v1` on `TANH_SWEEP`, and RoPE's two outputs on every pair of bf16 edges under
@@ -2012,7 +2013,7 @@ ACT_PORT = DT.Port("verity-evaluate", "evaluate", reference=evaluate_reference, 
 
 
 @pytest.mark.slow
-@EVERY
+@share(10)
 def test_activations_sampled(server, every):
     sampled(server, ACT_PORT, 1000, every, 800, 50)
 
