@@ -263,7 +263,7 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
     notAdmitted "port-names" s!"C_S's template {key}: port {n} is named twice"
   let (L, dl) ← match Flock.Lift.lift S d with
     | .ok r => pure r
-    | .error e => notAdmitted "on-bits" s!"the lift to bits refuses C_S's template {key}: {e}"
+    | .error _ => notAdmitted "on-bits" s!"the lift to bits refuses C_S's template {key}"
   if let some w := (wideFrom L dl)[0]? then
     notAdmitted "on-bits" s!"C_S's template {key} reaches {w}, whose leaves are not all one bit after the lift to bits"
   for (p, k) in cs do
@@ -368,6 +368,19 @@ def admitIn (d : String) (ts : List String) (us : Array Nat) : V Admit := do
 
 #guard refusedBy (admitIn AB16 ["A_v0", "B_v0"] #[0, 1]) "one-template" "C_S's root calls [A_v0, B_v0], and a block's units are instances of one template"
 #guard (admitIn AB16 ["A_v0", "B_v0"] #[1]).toOption.map (·.key) == some "B_v0"
+
+/-- `E16` returning `Value 16` named by one leaf of `map Not y`: a template wide on its return alone. -/
+def R16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",16]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,1]},"ret_type":["Value",16]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Value",16]]}"#
+
+/-- X(a : Value 16) = Inc16 a, a word primitive with no Boolean body: a template whose lift to bits would refuse. -/
+def X16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input16_v1","Inc16_v1","X_v1"],"definitions":{"Inc16_v1":{"form":"primitive","id":"Inc16_v1","params":[["a",["Value",16]]],"ret":["Value",16]},"Input16_v1":{"form":"primitive","id":"Input16_v1","params":[],"ret":["Value",16]},"Root[XProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":0}],"fn":2,"form":"call","out":0}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",16]},"form":"composite","id":"Root[XProg_v1]_v1"},"X_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["a",["Value",16]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",16]},"form":"composite","id":"X_v1"}},"program_fn":"XProg_v1","root":"Root[XProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",16]]}"#
+
+/-- Whether the decoder refuses the descriptor `d` with `why`: what no template `admitted` reads reaches. -/
+def undecoded (d why : String) : Bool :=
+  match Flock.Program.decode d.toUTF8 with | .error e => e == why | .ok _ => false
+
+#guard undecoded R16 "definition 'E_v1': E_REINTERPRET: the body's return: leaf 0 is typed Value<16> but names leaf 0 of node 0, a Value<1>: a silent reinterpretation. A word is read only at the width it was committed with; a runtime word is split into limbs only by a registered LimbSplit Definition, which computes the limbs and their carries"
+#guard undecoded X16 "E_BODY_MISSING: the word primitives [Inc16_v1] have no Boolean body in `boolean`"
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's

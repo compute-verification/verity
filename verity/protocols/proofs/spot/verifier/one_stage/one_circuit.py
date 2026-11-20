@@ -164,7 +164,7 @@ def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[l
     try:
         wide = lift_shape(D.desc, key)[1]
     except ValueError as e:
-        raise _not_admitted("on-bits", f"the lift to bits refuses C_S's template {key}: {e}") from e
+        raise _not_admitted("on-bits", f"the lift to bits refuses C_S's template {key}") from e
     if wide:
         raise _not_admitted("on-bits", f"C_S's template {key} reaches {wide[0]}, whose leaves are not all one bit after "
                                        "the lift to bits")

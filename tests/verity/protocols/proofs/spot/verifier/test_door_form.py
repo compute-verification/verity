@@ -113,6 +113,21 @@ def test_python_admits_what_lean_admits():
     assert _admit(descriptor("E16"), "E_v1", []) == ("E_v1", [("x", 16), ("y", 16)], [("o0", 16), ("o1", 16)])
 
 
+UNDECODED = re.compile(r'^#guard undecoded (\w+) "(.*)"$', re.M)
+
+
+@pytest.mark.parametrize("name,why", UNDECODED.findall(lean_text()))
+def test_what_lean_does_not_decode_python_does_not(name, why):
+    """A template wide on its return alone, and one whose lift to bits would refuse, are no descriptors: the decoders
+    refuse them before `admitted` reads them, Python by the same code."""
+    with pytest.raises(R.Refused) as e:
+        R.program(descriptor(name).encode())
+    code = re.search(r"\bE_[A-Z_]+", why).group(0)
+    assert code in str(e.value)
+    if name == "R16":
+        assert str(e.value) == f"E_DESCRIPTOR: {_unescape(why)}"
+
+
 def test_a_refused_block_reaches_no_executable():
     def never():
         raise AssertionError("built an executable for a C_S the door refuses")
