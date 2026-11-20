@@ -784,6 +784,13 @@ def test_the_workloads_piece_is_the_prover_nodes_first(capsys):
     assert rc == 0 and (got["plan"][0]["party"], first["component"]) == (T.WORKERS, T.SERVED_WINDOW)
 
 
+def test_an_application_stating_no_window_or_law_is_refused_by_name():
+    with pytest.raises(Refused) as e:
+        T.public({"workload": {"params": {}}, "service": {}})
+    assert (e.value.name, e.value.detail) == ("params", "the application file states no [workload.params] window-steps "
+                                                        "and no [service] law")
+
+
 #: what the adapter's `run.sh settings MODEL -- verity run ...` sets of the node the workload runs on
 NODE_SETTINGS = ("VENV", "CUDA_HOME", "HF_HOME", "FLOCK_WORK", "DISK_FLOOR_GB", "HIDDEN_SO", "NORM_TAP_SO",
                  "SERVE_ROOT", "ROW")

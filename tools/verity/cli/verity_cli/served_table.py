@@ -564,9 +564,10 @@ def _local_gate(cfg: Mapping[str, Any], state: Path, machines: Sequence[str] = (
     part.replace(f)
 
 
-SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
-              "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
-              "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
+SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution's record: the window's steps on what the adapter's serve "
+              "left on the prover node (its seal, the window and its advice, the window circuit's count, each listed "
+              "component's piece, the inference-only policy's steps); the sampled proofs are not run, so no proof is "
+              "made and no Lean verifier runs on one",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 class Launcher(NamedTuple):
     """What a declared piece's `Launch.entry` gives, called with its scheme's declaration: ``hooks(cfg, params, bound,
@@ -1063,16 +1064,24 @@ class ServedWorkload(NamedTuple):
 def public(cfg: Mapping[str, Any]) -> period.PublicParameters:
     """`run`'s public parameters as the application file states them: the window's length its engine steps
     (``[workload.params] window-steps``) and the sampling design its ``[service] law``. No key states the hardware or the
-    policy's limits."""
-    return period.PublicParameters(hardware=None, limits=None, window=cfg["workload"]["params"]["window-steps"],
-                                   sampling_design=cfg["service"]["law"])
+    policy's limits. Refused by name (``params``) where the file states either key not."""
+    window, law = cfg.get("workload", {}).get("params", {}).get("window-steps"), cfg.get("service", {}).get("law")
+    if window is None or law is None:
+        raise Refused("params", "the application file states no " + " and no ".join(
+            k for k, v in (("[workload.params] window-steps", window), ("[service] law", law)) if v is None))
+    return period.PublicParameters(hardware=None, limits=None, window=window, sampling_design=law)
+
+
+#: what registration says where no runtime party is listed, which is every application today
+REGISTRATION_PERFORMS_NOTHING = "registration performed nothing: no runtime party is listed"
 
 
 def _registration(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState) -> dict[str, Any]:
     """What today's road does before anything starts: every listed piece's bindings given, each runtime party
     prepared, and where one is, the run's registration (`registration`). Refused by name (``unbound``) while a listed
     piece's binding is missing, and ``unwritten`` (naming the goal) while a runtime party's start, `held` or the
-    registration is not written. Its ``prepared`` parties are the accounting stage's to start."""
+    registration is not written. Its ``prepared`` parties are the accounting stage's to start, and with none it
+    performs nothing and says so (``note``)."""
     runtime = [x for p in w.here for x in pieces(w.cfg, p) if x.runs == RUNTIME]
     if missing := unbound(w.cfg, w.bindings) if WORKERS in w.here else list(dict.fromkeys(
             k for x in runtime for k in x.unbound(w.bindings))):
@@ -1088,7 +1097,7 @@ def _registration(public: period.PublicParameters, w: ServedWorkload, state: per
             registration(w.cfg, w.state)
         except NotImplementedError as e:
             raise Refused("unwritten", f"the run's registration is not written ({e})") from None
-    return {"prepared": ready}
+    return {"prepared": ready, **({} if ready else {"note": REGISTRATION_PERFORMS_NOTHING})}
 
 
 #: the period's one window today: the one the runner picks from the serve dir's record (WINDOW, else plans.jsonl's last)
@@ -1153,7 +1162,9 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
     """Each party's outcome: its window's (the policy's runner's exit where the accounting's was 0), else a gate's side
     as started by the gate; and when the verifier is here, the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
     read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
-    component -> premise), and beside it what compilation said (``compilation``)."""
+    component -> premise), and beside it what the wipe, compilation and registration said (``wipe``, ``compilation``,
+    and ``registration`` where it performed nothing)."""
+    # a party at a time: a later window's outcome would replace an earlier one's, and the period has one window today
     out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
     for x in state.windows:
         for o in out.values():
@@ -1175,8 +1186,10 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
         said = "; ".join(sorted({x["accounting"]["compilation"]["note"] for x in state.windows}))
         try:
             line = remote_check if K.composite(w.cfg["protocols"], MANIFESTS) == REMOTE else onsite_check
-            out[VERIFIER] = {"outcome": {"verdicts": [{**line(w.cfg, w.state), mc.PREMISE: devices,
-                                                       "compilation": said}]}, "refused": None}
+            beside = {"wipe": state.wipe["note"], "compilation": said,
+                      **({"registration": n} if (n := state.registration.get("note")) else {})}
+            out[VERIFIER] = {"outcome": {"verdicts": [{**line(w.cfg, w.state), mc.PREMISE: devices, **beside}]},
+                             "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
     return Result(out)
