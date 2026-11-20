@@ -15,6 +15,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.ExecRows
 import Proofs.Flock.Soundness.ExecCheck
+import all Lean.Data.Json.Basic
 
 /-! What the deployed verifier's reading and setup of one statement establish, of any statement it reads. -/
 
@@ -184,7 +185,6 @@ end RecDeploy
 namespace FlockDeploy.BaseSetup
 
 open Lean (Json)
-open Flock (V)
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
@@ -192,7 +192,7 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error e => simp [bind, Except.bind] at h
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem forIn_list_ok {α : Type} {l : List α} {f : α → PUnit → V (ForInStep PUnit)}
+theorem forIn_list_ok {α : Type} {l : List α} {f : α → PUnit → Flock.V (ForInStep PUnit)}
     (h : ∀ a ∈ l, f a PUnit.unit = .ok (.yield PUnit.unit)) : forIn l PUnit.unit f = .ok PUnit.unit := by
   induction l with
   | nil => rfl
@@ -201,12 +201,12 @@ theorem forIn_list_ok {α : Type} {l : List α} {f : α → PUnit → V (ForInSt
     exact ih fun b hb => h b (List.mem_cons_of_mem _ hb)
 
 /-- A `for` loop over an array whose every step yields is `.ok`. -/
-theorem forIn_ok {α : Type} {xs : Array α} {f : α → PUnit → V (ForInStep PUnit)}
+theorem forIn_ok {α : Type} {xs : Array α} {f : α → PUnit → Flock.V (ForInStep PUnit)}
     (h : ∀ a ∈ xs, f a PUnit.unit = .ok (.yield PUnit.unit)) : forIn xs PUnit.unit f = .ok PUnit.unit := by
   rw [← Array.forIn_toList]
   exact forIn_list_ok fun a ha => h a (Array.mem_toList_iff.1 ha)
 
-theorem forIn_list_mem {α : Type} {l : List α} {f : α → PUnit → V (ForInStep PUnit)}
+theorem forIn_list_mem {α : Type} {l : List α} {f : α → PUnit → Flock.V (ForInStep PUnit)}
     (hy : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
     (h : forIn l PUnit.unit f = .ok PUnit.unit) : ∀ a ∈ l, f a PUnit.unit = .ok (.yield PUnit.unit) := by
   induction l with
@@ -224,21 +224,21 @@ theorem forIn_list_mem {α : Type} {l : List α} {f : α → PUnit → V (ForInS
       · exact ih h b hb
 
 /-- A `.ok` `for` loop over an array, whose steps only yield, yields at each element. -/
-theorem forIn_mem {α : Type} {xs : Array α} {f : α → PUnit → V (ForInStep PUnit)}
+theorem forIn_mem {α : Type} {xs : Array α} {f : α → PUnit → Flock.V (ForInStep PUnit)}
     (hy : ∀ a s, f a PUnit.unit = .ok s → s = .yield PUnit.unit)
     (h : forIn xs PUnit.unit f = .ok PUnit.unit) : ∀ a ∈ xs, f a PUnit.unit = .ok (.yield PUnit.unit) := by
   rw [← Array.forIn_toList] at h
   exact fun a ha => forIn_list_mem hy h a (Array.mem_toList_iff.2 ha)
 
 /-- A loop step `do A a; B a; pure (.yield ())` yields exactly when both calls are `.ok`. -/
-theorem body_ok {α : Type} {A B : α → V Unit} {a : α} :
-    (do A a; B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok (.yield PUnit.unit) ↔
+theorem body_ok {α : Type} {A B : α → Flock.V Unit} {a : α} :
+    (do A a; B a; pure (ForInStep.yield PUnit.unit) : Flock.V (ForInStep PUnit)) = .ok (.yield PUnit.unit) ↔
       A a = .ok () ∧ B a = .ok () := by
   rcases hA : A a with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
     simp [bind, Except.bind, pure, Except.pure]
 
-theorem body_yield {α : Type} {A B : α → V Unit} :
-    ∀ a s, (do A a; B a; pure (ForInStep.yield PUnit.unit) : V (ForInStep PUnit)) = .ok s →
+theorem body_yield {α : Type} {A B : α → Flock.V Unit} :
+    ∀ a s, (do A a; B a; pure (ForInStep.yield PUnit.unit) : Flock.V (ForInStep PUnit)) = .ok s →
       s = .yield PUnit.unit := by
   intro a s h
   rcases hA : A a with e | ⟨⟩ <;> rcases hB : B a with e' | ⟨⟩ <;>
