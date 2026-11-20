@@ -200,7 +200,10 @@ def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → F
 /-- **The memory wipe: input at most from its own past, for every server-day block**, at `pastBound E k` bits: `E i`, the
 bits that leave the attested boundary during the wipe that opens block `i`, plus the wipe residual at its location's
 registered label count `N` and label width `b` (bits), the wipe's challenge count `k i` and the soundness exponent `s`,
-plus the location's storage the wipe does not cover. From `Pous.Guarantees.StreamedWipeResidual`, read on the runs once
+plus the location's storage the wipe does not cover. Until the wipe's check refuses a fill below the registered memory,
+the guarantee is at the `N` the wipe ran at, and nothing ties that `N` to the hardware description; the comparison an
+instance needs is `memCap ≤ wipeLabels * labelBits + uncovered` with all three read from the registration. From
+`Pous.Guarantees.StreamedWipeResidual`, read on the runs once
 for each wipe (`RunReads`), each wipe a location of `Ls` (a finite family holding every listed location) and a day of
 the period, at error `2^-s` plus the PRF distinguisher's advantage `adv` a wipe; the row's error is that times the
 wipes, `|Ls| · nDays`, which bounds the run's server-day blocks (`serverDay_count_le`). `survives X d r` is that the
@@ -210,8 +213,17 @@ the whole memory, `N · b` bits, so the row's hypotheses are: the location's mem
 a hardware description listing more memory than the wipe fills makes the row's hypothesis false unless that term holds
 the rest; and in every accepted run the guarantee applies at every server-day block's numbers (`WipeApplies`), which
 `check` compares (`check_wipeApplies`). `k` is tied to what the wipe's check output only through `RunReads`; no
-attester's signed output is tied to it yet. Open: `RunReads` and `WipeInformationGivesWidth`. Proved from its premises
-by `ResourceAccounting.SecurityProofs.BlockProperties.wipeInputAtMost`. -/
+attester's signed output is tied to it yet. Open: `RunReads` and `WipeInformationGivesWidth`.
+
+Limit, to be mended or kept by Mon 23 Nov noon PST: the wipe's row holds for a server that is alone behind its attested
+boundary, or for a boundary whose every location is filled and challenged in ONE wipe (then `N` is every location's
+labels together and the egress is the boundary's over that wipe). Where servers behind one boundary are wiped at
+different times, a server's content can sit on its neighbour through its wipe and return, and nothing crosses the
+boundary: the row's `wipeEgress` is then no bound on what left the SERVER, and the row does not apply.
+
+`wipeInputAtMost` proves the summing over the period's wipes from `RunReads` and `WipeInformationGivesWidth` alone;
+`StreamedWipeResidual`, the memory cover and `WipeApplies` are not used by that proof: they are what an instance must
+hold to discharge `RunReads`, which is open. That the wipe bounds a block's input is not proved here. -/
 def WipeInputAtMost (Ls : Finset (Finset L)) (survives : Finset L → Fin P.nDays → P.Run → Prop)
     (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
   Pous.Guarantees.StreamedWipeResidual →
@@ -268,7 +280,13 @@ phase to the monitoring period — that the state each phase reads is the fold o
 is carried by `RunReads` here, which reads the phase guarantee on the period's runs; it is not a separate named def on this
 head, and restoring it as its own premise is ours with lean. Its channel term, the log of how many timing and failure
 patterns the operator can choose, is no width of any gate; whether the output is stated in information for that part is
-open for training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape. -/
+open for training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape.
+
+Limit, Wed 25 Nov: the two counts are tied by no premise yet; the row bounds undeclared output, and reads the attester's
+count only through an equality an instance owes.
+
+Limit, Wed 25 Nov: `ε` is the period's: the phase's error times the period's execution phases, as the wipe's row sums
+it. -/
 def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut egress' ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ)
     (ε : ℝ≥0∞) : Prop :=
   NetTiming.Attester.PhaseGetsBack →
