@@ -2,6 +2,9 @@ module
 
 public import Properties.Spot.PortsHeld
 import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.String.Legacy
+import Init.Data.String.Lemmas.Pattern.TakeDrop.String
 public import Spot.SecondStage
 public import Proofs.Flock.Claims.Complete.Json.Value
 public import Proofs.Flock.Claims.Complete.Json.Record
@@ -593,11 +596,21 @@ theorem membersPortsHeld : MembersPortsHeld := by
 
 /-- Parameters naming no members, a default program and no ports: what the per-member form reads of them before
 the registration's roots is nothing. -/
+def bareVerifier : Docket.Verifier where
+  program := default
+  query := .null
+  samplingDesign := .null
+  workTable := none
+  scheme := ""
+  ports := #[]
+  leafLayer := none
+  anchors := #[]
+  log := #[]
+  partition := none
+
 def bareParams : OneStageZk.Params where
-  base := { verifier := { program := default, query := .null, samplingDesign := .null, workTable := none, scheme := "",
-      ports := #[], leafLayer := none, anchors := #[], log := #[], partition := none }, delta := default }
-  own := { programJ := .null, program := ByteArray.empty, partition := .null, circuit := "", pub := "",
-    registered := none }
+  base := { verifier := bareVerifier, delta := default }
+  own := { programJ := .null, program := ByteArray.empty, partition := .null, pub := "", registered := none }
   members := none
 
 /-- **`MembersPortsHeld`'s nontrivial lemma**: at a registration whose roots are not a list, the verifier's roots of
@@ -610,5 +623,78 @@ theorem membersPortsHeld_nontrivial :
       .error "roots: the registration's roots are not a list" := rfl
   rw [e] at h
   cases h
+
+/-- The slice's root of port `a`, at the tree `t`. -/
+def wA : Json := Json.mkObj [("port", .str "a"), ("tree", .str "t")]
+
+/-- The slice's root of port `c`, at the root `x` of domain `d`. -/
+def wC : Json := Json.mkObj [("domain", .str "d"), ("port", .str "c"), ("root", .str "x")]
+
+/-- A slice holding port `a` at the tree `t` and port `c` at the root `x` of domain `d`. -/
+def wSlice : Json := Json.mkObj [("roots", .arr #[wA, wC])]
+
+/-- Registered reads of port `a` at the tree `t` and of port `b` at the empty value. -/
+def wReads : Array (String × String) := #[("a", "t"), ("b", "")]
+
+/-- The verifier's registered file holding the empty value at port `b`. -/
+def wHeld : Array Flock.Registered.Port :=
+  #[{ name := "b", value := "", root := .empty, leaves := 0, words := none, wordBits := 0, domain := .empty,
+      readsRel := #[] }]
+
+/-- A header naming the ports `a`, `b` and `c`, `c` at the root `x` of domain `d`. -/
+def wHeader : Json := Json.mkObj [("frame_v3", Json.mkObj [("domain_ids", Json.mkObj [("c", .str "d")]),
+  ("roots", Json.mkObj [("a", .str "ra"), ("b", .str "rb"), ("c", .str "x")])])]
+
+theorem jeq_str (q : String) : jeq (.str q) (.str q) = true := by
+  have hs : Flock.canon (.str q) = .ok (Flock.canonStr q) := by rw [Flock.canon]; rfl
+  unfold jeq
+  rw [hs]
+  simp
+
+/-- **`MembersPortsHeld`'s conclusion is inhabited in each of its three cases**, on a hash-free slice, header and
+reads: port `a` is held at a shared tree by a registered read, `b` at a registered value, and `c` at the slice's one
+root. It does not show that the check accepts anything. -/
+theorem portsHeld_threeCases : PortsHeld wReads wHeld wSlice wHeader := by
+  have hroots : getD wSlice "roots" = .arr #[wA, wC] := by with_unfolding_all rfl
+  have hent : entries (getD (getD wHeader "frame_v3") "roots") = #[("a", .str "ra"), ("b", .str "rb"), ("c", .str "x")] :=
+    by with_unfolding_all rfl
+  have hby : Record.byPort wSlice = #[("a", wA), ("c", wC)] := by with_unfolding_all rfl
+  have hreg : OneStageZk.registeredAt wHeld "b" "" = true := by
+    have h1 : "".startsWith OneStageZk.COMMITTED = false := by
+      rw [String.startsWith_string_eq_false_iff]; simp [OneStageZk.COMMITTED]
+    have h2 : Flock.Registered.isFreshValue "" = false := by simp [Flock.Registered.isFreshValue]
+    have h3 : OneStageZk.fieldTreeName "" = false := by
+      unfold OneStageZk.fieldTreeName String.splitOn
+      rw [String.splitOnAux]
+      with_unfolding_all rfl
+    have h4 : (wHeld.any fun q => q.name == "b" && q.value == "") = true := by decide +kernel
+    unfold OneStageZk.registeredAt
+    rw [h1, h2, h3, h4]
+    rfl
+  have hdom : getD (getD (getD wHeader "frame_v3") "domain_ids") "c" = .str "d" := by with_unfolding_all rfl
+  have hAp : getD wA "port" = .str "a" := by with_unfolding_all rfl
+  have hAt : getD wA "tree" = .str "t" := by with_unfolding_all rfl
+  have hCp : getD wC "port" = .str "c" := by with_unfolding_all rfl
+  have hCr : getD wC "root" = .str "x" := by with_unfolding_all rfl
+  have hCd : getD wC "domain" = .str "d" := by with_unfolding_all rfl
+  unfold PortsHeld PortHeld
+  rw [hroots, hent, hby]
+  dsimp only
+  intro pr hpr
+  simp only [Array.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hpr
+  rcases hpr with rfl | rfl | rfl
+  · exact Or.inl ⟨wA, by simp, hAp, "t", hAt, by simp [wReads]⟩
+  · refine Or.inr (Or.inl ⟨fun q hq => ?_, "", by simp [wReads], hreg⟩)
+    simp only [Array.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hq
+    rcases hq with rfl | rfl <;> simp
+  · refine Or.inr (Or.inr ⟨wC, by simp, hCp, fun r' hr' hp' => ?_, ?_, ?_⟩)
+    · simp only [Array.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hr'
+      rcases hr' with rfl | rfl
+      · rw [hAp] at hp'; simp at hp'
+      · rfl
+    · show jeq (getD wC "root") (.str "x") = true
+      rw [hCr]; exact jeq_str "x"
+    · show jeq (getD (getD (getD wHeader "frame_v3") "domain_ids") "c") (getD wC "domain") = true
+      rw [hdom, hCd]; exact jeq_str "d"
 
 end Properties.Spot.PortsHeldProof
