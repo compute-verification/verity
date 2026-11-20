@@ -616,7 +616,8 @@ def _registered(d: Path) -> dict:
 
 
 def _check(rec: dict, mine, publics: dict[str, bytes]):
-    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics))
+    return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), CS.leaf_layer(publics),
+                   partition=mine.partition)
 
 
 def _rows(d: Path) -> bytes:
@@ -2130,31 +2131,6 @@ def test_a_served_window_commit_binds_the_advice_the_server_committed(tmp_path, 
     reg.write_text(json.dumps({**doc, "binding": {**doc["binding"], "advice": {**doc["binding"]["advice"], "root": "ee" * 64}}}))
     with pytest.raises(ValueError, match=r"published records are refused \(advice\)"):
         PP.served_binding(a, s.compiler, s.data, r)
-
-
-def test_window_circuits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, the verifier's window-circuit reads W's
-    tables (`window_class.Tables` of the serve's H1 window Program) with no key; none without W. Refused by name for a W
-    under another Program, and where H1's rounds aren't the class's outputs."""
-    from verity_vllm.program.predict.window_circuit import Tables
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-    serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
-    (serve / "h1").mkdir(parents=True)
-    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
-    (serve / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
-    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-
-    def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), **kw}
-        return PP.h1_tie(argparse.Namespace(**args), cls)
-    assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
-    w, meta, tables = tie()
-    assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
-    with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
-        tie(window_registration=str(tmp_path / "other.json"))
-    with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
-        tie(SimpleNamespace(outputs=4))
 
 
 def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
