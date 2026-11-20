@@ -1,0 +1,23 @@
+{
+ "steps": [
+  {
+   "name": "door2",
+   "cap": 0,
+   "targets": [
+    {
+     "file": "verity/protocols/proofs/spot/verifier/one_stage/one_circuit.py",
+     "funcs": [
+      "admitted",
+      "template_form",
+      "admitted_block",
+      "lower"
+     ]
+    }
+   ],
+   "tests": [],
+   "slow": [
+    "tests/benchmarks/one_stage/test_door_walls.py::test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form"
+   ]
+  }
+ ]
+}
