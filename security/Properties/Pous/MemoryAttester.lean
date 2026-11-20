@@ -24,6 +24,7 @@ proved (`Proofs.Properties.Pous.MemoryChallenger`).
 @[expose] public section
 
 namespace MemoryAttester.Properties
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-- What an accepted verdict establishes about its inputs. -/
 def Accepted (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
@@ -54,8 +55,8 @@ its coins and the session's parameters (`__init__`) and keeps it until the sessi
 again (the receipt time), refuses an answer that is not `block_bytes` long, and records
 `Round(j, index, send, receipt, block_digest(block))`; the first late round ends the session `late`, the `k`-th on-time
 round `complete`; `close()` signs the ended session once (`LmsSigner.sign`), the message
-`memoryChallengerMessage(I, session, message(commitment, ended, rounds))` under its key, and only then releases the
-commitment.
+`memoryChallengerMessage(I, session, message(commitment, salt, ended, rounds))` under its key, `salt` the 64 bytes it drew
+for the session, and only then releases the commitment.
 
 The model takes the device's clock readings and the answers it receives as they came, and assumes nothing of them: a
 round's times are the device's own readings, whatever its clock did. It does not model what refuses a session before
@@ -77,10 +78,11 @@ structure Observed where
   receiptNs : Nat
   block : ByteArray
 
-/-- A session the device runs: its coins, its limit `Δ + RTT`, the answer's size, what the session audits, and what it
-observes in each round, in order. -/
+/-- A session the device runs: its coins, its record's salt, its limit `Δ + RTT`, the answer's size, what the session
+audits, and what it observes in each round, in order. -/
 structure Run where
   coins : CoinTree
+  salt : ByteArray
   limitNs : Nat
   blockBytes : Nat
   binding : ByteArray
@@ -116,7 +118,7 @@ structure Challengers where
 `memoryChallengerMessage` of the key's identifier, the session id and the session's `message`. -/
 def Signed (dev : Challengers) (pk m : ByteArray) : Prop :=
   ∃ r ∈ dev.sessions pk, ∃ ended rec, r.recorded.ended = some ended ∧
-    message r.commitment ended r.recorded.rounds = .ok rec ∧
+    message r.commitment r.salt ended r.recorded.rounds = .ok rec ∧
     memoryAttesterMessage (pk.extract 0 16) r.commitment.session rec = .ok m
 
 /-- The LMS verifier accepts `sig` (once decoded) under the key `pk` over the message `m`. -/
@@ -130,19 +132,20 @@ def challengePhaseMessage (s : SignedChallengePhase) : Option ByteArray :=
 
 /-! ### The strings a run hashes -/
 
-/-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
-its digest), the records stream under its `sha512/row/v2` prefix, the input of the session's `message`, and that of
-`memoryChallengerMessage`. -/
-def challengePhaseStrings (pk : ByteArray) (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : List ByteArray :=
+/-- What SHA-512 hashes for a session `(c, salt, ended, rounds)` signed under the key `pk`: the coin key (the header
+holds its digest), the records stream under its `sha512/row/v2` prefix, the input of the session's `message`, and that
+of `memoryChallengerMessage`. -/
+def challengePhaseStrings (pk : ByteArray) (c : ChallengePhaseCommitment) (salt : ByteArray) (ended : String)
+    (rounds : Array Round) : List ByteArray :=
   let head := (header c ended rounds.size).toUTF8
   [c.coinKey] ++
     (match recordsStream rounds with
       | .ok s => [Flock.HmRow.rowPrefixV2 (8 * s.size) ++ s]
       | .error _ => []) ++
     (match recordsDigest rounds with
-      | .ok d => [SESSION_TAG ++ Flock.be64 head.size.toUInt64 ++ head ++ d]
+      | .ok d => [SESSION_TAG ++ salt ++ Flock.be64 head.size.toUInt64 ++ head ++ d]
       | .error _ => []) ++
-    match message c ended rounds with
+    match message c salt ended rounds with
     | .ok rec =>
       if (pk.extract 0 16).size = 16 then
         [field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec]
@@ -151,9 +154,9 @@ def challengePhaseStrings (pk : ByteArray) (c : ChallengePhaseCommitment) (ended
 
 /-- The strings the run hashes: the signed session's, and those of each session the device ends under its key. -/
 def runStrings (s : SignedChallengePhase) (dev : Challengers) : List ByteArray :=
-  challengePhaseStrings s.publicKey s.commitment s.ended s.rounds ++
+  challengePhaseStrings s.publicKey s.commitment s.salt s.ended s.rounds ++
     (dev.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment r.salt e r.recorded.rounds
       | none => []
 
 /-- The signed session `s` is one the device ran under its key: its commitment is the one the device built, and

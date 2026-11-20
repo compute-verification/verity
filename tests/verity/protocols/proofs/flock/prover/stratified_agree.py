@@ -30,6 +30,9 @@ import tempfile
 from pathlib import Path
 from verity.circuits import population as PN
 
+sys.path.append(str(Path(__file__).resolve().parents[4] / "circuits"))
+import stand_in  # noqa: F401  this process's test primitives' Boolean bodies, as the suite's conftest registers them
+
 A4_SIZES = (287, 6_171_648, 11_480, 287, 287, 587_776)
 
 

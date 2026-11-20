@@ -19,9 +19,8 @@ computed row reads the column (`RecResiduals.readIns`), and Δ's source key at t
 unit's, one of its leaf's outputs is the bit's output word (`outAt`), and the bit's column of the output group is a
 computed one. Its cost is the known bits times the unit's ports, never the unit's gates.
 
-A port the file marks `read_in_full` (`READ_KEY`) is checked the same way, as one row of its registered row's words
-(`fullRows`): its every bit is read, at the registered width, so two statements that read one registered row in full
-depend on the same bits of it.
+A port named read in full is checked the same way, as one row of its registered row's words (`fullRows`): its every bit
+is read, at the registered width, so two statements that read one registered row in full depend on the same bits of it.
 -/
 
 @[expose] public section
@@ -166,17 +165,9 @@ def check (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray)
 
 open Lean (Json)
 
-/-- The key of a port entry whose row a computed row of the unit reads in every bit: `true`, or absent (false). -/
+/-- The key PoUW's leaf files mark a port read in full by. `Registered.PORT_KEYS` lacks it, so `Registered.ofJson` refuses
+a file that holds it: whether a port reads its whole row is a fact of C. -/
 def READ_KEY : String := "read_in_full"
-
-/-- **The ports a `--registered` file names read in full**: each port entry whose `read_in_full` (`READ_KEY`) is true. -/
-def readOf (j : Json) : V (Array String) := do
-  let .ok (.obj kvs) := j.getObjVal? "ports" | throw "registered reads: ports is not an object"
-  kvs.toArray.filterMapM fun (name, e) =>
-    match e.getObjVal? READ_KEY with
-    | .error _ => pure none
-    | .ok (.bool b) => pure (if b then some name else none)
-    | .ok _ => throw s!"registered reads: port {name}: {READ_KEY} is true or false"
 
 /-- A registered row's u16 words: `words` leaves of `wordBits` bits each. -/
 def regWords (reg : Registered.Port) : Nat := reg.words.getD 0 * (reg.wordBits / 16)

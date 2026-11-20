@@ -24,9 +24,9 @@ verity-bench check SPEC    # exit 0 only when every point has a passing run
 
 SPEC is a spec's id or its path, and `SPEC@CARD` names the card a run is on. Without one, a run is on the spec's one card,
 else on the card the driver reports, and a card the spec doesn't list is refused by name. A point's identity holds its
-card. A spec id from before its spec named no card (`llama32-1b-1gpu-pouw-protocol-served-h100`) names a stored run's spec
-alone: `verity_bench/data/former_spec_ids.toml` says which spec and card it is now, and no launch takes it. Its
-`[retired]` names each spec deleted with no successor, and a launch of one is refused with why. `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
+card. A stored run whose record names its spec by a path or id it no longer has carries a `spec` label, its `SPEC@CARD`
+now, and a run whose result names an arm by a former id an `arms` label, each id as it is named now
+(`verity_bench.served_table`). `tests/` checks that every pinned preset resolves as the vLLM integration's engine spec to
 its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## Stock serving
@@ -45,8 +45,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   in both.
 - `llama32-1b-bf16-served-arm`: the same on Llama-3.2-1B in BF16, on one RTX PRO 6000, H200 or H100.
 - `qwen3-8b-bf16-served-arm`: the compiled served arm on Qwen3-8B in BF16.
-- `qwen3-8b-bf16-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
-  don't fit one GPU beside the Commit's buffers.
 
 ## PoUW
 
@@ -58,8 +56,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
   of the served Pearl-C arm under one CUDA graph a decode step, not the protocol arm.
-- `llama32-1b-1gpu-stock-served`: its two stock arms alone, with no setup: a served point on an H100 whose machine
-  has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 
 ## PoUS's bandwidth audit
 
@@ -67,7 +63,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps, on one RTX PRO 6000 or H200.
 - `llama32-1b-fp8-1gpu-bandwidth-served`: the same on Llama-3.2-1B on one H200.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
-  (`verity-bench breakdown`).
+  (`verity-bench served-table`).
 
 ## The proof server at steady state
 
@@ -80,8 +76,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   with ten cores, the units walked on the host.
 - `llama32-1b-flock-steady-gemm-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
   with the one above, the same metric's Llama member.
-- `llama32-1b-flock-steady-small`: Llama 3.2 1B's census block types other than its attention, each under its
-  census name, at one prover on one H200 with ten cores.
 
 ## Sweeps
 

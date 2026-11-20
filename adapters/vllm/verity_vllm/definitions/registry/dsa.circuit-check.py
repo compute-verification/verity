@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 #: GLM-5.3's DSA indexer logits at its served shapes over every key count a served row takes, checked at these spots
 #: (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaMqaLogits_v3``).  Past about 32,480 keys the parameters are over
-#: the partition's leaf budget, so the last spot is partitioned by its `DsaMqaLogit_v3` Calls (`circuit_check.checks.by_callees`);
+#: the partition's leaf budget, so the last spot's size class is read off its return type (`circuit_check.checks.partition`);
 #: serving cuts a row into N = 1 slices (`verity_vllm.pipeline.serving_templates.SLICES`), the unit N = 1 checks whole
 RANGES = {
     "DsaMqaLogits_v3{N=1..32533,H=32,D=128}": (

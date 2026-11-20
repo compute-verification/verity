@@ -45,8 +45,8 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
-* **C's wiring** (`OneStageZk.derivedWiring`, whose wired ports read their writers' output field trees, `fieldRoots`):
-  not mirrored; `slices` gives a wired port no root.
+* **C's wiring** (`OneStageZk.derivedWiring`): a wiring Lean refuses raises `Outside` here, whose refusal codes are
+  `edges.edges`'.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -54,23 +54,27 @@ Where it is not Lean's step for step, each on a case neither side accepts:
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
+import math
 import os
-import subprocess
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.circuits.program import Program
+from verity.circuits import codec, edges as EG, partition_object as PO
+from verity.circuits.program import Program, is_input, is_registered
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger.coins import DRAW_FORM
 
-from . import closing as CL, one_circuit as OC, partition as P, proofs as PF
+from . import closing as CL, docket as DK, one_circuit as OC, partition as P, proofs as PF, registered as G
 from verity.commitments import registered_value as RV
+from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
+from . import lean_child as LC
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
 EXITS = {"accept": 0, "reject": 1, "undecided": 2}
@@ -86,8 +90,7 @@ def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: 
         canonical = json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
         for path, b in zip(paths, (canonical, commitment, evidence)):
             path.write_bytes(b)
-        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
+        p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], ok_statuses=LC.CHECK_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -137,7 +140,7 @@ def unwired_why(port: str) -> str:
             "output field: a wired port reads its writer's output field's tree")
 
 
-#: `OneStageZk.provedHeld`'s refusal
+#: `OneStageZk.UNITS_HANDED`
 UNITS_HANDED = "units: a member's units are its block of the partition object's blocks, never the parameters' own"
 PROVED_UNITS = "the units the sessions proved are not the evidence's proved_units"
 #: the heads of the two refusals `Flock.KsScope.checkOf` and the scope (`Flock.ProvedScope.checkOf`) word alike, of
@@ -147,6 +150,30 @@ UNREAD = ("refused: a circuit that does not parse (", "refused: a public file th
 #: the refusal (`flock_form`)
 Form = Callable[[Path, Path, Sequence[tuple[str, Path]]], "str | None"]
 _HEX = frozenset("0123456789abcdef")
+#: the value a registered port reads a committed tree of the registration as, ``committed/<port>`` (`rows.own_value`)
+COMMITTED = "committed/"
+#: `OneStageZk.INPUT_MEMBER`
+INPUT_MEMBER = "roots: a member is named input: a root input/n<w> is the window's tree of run input node w, no member's"
+
+
+def own_root_why(member: str, port: str) -> str:
+    """`OneStageZk.OWN_ROOT_WHY`: the refusal of a member's root of its own at a port C wires into it."""
+    return (f"member {member}: port {port} is a row of in(S) (C wires it from another block's outputs), and the "
+            "registration holds a root of its own for it: a crossing wire is committed once, in its writer's output "
+            "field's tree")
+
+
+def wired_tree_why(name: str, port: str) -> str:
+    """`OneStageZk.WIRED_TREE_WHY`: the refusal of member ``name``'s registered port whose value is a field tree's
+    name that is not its own output at its template's tree."""
+    return f"registered: member {name}'s port {port}: a wired port's tree is not derived from C yet"
+
+
+def _field_tree_name(v: str) -> bool:
+    """`OneStageZk.fieldTreeName`: ``v`` is ``<template>/o<j>`` (`Flock.Registered.fieldTree`)."""
+    parts = v.split("/")
+    j = parts[-1][1:]
+    return len(parts) >= 2 and parts[-1][:1] == "o" and j.isascii() and j.isdigit()
 
 
 class Outside(ValueError):
@@ -221,15 +248,26 @@ def _count(m: Mapping[str, Any]) -> int:
     return sum(hi - lo for lo, hi in m["units"])
 
 
-def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any]) -> list[tuple[int, int]]:
-    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`); a member whose
-    parameters hand it units of its own is refused."""
+def _block(name: str, m: Mapping[str, Any], descriptor: bytes, partition: Mapping[str, Any],
+           decoded: OC.Decoded | None = None) -> list[tuple[int, int]]:
+    """Member ``name``'s units, its block of the partition object's ``blocks`` (`one_circuit.block`). Lean's parse
+    refuses the parameters of a member handed units of its own or naming a block the object lacks
+    (`OneStageZk.membersOf`), so those raise `Outside` with Lean's ``params:`` reason."""
     if "units" in m:
-        raise _Refused(f"member {name}: {UNITS_HANDED}")
+        raise Outside(f"params: proofs: member {name}: {UNITS_HANDED}")
     try:
-        return OC.block(descriptor, partition, m["block"])
+        return OC.block(descriptor, partition, m["block"], decoded)
     except OC.Refused as e:
-        raise _Refused(f"member {name}: partition: {e}") from None
+        raise Outside(f"params: proofs: member {name}: partition: {e}") from None
+
+
+def _apart(ms: Mapping[str, Any]) -> None:
+    """`OneStageZk.membersOf`'s last check: no unit in two members' units, the first overlap of the ranges sorted by
+    start refused as Lean's parse refuses the parameters."""
+    rs = sorted((u for m in ms.values() for u in m["units"]), key=lambda u: u[0])
+    for prev, r in zip(rs, rs[1:]):
+        if r[0] < prev[1]:
+            raise Outside(f"params: proofs: unit {r[0]} is in two members' units: a unit is one member's")
 
 
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
@@ -350,6 +388,60 @@ def _laid(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
         raise _Refused(MEMBERS_LAID)
 
 
+def held_read_why(member: str, node: int) -> str:
+    """`OneStageZk.HELD_READ_WHY`."""
+    return (f"member {member}: its units read run Input node {node}, a held or tied parameter's, which R8 lets several "
+            "proof blocks read only as one registered tree, and it carries no registered file: a reader of a held or "
+            "tied parameter opens its rows by its registered reads")
+
+
+#: `OneStageZk.HELD_QUERY_WHY`.
+HELD_QUERY_WHY = ("the per-member form's partition is no template query that applies to the program (Q_template_instance, "
+                  "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off")
+
+
+def _held_reads(params: Mapping[str, Any], program: Program) -> list[tuple[range, int]]:
+    """`OneStageZk.heldReadsOf`: the readers of a held or tied parameter's run Input (`registered.held_gates`,
+    `docket._tied`, `partition.held_reads`), refused under a partition that is no template query applying to the
+    program (`HELD_QUERY_WHY`)."""
+    if not P.is_template_query(params["query"]):
+        raise _Refused(HELD_QUERY_WHY)
+    registered = list(params.get("registered") or {})
+    tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
+    try:
+        return P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
+    except P.QueryRefused:
+        raise _Refused(HELD_QUERY_WHY) from None
+
+
+def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
+    """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
+    tied parameter's run Input carries a registered file."""
+    reads = _held_reads(params, program)
+    for name, m in ms.items():
+        if m.get("registered") is None:
+            for units, i in reads:
+                if any(lo < units.stop and units.start < hi for lo, hi in m["units"]):
+                    raise _Refused(held_read_why(name, i))
+
+
+def held_root_why(member: str, w: int) -> str:
+    """`OneStageZk.HELD_ROOT_WHY`."""
+    return (f"member {member}: its units read C's run input node {w}, a held or tied parameter's, and its slice holds no "
+            f"port at input/n{w}: every reader of a held or tied parameter opens the record's one tree of its rows")
+
+
+def _held_roots(ms: Mapping[str, Any], reads: Sequence[tuple[range, int]],
+                roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+    """`OneStageZk.heldRootsHeld`: each member whose units meet a range of `reads` reading a held or tied parameter's run
+    Input node ``w`` has an entry of tree ``input/n<w>`` among its slice's roots."""
+    for name, m in ms.items():
+        for units, w in reads:
+            if (any(lo < units.stop and units.start < hi for lo, hi in m["units"])
+                    and not any(r.get("tree") == f"input/n{w}" for r in roots.get(name, ()))):
+                raise _Refused(held_root_why(name, w))
+
+
 def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
     """`OneStageZk.sampledHeld`: each statement's member, in the statements' order, has a unit among the evidence's
     ``proved_units`` `want`; the first that has none refuses (`OneStageZk.unsampled`)."""
@@ -361,7 +453,10 @@ def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) ->
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
     """A registered file's ports by the fields `classHeld` compares, in the file's order; `Outside` where one is not
-    read."""
+    read. A file of another format is refused by name, as `Flock.Registered.portsOf` refuses it."""
+    form = registered.get("format")
+    if type(form) is str and form != REGISTERED_READS_V2:
+        raise _Refused(f"member {name}: registered reads: not a {REGISTERED_READS_V2} file")
     ports = registered.get("ports")
     if not (isinstance(ports, dict) and ports):
         raise Outside(f"member {name}: its registered file names no ports")
@@ -398,11 +493,89 @@ def _class(ms: Mapping[str, Any]) -> None:
                                "member at one root")
 
 
+def _template_of(name: str) -> tuple[str, str] | None:
+    """`OneStageZk.templateOf`: a name read at its last ``/``; None for a name with none."""
+    i = name.rfind("/")
+    return None if i < 0 else (name[:i], name[i + 1:])
+
+
+def _templates(names: Any) -> set[str]:
+    """`OneStageZk.templatesOf`: the templates of the members named `names`."""
+    return {t[0] for n in names if (t := _template_of(n)) is not None}
+
+
+def _field_trees(ts: set[str], record: Mapping[str, Any]) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    """`OneStageZk.fieldTreesOf`: each root of `record` whose port is ``<template>/<field>`` of a template of `ts`, by
+    template, as ``(field, root)`` in the record's order, the root under the bare field."""
+    out: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    roots = record.get("roots")
+    for r in roots if isinstance(roots, list) else ():
+        port = r.get("port") if isinstance(r, dict) else None
+        t = _template_of(port) if type(port) is str else None
+        if t is not None and t[0] in ts:
+            out.setdefault(t[0], []).append((t[1], {"domain": r.get("domain"), "leaves": r.get("leaves"), "port": t[1],
+                                                    "root": r.get("root"), "tree": port}))
+    return out
+
+
+def _own_fields(ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]], name: str,
+                roots: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """`OneStageZk.ownFieldsOf`: the member `name`'s roots with its template's fields' trees at the fields it has no
+    root of."""
+    got = [dict(r) for r in roots]
+    t = _template_of(name)
+    for f, e in ft.get(t[0], ()) if t is not None else ():
+        if not any(r.get("port") == f for r in got):
+            got.append(dict(e))
+    return got
+
+
+def _tree_ports_held(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
+    """`OneStageZk.treePortsHeld`: every port of a member's registered file that opens a committed tree, a value
+    ``committed/<port>`` or a run input node's ``input/n<w>``, is the record's root of it, its root, domain and leaf
+    count (`OneStageZk.portTreeHeld`); a port whose value is a field tree's name is opened only as the member's own
+    output, ``<template>/<port>``, and any other refuses first (`wired_tree_why`)."""
+    roots = record.get("roots")
+    by_port = {r["port"]: r for r in (roots if isinstance(roots, list) else ())
+               if isinstance(r, dict) and type(r.get("port")) is str}
+    for name, m in ms.items():
+        reg, tmpl = m["registered"], _template_of(name)
+        for port in sorted(reg["ports"]) if reg is not None else ():
+            e = reg["ports"][port]
+            value = e["value"]
+            field = not value.startswith(COMMITTED) and _field_tree_name(value)
+            if field and (tmpl is None or f"{tmpl[0]}/{port}" != value):
+                raise _Refused(wired_tree_why(name, port))
+            t = value[len(COMMITTED):] if value.startswith(COMMITTED) else value if G.is_fresh_value(value) or field \
+                else None
+            if t is None:
+                continue
+            r = by_port.get(t)
+            if r is None:
+                raise _Refused(f"registered: member {name}'s port {port} opens the committed tree {t}, and the "
+                               f"registration holds no root {t}: a committed tree a statement opens is one its window "
+                               "registered before any coin")
+            what = next((w for w, ok in (("root", r.get("root") == e["root"]), ("domain", r.get("domain") == e["domain"]),
+                                         ("leaf count", _nat(r.get("leaves")) and r["leaves"] == e["leaves"]))
+                         if not ok), None)
+            if what is not None:
+                raise _Refused(f"registered: member {name}'s port {port} opens the committed tree {t} at another {what} "
+                               "than the registration's: a statement opens its window's registered tree, never another "
+                               "window's or another member's")
+
+
 def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    """`OneStageZk.rootsOf`: the docket's roots by the member each is of, its port without the member's name."""
+    """`OneStageZk.rootsOf`: the docket's roots by the member each is of, its port without the member's name; a root
+    ``<template>/<field>`` of a member's template, not named as a member, is the window's tree of the field, no
+    member's own (`_field_trees`), and a member's own root at such a field refuses (`OneStageZk.ownFieldsHeld`)."""
     roots = record.get("roots")
     if type(roots) is not list:
         raise _Refused("roots: the registration's roots are not a list")
+    ts = _templates(ms)
+    if (n := next((n for n in ms if n in ts), None)) is not None:
+        raise _Refused(DK.name_template(n))
+    if "input" in ms:
+        raise _Refused(INPUT_MEMBER)
     out: dict[str, list[dict[str, Any]]] = {name: [] for name in ms}
     for r in roots:
         port = r.get("port") if isinstance(r, dict) else None
@@ -410,16 +583,84 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
             raise _Refused("roots: a root of the registration names no port")
         if port == TABLE_PORT:
             raise _Refused(ROW_TABLES)
+        if G.is_fresh_value(port):
+            continue
         mine = [(port[:i], port[i + 1:]) for i, c in enumerate(port) if c == "/" and port[:i] in out]
         if not mine:
+            if port not in out and (t := _template_of(port)) is not None and t[0] in ts:
+                continue
             raise _Refused(f"roots: the registration's root {port} is no member's: a member's roots are named "
-                           "<member>/<port>")
+                           "<member>/<port>, and a window's tree of a template's field <template>/<field>")
         if len(mine) > 1:
             raise _Refused(f"roots: the registration's root {port} is two members': a member's roots are named "
                            "<member>/<port>, and a root is one member's")
         name, bare = mine[0]
         out[name].append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": bare, "root": r.get("root")})
+    ft = _field_trees(ts, record)
+    for name, rs in out.items():
+        t = _template_of(name)
+        if (f := next((f for f, _ in ft.get(t[0], ()) if any(r["port"] == f for r in rs)), None) if t else None) is not None:
+            raise _Refused(DK.own_field(name, f))
     return out
+
+
+def field_trees_why(what: str) -> str:
+    """`OneStageZk.FIELD_TREES_WHY`."""
+    return ("roots: the registration's trees of its templates' output fields are not the ones C and the partition give "
+            f"({what}): a window registers exactly one tree <template>/o<j> for each output field of each member's "
+            "template, its leaves the template's units in C")
+
+
+def _derived_field_trees(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any]) -> list[tuple[str, int]]:
+    """`OneStageZk.derivedFieldTrees`: for each member's template, in the members' order, ``<template>/o<j>`` for each
+    return field of the one Definition the partition's ranges over C give its members' units, its leaves that
+    Definition's units."""
+    try:
+        ranges = P._template(program, query, "the members' partition").ranges
+    except P.QueryRefused as e:
+        raise _Refused(str(e)) from None
+    fns = {PO.descriptor_id(fn): fn for _k, fn in PO.calls(program)}
+    tids: dict[str, str] = {}
+    for name in sorted(ms):
+        t = _template_of(name)
+        if t is None:
+            raise _Refused(field_trees_why(f"the member {name} names no template"))
+        met = list(dict.fromkeys(tid for lo, hi in ms[name]["units"] for _k, tid, first, n in ranges
+                                 if first < hi and lo < first + n))
+        if len(met) != 1:
+            raise _Refused(field_trees_why(f"the member {name}'s units are not one Definition's in C"))
+        if t[0] in tids:
+            if tids[t[0]] != met[0]:
+                raise _Refused(field_trees_why(f"the template {t[0]}'s members' units are two Definitions'"))
+        elif met[0] in tids.values():
+            raise _Refused(field_trees_why(f"the Definition {met[0]}'s units are two templates'"))
+        else:
+            tids[t[0]] = met[0]
+    out: list[tuple[str, int]] = []
+    for t, tid in tids.items():
+        n = sum(c for _k, r, _a, c in ranges if r == tid)
+        ret = fns[tid].signature()[1]
+        out += [(f"{t}/o{j}", n) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
+    return out
+
+
+def _field_trees_held(want: Sequence[tuple[str, int]], ts: set[str], record: Mapping[str, Any]) -> None:
+    """`OneStageZk.fieldTreesHeld`: each derived tree a root of `record`, once, at its derived leaf count, and no other
+    root ``<template>/<field>`` of a template of `ts`."""
+    roots = record.get("roots")
+    got = [(r["port"], r.get("leaves")) for r in (roots if isinstance(roots, list) else ())
+           if isinstance(r, dict) and type(r.get("port")) is str and (t := _template_of(r["port"])) is not None
+           and t[0] in ts]
+    for tree, n in want:
+        held = [leaves for port, leaves in got if port == tree]
+        if not held:
+            raise _Refused(field_trees_why(f"it omits {tree}"))
+        if len(held) > 1:
+            raise _Refused(field_trees_why(f"it holds {tree} more than once"))
+        if not (_nat(held[0]) and held[0] == n):
+            raise _Refused(field_trees_why(f"it holds {tree} at {json.dumps(held[0])} leaves, not {n}"))
+    if (port := next((p for p, _ in got if p not in dict(want)), None)) is not None:
+        raise _Refused(field_trees_why(f"it holds {port}, no output field's tree"))
 
 
 def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Mapping[str, Any]) -> dict[str, Any]:
@@ -427,21 +668,133 @@ def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Map
     return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
 
 
-def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _members_roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> tuple[dict[str, list[dict[str, Any]]],
+                                                                             dict[str, list[tuple[str, dict[str, Any]]]]]:
+    """`OneStageZk.membersRootsOf` before its wiring: `_roots`', each member's own output ports at its template's
+    fields' trees (`_own_fields`), and the window's trees (`_field_trees`) the wiring reads."""
+    roots = _roots(ms, record)
+    ft = _field_trees(_templates(ms), record)
+    return {name: _own_fields(ft, name, rs) for name, rs in roots.items()}, ft
+
+
+def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: Mapping[str, Any],
+                 ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]],
+                 roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.fieldRoots` at C's wiring under the partition's `ranges` (`derivedWiring`), where C's root has an
+    edge (`hasEdge`): each member's roots with, for each wire whose reader units meet its own, its writer's output
+    field's tree under the reader's port, the first wire's of each port. A member's own root at a wired port refuses
+    (`own_root_why`); `Outside` where C's wiring is refused."""
+    if not EG.has_edge(desc):
+        return roots
+    try:
+        got = EG.edges(desc, ranges, {"templates": {t: {} for _k, t, _a, _c in ranges}, "cuts": EG.io_cuts(desc, ranges)})
+    except ValueError as e:
+        raise Outside(f"C's wiring: {e}") from None
+    if "refusal" in got:
+        raise Outside(f"C's wiring: {got['refusal']}")
+    lbase, seen = [], {}
+    for _k, t, _a, c in ranges:
+        lbase.append(seen.get(t, 0))
+        seen[t] = seen.get(t, 0) + c
+    out = {}
+    for name, m in ms.items():
+        first, n = m["units"][0][0], _count(m)
+
+        def meets(w: Mapping[str, Any]) -> bool:
+            units = max(w["cut"][1], 1)
+            return any(t == w["reader"] and a <= first and first + n <= a + c
+                       and (lo := lbase[j] + first - a) < w["at"] + math.prod(w["radix"]) // units and w["at"] < lo + n
+                       for j, (_k, t, a, c) in enumerate(ranges))
+        own = roots.get(name, [])
+        if (w := next((w for w in got["wires"] if meets(w) and any(r.get("port") == w["port"] for r in own)), None)):
+            raise _Refused(own_root_why(name, w["port"]))
+        mine = list(own)
+        for w in got["wires"]:
+            if meets(w) and not any(r.get("port") == w["port"] for r in mine):
+                e = next((e for f, e in ft.get(w["writer"], ()) if f == w["out"]), None)
+                if e is not None:
+                    mine.append({"domain": e.get("domain"), "leaves": e.get("leaves"), "port": w["port"],
+                                 "root": e.get("root")})
+        out[name] = mine
+    return out
+
+
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
+           query: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
-    docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), and the docket's scheme; a
-    program with an edge, whose wired ports Lean derives from C (`OneStageZk.derivedWiring`), is not mirrored here. `population_why` holds a member's
+    docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, and each wired port at its
+    writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
     ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
     try:
         _laid(ms, record)
-        roots = _roots(ms, record)
+        roots, ft = _members_roots(ms, record)
+        roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft)
     except _Refused as e:
         raise ValueError(str(e)) from None
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
+
+
+def _wired(program: Program, query: Mapping[str, Any], desc: Mapping[str, Any], ms: Mapping[str, Any],
+           record: Mapping[str, Any], roots: dict[str, list[dict[str, Any]]],
+           ft: Mapping[str, Sequence[tuple[str, Mapping[str, Any]]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.membersRootsOf` past `_members_roots`: the window's field trees held to C's (`_field_trees_held`),
+    each member's ports at C's run input nodes' trees (`_run_input_roots`), then each member's wired ports at their
+    writers' trees (`_wired_roots`)."""
+    _field_trees_held(_derived_field_trees(program, query, ms), _templates(ms), record)
+    roots = _run_input_roots(program, query, ms, record, roots)
+    return _wired_roots(desc, P._template(program, query, "the members' partition").ranges, ms, ft, roots)
+
+
+def run_own_root_why(member: str, port: str, w: int) -> str:
+    """`OneStageZk.RUN_OWN_ROOT_WHY`: the refusal of a member's root of its own at a port C reads from run input node
+    ``w``."""
+    return (f"member {member}: port {port} reads C's run input node {w}, and the registration holds a root of its own "
+            f"for it: a run input node's rows are committed once, in input/n{w}")
+
+
+def _run_input_roots(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any], record: Mapping[str, Any],
+                     roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """`OneStageZk.runInputRoots`: for each member, each input port its first unit reads whole from one run input node
+    ``w`` of C at a row of the node (its first leaf a multiple of the port's leaves, as `regRow` reads it), the
+    record's root of ``input/n<w>`` with that tree; a tree the record holds no root of gives none, and where it holds
+    one, a member's own root at the port refuses (`run_own_root_why`)."""
+    tp = PO.TemplatePartition(program, query)
+    body, total = program.root.body, program.root.gates
+    offs = list(body.offsets)
+    by_port = {r.get("port"): r for r in record.get("roots") or () if isinstance(r, Mapping)}
+    out = dict(roots)
+    for name, m in ms.items():
+        u = m["units"][0][0]
+        k = next((k for k, _t, a, n in tp.ranges if a <= u < a + n), None)
+        if k is None:
+            continue
+        own, at = list(roots.get(name, [])), 0
+        gates = list(tp.inputs(u))
+        for p, t in body.nodes[k].fn.signature()[0]:
+            leaves = len(t.leaf_widths())
+            g = gates[at:at + leaves]
+            at += leaves
+            if not g:
+                continue
+            w = bisect.bisect_right(offs, g[0]) - 1
+            fw = body.nodes[w].fn
+            end = offs[w + 1] if w + 1 < len(offs) else total
+            if (not is_input(fw) or is_registered(fw) or g != list(range(g[0], g[0] + leaves)) or g[-1] >= end
+                    or (g[0] - offs[w]) % leaves):
+                continue
+            if (r := by_port.get(f"input/n{w}")) is None:
+                continue
+            if any(e.get("port") == p for e in own):
+                raise _Refused(run_own_root_why(name, p, w))
+            own.append({"domain": r.get("domain"), "leaves": r.get("leaves"), "port": p, "root": r.get("root"),
+                        "tree": f"input/n{w}"})
+        out[name] = own
+    return out
 
 
 def _meta(circuit: Path) -> Any:
@@ -475,8 +828,78 @@ def _header(public: Path) -> Any:
         raise ValueError(f"the public file's header is not JSON: {e}") from None
 
 
+#: `OneStageZk.POPULATION_WHY`: a header's ``instances`` not its slice's population, refused before any port is dropped
+POPULATION_WHY = "public file: not the registration's: population"
+
+
+def shared_unread(port: str, tree: str) -> str:
+    """`OneStageZk.SHARED_UNREAD`: the refusal of a member's header port ``port`` held in its template's shared field tree
+    ``tree``, that its registered reads open no row of there and whose header root is not the registration's."""
+    return (f"public file: port {port} is held in the shared tree {tree}, and the member's registered reads open no row "
+            "of it there: a member's rows of a tree other members' rows share are held to the registration's root by "
+            "opening it at the leaves C gives, and the header's own root there is no commitment to them")
+
+
+def registered_at(held: Mapping[str, Any], p: str, v: str) -> bool:
+    """`OneStageZk.registeredAt`: the verifier's registered file's ports ``held`` (its ``ports``, by name) hold ``p`` at
+    ``v``, which names no committed tree, run input's tree or field tree."""
+    e = held.get(p)
+    return (isinstance(e, dict) and e.get("value") == v and not v.startswith(COMMITTED) and not G.is_fresh_value(v)
+            and not _field_tree_name(v))
+
+
+def unregistered_why(p: str, v: str) -> str:
+    """`OneStageZk.UNREGISTERED_WHY`: the refusal of a header port ``p`` the slice holds no root of, read at ``v``, which
+    the verifier's registered file holds at ``p`` as no registered value."""
+    return (f"public file: port {p} reads {v}, and the verifier's registered file holds no registered value {v} at {p}: "
+            "a port the registration holds no root of is held only at a registered value's root")
+
+
+def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_: Mapping[str, Any],
+             header: Any) -> tuple[Any, Any]:
+    """`OneStageZk.headerHeldAt` before `headerHeld`: the slice and the header without each port the slice holds at a
+    template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of, that the
+    header names and ``reads`` names at a value the verifier's registered file's ports ``held`` hold there as a
+    registered value (`registered_at`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose header root
+    or domain is not the registration's, and (`unregistered_why`) for one read at any other value."""
+    h = header if isinstance(header, dict) else {}
+    if not _same(h.get("instances"), slice_.get("population")):
+        raise _Refused(POPULATION_WHY)
+    fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
+    roots = fv["roots"] if isinstance(fv.get("roots"), dict) else {}
+    domains = fv["domain_ids"] if isinstance(fv.get("domain_ids"), dict) else {}
+    drop = set()
+    for r in slice_["roots"]:
+        p, t = r.get("port"), r.get("tree")
+        if type(p) is not str or type(t) is not str:
+            continue
+        if (p, t) in reads:
+            drop.add(p)
+        elif roots.get(p) is not None and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
+            raise _Refused(shared_unread(p, t))
+    ported = {r.get("port") for r in slice_["roots"]}
+    for p, v in sorted(reads):
+        if p not in ported and roots.get(p) is not None:
+            if not registered_at(held, p, v):
+                raise _Refused(unregistered_why(p, v))
+            drop.add(p)
+    if not drop:
+        return slice_, header
+    fv2 = {**fv, "roots": {k: v for k, v in roots.items() if k not in drop},
+           "domain_ids": {k: v for k, v in domains.items() if k not in drop}}
+    return {**slice_, "roots": [r for r in slice_["roots"] if r.get("port") not in drop]}, {**h, "frame_v3": fv2}
+
+
+def registered_reads(registered: Mapping[str, Any] | None) -> tuple[set[tuple[str, str]], Mapping[str, Any]]:
+    """`OneStageZk.Member.reads` and `Member.held`: the member's registered file's ``(port, value)`` reads and its ports
+    by name, none without one."""
+    held = registered["ports"] if registered is not None else {}
+    return {(p, e["value"]) for p, e in held.items()}, held
+
+
 def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, Sequence[Sequence[int]]]], header: Any,
-                   slice_: Mapping[str, Any]) -> str | None:
+                   slice_: Mapping[str, Any], reads: Collection[tuple[str, str]] = (),
+                   held: Mapping[str, Any] | None = None) -> str | None:
     """`OneStageZk.Member.population` past its files' reads: why a member of the units `units` (ranges ``[lo, hi)``) is
     not what its public file's header `header` holds at the docket's `strata` and the member's slice `slice_` of
     the record (``{population, roots, scheme}``); None when it is. The docket's strata read stratum by stratum
@@ -497,6 +920,10 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
     mine = [u for lo, hi in units for u in range(lo, hi)]
     if not (type(indices) is list and len(indices) == len(mine) and all(_nat(i) and i == u for i, u in zip(indices, mine))):
         return MEMBER_UNITS
+    try:
+        slice_, h = _held_at(set(reads), held or {}, slice_, h)
+    except _Refused as e:
+        return str(e)
     fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
     roots, domains = fv.get("roots"), fv.get("domain_ids")
     reg = {r["port"]: r for r in slice_["roots"]}
@@ -525,9 +952,8 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
-        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(circuit),
-                            "--public", str(public), "--tables", d], capture_output=True, text=True,
-                           env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
+                    "--public", str(public), "--tables", d], env=PF.verifier_env(), ok_statuses=LC.KS_FORM_EXITS)
     out = p.stdout.removesuffix("\n")
     if not out.startswith("KS-FORM ") or p.returncode != (0 if out == "KS-FORM ok" else 1):
         raise Outside(f"the verifier answered no form check for the files (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
@@ -535,7 +961,8 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
 
 
 def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], units: Sequence[Sequence[int]],
-              strata: Any, slice_: Mapping[str, Any], form: Form) -> str | None:
+              strata: Any, slice_: Mapping[str, Any], form: Form, reads: Collection[tuple[str, str]] = (),
+              held: Mapping[str, Any] | None = None) -> str | None:
     """`OneStageZk.StepAt.filesHeld` as far as this answers it (module docstring): why the files of a member of the
     units `units` are refused with no session, the first of Lean's that applies, None where none does. A circuit that
     does not parse or a public file that does not load (`form`'s refusal, which is the scope's word for word,
@@ -556,21 +983,32 @@ def files_why(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]], u
         header = _header(public)
     except ValueError as e:
         raise Outside(f"{e}, whose refusal is the Lean parser's own") from None
-    return population_why(units, strata, header, slice_)
+    return population_why(units, strata, header, slice_, reads, held)
 
 
 def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descriptor: bytes, partition: Mapping[str, Any],
-           strata: Any, slice_: Mapping[str, Any], form: Form) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
-    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S (`one_circuit.restrict`), and public files and its own lookup tables, the blobs'
-    pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as `Member.statement` reads
-    them and held with no session (`files_why`); a refusal names the member. A table its circuit looks up that the
-    blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit looks up is none of its."""
+           strata: Any, slice_: Mapping[str, Any], form: Form,
+           derived: Path, decoded: OC.Decoded | None = None) -> tuple[Path, Path, tuple[tuple[str, Path], ...]]:
+    """`OneStageZk.Member.files`: the member `name`'s circuit file, C_S as `OneStageZk.restrict` derives it
+    (`one_circuit.restrict`, then `one_circuit.lower`), written under `derived`, and public files and its own lookup
+    tables, the blobs' pinned tables its circuit looks up (`proofs.own_tables`, `OneStageZk.ownTables`), read as
+    `Member.statement` reads them and held with no session (`files_why`); a refusal names the member. A table its
+    circuit looks up that the blobs do not hold refuses (`proofs.tables_match_why`); one only another member's circuit
+    looks up is none of its."""
     try:
         try:
-            c = OC.lower(OC.restrict(descriptor, partition, m["units"]))
-        except (OC.NotDerived, OC.Refused) as e:
-            raise _Refused(f"circuit: {e}") from None
-        circuit = _blob(blobs, hashlib.sha512(c).hexdigest(), "circuit")
+            decoded = decoded or OC.Decoded(descriptor)
+            c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
+                         cut=OC.cuts(descriptor, partition, decoded),
+                         formed=OC.formed_in(decoded, partition, m["units"]))
+        except OC.Refused as e:
+            if str(e).startswith(f"{e.code}: {OC.NOT_ADMITTED}"):
+                raise _Refused(str(e).removeprefix(f"{e.code}: ")) from None
+            raise _Refused(f"restrict: {e}") from None
+        except OC.NotDerived as e:
+            raise _Refused(f"restrict: {e}") from None
+        circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
+        circuit.write_bytes(c)
         meta = _meta(circuit)
         try:
             lookups = PF.lookups_of(meta)
@@ -589,7 +1027,8 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
         if _nat(g) and g != m["vus_per_block"]:
             raise _Refused(f"vus_per_block: the member's circuit has {g} units a proof block, not the "
                            f"{m['vus_per_block']} the parameters name")
-        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form)) is not None:
+        reads, held = registered_reads(m["registered"])
+        if (why := files_why(circuit, public, tables, m["units"], strata, slice_, form, reads, held)) is not None:
             raise _Refused(why)
     except _Refused as e:
         raise _Refused(f"member {name}: {e}") from None
@@ -616,13 +1055,15 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         if st.registered is not None:
             (at / "registered.json").write_text(json.dumps(st.registered))
             reads = ["--registered", str(at / "registered.json")]
-        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.STATEMENT, "--circuit", str(st.circuit),
-                            "--public", str(st.public), "--tables", str(at / "tables"),
-                            "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
-                            "--session", str(at / "s")], capture_output=True, text=True, env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
+                    "--public", str(st.public), "--tables", str(at / "tables"),
+                    "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
+                    "--session", str(at / "s")], env=PF.verifier_env(), ok_statuses=LC.VERIFY_EXITS)
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if len(lines) != 1 or not isinstance(lines[0], dict):
         raise Outside(f"the verifier answered no verdict for the session (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
+    if (why := PF.not_zk_why(lines[0])) is not None:
+        raise Outside(why)
     return lines[0]
 
 
@@ -663,8 +1104,19 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
     if P.program_sha512(program) != params["partition"].get("program"):
         raise Outside("the program is not the one the parameters' partition object names")
     descriptor = json.dumps(params["program"], sort_keys=True, separators=(",", ":")).encode()
+    decoded = OC.Decoded(descriptor)
+    ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"], decoded)} for name, m in ms.items()}
+    _apart(ms)
+    with tempfile.TemporaryDirectory(prefix="verity-members-cs-") as derived:
+        return _members_run(params, record, evidence, blobs, ms, sts, descriptor, program, verify, verdict, form,
+                            Path(derived), decoded)
+
+
+def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
+                 blobs: Mapping[str, Path], ms: dict[str, Any], sts: list[Any], descriptor: bytes, program: Program,
+                 verify: Ch.Verify, verdict: Callable[[Statement], Mapping[str, Any]], form: Form,
+                 derived: Path, decoded: OC.Decoded | None = None) -> tuple[Run | None, str | None]:
     try:
-        ms = {name: {**m, "units": _block(name, m, descriptor, params["partition"])} for name, m in ms.items()}
         held = _held(ms, sts)
         if [s["name"] for st in sts for s in st["sessions"]] != evidence["sessions"]:
             raise _Refused("the statements' sessions are not the evidence's sessions, in order")
@@ -678,15 +1130,20 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         if not P.in_order(program, params["query"], record["population"]):
             raise _Refused(POPULATION_ORDER)
         _laid(ms, record)
+        _held_read(ms, params, program)
         _class(ms)
-        roots = _roots(ms, record)
+        _tree_ports_held(ms, record)
+        roots, ft = _members_roots(ms, record)
+        roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
+        _held_roots(ms, _held_reads(params, program), roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
         except (P.QueryRefused, ValueError) as e:
             strata = e
         files = {name: _files(name, m, blobs, descriptor, params["partition"], strata,
-                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form)
+                              {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}, form,
+                              derived, decoded)
                  for name, m in ms.items()}
         findings: list[PF.Finding] = []
         for st, name in zip(sts, held):
@@ -720,4 +1177,6 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "members_run", "population_why", "run_reason", "unwired_why"]
+           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_at", "registered_reads",
+           "run_reason", "shared_unread", "unregistered_why", "unwired_why", "own_root_why", "run_own_root_why",
+           "wired_tree_why"]

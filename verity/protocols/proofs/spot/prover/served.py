@@ -22,8 +22,8 @@ is one of three, and no other:
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
 * an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`):
   the log's record with that digest names the port, its root and its leaf count, and the tree is that port's;
-* an earlier record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
-  log's record with that digest registered the value with its root, domain, rows, words and word bits, and the tree is
+* the previous record's registered value's domain, when the tree is that value (`reused`: `(record digest, value)`): the
+  log's last record, of that digest, registered the value with its root, domain, rows, words and word bits, and the tree is
   that entry, registered under no domain of its own (H1's `a/<K>@<s>` as a Commit's AROW, say).
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
@@ -197,8 +197,8 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
             record, value = t.reused
             got = R._earlier(log, record, "value", value, want)
             if got is None:
-                raise ValueError(f"served tree {t.value!r}: the log holds no record {record[:16]}... registering {value!r} "
-                                 f"with {t.leaves} rows of {t.words} {t.word_bits}-bit leaves")
+                raise ValueError(f"served tree {t.value!r}: the log's last record is no record {record[:16]}... "
+                                 f"registering {value!r} with {t.leaves} rows of {t.words} {t.word_bits}-bit leaves")
             if (got["root"], got["domain"]) != (t.root, t.domain):
                 raise ValueError(f"served tree {t.value!r}: root and domain are not value {value!r}'s of record "
                                  f"{record[:16]}...: {got!r}")

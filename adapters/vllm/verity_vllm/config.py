@@ -44,9 +44,9 @@ from verity_vllm.records import workload as workload_record
 #: The names the library's other modules read here.
 __all__ = [
     "CARD_FILES", "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "VLLM",
-    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "card_arch", "cuda_arch", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
-    "RowId", "RunEnv", "UsageError", "CONTENT", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
-    "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "card_arch", "cuda_arch", "EnginePin", "RowConfig", "RowEngine",
+    "RowId", "UsageError", "CONTENT", "checkpoint_digest", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "RETIRED", "group", "option", "parse_protocols", "retired", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
     "row_world", "rows_of_record", "run_store", "target_card", "target_cc", "target_num_sms", "target_tokens", "vllm_revision", "workload_arg", "workload_file", "workload_files",
 ]
 
@@ -251,9 +251,15 @@ def row_target(row: str) -> str | None:
 
 
 #: The protocols a run can enable, each with its adapter module in `verity_vllm.protocols`, in install order, innermost
-#: first: PoUW replaces the linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model
-#: computed.
-PROTOCOLS = {"pouw": "pouw", "sampled-proofs": "spot"}
+#: first: SPOT commits what the model computed.
+PROTOCOLS = {"sampled-proofs": "spot"}
+#: The protocols a run once enabled, each (name, why), refused by name (`retired`).
+RETIRED = (("pouw", "the first stage is deleted; useful work is Pearl+'s, attached by its declared name"),)
+
+
+def retired(name: str) -> str | None:
+    """Why the protocol ``name`` is refused by name (`RETIRED`), or None."""
+    return dict(RETIRED).get(name)
 #: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
@@ -264,7 +270,7 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     """A protocol set in its one spelling: ``name:scheme`` entries, one per protocol, in `PROTOCOLS` order.
 
     ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
-    ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
+    ``{name: scheme}``.  Refuses (ValueError) a retired protocol by name (`RETIRED`), an unknown protocol, an entry without a scheme, a malformed scheme and two
     entries of one protocol.  Whether a scheme is registered is the protocol package's to say
     (`verity_vllm.protocols.refusals`)."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
@@ -278,6 +284,8 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     got: dict[str, str] = {}
     for item in items:
         name, sep, scheme = item.partition(":")
+        if why := retired(name):
+            raise ValueError(f"protocol entry {item!r}: {why}")
         if name not in PROTOCOLS:
             raise ValueError(f"protocol entry {item!r}: unknown protocol {name!r} (known: {', '.join(PROTOCOLS)})")
         if not sep or not _SCHEME.fullmatch(scheme):
@@ -643,229 +651,3 @@ class RowConfig:
     def to_json(self) -> dict[str, Any]:
         return {"schema": WORKLOAD_SCHEMA, "model": self.model, **({"case": self.case} if self.case is not None else {}),
                 "engine": self.engine.to_json(), **self.workload}
-
-
-# ---------------------------------------------------------------------------------------------------------------- stage configs
-
-@dataclass(frozen=True, kw_only=True)
-class BuildConfig:
-    """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
-
-    build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
-                                         "smaller) over the largest shape's planned derive peak, at most one per CPU and one per derive "
-                                         "(TP: ranks x (shapes + 1); its per-rank composes are sized from memory too)")
-    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
-                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
-    build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
-                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's global Program "
-                                            "and the call-boundary check); default scales with the envelope (TP: 7200).  Never the TP "
-                                            "manifest, which --manifest-timeout bounds")
-    manifest_timeout: int | None = option("--manifest-timeout", env="MANIFEST_TIMEOUT", type=int, default=None,
-                                          help="TP: seconds for the required-value manifest over the W ranks, the Build's and a Commit's "
-                                               "rebuild (default 4 h + 1200 s a component build, W x declared requests: "
-                                               "row_records.manifest_timeout; 0 = no limit).  manifest.log reports each component built")
-    lp: int | None = option("--lp", env="LP", type=int, default=None,
-                            help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
-    t: int | None = option("--t", env="T", type=int, default=None,
-                           help="request wrapper decode steps (default: the largest cap - 1; a stochastic row: r0's)")
-    program_cache: str | None = option("--program-cache", env="PROGRAM_CACHE", default=None,
-                                       help="a directory of derived Programs shared by the host's runs (pipeline.program_cache): each derive "
-                                            "restores a cached entry of the same key or publishes its own; default off")
-    build_relabel: str = option("--build-relabel", env="BUILD_RELABEL", default="off", choices=("off", "on"),
-                                help="TP: one template rank's request derives write the other ranks' (pipeline.tp.relabel_build), behind a "
-                                     "step guard over every rank and a canary request derived in full; default off")
-    build_programs_only: str = option("--build-programs-only", env="BUILD_PROGRAMS_ONLY", default="0",
-                                      help="TP: 1 = the Build ends at the rank and global Programs: no required-value manifest or call-boundary "
-                                           "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
-    build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
-                                     help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
-                                          "manifests/records.json, verity_vllm.program.predict.aot) and the trace for any other; trace = the trace "
-                                          "(`verity-vllm neutrality`'s heavy tier)")
-    aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
-                                   help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
-                                        "--send of it; default fetched from the store into <row dir>/aot_trace")
-
-
-@dataclass(frozen=True, kw_only=True)
-class MatchConfig:
-    """How the Match stage of ``verity-vllm row`` runs.  None = the row's derived default."""
-
-    match_impl: str = option("--match-impl", env="MATCH_IMPL", default="fast", help="global match checker: fast or record (the audit)")
-    match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="shared",
-                                 help="shared = one batch decomposition inside the global match (a TP row's: per rank)")
-    match_phase: str = option("--match-phase", env="MATCH_PHASE", default="all", choices=("all", "gpu", "cpu"),
-                              help="cpu = resume the CPU half over the capture already on disk; gpu (TP) = the capture and control alone, "
-                                   "which need no Build, then the row stops")
-    snapshot_steps: str | None = option("--snapshot-steps", env="MATCH_SNAP_STEPS", default=None,
-                                        help="0,1 | all; default 0,1 greedy, all stochastic or when form (B) must be complete")
-    snapshot_max_bytes: str | None = option("--snapshot-max-bytes", env="MATCH_SNAP_MAX_BYTES", default=None,
-                                            help="explicit per-tensor snapshot cap (default: derived by the Match)")
-    within_step: str = option("--within-step", env="WITHIN_STEP", default="dag", help="within-step criterion: dag or sequence")
-    instances_form: str = option("--instances-form", env="VERITY_INSTANCES_FORM", default="progressions",
-                                 help="stored form of the fold's instances.jsonl: progressions or runs")
-    acquire_manifest: str | None = option("--acquire-manifest", env="ACQUIRE_MANIFEST", default=None,
-                                          help="required-value manifest for the capture (default: the Build's manifest.json)")
-    match_timeout: int | None = option("--match-timeout", env="MATCH_TIMEOUT", type=int, default=None,
-                                       help="seconds for the capture + fold (default scales with B and the envelope; TP: 3600)")
-    compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
-                                         help="seconds per comparator (default scales with B and the envelope)")
-    fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, the global match; default "
-                                           "350 s a GiB of a rank's summed request derive peaks, at least 7200: row_records.fold_plan); "
-                                           "tp-fold-match as a whole gets the folds' rounds, the compare and global-match rounds and the "
-                                           "cross-rank leg (row_records.fold_phase_s: four legs when every rank runs at once)")
-    fold_mem_gb: float | None = option("--fold-mem-gb", env="RESEARCH_RUN_MEM_GB", type=float, default=None,
-                                       help="TP: the memory (GB) the fold Match's concurrent legs are sized to (default: research run's "
-                                            "--mem-gb, RESEARCH_RUN_MEM_GB; without one, the host's headroom); one that holds no planned "
-                                            "global-match leg beside one fold runs one rank at a time, with a warning in row.log")
-    fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose compare and global-match legs run at once (0 = as many as --fold-mem-gb holds at "
-                                         "a global-match leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: "
-                                         "GLM-5.3 B8 I256's 339 GiB; every rank when the checkpoint's layers are unknown)")
-    fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
-                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those global-match legs leave holds "
-                                    "at a fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given "
-                                    "or the layers are unknown)")
-    match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
-                              help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
-                                   "rank's persisted fold of the capture in place; legs = also each rank's written compare and global-match "
-                                   "documents, so only the missing legs and the cross-rank leg run")
-    fold_profile: str | None = option("--fold-profile", env="FOLD_PROFILE", env_empty=True, default=None,
-                                      help="TP: rank profile module (default derived_<ROLE>_tp<W>; empty = collective-level Match only)")
-
-
-@dataclass(frozen=True, kw_only=True)
-class CommitConfig:
-    """How the Commit stage of ``verity-vllm row`` runs.  None = the row's derived default."""
-
-    pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
-    config_run: str = option("--config-run", env="CONFIG_RUN", default="0",
-                             help="1 = the config run (docs/vllm-config-sweep-plan.md §2): Build and the strict word check, ONE instrumented "
-                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay (--replay-draw), then "
-                                  "config_record.json; no Match, no manifest-verify rebuild, no VU export")
-    replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
-    replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
-                                  help="config run (any run of a TP row; at a world other than TP2 and TP8 its Commit replays in process all the "
-                                       "same, `tp.c2.DEFER_WORLDS`): 1 = the Commit "
-                                       "writes a replay bundle (per rank) and exits without "
-                                       "the replay; the verdict stays pending until `row stage replay` (CPU) replays the bundle; slim = a "
-                                       "slim bundle (single-GPU)")
-    config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
-                                  help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
-                                       "the record's extraction slowdown")
-    replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
-                              help="config run: the k units sampled uniformly from every unit (k/k equal bounds the wrong fraction) or "
-                                   "stratified by family (each family at least once, the rest split evenly)")
-    commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
-                                         help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
-    window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
-    window_slots: int = option("--window-slots", env="WINDOW_SLOTS", type=int, default=8)
-    retain: str = option("--retain", env="RETAIN", default="host", help="where raw copies are retained: host, device or gpu")
-    open_after_release: str = option("--open-after-release", env="OPEN_AFTER_RELEASE", default="1", help="0 opts out")
-    tap_cap_mb: int = option("--tap-cap-mb", env="TAP_CAP_MB", type=int, default=2048, help="FA2 tap residency cap (0 = unbounded)")
-    replay_cache: str = option("--replay-cache", env="REPLAY_CACHE", default="1", help="0 = every pair replays")
-    required_classes: str | None = option("--required-classes", env="REQUIRED_CLASSES", default=None)
-    required_manifest: str | None = option("--required-manifest", env="REQUIRED_MANIFEST", default=None,
-                                           help="an explicit manifest (default: the row's own manifest.json)")
-    program_digest: str | None = option("--program-digest", env="PROGRAM_DIGEST", default=None,
-                                        help="explicit Program digest (default: read from build_summary.json)")
-    extra_engine_args: str | None = option("--extra-engine-args", env="EXTRA_ENGINE_ARGS", default=None, help='"k=v k=v"')
-    extra_commit_args: str | None = option("--commit-args", env="EXTRA_COMMIT_ARGS", default=None, help="extra Commit flags, verbatim")
-    commit_args: str | None = option("--commit-args-tail", env="COMMIT_ARGS", default=None,
-                                     help="extra Commit flags appended after --program-digest, verbatim")
-    replay_args: str | None = option("--replay-args", env="REPLAY_ARGS", default=None, help="extra replay flags, verbatim")
-    replay_workers: int = option("--replay-workers", env="REPLAY_WORKERS", type=int, default=32, help="TP: replay workers")
-    commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
-                                        help="seconds (default scales with B and the envelope; TP: 7200)")
-    vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
-                            help="0 opts out: the Commit exports a sample of the row's VUs as input sets (verity_vllm.pipeline.vu_export)")
-    serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
-                                      help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
-                                           "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
-                                           "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
-                                           "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
-                                           "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
-    serving_rows_tables: str | None = option("--serving-rows-tables", env="SERVING_ROWS_TABLES", default=None, metavar="REGISTRATION_JSON",
-                                             help="the per-expert cut's tables registration (verity-vllm tp-register-tables --out; {rank} "
-                                                  "in its path its rank's): the windows commit the tables their reads read under it, so "
-                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request), under the "
-                                                  "salts in the salt file beside it; needs SERVING_ROWS")
-    remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
-                                         help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity.protocols.resource_accounting.memory.poub.prover.commit_session; single-GPU rows)")
-    norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
-                           help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
-                                "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
-    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
-                                  help="0 opts out, for A/B only: by default the row loads the guarded-max FA2/FA3 tap build, whose "
-                                       "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every "
-                                       "block's max * scale (acquire.sources.hidden_source.TAP_ROW3); only a manifest that names the stream "
-                                       "binds it")
-    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
-                             help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
-                                  "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "
-                                  "when its manifest names MoE routers")
-    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="1",
-                            help="0 opts out, for A/B only: by default each TP rank commits its vocabulary-range values per token row "
-                                 "(verity_vllm.query.vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source) "
-                                 "when its manifest names vocabulary ranges")
-
-
-# ---------------------------------------------------------------------------------------------------------------- where it runs
-
-@dataclass(frozen=True, kw_only=True)
-class RunEnv:
-    """Where a row runs: interpreters, caches and roots.  Filled by ``pipeline/cli.py`` from flags, the environment and
-    the pod layout's machine-path defaults (``cli.MACHINE``); recorded as telemetry, never hashed.
-
-    ``environ`` is the environment the CLI was started with; child processes get it plus the pins the driver sets.
-    """
-
-    py: str = option("--py", env="PY", help="the stages' interpreter")
-    py312: str | None = option("--py312", env="PY312", default=None, help="the CPU stages' interpreter (default: --py)")
-    sweep_dir: str = option("--sweep-dir", env="SWEEP_DIR", help="rows live in <sweep-dir>/<row>")
-    hf_home: str = option("--hf-home", env="HF_HOME")
-    cuda_home: str = option("--cuda-home", env="CUDA_HOME")
-    cuda_bin: str | None = option("--cuda-bin", default=None,
-                                  help="put on the stages' PATH after the interpreter's directory (default: <cuda-home>/bin)")
-    native_collect_build: str | None = option("--native-collect-build", env="NATIVE_COLLECT_BUILD", default=None,
-                                              help="collector build dir (default: the release's, else --native-collect-default)")
-    build_root: str = option("--build-root", env="VERITY_BUILD_ROOT",
-                             help="the pod's build root: the collector build and the tap builds below are under it")
-    native_collect_default: str | None = option("--native-collect-default", default=None, help="(default: <build-root>/nc_build)")
-    hidden_so: str | None = option("--hidden-so", env="HIDDEN_SO", default=None,
-                                   help="M1 tap .so (default: the one of the row's attention implementation)")
-    hidden_so_fa2: str | None = option("--hidden-so-fa2", default=None)
-    hidden_so_fa3: str | None = option("--hidden-so-fa3", default=None)
-    hidden_so_fa2_guarded: str | None = option("--hidden-so-fa2-guarded", default=None, help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    hidden_so_fa3_guarded: str | None = option("--hidden-so-fa3-guarded", default=None, help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
-    router_tap_so: str | None = option("--router-tap-so", default=None, help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
-    timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
-                                  help="stage telemetry file (default: <row dir>/timeline.jsonl)")
-    verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
-                                     help="must name the tree that runs when given (the mixed-tree refusal)")
-    research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
-    research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
-    guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")
-    pod_guard: str = option("--pod-guard", help="the pod guard shell library (the tree's copy when absent)")
-    environ: Mapping[str, str] = environ_snapshot()
-
-    def __post_init__(self) -> None:
-        for name, below in BUILT.items():
-            if getattr(self, name) is None:
-                object.__setattr__(self, name, os.path.join(self.build_root, below))
-
-
-#: Each build `RunEnv` takes, below its build root: the collector's (``commit/committer/native_jit.py``) and the taps'
-#: (``ops/pod_fa2_tap.sh``, ``pod_fa3_tap.sh``, ``pod_norm_tap.sh``, ``pod_router_tap.sh``).
-BUILT: dict[str, str] = {
-    "native_collect_default": "nc_build",
-    "hidden_so_fa2": "fa2/build/matReq/verity_fa2_matReq.so",
-    "hidden_so_fa3": "fa2/build/fa3_matReq/verity_fa3_matReq.so",
-    "hidden_so_fa2_guarded": "fa2/build/matReqG/verity_fa2_matReqG.so",
-    "hidden_so_fa3_guarded": "fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
-    "norm_tap_so": "norm_tap/build/verity_norm_tap.so",
-    "router_tap_so": "router_tap/build/verity_router_tap.so",
-}

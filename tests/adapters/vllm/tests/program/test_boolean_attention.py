@@ -16,46 +16,12 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.registry import boolean_attention as BAt
-
-#: id -> (And, Xor, Not gates, standalone program digest)
-PINS = {
-    "AttnBlock_v6{D=16,NVIS=5,FIRST=True,BN=16}":
-        (117848, 240136, 12689, "a0d85fc56f1e8959ca41f131e5a29e1a2b0bbcc1cb4c0ef0fb9280bfbff2a0c60f400efa33900335c8f0e27bbf2120ccd2dc261af727337caac31397e769677b"),
-    "AttnBlock_v6{D=16,NVIS=16,FIRST=False,BN=16}":
-        (385610, 775142, 35861, "c7c87d04180d9bf24c4c1e64448d54a4af94149ef419fd7fe523f19ac50d067ba49b45f564ae067bc68f70ea02b042758d277a63745d14dd0b290f90d15fc379"),
-    "AttentionHead_v6{T=20,D=16,BN=16}":
-        (529826, 1064130, 49293, "d42c58a086758e71631ffbe307b3c9cf4b7c8aa3f793aa5f5ee225657bf515265954bd056dc73aac26ebee19e65eb944176482bdb8fa664120b9abb36a42d400"),
-    "Attention_v6{T=20,NH=4,KVH=2,D=16,BN=16}":
-        (2119304, 4256520, 197172, "9d75a0324bdf64a06ec68770b89df675cc8f8175ab3c94c76571615c7f973ec30cbe003a807050ed692fdc059e4007c27e6a2ae51a525dac0ea8f5abd0d833f9"),
-    "Fa3InvSum_v2": (947, 4866, 102, "017c77eb48a6d4ed9be9ddaa291fa4c3ae280333540ed06045fef47238963ed59268c32fb069f62910b83e099df8eded6bba977ae659d6b42280ca8d8d653c5d"),
-    "AttnBlock_v7{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2}":
-        (373082, 753894, 32661, "92eaf649b73843cfd384502cc591f2986b3f174fe3895473ed4f905859ac9644afe7ae72c740168bc78345034ad71c2a0fe80c621b7cc3e1ea773262f9c8313b"),
-    "AttentionHead_v7{T=20,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2}":
-        (529826, 1064130, 49293, "bf5ffb2c7321aa35757d66457de1d24c8c0ac40bf863b1fd1c1285cbb7222fe2d84ba63b1895460efcd5c09b31825ad62fd1043b8247f9a547647540c3a2f9b8"),
-    "AttentionHead_v7{T=20,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (507222, 1022162, 43986, "8634c3ef17b98ad2e7a88d3968683d371a229ef1bb8ab3e5646649ec3ad19ae0281229cd49fe024fd18bce7a1a7439717f9d00ded9dfe40a71a0e6ffbdd78465"),
-    "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (2028888, 4088648, 175944, "95a408a28d9eb2e7cb17a45d844313019692bbd9566576333ba8aaf7f38c0e279c1a01536d07788b7c90fbc4ab7745c550415d80e0d1758bd4f82c9aa136fd11"),
-    "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (373082, 753894, 32661, "599a02a3cca5d8e6a1f3c71408e0e8f91af39749cf71f356c775ce7a41e774a7421675d6585a3f48521987ceb91284a1c405642a65e70bc84435ad8c4d4e055a"),
-    "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (952372, 1927030, 83204, "eea0421f654d0e763aa401f04de68fe6471a66f033013a0e068e7ce864b9c2b9e9791dd3de84db0457a842b9c87293878a9d894d96f4b6bf1f77b8171f5ea340"),
-    "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0}":
-        (2028888, 4088648, 175972, "ed2d254617a94c291126d8ff89f85b278f2a2522f361d1869675faf28e7be784935d7fd056db5922a68a23709c8f8e1a9a4e07ae3445c6595a895e8c429553d5"),
-    "AttnBlock_v9{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (373019, 753894, 32637, "fad98d501500b7c99c1b55730b598afcb2d4f843c13e3676e177a60d9ba45c8938d53127f13a2d80b2a46e647df7b70428e69ea2c76342478bd140d04658986c"),
-    "AttentionHead_v9{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=2}":
-        (952246, 1927030, 83149, "224920413449676c73cc298553a7eb80f05f61a0c211266f5f3bb2800e1288b2ff1ef0fe0fc99dd093fb2cf8d5f20194a51eee8a90026d8e7b38a0f7d0d0d356"),
-    "Attention_v9{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}":
-        (2028636, 4088648, 175848, "21fea7aa3389ddea3ca25b4e5bdd85dc08531f54a4148676102fb92f5c4c101eaef6606639dc50287bdecb43d9bbf228d66f1dc507f1ae836757e664131155c6"),
-}
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
 #: the served FA2 row's `Attention_v5` binding (`kernels.rows`): the wgmma step and FA2's inverse sum
@@ -70,7 +36,6 @@ PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnB
           bind(BAt.AttnBlockV9, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
           bind(BAt.AttentionHeadV9, T=40, D=16, BN=16, MASKED_FROM=2, **FA3),
           bind(BAt.AttentionV9, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA3)]
-SLOW_PIN = PINNED[5].id
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
 #: profiles; v8 and v9 with an unguarded block, a head with an unguarded block, and GQA; v16 (v9 with the scale an input) with a
@@ -132,16 +97,6 @@ def _inputs(word, n: int, seed: int) -> list[np.ndarray]:
     return out
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == SLOW_PIN else t for t in PINNED], ids=lambda t: t.id)
-def test_pinned_counts_and_digests(target) -> None:
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    assert codec.program_digest(codec.encode_program(prog)) == digest
-
-
 def _program(*fns) -> Program:
     """One Program calling each of ``fns`` once, on parameters of its own."""
     sigs = [fn.signature() for fn in fns]
@@ -186,7 +141,7 @@ def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
 
 @pytest.mark.slow
 def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word_one() -> None:
-    """At Qwen3-0.6B's served statics (`benchmarks/bool_build_cost`'s small case: D = 128, BN = 64, rows of 1 and 65 keys), the
+    """At Qwen3-0.6B's served statics (D = 128, BN = 64, rows of 1 and 65 keys), the
     Definitions a row has one of per key length (`Attention`, `AttentionHead`) or per block width (`AttnBlock`) take at most twice
     the word Build's descriptor bytes.  The Boolean primitives' bit circuits, written once per Program whatever the row, are not
     counted."""

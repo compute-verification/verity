@@ -60,7 +60,6 @@ CANDIDATE_CACHE_ENV = "VERITY_REGRESSION_CANDIDATE_CACHE"  # where the attempts'
 ENGINE = "v2"                                  # the builder that recomputes `actual`: Q_module_body_v1 via verity_vllm.query (recorded in every result)
 ORACLE_ENV = "VERITY_REGRESSION_ORACLE"        # `expected` (default: expected/<row>.json, re-baselined on v2) | `frozen` (lift from the R2 frozen v1 records)
 ORACLES = ("expected", "frozen")
-RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
 REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that recompute from a row's Programs (`REBUILD = True`: a manifest rebuild, step_segmentation's decode; CPU minutes to half an hour a row)
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
 REGISTRY = HERE.parents[4] / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
@@ -93,25 +92,6 @@ def oracle() -> str:
     if o not in ORACLES:
         raise ValueError(f"{ORACLE_ENV}={o!r}: one of {ORACLES}")
     return o
-
-
-def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
-    """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
-    `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
-    A document that can't be written (the directory, an `actual` that is no mapping, a value JSON can't hold or one nested deeper
-    than it writes, an unknown oracle) is not recorded and returns None: a recording failure is not a test failure."""
-    d = os.environ.get(RECORD_ACTUAL_ENV)
-    if not d:
-        return None
-    try:
-        p = Path(d) / row_key / f"{check}.json"
-        p.parent.mkdir(parents=True, exist_ok=True)
-        doc = {"schema": "verity-vllm/regression-result/v1", "row": row_key, "check": check, "expected": exp, "actual": act,
-               "problems": list(problems), "matched": matched(act, problems), "engine": ENGINE, "oracle": oracle()}
-        p.write_text(canonical(doc) + "\n")
-        return p
-    except (AttributeError, OSError, RecursionError, TypeError, ValueError):
-        return None
 
 
 class InputMismatch(AssertionError):

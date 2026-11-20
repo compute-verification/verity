@@ -21,12 +21,14 @@ the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.
   can't hold here, checked by Lean only).
 Writes DIR/result.json; exits 1 unless everything agrees.
 """
-import argparse, gc, gzip, hashlib, importlib, json, subprocess, sys
+import argparse, gc, gzip, hashlib, importlib, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 
 def lean(a, path, *extra):
-    p = subprocess.run([a.lean, "qword-program", str(path), *extra], capture_output=True, text=True)
+    p = LR.run([a.lean, "qword-program", str(path), *extra], ok_statuses=LR.REFUSES)
     line = next((l for l in p.stdout.splitlines() if l.startswith("QWORDPROGRAM ")), None)
     if line is None:
         raise RuntimeError(p.stdout + p.stderr)
@@ -85,16 +87,14 @@ def check_format(a, out, bad):
     d["definitions"]["TPair_v1"]["body"]["nodes"][0]["args"][0]["refs"] = {"affine": ["n", 1, 0, 1]}
     (out / "forward.desc").write_text(json.dumps(d))
     got = lean(a, out / "forward.desc")
-    want = fr.get("call_refused")
-    if got["ok"] or (want is not None and got.get("inapplicable") != want) or (want is None and fr["q_word"] not in got["error"]):
+    if got["ok"] or got.get("error") != fr["call_refused"]:
         bad.append(("forward_reference", got.get("error")))
-    if "root_refused" in fr:
-        d = json.loads(f["descriptor"])
-        _root_body(d)["nodes"][3]["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}
-        (out / "forward-root.desc").write_text(json.dumps(d))
-        got = lean(a, out / "forward-root.desc")
-        if got["ok"] or got.get("inapplicable") != fr["root_refused"]:
-            bad.append(("forward_reference root", got.get("inapplicable")))
+    d = json.loads(f["descriptor"])
+    _root_body(d)["nodes"][3]["args"][1]["refs"] = {"affine": ["n", 9, 0, 1]}
+    (out / "forward-root.desc").write_text(json.dumps(d))
+    got = lean(a, out / "forward-root.desc")
+    if got["ok"] or got.get("error") != fr["root_refused"]:
+        bad.append(("forward_reference root", got.get("error")))
     refused = 0
     for label, edit, _why in spec.REJECT:
         d = json.loads(f["descriptor"])
@@ -110,25 +110,26 @@ def check_format(a, out, bad):
 
 def check_widths(a, out, bad):
     """Each `--widths` line is `{"program", "codec"}`: a descriptor and the codec's refusal of it (`decode_program`; null
-    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET` with the codec's message,
-    and none other as `E_REINTERPRET`."""
-    both = neither = 0
+    where it decodes). The Lean decoder refuses every one the codec refuses as `E_REINTERPRET`, or as a read at another
+    width (`recut-width`, `recut-boundary`, `recut-overrun`, PROTOCOL.md §4.4), with the codec's message, and none other so."""
+    both = neither = recut = 0
     for k, line in enumerate(Path(a.widths).read_text().splitlines()):
         case = json.loads(line)
         (out / "widths.desc").write_text(case["program"])
         got = lean(a, out / "widths.desc")
         err = "" if got["ok"] else got.get("error", "")
         why = case["codec"] or ""
-        if "E_REINTERPRET" in why:
+        if "E_REINTERPRET" in why or why.startswith("recut-"):
             if err == why:
                 both += 1
+                recut += why.startswith("recut-")
             else:
                 bad.append(("widths", k, err[:300], why[:300]))
-        elif "E_REINTERPRET" in err:
+        elif "E_REINTERPRET" in err or err.startswith("recut-"):
             bad.append(("widths", k, err[:300], why[:300]))
         else:
             neither += 1
-    return {"both_refuse": both, "neither": neither}
+    return {"both_refuse": both, "recut": recut, "neither": neither}
 
 
 def _root_body(d):
@@ -173,8 +174,8 @@ def check_qword_vectors(a, out, bad):
         (out / "order.desc").write_text(json.dumps(d))
         got = lean(a, out / "order.desc")
         orders += 1
-        if got["ok"] or got.get("inapplicable") != want["detail"][0]:
-            bad.append(("order_refusals", label, got.get("inapplicable")))
+        if got["ok"] or got.get("error") != want["refused"]:
+            bad.append(("order_refusals", label, got.get("error")))
     inapplicable = 0
     cut_refusals = 0
     for label, dname, X, W, want in v["verify_refusals"]:

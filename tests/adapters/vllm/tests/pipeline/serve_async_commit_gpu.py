@@ -47,10 +47,9 @@ def either_row() -> None:
     from verity_vllm.pipeline import serve_row as RW
 
     def of(opts: Any) -> dict[str, Any] | None:
-        if not opts.required_manifest:
+        if not opts.row_build:
             return None
-        from verity_vllm.pipeline import serve_seal as SS
-        path = Path(SS.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
+        path = Path(RW.programs_root_of(opts)) / RW.WORKLOAD_PROGRAM
         return {"async_scheduling": json.loads(path.read_text())["applicability"]["engine"]["async_scheduling"], "source": str(path)}
 
     RW.of = of

@@ -42,7 +42,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "RoPEHead_v1{D=64}": "57fab977f7eea6eb7e8d474e851842f8b1810157198b0680ecda481585c7a92d3515c7276cb9d9b27cb70f39e8b3370c025a54d0ec41b29a02727e0504f7b249"
+   "RoPEHead_v1{D=64}": "2c2b33cf6aeb858b3f7a785269e77b8e15f8cd34cfafac223ca2bce4ad481c941e945af85d1fda70caa9e4f2a776d4479f596d638f3cab0d9d5062918c268044"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",

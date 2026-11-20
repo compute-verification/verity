@@ -5,11 +5,11 @@ public import Evaluate.Fp32
 /-!
 # The correctly rounded transcendentals of the reference kinds
 
-`F32ExpRn_v1`, `F32LogRn_v1`, `F32ErfRn_v1` and `F32TanhRn_v1` (the vLLM integration's `ref_prims`): RN32 of the value
+`F32ExpRn_v1`, `F32LogRn_v1` and `F32TanhRn_v1` (the vLLM integration's `ref_prims`): RN32 of the value
 the stated `decimal` algorithm computes at 100 digits (`_CTX`: precision 100, `ROUND_HALF_EVEN`). Each `decimal`
 operation the Python performs is its exact result rounded to 100 significant digits, half to even: `add`, `subtract`,
-`multiply` and `divide` (`Dec.add`, `Dec.sub`, `Dec.mul`, `Dec.div`), and `sqrt`, `exp` and `ln`, which libmpdec rounds
-correctly too (`Dec.sqrt`, and `Dec.exp` and `Dec.ln` by Ziv's loop on directed-rounding bounds of the Taylor series of
+`multiply` and `divide` (`Dec.add`, `Dec.sub`, `Dec.mul`, `Dec.div`), and `exp` and `ln`, which libmpdec rounds
+correctly too (`Dec.exp` and `Dec.ln` by Ziv's loop on directed-rounding bounds of the Taylor series of
 `exp` and of `atanh`). Only values matter: a decimal's exponent and trailing zeros change no result here. Security: none
 yet.
 -/
@@ -77,27 +77,6 @@ def Dec.add (x y : Dec) : Dec :=
 
 /-- `_CTX.subtract`. -/
 def Dec.sub (x y : Dec) : Dec := x.add y.negate
-
-/-- `|x| < |y|`. -/
-def Dec.absLt (x y : Dec) : Bool :=
-  let (_, ax, bx) := x.q
-  let (_, ay, bY) := y.q
-  ax * bY < ay * bx
-
-/-- `_CTX.sqrt` of a positive decimal: the root rounded to `PREC` digits, ties to even, from `⌊2 √Y⌋` for the scaling
-`Y = x · 10^(-2k)` whose root has `PREC` digits. -/
-def Dec.sqrt (x : Dec) : Dec := Id.run do
-  let (_, a, b) := x.q
-  if a = 0 then return .zero
-  let scaled (k : Int) : Nat × Nat := if k ≥ 0 then (a, b * 10 ^ (2 * k).toNat) else (a * 10 ^ (2 * (-k)).toNat, b)
-  let mut k : Int := ((numDigits a : Int) - numDigits b) / 2 - PREC
-  for _ in [0:8] do
-    let r := Fp32.isqrt ((scaled k).1 / (scaled k).2)
-    if r ≥ 10 ^ PREC then k := k + 1 else if r < 10 ^ (PREC - 1) then k := k - 1 else break
-  let (n, d) := scaled k
-  let t := Fp32.isqrt (4 * n / d)
-  let m := if t % 2 = 1 ∧ t * t * d = 4 * n then (if (t / 2) % 2 = 0 then t / 2 else t / 2 + 1) else (t + 1) / 2
-  return ofQ false (m * (if k ≥ 0 then 10 ^ k.toNat else 1)) (if k ≥ 0 then 1 else 10 ^ (-k).toNat)
 
 /-- Directed-rounding bounds `[lo, hi] / S`, `S = 10^g`, on `exp(a / b)` for `0 ≤ a / b ≤ 2^k / 2`: the Taylor series of
 `exp(a / (b 2^k))` (floored terms below, ceiled terms and a tail of at most the last term above, the ratio of terms being
@@ -188,33 +167,6 @@ def Dec.ln (x : Dec) : Dec := Id.run do
     g := g + 60
   return .zero
 
-/-- `_PI_100`. -/
-def PI_100 : Dec := ⟨false, 314159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651, -110⟩
-
-/-- `2 / sqrt(pi)` as `_dec_erf` computes it. -/
-def TWO_OVER_SQRT_PI : Dec := (Dec.ofNat 2).div PI_100.sqrt
-
-/-- `10^-(_DEC_PREC + 5)`. -/
-def TINY : Dec := ⟨false, 1, -(PREC + 5 : Nat)⟩
-
-/-- `abs(x)` in Python's default context (28 digits, half to even), which rounds as it takes the magnitude. -/
-def Dec.abs28 (x : Dec) : Dec := let (_, a, b) := x.q; ofQ false a b 28
-
-/-- `_dec_erf`: `(2 / sqrt(pi)) Σ (-1)^n x^(2n+1) / (n! (2n+1))`, summed until a term, its magnitude taken by `abs`, is
-below `TINY`. -/
-def erf (x : Dec) : Dec := Id.run do
-  let x2 := x.mul x
-  let mut term := x
-  let mut total := x
-  let mut n := 0
-  for _ in [0:100000] do
-    n := n + 1
-    term := (term.mul x2).div (.ofNat n)
-    let contrib := term.div (.ofNat (2 * n + 1))
-    total := if n % 2 == 0 then total.add contrib else total.sub contrib
-    if contrib.abs28.absLt TINY then break
-  return total.mul TWO_OVER_SQRT_PI
-
 /-- `_dec_of_frac` of a finite word's value, `(-1)^neg · u · 2^-149`. -/
 def ofUnits (neg : Bool) (u : Nat) : Dec := ofQ neg u (2 ^ 149)
 
@@ -246,18 +198,6 @@ def f32LogRn (u : Nat) : Nat :=
     if n = 0 then 0xFF800000
     else if neg then F32_NAN
     else (ofUnits false n).ln.toF32
-
-open Fp32 (Decoded decode F32_NAN) in
-/-- `F32ErfRn_v1`, `ref_prims.f32_erf_rn_bits`: NaN gives `0x7FC00000`, `±0` itself, `±inf` and `|x| ≥ 4.2` give `±1`,
-any other x the 100-digit series rounded. Security: none yet. -/
-def f32ErfRn (u : Nat) : Nat :=
-  match decode u with
-  | .nan => F32_NAN
-  | .inf neg => if neg then 0xBF800000 else 0x3F800000
-  | .fin neg n =>
-    if n = 0 then u &&& 0x80000000
-    else if 5 * n ≥ 21 * 2 ^ 149 then (if neg then 0xBF800000 else 0x3F800000)
-    else (erf (ofUnits neg n)).toF32
 
 open Fp32 (Decoded decode F32_NAN) in
 /-- `F32TanhRn_v1`, `ref_prims.f32_tanh_rn_bits`: NaN gives `0x7FC00000`, `±0` itself, `±inf` and `|x| ≥ 9.2` give `±1`,

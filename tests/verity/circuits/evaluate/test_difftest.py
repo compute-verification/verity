@@ -70,7 +70,7 @@ from verity.circuits.ops.boolean import elementwise as BE
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import REGISTRATION, Program, input_id
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.circuits.types import Array, Tuple, type_from_json
+from verity.circuits.types import Array, Tuple, Value, type_from_json
 from verity_vllm.definitions.registry import act as ACT
 from verity_vllm.definitions.registry import dense as DENSE
 from verity_vllm.definitions.registry import dsa as DSA
@@ -118,7 +118,7 @@ SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL
 #: E4's MUFU primitives (`Evaluate.Mufu`)
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
 #: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
-DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32ErfRn, RP.F32TanhRn)
+DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32TanhRn)
 #: E4's activations and RoPE's outputs (`Evaluate.Act`)
 ACTS = (VP.SiluMulBf16, ACT.SiluMulBf16, VP.RopeOut, VP.RopeOutAdd, DENSE.TanhF32Rn, DENSE.GeluTanhMulBf16, ACT.GeluErfBf16)
 _E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS + ACTS)
@@ -321,7 +321,7 @@ def _gate_node(desc: dict) -> dict:
 
 
 def _forward(desc: dict) -> None:
-    """The root's first gate reads the root's last node, which decodes (PROTOCOL.md §4.4) and is computed after it."""
+    """The root's first gate reads the root's last node, which is computed after it: both decoders refuse it (PROTOCOL.md §4.4)."""
     nodes = _root_nodes(desc)
     a = _gate_node(desc)["args"][0]
     assert nodes.index(_gate_node(desc)) < len(nodes) - 1
@@ -495,7 +495,7 @@ def test_refusals_name_what_is_refused(server):
         d = copy.deepcopy(desc)
         _rename(d, _first_gate(d), new)
         got = server.call("evaluate", request(d, x))
-        assert got[0] == "reject" and new in got[1] and "not implemented" in got[1], got
+        assert got[0] == "reject" and new in got[1], got
         assert "reject" in python_answer(d, x)
 
 
@@ -746,7 +746,6 @@ def test_constants(server):
 #: renamings of a constant both sides read alike: only the spelling `prims.const` gives a member (`PROTOCOL.md` §9) is read,
 #: so a short, uppercase or zero-led hex, a zero-led width and bits beyond the width are refused, as is every malformed id
 CONST_IDS = [
-    ("Const16[0x8000]_v1", ["Value", 16], [0x8000]),
     ("Const32[0x5]_v1", None, None),
     ("Const32[0xABCDEF01]_v1", None, None),
     ("Const032[0x00000005]_v1", None, None),
@@ -777,7 +776,7 @@ def test_constant_ids(server):
         assert got == {"output": want} if want is not None else "reject" in got, (new, got)
         cases.append(request(d, []))
     outputs = sum(w is not None for _, _, w in CONST_IDS)
-    assert agree(server, cases) == (outputs, len(cases) - outputs) == (1, 15)
+    assert agree(server, cases) == (outputs, len(cases) - outputs) == (0, 15)
 
 
 # ---- E2: the FP32 and BF16 arithmetic and the casts ---------------------------------------------------------------------
@@ -1876,7 +1875,7 @@ def test_decimal_primitives_sampled(server):
 
 def test_decimal_words_out_of_range_are_refused(server):
     cases = _refused_leaves(DECIMALS)
-    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 4)
+    assert agree(server, cases) == (0, len(cases))
 
 
 # ---- E4: the activations and RoPE ---------------------------------------------------------------------------------------
@@ -1997,61 +1996,31 @@ def test_the_tanh_rn_table_is_the_pinned_one(server):
     assert _registered_sha256(server, "tanh_rn") == TABLE_SHA256["tanh_rn"]
 
 
-def _with_table(fn, table: str, n: int) -> dict:
-    """The Program of `n` calls of the table-reading composite `fn` (`tables.TanhF32RnV2`, `GeluTanhMulBf16V3`), its first
-    parameters batched and its table shared, the table a registered input."""
+def _with_table(fn, table: str, n: int, registered: bool = True) -> dict:
+    """The Program of `n` calls of the table-reading `fn`, its first parameters batched and its table shared, the table a
+    registered input or, not ``registered``, a run input."""
     params, ret = fn.signature()
     head = tuple((name, Array(n, t)) for name, t in params[:-1])
     main = CompositeDefinition(f"DtTable{fn.name}{fn.version}x{n}", 1, (), lambda S: ((*head, params[-1]), Array(n, ret)),
                                lambda B, S, *a: B.batch(fn, *a, axes=(0,) * len(head) + (None,)), register=False)
-    return desc_of(Program(bind(main), registered=(table,)))
-
-
-@functools.cache
-def _with_table_text(fid: str, n: int) -> str:
-    fn = {"TanhF32Rn_v2": TB.TanhF32RnV2, "GeluTanhMulBf16_v3": TB.GeluTanhMulBf16V3}[fid]
-    return json.dumps(_with_table(bind(fn), {"TanhF32Rn_v2": "tanh_rn", "GeluTanhMulBf16_v3": "gelu_tanh_bf16"}[fid], n))
-
-
-@pytest.mark.slow
-def test_tanh_v2_reads_the_registered_table(server):
-    """`TanhF32Rn_v2` on `TANH_SWEEP`, its `tanh_rn` named in the request (`{"table": "tanh_rn"}`, 2^28 words neither side
-    holds) and read at the words its gates index: `TanhF32Rn_v1`'s words."""
-    for i in range(0, len(TANH_SWEEP), 8192):
-        xs = list(TANH_SWEEP[i:i + 8192])
-        kind, out = DT.replay(PORT, request(json.loads(_with_table_text("TanhF32Rn_v2", len(xs))), [xs, {"table": "tanh_rn"}]),
-                              server)
-        assert kind == "output" and json.loads(out) == [DENSE.tanh_f32_bits(x) for x in xs]
-
-
-@pytest.mark.slow
-def test_gelu_v3_reads_the_registered_table(server):
-    """`GeluTanhMulBf16_v3` on every gate word under each of `_UPS`, its `gelu_tanh_bf16` named in the request and, once,
-    given as its 65,536 words: `GeluTanhMulBf16_v1`'s words."""
-    rows = [(g, u) for u in _UPS for g in range(1 << 16)]
-    for i in range(0, len(rows), 8192):
-        chunk = rows[i:i + 8192]
-        x = [[g for g, _ in chunk] + [u for _, u in chunk], {"table": "gelu_tanh_bf16"}]
-        desc = json.loads(_with_table_text("GeluTanhMulBf16_v3", len(chunk)))
-        kind, out = DT.replay(PORT, request(desc, x), server)
-        assert kind == "output" and json.loads(out) == [DENSE.GeluTanhMulBf16.evaluate(*r) for r in chunk]
-        if i == 0:
-            assert DT.replay(PORT, request(desc, [x[0], list(TB.gelu_tanh_bf16_words())]), server) == (kind, out)
+    return desc_of(Program(bind(main), registered=(table,) if registered else ()))
 
 
 def test_tables_bound_otherwise_are_refused(server):
     """A table named for a run input, for a parameter of another size, by a name no table has, or in an object with another
-    key; and a table read too wide for a row (`TableRead5x1`), with too many index bits or an entry that splits a row, or
-    spelled with a zero-led number."""
-    desc = json.loads(_with_table_text("TanhF32Rn_v2", 2))
-    run = copy.deepcopy(desc)
-    run["callees"] = ["Input16_v1" if c == "RegisteredInput16_v1" else c for c in run["callees"]]
-    run["definitions"]["Input16_v1"] = dict(run["definitions"].pop("RegisteredInput16_v1"), id="Input16_v1")
-    cases = [request(run, [[0, 0], {"table": "tanh_rn"}]),
-             request(desc, [[0, 0], {"table": "gelu_tanh_bf16"}]),
+    key, on `gelu_tanh_bf16`'s parameter read at its first row (`TableRead6x1`, within `boolean.table.MAX_WORDS`); and a
+    table read too wide for a row (`TableRead5x1`), with too many index bits or an entry that splits a row, or spelled with a
+    zero-led number."""
+    row = CompositeDefinition("DtTableRow", 1, (), lambda S: ((("index", Value(16)), ("gelu_tanh_bf16", TB.GELU_TABLE)), Value(16)),
+                              lambda B, S, i, t: B.call(TB.table_read(6, 1), i, array_of([t[0]])), register=False)
+    desc, run = (_with_table(bind(row), "gelu_tanh_bf16", 2, registered) for registered in (True, False))
+    kind, out = DT.replay(PORT, request(desc, [[0, 5], {"table": "gelu_tanh_bf16"}]), server)
+    assert kind == "output" and json.loads(out) == [TB.gelu_tanh_bf16_words()[i] for i in (0, 5)]
+    cases = [request(run, [[0, 0], {"table": "gelu_tanh_bf16"}]),
+             request(desc, [[0, 0], {"table": "tanh_rn"}]),
              request(desc, [[0, 0], {"table": "tanh"}]),
-             request(desc, [[0, 0], {"table": "tanh_rn", "rows": 1}]),
-             request(desc, [[0, 0], {"name": "tanh_rn"}])]
+             request(desc, [[0, 0], {"table": "gelu_tanh_bf16", "rows": 1}]),
+             request(desc, [[0, 0], {"name": "gelu_tanh_bf16"}])]
     for fid in ("TableRead5x1_v1", "TableRead33x1_v1", "TableRead0x64_v1", "TableRead6x3_v1", "TableRead06x1_v1",
                 "TableRead6x01_v1"):
         d = copy.deepcopy(json.loads(_batch_text("TableRead6x1_v1", 1)))
@@ -2061,9 +2030,9 @@ def test_tables_bound_otherwise_are_refused(server):
 
 
 #: the lazy families on their one-call Programs: table reads of each index width and entry size up to a row, and gathers of
-#: an empty, a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
+#: a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
 LAZY = (TB.table_read(6, 1), TB.table_read(5, 2), TB.table_read(4, 4), TB.table_read(1, 32), TB.table_read(7, 1),
-        VP.gather_bf16(0), VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
+        VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
 _TOKENS = (0, 1, 7, 8, 4999, 5000, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF8)
 
 

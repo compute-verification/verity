@@ -270,7 +270,7 @@ def test_a_shipped_tree_answers_git_as_the_launchers_checkout_does(tmp_path, mon
     repo = _replica_repo(tmp_path)
     _, dest, _ = remote.ship_source(LOCAL, str(tmp_path / "git-root"), repo)
     p = _replica_test_in(Path(dest))
-    assert p.returncode == 0 and "3 passed" in p.stdout, p.stdout + p.stderr
+    assert p.returncode == 0 and "4 passed" in p.stdout, p.stdout + p.stderr
     assert _git(Path(dest), "check-ignore", "fixtures/big.bin") == "fixtures/big.bin"
     monkeypatch.setenv(remote.SHIP_ENV, "stream")
     _, bare_tree, _ = remote.ship_source(LOCAL, str(tmp_path / "stream-root"), repo)

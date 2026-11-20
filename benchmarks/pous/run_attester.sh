@@ -8,6 +8,7 @@
 #
 # LEAN is the built poub-verifier. The bandwidth party keeps its answers in DIR/bw.
 set -euo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 USAGE="usage: run_attester.sh challenger_party|bw_party PY DIR [LEAN --minutes M ...]"
 VERB=${1:?$USAGE} PY=${2:?$USAGE} DIR=${3:?$USAGE}

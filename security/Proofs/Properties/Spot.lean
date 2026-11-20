@@ -605,7 +605,14 @@ theorem earlierRoot_some (log : Array Json) (want : Registered.Entry) (d : Strin
       EarlierIs log want.leaves want.words want.wordBits d e := by
   cases e with
   | port p => exact outputRoot_some log want.leaves d p
-  | value u => exact valueRoot_some log want.leaves want.words want.wordBits d u
+  | value u =>
+    simp only [Docket.earlierRoot, EarlierIs]
+    by_cases h : d = Docket.lastDigest log
+    · subst h
+      simp only [beq_self_eq_true, ↓reduceIte, true_and]
+      exact valueRoot_some log want.leaves want.words want.wordBits _ u
+    · have hb : (d == Docket.lastDigest log) = false := by simpa using h
+      simp [hb, h]
 
 /-- An entry's shape: its leaf count, words and word bits, all an output value's earlier entry is held to. -/
 abbrev shape (e : Registered.Entry) : Nat × Nat × Nat := (e.leaves, e.words, e.wordBits)

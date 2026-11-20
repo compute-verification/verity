@@ -14,7 +14,7 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
   releases, its sample's openings coin and the next append coin. No event changes the coins (`sstep_keeps`), and
   `withCoin` only fills a coin not yet sent or pushes an append coin (`withCoin_le`), so every coin the process holds
   stays, and `Agree c a` at the end holds at every request before it (`step_le`). The event's `unset` check says each
-  coin it read is sent and of a coin's size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
+  coin it read is sent and of its size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
 * A `verify`'s verdict is `checkWindowChunked`'s, which is `checkWindow`'s (`chunkedIsWhole`), at a point of the
   recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
   `checkWindow` gives the same verdict there (`verdict_kept`): its samples, record, registration and digest are kept
@@ -121,7 +121,7 @@ theorem close_W {s : State} {c a : Array ByteArray} {t : Int} {now : Nat} {r : R
   all_goals
     simp only [Bool.false_eq_true, ↓reduceIte] at hres
     cases h₁
-    rw [hc _ rfl, ‹receiptSample _ _ _ _ _ = some _›] at hres
+    rw [hc _ rfl, ‹receiptSample _ _ _ = some _›] at hres
     cases hres
     rfl
 
@@ -216,10 +216,10 @@ theorem close_params {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : Stat
   repeat' (split at he <;> try dsimp only at he)
   all_goals (cases he; try rfl)
 
-/-- Setting entry `i` to `c` where it held `x`, empty or `c`, keeps every entry of a coin's size. -/
+/-- Setting entry `i` to `c` where it held `x`, empty or `c`, keeps every entry that is not empty. -/
 theorem set_keeps {A : Array ByteArray} {i : Nat} {x c : ByteArray} (hx : A[i]? = some x)
     (hc : (x.isEmpty || x == c) = true) {k : Nat} {y : ByteArray} (hy : A[k]? = some y)
-    (hs : y.size = Codec.COIN_BYTES) : (A.setIfInBounds i c)[k]? = some y := by
+    (hs : 0 < y.size) : (A.setIfInBounds i c)[k]? = some y := by
   rw [Array.getElem?_setIfInBounds]
   split
   · rename_i hik
@@ -227,7 +227,7 @@ theorem set_keeps {A : Array ByteArray} {i : Nat} {x c : ByteArray} (hx : A[i]? 
     rw [hx] at hy
     cases hy
     have hne : x.isEmpty = false := by
-      simp only [ByteArray.isEmpty, hs, Codec.COIN_BYTES]; decide
+      simp only [ByteArray.isEmpty, beq_eq_false_iff_ne, ne_eq]; omega
     rw [hne, Bool.false_or] at hc
     have hxc : x = c := eq_of_beq hc
     subst hxc
@@ -246,15 +246,16 @@ theorem withCoin_cases {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ :
   all_goals (try contradiction)
   all_goals first
     | (left; cases h; exact ⟨_, _, ‹_›, ‹_›, rfl⟩)
-    | (right; cases h; exact ⟨_, rfl, fun k y hy hs => set_keeps ‹_› ‹_› hy hs⟩)
+    | (right; cases h; exact ⟨_, rfl, fun k y hy hs => set_keeps ‹_› ‹_› hy (by rw [hs]; decide)⟩)
     | (right; cases h; refine ⟨_, rfl, fun k y hy _ => ?_⟩
        have hk : k < s.appendCoins.size := (Array.getElem?_eq_some_iff.1 hy).1
        rw [Array.getElem?_push, if_neg (by simp only [Array.size_append, Array.size_replicate]; omega), Array.getElem?_append_left hk]
        exact hy)
 
-/-- What `s'` keeps of `s`'s coins and append coins: each of a coin's size. -/
+/-- What `s'` keeps of `s`'s coins and append coins: each coin that is not empty, and each append coin of a coin's
+size. -/
 def CoinsLE (s s' : State) : Prop :=
-  (∀ (i : Nat) (x : ByteArray), s.coins[i]? = some x → x.size = Codec.COIN_BYTES → s'.coins[i]? = some x) ∧
+  (∀ (i : Nat) (x : ByteArray), s.coins[i]? = some x → 0 < x.size → s'.coins[i]? = some x) ∧
     ∀ (k : Nat) (x : ByteArray), s.appendCoins[k]? = some x → x.size = Codec.COIN_BYTES → s'.appendCoins[k]? = some x
 
 theorem coinsLE_refl (s : State) : CoinsLE s s := ⟨fun _ _ h _ => h, fun _ _ h _ => h⟩
@@ -420,9 +421,14 @@ theorem unset_released {g : Nat} {s : State} {e : Event} {k : Nat} (he : ∃ now
     | none => simp [hk] at h
     | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
+theorem sampleBytes_pos (n g : Nat) : 0 < sampleBytes n g := by
+  unfold sampleBytes sampleCoins
+  have h : ∀ A : Nat, 0 < 64 * ((A + 64 + 63) / 64) := fun A => by omega
+  exact h _
+
 theorem unset_drew {g : Nat} {s : State} {t : Int} {now : Nat} {d : Array (Nat × Nat)}
     (h : Verifier.unset g s (.close t now) (some (.sampled d)) = none) :
-    ∃ x, s.coins[s.params.windows + t.toNat / g]? = some x ∧ x.size = Codec.COIN_BYTES := by
+    ∃ x, s.coins[s.params.windows + t.toNat / g]? = some x ∧ x.size = sampleBytes s.params.samples g := by
   unfold Verifier.unset at h
   cases hk : s.coins[s.params.windows + t.toNat / g]? with
   | none => simp [hk] at h
@@ -504,7 +510,7 @@ theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registrat
 
 /-! ## The process's requests on the recorded run -/
 
-/-- Coins `c` and append coins `a` agree with the ones `s` holds: each coin of a coin's size, and each append coin. -/
+/-- Coins `c` and append coins `a` agree with the ones `s` holds: each coin that is not empty, and each append coin. -/
 abbrev Agree (c a : Array ByteArray) (s : State) : Prop := CoinsLE s (W c a s)
 
 theorem agree_of_le {c a : Array ByteArray} {s s' : State} (h : CoinsLE s s') (h' : Agree c a s') : Agree c a s :=
@@ -523,11 +529,11 @@ theorem event_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {coin : Option 
     (fun _ _ _ _ _ x hx hs => hc.2 _ x (by rw [h2]; exact hx) hs)
   · subst hr
     obtain ⟨x, hx, hs⟩ := unset_released he hun
-    rw [bang (hc.1 k x hx hs), ← h1, bang hx]
+    rw [bang (hc.1 k x hx (by rw [hs]; decide)), ← h1, bang hx]
   · subst he hr
     obtain ⟨x, hx, hs⟩ := unset_drew hun
     rw [sstep_close_params hstep] at hx
-    rw [bang (hc.1 _ x hx hs), ← h1, bang hx]
+    rw [bang (hc.1 _ x hx (by rw [hs]; exact sampleBytes_pos _ _)), ← h1, bang hx]
 
 theorem verifyBy_keeps (s : State) (t : Int) (f : Array (Nat × Nat) → Verdict) :
     (verifyBy s t f).2.coins = s.coins ∧ (verifyBy s t f).2.appendCoins = s.appendCoins := by
@@ -615,7 +621,7 @@ theorem run_snoc {chunk g : Nat} {p p' : Proc} {qs : List Req} {q : Req} {answer
   obtain ⟨rfl, rfl, rfl⟩ := h₂
   exact ⟨x, e?, h₁, hs, rfl, rfl⟩
 
-/-- A request keeps the session's coins of a coin's size and its append coins. -/
+/-- A request keeps the session's coins that are not empty and its append coins of a coin's size. -/
 theorem step_le {chunk g : Nat} {p p' : Proc} {q : Req} {x : Reply} {e? : Option Event}
     (h : step chunk g p q = .ok (x, e?, p')) : CoinsLE p.session p'.session := by
   cases q with

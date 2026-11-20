@@ -17,7 +17,7 @@ public import InferenceOnlyVerifier.ThetaDifftest
 public import InferenceOnlyVerifier.Protocol
 public import InferenceOnlyVerifier.Count
 public import InferenceOnlyVerifier.CountDifftest
-public import InferenceOnlyVerifier.DefinitionDigest
+public import Circuits.DefinitionDigest
 
 /-!
 # The inference-only policy's check
@@ -65,7 +65,7 @@ table and its fresh bits from `InferenceOnlyCheck.Desc`'s summaries. It publishe
 the whole verdict, with the counts, is `InferenceOnlyCheck.Count.checkDetail`, for the private record. `InferenceOnlyCheck.CountDifftest`
 holds both to the Python reference.
 
-`InferenceOnlyCheck.DefinitionDigest` holds a Definition's digests, read off its Program's descriptor with no decode: the circuit
+`Flock.DefinitionDigest` holds a Definition's digests, read off its Program's descriptor with no decode: the circuit
 format's own (`definitionDigest`), over the Definition's body, and the closure digest (`closureDigest`), over its body
 and every body it reaches, which a check that takes a Definition by digest pins. It reads none of the modules above;
 the period check takes its slot entries' Definitions by it.

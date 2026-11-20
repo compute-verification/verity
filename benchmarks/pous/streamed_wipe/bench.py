@@ -316,6 +316,7 @@ def session(port: int, verdict: str) -> dict:
         signed = c.close()
     t3 = time.perf_counter_ns()
     v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
+    wv.finish()
     t4 = time.perf_counter_ns()
     per = [r.elapsed_ns for r in signed.batches]
     return {"labels": n, "k": k, "ended": signed.ended, "accepted": v.accepted, "outcome": wv.outcome(v),

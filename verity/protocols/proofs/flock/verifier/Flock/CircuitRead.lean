@@ -163,3 +163,8 @@ theorem CircuitRead.readers_eq (kept : Option CircuitRead) : CircuitRead.readers
     rw [KeptAt.reuse_eq, KeptAt.reuse_eq]
 
 end Flock
+
+/-- `verify`'s refusal of upstream's plain proof files (`--upstream-plain`), which `agree` reports for a session no other
+refusal meets. -/
+def UPSTREAM_PLAIN : String :=
+  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"

@@ -1,5 +1,4 @@
-"""The hidden source against a manifest built under the guarded-max policy, which no manifest is built under since the M1 stream left the
-manifest (`query.required`) but older manifests still carry: it refuses a tap build whose ROW word 3 or MS class is not the manifest's,
+"""The hidden source against a guarded-max tap build: `require_row3` refuses a build whose ROW word 3 or MS class is not the caller's,
 and the MS class lengthens the stream layout and the arena bound."""
 from __future__ import annotations
 
@@ -10,16 +9,10 @@ import pytest
 from tests.commit.hidden_stream import StreamLayout
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
-    guarded_max_policy,
     mat_total_words,
     tap_ms,
     tap_row3,
 )
-
-
-def test_the_policy_is_read_off_the_query_header():
-    assert guarded_max_policy({"query": {"guarded_max": {"words": 5}}})
-    assert not guarded_max_policy({"query": {"query_id": "Q"}}) and not guarded_max_policy({}) and not guarded_max_policy(None)
 
 
 def test_the_layout_without_ms_is_the_record_s():
@@ -41,7 +34,7 @@ def _source(row3, src=None):
     return s
 
 
-def test_the_source_refuses_a_build_whose_word_3_or_ms_class_is_not_the_manifests():
+def test_the_source_refuses_a_build_whose_word_3_or_ms_class_is_not_the_callers():
     assert tap_row3(SimpleNamespace()) == 0 and tap_row3(SimpleNamespace(verity_tap_row3=lambda: 1)) == 1
     assert tap_ms(123) and not tap_ms(59) and not tap_ms(63)
     _source(1).require_row3(True)

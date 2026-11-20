@@ -1,7 +1,9 @@
 """machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, U/F_low and
                                           margin against what was published, θ, the cheapest attacks, the check,
                                           then whether (π₃₂), its load half and π_c ≥ 16 hold
-                                          (data/floors.csv), and every copy route's price and measured cost a word"""
+                                          (data/floors.csv), and every copy route's price and measured cost a word;
+                                          exits 1 when the vector fails its check, doesn't reproduce a
+                                          published number, or the device has no price vector"""
 from __future__ import annotations
 
 import argparse

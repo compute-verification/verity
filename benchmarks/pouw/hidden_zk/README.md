@@ -7,13 +7,11 @@ witness bit.
 
 ## Try it
 
-Check that the summaries hold every Lean check to the verdict it must give:
+Check that the fast staging writes the bytes Flock's library writes:
 
 ~~~sh
-uv run pytest tests/benchmarks/pouw/test_hidden_zk_summarize.py -q
+uv run pytest tests/benchmarks/pouw/test_hidden_zk_stage.py -q
 ~~~
-
-It prints `4 passed`.
 
 ## Runner
 
@@ -38,4 +36,4 @@ research run --on MACHINE --project verity --source . --cwd source --declared-ou
 | `scope` | `scope.sh CPUS MEM`: `job`, or the job script `HZ_JOB` names (`benchmarks/pouw/served_zk/job.sh`), in a systemd scope of its own on CPUS under a memory limit of MEM | what the job it runs writes |
 
 `job` keeps its builds and staged configs under `HZ_CACHE`, keyed by their inputs, so a later run with the same key
-proves the kept files. Jobs in `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/`, `h1_prove/` and `h1_lanes/` source `job.sh` for those builds.
+proves the kept files. Jobs in `../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/` source `job.sh` for those builds.

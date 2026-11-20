@@ -19,7 +19,6 @@ import torch
 
 from tests import fake_vllm
 from verity_vllm.engine.collectives import fused_norm as FN
-from verity_vllm.pipeline.tp import match as M
 
 
 class _Norm(torch.nn.Module):
@@ -109,11 +108,3 @@ def test_expected_residual_is_the_mnnvl_rule():
     assert sub.tolist() == [0.0]
 
 
-def test_the_match_checks_a_fused_call_and_leaves_an_unfused_one_to_the_commit():
-    bf = torch.bfloat16
-    parts = [torch.stack([torch.tensor([1.0, 2.0], dtype=bf), torch.tensor([0.5, 0.5], dtype=bf)])] * 2
-    prov = {"all_reduce_checked": 0, "all_gather_checked": 0, "alt_f32_once_equal": 0, "alt_ascending_equal": 0}
-    exp = M._expected(FN.KIND, FN.FUSED, parts, [], (0, 1), prov)
-    assert exp.tolist() == [2.5, 4.5] and prov["fused_norm_checked"] == 1
-    assert M._expected(FN.KIND, FN.UNFUSED, parts, [], (0, 1), prov) is None and prov["fused_norm_unfused_left_to_commit"] == 1
-    assert M._expected("reduce_scatter", None, parts, [], (0, 1), prov) is None

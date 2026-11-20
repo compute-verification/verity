@@ -42,7 +42,7 @@ parts are read only after `argPartsOk` has bounded them by the root's nodes.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId partLanes partLeafAt laneWire fieldIx)
+open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId partLanes partLeafAt laneWire fieldIx fieldSpan)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
@@ -78,10 +78,10 @@ def partsOk (P : Prog) : Bool :=
   (List.range b.nodes.size).all fun k => (b.nodes[k]!).args.all fun a => argPartsOk k b.params.size a.seq
 
 /-- The return field of `t` that starts at leaf `o`: its index, leaves and bits. -/
-def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) :=
-  ((fieldsOf t).foldl (fun (acc : Option (Nat × Nat × Nat) × Nat × Nat) ty =>
-    (if acc.2.1 == o && acc.1.isNone then some (acc.2.2, ty.leaves, bitsOf ty) else acc.1,
-      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
+def fieldAt (t : Ty) (o : Nat) : Option (Nat × Nat × Nat) := do
+  let (j, l) ← fieldSpan t o
+  let ty ← (fieldsOf t)[j]?
+  pure (j, l, bitsOf ty)
 
 /-- The members `[lo, lo + n)` of `M` whose row, at argument index `x0 + m·L` and `len` long, lies in the part at
 `[s0, s0 + c)`; `edge-rows` where some member's row meets the part without lying in it. -/
@@ -179,7 +179,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
   return out
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
-cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
+cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. The wires are
+accumulated last first, so each part costs its own wires. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
   if !partsOk P then throw "edge-parts"
   let fu := firstUnits rs
@@ -194,8 +195,8 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       let s := node.args[i]!.seq
       for qi in [0:s.parts.size] do
-        out := out ++ (← partWires P fu W k i s.parts[qi]! s.starts[qi]!)
-  return out
+        out := (← partWires P fu W k i s.parts[qi]! s.starts[qi]!).reverse ++ out
+  return out.reverse
 
 /-! ## Examples: the A, B, A layout -/
 

@@ -1,3 +1,4 @@
+// The row tables' device code, kept here until proofs decides where it lives.
 // `row_table.cuh` on the device: a step's row tables hashed on the caller's stream, from device pointers only, so a serving loop
 // launches it on a side stream behind an event and records the step's root when that stream's work completes
 // (`row_tables_device.step_roots`). Four kernels: every segment digest, every row's leaf, every table's tree (one block each), and

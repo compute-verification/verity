@@ -707,13 +707,14 @@ def test_the_memory_attesters_verdict_is_the_leans_alone(flip, monkeypatch):
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
     live = _live()
-    lean = live.lean_verdict().verdict
+    verdicts = live.lean_verdict()
+    lean = verdicts.verdict
 
     def judged(*args, **kw):
         v = lean(*args, **kw)
         return mc.Verdict(not v.accepted, () if not v.accepted else ("forced",), v.late, v.wrong) if flip else v
 
-    monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=judged, server=lambda: None))
+    monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=judged, server=lambda: None, finish=verdicts.finish))
     monkeypatch.setattr(mc, "verdict", lambda *_a, **_k: pytest.fail("the Python verdict ran"))
     doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
     assert doc["audits"] == 1
@@ -900,33 +901,3 @@ def test_an_lms_signed_audit_takes_a_session_log_of_its_own_and_an_existing_key_
         audit(session_log_path=log)
     assert not log.exists() and json.loads((tmp_path / "state").read_text())["next"] == 0
 
-
-def test_decode_bench_result_names_device_rate_setup_and_keys_agreement(tmp_path):
-    sys.path.insert(0, str(BENCH))
-    from p2_v1 import decode_bench as db
-
-    every = {"blocks": 1 << 19, "ranges": 256, "passed": True, "failed_ranges": []}
-    pinned = {"vector": "v4-deployment", "keys_version": 4, "passed": True, "K": True, "t": True}
-    lib = {"lib": "/b/v4", "fused": False, "keys_version": 4, "blocks": 1 << 19, "setup_s": 0.5, "keys_s": 0.25,
-           "keys_GBps": 4.3, "kernel_GBps": 70.0, "decode_GBps": 50.0, "build": {"name": "v4", "flags": "-DP2_KEYS4"},
-           "gate": {"passed": True, "reference_blocks": 58, "reference_keys_equal": 58, "pinned_keys": pinned,
-                    "keys_all": every}}
-    doc = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "results": [lib], "passed": True}
-    out = tmp_path / "out"
-    out.mkdir()
-    (out / "decode-bench.json").write_text("{}")
-    smi = "3, GPU-abc, NVIDIA RTX PRO 6000 Blackwell Server Edition"
-    r = db.result_doc(doc, smi, "r1", tmp_path, out, ["decode_bench.py"])
-    assert r["schema"] == "research/result/v0.1" and r["run_id"] == "r1"
-    assert r["device"] == {"name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "index": 3, "uuid": "GPU-abc"}
-    assert r["keys_per_s"] == (1 << 19) / 0.25 and r["setup_s"] == 0.5
-    assert r["agreement"]["passed"] and r["validation"]["status"] == "passed"
-    assert r["measurement_files"] == ["out/decode-bench.json"] == r["validation"]["evidence"]
-    assert all({"name", "value", "unit"} <= set(m) for m in r["measurements"])
-    lib["gate"]["keys_all"] = None
-    assert not db.result_doc(doc, smi, "r1", tmp_path, out, [])["agreement"]["passed"]
-    lib["gate"]["keys_all"] = every | {"passed": False}
-    assert db.result_doc(doc, smi, "r1", tmp_path, out, [])["validation"]["status"] == "failed"
-    lib["gate"]["keys_all"], lib["gate"]["reference_keys_equal"] = every, 57
-    assert not db.result_doc(doc, "", "r1", tmp_path, out, [])["agreement"]["passed"]
-    assert db.result_doc(doc, "", "r1", tmp_path, out, [])["device"]["index"] is None

@@ -81,7 +81,8 @@ from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as IX
 from verity_vllm.definitions.registry import marlin_moe as MM
-from verity_vllm.definitions.registry.dsv4_decode_indices import FILL, U8, gather_i32
+from verity_vllm.definitions.registry.dsv4_decode_indices import FILL, U8
+from verity_vllm.definitions.registry.fp8_moe_experts import gather_i32
 from verity_vllm.definitions.registry.prims import I32
 from verity_vllm.definitions.registry.sampling import bit_at
 

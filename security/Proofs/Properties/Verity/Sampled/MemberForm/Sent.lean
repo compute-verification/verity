@@ -86,11 +86,11 @@ def sentEvidenceAt (u : ℕ) (x : Verity.Exchange) : Option Hash.Msg :=
 /-- **The one table of a statement's session**: the table of the tags of the statement every member's session is
 of (`Spot.OneStageZk.STATEMENT`), or the empty string where the statement is unknown. -/
 def statementTable : String :=
-  ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).map fun t => t.table).getD ""
+  ((Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT).map fun t => t.table).getD ""
 
 /-- The statement's table is the table of the statement's tags. -/
 theorem statementTable_eq {tags0 : Flock.Tags}
-    (ht : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0) : statementTable = tags0.table := by
+    (ht : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0) : statementTable = tags0.table := by
   simp only [statementTable, ht, Option.map_some, Option.getD_some]
 
 /-! ## The session at a place -/
@@ -194,7 +194,7 @@ theorem sentEvidenceAt_session {x : Verity.Exchange} {p : _root_.Spot.OneStageZk
 /-- **A member's session's tables with their `root_B` lengths are one table's, the statement's**: `ownRootBTables`
 pairs each of the session's tables (`Spot.OneStageZk.sessionTables`, the statement's one) with a length. -/
 theorem ownRootBTables_one {tags0 : Flock.Tags}
-    (ht : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0) (p : _root_.Spot.OneStageZk.Own)
+    (ht : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some tags0) (p : _root_.Spot.OneStageZk.Own)
     (bs : _root_.Core.Blobs) (record : String) :
     ∃ n?, _root_.Spot.OneStageZk.ownRootBTables p bs record = #[(tags0.table, n?)] := by
   have htab : _root_.Spot.OneStageZk.sessionTables = #[tags0.table] := by

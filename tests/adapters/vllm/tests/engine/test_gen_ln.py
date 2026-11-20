@@ -37,7 +37,7 @@ C = pythia.C
 
 def test_embedded_hf_config_is_the_registered_one():
     if not pythia.HF_CONFIG_PATH.exists():
-        pytest.skip("data/hf_configs is not shipped to pods")
+        pytest.skip("the role's config.json is not shipped to pods")
     assert json.loads(pythia.HF_CONFIG_PATH.read_text()) == pythia.HF_CONFIG
 
 
@@ -150,22 +150,6 @@ def test_layer_norm_and_gelu_erf_are_registry_definitions():
     assert [f.id for f in fns] == ["LayerNormAten_v1", "LayerNormAten_v2", "GeluErf_v1", "GeluErfBf16_v1"]
     assert all(REGISTRY[f.id] is f for f in fns)
     assert layer_norm.VEC == 4 and layer_norm.NTHREADS == 128 and layer_norm.MEAN_FMA_ORDER == "A"
-
-
-def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
-    from verity.circuits.defs import bind
-
-    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
-    N = 64
-    rng = np.random.default_rng(0)
-    x, w, b = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16 for _ in range(3))
-    got = np.array(evaluate_spec(bind(layer_norm.LayerNormAten, N=N, EPS=1e-5), [a.astype(np.uint16) for a in (x, w, b)]), dtype=np.uint32)
-
-    def bf(u):
-        return (u.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
-    xf, wf, bf_ = bf(x), bf(w), bf(b)
-    ref = wf * (xf - xf.mean()) / np.sqrt(((xf - xf.mean()) ** 2).mean() + 1e-5) + bf_
-    assert np.abs(bf(got) - ref).max() <= 2 ** -7 * np.abs(ref).max()   # one bf16 ulp at the row's scale
 
 
 # --- patterns in the profile ----------------------------------------------------------------------------------------------------

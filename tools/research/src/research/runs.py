@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import record, result
+from .store.private import listed as refused_listed
 
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
@@ -188,6 +189,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "measurements": (res.doc or {}).get("measurements") if res.valid else None,
         "cost": record.cost_estimate(job, status),
         "preserved": manifest,
+        "custody_refused": refused_listed(run_dir),
         "has_job": bool(raw_job),
         "has_status": bool(status),
         "has_failure": bool(failure),

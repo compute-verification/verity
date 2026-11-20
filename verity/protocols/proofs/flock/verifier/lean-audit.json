@@ -46,6 +46,7 @@
   "Flock.Test.RegBound",
   "Flock.Test.RegProgram",
   "Flock.Test.DescOfProg",
+  "Flock.Test.Recut",
   "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
   "Flock.Test.RegTwoParams",

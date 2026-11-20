@@ -4,7 +4,7 @@
 # with verity_flock.circuit (the prover's inst-N.bin, the verifier's own pub-N.bin); then per set:
 #   MODE=selftest   CPU and GPU selftests at SELF_N instances
 #   MODE=bench      loopback sessions (a verifier process on 127.0.0.1 serving its own public file) at each of POINTS
-#   MODE=build      nothing more
+#   MODE=build      nothing more (SEED_INJECTION=1: a selftest build, whose statement is `+seed-injection`)
 # env: SELF_N=4  POINTS="64 256"  WARM=1 RUNS=3  GPU=1  SM (from nvidia-smi; GPU=1 without one refuses)  CPU_SELF=1 (0: skip the CPU selftest)
 #      RECORD=1 (selftest: every case's server record and proofs under out/<set>/records-{cpu,gpu})  TYPED=1 (the typed statement)
 #      ZK=1 (selftest: Flock ZK's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
@@ -37,7 +37,7 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
   && git apply $REPO/verity/protocols/proofs/flock/prover/flock-wide-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_circuit_patch.py && python3 $REPO/verity/protocols/proofs/flock/prover/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
-[ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
+{ [ "$MODE" = selftest ] || [ "${SEED_INJECTION:-0}" = 1 ]; } && FEAT="$FEAT --features seed-injection"
 (cd $F && cargo build --release -p flock-live $FEAT --bin flock-circuit -j $TH) > $O/build-circuit.txt 2>&1 || { tail -40 $O/build-circuit.txt; exit 1; }
 B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0

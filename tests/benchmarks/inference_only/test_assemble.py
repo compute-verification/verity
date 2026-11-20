@@ -105,10 +105,11 @@ def test_the_limits_assemble_fixes_from_the_policy_are_judged_and_refused_on_the
 def test_without_R_the_log_ends_at_W_so_an_accept_tied_to_W_is_refused_and_the_check_refuses_the_rest(
         case, tmp_path, stand_in, capsys) -> None:
     names = tied(case, tmp_path, limits=True)
-    said = _assemble(case, tmp_path, {"first": names["first"]})
+    calls: list = []
+    said = _assemble(case, tmp_path, {"first": names["first"]}, calls=calls)
     log = case["trusted"]["log"]
     assert [json.loads(x) for x in (tmp_path / "out" / R.REGISTERED["log"]).read_text().splitlines()] == log[:2]
-    assert A.NO_REGISTRATION in said[2]
+    assert A.NO_REGISTRATION in said[2] and said[-1] == f"block-counts-2-2-2.json: none, {A.NO_COUNT}" and not calls
     capsys.readouterr()
     with pytest.raises(SystemExit):
         _run(["--from", str(tmp_path)], stand_in)
@@ -131,8 +132,12 @@ def test_a_program_rebuilt_to_another_digest_is_refused_before_anything_is_writt
 
 
 @pytest.mark.parametrize("change, match", [
-    (lambda r: {**r, "program": "ab" * 64}, "R names Program abababababababab..., not the circuit record's"),
-    (lambda r: {**r, "window": {**r["window"], "circuit": "ab" * 64}}, "R's window.circuit is not the SHA-512"),
+    (lambda r: {**r, "program": "ab" * 64}, "R: the circuit record names another program, partition or run than its "
+                                            "registration"),
+    (lambda r: {**r, "partition": "ab" * 64}, "R: the circuit record names another program, partition or run than its "
+                                              "registration"),
+    (lambda r: {**r, "window": {**r["window"], "circuit": "ab" * 64}},
+     r"R: \S*circuit-record.json is not the circuit record the registration binds \(abab"),
     (lambda r: {**r, "previous": "ab" * 64}, "the log's record 2 follows abababababababab..., not"),
 ])
 def test_an_R_that_doesnt_name_the_program_the_record_or_W_is_refused(case, tmp_path, change, match) -> None:

@@ -30,6 +30,15 @@ theorem Refines.bind {α β : Type} {a a' : Option α} {k k' : α → Option β}
     rw [h1 y rfl]
     exact h2 y v hv
 
+theorem Refines.bind_of {α β : Type} {a : Option α} {k k' : α → Option β}
+    (h : ∀ y, a = some y → Refines (k y) (k' y)) : Refines (a >>= k) (a >>= k') := by
+  intro v hv
+  cases ha : a with
+  | none => rw [ha] at hv; simp at hv
+  | some y =>
+    rw [ha] at hv
+    exact h y ha v hv
+
 theorem Refines.map {α β : Type} {a a' : Option α} (f : α → β) (h : Refines a a') : Refines (f <$> a) (f <$> a') := by
   intro v hv
   cases a with
@@ -46,12 +55,14 @@ theorem Refines.ite {α : Type} {c : Prop} [Decidable c] {a a' b b' : Option α}
   · simp only [if_neg hc]
     exact h2 hc
 
-theorem Refines.foldlM {α β : Type} {f g : β → α → Option β} (h : ∀ b a, Refines (f b a) (g b a)) :
-    ∀ (l : List α) (init : β), Refines (List.foldlM f init l) (List.foldlM g init l)
-  | [], _ => Refines.rfl' _
-  | a :: l, init => by
+theorem Refines.foldlM {α β : Type} {f g : β → α → Option β} :
+    ∀ (l : List α), (∀ b, ∀ a ∈ l, Refines (f b a) (g b a)) → ∀ init : β,
+      Refines (List.foldlM f init l) (List.foldlM g init l)
+  | [], _, _ => Refines.rfl' _
+  | a :: l, h, init => by
     simp only [List.foldlM_cons]
-    exact Refines.bind (h init a) fun b => Refines.foldlM h l b
+    exact Refines.bind (h init a List.mem_cons_self) fun b =>
+      Refines.foldlM l (fun b a ha => h b a (List.mem_cons_of_mem _ ha)) b
 
 theorem Refines.mapM {α β : Type} {f g : α → Option β} (h : ∀ a, Refines (f a) (g a)) :
     ∀ l : List α, Refines (List.mapM f l) (List.mapM g l)
@@ -103,30 +114,42 @@ theorem evalDef?_succ (P : Prog) (fuel d : Nat) (x : List Bool) :
   | rfl
   | (rw [evalDef?]; rfl)
 
-theorem evalStep_mono (P : Prog) {f g : Nat → List Bool → Option (List Bool)} (h : ∀ e ins, Refines (f e ins) (g e ins))
-    (d : Nat) (x : List Bool) : Refines (evalStep P f d x) (evalStep P g d x) := by
+/-- `evalStep` at `d` refines wherever its recursive call does on what `d` calls: a primitive's body, or a composite's
+callees, each below `d`. -/
+theorem evalStep_mono_at (P : Prog) {f g : Nat → List Bool → Option (List Bool)} {d : Nat}
+    (hb : ∀ defn, P.defs[d]? = some defn → defn.prim = true → ∀ b, P.bodyOf? defn.key = some b →
+      ∀ ins, Refines (f b ins) (g b ins))
+    (hc : ∀ defn, P.defs[d]? = some defn → defn.prim = false → ∀ nd ∈ defn.body.nodes.toList, nd.fn < d →
+      ∀ ins, Refines (f nd.fn ins) (g nd.fn ins))
+    (x : List Bool) : Refines (evalStep P f d x) (evalStep P g d x) := by
   unfold evalStep
-  refine Refines.bind (Refines.rfl' _) fun defn => ?_
-  refine Refines.ite (fun _ => ?_) (fun _ => ?_)
+  refine Refines.bind_of fun defn hd => ?_
+  refine Refines.ite (fun hp => ?_) (fun hp => ?_)
   · generalize Flock.Lower.gateOf? defn.id = og
     cases og with
     | some _ => exact Refines.rfl' _
-    | none => exact Refines.bind (Refines.rfl' _) fun b => h b x
-  · refine Refines.bind ?_ fun _ => Refines.rfl' _
-    refine Refines.foldlM (fun outs nd => ?_) _ _
+    | none => exact Refines.bind_of fun b hb' => hb defn hd hp b hb' x
+  · have hpf : defn.prim = false := by simpa using hp
+    refine Refines.bind ?_ fun _ => Refines.rfl' _
+    refine Refines.foldlM _ (fun outs nd hnd => ?_) _
     try dsimp only
     first
-      | refine Refines.ite (fun _ => Refines.rfl' _) (fun _ => ?_)
-      | refine Refines.bind (Refines.rfl' _) fun _ => ?_
+      | refine Refines.ite (fun _ => Refines.rfl' _) (fun hlt => ?_)
+      | refine Refines.bind_of fun _ hlt => ?_
+    have hf := hc defn hd hpf nd hnd (by first | omega | (split at hlt <;> first | omega | simp at hlt))
     refine Refines.bind (Refines.rfl' _) fun callee => ?_
     obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
     cases form <;> try dsimp only
     all_goals first
-      | exact Refines.map _ (h _ _)
-      | exact Refines.bind (Refines.mapM (fun _ => h _ _) _) fun _ => Refines.rfl' _
-      | exact Refines.bind (Refines.foldlM (fun acc _ => by
+      | exact Refines.map _ (hf _)
+      | exact Refines.bind (Refines.mapM (fun _ => hf _) _) fun _ => Refines.rfl' _
+      | exact Refines.bind (Refines.foldlM _ (fun acc _ _ => by
             obtain ⟨_, _⟩ := acc
-            exact Refines.bind (h _ _) fun _ => Refines.rfl' _) _ _) fun _ => Refines.rfl' _
+            exact Refines.bind (hf _) fun _ => Refines.rfl' _) _) fun _ => Refines.rfl' _
+
+theorem evalStep_mono (P : Prog) {f g : Nat → List Bool → Option (List Bool)} (h : ∀ e ins, Refines (f e ins) (g e ins))
+    (d : Nat) (x : List Bool) : Refines (evalStep P f d x) (evalStep P g d x) :=
+  evalStep_mono_at P (fun _ _ _ b _ ins => h b ins) (fun _ _ _ nd _ _ ins => h nd.fn ins) x
 
 /-- A value at fuel `n` is the value at fuel `n + 1`. -/
 theorem evalDef?_mono_succ (P : Prog) : ∀ (n d : Nat) (x : List Bool), Refines (evalDef? P n d x) (evalDef? P (n + 1) d x)

@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import json
 import random
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,9 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity.circuits import codec
+from verity.circuits.program import boolean_map
+from verity.circuits.restrict import _declared
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
 
@@ -171,20 +176,29 @@ def test_two_definitions_are_refused_by_name(server) -> None:
     assert T.ONE_DEFINITION in json.loads(lean[1])["reason"], lean
 
 
+def test_two_levels_that_parse_are_refused_by_name(monkeypatch) -> None:
+    """By design, the twin refuses two levels' parameters by name (`TWO_LEVELS_REFUSED`) where the two-stage form's
+    parse returns, and only there: its parse's own refusals keep their reasons."""
+    monkeypatch.setattr(T, "params_of_json", lambda j: {})
+    with pytest.raises(D.Reject) as refused:
+        R._form_params(base())
+    assert str(refused.value) == R.TWO_LEVELS_REFUSED
+    assert R.TWO_LEVELS_REFUSED.startswith("levels-not-proved: ")
+
+
 def test_the_base_is_refused(server) -> None:
     """Past the mirror the Lean still refuses: the members are none."""
     assert PORT.lean(server, case(base()))[0] == "reject"
 
 
-#: One honest two-stage play's case, as ``sampled_two_small.sh`` with no arguments keeps it (its ``$OUT/form``:
-#: params.json, commitment.json, evidence.json and blobs/, the play's circuit, public file and session's files). Its
-#: files are past what git holds, so `artifacts.json` registers the directory and `suites.py` fetches it.
+#: One honest two-stage play's case (params.json, commitment.json, evidence.json and blobs/, the play's circuit, public
+#: file and session's files). Its files are past what git holds, so `artifacts.json` registers the directory and
+#: `suites.py` fetches it.
 CASE = Path(__file__).resolve().parent / "fixtures" / "sampled-two-case"
-#: What mends a kept case SPOT no longer accepts because an honest play changed: a play made afresh, which the script
-#: accepts before it keeps it.
-AFRESH = ("if an honest play changed, keep one made afresh: `bash benchmarks/one_stage/sampled_two_small.sh` on a "
-          "node, its $OUT/form's params.json, commitment.json, evidence.json and blobs/ as a directory, `research "
-          "data put --kind fixture/v1 --tree DIR --preserve`, and its id at this path in artifacts.json")
+#: No command makes a two-level play while two levels are refused, so the kept case is not remade: the check must
+#: refuse it by name before it reads what an honest play would change.
+AFRESH = ("the kept two-level case is refused by another name than levels.TWO_LEVELS_REFUSED: the refusal must come "
+          "before the check reads the case's evidence, which no command remakes while two levels are refused")
 
 
 def _case_dir() -> Path:
@@ -201,11 +215,74 @@ def _at_two_levels(j: dict) -> dict:
     return {**{k: v for k, v in j.items() if k != "form"}, "levels": 2}
 
 
+def _v2(desc: dict) -> dict:
+    """A kept program descriptor at the schema the verifier reads: the case was kept at v1, which holds no Boolean
+    bodies, and no command remakes it while two levels are refused."""
+    if desc.get("schema") == codec.SCHEMA:
+        return desc
+    d = {**desc, "schema": codec.SCHEMA}
+    get = codec.definition_decoder(d, _declared(d))
+    p = codec.DecodedProgram(get(d["root"]), {}, d,
+                             tuple(get(f) for f in codec._record_function_ids(d["program_fn"]) if f in d["definitions"]))
+    p.boolean = boolean_map(p)
+    return codec.encode_program(p)
+
+
+def _reads_v2(r: dict | None) -> dict | None:
+    """Registered reads at `verity/registered-reads/v2`, which hold no positions: C and the partition give them."""
+    if r is None:
+        return None
+    return {"format": "verity/registered-reads/v2",
+            "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "reads_from")} for k, e in r["ports"].items()}}
+
+
+def _circuit_sha(program: dict, partition: dict, first: int) -> str:
+    """The SHA-512 of the circuit file Lean derives for the block starting at unit `first` (`spot-one-stage-zk
+    restrict`), the one a member's statement reads."""
+    with tempfile.TemporaryDirectory() as d:
+        cp, pp, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "circuit.txt")
+        cp.write_text(canonical(program))
+        pp.write_text(canonical(partition))
+        exe = D.build(R.ROOT / "verity/protocols/proofs/spot/verifier/lean", "spot-one-stage-zk")
+        p = subprocess.run([str(exe), "restrict", str(cp), str(pp), str(first), str(out)],
+                           capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stdout + p.stderr
+        return hashlib.sha512(out.read_bytes()).hexdigest()
+
+
+def _kept_params(j: dict) -> dict:
+    """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
+    program and its members' units as its blocks, each member naming its block rather than handing its units, and each
+    template's circuit the one Lean derives for its member's block. That digest is the verifier's own `restrict` output,
+    so the tests on these params do not check it independently: they check the refusal by name, and that it comes
+    before the evidence is read."""
+    j = copy.deepcopy(j)
+    for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
+        at[k] = _v2(at[k])
+    ip, members = j["interior"]["params"], j["interior"]["members"]
+    blocks = sorted(tuple(u) for m in members.values() for u in m["units"])
+    ip["partition"] = {**ip["partition"], "program": codec.program_digest(ip["program"]),
+                       "blocks": [[list(b) for b in blocks]]}
+    j["interior"]["members"] = {
+        name: {"block": blocks.index(tuple(m["units"][0])), "public": m["public"],
+               "registered": _reads_v2(m["registered"]), "vus_per_block": m["vus_per_block"]}
+        for name, m in members.items()}
+    firsts = {name: m["units"][0][0] for name, m in members.items()}
+    for t in ip["proofs"]["templates"]:
+        if t["template"] in firsts:
+            t["circuit"] = _circuit_sha(ip["program"], ip["partition"], firsts[t["template"]])
+    return j
+
+
+def _params() -> dict:
+    return _kept_params(json.loads((_case_dir() / "params.json").read_text()))
+
+
 def _check(tmp_path: Path, params: dict | None = None, evidence: dict | None = None) -> subprocess.CompletedProcess:
     """`vstar-recursive sampled check` on the kept play, at two levels, its params or evidence replaced where given."""
     d = _case_dir()
     files = []
-    for name, given in (("params.json", params), ("evidence.json", evidence)):
+    for name, given in (("params.json", params if params is not None else _params()), ("evidence.json", evidence)):
         f = tmp_path / name
         f.write_text(canonical(_at_two_levels(given if given is not None else json.loads((d / name).read_text()))))
         files.append(f)
@@ -223,23 +300,14 @@ def _profile(j) -> dict | None:
 
 
 @pytest.mark.slow
-def test_two_levels_accept_one_honest_play_and_profile_both(tmp_path) -> None:
-    """SPOT accepts some play at two levels: one honest two-stage run's case (`CASE`, or the directory
-    ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``) passes `vstar-recursive sampled check`, and the
-    accept's integrity profile lists both levels, coarse to fine: the replay blocks, the boundary registration's
-    population, then the interior's, each with its sampling design and its drawn count, and no credited block. It
-    catches a change after which two levels accept no play, which every refusal case above passes, or profile one."""
+def test_two_levels_are_refused_by_name_on_an_honest_play(tmp_path) -> None:
+    """By design, SPOT refuses two levels by name at registration: one honest two-stage run's case (`CASE`, or the
+    directory ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``), whose parameters parse at two levels to the
+    end, is refused by `vstar-recursive sampled check` with `TWO_LEVELS_REFUSED` and no accept, as the twin refuses
+    it. It catches a change after which two levels accept a play that no soundness theorem covers."""
     on = _check(tmp_path)
-    assert on.returncode == 0, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
-    prof = _profile(json.loads(on.stdout))
-    assert prof is not None, on.stdout[-4000:]
-    population = json.loads((_case_dir() / "commitment.json").read_text())["population"]
-    levels = prof["levels"]
-    assert [lv["name"] for lv in levels][:1] == ["replay"] and len(levels) == 2, levels
-    assert levels[0]["size"] == population, (levels, population)
-    assert all(lv["draw"] is not None and lv["size"] >= 1 for lv in levels), levels
-    assert sorted(prof["drawn"]) == sorted(lv["name"] for lv in levels), prof["drawn"]
-    assert "credited" not in prof, prof
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
+    assert _profile(json.loads(on.stdout)) is None, on.stdout[-4000:]
 
 
 #: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)
@@ -252,7 +320,7 @@ def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
     root set to the boundary registration's is refused at its parameters and by name (`ONE_WINDOW`). The parameters
     still parse to the end, where the refusal is, which no refusal case above reaches: their interior names no
     members."""
-    params = json.loads((_case_dir() / "params.json").read_text())
+    params = _params()
     assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
     params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
     on = _check(tmp_path, params=params)
@@ -264,37 +332,16 @@ def _evidence() -> dict:
     return json.loads((_case_dir() / "evidence.json").read_text())
 
 
-def _refuses(tmp_path: Path, evidence: dict, reason: str) -> None:
-    """The kept play with its evidence replaced by `evidence` is refused, by `reason`."""
-    on = _check(tmp_path, evidence=evidence)
-    assert on.returncode == 1 and reason in on.stdout, (on.stdout + on.stderr)[-4000:]
-
-
 @pytest.mark.slow
-def test_two_levels_refuse_a_session_count_mismatch(tmp_path) -> None:
-    """Two levels read one statement a session: the kept honest play (`CASE`) with one second-stage statement dropped,
-    so the statements are fewer than the sessions, is refused by `STMT_COUNT`, the reason the twin's reference gives.
-    The counts agree only at the honest play, which the accept test passes; no refusal case above reaches this check,
-    whose play's interior names no members."""
+def test_two_levels_are_refused_by_name_before_their_evidence_is_read(tmp_path) -> None:
+    """By design, two levels' parameters are refused by name before their evidence is read: the kept honest play
+    (`CASE`) with one second-stage statement dropped, which the twin's reference refuses by `STMT_COUNT` when it reads
+    the statements, is refused by `TWO_LEVELS_REFUSED` instead."""
     ev = _evidence()
     own = ev["statements"]
     assert len(own) >= 1, ev
     short = own[:-1]
-    reason = T.stmts_sessions(own, short)
-    assert reason == T.STMT_COUNT
-    _refuses(tmp_path, {**ev, "statements": short}, reason)
-
-
-@pytest.mark.slow
-def test_two_levels_refuse_a_statement_that_is_not_its_session_s(tmp_path) -> None:
-    """Two levels read each statement as its session's: the kept honest play (`CASE`) with its first second-stage
-    statement replaced by another, so the statement at a position is not the one its session makes, is refused by
-    `STMT_SESSION 0`, the reason the twin's reference gives."""
-    ev = _evidence()
-    own = ev["statements"]
-    assert len(own) >= 1, ev
-    swapped = [{"template": "not-the-session-s"}, *own[1:]]
-    assert canonical(swapped[0]) != canonical(own[0])
-    reason = T.stmts_sessions(own, swapped)
-    assert reason == T.STMT_SESSION(0)
-    _refuses(tmp_path, {**ev, "statements": swapped}, reason)
+    assert T.stmts_sessions(own, short) == T.STMT_COUNT
+    on = _check(tmp_path, evidence={**ev, "statements": short})
+    assert on.returncode == 1 and R.TWO_LEVELS_REFUSED in on.stdout, (on.stdout + on.stderr)[-4000:]
+    assert T.STMT_COUNT not in on.stdout, on.stdout[-4000:]

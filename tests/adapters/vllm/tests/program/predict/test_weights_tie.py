@@ -28,9 +28,6 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-    registered as H1R,
-)
 
 from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S
@@ -62,15 +59,15 @@ def _pins(want: dict) -> dict[str, dict]:
 
 
 def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -> set[tuple[str, str]]:
-    """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
-    and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
-    the pinned root at their stated positions."""
+    """The door's registered file of the written window ``d`` (`interface.registered_file`: position-free), from its records
+    and the verifier's ``pins`` alone, read on the host (`Flock.Registered.checkPort`): each member's ports, ``(member, port)``,
+    whose table rows' ``b || c`` don't open the pinned root at the positions the header states."""
     mine, doc = IF.of_records(d, DESIGN, IF.resolve)
-    files = IF.registered_reads(doc, mine, pins, registered=G)
-    assert set(files) == {m.key for m in mine.members}
+    files = IF.registered_file(doc, mine, pins)
+    assert set(files) <= {m.key for m in mine.members}
     written, bad = json.loads((d / "window.json").read_text()), set()
     for k, m in enumerate(mine.members):
-        for p, port in files[m.key]["ports"].items():
+        for p, port in files.get(m.key, {"ports": {}})["ports"].items():
             dom, entry, bc = win.registered[port["value"]].domain, CS.registered_header(written, k)[p], c.bc[m.port(p)]
             assert dom.domain_id.hex() == port["domain"]
             if not all(G.verify_read(dom, bytes.fromhex(port["root"]), pos, bc[r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES],
@@ -106,7 +103,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     tie names it unrooted, as the registration does. Its templates, in the order its first batches them: the field's rows
     and last row, the table's rows (one byte pending) and last row, whose ``data`` alone are row-seg ports, then the shard's
     rows of each width (1024, 64 and 512 words, in first use) at its one phase (each row whole blocks) and its last row. The verifier makes the tie, its circuit's
-    digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its shape
+    digest and its audit inputs without committing a weight (`weight_value` refuses here), and its shape
     entries are the weights record's but the rotary table's, which names no root."""
     reg, (d, man) = S._registered(), x
     registration = WW.weights_registration(reg, Path(d).parent / "r.salts", d, checkpoints_manifest=man, grain=GRAIN)
@@ -116,7 +113,6 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
         raise AssertionError("the verifier commits no weight")
 
     monkeypatch.setattr(WW, "weight_value", no)
-    monkeypatch.setattr(H1R, "commit", no)
     t = WT.tie(reg, d, man, grain=GRAIN)
     shard = (Path(d) / "model.safetensors").read_bytes()
     base = 8 + struct.unpack("<Q", shard[:8])[0]

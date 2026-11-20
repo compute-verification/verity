@@ -14,6 +14,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.commitments import session_coins as SC
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -24,7 +25,7 @@ def signers_port(cases: st.SearchStrategy) -> D.ProtocolPort:
 
 
 def deployed_port(cases: st.SearchStrategy) -> D.ProtocolPort:
-    return D.ProtocolPort("memory-challenger", M.protocol_reference(mc.PROTOCOL, mc.SCHEMES), cases, package=M.PACKAGE)
+    return D.ProtocolPort("memory-challenger", M.protocol_reference(SC.PROTOCOL, mc.SCHEMES), cases, package=M.PACKAGE)
 
 
 signers_server = D.server_fixture(signers_port(st.none()))
@@ -33,7 +34,7 @@ deployed_server = D.server_fixture(deployed_port(st.none()))
 
 @pytest.mark.slow
 def test_the_test_protocol_agrees(signers_server):
-    stats = D.run(signers_port(M.cases()), examples=400, server=signers_server)
+    stats = D.run(signers_port(M.cases()), examples=500, server=signers_server)
     assert stats.counts.get("accept", 0) > 40 and stats.rejects > 200, stats
 
 

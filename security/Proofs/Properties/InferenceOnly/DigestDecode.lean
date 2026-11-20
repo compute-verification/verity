@@ -31,7 +31,7 @@ open Lean (Json JsonNumber)
 open Flock Flock.Program
 open FlockDeploy
 open Claims.Json (Wf)
-open private natJ? intJ? paramsOf from Circuits.Program
+open private natJ? intJ? paramsOf from Circuits.Descriptor
 
 theorem natJ_eq {x : Json} {w : Nat} (h : natJ? x = some w) : x = Lean.toJson w := by
   unfold natJ? at h

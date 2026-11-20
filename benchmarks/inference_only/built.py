@@ -88,11 +88,12 @@ def registered(model: str = MODEL) -> Any:
 
 
 def record(circuit: Any) -> tuple[dict[str, Any], dict[str, str]]:
-    """A circuit's record, as its description and its blocks, and θ as the pins that hold every registered weight."""
+    """A circuit's record (`interface.descriptor_record`, at `prove_path.py`'s default cap), which names the program digest
+    the block counts hold its templates to, and θ as the pins that hold every registered weight."""
+    from verity.commitments.periods import interface as IF
     from verity_vllm.check.weights_of_record import PARAM
 
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    doc = IF.descriptor_record(circuit, 64)
     return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == PARAM}
 
 

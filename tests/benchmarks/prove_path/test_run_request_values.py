@@ -40,9 +40,9 @@ def published(out: Path) -> list[str]:
     return sorted(files)
 
 
-@pytest.mark.parametrize("var", ["PP_LLAMA", "PP_SERVE_RUN", "PP_SERVE_ROWS"])
+@pytest.mark.parametrize("var", ["PP_SERVE_RUN", "PP_SERVE_ROWS"])
 def test_an_art_row_dir_or_serve_run_is_refused_before_anything_is_written(tmp_path, var):
-    unset = [a for v in ("PP_LLAMA", "PP_SERVE_RUN", "PP_SERVE_ROWS", "OUT") for a in ("-u", v)]
+    unset = [a for v in ("PP_SERVE_RUN", "PP_SERVE_ROWS", "OUT") for a in ("-u", v)]
     got = subprocess.run(["env", *unset, f"RESEARCH_RUN_DIR={tmp_path}", f"{var}=art:{'0' * 64}", "bash", str(RUN_SH)],
                          cwd=tmp_path, capture_output=True, text=True)
     assert got.returncode == 2
@@ -134,17 +134,6 @@ def test_records_finds_every_file_it_opens_after_served(tmp_path):
     assert b"4242424" in (tmp_path / "keep/served/audit.log").read_bytes()
 
 
-def test_the_standins_workload_prompts_never_reach_out(tmp_path):
-    s, out = tmp_path / "served", tmp_path / "out"
-    put(s, {"workload.json": {"requests": [{"request_id": "q0", "prompt_token_ids": PROMPT}]},
-            "commit/runs.jsonl": [{"rank": 0, "root": "ab"}], "commit/versions.json": {"root_tag": "t"},
-            "commit/rank0/rows.json": {"rows": [PROMPT]}})
-    code = f"O={out}; S={s}; PUBF={PUBF}\n" + block("  mkdir -p $O/standin", "  mkdir -p $O/standin")
-    got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == ["standin/runs.jsonl", "standin/versions.json"]
-
-
 #: the files a run keeps in PP_KEEP and never writes under $O: a window's partition and the files beside it, the advice's
 #: length, the tools' error output and logs no reader takes from $OUT, the compilers' argv (local paths), the machine's shape
 KEPT = ("partition.json", "index.json", "window.json", "m*-public.bin", "audit.err", "compilers.json", "advice.log",
@@ -203,10 +192,10 @@ def _run_arm(tmp_path: Path, arm: str, bits: int = 5) -> tuple[Path, Path, str]:
 
 
 @pytest.mark.parametrize("arm", ["run glm '--tp-commit T --build-root B' A part.json ''",
-                                 "run llama '--bundle B --row-dir R --workload L' A part.json ''",
+                                 "run served '--serve-run S --window 0 --row-dir R' - part.json ''",
                                  "run standin '--tp-commit S --build-root B' A part.json '' --forge 0:1"])
 def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_path, arm):
-    """The TP, single-GPU and stand-in arms each go through run(): $OUT gets the window's registration, commit.log and the
+    """The TP, served and stand-in arms each go through run(): $OUT gets the window's registration, commit.log and the
     audit's log, whose PROVE-PATH line `verity bench prove layers` reads, and none of the planted values; the keep holds them."""
     out, keep, _ = _run_arm(tmp_path, arm)
     name = arm.split()[1]

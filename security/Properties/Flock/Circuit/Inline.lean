@@ -3,6 +3,7 @@ module
 public import Definitions.Core.Boolean
 public import Properties.Flock.Circuit.OfProgram
 public import Properties.Flock.DecodeBoolean
+public import InferenceOnlyVerifier.Count
 
 /-!
 # C's Boolean inlining (`inline`)
@@ -17,9 +18,10 @@ a block's statement and for counts, never to name a block, a boundary or a leaf.
   inlined gate of the body's return leaf `i`, which may be an earlier gate where the body returns a parameter's bit.
 
 Core's Boolean profile has two-input gates and no constant gate, so a §9 `And<n>` or `Xor<n>` is `n - 1` two-input gates
-in a chain, `Not` one gate, a `0` bit one constant gate (a row of two empty XORs) and a `1` bit two (its NOT). Where the
-evaluator's value is `[]` or shorter than the gate's width, the missing bits are `0` gates, and the circuit ends in one
-`0` gate. So the inlining mirrors the evaluator on every description (`InlineEval`).
+in a chain, `Not` one gate, a `0` bit the inlining's gate 0 (a row of two empty XORs) and a `1` bit its NOT. Where the
+evaluator's value is `[]` or shorter than the gate's width, the missing bits are gate 0, and the circuit ends in one more
+`0` gate. The inlining is the evaluator's walk (`walkStep`) on wires in place of bits (`Wires.wire` beside
+`Wires.bool`), so it mirrors the evaluator on every description (`InlineEval`).
 
 `bodyAnds` is a Definition's AND count by circuits' rule (`verity/circuits/count.py`): `And<n>` `n - 1`, every other §9
 gate, constant bit and input none, a word primitive its body's, a composite the sum over its nodes of members times its
@@ -31,6 +33,7 @@ callee's. A figure that credits reads `andSize (inline P)` itself; a report or a
 namespace Flock.OfProgram
 
 open Flock.Program
+open InferenceOnlyVerifier
 
 /-- A gate of the inlining as it is built, its operands by index. -/
 inductive RawOp where
@@ -46,7 +49,8 @@ abbrev Build := StateM (Array RawOp)
 
 def emit (o : RawOp) : Build ℕ := modifyGet fun s => (s.size, s.push o)
 
-def zeroW : Build ℕ := emit .zero
+/-- The `0` wire: the inlining's gate 0, a `0` gate, which `refVal` reads past a node's wires (`default`). -/
+def zeroW : Build ℕ := pure 0
 
 def oneW : Build ℕ := do emit (.not (← zeroW))
 
@@ -61,61 +65,14 @@ def gateW : Flock.Lower.Gate → List ℕ → Build ℕ
   | .const_ false, _ => zeroW
   | .const_ true, _ => oneW
 
-/-- Reference `r`'s wire, as `refVal` reads its bit; a `0` gate where `refVal` reads `false` for want of a bit. -/
-def refW (x : List ℕ) (st : Array ℕ) (outs : Array (List ℕ)) (r : Ref) : Build ℕ :=
-  match (if r.p then x[st.getD r.i 0 + r.j]? else (outs.getD r.i [])[r.j]?) with
-  | some w => pure w
-  | none => zeroW
-
-/-- The wires of `argVals`'s bits. -/
-def argW (v : Ref → Build ℕ) (a : Arg) (cnt : ℕ) (k : ℕ → ℕ) : Build (List ℕ) :=
-  let rs := a.seq.toArray
-  (List.range cnt).mapM fun t => v (rs.getD (k t) default)
+/-- Wires as the inlining's gates: a §9 gate emitted on its operands' wires. -/
+def Wires.wire : Wires (OptionT Build) ℕ := ⟨fun g xs => OptionT.lift (gateW g xs), fun o => OptionT.mk (pure o)⟩
 
 /-- `evalDef?` on wires: Definition `d` expanded on its parameter wires `x`, at most `fuel` calls deep, its return's
 wires; none where `evalDef?` is none. -/
 def inlDef? (P : Prog) : ℕ → ℕ → List ℕ → OptionT Build (List ℕ)
   | 0, _, _ => failure
-  | fuel + 1, d, x => do
-    let defn ← OptionT.mk (pure P.defs[d]?)
-    if defn.prim then
-      match Flock.Lower.gateOf? defn.id with
-      | some g => return [← (gateW g x : Build ℕ)]
-      | none => return (← inlDef? P fuel (← OptionT.mk (pure (P.bodyOf? defn.key))) x)
-    let callOf (e : ℕ) (ins : List ℕ) : OptionT Build (List ℕ) := inlDef? P fuel e ins
-    let st := paramStarts defn.params
-    let outs ← defn.body.nodes.toList.foldlM (init := (#[] : Array (List ℕ))) fun outs nd => do
-      let v : Ref → Build ℕ := refW x st outs
-      if d ≤ nd.fn then failure
-      let callee ← OptionT.mk (pure P.defs[nd.fn]?)
-      let leaves (i : ℕ) : ℕ := ((callee.params.getD i default).2).leaves
-      match nd.form with
-      | .prim | .call =>
-        let ins ← (nd.args.toList.mapM fun a => argW v a a.seq.count id : Build (List (List ℕ)))
-        outs.push <$> callOf nd.fn ins.flatten
-      | .batch =>
-        let ms ← (List.range nd.n).mapM fun m => do
-          let ins ← ((List.range nd.args.size).mapM fun i =>
-            let a := nd.args.getD i default
-            match a.dims with
-            | none => argW v a a.seq.count id
-            | some (dd, L) => argW v a (leaves i) fun t => (t / L * dd) * L + t % L + m * L : Build (List (List ℕ)))
-          callOf nd.fn ins.flatten
-        return outs.push ms.flatten
-      | .scan =>
-        let c := leaves 0
-        let init ← (argW v (nd.args.getD 0 default) c id : Build (List ℕ))
-        let (carry, ys) ← (List.range nd.n).foldlM (init := (init, ([] : List ℕ))) fun (carry, ys) m => do
-          let rest ← (((List.range nd.args.size).drop 1).mapM fun i =>
-            let a := nd.args.getD i default
-            if i ≤ nd.nxs then argW v a (leaves i) fun t => t + m * leaves i else argW v a (leaves i) id
-            : Build (List (List ℕ)))
-          let o ← callOf nd.fn (carry ++ rest.flatten)
-          return (o.take c, ys ++ o.drop c)
-        return outs.push (carry ++ ys)
-    let rs := defn.body.ret.toArray
-    let ws ← ((List.range defn.body.ret.count).mapM fun t => refW x st outs (rs.getD t default) : Build (List ℕ))
-    return ws
+  | fuel + 1, d, x => walkStep Wires.wire P (inlDef? P fuel) d x
 
 /-- Gate `g`'s operands below it, in order, as indices (`opsBelow`). -/
 def opsBelowN (P : Prog) (g : ℕ) : List ℕ :=
@@ -153,10 +110,11 @@ def gateStep (P : Prog) (done : Array GateW) (g : ℕ) : Build GateW := do
       | none => zeroW
     return { bits := ws.toArray, lo, hi := (← get).size }
 
-/-- The walk over C's gates in increasing index, then the closing `0` gate. -/
+/-- The walk over C's gates in increasing index, after gate 0 and before the closing gate, both `.zero` (`toOp`'s empty
+row, a constant `0`); every read past a list (`refVal`'s `default`) and every `0` bit reads gate 0. -/
 def walk (P : Prog) : Array GateW × Array RawOp :=
   let r := ((List.range (size P)).foldlM (init := (#[] : Array GateW))
-    (fun done g => done.push <$> gateStep P done g) : Build (Array GateW)).run #[]
+    (fun done g => done.push <$> gateStep P done g) : Build (Array GateW)).run #[.zero]
   (r.1, r.2.push .zero)
 
 /-- A raw gate as core's, at index `g`; an operand not below `g` makes it a `0` gate, which the walk never emits. -/
@@ -231,22 +189,16 @@ def blockGates (P : Prog) (S : Finset (Fin (ofProgram P).N)) : Finset (Fin (inli
   Finset.univ.filter fun x => ∃ g ∈ S, ((walk P).1.getD g.val default).lo ≤ x.val ∧
     x.val < ((walk P).1.getD g.val default).hi
 
-/-- Definition `d`'s ANDs by circuits' rule, at most `fuel` calls deep. -/
-def andsDef (P : Prog) : ℕ → ℕ → ℕ
-  | 0, _ => 0
-  | fuel + 1, d =>
-    let defn := P.defs[d]!
-    if defn.prim then
-      match gateKind? defn.id with
-      | some (.and n) => n - 1
-      | some _ => 0
-      | none => match P.bodyOf? defn.key with
-        | some b => andsDef P fuel b
-        | none => 0
-    else (defn.body.nodes.toList.map fun nd => nd.members * andsDef P fuel nd.fn).sum
+/-- §9's ANDs by circuits' rule, by a primitive's key: `And<n>` `n - 1`, every other gate and constant bit none; no
+entry for any other primitive. -/
+def gateAndsOf (k : String) : Option ℕ := (gateKind? k).map fun | .and n => n - 1 | _ => 0
 
-/-- **A Definition's ANDs** (`count.py`'s `ands`), at the evaluator's depth. -/
-def bodyAnds (P : Prog) (p : ℕ) : ℕ := andsDef P (2 * P.defs.size + 2) p
+/-- Each primitive's ANDs: a §9 gate's, or a word primitive's Boolean Definition's (`P.bodyOf?`). -/
+def primAnds (P : Prog) (k : String) : Option ℕ :=
+  (gateAndsOf k).orElse fun _ => (P.bodyOf? k).bind fun b => ((Count.boolGates P gateAndsOf)[b]?).join
+
+/-- **A Definition's ANDs** (`count.py`'s `ands`): `Count.boolGates` on `primAnds`; none where it has no count. -/
+def bodyAnds (P : Prog) (p : ℕ) : ℕ := (((Count.boolGates P (primAnds P))[p]?).join).getD 0
 
 /-- Gate `g`'s ANDs: its primitive's, none for an input. -/
 def gateAnds (P : Prog) (g : Fin (ofProgram P).N) : ℕ :=

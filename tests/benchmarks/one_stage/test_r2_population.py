@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 
+import stand_in
+from verity.circuits import boolean as BL
+
 from verity.circuits import population as PN
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
@@ -22,8 +25,9 @@ import r2_population as R2  # noqa: E402
 
 XOR8 = PrimitiveDefinition("R2PopulationTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
-AND8 = PrimitiveDefinition("R2PopulationTestAnd8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a & b,
-                           register=False)
+AND8 = stand_in.exact(PrimitiveDefinition("R2PopulationTestAnd8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8),
+                                           lambda a, b: a & b, register=False),
+                       lambda B, a, b: [B.call(BL.AND, BL.operands(x, y)) for x, y in zip(a, b)])
 SCHEME = "frame-v3-sha512/hm96-sha512"
 SAMPLING_DESIGN = {"law": "subset", "k": 1}
 WINDOW = {"kind": "served", "row": 1, "run": "r-test"}

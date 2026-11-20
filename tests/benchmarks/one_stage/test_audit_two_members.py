@@ -22,7 +22,7 @@ stops included (`_kept_prover`).
   v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
   (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
-* **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
+* **The binaries.** The Lean verifier, the ZK server's Lean and the door's lowering check (`flock-lower-check`) are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
   nothing: on a machine with no checkout, not its Rust toolchain or not its crates the tests skip, saying so. The
@@ -88,6 +88,7 @@ STATE = next(iter(RA.PHASE_OWN))
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
+TMPL_UNIT = ROOT / "tests" / "verity" / "protocols" / "proofs" / "flock" / "prover" / "lean" / "TmplUnit.lean"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
@@ -142,7 +143,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "verity-verify-proof", "zk-server": LEAN / "flock-zk-server"}
+    lean = {"lean": LEAN / "verity-verify-proof", "zk-server": LEAN / "flock-zk-server", "lower": LEAN / "flock-lower-check"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
@@ -150,7 +151,12 @@ def binaries(tmp_path_factory) -> dict[str, Path]:
     if p.returncode == NOTHING_TO_BUILD_ON:
         pytest.skip(p.stderr.strip())
     assert p.returncode == 0 and prover.is_file(), f"check_build.sh bin: {p.stdout[-2000:]}\n{p.stderr[-4000:]}"
-    return {"bin": prover, **lean}
+    # the door's member circuits are templated: the prover reads each unit placed by `flock-tmpl-unit`, here run on the
+    # verifier package's build rather than built as an executable of a copy of it
+    tmpl_unit = prover.parent / "flock-tmpl-unit"
+    tmpl_unit.write_text(f"#!/bin/sh\ncd {LEAN.parents[2]} && exec lake env lean --run {TMPL_UNIT} \"$@\"\n")
+    tmpl_unit.chmod(0o755)
+    return {"bin": prover, **lean, "tmpl-unit-bin": tmpl_unit}
 
 
 def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
@@ -349,6 +355,22 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert _kept_verifier(out) == [(0, True), (1, False)]
 
 
+#: The two refusals the afresh audit meets on this branch, each by a line of the audit's own words. Both fail closed.
+#: The recut: the registered value's 16-bit words are read into ``wrow``'s 8-bit leaves (a format's words are 16 or 32
+#: bits), a root Spot's registration refuses (`recut-root`) where Python's registers it, so the registration disagrees.
+#: The header: since a registered value is leafed once, in its registration's tree, the docket gives the member no root
+#: at the port that reads it, and the members check still asks one of every port the header names.
+AFRESH_REFUSALS = ("recut-root: the root reads an input node at a width other than its registered one",
+                   "port wrow has no tree under the member")
+
+
+class AfreshRefused(Exception):
+    """The afresh audit refused with exactly the refusals `AFRESH_REFUSALS` names."""
+
+
+@pytest.mark.xfail(strict=True, raises=AfreshRefused,
+                   reason="the recut read Spot's registration refuses (recut-root) and the members check's header rule "
+                   "for a port that reads a registered value; any other failure, or either refusal gone, fails this test")
 def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_passes_the_audit(tmp_path, binaries):
     """No other test runs a value the Program takes, registered afresh under the run root with no earlier record (no
     ``--tie``), through the stream's registration, the prover and the Lean verifier's registered reads."""
@@ -356,6 +378,8 @@ def test_a_value_the_program_takes_registered_afresh_with_no_earlier_record_pass
     rec = json.loads((window / "registration.json").read_text())
     (entry,) = rec["registered"]
     rc, row, _out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "0"})
+    if not (rc == 0 and row.get("ok") is True) and all(line in said for line in AFRESH_REFUSALS):
+        raise AfreshRefused(said)
     assert rc == 0 and row.get("ok") is True, said
     assert row["audit"]["accepted"] is True, row["audit"]
     assert row["registered"]["own"] == {STATE: entry} and row["registered"]["members"] == 1, row["registered"]

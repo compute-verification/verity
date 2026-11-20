@@ -4,7 +4,7 @@ auditor's, and a request carrying other values is refused by name; its answer in
 `core_check` reads, and the prover reads a challenge in either form. The parties' lines are named by their key, the
 verifier's side reading any other as `Malformed` and the channel's end as the runtime's `Closed`; the verifier claims
 the session id before it flips its coins, and a line before it asked for one ends the session out of phase. Its
-sessions, decided by the Lean verifier with these books beside it, are `lean/tests/test_p2_party.py`'s and
+sessions, decided by the Lean verifier alone, are `lean/tests/test_p2_party.py`'s and
 `lean/tests/test_p2_parties.py`'s, which run where Lake is."""
 
 from __future__ import annotations
@@ -230,10 +230,17 @@ def test_a_line_before_the_verifier_asked_for_one_ends_it_out_of_phase(store) ->
 def test_the_verifiers_start_is_not_yet_a_path_that_runs_and_reads_no_key(tmp_path) -> None:
     assert p2_parties.VERIFIER not in p2_parties.PROTOCOLS[p2_parties.ID].starts
     start = p2_parties.starts()[p2_parties.VERIFIER]
-    with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
+    with pytest.raises(NotImplementedError) as verifier_start:
         start({}, {"challenger": str(tmp_path)}, None)
-    with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
+    with pytest.raises(NotImplementedError) as prover_start:
         p2_party_prover.PROTOCOL.starts[p2_parties.PROVER]({}, {}, None)
+    assert str(verifier_start.value) == str(prover_start.value) == p2_parties.GOAL
+
+
+def test_the_deployed_request_is_not_yet_written_and_says_its_goal_alone() -> None:
+    with pytest.raises(NotImplementedError) as e:
+        p2_parties.deployed_request({}, {"node": "the prover's node"})
+    assert str(e.value) == p2_parties.GOAL == "memory-accounting/onsite-memory-verdicts"
 
 
 def test_the_party_refuses_a_closer_key_other_than_the_one_its_pin_names_before_any_session(tmp_path, capsys) -> None:

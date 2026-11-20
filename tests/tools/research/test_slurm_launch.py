@@ -119,6 +119,18 @@ def test_a_run_a_slurm_machine_cannot_take_is_refused_by_name_before_anything_is
     assert not site["via"].exists() and not (site["runs"].exists() and any(site["runs"].iterdir()))
 
 
+def test_a_launch_naming_a_machine_marked_stopped_is_refused_and_sends_nothing(site, capsys):
+    entry = site["reg"] / "vcf-node.toml"
+    kept = entry.read_text()
+    entry.write_text('stopped_since = "2026-11-18T21:17:28Z"\n' + kept)
+    assert _run(site) == 2
+    assert ("vcf-node is stopped since 2026-11-18T21:17:28Z in the register, so no job is submitted there: `research pods "
+            "stopped vcf-node --back`") in capsys.readouterr().err
+    assert not site["via"].exists() and not (site["runs"].exists() and any(site["runs"].iterdir()))
+    entry.write_text(kept)
+    assert _run(site) == 0 and (site["via"] / "launches").is_dir(), "without the mark the same launch goes"
+
+
 def test_a_commit_before_the_slurm_launch_is_refused_and_leaves_no_run(site, capsys):
     git = ["git", "-C", str(site["src"]), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
     subprocess.run([*git, "rm", "-q", slurm.MARKER], check=True)

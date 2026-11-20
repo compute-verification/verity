@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 MAP = REPO / "artifacts.json"
 MAX_BYTES = 20 << 20
 PREVIOUS = "previous"
+TOYS = "toys"
 
 
 def _doc() -> dict:
@@ -31,7 +32,7 @@ def _doc() -> dict:
 
 
 def _entries() -> dict[str, str]:
-    entries = {k: v for k, v in _doc().items() if k != PREVIOUS}
+    entries = {k: v for k, v in _doc().items() if k not in (PREVIOUS, TOYS)}
     assert entries, "the replica map has no entries"
     return entries
 
@@ -118,3 +119,13 @@ def test_replica_map_paths_are_tracked_or_fetched() -> None:
     loose = sorted(set(untracked) - {x for x in out if x})
     assert not loose, ("replica map names paths git neither tracks nor ignores (a fetched entry's path is gitignored, so that a fetched "
                        "copy is never committed):\n" + "\n".join(loose))
+
+
+def test_replica_map_toys_mark_registered_paths_with_a_reason() -> None:
+    """`toys` (store.private.toy) maps a registered path that is public on purpose to why: a key no entry registers marks nothing."""
+    toys = _doc().get(TOYS, {})
+    assert isinstance(toys, dict), "`toys` is an object {registered path: reason}"
+    registered = {v.rstrip("/") for v in _entries().values() if isinstance(v, str)}
+    for rel, why in toys.items():
+        assert rel in registered, f"toys[{rel!r}] is not a registered path"
+        assert isinstance(why, str) and why.strip(), f"toys[{rel!r}] needs a reason"

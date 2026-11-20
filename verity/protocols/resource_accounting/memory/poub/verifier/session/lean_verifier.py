@@ -18,11 +18,13 @@ import json
 import queue
 import shutil
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity import lean_process as LC
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
 
 ROOT = Path(__file__).resolve().parents[7]
@@ -63,8 +65,11 @@ class Lean:
     not yet answered is answered with the error."""
 
     def __init__(self, exe: Path, done: Callable[[dict], None]) -> None:
-        self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.stderr = tempfile.TemporaryFile("a+b")
+        self.proc = subprocess.Popen([str(exe)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
+                                     env=LC.lean_env())
         self.done, self.requests, self.lock = done, queue.SimpleQueue(), threading.Lock()
+        self.err_lock = threading.Lock()
         self.pending: collections.deque[Callable[[dict], None] | None] = collections.deque()
         self.ended: str | None = None
         threading.Thread(target=self._write, daemon=True).start()
@@ -92,13 +97,17 @@ class Lean:
             try:
                 self.proc.stdin.write(data)
                 self.proc.stdin.flush()
-            except (BrokenPipeError, ValueError, OSError) as e:
-                self._end(f"the process is gone: {e}")
+            except (BrokenPipeError, ValueError, OSError):
+                self._end(self._gone())
         with contextlib.suppress(OSError):
             self.proc.stdin.close()
 
     def _read(self) -> None:
         for line in self.proc.stdout:
+            if (panic := LC.panic_line(self._err())) is not None:
+                self.proc.kill()
+                self._end(f"{LC.LEAN_PANIC}: {panic}")
+                break
             msg = json.loads(line)
             if "done" in msg:
                 self.done(msg)
@@ -107,8 +116,25 @@ class Lean:
                 answered = self.pending.popleft() if self.pending else None
             if answered is not None:
                 answered(msg)
-        self._end(f"the process ended ({self.proc.wait()})")
+        self._end(self._gone())
         self.done({"done": None, "accepted": False})
+
+    def _err(self) -> str:
+        """What the process has written on its standard error so far, read by whichever thread asks."""
+        with self.err_lock:
+            self.stderr.seek(0)
+            return self.stderr.read().decode("utf-8", "replace")
+
+    def _refusal(self, code: int) -> str | None:
+        """Why an answer read from a process that ended with ``code`` is not used: its panic line, else the status it ended
+        with where that is not 0 (`LC.exit_why`); None for a clean end."""
+        panic = LC.panic_line(self._err())
+        return f"{LC.LEAN_PANIC}: {panic}" if panic else LC.exit_why(code)
+
+    def _gone(self) -> str:
+        """Why the process has no more answers: `_refusal`, else that it ended."""
+        code = self.proc.wait()
+        return self._refusal(code) or f"the process ended ({code})"
 
     def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:
         self.requests.put((json.dumps(request, separators=(",", ":")).encode() + b"\n" + body, answered))
@@ -127,9 +153,14 @@ class Lean:
             raise LeanError(msg["error"])
         return msg["answer"]
 
-    def close(self) -> None:
+    def close(self, check: bool = True) -> None:
+        """Ends the process: its input closed (the writer's end of input), then its end waited for. With ``check``,
+        `LeanError` by name (`LC.LEAN_PANIC`, `LC.LEAN_EXIT`) where it wrote a panic line while it ended or ended with a
+        status but 0: no answer read from it is used."""
         self.requests.put(None)
-        self.proc.wait()
+        code = self.proc.wait()
+        if check and (why := self._refusal(code)):
+            raise LeanError(why)
 
 
 def codec_json(c: codec.Codec) -> dict:
@@ -250,12 +281,13 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
 
 
 def released_coins(c: coins.SessionCoins) -> tuple[list[bytes], list[bytes]]:
-    """The session's coins as the Lean's session takes them: its W + ⌈W/g⌉ committed coins (window t's challenge at t,
-    flip d's openings coin at W + d, g windows a sample), each one the challenger never released 32 zero bytes, which no
-    event reads, and the append coins by slot (`coins.by_slot`)."""
-    zero, w, d = bytes(coins.COIN_BYTES), c.windows, coins.openings_coins(c.windows, c.per_coin)
-    out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
-    return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (d - len(out[1]))], coins.by_slot(c))
+    """The session's coins as the Lean's session takes them: its W challenges and ⌈W/g⌉ samples' coins (window t's
+    challenge at t, sample d's coins whole at W + d, g windows a sample), each the challenger never released 32 zero
+    bytes, which no event reads, and the append coins by slot (`coins.by_slot`)."""
+    zero, w = bytes(coins.COIN_BYTES), c.windows
+    challenges = [coins.coin(o) for o in c.opened(coins.CHALLENGE)]
+    samples = [c.sample_bytes(d) or zero for d in range(coins.draws(w, c.per_coin))]
+    return ([*challenges, *[zero] * (w - len(challenges)), *samples], coins.by_slot(c))
 
 
 class DifftestCase:

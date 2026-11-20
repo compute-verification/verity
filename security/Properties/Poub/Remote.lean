@@ -23,7 +23,7 @@ of the registration given, `LineRegistered`) and the W's cover of the session's 
 
 The window (`verifyWindow`):
 
-* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a sample, and
+* `AcceptChecksOpenings`: an accepted window drew its receipts from its sample's coins, has one opening a sample, and
   each sampled opening passes `checkOpening` under the receipter of its pass's seed;
 * `AcceptOpensSamples`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
   sampled receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
@@ -33,12 +33,12 @@ The window (`verifyWindow`):
 
 The sample (`draws`):
 
-* `SampleIsSubset`: the window's samples are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the
-  key derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)`
+* `SampleIsSubset`: the window's samples are the proof system's draw's `min(s, U)`-subset of `[0, U)` (`SampleValues`:
+  `Spot.Draw.sampleUnits` on the sample's coins as released, with no derivation), each value `u` mapped to the receipt `(i, p)`
   whose index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the samples are distinct
-  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s distribution
-  gives the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_missProb_le`, a proofs
-  unit, under a uniform live coin, a premise) it gives the receipts.
+  receipts of the window, as many as the draw's values, and the map is a bijection: what the draw's distribution gives
+  the values (a uniform `k`-subset of a uniform live coin's bytes, given that the draw ends; one that runs out refuses
+  the close) it gives the receipts.
 
 A pass's plan (`Plan.make?`, `Plan.changed`):
 
@@ -58,8 +58,8 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
-When the session reads a window's openings coin, and what its sample fixes (the code's half of the opening sample's
-`Refused` and `Live`), is `Properties.Poub.Coins`, and at one openings coin over `g` windows
+When the session reads a window's sample's coins, and what its sample fixes (the code's half of the opening sample's
+`Refused` and `Live`), is `Properties.Poub.Coins`, and at one sample's coins over `g` windows
 (`groups_per_coin`, `Shared.run g`) `Properties.Poub.Shared`. That the verifier's process, which takes the events
 one request at a time on the coins the challenger sent and settles each window's check later, accepts what
 `Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
@@ -79,13 +79,13 @@ seed. -/
 def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
   receipter reg.receipt (w.seedOf i) reg.rows
 
-/-- An accepted window drew `sampled` from its openings coin over its passes' plans, has exactly one opening a sample, and
+/-- An accepted window drew `sampled` from its sample's coins over its passes' plans, has exactly one opening a sample, and
 each sampled receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
 def AcceptChecksOpenings : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+      ∃ sampled, receiptSample samples coin (w.passes.map (·.plan.length)) = some sampled ∧
         openings.size = sampled.size ∧
         ∀ k (hk : k < sampled.size),
           checkOpening reg reg.digest appends w (receipterOf reg w sampled[k].1) sampled[k].1 sampled[k].2 openings[k]! = none
@@ -141,13 +141,13 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
                 odom.verifyOpening oroot odom.count q (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
-/-- An accepted window drew `sampled` from its openings coin, has exactly one opening a sample, and each sampled receipt's
+/-- An accepted window drew `sampled` from its sample's coins, has exactly one opening a sample, and each sampled receipt's
 opening passes checks 1–5 (`OpeningPasses`). -/
 def AcceptOpensSamples : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
     (openings : Array Opening),
     verifyWindow reg appends w coin samples openings = some .accept →
-      ∃ sampled, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some sampled ∧
+      ∃ sampled, receiptSample samples coin (w.passes.map (·.plan.length)) = some sampled ∧
         openings.size = sampled.size ∧
         ∀ k (hk : k < sampled.size), OpeningPasses reg appends w sampled[k].1 sampled[k].2 openings[k]!
 
@@ -157,20 +157,21 @@ def AcceptOpensSamples : Prop :=
 then `p`. -/
 def receiptIndex (lengths : Array Nat) (i p : Nat) : Nat := (lengths.toList.take i).sum + p
 
-/-- The key a window's openings are sampled on: `derive(c, OPENINGS_DOMAIN, {registration, window: t})`. -/
-def openingsKey (registration : ByteArray) (t : Nat) (coin : ByteArray) : ByteArray :=
-  FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
+/-- The values `us` a sample of `samples` receipts among `U` takes on `src`, the sample's coins as the challenger
+released them, read in order with no derivation: the proof system's draw (`Spot.Draw.sampleUnits`, its subset law at
+`min(s, U)`, as `coins.draw_first` draws it), reading some prefix of `src`; none at `min(s, U) = 0`. -/
+def SampleValues (samples U : Nat) (src : ByteArray) (us : Array Nat) : Prop :=
+  (min samples U = 0 ∧ us = #[]) ∨
+    (0 < min samples U ∧ ∃ read, Spot.Draw.sampleUnits (.subset (min samples U)) U src = .ok (us, read))
 
-/-- The samples of window `t` (passes of `lengths` positions, `U` receipts in all) are `Key.subset`'s
-`min(s, U)`-subset of `[0, U)` on the openings key, its stream read to some length `L`, each value `u` mapped to the
-receipt `(i, p)` with `receiptIndex = u`: so they are `min(s, U)` distinct receipts of the window (`i` a pass,
-`p < L_i`), one for each of the sampler's values. -/
+/-- The samples of a window (passes of `lengths` positions, `U` receipts in all) on its sample's coins `src` are the
+draw's `min(s, U)`-subset of `[0, U)` (`SampleValues`), each value `u` mapped to the receipt `(i, p)` with
+`receiptIndex = u`: so they are `min(s, U)` distinct receipts of the window (`i` a pass, `p < L_i`), one for each of
+the draw's values. -/
 def SampleIsSubset : Prop :=
-  ∀ (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat)
-    (sampled : Array (Nat × Nat)),
-    receiptSample registration t coin samples lengths = some sampled →
-      ∃ L us, FlockSoundness.Randomness.subset (openingsKey registration t coin) (min samples lengths.toList.sum)
-          lengths.toList.sum [.str "openings"] L = some us ∧
+  ∀ (samples : Nat) (src : ByteArray) (lengths : Array Nat) (sampled : Array (Nat × Nat)),
+    receiptSample samples src lengths = some sampled →
+      ∃ us, SampleValues samples lengths.toList.sum src us ∧
         sampled.size = us.size ∧ us.size = min samples lengths.toList.sum ∧
         (∀ k (hk : k < sampled.size), sampled[k].1 < lengths.size ∧ sampled[k].2 < lengths[sampled[k].1]! ∧
           receiptIndex lengths sampled[k].1 sampled[k].2 = us[k]!) ∧

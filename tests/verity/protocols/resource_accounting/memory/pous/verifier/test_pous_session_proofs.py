@@ -1,123 +1,107 @@
-"""PoUS's session checked inside proofs (`pous.verifier.session_proofs`): outcomes made from the prover's staged statements
-(`pous.prover.session`) pass, and a broken link, a public input that is not the session's, a proof of another program, a
-rejected proof, an untrusted key, an unknown scheme and a coin that doesn't open each reject. A committed row is a
-stand-in here, SHA-512 of the row: the links compare committed rows and never read through them."""
+"""PoUS's session checked inside proofs (`pous.verifier.session_proofs`): the clear checks. A key the configuration doesn't
+pin, a signature that doesn't verify over the message, an unknown scheme, a coin that doesn't open, a session over another
+store than the registered one and an index past the store each reject."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
-import json
 import random
 
-import pytest
-
-from verity.commitments.crypto import lms as R
+from verity.commitments import session_coins as SC
+from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
-from verity.protocols.resource_accounting.memory.pous.prover import session as P
 from verity.protocols.resource_accounting.memory.pous.verifier import session_proofs as V
 
 RNG = random.Random(3)
 K, BLOCKS, BLOCK = 5, 64, 2056
+PARAMS = lms.Params(64, 1, 2)
+SCHEMES = {mc.LMS: mc.lms_verify(PARAMS)}
+"""The deployed scheme's id at a two-level tree, so a test key signs quickly; the checks read only the id."""
 
 
 def _rand(n: int) -> bytes:
     return bytes(RNG.getrandbits(8) for _ in range(n))
 
 
-def _commit(row: bytes) -> bytes:
-    return hashlib.sha512(b"stand-in" + row).digest()
+STORE = {"value": "store", "root": _rand(64).hex(), "leaves": BLOCKS}
+KEY, OTHER = (lms.keygen(PARAMS, hashlib.sha512(b"session-proofs/" + w).digest()[:64]) for w in (b"pinned", b"other"))
 
 
-def _outcome(unit: P.SessionUnit) -> V.UnitOutcome:
-    return V.UnitOutcome(unit.definition.id, True, tuple(_commit(r) for r in (*unit.rows, *unit.outputs)),
-                         tuple((p, r) for p, (r, kind) in enumerate(zip(unit.rows, unit.kinds)) if kind == "known"))
+def _pin(key: lms.PrivateKey) -> str:
+    return hashlib.sha512(lms.public_key(key)).hexdigest()
 
 
-def _staged(k: int = K):
+def _sign(key: lms.PrivateKey, session: bytes, m: bytes) -> bytes:
+    return lms.sign_at(key, 0, lms.memory_attester_message(key.I, session, m)).encode()
+
+
+def _session(k: int = K, drawn: int = BLOCKS):
+    """A session of `k` rounds over the registered `STORE`, its coins drawn over `drawn` blocks, its records, its salt and
+    its message signed under `KEY`."""
     session = _rand(32)
-    tree = mc.CoinTree.draw(b"source", session, BLOCKS, k, key=mc.coin_key(_rand(mc.HM96.key_bytes)),
+    tree = mc.CoinTree.draw(b"source", session, drawn, k, key=mc.coin_key(_rand(mc.HM96.key_bytes)),
                             salts=[_rand(mc.HM96.salt_bytes) for _ in range(k)])
-    c = mc.SessionCommitment(session, tree.root, tree.key, BLOCKS, k, 854_000, BLOCK, _rand(64))
-    blocks = {i: _rand(BLOCK) for i in range(BLOCKS)}
-    rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 5, mc.block_digest(blocks[tree.indices[j]])) for j in range(k)]
-    key = _rand(16 + 64)
-    head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": k}, sort_keys=True, separators=(",", ":")).encode()
-    m = R.memory_attester_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))
-    st = P.session_statements(head, session,
-                              [r.value() for r in rounds], m, key, _rand(R.DEPLOYED.signature_bytes()), tree.indices,
-                              [blocks[i] for i in tree.indices], limit_ns=c.limit_ns)
-    return c, [tree.opening(j) for j in range(k)], key, st, lambda i: _commit(blocks[i])
+    c = mc.SessionCommitment(session, tree.root, tree.key, BLOCKS, k, 854_000, BLOCK, bytes.fromhex(STORE["root"]))
+    rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 7, _rand(64)) for j in range(k)]
+    return c, [tree.opening(j) for j in range(k)], rounds, _rand(mc.RECORD_SALT_BYTES)
 
 
-def _setup():
-    c, openings, key, st, registered = _staged()
-    proofs = V.SessionProofs(_outcome(st.signature), _outcome(st.digest), tuple(_outcome(u) for u in st.rounds))
-    return c, openings, key, proofs, registered
+def _clear(c, openings, m=None, key=KEY, sig=None, scheme=mc.LMS, pinned=None, store=STORE, rounds=None, salt=None
+           ) -> tuple[str, ...]:
+    m = mc.message(c, salt, SC.COMPLETE, rounds) if m is None else m
+    sig = _sign(key, c.session, m) if sig is None else sig
+    return V.clear_reasons(c, openings, scheme, lms.public_key(key), m, sig, store=store,
+                           pinned={_pin(KEY)} if pinned is None else pinned, schemes=SCHEMES)
 
 
-def _check(c, openings, key, proofs, registered, scheme=mc.LMS, trusted=None) -> mc.Verdict:
-    return V.check_session(c, openings, scheme, key, proofs, registered, trusted={key} if trusted is None else trusted)
-
-
-def test_the_staged_statements_pass() -> None:
-    """The statements the prover stages, each proof accepted, pass: their programs, public inputs and links are the
-    verifier's."""
-    v = _check(*_setup())
-    assert (v.accepted, v.reasons) == (True, ())
-
-
-def _replace(o: V.UnitOutcome, **kw) -> V.UnitOutcome:
-    return dataclasses.replace(o, **kw)
-
-
-def _row(o: V.UnitOutcome, p: int, value: bytes) -> V.UnitOutcome:
-    return _replace(o, rows=o.rows[:p] + (value,) + o.rows[p + 1:])
-
-
-@pytest.mark.parametrize("break_, reason", [
-    (lambda p: dataclasses.replace(p, signature=_row(p.signature, 1, bytes(64))), "the signed message is not"),
-    (lambda p: dataclasses.replace(p, rounds=p.rounds[:3] + (_row(p.rounds[3], 1, p.digest.rows[-1]),) + p.rounds[4:]),
-     "round 3's record is not"),
-    (lambda p: dataclasses.replace(p, rounds=p.rounds[:-1]), "the session's proofs are not"),
-    (lambda p: dataclasses.replace(p, digest=_replace(p.digest, accepted=False)), "the signed digest's proof is not"),
-    (lambda p: dataclasses.replace(p, rounds=(_replace(p.rounds[0], program=p.rounds[1].program),) + p.rounds[1:]),
-     "round 0's proof is not"),
-    (lambda p: dataclasses.replace(p, digest=_replace(p.digest, known=p.digest.known[:2] + ((2, bytes(1)),))),
-     "the signed digest's public inputs"),
-    (lambda p: dataclasses.replace(p, rounds=(_row(p.rounds[0], 0, bytes(64)),) + p.rounds[1:]),
-     "round 0's row is not the registered row"),
-])
-def test_a_broken_proof_rejects(break_, reason) -> None:
-    c, openings, key, proofs, registered = _setup()
-    v = _check(c, openings, key, break_(proofs), registered)
-    assert not v.accepted and any(r.startswith(reason) for r in v.reasons), v.reasons
+def _unsalted(c, rounds) -> bytes:
+    head = SC.header(c.session, c.coin_root, hashlib.sha512(c.coin_key).digest(), c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, SC.COMPLETE,
+                     len(rounds))
+    return hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
+                          + mc.records_digest(rounds)).digest()
 
 
 def test_the_clear_checks_reject() -> None:
-    """An untrusted key, an unknown scheme and a round whose coin doesn't open each reject."""
-    c, openings, key, proofs, registered = _setup()
-    assert "not a trusted" in " ".join(_check(c, openings, key, proofs, registered, trusted={bytes(80)}).reasons)
-    assert "is not accepted" in " ".join(_check(c, openings, key, proofs, registered, scheme="test/x").reasons)
+    """A session's pinned key, its scheme, its signed message and its openings pass; a key the configuration doesn't pin
+    (its own signature verifying), an unknown scheme and a round whose coin doesn't open each reject."""
+    c, openings, rounds, salt = _session()
+    clear = lambda o=openings, **kw: _clear(c, o, rounds=rounds, salt=salt, **kw)  # noqa: E731
+    assert clear() == ()
+    assert clear(key=OTHER) == (V.UNPINNED,)
+    assert clear(pinned=set()) == (V.UNPINNED,)
+    assert clear(scheme="test/x") == ("signature scheme 'test/x' is not accepted",)
     bad = openings[:2] + [dataclasses.replace(openings[2], index=(openings[2].index + 1) % BLOCKS)] + openings[3:]
-    assert "round 2's index is not its committed coin" in _check(c, bad, key, proofs, registered).reasons
+    assert "round 2's index is not its committed coin" in clear(bad)
 
 
-def test_proving_is_not_written_yet() -> None:
-    c, openings, key, proofs, registered = _setup()
-    with pytest.raises(NotImplementedError, match="memory-accounting/pous-session-inside-proof"):
-        P.prove_session(proofs)
+def test_a_message_the_signature_does_not_sign_is_refused() -> None:
+    """The signature is the attester's over the salted message of its own records: the message of records that differ
+    in one word, under another salt or without a salt (the unsalted tag), each fails to verify by name."""
+    c, openings, rounds, salt = _session()
+    sig = _sign(KEY, c.session, mc.message(c, salt, SC.COMPLETE, rounds))
+    word = dataclasses.replace(rounds[1], digest=bytes([rounds[1].digest[0] ^ 1]) + rounds[1].digest[1:])
+    for m in (mc.message(c, salt, SC.COMPLETE, [rounds[0], word, *rounds[2:]]),
+              mc.message(c, bytes([salt[0] ^ 1]) + salt[1:], SC.COMPLETE, rounds), _unsalted(c, rounds)):
+        assert _clear(c, openings, m=m, sig=sig) == (V.BAD_SIGNATURE,)
+    assert _clear(c, openings, m=mc.message(c, salt, SC.COMPLETE, rounds), sig=sig[:-1]) == (V.BAD_SIGNATURE,)
 
 
-@pytest.mark.parametrize("k", [1, K])
-def test_the_session_is_a_window_circuit(k) -> None:
-    """The staged statements as a window's circuit (`window.SessionIntegration`): its templates and wires pass the
-    window's checks, one unit each for the signature and the digest and one a round, at a K with no odd round too."""
-    from verity.circuits.codec import descriptor_id
-    from verity.protocols.resource_accounting.memory.pous.prover.window import SessionIntegration
+def test_a_session_over_another_store_is_refused() -> None:
+    """The store the session's openings pin is the registered one, whose root the setup published: a session whose
+    signed binding is another root, or whose block count is not the store's rows, is refused by name."""
+    c, openings, rounds, salt = _session()
+    other = {**STORE, "root": _rand(64).hex()}
+    (why,) = _clear(c, openings, rounds=rounds, salt=salt, store=other)
+    assert why.startswith(V.OTHER_STORE) and "is not the store's root" in why
+    (why,) = _clear(c, openings, rounds=rounds, salt=salt, store={**STORE, "leaves": BLOCKS + 1})
+    assert why.startswith(V.OTHER_STORE) and f"it audits {BLOCKS} blocks, the store has {BLOCKS + 1}" in why
 
-    st = _staged(k)[3]
-    circuit = SessionIntegration(st).circuit()
-    assert circuit.units == {descriptor_id(st.signature.definition): 1, descriptor_id(st.digest.definition): 1,
-                             **{descriptor_id(st.rounds[s].definition): len(st.rounds[s::2]) for s in range(min(k, 2))}}
-    assert len(circuit.wires) == 1 + k
+
+def test_an_index_past_the_store_is_refused() -> None:
+    """The store's opening returns a verdict of 1 for a key past its rows, so the index bound is a clear check: coins
+    that open, drawn over twice the store's blocks, are refused by name at each round past it."""
+    c, openings, rounds, salt = _session(k=16, drawn=2 * BLOCKS)
+    past = [o.j for o in openings if o.index >= BLOCKS]
+    assert past and _clear(c, openings, rounds=rounds, salt=salt) == tuple(
+        f"{V.PAST_STORE}round {j}'s index {openings[j].index} is not below the store's {BLOCKS} blocks" for j in past)

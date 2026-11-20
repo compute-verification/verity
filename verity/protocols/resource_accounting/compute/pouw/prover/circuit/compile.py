@@ -53,8 +53,8 @@ by its unit (Replace), PoUW's own Program and not the served one.
   ``cover`` and ``uncovered`` (a matmul step outside every registered family); `compile` adds the ones that read the
   units it puts in.
 
-The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
-(`traced_as` at Program level). Each unit's noise-forced work, the floor compute attribution credits to the block it is
+The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`.
+Each unit's noise-forced work, the floor compute attribution credits to the block it is
 placed at, is `Compiled.floor`.
 """
 from __future__ import annotations

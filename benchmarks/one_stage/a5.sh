@@ -9,8 +9,8 @@
 #   python3 tools/check/slot.py --by LANE -- bash benchmarks/one_stage/a5.sh
 #   (a job run from a clone of the tree, 16 GB)
 # A5_ROW_DIR=D: a single-GPU deferred Commit's row dir in place of the fixture (its sealed D/commit/replay_bundle_p0 and the Build's
-# Programs of record in D, as a5_llama1b_h200.sh leaves them), with A5_PARTITION the partition its --serving-rows named and, with
-# WINDOW=served, A5_WINDOW the window its C2 site committed (`c2_replay.serving_rows`); A5_SUBCIRCUIT is the template's input set
+# Programs of record in D, as a served window's seal leaves them), with A5_PARTITION the partition its --serving-rows named and, with
+# WINDOW=served, A5_WINDOW the window it committed before sampling (`serving_rows.readers`); A5_SUBCIRCUIT is the template's input set
 # for the lowering (default rope-head/d64/neox-bf16, the fixture's RoPEHead_v1{D=64}). FLOCK_CHALLENGER=0: each server samples its
 # session's coin tree itself instead of taking it from a challenger of its own.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (a5.py --zk-server, the core protocols'

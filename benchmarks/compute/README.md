@@ -119,8 +119,9 @@ Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
 `liveRow`), and an excluded row must fail them; a filler row is zero and no row holds a word past the kept width
 (`not zero past the kept width`). `checkRecords` limits voluntary rows.
 
-**Crediting one call twice.** `passesDistinct` refuses `repeated-call` (an index repeated under one salt) and
-`call-range`; `workloadReason` refuses repeated matmul indices.
+**Crediting one call twice, or choosing its noise.** `passesPlaced` holds each call's index to its place, round s's call
+c at s·2^16 + c (`callPlace`): it refuses `call-place` (another index), `repeated-call` (two passes at one round) and
+`call-range` (a round or a position past 2^16); `workloadReason` refuses repeated matmul indices.
 
 **A smaller instance, or another scheme.** The verifier refuses a matrix multiplication outside the scheme's domain
 (`domainReason`: k under 1,024 other than 256, k past 2^16, m or n past 2^24) and passes at a k_min or

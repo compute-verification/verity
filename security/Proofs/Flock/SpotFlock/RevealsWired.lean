@@ -308,10 +308,11 @@ theorem opens_slot (hr : r.Ok h) {slot : ℕ → Option Slot} {c : Code} (hf : h
     have he' : entryAt (r.rootsWired ω keep g) S.slot = some e := hkey.trans he
     obtain ⟨hlv, hlf⟩ := hleaf e he' hle
     obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfindP⟩ := port_frameAt (c := c) hsl he' hre hlv hde hsch hcap
-    have hro := rows_open hset hown hsx hck 0 hj
+    obtain ⟨own', hw⟩ := derived_of_setup hset hown r.sts[0] (Array.getElem_mem hj)
+    have hro := rows_open hset hown hsx hck 0 hj own' hw
     rw [← e0] at hro
     obtain ⟨tb, _idx, ht, -, hregs⟩ := hro
-    obtain ⟨q', positions, paths, hq', hent, hrows⟩ := hregs reg hmem
+    obtain ⟨_reg', -, -, q', positions, paths, hq', hent, hrows⟩ := hregs reg hmem
     obtain rfl : q' = S.port r.u := Option.some.inj (hq'.symm.trans hfind)
     obtain ⟨-, -, hopens⟩ := hrows (r.n h) hn
     have hpath : pathAt r.ins r.sts (r.n h) (S.port r.u) =

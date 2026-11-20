@@ -30,7 +30,8 @@ session has five steps:
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
-5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
+5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records root)`, the salt 64 bytes the
+   challenger draws from its own randomness for the session, and the header the
    commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
    frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the
    network attester after its last read.  No egress count is signed: the count of what left between the two marks
@@ -69,13 +70,13 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import SCHEMES, Verify
+from verity.protocols.resource_accounting.memory.pous.attester.memory_attester import RECORD_SALT_BYTES, SCHEMES, Verify
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
 COIN_DOMAIN = "verity/pous/streamed-wipe-coins/v1"
 LABEL_TAG = b"verity-pous/streamed-wipe/label/v1\0"
-SESSION_TAG = b"verity-pous/streamed-wipe/session/v2\0"
+SESSION_TAG = b"verity-pous/streamed-wipe/session/v3\0"
 START_TAG = b"verity-pous/streamed-wipe/start/v1\0"
 END_TAG = b"verity-pous/streamed-wipe/end/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
@@ -238,11 +239,12 @@ def records_root(session: bytes, batches: Sequence[BatchRecord]) -> bytes:
 
 @dataclass(frozen=True, slots=True)
 class SignedWipe:
-    """A closed session: its commitment, how it ended, its start mark (the SHA-512 of the start certificate the
+    """A closed session: its commitment, its record's salt, how it ended, its start mark (the SHA-512 of the start certificate the
     challenger held before the fill, empty when it had no mark source), the fill's times, the batch records, and the
     one signature over them.  It holds no egress count."""
 
     commitment: WipeCommitment
+    salt: bytes
     ended: str
     start_mark: bytes
     fill_start_ns: int
@@ -253,11 +255,12 @@ class SignedWipe:
     signature: bytes
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches)
+        return message(self.commitment, self.salt, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
+                       self.batches)
 
     def to_json(self) -> dict[str, Any]:
         """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
-        return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
+        return {"commitment": self.commitment.to_json(), "salt": self.salt.hex(), "ended": self.ended, "start_mark": self.start_mark.hex(),
                 "fill_start_ns": self.fill_start_ns, "fill_end_ns": self.fill_end_ns,
                 "batches": [r.to_json() for r in self.batches], "scheme": self.scheme,
                 "public_key": self.public_key.hex(), "signature": self.signature.hex()}
@@ -270,13 +273,15 @@ def mark_of(text: str) -> bytes:
     return bytes.fromhex(text)
 
 
-def message(commitment: WipeCommitment, ended: str, start_mark: bytes, fill_start_ns: int, fill_end_ns: int,
+def message(commitment: WipeCommitment, salt: bytes, ended: str, start_mark: bytes, fill_start_ns: int, fill_end_ns: int,
             batches: Sequence[BatchRecord]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records root)`."""
+    if len(salt) != RECORD_SALT_BYTES:
+        raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
     head = json.dumps({**commitment.header(), "ended": ended, "start_mark": start_mark.hex(),
                        "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches)},
                       sort_keys=True, separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
+    return _sha512(SESSION_TAG, salt, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
 
 
 def start_message(commitment: WipeCommitment) -> bytes:

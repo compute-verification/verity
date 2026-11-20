@@ -21,8 +21,10 @@ import numpy as np
 import pytest
 from test_class_statement_unit_stager import _toy
 from test_lean_verifier import lake_build
-from test_struct_lower import TOY_READS, toy_reads  # noqa: F401
+from stand_in import exact
+from test_struct_lower import TOY_MIX, TOY_READ, TOY_READS, TOY_WORDS, toy_reads  # noqa: F401
 from tmpl_toy import ROWS, toy_tmpl
+from verity.circuits import boolean as BL
 from verity.circuits import population as PN
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -35,6 +37,31 @@ from verity_flock import tmpl as T
 LEAN = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 MODE = "iv/hybrid/4"
+
+
+def _toy_mix_bits(B, x, y):
+    return [B.call(BL.XOR, BL.operands(a, b)) for a, b in zip(x, y)]
+
+
+def _toy_read_bits(B, x):
+    """The toy's table as the XOR of the minterms its words set: the unit's Boolean map computes the read, as the structural
+    stager lays it."""
+    inv = [B.call(BL.NOT, a) for a in x]
+
+    def nibble(v, at):
+        return B.call(BL.and_gate(4), BL.operands(*[x[at + i] if v >> i & 1 else inv[at + i] for i in range(4)]))
+
+    lo, hi = [nibble(v, 0) for v in range(16)], [nibble(v, 4) for v in range(16)]
+    minterm = [B.call(BL.AND, BL.operands(hi[v >> 4], lo[v & 15])) for v in range(256)]
+    out = []
+    for j in range(8):
+        on = [minterm[v] for v in range(256) if int(TOY_WORDS[v]) >> j & 1]
+        out.append(B.call(BL.constant(0)) if not on else on[0] if len(on) == 1 else B.call(BL.xor_gate(len(on)), BL.operands(*on)))
+    return out
+
+
+exact(TOY_MIX, _toy_mix_bits)
+exact(TOY_READ, _toy_read_bits)
 
 def _map(t: T.Tmpl, mode: str) -> tuple[int, list[int]]:
     lays = T.layout(t, mode)

@@ -55,7 +55,7 @@ The placed window (`[run.window.plain]`) is remote with no accounting piece: it 
 (`H1_GATE` empty), so PoUW's piece is `MISSING`, and it runs no V3c (`V3C_CLASS` empty, so step 3's audit is the SPOT
 audit of record) and no composite (`COMPOSITE` empty). Its record is composed off the node by `run.sh compose`. The
 tied window (`run.sh window --tie`, `[run.window.tie]`) serves the BF16 row (`tied_row`) under Pearl+
-(`PEARLPLUS_TIE`, `POUW=pearlplus`), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
+(`POUW=pearlplus`, untied: Pearl+'s own verdict over its own passes, held to no window record, crediting nothing), its linears committed at V3c's class `4,32,4` (4 slots, prompts 32:32), leaves
 `COMPOSITE` at its default, so its hand-off carries `POUW` and the compose off the node composes remote's composite of
 record, `verity/remote/v1` (a hand-off without `POUW` composes v0, which its record says is not of record), and it
 defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `run.sh copy` and

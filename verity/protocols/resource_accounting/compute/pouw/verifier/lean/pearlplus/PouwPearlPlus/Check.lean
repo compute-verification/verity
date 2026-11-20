@@ -157,7 +157,7 @@ def afterTie (i : Input) (passes : List Pass) (tie : Option Tied) : Except Refus
 /-- `verify_passes` up to the replay: the passes, the run's commitment, the source and the tiles to open. -/
 def plan (i : Input) : Except Refusal Plan := do
   if i.manifests.isEmpty then throw { reason := "the run holds no pass with calls" }
-  throwRefusal (passesDistinct i.manifests) fun _ => do
+  throwRefusal (passesPlaced i.manifests i.rounds) fun _ => do
   let passes ← i.manifests.mapM (load i.coins)
   if passes.any (·.salt != passes[0]!.salt) then throw { reason := "ValueError: the passes are not all of one salt" }
   if !i.testInstance then

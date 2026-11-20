@@ -106,7 +106,7 @@ def PooledSample : Prop :=
     (δ : ℝ), 0 ≤ δ → m < 18446744073709551616 → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
-        (R.binding D prf rest).toReal) fun ω =>
+        (R.binding (D.opened prf rest)).toReal) fun ω =>
       (T.incorrect ω : ℝ) ≤ D.pooled δ ω
 
 /-- **Live coins, derived.** On a session meeting `PooledSample`'s premises, `m < 18446744073709551616` (2^64) among
@@ -120,7 +120,7 @@ def LiveCoinsSampled : Prop :=
     (∀ ω, T.accepts ω → D.pooled δ ω ≤ W) →
     LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
       (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
-      (R.binding D prf rest).toReal)
+      (R.binding (D.opened prf rest)).toReal)
 
 /-- **The snapshot held at the record's pooled bound, under Identity.** `Held` on a trace over a session's coins, with
 `LiveCoins` replaced by the sample's premises (`Live`, `Refused`, `Counted`) and `W` by the record's pooled bound at
@@ -134,7 +134,7 @@ def HeldSampled : Prop :=
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
-        (R.binding D prf rest).toReal)) fun ω =>
+        (R.binding (D.opened prf rest)).toReal)) fun ω =>
       (T.planned ω : ℝ) - D.pooled δc ω - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω
 
 /-- **Held over time at the record's pooled bound, under Identity.** `HeldOverTime` with `LiveCoins` replaced by the
@@ -150,7 +150,7 @@ def HeldOverTimeSampled : Prop :=
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
-        (R.binding D prf rest).toReal)) fun ω =>
+        (R.binding (D.opened prf rest)).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
           - 2 * K.longest ω * ((s / E + β) * (((K.stop ω - K.start ω : ℕ) : ℝ) + 2 * K.longest ω) + (Br + Bd))
           - K.fill ω T.blocks (D.pooled δc ω)
@@ -169,7 +169,7 @@ def HeldOverTimeLinksSampled : Prop :=
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
-        (R.binding D prf rest).toReal)) fun ω =>
+        (R.binding (D.opened prf rest)).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
           - 2 * K.longest ω *
               ((s / E + β + βl) * (((K.stop ω - K.start ω : ℕ) : ℝ) + 2 * K.longest ω) + (Br + Bd + Bl))

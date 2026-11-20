@@ -44,6 +44,9 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
+from verity.protocols.proofs.spot.verifier.one_stage.lean_child import (LEAN_PANIC, VERIFY_EXITS, exit_why, panic_line,
+                                                                        refuse_exit, refuse_panic)
+from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
 
 import r2_population as R2
 
@@ -61,14 +64,15 @@ ARCHIVE_LINK = "archive_link"
 
 def environ(env: dict | None) -> dict:
     """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
-    witness when FC_HOST_WITNESS is set at all)."""
-    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+    witness when FC_HOST_WITNESS is set at all), under `lean_env`."""
+    return lean_env({k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None})
 
 
 def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 3600) -> subprocess.CompletedProcess:
     t = time.time()
     p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
     log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
+    refuse_panic(p.stderr)
     return p
 
 
@@ -304,9 +308,10 @@ def lean_sample_test(lean: str, cases: list[dict], out: Path, name: str) -> list
 
 def zk_server_env(st: dict) -> dict:
     """What a zk_served prover (`FC_ZK_SERVER=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
-    `lean_verify` verifies under, and the statement's partition and program."""
+    `lean_verify` verifies under, and the statement's partition and program; and `ABORT_ON_PANIC` for the Lean server."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
-    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args)}
+    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args),
+            ABORT_ON_PANIC: "1"}
 
 
 #: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
@@ -438,7 +443,7 @@ class VerifyMembers:
         with self.stderr.open("wb") as err:
             self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
                                          env=environ(None))
-        self.members, self.ended = 0, None
+        self.members, self.ended, self.statuses = 0, None, []
         self._buf, self._err_read, self._ends = b"", 0, []
 
     def _stop(self, why: str, kill: bool = False) -> None:
@@ -504,20 +509,31 @@ class VerifyMembers:
                     end = f"not JSON ({e})"
                 if isinstance(end, dict) and end.get("index") == i and isinstance(end.get("exit"), int):
                     status = end["exit"]
+                    self.statuses.append(status)
                 else:
                     self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
         stderr = self._stderr()
+        panic = panic_line(stderr)
+        refused = (f"{LEAN_PANIC}: {panic}" if panic is not None
+                   else None if status is None else exit_why(status, VERIFY_EXITS))
+        if refused is not None:
+            status = None
         # what the process printed for a member it did not answer is kept, and is no verdict to any reader of the log
         stdout = "".join(("" if status is not None else "not taken: ") + x + "\n" for x in printed)
-        why = f"no verdict (rc {status}): {stderr[-400:]}" if status is not None else f"no verdict: {self.ended}: {stderr[-400:]}"
+        why = (refused if refused is not None else f"no verdict (rc {status}): {stderr[-400:]}" if status is not None
+               else f"no verdict: {self.ended}: {stderr[-400:]}")
         log.write_text(f"$ {self.cmd[0]} verify {' '.join(args)}\n# rc {status} in {time.time() - t:.3f} s\n"
-                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended}")
+                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended if refused is None else why}")
                        + f"\n--- stdout\n{stdout}\n--- stderr\n{stderr}")
         return (stdout if status is not None else ""), why
 
     def close(self) -> int:
         """Ends the process, its standard input closed so that it exits once it has answered what it was handed: its exit
-        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs)."""
+        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs).
+        Where it answered every member and then did not end as `verify-members` documents (0 when every member's exit
+        was 0, else 1), wrote a panic line after its last answer or was killed, raises `LeanPanic`: the verdicts it
+        gave were read before its end, and stand on nothing."""
+        answered = self.ended is None
         if self.ended is None:
             self.proc.stdin.close()
             while isinstance(line := self._line(EXIT_WAIT), bytes):
@@ -528,9 +544,13 @@ class VerifyMembers:
                             f"# {self.members} members handed in; {self.ended}\n--- stdout\n"
                             + "".join(x + "\n" for x in self._ends) + self._buf.decode(errors="replace")
                             + f"\n--- stderr\n{self.stderr.read_text(errors='replace')}")
+        tail = self._stderr()
         self.stderr.unlink()
         for f in (self.proc.stdin, self.proc.stdout):
             f.close()
+        if answered:
+            refuse_panic(tail)
+            refuse_exit(self.proc.returncode, {0 if all(s == 0 for s in self.statuses) else 1})
         return self.proc.returncode
 
 
@@ -581,7 +601,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     t = time.time()
     if members is None:
         p = run([lean, "verify", *args], out / f"{log}.log", env=verifier_env())
-        stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
+        exited = exit_why(p.returncode, VERIFY_EXITS)
+        stdout, none = ("", exited) if exited else (p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}")
     else:
         stdout, none = members.verify(args, out / f"{log}.log")
     line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)

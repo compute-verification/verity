@@ -148,7 +148,7 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open",
-         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "meaning", "escapes",
+         "open_seed", "open_default_issue", "default_owner", "ids", "trust", "deployed", "trust_gap", "scope", "meaning", "escapes",
          "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked",
          "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
@@ -1381,7 +1381,7 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
 #: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
 #: witnesses); and `format`, which `dump` writes and only the merge driver reads
 JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
-                    "witnesses", "witnesses_assumed", "ids", "format"})
+                    "witnesses", "scope", "witnesses_assumed", "ids", "format"})
 
 
 def build_inputs(policy: dict) -> dict:
@@ -1587,12 +1587,12 @@ MAIN = ("refs/remotes/origin/main", "refs/heads/main")
 #: the maps keyed by a guarantee, theorem or premise that `renamed_witnesses` re-keys, beside `deployed`, `trust`,
 #: `shape.inline` and `claims.witnesses`
 RE_KEYED = ("guarantees", "deployed", "ids", "trust_gap", "witnesses_assumed", "witnesses", "unwitnessed", "open", "domain",
-            "assumptions", "four_names_except")
+            "assumptions", "four_names_except", "scope")
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]) -> dict:
     """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed`, `trust_gap`, `ids`, `open`,
-    `domain`, `assumptions`, `four_names_except` and `claims.witnesses` with every guarantee, theorem and premise they name
+    `domain`, `assumptions`, `four_names_except`, `scope` and `claims.witnesses` with every guarantee, theorem and premise they name
     `renamed` by ``moved`` (or mapped by it, a function), each entry's other fields kept."""
     rn = moved if callable(moved) else lambda n: renamed(n, moved)
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
@@ -1626,6 +1626,8 @@ def renamed_witnesses(policy: dict, moved: dict[str, str] | Callable[[str], str]
                                     for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
     if isinstance(allow, dict):
         out["unwitnessed"] = {rn(g): h for g, h in allow.items()}
+    if isinstance(scope := policy.get("scope"), dict):
+        out["scope"] = {rn(g): s for g, s in scope.items()}
     if isinstance(spec := policy.get("shape"), dict) and isinstance(spec.get("inline"), dict):
         out["shape"] = spec | {"inline": {rn(g): h for g, h in spec["inline"].items()}}
     return out
@@ -2022,10 +2024,25 @@ def own_modules(facts: dict) -> set[str]:
             if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
+def exempt_owed(entry) -> bool:
+    """Whether an `exempt` entry is one that is owed: {why, owner, issue, due}, a file left out of the roots until its
+    issue ends, with the owner, issue and due date an `open` entry has.  A bare reason is a file no root is meant to
+    import."""
+    return (isinstance(entry, dict) and set(entry) == {"why", "owner", "issue", "due"}
+            and isinstance(entry["why"], str) and bool(entry["why"].strip()) and bool(OWNER.fullmatch(str(entry["owner"])))
+            and bool(OPEN_ISSUE.fullmatch(str(entry["issue"]))) and bool(OPEN_DUE.fullmatch(str(entry["due"]))))
+
+
 def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> list[Failure]:
     """`orphan.file` for each of the package's ``files`` that is neither one of ``modules`` (those its roots import) nor
-    under `exempt`, and `orphan.stale-exempt` for each `exempt` entry that matches no file."""
+    under `exempt`, `orphan.stale-exempt` for each `exempt` entry that matches no file, and `orphan.exempt-form` for an
+    entry that is neither a reason nor {why, owner, issue, due} (`exempt_owed`)."""
     fails, exempt = [], policy.get("exempt", {})
+    for p, entry in sorted(exempt.items()) if isinstance(exempt, dict) else ():
+        if not (isinstance(entry, str) and entry.strip()) and not exempt_owed(entry):
+            fails.append(Failure("orphan.exempt-form", p, f"orphan: exempt[{p}] is its reason, or {{why, owner, issue, due}} "
+                                 "for a file left out of the roots until its issue ends: an owner's handle (@lean), its "
+                                 "Linear issue (LEAN-12) and its due date (2026-11-30)"))
     for m, rel in sorted(files.items()):
         if m not in modules and not under(exempt, m):
             fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
@@ -2299,7 +2316,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     if update and isinstance(policy.get("trust_gap"), dict):
         out["trust_gap"] = trust_gap_kept(out)
-    fails += trust_failures(out)
+    fails += trust_failures(out) + deployed_witness_failures(out) + scope_failures(out)
     if update and isinstance(policy.get("ids"), dict):
         out["ids"] = ids_kept(out)
     fails += id_failures(out, {getattr(f, "entry", None) for f in fails})
@@ -2926,8 +2943,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
       `witnesses.nontrivial-repeat`), so each shows another premise matters, and a premise-free guarantee has none to
       drop. Each builds its instance and assumes nothing more, as the first does.
 
-    A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
-    guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
+    A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: {type_hash, why}}, `why` its owner's
+    reason on soundness's word; a bare type hash is an entry carried from before the reason was required, whose count only
+    shrinks, `UNREASONED`) lists it with the hash of its statement as built, or, under `--moved`, with that
     of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
     the entry): a new guarantee, and one whose statement changed, carry both. Of a guarantee whose statement is a
     definition (`lift`), the entry also holds the hash of that statement with the definition unfolded once
@@ -2941,14 +2959,16 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     list exempts nothing today, and would exempt a guarantee listed under that name later with the same statement: it
     fails `witnesses.unwitnessed-unlisted`, as a `witnesses` entry of no guarantee fails `witnesses.stale`, and `--update`
     drops it, its own audit not failing on it (`judge`). `--update` keeps an entry only while its guarantee is in scope
-    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list
-    only shrinks (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side
-    still lists: for that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry
-    at its statement as built, in the form the lock run writes (`repaired`), to be written back."""
+    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, and the lock
+    run (`repaired`) re-keys only an entry the lock holds, keeping its `why`, and adds none: the list grows only by an
+    entry written by hand with its reason (`tests/test_lean_packages.py` holds its size, `UNWITNESSED`, and the count of
+    entries without a reason, `UNREASONED`, which only shrinks). A merge can drop the entry of a guarantee one side still
+    lists: for that case the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry at its
+    statement as built, to be written back by hand as it was."""
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
     if not isinstance(ws, dict) or not isinstance(allow, dict):
         return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
-                        "theorem or [theorem, …]}} and `unwitnessed` {guarantee: its type hash}")]
+                        "theorem or [theorem, …]}} and `unwitnessed` {guarantee: {type_hash, why}}")]
     guarantees, wit, fails = policy.get("guarantees", {}), claim_witnesses(policy), []
     for g in sorted(set(ws) - set(guarantees)):
         fails.append(Failure("witnesses.stale", g, f"witnesses: `witnesses` lists {g}, which is not a guarantee of this "
@@ -2957,9 +2977,10 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
         fails.append(Failure("witnesses.unwitnessed-unlisted", g, f"witnesses: `unwitnessed` lists {g}, which is not a "
                              f"guarantee of this package; run `check.py --update`, which drops the entry, or remove it"))
     for g in sorted(g for g, v in allow.items() if unwitnessed_entry(v) is None):
-        fails.append(Failure("witnesses.form", g, f"witnesses: unwitnessed[{g}] is its type hash, or {{type_hash, missing: "
-                             f"honest or nontrivial, why}} for a guarantee whose `witnesses` entry lacks that half, each "
-                             f"with `unfolded_hash` for a guarantee whose statement is a definition"))
+        fails.append(Failure("witnesses.form", g, f"witnesses: unwitnessed[{g}] is {{type_hash, why}}, or {{type_hash, "
+                             f"missing: honest or nontrivial, why}} for a guarantee whose `witnesses` entry lacks that "
+                             f"half, each with `unfolded_hash` for a guarantee whose statement is a definition and `why` "
+                             f"its owner's reason, on soundness's word"))
     for g in sorted(guarantees):
         pin = facts["pins"].get(g, {})
         if g in wit or pin.get("kind") != "theorem" or (g in allow and unwitnessed_entry(allow[g]) is None):
@@ -3006,8 +3027,11 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                 fails.append(Failure("witnesses.missing", g, f"witnesses: {g} lists no witnesses that it says something, "
                                      f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}. "
                                      f"Only if `unwitnessed` listed it and a merge dropped the entry, write the entry "
-                                     f"back: {json.dumps({g: back}, ensure_ascii=False)[1:-1]}; a new guarantee gets "
-                                     f"its witnesses, not an entry (`UNWITNESSED` only shrinks)"))
+                                     f"back as it was; at its statement as built that is "
+                                     f"{json.dumps({g: back}, ensure_ascii=False)[1:-1]}. Otherwise it gets its "
+                                     f"witnesses, or an exemption: a ruling, which no run writes, written by hand on "
+                                     f"soundness's word with its owner's reason in `why` ({{type_hash, why}}), never "
+                                     f"as a bare hash (`UNREASONED` only shrinks)"))
             continue
         w = ws[g]
         honest = w.get("honest") if isinstance(w, dict) else None
@@ -3187,23 +3211,26 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
             continue
         keyed = {"unfolded_hash": unfolded} if unfolded else {}
         if half is None:
-            out[g] = {"type_hash": built} | keyed if keyed else built
+            why = {"why": v["why"]} if isinstance(v, dict) and "why" in v else {}
+            out[g] = {"type_hash": built} | keyed | why if keyed or why else built
         else:
             out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
     return out
 
 
 def unwitnessed_entry(v) -> tuple[str, str | None] | None:
-    """An `unwitnessed` entry as (its type hash, the half it exempts): a hash exempts both witnesses, and
+    """An `unwitnessed` entry as (its type hash, the half it exempts): {type_hash, why} exempts both witnesses, and
     {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other.
-    Of a guarantee whose statement is a definition (`lift`), the entry is a dict with that definition's statement unfolded
-    once, `unfolded_hash`, beside them ({type_hash, unfolded_hash} exempts both); None for any other form."""
+    Of a guarantee whose statement is a definition (`lift`), the entry also holds that definition's statement unfolded
+    once, `unfolded_hash`; None for any other form. A whole exemption without `why` (a bare hash, or {type_hash,
+    unfolded_hash}) is still read: an entry carried from before the reason was required, whose count per lock
+    (`UNREASONED` in `tests/test_lean_packages.py`) only shrinks."""
     if isinstance(v, str):
         return v, None
     if not (isinstance(v, dict) and isinstance(v.get("type_hash"), str)) or not isinstance(v.get("unfolded_hash", ""), str):
         return None
     rest = set(v) - {"type_hash", "unfolded_hash"}
-    if not rest and "unfolded_hash" in v:
+    if (not rest and "unfolded_hash" in v) or (rest == {"why"} and isinstance(v["why"], str) and v["why"]):
         return v["type_hash"], None
     if rest == {"missing", "why"} and v["missing"] in ("honest", "nontrivial") and isinstance(v["why"], str) and v["why"]:
         return v["type_hash"], v["missing"]
@@ -3776,15 +3803,17 @@ RECORD_DIFFERENCE = Codes({
 
 #: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
-#: kind and its ticket, an entry no guarantee has, an owner, a guarantee the witnesses rule holds to witnesses it lacks,
-#: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust
+#: kind and its ticket, an entry no guarantee has, an owner, an `unwitnessed` entry its guarantee's statement has moved
+#: from, and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust. A guarantee
+#: without witnesses and without an entry (`witnesses.missing`) is none: an exemption is a ruling, which no run writes
 BOOKKEEPING = Codes({
     "open.unlisted", "assumptions.outside-module", "domain.uncovered", "open.seed",    # under `open`, on the default ticket
-    "witnesses.missing", "witnesses.unwitnessed-changed",                              # under `unwitnessed`, as it is now
+    "witnesses.unwitnessed-changed",                                                   # its entry re-keyed, as it is now
     "witnesses.stale", "witnesses.assumed-stale", "shape.properties-stale", "shape.frozen-stale",   # dropped
     "witnesses.unwitnessed-unlisted",                                                  # dropped from `unwitnessed`
     "guarantees.no-owner", "assumptions.no-owner", "open.no-owner", "domain.no-owner",               # owned
     "trust.gap-gone", "trust.gap-stale",                                               # dropped from `trust_gap`
+    "scope.stale",                                                                     # dropped from `scope`
 })
 #: the days from the lock run to the due date of a premise `--bookkeeping warn` lists under `open`
 BOOKKEEPING_DAYS = 7
@@ -3812,10 +3841,11 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     """The lock `--bookkeeping warn` writes for ``policy``, failing with ``fails``: the records as `--update` writes them
     (`regenerated`), an open premise the lock doesn't list, and an `assumptions` or uncovered `domain` entry that is one,
     listed under `open` on ``ticket`` (`bookkeeping_ticket`; `open_seed` first, which goes), an entry without an owner given
-    its guarantees' (the first, of several) or ``ticket``'s, each guarantee failing `witnesses.missing` or
-    `witnesses.unwitnessed-changed` under `unwitnessed` with its statement's hashes as built, each entry of no guarantee
+    its guarantees' (the first, of several) or ``ticket``'s, the `unwitnessed` entry of each guarantee failing
+    `witnesses.unwitnessed-changed` re-keyed to its statement's hashes as built (one failing `witnesses.missing`, which
+    has no entry, gets none, so the audit fails on it by name), each entry of no guarantee
     (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`; an `unwitnessed` one,
-    `witnesses.unwitnessed-unlisted`, as the update drops it) dropped, and `trust_gap` as an update keeps it
+    `witnesses.unwitnessed-unlisted`, as the update drops it; `scope.stale`) dropped, and `trust_gap` as an update keeps it
     (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
     out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
@@ -3823,14 +3853,15 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     out.pop("open_seed", None)
     allow, shape_ = dict(out.get("unwitnessed") or {}), dict(out.get("shape") or {})
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
-             "shape.properties-stale": ("shape", "properties"), "shape.frozen-stale": ("shape", "frozen")}
+             "shape.properties-stale": ("shape", "properties"), "shape.frozen-stale": ("shape", "frozen"),
+             "scope.stale": ("scope",)}
     for f in fails:
-        if (c := code_of(f)) in ("witnesses.missing", "witnesses.unwitnessed-changed") and (pin := facts["pins"].get(f.entry)):
-            _, half = unwitnessed_entry((policy.get("unwitnessed") or {}).get(f.entry)) or (None, None)
+        if (c := code_of(f)) == "witnesses.unwitnessed-changed" and (pin := facts["pins"].get(f.entry)):
+            was = (policy.get("unwitnessed") or {}).get(f.entry)
+            kept = {k: was[k] for k in ("missing", "why") if isinstance(was, dict) and k in was}
             unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
             at = {"type_hash": pin["type_sha256"]} | ({"unfolded_hash": unfolded} if unfolded else {})
-            allow[f.entry] = at | {k: policy["unwitnessed"][f.entry][k] for k in ("missing", "why")} if half else \
-                at if unfolded else pin["type_sha256"]
+            allow[f.entry] = at | kept if kept or unfolded else pin["type_sha256"]
         elif c in drops and f.entry is not None:
             where = drops[c]
             if where[0] == "shape":
@@ -3880,7 +3911,8 @@ def bookkeeping_repairs(fails: list[str], lock: dict, ticket: dict, was: dict | 
         elif c == "witnesses.unwitnessed-unlisted":
             what = "its `unwitnessed` entry dropped: no guarantee has it"
         elif c.startswith("witnesses.") and c not in ("witnesses.stale", "witnesses.assumed-stale"):
-            what = "listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and `nontrivial` witnesses"
+            what = ("its `unwitnessed` entry re-keyed to its statement's hashes now: it owes its `honest` and `nontrivial` "
+                    "witnesses")
         elif c == "trust.gap-gone":
             what = f"dropped from its `trust_gap` entry, outside its trust no longer: {dropped(e)}"
         elif c == "trust.gap-stale":
@@ -3991,6 +4023,64 @@ def trust_failures(lock: dict) -> list[str]:
         fails.append(Failure("trust.gap-stale", g, f"trust: `trust_gap` lists {g}, which `deployed` doesn't: drop the "
                              "entry (`check.py --update` does)"))
     return fails
+
+
+#: a `scope` entry: one sentence on one line, ending at its only full stop
+SENTENCE = re.compile(r"[^\s.!?][^\n.!?]*(?:[.!?]\S[^\n.!?]*)*\.")
+
+
+def scope_failures(lock: dict) -> list[str]:
+    """`scope` ({listed guarantee: one sentence}) says what sessions or forms a guarantee is about where that is narrower
+    than what is served, so the lock doesn't read as coverage.  An entry of no listed guarantee is bookkeeping
+    (`scope.stale`); a malformed one, or one of a deployed guarantee, which is about what is served, fails.  Only a person
+    writes an entry: `--update` neither adds nor drops one."""
+    scope = lock.get("scope", {})
+    if not isinstance(scope, dict):
+        return [Failure("scope.form", None, "scope: `scope` is {guarantee: one sentence saying what sessions or forms it is "
+                        "about}")]
+    fails, listed, deployed = [], lock.get("guarantees") or {}, set(name_list(lock.get("deployed")))
+    for g, s in sorted(scope.items()):
+        if not (isinstance(s, str) and SENTENCE.fullmatch(s)):
+            fails.append(Failure("scope.form", g, f"scope: scope[{g}] is {json.dumps(s)}: write one sentence on one line, "
+                                 "ending at its only full stop, saying what sessions or forms the guarantee is about"))
+        if g not in listed:
+            fails.append(Failure("scope.stale", g, f"scope: `scope` lists {g}, which `guarantees` doesn't: drop the entry, "
+                                 "or list the guarantee"))
+        elif g in deployed:
+            fails.append(Failure("scope.deployed", g, f"scope: {g} is deployed, so it is about what is served and has no "
+                                 "scope: drop it from `deployed`, or drop its `scope` entry once it covers what is served"))
+    return fails
+
+
+def scope_counts(lock: dict) -> dict[str, int]:
+    """How many listed guarantees have a `scope` entry (`with`) and how many don't (`without`)."""
+    listed, scope = lock.get("guarantees") or {}, lock.get("scope")
+    held = sum(g in listed for g in scope) if isinstance(scope, dict) else 0
+    return {"with": held, "without": len(listed) - held}
+
+
+def deployed_witnesses(lock: dict) -> dict[str, int]:
+    """How the lock's guarantees stand to the name deployed: `witnessed`, the guarantees `deployed` lists whose
+    `witnesses` entry names an honest lemma; `unwitnessed`, those it lists that have none; and the `unwitnessed`
+    allowance's entries, those of a deployed guarantee (`allowed_deployed`) and the rest (`allowed`)."""
+    ws, allow = lock.get("witnesses"), lock.get("unwitnessed")
+    ws, allow = ws if isinstance(ws, dict) else {}, allow if isinstance(allow, dict) else {}
+    deployed = name_list(lock.get("deployed"))
+    honest = {g for g in deployed if isinstance(ws.get(g), dict) and name_list(ws[g].get("honest"))}
+    return {"witnessed": len(honest), "unwitnessed": len(set(deployed) - honest),
+            "allowed_deployed": len(set(allow) & set(deployed)), "allowed": len(set(allow) - set(deployed))}
+
+
+def deployed_witness_failures(lock: dict) -> list[str]:
+    """No guarantee is called deployed without an honest witness: each guarantee `deployed` lists has a `witnesses`
+    entry naming an honest lemma, which the witnesses rule holds to its form (`witness_failures`).  The `unwitnessed`
+    allowance exempts a guarantee from the witnesses rule; of a deployed one it exempts the `nontrivial` half alone."""
+    ws = lock.get("witnesses") if isinstance(lock.get("witnesses"), dict) else {}
+    return [Failure("trust.deployed-unwitnessed", g, f"trust: `deployed` lists {g}, which has no honest witness: give it "
+                    "one under `witnesses` (a theorem that an honest run is accepted through the code as it stands), or "
+                    "drop it from `deployed` with its `trust_gap` and `trust.extra` entries; its statement stays listed")
+            for g in name_list(lock.get("deployed"))
+            if not (isinstance(ws.get(g), dict) and name_list(ws[g].get("honest")))]
 
 
 def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
@@ -5761,12 +5851,14 @@ class Sealed:
         lakefiles the dependency scans read, and the search path mapped to the copies.  The seeds are the package's modules
         under the lock's ``roots`` that are not under an ``exempt`` prefix, the set the build builds and `facts_of` reads:
         an exempt module (a scratch file, a `runs` test) is not built, so seeding it would send `Graph.lean` after an
-        `.olean` that is not there.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
+        `.olean` that is not there.  A root that is itself a module is always a seed, even under an ``exempt`` prefix (an
+        exempt `X` beside a root `X.A`), since `Facts.lean` imports every root by name.  Idempotent per package (every copy is copy-once), and safe to call while a dependent
         builds, since it reads only paths a dependent cannot reach once the first `.olean` is copied: the caller takes it
         before the package's build is announced."""
         self.dir.mkdir(parents=True, exist_ok=True)
         lib = self.pkg / ".lake" / "build" / "lib" / "lean"
-        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m) and not under(exempt, m))
+        modules = lean_modules(self.pkg)
+        seeds = sorted({m for m in modules if under(roots, m) and not under(exempt, m)} | {r for r in roots if r in modules})
         if missing := [m for m in seeds if not (lib / Path(*m.split(".")).with_suffix(".olean")).is_file()]:
             it = "it" if len(missing) == 1 else "them"
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "
@@ -5928,7 +6020,56 @@ def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked
     return {k: g for chunk, d in zip(chunks, done) for (k, _), g in zip(chunk, d["graphs"])}
 
 
-def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = None) -> dict[str, str]:
+GRAPHS_SCHEMA = 2
+
+
+@functools.cache
+def graph_tool() -> str:
+    return sha256(HERE / "olean_graph.py")
+
+
+def graph_id(k: tuple[str, str], job: tuple[str, dict[str, Path]]) -> dict:
+    """Everything the walk of ``k`` ((module, its parts' digests)) is a function of: the parts' bytes (their digests, by
+    part), the source path it leaves out (``job``: `walk_job`'s answer) and the walker (`olean_graph.py`, stdlib only, which
+    reads no file but those parts and no environment); and the module, so an entry is found for no other."""
+    return {"schema": GRAPHS_SCHEMA, "tool": graph_tool(), "module": k[0], "plain": k[1], "source": job[0],
+            "parts": sorted(job[1])}
+
+
+def graph_entry(cache: Path, gid: dict) -> Path:
+    """Where ``cache`` (a replay cache's `graphs/`) keeps the walk ``gid`` (`graph_id`) names."""
+    return cache / f"{hashlib.sha256(json.dumps(gid, sort_keys=True).encode()).hexdigest()}.json"
+
+
+def stored_graphs(cache: Path, jobs: dict) -> dict[tuple[str, str], str | None]:
+    """The walks of ``jobs`` that ``cache`` holds (`store_graphs`), each taken only where its entry names the same
+    `graph_id`, and touched, so the cache's eviction (`lean_audit.prune_replays`) keeps what every replay reads. An entry
+    unreadable or naming anything else is walked again and rewritten."""
+    found = {}
+    for k, job in jobs.items():
+        f = graph_entry(cache, gid := graph_id(k, job))
+        if not f.is_file():
+            continue
+        try:
+            doc = json.loads(f.read_bytes())
+            os.utime(f)
+        except (OSError, ValueError) as e:             # a concurrent prune dropped it, or a write was cut short
+            print(f"replay keys: {f.name}: {e}; walked again", file=sys.stderr)
+            continue
+        if doc == gid | {"graph": doc.get("graph")} and isinstance(doc["graph"], str | None):
+            found[k] = doc["graph"]
+    return found
+
+
+def store_graphs(cache: Path, found: dict[tuple[str, str], str | None], jobs: dict) -> None:
+    cache.mkdir(parents=True, exist_ok=True)
+    for k, g in found.items():
+        gid = graph_id(k, jobs[k])
+        write_atomic(graph_entry(cache, gid), json.dumps(gid | {"graph": g}).encode())
+
+
+def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = None,
+                graphs: Path | None = None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
     function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files, and the name and key of each module
     it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's name, never
@@ -5937,7 +6078,10 @@ def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = 
     `sha256`: `Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
     in step), or, where its server part holds its source's path (`walk_job`), as the parts' object graph with that path left
     out (`olean_graph.canonical`, under `graph:`; `walk_graphs`, whose counts go to ``walked``), which the module compiled
-    in another tree shares."""
+    in another tree shares. With ``graphs`` (a replay cache's `graphs/`, given only by an audit that stores verdicts there)
+    a walk is read from there (`stored_graphs`) and each new one stored: its parts are still hashed on every call, so an
+    entry maps only those exact bytes and source path to a graph (`graph_id`), and whoever could write a wrong one could
+    write a wrong verdict beside it."""
     graph, digest, mk = facts["graph"], digest or sha256, sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
@@ -5956,9 +6100,14 @@ def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = 
         lap("lock")
         with _GRAPHS_LOCK:
             jobs = {k: j for k, j in jobs.items() if k not in _GRAPHS}
-        found = walk_graphs(jobs, walked) if jobs else {}
+        kept = stored_graphs(graphs, jobs) if graphs is not None and jobs else {}
+        found = walk_graphs({k: j for k, j in jobs.items() if k not in kept}, walked) if len(kept) < len(jobs) else {}
+        if graphs is not None and found:
+            store_graphs(graphs, found, jobs)
+        if walked is not None:
+            walked["stored"] = walked.get("stored", 0) + len(kept)
         with _GRAPHS_LOCK:
-            _GRAPHS.update(found)
+            _GRAPHS.update(kept | found)
             graphs = {m: _GRAPHS.get((m, plain[m])) for m in files}
     lap("held")
     digests = {m: f"graph:{graphs[m]}" if graphs[m] else plain[m] for m in files}
@@ -6089,7 +6238,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     def lap(part):
         took[part], at[0] = round(time.monotonic() - at[0], 1), time.monotonic()
     walked: dict = {}
-    keys = replay_keys(facts, toolchain, digest, walked) if replay_cache is not None else {}
+    graphs = replay_cache / "graphs" if isinstance(replay_cache, Path) and store else None
+    keys = replay_keys(facts, toolchain, digest, walked, graphs) if replay_cache is not None else {}
     lap("keys")
     took |= {"keys-walks": walked.get("seconds", 0)} | {f"keys-{k}": walked.get(k, 0) for k in KEY_PARTS}
     def passed(m):
@@ -6241,12 +6391,12 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
         return [Failure("lean", None, f"lean: {e}")], {"checked": 0, "reused": 0}
     if not first:
         return last()
-    kept = "the replay cache"
+    kept, graphs = "the replay cache", replay_cache / "graphs" if replay_cache is not None and store else None
     if replay_cache is None or not store:
         replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
     s = time.monotonic()
     walked: dict = {}
-    keys = replay_keys(facts, toolchain, digest, walked)
+    keys = replay_keys(facts, toolchain, digest, walked, graphs)
     first_keys = round(time.monotonic() - s, 1)
     def passed(m):
         return has_replay(replay_cache, keys[m])
@@ -6398,7 +6548,7 @@ class Pipeline:
         s = time.monotonic()
         try:
             facts, search = self.copied(mods, work)
-            keys = replay_keys(facts, self.toolchain, self.digest)
+            keys = replay_keys(facts, self.toolchain, self.digest, graphs=self.replay_cache / "graphs")
             def passed(m):
                 return (self.replay_cache / f"{keys[m]}.json").is_file()
             first = {m for m in (e["module"] for e in replay_first(self.pkg)) if m in facts["graph"] and not passed(m)}
@@ -7076,6 +7226,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails, new = judge(current, facts, files, update, owner)
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
+        rep["deployed_witnesses"] = deployed_witnesses(new)
+    rep["scope"] = scope_counts(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7317,6 +7469,8 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     fails, new = judge(current, facts, files, update, owner)
     if "deployed" in new:
         rep["trust_gap"] = trust_gaps(new)
+        rep["deployed_witnesses"] = deployed_witnesses(new)
+    rep["scope"] = scope_counts(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -7545,8 +7699,8 @@ def main(argv: list[str]) -> int:
                     "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
                     "package's own lock is never written")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: a package "
-                    "whose lock's bookkeeping fails (`BOOKKEEPING`: an unlisted or misfiled premise, a guarantee the "
-                    "witnesses rule holds to witnesses it lacks, a stale entry, an owner) passes once the lock with it "
+                    "whose lock's bookkeeping fails (`BOOKKEEPING`: an unlisted or misfiled premise, an `unwitnessed` "
+                    "entry its guarantee's statement moved from, a stale entry, an owner) passes once the lock with it "
                     "repaired (`repaired`, on the lock's `open_default_issue`, else without an issue, due in "
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
@@ -7850,6 +8004,12 @@ def main(argv: list[str]) -> int:
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)
                 for g, gap in gaps.items():
                     print(f"    {g}: {len(gap)}" + (f" ({', '.join(gap)})" if gap else ""), flush=True)
+            if sc := rep.get("scope"):
+                print(f"  scope: {sc['with']} listed guarantees with a scope, {sc['without']} without", flush=True)
+            if dw := rep.get("deployed_witnesses"):
+                print(f"  deployed: {dw['witnessed']} witnessed, {dw['unwitnessed']} unwitnessed (must be 0); "
+                      f"`unwitnessed` allows {dw['allowed_deployed']} deployed and {dw['allowed']} not deployed",
+                      flush=True)
             if hb := rep.get("heartbeats"):
                 print(f"  heartbeats: {len(hb)} overrides, {sum(h['reason'] is None for h in hb)} without a reason "
                       f"(value; its module's build time; reason):", flush=True)

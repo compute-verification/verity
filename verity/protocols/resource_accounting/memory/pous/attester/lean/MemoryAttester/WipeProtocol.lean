@@ -244,6 +244,57 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/wipe/v0`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- The refusal of a case whose params name another server than the served node `served`. -/
+def otherServer (served : String) : String := s!"the case is a wipe of another server than {served}"
+
+/-- `check` on a served road, whose served node `served` (its name, the public input `serve --server` takes) the case
+must be a wipe of: a case whose params' `server` is not `served`'s bytes is refused by name (`otherServer`) before
+anything else is read. -/
+def checkServed (schemes : Schemes) (served : String) (p : Params) (c : StreamedWipe.Commitment) (e : Evidence) :
+    Core.Outcome Public (StreamedWipe.Params × Int) :=
+  if p.server != served.toUTF8 then .reject (otherServer served) else check schemes p c e
+
+/-- `mkProtocol id schemes` held to the served node `served` (`checkServed`). -/
+def servedProtocol (id : String) (schemes : Schemes) (served : String) : Core.Protocol where
+  id := id
+  Params := Params
+  Commitment := StreamedWipe.Commitment
+  Evidence := Evidence
+  Public := Public
+  Profile := StreamedWipe.Params × Int
+  params := decodeParams
+  commitment := decodeCommitment
+  evidence := decodeEvidence
+  digest := digest
+  check := checkServed schemes served
+  publicJson := Public.toJson
+  profileJson := profileJson
+
+/-- The refusal of `serve` or `check` with no served node: the wipe answers only held to one. -/
+def unheld (id : String) : String :=
+  s!"{id}: serve and check are held to the served node: --server NAME serve, or --server NAME check PARAMS " ++
+    "COMMITMENT EVIDENCE; there is no form without it"
+
+/-- The wipe's command line: `id`, and `serve` or `check` held to the served node NAME (`servedProtocol`), each
+`--server NAME` first; any other form, `serve` or `check` with no server among them, is refused by name (`unheld`), exit
+64. -/
+def mainOf (id : String) (schemes : Schemes) : List String → IO UInt32
+  | ["--server", served, "serve"] => (servedProtocol id schemes served).main ["serve"]
+  | ["--server", served, "check", p, c, e] => (servedProtocol id schemes served).main ["check", p, c, e]
+  | ["id"] => (mkProtocol id schemes).main ["id"]
+  | _ => do IO.eprintln (unheld id); return 64
+
+/-- `wipe-protocol`'s command line (`mainOf`): no form without a served node. -/
+def main : List String → IO UInt32 := mainOf ID SCHEMES
+
+/-- `wipe-protocol-test`'s command line: `mainOf`'s, and the test's form, `serve` and `check` of `testProtocol` held to
+no node, which the difference test samples sessions of any server through; its schemes are the test signers' alone, so
+nothing it accepts is the deployed protocol's. -/
+def testMain (args : List String) : IO UInt32 :=
+  match args with
+  | ["serve"] | ["check", _, _, _] => testProtocol.main args
+  | _ => mainOf (TEST_PREFIX ++ ID) TEST_SCHEMES args
+
 /-- **What a wipe accounts for** (`Core.Account`): the foreign bits the server may still hold after an accepted wipe
 (`foreign_bits`), free from above, against the memory the wipe declared (`memory_bits`, its capacity), at the error its
 bound states (`eps`), at a moment. Until the network attester's count reaches the check, every accepted wipe publishes
@@ -296,5 +347,12 @@ private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { se
   | .error _ => false
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 #guard account.Formed ∧ account.protocol = protocol.id
+
+#guard match checkServed SCHEMES "n0" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+  | .undecided r => r.startsWith "the memory challenger has not signed"
+  | _ => false
+#guard match checkServed SCHEMES "n1" ⟨"n0".toUTF8, ⟨#[0]⟩, #[]⟩ unread ⟨none, none⟩ with
+  | .reject r => r == otherServer "n1" && r == "the case is a wipe of another server than n1"
+  | _ => false
 
 end MemoryAttester.WipeProtocol

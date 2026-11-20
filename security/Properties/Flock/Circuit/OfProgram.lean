@@ -19,7 +19,7 @@ evaluator, `Prog.evalBool`, so a primitive Definition's gate computes that Defin
 the operation reads nothing else, and a gate `Prog.gate` refuses is an input of width 0. On a description `decode` accepts
 no operand is dropped and no gate is refused.
 
-`partOf` reads the proof blocks off their gate ranges (`[lo, hi)`, several a block: a unit's, `TemplateQuery.unitGates` and
+`partOf` reads the proof blocks off their gate ranges (`[lo, hi)`, several a block: a unit's, a template query's ranges and
 `Spot.BlockFront.Front.ranges`, or a root node's, the inference-only policy's owners): a computed gate in one of block `i`'s
 ranges is in block `i`, one in none in the last block, empty on an accepted partition. `layoutOf` is core's
 `Layout`: a `RegisteredInput` gate's entry is its root node and its leaf its offset in that node's gates, and every gate is

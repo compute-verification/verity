@@ -144,15 +144,17 @@ def statement_rows(T: int, v2: bool = False) -> list[tuple[str, str, int, list[s
 
 
 def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], window: str, session: str, m: int,
-               prefix: str = "", max_tokens: Sequence[int] | None = None) -> dict[str, Any]:
-    """The verifier's ``--registered`` file (`registered.READS`) of round s's statement ``live@<s>``, unit s of the live
+               prefix: str = "", max_tokens: Sequence[int] | None = None, positions: bool = True) -> dict[str, Any]:
+    """The ``--registered`` file (`registered.READS`) of round s's statement ``live@<s>``, unit s of the live
     Program of S rounds at T: its slot ports at round s's ``<prefix>slots@<s>`` and its header ports at
     ``<prefix>requests@0``, at the roots `roots` (``{value: root}``, the execution phase's entries) gives them, each under
     `registered_value.domain` of `program` (the execution phase Program's digest, which the tables are registered under), the slot table
     bound to the execution phase's open root `window` and the request table to its session `session`; ``m`` and ``s`` at their known
     content (`m_table`, `round_table`) and the output row ``o0`` at the ok rows (`ok_table`). With `max_tokens` it is the v2
     unit's: each ``cap_<i>`` reads row i of the known public caps (`caps_table` of them). Units other than s read nothing.
-    Refused (ValueError) when `roots` lacks a table or s is no round."""
+    Without `positions` it is the verifier's (`LiveVerified.readsFile`): no port states its rows (``reads``), in
+    `registered.READS_V2`, Flock's `Registered.FORMAT`, as C and the partition give them. Refused (ValueError) when
+    `roots` lacks a table or s is no round."""
     if not 0 <= s < S:
         raise ValueError(f"round {s} is none of the window's {S}")
     sv, rv = table(prefix, SLOTS, s), table(prefix, REQUESTS)
@@ -163,12 +165,13 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
     def port(value: str, words: int, leaves: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
         return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
                 "domain": RV.domain(program, value, words, leaves, **bind).domain_id.hex(), **RV.schema_entry(schema),
-                "reads": before + [row]}
+                **({"reads": before + [row]} if positions else {})}
 
     def known(value: str, rows: list, salts: list, reg: RV.Registered, row: int) -> dict[str, Any]:
         return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
                 "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
+                **({"reads": before + [row]} if positions else {}),
+                "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, T, i, window=window) for i in range(T)}
     ports |= {f"req_{i}": port(rv, HEADER_WORDS, T, i, REQUEST_SCHEMA, session=session) for i in range(T)}
@@ -178,7 +181,7 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
         rows, salts, reg = caps_table(program, prefix, window, T, max_tokens)
         ports |= {f"cap_{i}": known(table(prefix, CAPS), rows, salts, reg, i) for i in range(T)}
     ports[OK_PORT] = known(table(prefix, OK_VALUE), *ok_table(program, prefix, window, S), s)
-    return {"format": G.READS, "ports": ports}
+    return {"format": G.READS if positions else G.READS_V2, "ports": ports}
 
 
 def statement_rows_pieces(R: int) -> list[tuple[str, str, int, list[str]]]:

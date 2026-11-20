@@ -340,35 +340,3 @@ def _folded_routed(rank: int):
         return f.run(read_log(fixture(rank)), with_program=False)
 
 
-@pytest.mark.parametrize("rank", RANKS)
-def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole(rank):
-    """The flat Compute: the same collectives and peers fields as the per-row fold, one instance per all-reduce whose part r is
-    rank r's whole [M, N] partial in row order -- the per-row instances' parts, regrouped -- and whose peer part canonicalises as a rank
-    Program's read of each whole `peers_<k>` Input."""
-    _f, per_row = _folded(rank)
-    res = _folded_routed(rank)
-    assert {e["class"] for e in res.errors} == {"SampleEnd", "TokenWiring"}, res.errors
-    assert [(c["step"], c["k"], c["kind"], c["site"], c["rows"], c["N"]) for c in res.collectives] == COLLECTIVES
-    assert [c.get("flat", False) for c in res.collectives] == [c[2] == "all_reduce" for c in COLLECTIVES]
-    assert res.peers_layout == per_row.peers_layout
-    from verity_vllm.check.match import rank_match as RMx
-    assert RMx.own_producers(res) == RMx.own_producers(per_row) and len(RMx.own_producers(res)[(0, 0)]) == STEPS[0][0]
-    (layout,) = res.peers_layout
-    chain = ",".join(map(str, CHAIN))
-    for step, (M, _aligned) in STEPS.items():
-        flat = [m for m in res.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
-        rows = [m for m in per_row.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
-        assert len(flat) == 1 and len(rows) == M and flat[0]["rows"] == 1
-        assert flat[0]["spec"] == f"AllReduceNcclTree_v1{{WORLD={WORLD},SIZE={M * H},CHAIN=({chain})}}", flat[0]["spec"]
-        (arg,) = res.body.nodes[flat[0]["node"]].args
-        got = runs(arg.refs)
-        cut = [_parts(runs(per_row.body.nodes[m["node"]].args[0].refs), H) for m in sorted(rows, key=lambda m: m["row"])]
-        by = lambda r_: {m["node"]: (m["step"], m["name"], m["row"]) for m in r_.instances}  # noqa: E731
-        named = lambda rs, nodes: [(r[0], nodes[r[1]], *r[2:]) if r[0] == "n" else r for r in rs]  # noqa: E731
-        assert named(got, by(res)) == named(_merged([r for p in range(WORLD) for row in cut for r in row[p]]), by(per_row))
-
-        to_n = [(("n", OWN, r[2], r[3]) if r[0] == "n" else ("n", PEERS0, r[2], r[3])) for r in got if r[0] == "p"]
-        mine = [x for x in layout["fields"] if x["name"].startswith(f"s{step}_k0_")]
-        F = _prog(f"fold{rank}", flat[0]["spec"], "MoeSum_v1", M * H, {PEERS0: ("Input16_v1", layout["leaves"])},
-                  {PEERS0: [(x["offset"], x["ordinal"]) for x in layout["fields"]]}, to_n, False)
-        assert _canon(F) == [("PEER", x["ordinal"], 0, M * H) for x in mine], (step, _canon(F)[:3])

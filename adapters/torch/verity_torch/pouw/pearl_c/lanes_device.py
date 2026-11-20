@@ -178,7 +178,7 @@ class LaneCalls(_RunState):
         if cuda and side and sh.done[j] is not None and not waited:  # and rewrites set j only once its side steps are done
             lane.wait_event(sh.done[j])
         if self.hashing:
-            fresh_into(self.salts_a(sh, pipe), sh.m16, lane_raw if cuda else None)
+            fresh_into(self.salts_a(sh, pipe), sh.m16, lane_raw if cuda else None, salts=self.cur.salts)
         cut, side_cut = (g.cut, g.side_cut) if g is not None else pipe.lane_cuts if aside else (None, 0)
         self._launching = lane
         self.kernel.dev.stream = lane_raw
@@ -243,7 +243,7 @@ class LaneCalls(_RunState):
         if done is not None:
             D.wait(lane, done)
         self.uploads.put_raw(g.slot_ptr, data, lane, D)
-        fresh_into(self.salts_a(sh, None), sh.m16, lane)
+        fresh_into(self.salts_a(sh, None), sh.m16, lane, salts=self.cur.salts)
         if main is not None:
             D.record(main.event, raw)
             D.wait(lane, main.event)

@@ -149,13 +149,13 @@ def _run_with_outputs(tmp_path: Path, build_ref: str | None = None) -> Path:
     (d / "outputs" / "build" / "build_summary.json").write_text(json.dumps({"program_digest": "sha256:" + "9" * 64}))
     (d / "outputs" / "build" / "required_values.json").write_text('{"classes": ["module_out"]}')
     (d / "evidence").mkdir()
-    (d / "evidence" / "timeline.jsonl").write_text('{"stage": "build", "state": "done"}\n')
+    (d / "evidence" / "stages.txt").write_text("build PASS\n")
     (d / "logs").mkdir()
     (d / "logs" / "build.log").write_text("ok\n")
     refs = {"build": build_ref} if build_ref else {}
     doc = {"schema": A.OUTPUTS_SCHEMA, "outputs": [
         {"name": "build", "kind": "vllm-build/v1", "meta": {"row": ROW, "program_digest": "sha256:" + "9" * 64}, "tree": "outputs/build", "refs": refs},
-        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": "build"}, "file": "evidence/timeline.jsonl"},
+        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": "build"}, "file": "evidence/stages.txt"},
         {"name": "logs", "kind": "run-files/v1", "files": ["logs", "missing.log"], "refs": {"build": "@build"}},
         {"name": "absent", "kind": "vllm-verdict/v1", "file": "nope.json", "optional": True},
     ]}
@@ -174,7 +174,7 @@ def test_publish_typed_outputs_and_preserve_on_fs_remote(env):
     assert b.kind == "vllm-build/v1" and b.meta["program_digest"] == "sha256:" + "9" * 64 and b.meta["run_id"] == RUN_ID
     assert sorted(f.path for f in b.payload.files) == ["build_summary.json", "required_values.json"]
     e = st.get_manifest(o["evidence"])
-    assert e.kind == "execution-evidence/v1" and e.payload.type == "file" and e.payload.name == "timeline.jsonl"
+    assert e.kind == "execution-evidence/v1" and e.payload.type == "file" and e.payload.name == "stages.txt"
     lg = st.get_manifest(o["logs"])
     assert lg.kind == "run-files/v1" and [f.path for f in lg.payload.files] == ["logs/build.log"]
     assert lg.refs == {"build": o["build"]}, "@name refs resolve to the earlier output's id"
@@ -191,6 +191,18 @@ def test_publish_typed_outputs_and_preserve_on_fs_remote(env):
     assert P.check(st, [RUN_ID], mode="recorded")["preserved"] is True, "push recorded verified replicas"
     assert P.check(st, [RUN_ID], mode="readback")["preserved"] is True
     assert P.check(st, [])["preserved"] is False, "no target, nothing is vouched for"
+
+
+def test_an_output_of_a_private_named_file_is_refused_and_the_rest_published(env, capsys):
+    d = _run_with_outputs(env)
+    (d / "evidence" / "timeline.jsonl").write_text('{"stage": "build", "state": "done"}\n')
+    doc = json.loads((d / "outputs.json").read_text())
+    doc["outputs"].append({"name": "timeline", "kind": "execution-evidence/v1", "file": "evidence/timeline.jsonl"})
+    (d / "outputs.json").write_text(json.dumps(doc))
+    out = A.publish(d, store=LocalStore())
+    assert out["published"] is True and "timeline" not in out["outputs"] and out["outputs"]["evidence"], out
+    err = capsys.readouterr().err
+    assert "timeline not stored: 1 private file(s) refused" in err and "(name timeline.jsonl, @vllm)" in err, err
 
 
 def test_preserved_lists_what_is_missing_and_the_cli_exits_nonzero(env, capsys):
@@ -263,7 +275,7 @@ def test_outputs_json_errors_are_publish_errors_not_crashes(env):
     out = A.publish(d, store=st)
     assert out["published"] is False and "nope.json" in out["error"] and st.get_attempt(RUN_ID) is None
     assert (d / "store_publish_error.json").exists()
-    for bad in ({"name": "x", "kind": "notakind", "file": "evidence/timeline.jsonl"},
+    for bad in ({"name": "x", "kind": "notakind", "file": "evidence/stages.txt"},
                 {"name": "x", "kind": "run-files/v1", "file": "../outside"},
                 {"name": "x", "kind": "run-files/v1", "refs": {"b": "@nothing"}},
                 {"name": "build", "kind": "run-files/v1"}):

@@ -88,7 +88,7 @@ def _verifier(mine, rec: dict):
 
     def check(ports: dict, leaf_layer: str, history: dict | None = None) -> V.Verdict:
         return V.check(rec, mine.program, mine.query, own, CS.SCHEME, ports, leaf_layer=leaf_layer,
-                       work_table=mine.work_table, history=history)
+                       work_table=mine.work_table, history=history, partition=mine.partition)
 
     return check, D.derive(mine.program, mine.query, own, mine.work_table)
 
@@ -110,7 +110,7 @@ def test_the_verifier_holds_the_registered_history_root_to_the_writers_bodies(tm
         stream, counts = A5.stream_of(a, mine, [{"defn": G8, "m": m} for m in mine.members], want, leaf,
                                       FC.Challenger("a5-history"))
         return stream.register(rec, want, leaf_layer=leaf, window_root=a.window_root, counts=counts,
-                               work_table=mine.work_table, **A5.registering(a, h))
+                               work_table=mine.work_table, partition=mine.partition, **A5.registering(a, h))
 
     got = check(hist)
     assert got.ok and got.verifiers["lean"] == got.verifiers["python"], got

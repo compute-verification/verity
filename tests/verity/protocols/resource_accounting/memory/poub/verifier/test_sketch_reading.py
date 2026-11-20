@@ -254,3 +254,11 @@ def test_a_grinding_try_costs_what_the_reference_hashes(monkeypatch: pytest.Monk
     for n in (1, 2, 4, 8, 2 ** 17):
         assert timing.grind_compressions(n) == hide + leaf + node * math.ceil(math.log2(n)) + next_seed + signs
     assert (timing.grind_compressions(1), timing.grind_compressions(2 ** 21 // receipts.PER_LEAF)) == (15, 66)
+
+
+@pytest.mark.parametrize(("rows", "term"), [(16, "bandwidth"), (64, "poub")])
+def test_the_ledgers_sketch_term_is_the_schemes_delta_sketch(rows, term) -> None:
+    from verity.protocols.resource_accounting.memory.poub.scheme import DELTA_SCHEME
+    tail = timing.SECTORS * timing.sign_rank_at_most(rows, timing.sketch_reading(rows)[0] - 1)
+    for q in (2 ** audit.QUERIES_LOG2, 2 ** 200):
+        assert timing.sketch_failure(30, rows, blocks=2 ** 30, queries=q) == DELTA_SCHEME[term].value(q, 30, 2 ** 30, tail)

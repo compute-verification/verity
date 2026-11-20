@@ -69,7 +69,7 @@ print(json.dumps({"pin": st.pin, "class": st.class_sha512}))
 @pytest.mark.parametrize("layout", ["", "iv/hybrid/4", "iv/hybrid/4+structural"], ids=["flat", "templated", "structural"])
 def test_fast_staging_composes_the_library_circuit_flat_and_templated(layout, tmp_path):
     """About 20 s: a Boolean unit's `UnitStager` circuit, flat, templated from the flat unit (`circuit.compose`'s
-    ``layout``) and templated from struct_lower (``structural``, the H1 stagers' form under ``H1_TMPL=structural``), built under
+    ``layout``) and templated from struct_lower (``structural``), built under
     fast_stage's patches and without them, each in its own process: the same file, pin and class. The stager's file is
     `circuit.compose_to`'s either way (fast_stage's scratch description is `stage_unit`'s,
     `test_fast_staging_writes_the_library_bytes`), under fast_stage's lowering, layout and digests; a templated one has no

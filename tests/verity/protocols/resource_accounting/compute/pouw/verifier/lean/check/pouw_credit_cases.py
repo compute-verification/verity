@@ -143,6 +143,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import window as
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.circuits.program import input_id
 from verity.commitments import registered_value as RV
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
@@ -744,6 +745,40 @@ def _wired(desc: dict) -> dict:
             source("n", k, types[x["out"]])
         body["ret"] = refs(body["ret_type"], first)
     desc["types"] = types
+    return _bodied(desc)
+
+
+#: the Boolean profile's constant 0 (`boolean`), and the prefix of `_bodied`'s bodies
+ZERO_BIT, ZERO_BODY = "Const1[0x0]_v1", "PouwH1ZeroBits"
+
+
+def _bodied(desc: dict) -> dict:
+    """`desc` with its Boolean map as the decoder checks it (`codec._decode_boolean`, `Flock.Program.decode`): each word
+    primitive (no input, no `ZERO_BIT`; each here without parameters) keyed to a Boolean composite of its bit signature
+    whose bits are `ZERO_BIT`'s, one per width, and those bodies rebuilt from the definitions as they stand."""
+    defs, types = desc["definitions"], desc["types"]
+    for k in [k for k in defs if k.startswith(ZERO_BODY)]:
+        del defs[k]
+    if ZERO_BIT not in desc["callees"]:
+        desc["callees"].append(ZERO_BIT)
+    defs[ZERO_BIT] = {"form": "primitive", "id": ZERO_BIT, "params": [], "ret": ["Value", 1]}
+
+    def ty(t: list) -> int:
+        if t not in types:
+            types.append(t)
+        return types.index(t)
+
+    desc["boolean"] = {}
+    for fid, d in sorted(defs.items()):
+        if d["form"] != "primitive" or fid == ZERO_BIT or input_id(fid) is not None:
+            continue
+        w, bid = d["ret"][1], f"{ZERO_BODY}{d['ret'][1]}_v1"
+        ret = ["Value", 1] if w == 1 else ["Array", w, ["Value", 1]]
+        node = {"form": "primitive" if w == 1 else "batch", "fn": desc["callees"].index(ZERO_BIT), "args": [], "out": ty(ret)}
+        node |= {} if w == 1 else {"n": w, "axes": []}
+        defs[bid] = {"form": "composite", "id": bid, "bindings": {},
+                     "body": {"params": [], "ret_type": ret, "nodes": [node], "ret": {"strided": ["n", 0, 0, 1, 0, 0, w]}}}
+        desc["boolean"][fid] = bid
     return desc
 
 
@@ -772,7 +807,21 @@ def _unit_fn(k: int, r: int, c: int, j10r: bool = False, tile: int | None = None
     wrapped at a chunked K in `h1zy.PouwH1TileZyChunks_v1`, or its v2 over J10-R (`h1zy.unit_chunks`)."""
     name = f"PouwH1Tile_v{tile}" if tile is not None else f"H1Tile_v{5 if j10r else 1}"
     tile, n = f"{name}{{K={k},R={r},C={c}}}", _n(k)
-    return tile if n == 1 else f"PouwH1TileZyChunks_v{2 if j10r else 1}{{UNIT={tile},CHUNKS={n}}}"
+    return tile if n == 1 else f"PouwH1TileZyChunks_v{2 if j10r else 1}{{UNIT={_canon({'fn': tile})},CHUNKS={n}}}"
+
+
+def _unit(defs: dict, key: str) -> None:
+    """The unit `key` (``Name_vN`` or ``Name_vN{k=json,...}``) in `defs` as a composite of its id and bindings returning a
+    word, and each unit a binding names (``{"fn": …}``) alike, as the decoder follows them. Its body computes nothing:
+    its nodes and return are `_wired`'s."""
+    if key in defs:
+        return
+    bindings = {k: json.loads(v) for k, v in Cr._record(key)} if "{" in key else {}
+    defs[key] = {"form": "composite", "id": key.split("{", 1)[0], "bindings": bindings,
+                 "body": {"params": [], "ret_type": ["Value", 16], "nodes": []}}
+    for v in bindings.values():
+        if isinstance(v, dict) and list(v) == ["fn"]:
+            _unit(defs, v["fn"])
 
 
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
@@ -790,8 +839,9 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     units = {k: {"fn": (unit_fns or {}).get(k) or _unit_fn(k, r, c, j10r, tile)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values(), "Input1_v1"]
-    defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
-    defs |= {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
+    defs = {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
+    for u in units.values():
+        _unit(defs, u["fn"])
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
     defs["Input1_v1"] = {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]}
     nodes = [{"form": "batch", "fn": len(callees) - 1 if i < 2 * len(ks) else 0, "n": rng.randint(1, 64)}
@@ -874,7 +924,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
         case "descriptor-form":
             raw = desc_bytes(desc)
             return rng.choice([raw + b" ", raw.replace(b",", b", ", 1), b"\xff" + raw, b"[]",
-                               desc_bytes({**desc, "schema": "verity-ir/descriptor/v2"}),
+                               desc_bytes({**desc, "schema": "verity-ir/descriptor/v1"}),
                                desc_bytes({k: v for k, v in desc.items() if k != "callees"}),
                                desc_bytes({**desc, "callees": [*desc["callees"], 5]}),
                                desc_bytes({**desc, "program_fn": None}), b'{"a":NaN}']).hex()
@@ -900,9 +950,10 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
                     t["id"] = "PouwH1WindowTile_v2"
                     _rekey(desc, tid, t["id"] + tid[len(Cr.TILE_FN):])
                 case "form":
-                    defs[tid] = {"form": "primitive", "id": tid, "params": [], "ret": ["Value", 16]}
+                    _rekey(desc, tid, Cr.TILE_FN)
+                    defs[Cr.TILE_FN] = {"form": "primitive", "id": Cr.TILE_FN, "params": [], "ret": ["Value", 16]}
                     for x in root:
-                        if desc["callees"][x["fn"]] == tid and x["form"] == "call":
+                        if desc["callees"][x["fn"]] == Cr.TILE_FN and x["form"] == "call":
                             x["form"] = "primitive"
                 case "params":
                     body["params"] = body["params"][:4]
@@ -925,7 +976,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
             k = max(k for k, _t in tiles) * 2
             unit = {"fn": f"H1Tile_v1{{K={k}}}"}
             extra = _template_id(k, unit)
-            defs[unit["fn"]] = {"form": "primitive", "id": unit["fn"], "params": [], "ret": ["Value", 16]}
+            _unit(defs, unit["fn"])
             defs[extra] = _template(k, *lay["tile"], unit)
             desc["program_fn"] = record(tiles + [[k, {"fn": extra}]], lay)
         case "body":
@@ -939,7 +990,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
                 case "zero":
                     root[i] = {**root[i], "form": "batch", "n": 0}
                 case "foreign":
-                    root[i] = {"form": "primitive", "fn": 1}
+                    root[i] = {"form": "primitive", "fn": desc["callees"].index(_stand_in(16))}
         case "layout-form":
             lin = lay["linears"]
             desc["program_fn"] = record(tiles, rng.choice([

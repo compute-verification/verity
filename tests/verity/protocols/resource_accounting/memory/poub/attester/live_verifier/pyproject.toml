@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["test_host.py"]
-inputs = ["verity/__init__.py", "verity/errors.py", 
+inputs = ["verity/lean_process.py", "verity/__init__.py", "verity/errors.py", 
           "verity/channel.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/resource_accounting/memory/poub/verifier", 
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
@@ -31,7 +31,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
           "verity/protocols/compose/verifier/live_challenger/serve.py",
           # the store's reader its publish imports from the pinned tree
-          "tools/research/src/research/__init__.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/store",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/store", "adapters/vllm/verity_vllm/pipeline/private_names.json",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py",
           "verity/protocols/resource_accounting/memory/poub/attester/__init__.py",
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/verifier/__init__.py", "verity/protocols/compose/verifier/live_challenger/__init__.py",

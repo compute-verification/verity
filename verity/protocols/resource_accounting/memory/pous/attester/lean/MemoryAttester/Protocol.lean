@@ -29,6 +29,7 @@ namespace MemoryAttester
 
 open Lean (Json)
 open Flock
+open Flock.SessionCoins (PROTOCOL COIN_TREE RECORDS CLOCK)
 
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n
@@ -47,7 +48,8 @@ def CoinOpening.toJson (o : CoinOpening) : Json :=
   Json.mkObj [("j", natJ o.j), ("index", natJ o.index), ("salt", hexJ o.salt), ("path", .arr (o.path.map hexJ))]
 
 def SignedChallengePhase.toJson (s : SignedChallengePhase) : Json :=
-  Json.mkObj [("commitment", s.commitment.toJson), ("ended", .str s.ended), ("rounds", .arr (s.rounds.map Round.toJson)),
+  Json.mkObj [("commitment", s.commitment.toJson), ("salt", hexJ s.salt), ("ended", .str s.ended),
+    ("rounds", .arr (s.rounds.map Round.toJson)),
     ("scheme", .str s.scheme), ("public_key", hexJ s.publicKey), ("signature", hexJ s.signature)]
 
 /-- `C`'s digests by block index, for the blocks a caller has them for. -/
@@ -111,7 +113,8 @@ def CoinOpening.ofJson (j : Json) : V CoinOpening := do
 
 def SignedChallengePhase.ofJson (j : Json) : V SignedChallengePhase := do
   let ctx := "session"
-  pure { commitment := ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx,
+  pure { commitment := ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" ctx), salt := ← hexField j "salt" ctx,
+         ended := ← J.str j "ended" ctx,
          rounds := ← objs j "rounds" ctx Round.ofJson, scheme := ← J.str j "scheme" ctx,
          publicKey := ← hexField j "public_key" ctx, signature := ← hexField j "signature" ctx }
 

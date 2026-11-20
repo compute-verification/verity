@@ -15,14 +15,13 @@ from verity.protocols.resource_accounting.compute.pouw.prover import serving as 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as T
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as Wn
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PSALT
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_tile import PearlCTileRead
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_tile import PearlPlusTile
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_plus_credited import PearlPlusTileCoreWords
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 
 
 def test_found_by_name() -> None:
     assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
-    assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
+    assert [b.definition for b in PS.PEARL_PLUS.blocks] == [PS.TILE] == [PearlPlusTileCoreWords.id]
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
@@ -505,9 +504,10 @@ def test_weights_outside_the_kernels_domain_are_refused_before_any_commitment(mo
 
 def test_its_settings_are_declared_and_checked() -> None:
     assert S.settings(PS.PEARL_PLUS, {}) == PS.SETTINGS
-    assert S.settings(PS.PEARL_PLUS, {"tie-uniform": True})["tie-uniform"] is True
-    with pytest.raises(ValueError, match="tie-uniform is a bool"):
-        S.settings(PS.PEARL_PLUS, {"tie-uniform": "yes"})
+    with pytest.raises(ValueError, match=r"pearl-plus has no setting \['tie-uniform'\]"):
+        S.settings(PS.PEARL_PLUS, {"tie-uniform": True})
+    with pytest.raises(ValueError, match="schedule is a str"):
+        S.settings(PS.PEARL_PLUS, {"schedule": 1})
     for given, refused in (({"schedule": "sideways"}, "schedule is one of serial"),
                            ({"coins": "beacon"}, "coins is 'in-process'"),
                            ({"coins": "in-process", **CTX["settings"]}, "coins and challenger are both set"),
@@ -534,7 +534,7 @@ def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
     assert on.commitment() == {} and on.run is None
     ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
-    assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
+    assert on.record() == {"entry": PS.OPTION, "schedule": "serial"}
     assert on.summary() == {"max_step_tokens": 64}
     on.release()
     assert run.finished and on.run is None
@@ -557,7 +557,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial", "weight_salts": _Device.salted[-1]})
-    assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
+    assert on.run.commits["coin_source"] == SV.PEARL_C_CHALLENGER and on.run.commits["session"] == {"gate": 1}
     on.release()
     assert finished == ["session"]
 
@@ -622,10 +622,10 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     session = {"session": "s-1", "seq": 4, "root": "ab" * 64, "commitment": "cd" * 64, "host": "auditor.s-1"}
     w = SV.weights_root({0: bytes([0]) * 64})
     reports = {"configuration": {"scheme": "pearl-plus", "settings": {**PS.SETTINGS, **CTX["settings"]},
-                                 "record": {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}},
+                                 "record": {"entry": PS.OPTION, "schedule": "serial"}},
                "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
                            "challenger": {"closed": True}},
-               "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,
+               "commitment": {"coin_source": SV.PEARL_C_CHALLENGER, "session": session, "pass_index": 2,
                               "weights_root": w.hex(), "salt": "00" * 32}}
     for name, doc in reports.items():
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
@@ -633,7 +633,7 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     assert got["arm"] == PS.OPTION and got["retained"] is False and got["max_step_tokens"] == 64
     assert got["passes"] == [{"pass": 0, "timed": True, "units": 3, "tiles": 9, "transcript_root": "ef", "macs": None}]
     coins = got["coins"]
-    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.H1_CHALLENGER, SESSION, 2,
+    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.PEARL_C_CHALLENGER, SESSION, 2,
                                                                                           {"closed": True})
     assert coins["salt_after"] == PSALT.epoch_open_root(w, 2).hex()
     assert coins["manifest_head"] == {"session": {k: session[k] for k in ("session", "seq", "root", "commitment")},

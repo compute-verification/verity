@@ -156,9 +156,6 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "three M classes run three CUTLASS kernels, and at those shapes every output word equals the k32 BlackwellE4m3QmmaDot32 "
              "block model of its kernel (CUTLASS's FFMA(d, FMUL(sx, sw), acc), Triton's FFMA(FMUL(d, sx), sw, acc)) and every "
              "activation quant Fp8GroupQuant_v1 at G 64 or 128, bit for bit, while each competing model is refuted."),
-    Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
-             "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
-             "scale, and each scale is the circuit's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
     Property("router_tap_exactness", "verity-vllm/router-tap-exactness/v1",
              "The tapped topk_softmax computes exactly the installed op's outputs, writes every word of every row's softmax, and each word "
              "is the ordered router's committed value in the circuit bit for bit (ties, NaN, +-inf and +-0 included), in vLLM's own MoE layers too."),

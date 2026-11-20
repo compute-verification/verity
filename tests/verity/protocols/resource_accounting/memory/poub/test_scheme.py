@@ -7,12 +7,15 @@ from fractions import Fraction
 import pytest
 
 from verity import hooks as H
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.prover import binder
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import registry
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties, period
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, p2_parties, period
+from verity.protocols.resource_accounting.memory.poub.verifier.commitments.gates import block_check as BC
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 
@@ -157,11 +160,17 @@ def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
         assert who == "poub" and request.property == key
 
 
-def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is() -> None:
-    for scheme in (poub.BANDWIDTH, poub.POUB):
-        assert isinstance(scheme.blocks, S.Lacks) and "BlockOpeningCheck_v2" in scheme.blocks.why
-        assert "BlockOpeningCheck_v2" in scheme.requires["one-design"]
-        assert S.credited([scheme], [("Dither_v1", [(0, 4)])]) == frozenset()
+def test_poubs_block_is_its_windows_opening_unit_costing_its_blocks_bits_and_bandwidth_declares_none() -> None:
+    assert isinstance(poub.BANDWIDTH.blocks, S.Lacks) and "BlockOpeningCheck_v2" in poub.BANDWIDTH.blocks.why
+    assert S.credited([poub.BANDWIDTH], [("Dither_v1", [(0, 4)])]) == frozenset()
+    S_ = dict(N=32, C=5, K=2, MASKED=1, BYTES=64, ROWS=2, LEAF=3, DR=1, DP=2, DV=1)
+    unit = bind(BC.BlockOpeningUnitV2, **S_)
+    [block] = poub.POUB.blocks
+    assert block.cost(S_) == 8 * 64 and block.cost({**S_, "BYTES": codec.BLOCK_BYTES}) == 32_768
+    assert S.credited([poub.POUB], [("Dither_v1", [(0, 4)]), (descriptor_id(unit), [(4, 7)])]) == frozenset({4, 5, 6})
+    with pytest.raises(ValueError, match="poub: its block BlockOpeningUnit_v2 resolves to no block"):
+        S.credited([poub.POUB], [("Dither_v1", [(0, 4)])])
+    assert "Window.give" in poub.POUB.requires["one-design"]
 
 
 def test_each_says_its_term_as_the_sketch_bounds_error_at_its_layout_and_its_two_sides() -> None:

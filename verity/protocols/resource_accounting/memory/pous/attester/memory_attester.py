@@ -14,10 +14,12 @@ A session has four steps:
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
    retried, and no index is resampled.
-3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
-   the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
-   records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
-   clear.
+3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ salt ‖ header ‖ records digest)`: the salt
+   is 64 bytes the device draws from the OS for the session (`RECORD_SALT_BYTES`), the header is the commitment's fields
+   and how the session ended, and the records digest is the `sha512/row/v2` digest of the round records as one stream.
+   The records and the salt are witness: the device hands them to the prover with the signature, the prover proves
+   things about them, and neither reaches the auditor on the proofs' path, which reads the signed digest and the
+   signature in the clear.
 4. **Release.** Once the session is signed the memory attester releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
    `SessionCommitment`) and opens every coin it revealed (`openings`).  Both refuse before the signature.
@@ -77,7 +79,6 @@ from __future__ import annotations
 import fcntl
 import gc
 import hashlib
-import json
 import logging
 import os
 import re
@@ -90,17 +91,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
-from verity.commitments import hm96
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
-from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import (
-    Commitment,
-    CommitmentDomain,
-    Opening,
-    tree_levels,
-    verify_opening,
-)
+from verity.commitments.merkle import tree_levels
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.resource_accounting.memory.pous.verifier.params import SALT_BITS
@@ -109,24 +102,18 @@ from verity.protocols.resource_accounting.memory.pous.verifier.verifier import D
 
 log = logging.getLogger(__name__)
 
-PROTOCOL = "verity-pous/memory-challenger/v2"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
-COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
-RECORDS = "sha512/row/v2"
-COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
-COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
-SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SESSION_TAG = b"verity-pous/memory-challenger/session/v2\0"
+#: the session record's salt, the device's own draw a session: the signed digest hides the rows it covers
+RECORD_SALT_BYTES = 64
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
-COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
-COMPLETE, LATE = "complete", "late"
-HM96 = hm96.SHA512
-LIMITS = VerificationLimits()
+HM96 = SC.HM96
 
 
 def _sha512(*parts: bytes) -> bytes:
@@ -141,8 +128,7 @@ def block_digest(block: bytes) -> bytes:
     return sha512_row_v2_digest(block, 8 * len(block))
 
 
-def _domain(tag: bytes, session: bytes, count: int) -> CommitmentDomain:
-    return CommitmentDomain(_sha512(tag, session)[:32], -1, RangeIndexedDomain(0, count), hash="sha512")
+_domain = SC.domain
 
 
 def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]:
@@ -153,14 +139,8 @@ def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]
     return tuple(out)
 
 
-def coin_digest(session: bytes, j: int, index: int) -> bytes:
-    """`x_j`, round `j`'s coin before hiding."""
-    return _sha512(COIN_TAG, session, j.to_bytes(4, "big"), index.to_bytes(8, "big"))
-
-
-def coin_leaf(key: bytes, session: bytes, j: int, index: int, salt: bytes) -> bytes:
-    """The hm96-sha512 leaf of round `j`'s coin under the session's key `key` and the coin's salt."""
-    return HM96.tree_leaf(key, HM96.commit_string(key, coin_digest(session, j, index), salt))
+coin_digest = SC.coin_digest
+coin_leaf = SC.coin_leaf
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,9 +172,9 @@ class CoinTree:
             raise ValueError("a coin tree has one salt per index, every index a block")
         self.session, self.blocks, self.indices, self.key = session, blocks, tuple(indices), HM96.check_key(key)
         self.salts = tuple(salts)
-        self.domain = _domain(COIN_BINDING, session, len(self.indices))
+        self.domain = _domain(SC.COIN_BINDING, session, len(self.indices))
         hm = [coin_leaf(self.key, session, j, i, s) for j, (i, s) in enumerate(zip(self.indices, self.salts, strict=True))]
-        self._levels = tree_levels(self.domain, [self.domain.leaf(j, j, COIN_SCHEMA, h) for j, h in enumerate(hm)])
+        self._levels = tree_levels(self.domain, [self.domain.leaf(j, j, SC.COIN_SCHEMA, h) for j, h in enumerate(hm)])
         self.root = self._levels[-1][0]
 
     @classmethod
@@ -214,15 +194,8 @@ class CoinTree:
 
 def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
     """`opening` opens round `opening.j`'s coin under the commitment's coin tree, to a block index."""
-    if not (0 <= opening.j < commitment.k and 0 <= opening.index < commitment.blocks):
-        return False
-    try:
-        leaf = coin_leaf(commitment.coin_key, commitment.session, opening.j, opening.index, opening.salt)
-        domain = _domain(COIN_BINDING, commitment.session, commitment.k)
-        return verify_opening(domain, Commitment(commitment.coin_root, commitment.k), Opening(opening.j, leaf, opening.path),
-                              COIN_SCHEMA, LIMITS)
-    except Exception:  # noqa: BLE001 - a malformed opening opens nothing
-        return False
+    return SC.verify(commitment.session, commitment.coin_root, commitment.coin_key, commitment.blocks, commitment.k,
+                     opening.j, opening.index, opening.salt, opening.path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,10 +215,8 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records": RECORDS, "session": self.session.hex(),
-                "coin_root": self.coin_root.hex(), "coin_key_sha512": _sha512(self.coin_key).hex(), "blocks": self.blocks,
-                "k": self.k, "limit_ns": self.limit_ns, "block_bytes": self.block_bytes, "binding": self.binding.hex(),
-                "clock": "CLOCK_MONOTONIC ns"}
+        return SC.header_fields(self.session, self.coin_root, _sha512(self.coin_key), self.binding, self.blocks, self.k,
+                                self.limit_ns, self.block_bytes)
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -293,11 +264,14 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
     return block_digest(b"".join(r.value() for r in rounds))
 
 
-def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
-    head = json.dumps({**commitment.header(), "ended": ended, "rounds": len(rounds)}, sort_keys=True,
-                      separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
+def message(commitment: SessionCommitment, salt: bytes, ended: str, rounds: Sequence[Round]) -> bytes:
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records digest)`, the
+    salt `RECORD_SALT_BYTES` bytes, so it ends where the tag says and the header's length begins."""
+    if len(salt) != RECORD_SALT_BYTES:
+        raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
+    head = SC.header(commitment.session, commitment.coin_root, _sha512(commitment.coin_key), commitment.binding,
+                     commitment.blocks, commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
+    return _sha512(SESSION_TAG, salt, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 
 class Signer(Protocol):
@@ -473,9 +447,11 @@ def holds(where: Mapping[str, Any]) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class SignedSession:
-    """A closed session: its commitment, how it ended, its round records, and the one signature over them."""
+    """A closed session: its commitment, its record's salt, how it ended, its round records, and the one signature over
+    them."""
 
     commitment: SessionCommitment
+    salt: bytes
     ended: str
     rounds: tuple[Round, ...]
     scheme: str
@@ -483,15 +459,15 @@ class SignedSession:
     signature: bytes
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.rounds)
+        return message(self.commitment, self.salt, self.ended, self.rounds)
 
     def to_json(self) -> dict[str, Any]:
-        return {"commitment": self.commitment.to_json(), "ended": self.ended, "rounds": [r.to_json() for r in self.rounds],
+        return {"commitment": self.commitment.to_json(), "salt": self.salt.hex(), "ended": self.ended, "rounds": [r.to_json() for r in self.rounds],
                 "scheme": self.scheme, "public_key": self.public_key.hex(), "signature": self.signature.hex()}
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
-        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
+        return cls(SessionCommitment.from_json(doc["commitment"]), bytes.fromhex(doc["salt"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
@@ -765,7 +741,8 @@ class MemoryAttester:
     ends the session; `close()` signs it once, and only then are `commitment` and `openings()` released."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
-                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
+                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
+                 salt: bytes | None = None) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
         if len(binding) != DIGEST_BYTES:
@@ -774,8 +751,11 @@ class MemoryAttester:
             resolution_ns = resolution_of(clock)
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
+        if salt is not None and len(salt) != RECORD_SALT_BYTES:
+            raise ValueError(f"a session record's salt is {RECORD_SALT_BYTES} bytes")
         log.claim(coins.session)
         self.coins, self.signer, self.clock = coins, signer, clock
+        self._salt = os.urandom(RECORD_SALT_BYTES) if salt is None else salt
         self._commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
                                              block_bytes, binding)
         self.rounds: list[Round] = []
@@ -818,9 +798,9 @@ class MemoryAttester:
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
         if not 0 <= r.elapsed_ns <= self._commitment.limit_ns:
-            self.ended = LATE
+            self.ended = SC.LATE
         elif len(self.rounds) == self.coins.k:
-            self.ended = COMPLETE
+            self.ended = SC.COMPLETE
         return r
 
     def run(self, respond: Callable[[int], bytes]) -> SignedSession:
@@ -837,9 +817,9 @@ class MemoryAttester:
             raise RuntimeError("the session has not ended")
         if self.signed is None:
             rounds = tuple(self.rounds)
-            sig = self.signer.sign(self._commitment.session, message(self._commitment, self.ended, rounds))
-            self.signed = SignedSession(self._commitment, self.ended, rounds, self.signer.scheme, self.signer.public_key,
-                                        sig)
+            sig = self.signer.sign(self._commitment.session, message(self._commitment, self._salt, self.ended, rounds))
+            self.signed = SignedSession(self._commitment, self._salt, self.ended, rounds, self.signer.scheme,
+                                        self.signer.public_key, sig)
         return self.signed
 
     def openings(self) -> tuple[CoinOpening, ...]:
@@ -900,7 +880,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
-    if signed.ended != COMPLETE or len(signed.rounds) != commitment.k:
+    if signed.ended != SC.COMPLETE or len(signed.rounds) != commitment.k:
         reasons.append(f"the session ended {signed.ended} after {len(signed.rounds)} of {commitment.k} rounds")
     by_j = {o.j: o for o in openings}
     late = wrong = 0
@@ -919,10 +899,10 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
-           "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COMMITTED", "HM96", "LMS", "MATCHED", "PREMISE",
+           "PREMISE_BEFORE", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
-           "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "RECORD_BYTES", "RECORD_SALT_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryAttester", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
