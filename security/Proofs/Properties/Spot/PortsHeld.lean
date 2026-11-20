@@ -653,7 +653,9 @@ theorem jeq_str (q : String) : jeq (.str q) (.str q) = true := by
 
 /-- **`MembersPortsHeld`'s conclusion is inhabited in each of its three cases**, on a hash-free slice, header and
 reads: port `a` is held at a shared tree by a registered read, `b` at a registered value, and `c` at the slice's one
-root. It does not show that the check accepts anything. -/
+root. It does not show that the check accepts anything. Its proof unfolds core string internals (`import all` of
+`Init.Data.Ord.String` and `Init.Data.String.Legacy`, `with_unfolding_all rfl`, `decide +kernel`): a toolchain bump that
+breaks it breaks that unfolding, not the guarantee. -/
 theorem portsHeld_threeCases : PortsHeld wReads wHeld wSlice wHeader := by
   have hroots : getD wSlice "roots" = .arr #[wA, wC] := by with_unfolding_all rfl
   have hent : entries (getD (getD wHeader "frame_v3") "roots") = #[("a", .str "ra"), ("b", .str "rb"), ("c", .str "x")] :=
