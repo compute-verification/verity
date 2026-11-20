@@ -7077,3 +7077,65 @@ def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
     assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])
+
+
+def _audit_summary(**over) -> dict:
+    lean = {"verdict": "accept", "reason": None, "output": "VERDICT accept", "output_sha512": "ab" * 64}
+    ml = {"ok": True, "ran": True, "codes": [], "detail": {"lean": lean, "python": {"accepted": True, "failed": []}}}
+    return {"ok": True, "draw": [0, 3, 5], "audit": {"accepted": True, "complete": True, "members_lean": ml,
+                                                       "wrong_units": {"of": 40, "bound": 4, "delta": "1/100"}}, **over}
+
+
+@pytest.mark.parametrize("summary, verdict, rc, said", [
+    (_audit_summary(compiled="not checked"), "accept", 0,
+     ["Lean's members check (OneStageZk.checkMembersAt): ok=True", "sha512 " + "ab" * 64, "3 units drawn",
+      "at most 4 of its units wrong except with probability 1/100", "compiled: not checked; the verdict does not rest on "
+      "the circuit's compile check"]),
+    (_audit_summary(compiled=True), "accept", 0, ["compiled: True; SPOT's verdict alone"]),
+    (_audit_summary(), "accept", 0, ["compiled: not stated by the summary; the verdict does not rest on"]),
+    ({**_audit_summary(), "ok": False}, "reject", 1, ["WINDOW-RECORD reject", "the audit's ok=False"]),
+    ({**_audit_summary(), "audit": {**_audit_summary()["audit"], "members_lean": {
+        "ok": False, "ran": True, "codes": ["lean-reject"], "detail": {"lean": {"verdict": "reject", "reason": "x"}}}}},
+     "reject", 1, ["codes=['lean-reject']", "verdict reject, output sha512 not kept by this audit"]),
+    ({**_audit_summary(), "audit": {**_audit_summary()["audit"], "members_lean": {
+        "ok": True, "ran": False, "codes": [], "reason": "a window of one member"}}},
+     "undecided", 1, ["WINDOW-RECORD undecided: Lean's members check did not run (a window of one member)",
+                      "no verdict of Lean's stands"]),
+], ids=["accept, compiled not checked", "accept, compiled", "accept, compiled unstated", "audit not ok",
+        "Lean rejects", "Lean did not run"])
+def test_the_window_roads_record_is_leans_members_verdict_and_says_what_it_rests_on(tmp_path, capsys, summary, verdict, rc,
+                                                                                   said):
+    """The line is the verdict of record only where the audit accepted and Lean's members check ran and accepted; a Lean
+    that did not run is undecided, never an accept; `compiled` is said as the summary states it, and a verdict beside a
+    compile check that was not made says it does not rest on one. The line names no population and no window."""
+    got, line = S.window_record(summary)
+    assert got == verdict and all(x in line for x in said), line
+    assert S.public_line(line) == line and "population" not in line and " of 40" not in line
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(summary))
+    assert S.main(["window-record", str(path)]) == rc
+    assert capsys.readouterr().out == line + "\n"
+
+
+@pytest.mark.parametrize("text, why", [
+    (None, "FileNotFoundError"),
+    ("{", "JSONDecodeError"),
+    ("[]", "the audit's summary has no ok of type bool"),
+    (json.dumps({"ok": True}), "the audit's summary has no audit of type dict"),
+    (json.dumps({"ok": True, "audit": {"accepted": True}}), "no audit.members_lean of type dict"),
+    (json.dumps({"ok": True, "audit": {"accepted": True, "members_lean": {"ran": True}}}),
+     "no audit.members_lean.ok of type bool"),
+    (json.dumps({k: v for k, v in _audit_summary().items() if k != "draw"}), "no draw of type list"),
+    (json.dumps({**_audit_summary(), "audit": {**_audit_summary()["audit"], "wrong_units": {"of": 40}}}),
+     "no audit.wrong_units.bound"),
+], ids=["no file", "not JSON", "not an object", "no audit", "no members_lean", "no members_lean.ok", "no draw", "no bound"])
+def test_a_missing_or_malformed_audit_summary_is_an_error_by_name_never_a_verdict(tmp_path, capsys, text, why):
+    """The window road's record reads what the audit wrote and nothing else: a summary that is absent, not JSON or lacking
+    a field the verdict reads is `WINDOW-RECORD ERROR` (exit 2) naming it, and no accept line."""
+    path = tmp_path / "summary.json"
+    if text is not None:
+        path.write_text(text)
+    assert S.main(["window-record", str(path)]) == 2
+    out = capsys.readouterr().out
+    assert out.startswith("WINDOW-RECORD ERROR: ") and why in out and "accept" not in out.replace("accepted", ""), out
+

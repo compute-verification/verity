@@ -2017,8 +2017,11 @@ EOF
   road_network
   if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
   else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
-  step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
-  step_refused composite "V3c, the composite and the hand-off read the record, which was not made"
+  if [[ " ${RAN[*]} " != *" sampled-proofs "* ]]; then
+    step_refused record "its verdict of record is Lean's members check in the sampled proofs' audit summary ($OUT/summary.json), and that step did not run"
+  elif rec=$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" window-record "$OUT/summary.json" 2>&1); then RAN+=(record); say "$rec"
+  else FAILED+=(record); say "record: $rec"; fi
+  step_refused composite "served_composite.sh reads the audit's cases under D/private/logs/sampled-proofs/keep/served or D/v3c-w*/audit and, under POUW=pearlplus, Pearl+'s run case, and the window road writes neither: no input of the composite's stands, so its verdict is not made"
   road_end 20
 }
 
