@@ -246,7 +246,7 @@ theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
     exact ⟨b :: bs, by rw [List.mapM_cons, hb, hbs]; rfl⟩
 
 theorem beN_ok (n x : ℕ) (w : String) (h : x < 2 ^ (8 * n)) : ∃ b, beN n x w = .ok b := by
-  unfold beN; simp only [h, ↓reduceIte]; exact ⟨_, rfl⟩
+  unfold beN Flock.SessionCoins.beN; simp only [h, ↓reduceIte]; exact ⟨_, rfl⟩
 
 theorem coinLeaf_ok (key session : ByteArray) (j index : ℕ) (salt : ByteArray) (hk : checkKey key = .ok ())
     (hj : j < 2 ^ 32) (hi : index < 2 ^ 64) (hs : salt.size = 192) : ∃ b, coinLeaf key session j index salt = .ok b := by

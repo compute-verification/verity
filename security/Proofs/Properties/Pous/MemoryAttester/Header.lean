@@ -61,7 +61,8 @@ def keys : List (String × Nat) :=
 
 /-- The header's values, in `keys`'s places. -/
 def vals (c : ChallengePhaseCommitment) (e : String) (n : Nat) : List String :=
-  c.headerFields.map (·.2) ++ [pyJsonStr e, toString n]
+  (SessionCoins.headerFields c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes).map (·.2) ++
+    [pyJsonStr e, toString n]
 
 /-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
@@ -71,10 +72,11 @@ def entry (c : ChallengePhaseCommitment) (e : String) (n : Nat) (x : String × N
 
 theorem header_eq (c : ChallengePhaseCommitment) (e : String) (n : Nat) :
     header c e n = "{" ++ ",".intercalate (order.toList.map (entry c e n)) ++ "}" := by
-  have hf : (c.headerFields ++ [("ended", pyJsonStr e), ("rounds", toString n)]).toArray =
+  have hf : (SessionCoins.headerFields c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ++
+      [("ended", SessionCoins.pyJsonStr e), ("rounds", toString n)]).toArray =
       keys.toArray.map fun x => (x.1, (vals c e n)[x.2]!) := by
-    simp [keys, vals, ChallengePhaseCommitment.headerFields]
-  unfold header
+    simp [keys, vals, SessionCoins.headerFields, pyJsonStr]
+  unfold header SessionCoins.header
   simp only
   rw [hf, Sort.qsort_map, Array.toList_map, List.map_map]
   rfl
@@ -132,7 +134,7 @@ theorem comma_vals (c : ChallengePhaseCommitment) {e : String} (he : Plain e) (n
     ∀ v ∈ vals c e n, ',' ∉ v.toList := by
   have hc := plain_const
   intro v hv
-  simp only [vals, ChallengePhaseCommitment.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
+  simp only [vals, SessionCoins.headerFields, List.map_cons, List.map_nil, List.cons_append, List.nil_append,
     List.mem_cons, List.not_mem_nil, or_false] at hv
   rcases hv with h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h
   · exact comma_pyJsonStr (plain_hexOf _)

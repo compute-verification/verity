@@ -158,9 +158,9 @@ theorem signedWipe_split {s s' h h' r r' : ByteArray} (hs : s.size = s'.size) (h
   obtain ⟨e1, e2⟩ := List.append_inj' e (by rw [bs_length, bs_length, hr])
   simp only [List.append_assoc] at e1
   have e1 := List.append_cancel_left e1
-  obtain ⟨es, e1⟩ := split_bytes e1 (by rw [bs_length, bs_length, hs])
+  obtain ⟨es, e1⟩ := split_bytes e1 hs
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
-  exact ⟨bs_inj es, bs_inj e1, bs_inj e2⟩
+  exact ⟨es, bs_inj e1, bs_inj e2⟩
 
 theorem tag_byte : (bs SESSION_TAG)[12]? = some 109 := by decide +kernel
 

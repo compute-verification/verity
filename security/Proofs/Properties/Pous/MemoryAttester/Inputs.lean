@@ -29,7 +29,7 @@ open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_
 
 theorem beN_ok {n x : Nat} {w : String} {b : ByteArray} (h : beN n x w = .ok b) :
     x < 2 ^ (8 * n) ∧ bs b = (List.range n).map fun i => (x >>> (8 * (n - 1 - i))).toUInt8 := by
-  unfold beN at h
+  unfold beN SessionCoins.beN at h
   split at h
   · rename_i hx
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -235,9 +235,9 @@ theorem challengePhase_split {s s' h h' r r' : ByteArray} (hs : s.size = s'.size
   obtain ⟨e1, e2⟩ := List.append_inj' e (by rw [bs_length, bs_length, hr])
   simp only [List.append_assoc] at e1
   have e1 := List.append_cancel_left e1
-  obtain ⟨es, e1⟩ := split_bytes e1 (by rw [bs_length, bs_length, hs])
+  obtain ⟨es, e1⟩ := split_bytes e1 hs
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
-  exact ⟨bs_inj es, bs_inj e1, bs_inj e2⟩
+  exact ⟨es, bs_inj e1, bs_inj e2⟩
 
 /-- The signed message's input, under one key identifier and with records of one width, determines the record. -/
 theorem signed_split {I s s' r r' : ByteArray} (hr : r.size = r'.size)
