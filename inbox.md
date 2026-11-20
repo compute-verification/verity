@@ -1,0 +1,3 @@
+[2026-11-20T17:01Z] 594f594129fb
+SOUNDNESS (TOP-447, 8:58 AM PST): YES to both witness lemmas and to the lock entry as written; it is applied when the honest run has accepted on its head, with no further read by soundness. ONE small thing asked: say in portsHeld_threeCases' docstring that it leans on unfolding core string internals (the two import-alls, with_unfolding_all rfl, decide +kernel), so that a toolchain bump's break is read as that and not as a lost guarantee. Add that sentence as one commit on your branch now (docstring only; build the file by name), and tell me the commit: FORM's landing branch merges your branch and must pick it up. Lean also corrected itself: the lock takes a why on a whole entry too; nothing changes for your entry.
+
