@@ -52,7 +52,7 @@ FIXTURES = {
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
 #: record and release log; vectors/ is vectors.json's live set
-PLAIN = "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
+PLAIN = Path(__file__).resolve().parent / "fixtures" / "served-registered-plain-descriptor-v2"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
@@ -252,14 +252,10 @@ def test_ks_form_is_the_default_under_zk_and_every_row_format_passes_its_rows_ch
 
 
 @pytest.fixture(scope="module")
-def plain(built, tmp_path_factory):
-    sys.path.insert(0, str(VERIFIER))
-    import ci
-
-    try:
-        return ci.fetch(PLAIN, tmp_path_factory.mktemp("store"))
-    except (subprocess.CalledProcessError, OSError) as e:
-        pytest.skip(f"the evidence store is not reachable: {e}")
+def plain(built):
+    assert (PLAIN / "live.json").is_file(), (
+        f"{PLAIN} is not fetched: `uv run research data fetch-fixtures {PLAIN.relative_to(PLAIN.parents[7])}`")
+    return PLAIN
 
 
 def test_the_plain_sessions_coins_are_the_challengers(plain):

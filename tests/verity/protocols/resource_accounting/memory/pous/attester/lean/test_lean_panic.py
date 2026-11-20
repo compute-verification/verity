@@ -133,3 +133,54 @@ def test_a_refusal_sentence_that_contains_the_runtimes_text_is_no_panic(tmp_path
         assert json.loads(server.call("verdict", {})[1]) == ACCEPT
     finally:
         server.close()
+
+
+#: what the stand-in does at end of input, after every reply: the verdict it gave was an accept
+AT_END = {"a panic line": f"print({PANIC_LINE!r}, file=sys.stderr, flush=True)",
+          "exit 134": "sys.exit(134)",
+          "a signal": "import signal; os.kill(os.getpid(), signal.SIGKILL)"}
+REFUSED_AT_END = {"a panic line": f"^{D.LEAN_PANIC}: {PANIC_LINE}$", "exit 134": f"^{D.LEAN_EXIT}: status 134 \\(abort\\)$",
+                  "a signal": f"^{D.LEAN_EXIT}: killed by SIGKILL$"}
+
+
+def _answering(at_end: str) -> str:
+    out = json.dumps({"output": ACCEPT}, sort_keys=True, separators=(",", ":"))
+    return f"for line in sys.stdin:\n    print({out!r}, flush=True)\n{at_end}\n"
+
+
+@pytest.mark.parametrize("how", AT_END)
+def test_a_server_that_answers_accept_and_ends_unclean_is_refused_at_its_checked_close(tmp_path, how):
+    server = _fake(tmp_path, _answering(AT_END[how]))
+    assert server.call("verdict", {})[0] == "output"
+    with pytest.raises(D.ProtocolError, match=REFUSED_AT_END[how]):
+        server.close_checked()
+
+
+def test_a_server_that_ends_clean_passes_its_checked_close(tmp_path):
+    server = _fake(tmp_path, _answering("pass"))
+    assert server.call("verdict", {})[0] == "output"
+    server.close_checked()
+    server.close_checked()
+
+
+@pytest.mark.parametrize("how", AT_END)
+@pytest.mark.parametrize("module, call", [
+    (V, lambda: V.verdict(None, None, [], lambda i: b"", trusted=set())),
+    (WV, lambda: WV.verdict(None, None, trusted=set()))], ids=["memory_attester", "wipe"])
+def test_a_verdict_is_refused_at_the_end_of_the_verdicts_where_its_server_ended_unclean(tmp_path, monkeypatch, how, module,
+                                                                                        call):
+    import functools
+
+    monkeypatch.setattr(module, "record", lambda *a, **k: {})
+    monkeypatch.setattr(module, "server", functools.cache(lambda: _fake(tmp_path, _answering(AT_END[how]))))
+    call()
+    with pytest.raises(D.ProtocolError, match=REFUSED_AT_END[how]):
+        module.finish()
+    module.finish()
+
+
+def test_the_end_of_the_verdicts_is_nothing_where_no_server_started(monkeypatch):
+    import functools
+
+    monkeypatch.setattr(V, "server", functools.cache(lambda: pytest.fail("a server was started")))
+    V.finish()

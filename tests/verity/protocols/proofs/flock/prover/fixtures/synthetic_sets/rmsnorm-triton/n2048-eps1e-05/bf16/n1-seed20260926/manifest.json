@@ -42,7 +42,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "RMSNormTriton_v1{N=2048,EPS=1e-05}": "6d0e0aaa83918dde83420a54a9cf05323ca535e0e77a95fc2c415e543f35ae8f6694f26389761ae6027b0a82977c14334763b6a6af1215c7c0d6fafeef7b2242"
+   "RMSNormTriton_v1{N=2048,EPS=1e-05}": "26bf9cc015bc4e8300c42559af0a648c8105f986eff80ba3f2df7188f14e35c56076b39f03622718562632795b75588ace801aa0c484a04bc49608a5a931635b"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
