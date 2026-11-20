@@ -218,7 +218,7 @@ tests = [
     "test_rec_outer.py",
     "test_rec_vstar_checks.py",
 ]
-paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/h1_tiles.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_rec_shape.py"]

@@ -1,83 +1,80 @@
 """`credit.TILE_PINS` (``lean/check/h1_tiles.json``, which Lean's `Credit.TILE_PINS` reads too) against the registry: each
 pinned instance's window template (`h1window.template` at K over `h1window.tile_unit` at K, the 4 × 8 tile `h1unit.TILE`,
-over the v1, v3 or J10-R v5 H1 tile, chunked as `h1window.program` chunks it) is the key, and its closure digest
-(`codec.closure_digest`) the pin, so a change to the template, or to any Definition it reaches, fails here until it
-re-pins; and the credit cases' fixture (``lean/check/fixtures/h1_tiles.json``) is each pinned template's closure, every
-entry its canonical entry (`codec.canonical_entry`, its callees by id and its types inline), which `pouw_credit_cases`
-interns into its descriptors. Run as a script, it writes both:
+over the v1, v3 or J10-R v5 H1 tile, chunked as `h1window.program` chunks it; `pouw_credit_cases.registry_window`) is
+the key, and its closure digest (`codec.closure_digest`, its body and every Definition under it) the pin, so a change
+to the template, or to any Definition it reaches, fails here until it re-pins. Run as a script, it writes the pins:
 
     uv run python tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_h1_tile_pins.py
+
+A pinned window's descriptor is about 60 MB (its closure reaches the noise's SHA-512 at gates), about ten seconds to
+build, so every test here is slow.
 """
 from __future__ import annotations
 
-import hashlib
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
+import pytest
+
 from verity.circuits import codec
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 
-#: the pinned instances: each K, and the H1 tile under its unit (`h1unit.Shape`'s v1 and v3, and J10-R's v5)
-KS = (32, 64, 4096)
-TILES = {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}
+if "pouw_credit_cases" not in sys.modules:
+    for _name in ("pouw_rounds_cases", "pouw_credit_cases"):
+        _spec = importlib.util.spec_from_file_location(_name, Path(__file__).parent / "lean" / "check" / f"{_name}.py")
+        sys.modules[_name] = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(sys.modules[_name])
+cases = sys.modules["pouw_credit_cases"]
+
+#: the pinned instances: each K and the H1 tile under its unit (v3 has no form at K = 32)
+INSTANCES = ((64, "v1"), (64, "v3"), (64, "v5"), (4096, "v1"), (4096, "v5"))
 SCRIPT = "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_h1_tile_pins.py"
-FIXTURE = Path(__file__).parent / "lean" / "check" / "fixtures" / "h1_tiles.json"
 
 
-def closures() -> dict[str, dict[str, dict]]:
-    """Each pinned instance's template key and its closure, each Definition it reaches by id to its canonical entry."""
-    r, c = U.TILE
-    out = {}
-    for k in KS:
-        for definition in TILES.values():
-            unit = HW.tile_unit(k, (r, c), definition)
-            desc = codec.encode_program(HW.program((("w", k, c),), (("w", 0),), r, (r, c), unit=lambda _k, u=unit: u))
-            (key,) = (f for f in desc["callees"] if f.startswith(Cr.TILE_FN + "{"))
-            todo, seen = [key], {}
-            while todo:
-                f = todo.pop()
-                if f not in seen:
-                    e = desc["definitions"][f]
-                    seen[f] = codec.canonical_entry(e, desc)
-                    if e["form"] == "composite":
-                        todo += [desc["callees"][x["fn"]] for x in e["body"]["nodes"]]
-            assert codec.closure_digest(desc, key) == digest(seen)
-            out[key] = seen
-    return out
+def descriptor_bytes(desc: dict) -> bytes:
+    """`desc`'s bytes as the period's ``circuit`` hashes them: canonical JSON without annotations."""
+    return codec.canonical_json({k: v for k, v in desc.items() if k != "annotations"})
 
 
-def digest(closure: dict[str, dict]) -> str:
-    """`codec.closure_digest` of a closure of canonical entries: each is its own canonical entry."""
-    return hashlib.sha512(codec.canonical_json({f: hashlib.sha512(codec.canonical_json(e)).hexdigest()
-                                                for f, e in closure.items()})).hexdigest()
+def text() -> str:
+    """The pins file: each pinned instance's template key and its closure digest."""
+    pins = {}
+    for k, tile in INSTANCES:
+        desc = cases.registry_window(k, tile)
+        pins[cases.template_key(desc)] = codec.closure_digest(desc, cases.template_key(desc))
+    return json.dumps(pins, indent=1, sort_keys=True) + "\n"
 
 
-def files() -> dict[Path, str]:
-    """The pins file and the fixture, each path and its text."""
-    got = closures()
-    pins = {key: digest(defs) for key, defs in got.items()}
-    return {Cr.TILE_PINS_FILE: json.dumps(pins, indent=1, sort_keys=True) + "\n",
-            FIXTURE: codec.canonical_json(got).decode() + "\n"}
-
-
-def test_the_pins_and_the_fixture_are_the_registrys_templates():
-    """Regenerates every pinned template (about ten seconds each): a change to `h1window`'s template or tile unit, or
-    to any Definition under them, reaches no other test until the credit cases run on a stale fixture."""
-    for path, text in files().items():
-        assert path.read_text() == text, (
-            f"{path.name} is not the registry's H1 window templates at their pinned instances (KS × TILES): if the change "
-            f"to the template, or to a Definition it reaches, is meant, re-pin with `uv run python {SCRIPT}`")
-
-
-def test_the_verifier_reads_the_pins():
+@pytest.mark.slow
+def test_the_pins_are_the_registrys_templates():
+    """Regenerates every pinned template: a change to `h1window`'s template or tile unit, or to any Definition under
+    them, would otherwise surface only as served windows refused (`credit.no_template`)."""
+    assert U.TILE == (4, 8), "registry_window builds h1unit's default tile, 4 × 8"
+    assert Cr.TILE_PINS_FILE.read_text() == text(), (
+        f"{Cr.TILE_PINS_FILE.name} is not the registry's H1 window templates at their pinned instances (INSTANCES): if "
+        f"the change to the template, or to a Definition it reaches, is meant, re-pin with `uv run python {SCRIPT}`")
     assert Cr.TILE_PINS == json.loads(Cr.TILE_PINS_FILE.read_text())
 
 
+@pytest.mark.slow
+def test_a_pinned_window_is_read_and_its_template_over_another_body_is_refused():
+    """The registry's window at K = 64 is read (its layout, the 4 × 8 tile); the same descriptor with one Definition
+    under its template over another body, every id and signature the same (`pouw_credit_cases.other_body`), is refused
+    as no template at K = 64 (`credit.layout_of`, by `_tile`)."""
+    desc = cases.registry_window(64)
+    key = cases.template_key(desc)
+    lay, why = Cr.layout_of(descriptor_bytes(desc))
+    assert why is None and lay["tile"] == [4, 8], why
+    assert Cr._tile(desc["definitions"][key], key, 64, desc) == (4, 8, False)
+    bad = cases.other_body(desc)
+    assert codec.closure_digest(bad, key) != Cr.TILE_PINS[key]
+    assert Cr._tile(bad["definitions"][key], key, 64, bad) is None
+    assert Cr.layout_of(descriptor_bytes(bad)) == (None, ("layout", Cr.no_template(64)))
+
+
 if __name__ == "__main__":
-    for path, text in files().items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
-        print(path, len(text))
+    Cr.TILE_PINS_FILE.write_text(text())
+    print(Cr.TILE_PINS_FILE.read_text())

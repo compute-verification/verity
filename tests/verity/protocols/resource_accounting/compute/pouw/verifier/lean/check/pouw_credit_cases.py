@@ -128,6 +128,7 @@ mutation to the refusal it aims at.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import hashlib
 import itertools
 import json
@@ -864,6 +865,47 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
 def desc_bytes(desc: dict) -> bytes:
     """A descriptor's bytes as the verifier holds them: canonical JSON without annotations."""
     return _canon(desc).encode()
+
+
+#: the H1 tile under a registry window's unit, by name: `h1unit.Shape`'s v1 and v3, and J10-R's v5
+REGISTRY_TILES = ("v1", "v3", "v5")
+
+
+@functools.cache
+def registry_window(k: int, tile: str = "v1") -> dict:
+    """The registry's window (`h1window.program`) of one linear at K, one call, over the 4 × 8 tile unit
+    (`h1window.tile_unit`) over the H1 tile `tile` (`REGISTRY_TILES`), as `codec.encode_program` writes it: a template
+    `credit.TILE_PINS` pins when K and `tile` are an instance it holds. About 60 MB, ten seconds to build."""
+    from verity.circuits import codec
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
+    unit = HW.tile_unit(k, (4, 8), {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}[tile])
+    return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), unit=lambda _k: unit))
+
+
+def template_key(desc: dict) -> str:
+    """The one `credit.TILE_FN` template among `desc`'s callees."""
+    (key,) = (f for f in desc["callees"] if f.startswith(Cr.TILE_FN + "{"))
+    return key
+
+
+def other_body(desc: dict) -> dict:
+    """`desc` with one Definition its template reaches over another body under the same id: the first composite (by id)
+    of its closure calling ``Xor2_v1`` calls ``And2_v1`` there, of the same signature, so the descriptor still decodes
+    and only its template's closure digest is another."""
+    out = json.loads(json.dumps(desc))
+    callees, defs = out["callees"], out["definitions"]
+    xor, and2 = callees.index("Xor2_v1"), callees.index("And2_v1")
+    todo, seen = [template_key(out)], set()
+    while todo:
+        f = todo.pop()
+        if f not in seen:
+            seen.add(f)
+            if defs[f]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[f]["body"]["nodes"]]
+    f = min(f for f in seen if defs[f]["form"] == "composite" and any(x["fn"] == xor for x in defs[f]["body"]["nodes"]))
+    next(x for x in defs[f]["body"]["nodes"] if x["fn"] == xor)["fn"] = and2
+    return out
 
 
 def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,

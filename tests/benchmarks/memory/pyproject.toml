@@ -16,7 +16,7 @@ core = "verity bench memory"
 # number is printed or not by the reporting grid's rule for a row's error (`verity.protocol`); of `verity`, what
 # PoUB's verifier, which the command reads its record with, imports; the session's sheets, its one card's figures; --local serves the checkpoint core's pin names
 inputs = ["benchmarks/memory", "benchmarks/poub_session/summary.py", "benchmarks/poub_session/sheets.py", "tests/verity/protocols/resource_accounting/memory/poub/figures.json",
-    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/h1_tiles.json",
     "verity/protocol.py", "verity/channel.py", "tools/config/verity_config",
     "verity/__init__.py",
     "tools/config/verity_config/verity_settings.py",
