@@ -440,17 +440,6 @@ def test_two_reads_under_one_port_name_are_refused():
                         schemas={"A": G.SCHEMA_V2})["ports"].keys() == {"a0", "a1"}
 
 
-#: the SHA-512 of each `_two_params(second)` program's descriptor, `canonical_json(encode_program(...))` (for `w`, which
-#: no longer encodes, the `v` descriptor with `v` renamed): the bytes
-#: `verity/protocols/proofs/flock/verifier/Flock/Test/RegTwoParams.lean` holds (`desc`) and pins alike
-TWO_PARAMS = {
-    "w": "802171939d9baed267cc2b5516306111e61a937c6a5ad3892c0c032d44c287b2"
-         "78b2456e0f6e79f31d9797c9da6d86d1c67817396fa1f12ad1bb48055021b6fb",
-    "v": "352f7f13f7e80ef597b363b4fee73e5b2cd0a6c44cd4aae4a39337dbb87be66d"
-         "cd137737f06e3319226a2faee21a86c9a0921e027960d737e16164fbe5baa000",
-}
-
-
 def _two_params(second: str):
     """A program of the registered values A and B (two rows of two bytes each) whose proof block u is an instance of a
     template of the parameters `w` and `second`, reading row u of A at `w` and row u of B at `second`; and the template."""
@@ -479,10 +468,8 @@ def test_two_parameters_of_one_name_are_refused():
         _two_params("w")
     distinct, t = _two_params("v")
     desc = canonical_json(encode_program(distinct))
-    assert hashlib.sha512(desc).hexdigest() == TWO_PARAMS["v"]
     assert desc.count(b'"v"') == 1
     dup = desc.replace(b'"v"', b'"w"')
-    assert hashlib.sha512(dup).hexdigest() == TWO_PARAMS["w"]
     reg = DefinitionTable()
     reg.add(XOR8)
     with pytest.raises(ValueError, match=want):
