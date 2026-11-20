@@ -515,8 +515,8 @@ def heldWhy (hs : Array Held) (outs : Array Nat) : Option String := Id.run do
         return some s!"held output: return leaf {h.lo + i} is {x}, held to leaf {h.start + i % h.n} of {h.name}, which is {y}"
   return none
 
-private def heldOne : Array Held := #[{ lo := 0, hi := 16, name := "one", start := 0, n := 16,
-  leaves := #[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }]
+private def heldOne : Array Held :=
+  #[{ lo := 0, hi := 16, name := "one", start := 0, n := 16, leaves := #[1] ++ Array.replicate 15 0 }]
 #guard heldWhy heldOne (#[1] ++ Array.replicate 15 0) == none
 #guard heldWhy heldOne (Array.replicate 16 0) == some "held output: return leaf 0 is 0, held to leaf 0 of one, which is 1"
 #guard heldWhy heldOne (Array.replicate 15 0) == some "held output: the return has 15 leaves, and a held row ends at 16"
