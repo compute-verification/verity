@@ -3,6 +3,7 @@ module
 public import Properties.Spot.PortsHeld
 public import Proofs.Properties.Spot
 public import Proofs.Flock.Soundness.Refine.Rep
+import Mathlib.Data.List.Nodup
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -544,13 +545,7 @@ theorem fieldRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {
         rcases Array.mem_push.1 hx with hx | rfl
         · exact hgot x hx
         · obtain ⟨hp, hcar⟩ := fieldRootIn_carries hft hr
-          obtain ⟨j, hj, hF⟩ := List.any_eq_true.1 hin
-          have hj' : j < rs.size := by simpa using hj
-          rw [getElem!_pos (rs.map fun r => (r.template, r.first, r.count)) j (by simpa using hj')] at hF
-          simp only [Array.getElem_map, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hF
-          refine Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hw, ⟨m, hm, rfl, rs[j], Array.getElem_mem hj', ?_⟩, hp,
-            hcar⟩)
-          exact ⟨hF.1.1.1.1, hF.1.1.1.2, hF.1.1.2⟩
+          exact Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hw, ⟨m, hm, rfl, hin⟩, hp, hcar⟩)
       · exact hgot
   · exact hacc n x hx
 
@@ -575,6 +570,14 @@ theorem membersRootsWired_good {p : OneStageZk.Params} {ms : Array OneStageZk.Me
   · obtain ⟨W, hW, h⟩ := ebind_ok h
     exact fieldRoots_good hP hrs hW hft g2 h
 
+/-- **Where the per-member form's structure holds, no two members share a name** (`OneStageZk.namesOnce`). -/
+theorem membersStructure_names {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {c : OneStage.Commitment}
+    {e : OneStageZk.Evidence} {sts : Array OneStageZk.StatementFiles} {bs : Core.Blobs}
+    (h : OneStageZk.membersStructure p ms c e sts bs = .ok ()) : (ms.toList.map (·.name)).Nodup := by
+  unfold OneStageZk.membersStructure at h
+  obtain ⟨⟨⟩, h0, -⟩ := ebind_ok h
+  exact OneStageZk.namesOnce_ok h0
+
 theorem slice_roots (m : OneStageZk.Member) (rec : Json) (roots : Std.HashMap String (Array Json)) :
     getD (m.slice rec roots) "roots" = .arr (roots.getD m.name #[]) := by
   unfold OneStageZk.Member.slice
@@ -588,13 +591,14 @@ open Properties.Spot.RootsRecordProof
 
 /-- **`MembersRootsRecord`**: where the per-member form's check accepts, every root of every member's slice is the
 committed record's one root of its port: the member's own port, the tree it names, or the exact writer's output field
-a wire into a member of its name names. -/
+a wire into the member names. -/
 theorem membersRootsRecord : MembersRootsRecord := by
   intro p ms c ξ e sts bs pub prof h
   have h3 := r3_of_checkMembersAt h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
   unfold OneStageZk.membersRun at hr
-  obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
+  obtain ⟨⟨⟩, hs, hr⟩ := ebind_ok hr
+  have hn := membersStructure_names hs
   obtain ⟨roots, hroots, -⟩ := ebind_ok hr
   refine ⟨roots, hroots, ?_⟩
   unfold OneStageZk.membersRootsOf at hroots
@@ -602,12 +606,15 @@ theorem membersRootsRecord : MembersRootsRecord := by
   obtain ⟨⟨⟩, -, h2⟩ := ebind_ok h2
   cases h2
   have hg := membersRootsWired_good hw
-  intro m _ x hx
+  intro m hm x hx
   rw [slice_roots] at hx
   try dsimp only at hx
-  rcases hg m.name x hx with ⟨b, hb, hc⟩ | ⟨q, hq, hc⟩ | ⟨P, rs, W, hP, hrs, hW, w, hwm, hm', hp, hc⟩
+  rcases hg m.name x hx with ⟨b, hb, hc⟩ | ⟨q, hq, hc⟩ |
+    ⟨P, rs, W, hP, hrs, hW, w, hwm, ⟨m', hm', hname, hin⟩, hp, hc⟩
   · exact ⟨_, isRecordRoot_of_carries h3 hc, Or.inl ⟨b, hb, rfl⟩⟩
   · exact ⟨q, isRecordRoot_of_carries h3 hc, Or.inr (Or.inl hq)⟩
-  · exact ⟨_, isRecordRoot_of_carries h3 hc, Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hwm, hm', hp, rfl⟩)⟩
+  · have hmm : m' = m := List.inj_on_of_nodup_map hn (Array.mem_toList_iff.2 hm') (Array.mem_toList_iff.2 hm) hname
+    subst hmm
+    exact ⟨_, isRecordRoot_of_carries h3 hc, Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hwm, hin, hp, rfl⟩)⟩
 
 end Properties.Spot.SecurityProofs

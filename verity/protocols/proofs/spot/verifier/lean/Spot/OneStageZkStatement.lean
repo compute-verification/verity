@@ -37,8 +37,8 @@ Here, in the namespace `Spot.OneStageZk`:
 * the registration held to the verifier's program (`popHeld`) and one statement's check on its files (`statementOf`);
 * a member, its slice of the registration, its population and its statement (`Member`, `Member.statement`);
 * the files' pass over the members (`membersFiles`), and the same pass with each circuit file parsed once and the program's
-  strata evaluated once (`ProgramKept`, `keptFiles`, `membersFilesKept`), which is compiled in its place
-  (`membersFiles_eq_kept`).
+  strata evaluated once (`ProgramKept`, `keptFiles`), which `Spot/MembersWires.lean` compiles in its place
+  (`membersFilesKept`, `membersFiles_eq_kept`).
 -/
 
 @[expose] public section
@@ -1981,24 +1981,5 @@ theorem keptFiles_eq {tags0 : Flock.Tags} (ht : Flock.Tags.byName? STATEMENT = s
       rfl
     rw [keptFiles, membersFiles, Member.files_on ht, ProgramKept.next_eq hp]
     rw [keptFiles_eq ht slice bs ms _ hnext]
-
-/-- **Every member's files, a circuit file read and parsed once for the members that name it**, and the program's
-strata evaluated once for the members that read it: `keptFiles` from no file and no program kept, at the statement's
-tags and the blobs' lookup tables, each read once. It returns what `membersFiles` returns, a refusal included
-(`membersFiles_eq_kept`), and is compiled in its place. -/
-def membersFilesKept (slice : Member → Json) (bs : Core.Blobs) (ms : List Member) : V (List (String × StepAt)) :=
-  match Flock.Tags.byName? STATEMENT with
-  | some tags0 => keptFiles slice bs tags0 (tablesOf bs) none ms
-  | none => membersFiles slice bs ms
-
-/-- **The files' pass with each circuit file read and parsed once is the files' pass**: `membersFilesKept` returns
-exactly what `membersFiles` returns, a statement for each member or the first refusal, so every statement about
-`membersFiles` is one about the compiled pass. -/
-@[csimp] theorem membersFiles_eq_kept : @membersFiles = @membersFilesKept := by
-  funext slice bs ms
-  unfold membersFilesKept
-  cases ht : Flock.Tags.byName? STATEMENT with
-  | none => rfl
-  | some tags0 => exact (keptFiles_eq ht slice bs ms none (fun _ h => nomatch h)).symm
 
 end Spot.OneStageZk
