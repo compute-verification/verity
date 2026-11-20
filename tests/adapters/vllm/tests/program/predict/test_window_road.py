@@ -150,8 +150,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     sampled = [x for x in lines.splitlines() if x.startswith("sampled-proofs: ")]
     assert len(sampled) == 1 and sampled[0].startswith("sampled-proofs: Lean accepted: under rate:1/4, ") and sampled[0].endswith(
         "on the local challenger's coins (DEVELOPMENT=1); its circuit registered by the prover; the compile check did not run"), log
-    summary = json.loads((out / "sampled-proofs" / "summary.json").read_text())
-    assert summary["accepted"] is True and summary["ok"] is True and summary["sampled"] > 0, summary
+    summary = json.loads((out / "summary.json").read_text())
+    assert summary["audit"]["accepted"] is True and summary["ok"] is True and summary["sampled"] > 0, summary
     assert summary["compiled"] == "not checked" and summary["unprovable_drawn"] == [], summary
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
             "compute accounting's") in log, log

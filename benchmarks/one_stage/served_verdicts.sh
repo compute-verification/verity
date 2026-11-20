@@ -2013,15 +2013,20 @@ road_sampled() {  # step 3 on the window's road: the window's record audited fro
   cp "$s/audit/summary.json" "$s/" 2>/dev/null
   [ -s "$s/records.txt" ] && [ -s "$s/summary.json" ] \
     || { FAILED+=(sampled-proofs); say "sampled-proofs: ERROR: the records audit stopped with no RECORDS row $(failed "$rc" "$LOGS/sampled-proofs/audit.err")"; return; }
-  line=$("$PY" - "$s/summary.json" "$s/audit/window/summary.json" "$law" "$OUT/sampled-proofs/summary.json" <<'EOF'
+  # $OUT/summary.json is the audit's public summary, which the record step reads; the full one names templates and stays in $s
+  line=$("$PY" - "$s/summary.json" "$s/audit/window/summary.json" "$law" "$OUT/summary.json" <<'EOF'
 import json, sys
 from pathlib import Path
 row, inner = json.load(open(sys.argv[1])), (json.load(open(sys.argv[2])) if Path(sys.argv[2]).is_file() else {})
 draw = row.get("draw") if isinstance(row.get("draw"), list) else []
-accepted = (row.get("audit") or {}).get("accepted")
+audit = row.get("audit") or {}
+lean = audit.get("members_lean") or {}
+accepted = audit.get("accepted") is True and row.get("ok") is True
 bad = sorted(u for u in draw for x in (inner.get("unlowered") or {}).values() if x["base"] <= u < x["base"] + x["n"])
-public = {"ok": row.get("ok"), "accepted": accepted, "sampled": len(draw), "drawn": draw, "unprovable_drawn": bad,
-          "compiled": "not checked", "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
+public = {"ok": row.get("ok"), "audit": {"accepted": audit.get("accepted"),
+                                         "members_lean": {k: lean.get(k) for k in ("ok", "ran", "codes")} if lean else None},
+          "sampled": len(draw), "drawn": draw, "unprovable_drawn": bad, "compiled": "not checked",
+          "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
 Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
 if not draw:
     print("the law samples no block of this window: nothing would be proved")
@@ -2029,17 +2034,16 @@ if not draw:
 said = (f"under {sys.argv[3]}, {len(draw)} drawn block(s) {draw}, on the local challenger's coins (DEVELOPMENT=1); "
         "its circuit registered by the prover; the compile check did not run")
 if bad:
-    print(f"FAILED: {said}; drawn unit(s) {bad} of a block the door refuses to lower: a failed proof, not resampled "
+    print(f"REJECTED: {said}; drawn unit(s) {bad} of a block the door refuses to lower: a failed proof, not resampled "
           "(its Definition in the serve dir's private/sampled-proofs/summary.json)")
-    sys.exit(4)
-print(f"{'Lean accepted' if accepted is True and row.get('ok') else 'REJECTED'}: {said}")
-sys.exit(0 if accepted is True and row.get("ok") else 1)
+else:
+    print(f"{'Lean accepted' if accepted else 'REJECTED'}: {said}")
 EOF
 )
   case $? in
     0) RAN+=(sampled-proofs); say "sampled-proofs: $line" ;;
     3) REFUSED+=(sampled-proofs); say "sampled-proofs: $line" ;;
-    *) FAILED+=(sampled-proofs); say "sampled-proofs: ${line:-ERROR: its summary has no public form} (records_audit.py exit $rc)" ;;
+    *) FAILED+=(sampled-proofs); say "sampled-proofs: ERROR: the records audit's summary (records_audit.py exit $rc) has no public form" ;;
   esac
 }
 window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
