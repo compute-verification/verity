@@ -1478,9 +1478,10 @@ def worker(agent: str) -> bool | None:
 
 
 #: the one worker the Fable rule lets run Fable 5.2: a design worker of @top's, on this model alone, that the holder
-#: of this handle permitted (`permit_design`), and what such a worker may not run, since it only reads
+#: of this handle permitted (`permit_design`), and what such a worker may not run, since it only reads: git's `commit`
+#: and `push` as the subcommand, after any of git's own options, never a path or a pattern that holds the word
 DESIGN_MODEL, DESIGN_HANDLE = "claude-fable-5-2-medium", "top"
-DESIGN_WRITES = re.compile(r"\bgit\b[^|;&\n]*\b(commit|push)\b")
+DESIGN_WRITES = re.compile(r"\bgit(?:\s+(?:-[Cc]\s+\S+|--?[A-Za-z][\w-]*(?:=\S+)?))*\s+(?:commit|push)\b")
 DESIGN_READ_ONLY = ("Refused by tools/agent-guard/shell_hook.py: you run Fable 5.2 Medium on @top's permit for a design "
                     "worker, which reads and commits nothing: no `git commit` and no `git push`. Give what you found "
                     "in your last message; @top lands it, or launches a worker on `claude-opus-5-5-medium` to write it.")

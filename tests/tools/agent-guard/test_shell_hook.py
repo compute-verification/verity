@@ -1126,14 +1126,18 @@ def top_registry(tmp_path) -> dict[str, str]:
 def test_tops_permit_lets_one_design_worker_run_fable_medium_and_only_read(tmp_path, event_log, top_registry):
     """The one exception to the Fable rule: after a command of @top's holder that carries the permit, the first worker
     whose turn names Fable 5.2 Medium passes, in that turn and its later ones, and its `git commit` and `git push` are
-    refused since it only reads. The permit lets one worker through: a second worker on the same model is refused as
+    refused since it only reads, while a git command that only names a path or a pattern with those words passes. The
+    permit lets one worker through: a second worker on the same model is refused as
     before, and so is the permitted worker at another effort."""
     assert on_model("ls", AGENT, TURNS[0], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
     assert on_model(PERMIT, TOP, TURNS[1], FABLE, tmp_path, **top_registry) == ALLOW
     assert len(settled(event_log, "fable_design_permit")) == 1
     for turn, command in ((TURNS[2], "ls"), (TURNS[2], "cat notes.md"), (TURNS[3], "pwd")):
         assert on_model(command, AGENT, turn, MEDIUM, tmp_path, **top_registry) == ALLOW, command
-    for command in ("git commit -m design", "git push -u origin some-branch", "git -C . commit --amend"):
+    for command in ("git show origin/main:pipeline/commit.py", "git log --grep=push", "git -C . diff --stat commit.py"):
+        assert on_model(command, AGENT, TURNS[3], MEDIUM, tmp_path, cwd=tmp_path, **top_registry) == ALLOW, command
+    for command in ("git commit -m design", "git push -u origin some-branch", "git -C . commit --amend",
+                    "cd w && git -c user.name=x --no-pager commit -m design"):
         refused = on_model(command, AGENT, TURNS[3], MEDIUM, tmp_path, cwd=tmp_path, **top_registry)
         assert refused["permission"] == "deny" and "reads and commits nothing" in refused["user_message"], command
     assert [e["conversation_id"] for e in settled(event_log, "fable_design_claim")] == [AGENT]
