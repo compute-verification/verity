@@ -8,13 +8,13 @@ import pytest
 
 from verity.circuits import laying as LY
 from verity.circuits import partition_query as PQ
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import definition_digest, definition_entry, descriptor_id, program_digest
 from verity.circuits.count import count
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.rows import Bf16AddRow
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, tuple_of
-from verity.circuits.types import Tuple
+from verity.circuits.types import Tuple, Value
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import ands
@@ -41,10 +41,15 @@ def c():
     root = CompositeDefinition("PearlPlusLaidCreditC", 1, (), lambda S: (params, Tuple(*(r for _s, r in sigs), add_ret)),
                                body, register=False)
     program = Program(root, registered=[v for v, _ in params])
-    limit = min(ands(bind(PC.PearlPlusTileCoreWired, **t.core.bindings)) for t in ts)
-    laid = LY.lay(program, lambda _ins, _outs, a: a < limit)
+    laid = LY.lay(program, _fits(ts))
     strata = PQ.strata(laid, LY.query(laid))
-    return ts, program, laid, strata, PS.laid_tiles(program, laid, strata), descriptor_id(add)
+    return ts, program, laid, strata, PS.laid_tiles(program, _fits(ts), strata, program_digest(laid)), descriptor_id(add)
+
+
+def _fits(ts):
+    """The fixture's limit, below the wired core's ANDs, so the laying opens the core."""
+    limit = min(ands(bind(PC.PearlPlusTileCoreWired, **t.core.bindings)) for t in ts)
+    return lambda _ins, _outs, a: a < limit
 
 
 def _units(strata, tid: str) -> list[int]:
@@ -124,21 +129,60 @@ def test_an_audit_short_of_its_draw_is_refused(c) -> None:
 def test_strata_whose_blocks_are_not_the_laid_units_or_a_c_of_no_tile_are_refused(c) -> None:
     """Slow: as above: the bound rests on a block being one root unit of its stratum's one template, and a C with no tile
     has nothing to credit."""
-    _ts, program, laid, strata, _tiles, _add = c
+    ts, program, laid, strata, _tiles, _add = c
     (a, ra), (b, rb), *rest = strata
+    digest = program_digest(laid)
     with pytest.raises(ValueError, match=PS.BLOCK_NOT_UNIT):
-        PS.laid_tiles(program, laid, [(a, rb), (b, ra), *rest])
+        PS.laid_tiles(program, _fits(ts), [(a, rb), (b, ra), *rest], digest)
     with pytest.raises(ValueError, match=PS.BLOCK_NOT_UNIT):
-        PS.laid_tiles(program, laid, strata[1:])
+        PS.laid_tiles(program, _fits(ts), strata[1:], digest)
     with pytest.raises(ValueError, match=PS.TILE_ABSENT):
-        PS.laid_tiles(laid, laid, strata)
+        PS.laid_tiles(laid, _fits(ts), strata, digest)
+
+
+@pytest.mark.slow
+def test_the_tiles_of_a_c_other_than_the_registered_one_are_refused(c) -> None:
+    """Slow: as above: the tiles credited are those of the C the blocks are proved against, the one whose digest was
+    registered before any coin; C laid under another limit, or another C's digest, is refused."""
+    ts, program, laid, strata, _tiles, _add = c
+    with pytest.raises(ValueError, match=PS.C_UNREGISTERED):
+        PS.laid_tiles(program, _fits(ts), strata, "00" * 64)
+    with pytest.raises(ValueError, match=PS.C_UNREGISTERED):
+        PS.laid_tiles(program, lambda _ins, _outs, _a: True, strata, program_digest(laid))
+
+
+def _forged_c(forged) -> Program:
+    """A C of one root unit, ``forged``."""
+    sig, ret = forged.signature()
+    root = CompositeDefinition("PearlPlusForgedTileC", 1, (), lambda S: (sig, ret),
+                               lambda B, S, *xs: B.call(forged, *xs), register=False)
+    return Program(root, registered=[v for v, _ in sig])
+
+
+def _tile_named(body, signature=None) -> CompositeDefinition:
+    """A Definition under the tile's name, version and statics, its own ``body`` and ``signature`` (the tile's when
+    None)."""
+    return CompositeDefinition("PearlPlusTileCoreWords", 5, PC._STATICS, signature or PC.PearlPlusTileCoreWords.signature,
+                               body, register=False)
+
+
+def test_a_unit_with_the_tiles_id_at_a_huge_k_and_a_small_body_is_refused() -> None:
+    """A root unit carrying the tile's id at K = 2^20, its body one word passed through, is refused by name before the
+    registry builds any tile, so it is never credited its statics' 2^20 · TR · TN MACs."""
+    (t,) = PC.tiles(SCHEME, K, 1, 1, tile=(1, 1))
+    forged = bind(_tile_named(lambda B, S, x: x, lambda S: ((("x", Value(16)),), Value(16))), **{**t.core.bindings,
+                                                                                              "K": 2 ** 20})
+    assert descriptor_id(forged).startswith(PS.TILE + "{") and "K=1048576" in descriptor_id(forged)
+    with pytest.raises(ValueError, match=PS.TILE_FOREIGN):
+        PS.laid_tiles(_forged_c(forged), lambda *_: True, [], "")
 
 
 @pytest.mark.slow
 def test_a_unit_with_the_tiles_id_and_statics_and_another_body_is_refused(c) -> None:
-    """Slow: the forged unit's body calls the tile's noise and core, which only the module's built tiles make cheap. A
-    unit carrying the tile's id and statics, its body the tile's with F_A's and F_B's lines swapped into the core, is
-    refused at the reader, not credited its statics' MACs."""
+    """Slow: the forged units' bodies call the tile's noise and core, which only the module's built tiles make cheap. A
+    unit carrying the tile's id and statics is refused at the reader, not credited its statics' MACs, when its own body
+    is the tile's with F_A's and F_B's lines swapped into the core, and when its own body is the tile's and one Definition
+    it calls, the wired core under its id and statics, has F_A's and F_B's lines swapped inside."""
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
 
     ts, *_ = c
@@ -148,14 +192,22 @@ def test_a_unit_with_the_tiles_id_and_statics_and_another_body_is_refused(c) -> 
         eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col)
         return B.call(PC._wired(S), a, b, cert, salt, root, unit, rows, eb, fb, fa, g)
 
-    forged = bind(CompositeDefinition("PearlPlusTileCoreWords", 5, PC._STATICS, PC.PearlPlusTileCoreWords.signature,
-                                      swapped, register=False), **real.bindings)
-    assert descriptor_id(forged) == descriptor_id(real) and PS.foreign_tile(real) is None
-    sig, ret = forged.signature()
-    root = CompositeDefinition("PearlPlusForgedTileC", 1, (), lambda S: (sig, ret),
-                               lambda B, S, *xs: B.call(forged, *xs), register=False)
-    program = Program(root, registered=[v for v, _ in sig])
-    limit = ands(bind(PC.PearlPlusTileCoreWired, **real.bindings))
-    laid = LY.lay(program, lambda _ins, _outs, a: a < limit)
-    with pytest.raises(ValueError, match=PS.TILE_FOREIGN):
-        PS.laid_tiles(program, laid, PQ.strata(laid, LY.query(laid)))
+    wired = bind(CompositeDefinition(
+        "PearlPlusTileCoreWired", 2, PC._STATICS, PC.PearlPlusTileCoreWired.signature,
+        lambda B, S, a, b, cert, salt, root, unit, rows, eb, fa, fb, g:
+            PC._wired_body(B, S, a, b, cert, salt, root, unit, rows, eb, fb, fa, g), register=False), **real.bindings)
+
+    def calls_forged(B, S, a, b, cert, salt, root, unit, rows, col):
+        eb, fa, fb, g = PT.noise(B, S.K, S.TN, S.DEV, salt, root, col)
+        return B.call(wired, a, b, cert, salt, root, unit, rows, eb, fa, fb, g)
+
+    top = bind(_tile_named(swapped), **real.bindings)
+    callee = bind(_tile_named(calls_forged), **real.bindings)
+    assert descriptor_id(top) == descriptor_id(callee) == descriptor_id(real) and PS.foreign_tile(real) is None
+    assert descriptor_id(wired) == descriptor_id(PC._wired(real.S()))
+    assert definition_digest(definition_entry(callee)) == definition_digest(definition_entry(real))
+    assert "definition digests differ" in PS.foreign_tile(top) and descriptor_id(real) in PS.foreign_tile(top)
+    assert descriptor_id(wired) in PS.foreign_tile(callee)
+    for forged in (top, callee):
+        with pytest.raises(ValueError, match=PS.TILE_FOREIGN):
+            PS.laid_tiles(_forged_c(forged), _fits(ts), [], "")

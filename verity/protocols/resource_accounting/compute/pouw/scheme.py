@@ -5,7 +5,8 @@ linear is its grid's units of `PearlPlusTileCoreWords_v5` (`prover.circuit.pearl
 block (`TILE`) is the tile, which costs its credited MACs (`tile_macs`): its real rows × TN × K, its statics TR, TN and K,
 since the tile forms every word of the linear's depth K and holds its filler rows to zero. C's laying opens each tile into
 many proof blocks of many templates (its noise's units and its core, the core itself opened at the served K = 2048):
-`laid_tiles` gives each laid block its tile by a public rule from the laying, and `credited_tiles` credits the window's
+`laid_tiles` gives each laid block its tile by a public rule from the laying of the C registered before any coin, each
+tile the registry's own Definition at its statics (`foreign_tile`), and `credited_tiles` credits the window's
 tiles all or none, on an audit that drew every stratum holding a tile's block at its registered count.
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
@@ -115,11 +116,13 @@ TILE = "PearlPlusTileCoreWords_v5"
 #: `laid_tiles`' refusals: C holds no tile, so there is nothing to credit and no stratum to hold to its draw; the laid C's
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
-#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes
+#: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; C laid is not the C
+#: registered before any coin, so its tiles are not those of the C the blocks are proved against
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
 TILE_FOREIGN = "tile-body-foreign"
+C_UNREGISTERED = "tile-c-unregistered"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
 #: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
 AUDIT_SHORT = "tile-audit-short"
@@ -142,9 +145,10 @@ class LaidTile:
 
 def foreign_tile(fn: Any) -> str | None:
     """Why ``fn``, a root unit's Definition carrying `TILE`'s id, is not the registry's `TILE` bound at its statics, or
-    None when it is: the registry's own object, or one whose Definition and every Definition it reaches (its body's
-    callees and the functions its statics bind, down to the primitives) have the registry's ids and definition digests
-    (`codec.definition_digest`), compared pairwise from the root."""
+    None when it is: the registry's own object, or one of the registry's signature whose Definition and every Definition
+    it reaches (its body's callees and the functions its statics bind, down to the primitives) have the registry's ids
+    and definition digests (`codec.definition_digest`), compared pairwise from the root. The signature is compared first,
+    so a unit of another signature never makes the registry build its tile at the unit's statics."""
     from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
     from verity.circuits.defs import REGISTRY, FunctionDefinition, SpecializedDefinition, bind
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited  # noqa: F401
@@ -166,6 +170,11 @@ def foreign_tile(fn: Any) -> str | None:
         want = bind(REGISTRY.defs[TILE], **fn.bindings)
     except (TypeError, ValueError, KeyError) as e:
         return f"the registry's {TILE} binds no such statics ({e})"
+    if fn is want:
+        return None
+    (fp, fr), (wp, wr) = fn.signature(), want.signature()
+    if [(n, t.to_json()) for n, t in fp] != [(n, t.to_json()) for n, t in wp] or fr.to_json() != wr.to_json():
+        return f"its signature is not the registry's {descriptor_id(want)}'s"
     seen: set[str] = set()
     todo = [(fn, want)]
     while todo:
@@ -188,20 +197,38 @@ def foreign_tile(fn: Any) -> str | None:
     return None
 
 
-def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> list[LaidTile]:
-    """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of ``laid`` (C as
-    `verity.circuits.laying.lay` lays it) that it holds, by a public rule from the laying: since laying keeps C's gates in
-    C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do. ``strata`` are
-    the laid C's (`verity.circuits.partition_query.strata` under its template-instance query): their blocks must be its
-    root units, each of the one template its stratum names (`BLOCK_NOT_UNIT`), no unit may lie partly in a tile
-    (`TILE_STRADDLES`), C must hold a tile (`TILE_ABSENT`), and each tile must be the registry's `TILE` at its statics,
-    its body and every Definition it reaches (`TILE_FOREIGN`, `foreign_tile`)."""
+def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],
+               registered: str) -> list[LaidTile]:
+    """C's credited tiles, ``program``'s root units of `TILE`, each with the proof blocks of C as
+    `verity.circuits.laying.lay` lays it under ``fits`` that it holds, by a public rule from the laying: since laying keeps
+    C's gates in C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do.
+    C must hold a tile (`TILE_ABSENT`), each tile must be the registry's `TILE` at its statics, its body and every
+    Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), and the laid C must be the one ``registered`` names, its
+    `codec.program_digest` registered before any coin (`C_UNREGISTERED`): the tiles credited are those of the C the
+    blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
+    template-instance query): their blocks must be its root units, each of the one template its stratum names
+    (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile (`TILE_STRADDLES`)."""
     import bisect
 
     from verity.circuits import laying as LY
     from verity.circuits import partition_object as PO
+    from verity.circuits.codec import program_digest
 
-    before, after = PO.TemplatePartition(program, LY.query(program)), PO.TemplatePartition(laid, LY.query(laid))
+    before = PO.TemplatePartition(program, LY.query(program))
+    nodes = program.root.body.nodes
+    tiles = [(a + m, nodes[k].fn) for k, tid, a, n in before.ranges if tid == TILE or tid.startswith(TILE + "{")
+             for m in range(n)]
+    if not tiles:
+        raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
+    for u, fn in tiles:
+        if why := foreign_tile(fn):
+            raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
+                             "are not what it computes")
+    laid = LY.lay(program, fits)
+    if (got := program_digest(laid)) != registered:
+        raise ValueError(f"{C_UNREGISTERED}: C laid is {got[:16]}…, and the C registered before any coin is "
+                         f"{registered[:16]}…: its tiles are not the proved C's")
+    after = PO.TemplatePartition(laid, LY.query(laid))
     of: list[str | None] = [None] * after.population
     for tid, rs in strata:
         for lo, hi in rs:
@@ -212,15 +239,6 @@ def laid_tiles(program: Any, laid: Any, strata: Sequence[tuple[str, Sequence[Seq
     if wrong := next(((a, tid) for _k, tid, a, n in after.ranges if of[a:a + n] != [tid] * n), None):
         raise ValueError(f"{BLOCK_NOT_UNIT}: the laid C's root unit {wrong[0]} is one {wrong[1]}, and the strata place "
                          f"block {wrong[0]} in {of[wrong[0]]}: a block is one root unit of its stratum's template")
-    nodes = program.root.body.nodes
-    tiles = [(a + m, nodes[k].fn) for k, tid, a, n in before.ranges if tid == TILE or tid.startswith(TILE + "{")
-             for m in range(n)]
-    if not tiles:
-        raise ValueError(f"{TILE_ABSENT}: C has no root unit of {TILE}, so no tile to credit")
-    for u, fn in tiles:
-        if why := foreign_tile(fn):
-            raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
-                             "are not what it computes")
     spans = [before.gates(u) for u, _fn in tiles]
     starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
     held: list[list[int]] = [[] for _ in tiles]
