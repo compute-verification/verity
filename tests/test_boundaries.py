@@ -1059,11 +1059,7 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
-    "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
-    "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
-    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
-    "adapters/vllm/verity_vllm/program/predict/window_weights.py",
 )
 
 
