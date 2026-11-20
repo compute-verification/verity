@@ -283,6 +283,7 @@ def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], po
     """`served_binder` given the sources' merged ports (`bind.source_ports`) and whether a step-input port is among them. A
     shared instance's path (``aliases``, `RuntimeTree.aliases`) binds as its first path's call of its index."""
     from verity_vllm.query.manifest.bind import Binder
+    from verity_vllm.query.manifest.format import narrowed_of
 
     one: dict[tuple[str, str, int], dict[str, Any]] = {}
     shared = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
@@ -290,7 +291,9 @@ def served_binder_of(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], po
         op, k = shared.get(str(d["op_path"]), (str(d["op_path"]), 0))
         for j, (m, _width, _dtype) in enumerate(d["members"]):
             key = (op, str(m), k)
-            one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j]})
+            wide = narrowed_of(str(m))
+            one.setdefault(key, {"op_path": key[0], "output_member": key[1], "invocation": key[2], "position": [j],
+                                 **({"narrowed_of": wide} if wide else {})})
     placed = [{**r, "identity": None, "request_id": "*", "step": None, "engine_step": int(s), "rank": 0} for s in steps for r in one.values()]
     binder = Binder(placed, rank=0, ports=dict(ports))
     if has_port:
