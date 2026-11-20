@@ -591,6 +591,127 @@ theorem unit_member_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.
     rw [hflat]; exact List.mem_flatten.2 ⟨L[i], List.getElem_mem _, List.getElem_mem _⟩
   exact (hv i hi t (by rw [← hlc]; exact t1) _ (hres t t1) (hlt' _ hmem)).symm
 
+/-- **The word at a primitive node of an activation**: in an activation the walk reaches, the gate of primitive node
+`n`, computed on the trace, is its primitive on the words `v` gives its arguments' references, where `v`
+gives each reference the word at the gate below it that it resolves to. -/
+theorem scope_node_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) {sc : Scope} (hsc : Resolve.Good P sc)
+    {n : ℕ} (hn : n < (P.defs[sc.d]!).body.nodes.size) {nd : Node}
+    (hnd : (P.defs[sc.d]!).body.nodes[n]! = nd) (hf : nd.form = .prim)
+    (hp : (P.defs[nd.fn]!).prim = true)
+    (hseq : ∀ a ∈ nd.args.toList, ∃ ps, a.seq = Seq.ofParts ps)
+    (Y : (Flock.OfProgram.ofProgram P).Trace) {G : ℕ}
+    (hGd : sc.off + (P.defs[sc.d]!).body.offsets[n]! = G)
+    (hGN : G < (Flock.OfProgram.ofProgram P).N) (hkey : isInputId (P.defs[nd.fn]!).key = false)
+    (hY : Flock.OfProgram.inputAt P G = false → Y ⟨G, hGN⟩ = (Flock.OfProgram.ofProgram P).op ⟨G, hGN⟩ Y)
+    {w0 : ℕ} (hret : (P.defs[nd.fn]!).ret = .value w0) (hw : ∀ y, (Prog.evalBool P nd.fn y).length = w0)
+    (v : Ref → List Bool)
+    (hv : ∀ i < nd.args.size, ∀ t < (nd.args[i]!).seq.count, ∀ q,
+      resolve P sc ((nd.args[i]!).seq.get t) = .ok q → q < G →
+        v ((nd.args[i]!).seq.get t) = portWord Y ⟨q, 0⟩) (w : ℕ) :
+    portWord Y ⟨G, w⟩ =
+      Prog.evalBool P nd.fn ((nd.args.toList.flatMap fun a => Flock.Program.argVals v a a.seq.count id).flatten) := by
+  subst hnd
+  obtain ⟨p, ops, w', ⟨⟨sc', hg⟩, -, -⟩, hlt⟩ := hG G hGN
+  have hg' : P.gate (sc.off + (P.defs[sc.d]!).body.offsets[n]! + 0) =
+      .ok (p, ops, sc') := by rw [Nat.add_zero, hGd]; exact hg
+  obtain ⟨rfl, hsc', hops⟩ := LeafWidths.gate_of_node_ops P hroot hB hL hD sc hsc n 0 hn hp
+    (by rw [members_one (Or.inl hf)]; omega) p ops sc' hg'
+  subst sc'
+  have hga : Flock.OfProgram.gateAt P G = some (((P.defs[sc.d]!).body.nodes[n]!).fn, ops) := by
+    unfold Flock.OfProgram.gateAt; rw [hg]
+  have hlt' : ∀ a ∈ ops.toList, a < G := fun a ha => hlt a (Array.mem_toList_iff.1 ha)
+  have hin : Flock.OfProgram.inputAt P G = false := by unfold Flock.OfProgram.inputAt; rw [hga]; exact hkey
+  have hwd : ∀ y, (Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y).length =
+      Flock.OfProgram.widthAt P G := fun y => by
+    unfold Flock.OfProgram.widthAt; rw [hga]; simp only [hret]; exact hw y
+  rw [word_at_computed Y hGN hga hin hlt' (hY hin) (hwd _)]
+  congr 1
+  obtain ⟨L, hlen, hflat, hLi⟩ := OperandWidths.operands_lists P _ _ 0 ops hops
+  rw [hflat, List.map_flatten, flatMap_flatten_map]
+  congr 2
+  apply List.ext_getElem (by simp [hlen])
+  intro i h1 h2
+  have hi : i < ((P.defs[sc.d]!).body.nodes[n]!).args.size := by simpa [hlen] using h1
+  simp only [List.getElem_map, Array.getElem_toList]
+  obtain ⟨hlc, hres⟩ := hLi i (by simpa using h1)
+  have hcnt : L[i].length = (((P.defs[sc.d]!).body.nodes[n]!).args[i]!).seq.count := by
+    rw [hlc]; unfold OperandWidths.cntOf; simp [hf, BodiesOk.beq_prim_batch]
+  have hai : ((P.defs[sc.d]!).body.nodes[n]!).args[i] =
+      ((P.defs[sc.d]!).body.nodes[n]!).args[i]! := (getElem!_pos _ i hi).symm
+  obtain ⟨ps, hps⟩ := hseq _ (Array.getElem_mem_toList hi)
+  rw [hai] at hps ⊢
+  unfold Flock.Program.argVals
+  apply List.ext_getElem (by simp [hcnt])
+  intro t t1 t2
+  simp only [List.length_map, List.length_range] at t1 t2
+  have ht : t < (((P.defs[sc.d]!).body.nodes[n]!).args[i]!).seq.count := by simpa using t2
+  simp only [List.getElem_map, List.getElem_range, id]
+  have hr := hres t t1
+  have hro : OperandWidths.refOf ((P.defs[sc.d]!).body.nodes[n]!) 0 i t =
+      (((P.defs[sc.d]!).body.nodes[n]!).args[i]!).seq.get t := by
+    unfold OperandWidths.refOf; simp [hf, BodiesOk.beq_prim_batch]
+  rw [hro] at hr
+  have hmem : L[i][t] ∈ ops.toList := by
+    rw [hflat]; exact List.mem_flatten.2 ⟨L[i], List.getElem_mem _, List.getElem_mem _⟩
+  rw [hps, ofParts_getD ps (by rw [← hps]; exact ht), ← hps]
+  exact (hv i hi t ht _ hr (hlt' _ hmem)).symm
+
+/-- **The word at a member of a primitive node of an activation**: in an activation the walk reaches, the gate of
+member `m'` of node `n`, a primitive or batch node of a primitive of one gate, computed on the trace, is its
+primitive on the words `v` gives its operands' references, where `v` gives each reference the word at the gate below it
+that it resolves to. -/
+theorem scope_member_word {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) {sc : Scope} (hsc : Resolve.Good P sc)
+    {n : ℕ} (hn : n < (P.defs[sc.d]!).body.nodes.size) {nd : Node}
+    (hnd : (P.defs[sc.d]!).body.nodes[n]! = nd) {m' : ℕ} (hm' : m' < nd.members)
+    (hp : (P.defs[nd.fn]!).prim = true)
+    (Y : (Flock.OfProgram.ofProgram P).Trace) {G : ℕ}
+    (hGd : sc.off + (P.defs[sc.d]!).body.offsets[n]! + m' = G)
+    (hGN : G < (Flock.OfProgram.ofProgram P).N) (hkey : isInputId (P.defs[nd.fn]!).key = false)
+    (hY : Flock.OfProgram.inputAt P G = false → Y ⟨G, hGN⟩ = (Flock.OfProgram.ofProgram P).op ⟨G, hGN⟩ Y)
+    {w0 : ℕ} (hret : (P.defs[nd.fn]!).ret = .value w0) (hw : ∀ y, (Prog.evalBool P nd.fn y).length = w0)
+    (v : ℕ → ℕ → List Bool)
+    (hv : ∀ i < nd.args.size, ∀ t < OperandWidths.cntOf P nd i, ∀ q,
+      resolve P sc (OperandWidths.refOf nd m' i t) = .ok q → q < G → v i t = portWord Y ⟨q, 0⟩)
+    (w : ℕ) :
+    portWord Y ⟨G, w⟩ = Prog.evalBool P nd.fn
+      ((List.range nd.args.size).flatMap fun i => (List.range (OperandWidths.cntOf P nd i)).map (v i)).flatten := by
+  subst hnd
+  obtain ⟨p, ops, w', ⟨⟨sc', hg⟩, -, -⟩, hlt⟩ := hG G hGN
+  have hg' : P.gate (sc.off + (P.defs[sc.d]!).body.offsets[n]! + m') =
+      .ok (p, ops, sc') := by rw [hGd]; exact hg
+  obtain ⟨rfl, hsc', hops⟩ := LeafWidths.gate_of_node_ops P hroot hB hL hD sc hsc n m' hn hp hm' p ops sc' hg'
+  subst sc'
+  have hga : Flock.OfProgram.gateAt P G = some (((P.defs[sc.d]!).body.nodes[n]!).fn, ops) := by
+    unfold Flock.OfProgram.gateAt; rw [hg]
+  have hlt' : ∀ a ∈ ops.toList, a < G := fun a ha => hlt a (Array.mem_toList_iff.1 ha)
+  have hin : Flock.OfProgram.inputAt P G = false := by unfold Flock.OfProgram.inputAt; rw [hga]; exact hkey
+  have hwd : ∀ y, (Prog.evalBool P ((P.defs[sc.d]!).body.nodes[n]!).fn y).length =
+      Flock.OfProgram.widthAt P G := fun y => by
+    unfold Flock.OfProgram.widthAt; rw [hga]; simp only [hret]; exact hw y
+  rw [word_at_computed Y hGN hga hin hlt' (hY hin) (hwd _)]
+  congr 1
+  obtain ⟨L, hlen, hflat, hLi⟩ := OperandWidths.operands_lists P _ _ m' ops hops
+  rw [hflat, List.map_flatten, flatMap_flatten_map]
+  congr 2
+  apply List.ext_getElem (by simp [hlen])
+  intro i h1 h2
+  have hi : i < ((P.defs[sc.d]!).body.nodes[n]!).args.size := by simpa [hlen] using h1
+  obtain ⟨hlc, hres⟩ := hLi i (by simpa using h1)
+  simp only [List.getElem_map, List.getElem_range]
+  apply List.ext_getElem (by simp [hlc])
+  intro t t1 t2
+  simp only [List.length_map] at t1
+  simp only [List.getElem_map, List.getElem_range]
+  have hmem : L[i][t] ∈ ops.toList := by
+    rw [hflat]; exact List.mem_flatten.2 ⟨L[i], List.getElem_mem _, List.getElem_mem _⟩
+  exact (hv i hi t (by rw [← hlc]; exact t1) _ (hres t t1) (hlt' _ hmem)).symm
+
 /-- A primitive node's arguments as the walk reads them are its operands' references in order. -/
 theorem argVals_prim {W : Type} [Inhabited W] (P : Prog) (v : Ref → W) {nd : Node} (hf : nd.form = .prim)
     (hseq : ∀ a ∈ nd.args.toList, ∃ ps, a.seq = Seq.ofParts ps) :
