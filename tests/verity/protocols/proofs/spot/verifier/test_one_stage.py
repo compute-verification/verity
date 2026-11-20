@@ -761,14 +761,12 @@ def test_the_partition_refuses_what_core_refuses(n):
 
 
 def test_a_program_that_is_not_topological_has_no_units():
-    """Core's `order_violation`: the population program whose instances read their own outputs is no computation."""
+    """The population program whose instances read their own outputs is no computation: the decoder refuses it by name
+    (`forward-reference`) before any query reaches its units."""
     d = json.loads(TEMPLATE["descriptors"]["population"])
     d["definitions"][d["root"]]["body"]["nodes"][2]["args"][0]["refs"] = {"affine": ["n", 2, 0, 6]}
-    looped = codec.decode_program(d, TEMPLATE_REG)
-    q = PO.template_instance_query(TEMPLATE["template_ids"]["TScale descriptor id"])
-    with pytest.raises(P.QueryRefused) as e:
-        P.units(looped, q)
-    assert [e.value.detail] == TEMPLATE["order_refused"][1]
+    with pytest.raises(ValueError, match="node 2: forward-reference: node 2 reads node 2, which is not before it"):
+        codec.decode_program(d, TEMPLATE_REG)
 
 
 @pytest.mark.parametrize("n", range(len(TEMPLATE["malformed"])), ids=[m[0] for m in TEMPLATE["malformed"]])

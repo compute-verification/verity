@@ -15,7 +15,6 @@ import pytest
 
 from verity.circuits.codec import descriptor_chunks, program_digest
 from verity.commitments import rowleaf as RL
-from verity.commitments.crypto import lms as R
 from verity.commitments.periods import interface as I
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
@@ -140,7 +139,7 @@ def test_the_setup_and_the_session_read_one_store():
     _, _, setup = setup_case()
     reg = setup.registered("00" * 64)[WIN.STORE]
     assert reg.schema == RL.SCHEMA_HM96_SHA512_ROW_SEG and reg.rows == WIN.commit_store("00" * 64, setup.store).rows
-    session = WIN.session_units(3, 8, 1000, 8, 12, R.Params(R.TOY_N, 1, 1, toy=True))
+    session = WIN.session_units(3, 8, 1000, 8, 12)
     assert setup.circuit().registered.tables == session.registered.tables
     with pytest.raises(ValueError, match="1 to 2\\^31 blocks"):
         WIN.store_table((1 << 31) + 1, 4)
