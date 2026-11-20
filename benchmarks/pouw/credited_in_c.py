@@ -1,6 +1,6 @@
 """A credited linear of C whose nodes write its y, through the door.
 
-C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v4`
+C is one linear y = x · Wᵀ over M rows of K and N columns whose nodes are its grid's units of `PearlPlusTileCoreWords_v5`
 (`pearl_plus_credited.tiles`), each reading its ports as rows of the values C holds: x's and W's rows (``a``, ``b``), the
 prover's certificates (``cert``) and the public row (`pearl_plus_credited.PUBLIC`: ``salt``, ``root``, ``unit``,
 ``rows``, ``col``), registered under public salts; each deriving its noise inside from the salt and the root, and each
@@ -19,7 +19,8 @@ root to the supplied functions (`pouw.pearlplus.salt/v1`, `registered.root/v1`).
 ``stage`` evaluates C on an honest linear and stages a dishonest proof of the drawn tile (``--bad``: ``y``, its claimed y
 a word other than the one it computes; ``cert``, a certificate word other than the prover's; ``filler``, a nonzero word
 in its filler row; each claiming the honest outputs), places each laid block in its tile and each tile's amount
-(`scheme.laid_tiles` over the laid C's strata, `tile_macs` on the tile's statics), draws one block of the wired cores'
+(`scheme.laid_tiles` over the laid C's strata and its digest, recorded before the coin, `tile_macs` on the tile's
+statics), draws one block of the wired cores'
 stratum, cuts it (`restrict`), lowers it by the door (`one_circuit.lower` under C's `one_circuit.cuts`), and finds each
 of its input rows' writers in C: a row C wires from more than one writer unit (the core's fa and fb, K lines; g, 32 Gram
 rows) is no one writer's output field, which Lean's registered reads refuse (`Flock.Registered.treeReads`,
@@ -514,11 +515,12 @@ def stage(a) -> int:
     print("LAID " + json.dumps(rec["laid"]), flush=True)
     part = PO.build(program, query, [[(u, u + 1) for u in range(population)]])
     c = b"".join(descriptor_chunks(program))
+    rec["laid"]["digest"] = hashlib.sha512(c).hexdigest()
     key = PO.template_id(core)
     phase("lay", descriptor_bytes=len(c), population=population)
 
     strata = PQ.strata(program, part["query"])
-    tiles = PS.laid_tiles(ln.program, program, strata)
+    tiles = PS.laid_tiles(ln.program, fits, strata, rec["laid"]["digest"])
     rec["amounts"] = {"strata": [[tid, rs] for tid, rs in strata],
                       "tiles": [{"index": tl.index, "gates": tl.gates, "amount": tl.amount, "blocks": len(tl.blocks),
                                  "kinds": dict(tl.kinds)} for tl in tiles]}
@@ -609,7 +611,7 @@ def stage(a) -> int:
     t0 = time.perf_counter()
     try:
         cut = OC.cuts(c, part)
-        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut).decode()
+        text = OC.lower(b.descriptor, part, lambda: a.lower, cut=cut, formed=OC.formed_in(c, part, blk)).decode()
     except (OC.NotDerived, OC.Refused) as e:
         rec["lower"] = {"refused": f"{type(e).__name__}: {e}", "query": part["query"]["name"]}
         print("LOWER-REFUSED " + json.dumps(rec["lower"]), flush=True)
