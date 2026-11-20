@@ -18,7 +18,7 @@ SMOKE = Path("adapters/vllm/tools/served_run/h100_smoke.sh")
 VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
 #: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
 #: library and the adapter from the tree as on a node, whatever the test's environment installs
-PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "input_datasets",
+PATH_PARTS = ("verity", "tools/verity/cli", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "input_datasets",
               "applications", "adapters/vllm/tools/served_run/inputs.py")
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
@@ -33,6 +33,14 @@ if a[:2] == ["adapters/vllm/tools/served_run/inputs.py", "application"]:
     sys.exit(subprocess.run([sys.executable, *a]).returncode)
 if a[:1] == ["-"]:
     body = sys.stdin.read()
+    if "verity_cli" in body:
+        got = subprocess.run([sys.executable, "-c", body, *a[1:]], capture_output=True, text=True)
+        rec["said"] = got.stdout
+        with open(os.environ["STUB_LOG"], "a") as fh:
+            fh.write(json.dumps(rec) + "\n")
+        print(got.stdout, end="")
+        sys.stderr.write(got.stderr)
+        sys.exit(got.returncode)
     if "verity_vllm" not in body and "runpy" not in body:
         sys.exit(subprocess.run([sys.executable, "-c", body, *a[1:]]).returncode)
     if "--protocols-config" in a:
@@ -203,3 +211,16 @@ def test_the_toolkit_is_12_9_unless_toolkit_names_another_and_cuda_home_must_be_
             assert "SMOKE REFUSED toolkit: neither CUDA_HOME nor the machine gives CUDA 13.0" in p.stdout, p.stdout + p.stderr
         else:
             assert "SMOKE REFUSED toolkit" not in p.stdout and "SMOKE REFUSED model" in p.stdout, p.stdout + p.stderr
+
+
+def test_the_wipe_gets_the_pins_and_configuration_the_road_hands_a_piece(tmp_path):
+    import shlex
+
+    from verity_cli import run, served_table
+    app = ROOT / "applications/onsite_full.toml"
+    p, calls = run_dry(tmp_path, APPLICATION=str(app), WIPE_CMD="true")
+    assert p.returncode == 0 and "SMOKE DRY OK" in p.stdout, p.stdout[-2000:] + p.stderr[-2000:]
+    said = next(c["said"] for c in calls if "said" in c)
+    want = served_table.pins_and_configuration(run.load(app, run.registry()))
+    assert said.splitlines() == [f"export {k}={shlex.quote(v)}" for k, v in want.items()]
+    assert json.loads(want["VERITY_PINS"]) and any(x["protocol"] == "wipe" for x in json.loads(want["VERITY_PINS"]))
