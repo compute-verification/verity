@@ -17,6 +17,10 @@ public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
 import all Init.Util
+meta import Flock
+meta import Spot.Restrict
+meta import Spot.Edges
+meta import Circuits.DefinitionDigest
 
 /-!
 # One-stage v2: the parameters, one statement's check, and a member's statement and files
