@@ -45,18 +45,20 @@ class Record:
 
         path = Path(out) / REGISTRATION
         if not path.is_file():
-            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints)
+            doc = WW.weights_registration(registered, SF.beside(path), self.checkpoint_dir, checkpoints_manifest=self.checkpoints,
+                                          tables=served_tables(out))
             (Path(out) / DEPLOYMENT).write_text(json.dumps(WW.deployment_record(doc), indent=1) + "\n")
             path.write_text(json.dumps(doc, indent=1) + "\n")
         serve = json.loads((Path(out) / "serve.json").read_text())
         return ADV.registered_weights(json.loads(path.read_text()), serve)
 
-    def words(self, registered: Any) -> dict[str, Any]:
-        """The weights record's fields as the checkpoint of record composes them (`window_weights.record_words`), once a serve."""
+    def words(self, registered: Any, out: Path) -> dict[str, Any]:
+        """The weights record's fields as the checkpoint of record composes them (`window_weights.record_words`), and its
+        analytic tables as the serve under ``out`` served them (`served_tables`), once a serve."""
         if self._words is None:
             from . import window_weights as WW
 
-            self._words = WW.record_words(registered, self.checkpoint_dir, self.checkpoints)
+            self._words = WW.record_words(registered, self.checkpoint_dir, self.checkpoints, tables=served_tables(out))
         return self._words
 
     def hashers(self, com: Any) -> tuple[Any, Any, Any]:
@@ -131,7 +133,7 @@ class Record:
         placed = WREC.place_slots(cls, [u.id for u in reqs], ADV.bodies(out, window))
         state = WRS.state_value(program_digest(low.circuit.program()[0]), cls,
                                 SR.standin_rows(cls, [(row, m) for _u, row, m in placed]), window=run)
-        words = self.words(registered)
+        words = self.words(registered, out)
         lap("weights_read")
         weights = weight_elements(words)
         slot_of = {(cls.anchor(k), cls.lane(k)): k for k in range(cls.slots)}
@@ -161,6 +163,15 @@ class Record:
         return {"run": run, "out": str(to), "members": len(win.window.members), "population": sum(filled.n.values()),
                 "design": {"rule": self.rule, "from": "the serve's --sampling-design"}, "cap": self.cap,
                 "scan_state": "stand-in", "weights": "checkpoint of record", "strings": cost, "seconds": seconds}
+
+
+def served_tables(out: Path) -> dict[str, Any] | None:
+    """The analytic tables the serve under ``out`` served, by the weights record's table name: its rotary table, which
+    serve-openai writes to ``private/cos_sin_cache.npy``; None where it wrote none."""
+    import numpy as np
+
+    f = Path(out) / "private" / "cos_sin_cache.npy"
+    return {"cos_sin": np.load(f)} if f.is_file() else None
 
 
 def weight_elements(words: dict[str, Any]) -> Any:

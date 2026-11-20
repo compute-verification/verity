@@ -29,7 +29,7 @@ from verity_vllm.program.predict import window_plan as WP
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_strings as WS
 from verity_vllm.program.predict import window_weights as WW
-from verity_vllm.program.predict.close_record import Record, weight_elements
+from verity_vllm.program.predict.close_record import Record, served_tables, weight_elements
 
 
 def _committer(held):
@@ -80,6 +80,27 @@ def test_the_records_weights_read_a_fields_flat_elements_in_its_checkpoint_shape
     assert read("embed", 3, 7).tolist() == [3, 4, 5, 6]
     with pytest.raises(ValueError, match="weight other: the checkpoint of record composes no such field"):
         read("other", 0, 1)
+
+
+def test_the_records_words_hold_the_rotary_table_the_serve_served(tmp_path, monkeypatch):
+    """The checkpoint's shards hold no rotary table: the weights record holds it to the analytic table, and the record reads
+    the words the serve served (``private/cos_sin_cache.npy``), refused outside the table's bound. The close's stand-in
+    fields hold a rotary table of their own, so the record never asked the serve for one."""
+    table = np.arange(8, dtype=np.uint16).reshape(2, 4)
+    rot = {"field": "rot", "pinned": "analytic", "analytic": {"table": "cos_sin"}}
+    monkeypatch.setattr(WW, "_fields", lambda registered: (None, []))
+    monkeypatch.setattr(WW, "_composed", lambda *a: (a[-1]("w", [1, 2]), {"fields": [{"field": "w"}, rot]})[1])
+    bound = {"pass": {"status": "pass"}}
+    monkeypatch.setattr(WW.WR, "_check_analytic", lambda f, words: bound["pass"])
+    assert served_tables(tmp_path) is None
+    (tmp_path / "private").mkdir()
+    np.save(tmp_path / "private" / "cos_sin_cache.npy", table)
+    got = Record("rate:1/4", "ck", tmp_path / "salt").words(None, tmp_path)
+    assert sorted(got) == ["rot", "w"] and got["rot"].tolist() == table.tolist()
+    assert sorted(WW.record_words(None, "ck")) == ["w"], "no served table: the field is left out"
+    bound["pass"] = {"status": "fail", "why": "past the bound"}
+    with pytest.raises(ValueError, match="outside the analytic table's bound"):
+        WW.record_words(None, "ck", tables=served_tables(tmp_path))
 
 
 @pytest.mark.slow
