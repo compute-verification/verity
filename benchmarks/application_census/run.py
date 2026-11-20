@@ -4,10 +4,10 @@
 minutes (default 12; the first run builds the Lean verifier, about 5 minutes). Prints one table: application, the
 furthest step the runner's own lines reached, the file:line its error output names, the first refusal's or error's text, the
 kind (accept, refused NAME, error, time limit) and the seconds. The exit code is 0 only if every application ended in
-the verifier's accept (`verity run`'s exit code 0). With `$OUT` set, each application's stdout and stderr and the
+the verifier's accept (`verity run`'s exit code 0). With `--out DIR`, each application's stdout and stderr and the
 table are kept there.
 
-    research run --on auto --cwd clone -- uv run verity bench application_census [--minutes MINUTES]
+    research run --on auto --cwd clone -- bash -lc 'uv run verity bench application_census [--minutes MINUTES] --out "$OUT"'
 """
 from __future__ import annotations
 
@@ -91,8 +91,9 @@ def table(rows: list[list[str]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="verity bench application_census", description=__doc__.split("\n\n")[0])
     ap.add_argument("--minutes", type=float, default=12, help="each application's time limit (default 12)")
+    ap.add_argument("--out", type=Path, help="keep each application's stdout and stderr and the table here")
     a = ap.parse_args(argv)
-    keep = Path(os.environ["OUT"]) if os.environ.get("OUT") else None
+    keep = a.out
     scratch = Path(tempfile.mkdtemp(prefix="application-census-"))
     try:
         rows = [one(f.stem, scratch, a.minutes * 60, keep) for f in sorted((ROOT / "applications").glob("*.toml"))]
