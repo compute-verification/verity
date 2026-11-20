@@ -131,7 +131,7 @@ def setupAt (tz tags : Tags) (circuit pub : ByteArray) (coins : Coins) (tables :
   RecSetup.checkInner none none (pure (none, none))
   let (spec, sts) ← Flock.Stmt.setupTables tz circuit pub coins 1 tables none partition program none none none none
   for st in sts do
-    checkRegistered st registered
+    checkRegistered st (← Registered.withPositions st.c st.pub program registered)
     noIdentifier st
   Registered.checkFull registered none
   RecSetup.checks none none tags tables sts circuit partition program registered none none none
