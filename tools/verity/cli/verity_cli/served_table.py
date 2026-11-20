@@ -1128,7 +1128,7 @@ def _accounting(public: period.PublicParameters, w: ServedWorkload, state: perio
 
 
 def _policy(public: period.PublicParameters, w: ServedWorkload, state: period.PeriodState, window: str,
-            blocks: Mapping[str, Any]) -> Path | None:
+            outcomes: Mapping[str, Any]) -> Path | None:
     """The inference-only policy's record, which the accounting stage's window road wrote (``out/record/
     inference-only.json``), where it did: nothing is left for this stage to call."""
     f = w.state / "out" / "record" / "inference-only.json"
@@ -1140,7 +1140,7 @@ def _result(public: period.PublicParameters, w: ServedWorkload, state: period.Pe
     the onsite line (`remote_check` under remote), with each memory attester's `trusted-device` premise as `placement`
     read it from the challenger's outcome here, each listed component's as `attested` reads it (``trusted-device``:
     component -> premise), and beside it what compilation said (``compilation``)."""
-    out = {p: o for x in state.windows for p, o in x["accounting"]["blocks"].items()}
+    out = {p: o for x in state.windows for p, o in x["accounting"]["outcomes"].items()}
     for p in w.here:
         if p in out or p == VERIFIER:
             continue

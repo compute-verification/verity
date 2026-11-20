@@ -36,8 +36,9 @@ class PeriodState:
 @dataclass(frozen=True)
 class Stages:
     """Each stage's body but compilation's, called as ``stage(public, workload, state[, window])``: ``windows`` gives
-    the period's windows, and ``accounting`` the switched-on accounting protocols' verified properties of a window's
-    blocks, the only thing the policy layer reads."""
+    the period's windows. ``accounting`` is for the switched-on accounting protocols' verified properties of a window's
+    blocks, the only thing the policy layer is to read; in this first version it returns each party's outcome, and the
+    policy stage reads a file that accounting's steps wrote."""
 
     registration: Callable[[PublicParameters, Any, PeriodState], Any]
     windows: Callable[[PublicParameters, Any, PeriodState], Iterable[Any]]
@@ -54,17 +55,17 @@ def compilation(public: PublicParameters, workload: Any, window: Any) -> dict[st
 
 def accounting(public: PublicParameters, workload: Any, state: PeriodState, window: Any, stages: Stages) -> dict:
     compiled = compilation(public, workload, window)
-    return {"compilation": compiled, "blocks": stages.accounting(public, workload, state, window)}
+    return {"compilation": compiled, "outcomes": stages.accounting(public, workload, state, window)}
 
 
 def run_period(public: PublicParameters, workload: Any, stages: Stages) -> PeriodState:
     """One monitoring period: one registration, then for each window the accounting layer (compilation first) and the
-    policy layer on what accounting verified, then the period's result."""
+    policy layer on what accounting returned, then the period's result."""
     state = PeriodState()
     state.registration = stages.registration(public, workload, state)
     for window in stages.windows(public, workload, state):
-        verified = accounting(public, workload, state, window, stages)
-        state.windows.append({"window": window, "accounting": verified,
-                              "policy": stages.policy(public, workload, state, window, verified["blocks"])})
+        accounted = accounting(public, workload, state, window, stages)
+        state.windows.append({"window": window, "accounting": accounted,
+                              "policy": stages.policy(public, workload, state, window, accounted["outcomes"])})
     state.result = stages.result(public, workload, state)
     return state
