@@ -43,6 +43,8 @@ def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
     (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
     if not isinstance(fn, SpecializedDefinition):
         return False
+    if any(sel is fn.defn for sel in registered_composites(families)):
+        return True
     mine = None
     for sel in registered_composites(families):
         if set(sel.statics) != set(fn.bindings):
@@ -63,21 +65,24 @@ def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
 
 
 @functools.cache
-def _family_body(fn: SpecializedDefinition, families: tuple[str, ...]) -> str | None:
-    return next((f for f in families if registered_body(fn, (f,))), None)
+def _found(fn: SpecializedDefinition, families: tuple[str, ...]) -> tuple[str | None, str | None]:
+    """``fn``'s family among ``families`` by its name, and by its registered body."""
+    name = fn.name if fn.name in families else None
+    if name is not None and registered_body(fn, (name,)):
+        return name, name
+    return name, next((f for f in families if registered_body(fn, (f,))), None)
 
 
 def family(fn: Any, families: tuple[str, ...], why: str) -> str | None:
     """``fn``'s family among ``families``: its name, where a registered composite of that name has its body at its statics
     (`registered_body`); None where it has neither the name nor such a body. A name over another body or a registered body
     under another name is refused by name, since ``why``."""
-    name = getattr(fn, "name", None)
-    named = name if name in families else None
-    if named is not None and registered_body(fn, (named,)):
+    if isinstance(fn, SpecializedDefinition):
+        named, body = _found(fn, families)
+    else:
+        named, body = (name if (name := getattr(fn, "name", None)) in families else None), None
+    if named == body:
         return named
-    body = _family_body(fn, families) if isinstance(fn, SpecializedDefinition) else None
-    if named is None and body is None:
-        return None
     raise Unexpressible(f"{fn.id}: " + (f"a unit named as {named} whose body is no registered {named}'s at its statics"
                                         if named is not None else f"a registered {body}'s body under another name") +
                         f" is refused: {why}")
