@@ -2034,6 +2034,9 @@ public = {"ok": row.get("ok"), "audit": {"accepted": audit.get("accepted"),
           "sampled": len(draw), "draw": draw, "unprovable_drawn": bad, "compiled": row.get("compiled", "not stated by the audit"),
           "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
 Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
+if row.get("refused") or not isinstance(row.get("draw"), list):
+    print(f"REFUSED before the draw: {json.dumps(row.get('refused'), sort_keys=True)[:600]}")
+    sys.exit(2)
 if not draw:
     print("the law samples no block of this window: nothing would be proved")
     sys.exit(3)
@@ -2055,6 +2058,7 @@ EOF
            | while IFS= read -r b; do say "sampled-proofs: $b"; done
        else say "sampled-proofs: $line; the bound: not stated (accept_line.py absent)"; fi ;;
     1) RAN+=(sampled-proofs); say "sampled-proofs: $line" ;;
+    2) FAILED+=(sampled-proofs); say "sampled-proofs: $line" ;;
     3) REFUSED+=(sampled-proofs); say "sampled-proofs: $line" ;;
     *) FAILED+=(sampled-proofs); say "sampled-proofs: ERROR: the records audit's summary (records_audit.py exit $rc) has no public form" ;;
   esac
