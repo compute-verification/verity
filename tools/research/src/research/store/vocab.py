@@ -65,6 +65,7 @@ CITED_BY = "cited-by"
 ROW = "row"
 SWEEP = "sweep"
 ARM = "arm"
+SPEC = "spec"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
@@ -179,7 +180,7 @@ APPROACH_TYPES = ("scheme", "route", "attack")
 #: label key written -> the key it means.  Writers (`research data label`) store the canonical key only; readers (`vocab-check`)
 #: map an old key to its canonical one with `canonical_key`.
 KEY_ALIASES: dict[str, str] = {"notes": NOTE, "verify_note": NOTE, "verifier_note": NOTE, "batch": B, "checker": VERIFIER,
-                               "axis": SWEEP, "milestone": ARM, "tree": SOURCE, "release": SOURCE}
+                               "axis": SWEEP, "milestone": ARM, "arms": ARM, "tree": SOURCE, "release": SOURCE}
 #: (key, value written) -> the value it means.
 VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
 #: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.
@@ -339,7 +340,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(CITED_BY, GROUP_RESULT, TEXT, "one place that cites the run or artifact as evidence (note:<id>, <repo>#<n>, a doc path): a lane marks what it must never lose"),
     _k(ROW, GROUP_RESULT, TEXT, "the table or sweep row the result fills, e.g. 'bf16-hopper int-nonZK 4096 VUs' or a fixture row id"),
     _k(SWEEP, GROUP_RESULT, TEXT, "the parameter a series of results varies (batch, subbatch, l, zk, ...); old spelling `axis`"),
-    _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spelling `milestone`"),
+    _k(ARM, GROUP_RESULT, TEXT, "this result's point or variant within its sweep or comparison (pipeline4-window4, 1M-vu); old spellings `milestone`, `arms`"),
+    _k(SPEC, GROUP_RESULT, TEXT, "the benchmark spec the run was made under, by the id the tree gives that spec now"),
     _k(STAGE, GROUP_RESULT, TEXT, "the pipeline stage the result belongs to (build, match, commit)"),
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store); on an "
