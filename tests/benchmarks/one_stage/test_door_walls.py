@@ -52,7 +52,8 @@ SEEDS = [
     ("restrict divides by a template of no gate's gates",
      {"templates": [{"params": [32, 8], "steps": [[4, [0, 0, 0]], [3, [0, 2]], [3, [2, 0]]], "ret": [0, 3], "nested": False}, {"params": [-3, 8, 7], "steps": [[5, [2, 1]], [5, [2, 1]]], "ret": [2, 4], "nested": False}, {"params": [8, -5, -3, -2048], "steps": [[-1, [1]], [-3, [2]]], "ret": [0], "nested": False}], "root": [{"t": 1, "form": "batch", "n": 3, "args": [[["p", 0], ["p", 1], ["p", 2]], [["p", 3], ["p", 4], ["p", 5]], [["p", 6], ["p", 7], ["p", 8]]]}, {"t": 2, "form": "batch", "n": 3, "args": [[["p", 9], ["n", 0, 5], ["p", 10]], [["p", 11], ["p", 12], ["p", 13]], [["p", 14], ["p", 15], ["p", 16]], [["p", 17], ["p", 18], ["p", 19]]]}, {"t": 1, "form": "batch", "n": 2, "args": [[["p", 20], ["p", 21]], [["n", 0, 1], ["n", 1, 2]], [["p", 22], ["p", 23]]]}, {"t": 2, "form": "batch", "n": 2, "args": [[["n", 0, 5], ["n", 0, 5]], [["p", 24], ["p", 25]], [["p", 26], ["p", 27]], [["p", 28], ["p", 29]]]}], "root_params": [-3, -3, -3, 8, 8, 8, 7, 7, 7, 8, 8, -5, -5, -5, -3, -3, -3, -2048, -2048, -2048, -3, -3, 7, 7, -5, -5, -3, -3, -2048, -2048], "registered": [7, 9, 14, 17, 18, 22, 24, 25], "blocks": [[0, 2], [2, 7], [7, 10]]},
      3772944590, 'restrict: ZeroDivisionError: integer division or modulo by zero',
-     [("lower", "whole-words"), ("restrict", "E_NO_GATE"), ("lower", "whole-words")]),
+     [("cuts", "query-refused: template WallsT2_v1 has no gate"), ("restrict", "E_NO_GATE"),
+      ("cuts", "query-refused: template WallsT2_v1 has no gate")]),
     ("a unit reads another unit of its block: the reader given a value its writer did not produce is accepted",
      {"templates": [{"params": [-16], "steps": [[-1, [0]], [2, [1]], [W.PACK, [2] * 16]], "ret": [3], "nested": False}],
       "root": [{"t": 0, "form": "call", "n": 1, "args": [[["p", 0]]]}, {"t": 0, "form": "call", "n": 1, "args": [[["r", 0, 0, 16]]]}],
@@ -100,11 +101,11 @@ def test_the_census_reports_leans_compose_refusal_and_the_doors_by_class(tmp_pat
     assert r.klass == f"lower: Refused: E_LOWER: flock-lower-check compose (<n>): flock-lower-check compose: unit/<T>: {COMPOSE_WHY}"
     c, q = _zero_gate()
     (z,) = W.census(c, q, "one-per-template", lambda: exe)
-    assert z.step == "lower" and "(Spot.OneStageZk.admitted), one-template:" in z.klass, z.klass
+    assert z.klass == "cuts: Refused: E_QUERY: query-refused: template <T> has no gate", z.klass
     rows = W.table([b, r, z])
     assert sorted((x["step"], x["count"], x["owner"]) for x in rows) == [
-        ("lower", 1, "lean's compose (Flock.Compose)"), ("lower", 1, "proofs' door predicate (Spot.OneStageZk.admitted, on-bits)"),
-        ("lower", 1, "proofs' door predicate (Spot.OneStageZk.admitted, one-template)")]
+        ("cuts", 1, "proofs' door (one_circuit.cuts, Partition.checkTemplates)"), ("lower", 1, "lean's compose (Flock.Compose)"),
+        ("lower", 1, "proofs' door predicate (Spot.OneStageZk.admitted, on-bits)")]
     assert W.main(["census", "--circuit", "lean_case", "--lower", str(exe)]) == 1
 
 
