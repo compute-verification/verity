@@ -1,0 +1,3 @@
+[2026-11-20T10:41Z] 066ca3843ef1
+From the lead: the CPU nodes' memory is fully reserved and runs for the landing are queued behind it (proofs, TOP-444 2:40 AM PST). At your next step: 'research status' and CANCEL every run of yours that is still running or submitted and that you will not read (launched before a VM reboot and since relaunched; a duplicate; a superseded head): 'research cancel RUN --reason superseded --by circuits'. Ask for the memory a job needs, not more (--mem-gb), and do not launch head and base of a whole suite where named files answer the question. Say in your return how many you cancelled.
+
