@@ -57,14 +57,11 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the sampled proof blocks' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one sampling design and K′ is a function of the
   level, so the challenger holds one Stream per level.
-- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered_twin`, which
-  `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
-  (`core_check.case_twin` the Python) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
-  decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
-  rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
-  registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
-  Python's.  The outcome's verdict of record on each sampled proof block is the challenger's own run of the Lean verifier
+- **Of record** (`of_record`): the challenger's checks are Lean's alone.  PoUW's rule (which `public_problem` mirrors for
+  the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome and a unit's
+  opening each run Lean's port, whose verdict decides, is the published items' and goes in the execution phase's witness
+  (``outcome.json``'s ``of_record``, the opening verdict's ``witness``).  The service's public-items rule is Lean's too
+  (``public``, `Service.checkPublic`); the stream's own state stays Python's.  The outcome's verdict of record on each sampled proof block is the challenger's own run of the Lean verifier
   (``--verify``: `verify --zk` on the block's circuit, public file and delivered session, `run_lean`), never a verdict
   a job hands it.
 - **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
@@ -679,28 +676,15 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
           record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
-    `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
-    one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
+    rule on the opening (`pouw-check-difftest opening`, the unit sampled unless not `drawn`), of record (`record`: an
+    `of_record.Record`, whose Lean side `of_record_lean.Record` supplies).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
     every unit of a certified execution phase without it."""
-    try:
-        ell = level_of(rec)
-        work_at(params, ell)
-    except ValueError as e:
-        pre: str | None = str(e)
-    else:
-        roots = {r["port"]: r for r in rec["roots"]}
-        pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
-            "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": record.hexed(rec),
          "units": list(draw.get("units", ())) if drawn else None, "unit": unit, "pub": pub.hex(), "opening": op,
          **({} if salt is None else {"salt": salt.hex()})}
-    try:
-        out = record.opening(x)
-        return record.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
-    except OR.Disagree as e:
-        return e.code
+    out = record.opening(x)
+    return f"opening: {out['refused']}" if isinstance(out, dict) else out
 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
@@ -932,8 +916,8 @@ def state_entropy(path: str):
 
 
 class Challenger:
-    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered_twin`), the pass's
-    execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`pouw-check-difftest registered`), the pass's
+    execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
     `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
     fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier sample and opens no coin, so a
@@ -1053,17 +1037,15 @@ class Challenger:
         return o
 
     def _of_record(self, name: str, check: Callable[..., Any], *args: Any) -> Any:
-        """`check`'s verdict of record (`of_record`), both verdicts kept in execution phase `name`'s witness."""
+        """`check`'s verdict of record (`of_record`), kept in execution phase `name`'s witness."""
         at = len(self.record.witness)
         try:
             return check(*args)
-        except OR.Disagree as e:
-            raise _refused(e.code, {"lean": e.lean, "python": e.python}) from None
         finally:
             self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
-        """PoUW's rule over the registration (`core_check.registered_twin`), of record.  Raises `Refused`."""
+        """PoUW's rule over the registration (`pouw-check-difftest registered`), of record.  Raises `Refused`."""
         try:
             x = {"params": self.core, "commitment": self.record.hexed(rec)}
         except TypeError as e:
@@ -1099,8 +1081,7 @@ class Challenger:
         codes = self._of_record(name, self.record.registration, params, dict(rec))
         if not codes:
             codes = self._of_record(name, self.record.caller, params, dict(rec))
-        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
-                                 lambda: S.check_public(st.spec, rec).to_json())
+        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME))
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
         if codes:
             raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))

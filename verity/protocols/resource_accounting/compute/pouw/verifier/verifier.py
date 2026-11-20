@@ -18,8 +18,8 @@ call it. An execution phase's and a credit period's verdicts are `pouw-check ser
 raises (`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each. The Python
 twins (`*_twin`) answer the difftests only.
 
-`RECORD_VERDICT` switches what `of_record` doesn't read: the sampled blocks' and live rounds' runs, the committed
-circuit files and the served road's `Record`; setting it to ``"python"`` is the one line that undoes those.
+`RECORD_VERDICT` switches what `of_record` doesn't read: the sampled blocks' and live rounds' runs and the committed
+circuit files; setting it to ``"python"`` is the one line that undoes those.
 
 `coins` is the challenger's entropy: bytes the Lean verifier reads from the operating system (`pouw-check-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and

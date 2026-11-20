@@ -102,7 +102,7 @@ The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`,
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
 `verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
 the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) switches what
-`of_record` doesn't read (the statement runs, the committed circuit files and the served road's `Record`), and setting
+`of_record` doesn't read (the statement runs and the committed circuit files), and setting
 it to `"python"` is the one line that undoes those.
 
 ### Verdicts of record
@@ -159,4 +159,4 @@ No Lean verdict makes these refusals. Each runs in the served road's challenger,
 | `lean-run` | The challenger runs the Lean verifier and gets a documented status from it. | `LEAN_RUN` |
 | `public-header` | The Lean verifier's verdict names the challenger's copy of the public file. | `PUBLIC_HEADER` |
 
-`reject`, Python's answer form, and `lean-python-disagree`, the of-record comparison, leave with the twins.
+`reject`, Python's answer form, leaves with the twins; `lean-python-disagree` went with `of_record.Record`'s Python side.
