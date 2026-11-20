@@ -191,21 +191,25 @@ theorem SetupRecord.value_size {r : SetupRecord} {b : ByteArray} (h : r.value = 
     omega
 
 /-- PoUS's session record is a digest. -/
-theorem pous_record_size {c : ChallengePhaseCommitment} {ended : String} {rounds : Array Round} {r : ByteArray}
-    (h : message c ended rounds = .ok r) : r.size = 64 := by
+theorem pous_record_size {c : ChallengePhaseCommitment} {salt : ByteArray} {ended : String} {rounds : Array Round}
+    {r : ByteArray} (h : message c salt ended rounds = .ok r) : r.size = 64 := by
   unfold message at h
-  cases hr : recordsDigest rounds <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
-  subst h
-  exact hash_size _
+  by_cases hs : salt.size = RECORD_SALT_BYTES
+  · cases hr : recordsDigest rounds <;> simp [hs, hr, bind, Except.bind, pure, Except.pure] at h
+    subst h
+    exact hash_size _
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 /-- The wipe's session record is a digest. -/
-theorem wipe_record_size {c : StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
+theorem wipe_record_size {c : StreamedWipe.Commitment} {salt : ByteArray} {ended : String} {startMark : ByteArray}
     {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {r : ByteArray}
-    (h : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) : r.size = 64 := by
+    (h : StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok r) : r.size = 64 := by
   unfold StreamedWipe.message at h
-  cases hr : StreamedWipe.recordsRoot c.session batches <;> simp [hr, bind, Except.bind, pure, Except.pure] at h
-  subst h
-  exact hash_size _
+  by_cases hs : salt.size = RECORD_SALT_BYTES
+  · cases hr : StreamedWipe.recordsRoot c.session batches <;> simp [hs, hr, bind, Except.bind, pure, Except.pure] at h
+    subst h
+    exact hash_size _
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 /-! ## No setup record is another subprotocol's -/
 
@@ -217,14 +221,15 @@ theorem SetupRecord.value_ne_digest {r : SetupRecord} {b d : ByteArray} (h : r.v
   rw [e, hd, SETUP_RECORD_TAG_size] at this
   omega
 
-theorem SetupRecord.value_ne_pous {r : SetupRecord} {b : ByteArray} {c : ChallengePhaseCommitment} {ended : String}
-    {rounds : Array Round} {d : ByteArray} (h : r.value = .ok b)
-    (hd : MemoryAttester.message c ended rounds = .ok d) : b ≠ d :=
+theorem SetupRecord.value_ne_pous {r : SetupRecord} {b : ByteArray} {c : ChallengePhaseCommitment} {salt : ByteArray}
+    {ended : String} {rounds : Array Round} {d : ByteArray} (h : r.value = .ok b)
+    (hd : MemoryAttester.message c salt ended rounds = .ok d) : b ≠ d :=
   SetupRecord.value_ne_digest h (pous_record_size hd)
 
-theorem SetupRecord.value_ne_wipe {r : SetupRecord} {b : ByteArray} {c : StreamedWipe.Commitment} {ended : String}
+theorem SetupRecord.value_ne_wipe {r : SetupRecord} {b : ByteArray} {c : StreamedWipe.Commitment} {salt : ByteArray}
+    {ended : String}
     {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch} {d : ByteArray}
-    (h : r.value = .ok b) (hd : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok d) :
+    (h : r.value = .ok b) (hd : StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok d) :
     b ≠ d :=
   SetupRecord.value_ne_digest h (wipe_record_size hd)
 
@@ -258,15 +263,15 @@ theorem setupPreimage_ne_digest {I I' s s' b d : ByteArray} {r : SetupRecord} (h
   fun e => SetupRecord.value_ne_digest h hd (rolePreimage_inj hI hI' hs hs' e).2.2
 
 theorem setupPreimage_ne_pous {I I' s s' b d : ByteArray} {r : SetupRecord} {c : ChallengePhaseCommitment}
-    {ended : String} {rounds : Array Round} (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64)
-    (hs' : s'.size < 2 ^ 64) (h : r.value = .ok b) (hd : message c ended rounds = .ok d) :
+    {salt : ByteArray} {ended : String} {rounds : Array Round} (hI : I.size = 16) (hI' : I'.size = 16)
+    (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64) (h : r.value = .ok b) (hd : message c salt ended rounds = .ok d) :
     rolePreimage I s b ≠ rolePreimage I' s' d :=
   setupPreimage_ne_digest hI hI' hs hs' h (pous_record_size hd)
 
 theorem setupPreimage_ne_wipe {I I' s s' b d : ByteArray} {r : SetupRecord} {c : StreamedWipe.Commitment}
-    {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch}
+    {salt : ByteArray} {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int} {batches : Array StreamedWipe.Batch}
     (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64) (h : r.value = .ok b)
-    (hd : StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok d) :
+    (hd : StreamedWipe.message c salt ended startMark fillStartNs fillEndNs batches = .ok d) :
     rolePreimage I s b ≠ rolePreimage I' s' d :=
   setupPreimage_ne_digest hI hI' hs hs' h (wipe_record_size hd)
 

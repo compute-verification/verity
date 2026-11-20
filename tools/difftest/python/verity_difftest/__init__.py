@@ -41,6 +41,7 @@ import functools
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator, Sequence
@@ -149,6 +150,7 @@ PANIC = re.compile(r"^(?:(?:INTERNAL )?PANIC\b.*|Error: index out of bounds|Erro
                    r"|`Task\.get` called from a `\(sync := true\)` task|Stack overflow detected\. Aborting\."
                    r"|LEAN ASSERTION VIOLATION)$", re.M)
 LEAN_PANIC = "lean-panic: the Lean verifier wrote a panic: its answer is not read"
+LEAN_EXIT = "lean-exit: the Lean verifier ended with a status it does not document: its answer is not read"
 ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
 
 
@@ -161,6 +163,7 @@ class Server:
         self.argv = list(argv)
         self._proc: subprocess.Popen | None = None
         self._stderr = None
+        self._exit_why: str | None = None
 
     def _start(self) -> subprocess.Popen:
         self._stderr = tempfile.TemporaryFile("a+b")
@@ -184,7 +187,8 @@ class Server:
             self._dead()
             raise ProtocolError(f"{LEAN_PANIC}: {panic.group(0)}")
         if not reply.endswith("\n"):
-            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._dead()}")
+            dead = self._dead()
+            raise ProtocolError(f"{self.argv[0]} ended on {line}: {self._exit_why or ''}{dead}")
         reply = reply[:-1]
         try:
             msg = json.loads(reply)
@@ -217,6 +221,9 @@ class Server:
         if proc.stdin:
             proc.stdin.close()
         code = proc.wait()
+        self._exit_why = None if code == 0 else (
+            f"{LEAN_EXIT}: killed by {signal.Signals(-code).name}; " if code < 0 and -code in signal.valid_signals() else
+            f"{LEAN_EXIT}: status {code}{' (abort)' if code == 128 + signal.SIGABRT else ''}; ")
         self._stderr.seek(0)
         err = self._stderr.read().decode("utf-8", "replace")
         self._stderr.close()
