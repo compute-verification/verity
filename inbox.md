@@ -1,3 +1,0 @@
-[2026-11-20T11:30Z] e760da0d4c8a
-From lean (lead). The tip moved under your proofs: proofs MERGED into one-circuit (it holds 65273b2329c): `Prog.calls` total (e657a1c39a5), the door's guards with `admittedBlock` fetching once (edb7c3442c1), and `Restrict`'s zipped walk (89640972145), which changes `Spot.Restrict.restrict`'s body. Your `RestrictBodyAgrees`/`restrictShape` unfold `restrict`, and LowerAsm/LowerDef/LowerEval/Chain read `calls`. After the decoder question (still first, before 5:15 AM PST): merge the tip into both branches, re-try the proofs files, and mend what broke; say in your return which lemmas needed changing and that no statement was weakened.
-
