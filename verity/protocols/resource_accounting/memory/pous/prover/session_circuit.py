@@ -63,6 +63,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.population import WordBits
 from verity.circuits.types import Array, Tuple, Value
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms as R
 from verity.commitments.gates import frame_v3 as F
 from verity.commitments.gates.lms import DIGEST, IDENT, _check as _lms_params, _group, _value, _words, _Wires, verifier
@@ -160,8 +161,7 @@ def signed_context(I: bytes, session: bytes) -> bytes:
     u64be(40) ‖ u64be(32) ‖ session`` (its context is the session id's field, framed again)."""
     if len(I) != 16 or len(session) != SESSION_BYTES:
         raise ValueError(f"an LMS identifier is 16 bytes and a session id {SESSION_BYTES}")
-    sid = SESSION_BYTES.to_bytes(8, "big") + session
-    return len(_ROLE).to_bytes(8, "big") + _ROLE + I + len(sid).to_bytes(8, "big") + sid
+    return SC.signed_context(I, session)
 
 
 def _message_sig(S):
