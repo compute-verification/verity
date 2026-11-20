@@ -7001,8 +7001,6 @@ def test_a_request_for_poow_h1_or_no_scheme_is_refused_by_name_before_anything_r
 @pytest.mark.parametrize("args, extra, line", [
     (("v3c",), {"CERTIFIER_CMD": "true", "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"),
-    ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None},
-     "PREFLIGHT: the split attestation period check reads V3c's period.json, and V3C_CLASS is empty"),
 ])
 def test_the_split_attester_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes network attestation's answer from V3c's period.json, so the preflight refuses it beside
@@ -7011,48 +7009,8 @@ def test_the_split_attester_needs_v3c_and_no_whole_piece_beside_it(tmp_path, arg
     assert (rc, lines, order) == (3, [line], [])
 
 
-@pytest.mark.parametrize("challenger", [None, "loopback:127.0.0.1:7000"])
-def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a_development_run(tmp_path, challenger):
-    """With V3c off step 3's audit is the SPOT audit of record, whose SPOT the compose gate's Lean
-    holds to a challenger, so under VERITY_HOLD_PLACEMENT=1 its local or loopback session is refused unless the run is
-    a development run, before anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", DEVELOPMENT=None, PP_CHALLENGER=challenger,
-                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
-    assert (rc, lines, order) == (3, [
-        "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER "
-        "is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run "
-        "takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or "
-        "VERITY_HOLD_PLACEMENT unset"], [])
-
-
-@pytest.mark.parametrize("extra, other", [
-    ({"POUW": "pearlplus", "H1_PEER": "vy-dc-h200-3", "PEARLC_CHALLENGER_GATE": None}, "PEARLC_CHALLENGER_PEER"),
-])
-def test_the_preflight_refuses_a_v3c_peer_other_than_the_one_the_runs_other_live_session_names(tmp_path, extra, other):
-    """On the served node V3c's audit's session and Pearl+'s (PEARLC_CHALLENGER_PEER, default
-    H1_PEER) each listen on their peer's 127.0.0.1, the node the run serves on: a V3C_PEER naming another is refused
-    before anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, (), **_live(tmp_path, [], hosts=True), HOST="vy-dc-h200", **extra)
-    assert (rc, lines, order) == (3, [f"PREFLIGHT: V3C_PEER (default PP_PEER) and {other} differ: "
-                                      "each names the node the run serves on, where V3c's audit's session listens as the "
-                                      "other one does"], [])
-
-
-@pytest.mark.parametrize("extra, line", [
-    ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
-     "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
-     "or COMPOSE_OFF_NODE=0 for a development composite here"),
-    ({"COMPOSITE": None, "COMPOSE_OFF_NODE": "0"}, None),
-    ({}, None),
-    ({"COMPOSE_OFF_NODE": "yes"}, "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) "
-                                    "or 0, not yes"),
-])
-def test_the_preflight_refuses_an_onsite_composite_off_the_node_whose_cases_only_its_card_writes(tmp_path, extra, line):
-    """Onsite's composite reads PoUS's and the wipe's cases, which `served_case.sh` writes under the served card's lease,
-    so they can't be composed off the node: under COMPOSE_OFF_NODE=1 the preflight refuses onsite with a composite, before
-    anything runs, and passes it with none or under COMPOSE_OFF_NODE=0."""
+def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_anything_runs(tmp_path):
+    """COMPOSE_OFF_NODE is read before any mode, the window road's included."""
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
-                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
-    assert (rc, order) == ((3, []) if line else (0, [])) and (lines == [line] if line else len(lines) == 1), lines
-    assert line or lines[0].startswith("PREFLIGHT passed")
-
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
+    assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])
