@@ -5,6 +5,7 @@ public import Definitions.Pouw.PearlC.TileSample
 public import Definitions.ResourceAccounting.Network.AttesterScheme
 public import Definitions.Registration.Guarantees
 public import Definitions.InferenceOnly
+public import Definitions.Pous.Guarantees.StreamedWipeResidual
 
 /-!
 # The protocols' block statements, the inference-only policy, and the chain
@@ -23,10 +24,11 @@ hypothesis, named where this layer may import it, and the open premises that tie
   with `lim.freeSize`.
 * **PoUB** (`PoubUseAtLeast`) and **PoUS** (`PousUseAtLeast`): open and not placed; no term of the inference-only bound
   reads memory reads or memory held.
-* **The memory wipe** (`WipeInputAtMost`): input at most from its own past, for every server-day block; its guarantee's
-  module is a layer this one may not import, so the hypothesis `G`.
-* **Network attestation** (`NetworkInputAtMost`, `NetworkOutputAtMost`): input at most from `AttesterOnEveryLink` and the
-  attester's ingress count; output at most from `NetTiming.Attester.PhaseGetsBack` and the record's unexplained bits.
+* **The memory wipe** (`WipeInputAtMost`): input at most from its own past, for every server-day block, from
+  `Pous.Guarantees.StreamedWipeResidual` at the location's registered label count and width and the wipe's challenge
+  count.
+* **Network attestation** (`NetworkInputAtMost`, `NetworkOutputAtMost`): input at most for each attested boundary's day
+  block from `AttesterOnEveryLink` and the attester's ingress count for that boundary and day; output at most from `NetTiming.Attester.PhaseGetsBack` and the record's unexplained bits.
 * **Registration** (`RegistrationBinds`): every registered input gate opens a root of the log, from
   `Verity.Guarantees.RegistrationSound`.
 * **The proof layer** is `Verity.Scheme.GetsBack` itself and gives no block property here.
@@ -48,16 +50,17 @@ variable {L : Type*} (P : Runs L)
 
 /-! ## PoUW -/
 
-/-- **The spend is work outside `M` plus `M`'s declared size** (open, compute-accounting; no verifier checks it today). It
-holds for every `M`, so at `M` = every inference block it says the whole credited use is at most the sum of the committed
-size claims: a block's credit is at most its committed size claim. In an accepted run whose spend clears the claim, for
-every set `M` of `inner`'s units and inside every server-day block `i`, PoUW's credited use `credited r i` (gates at `π`)
-is at most the work of the inference blocks directly inside `i` outside `M`, plus the committed size claims
-(`claimedSize`) of the inference blocks directly inside `i` in `M`. By the class's definition (`cls`), an inference
-block's window starts at or after its epoch's challenge tick. The credited use is fixed before the sampling coins, by the committed
-claim (the epoch's salt is a live coin that comes before the work); the factor from multiply-accumulates, the spend's
-unit, to gates at `π` is a constant of the scheme and the pricing, assumed. Stated with `+` on the right rather than `−`
-on the left, so no truncated subtraction enters it. -/
+/-- **The spend is work outside `M` plus `M`'s declared size** (open, compute-accounting; no verifier checks it today). In
+an accepted run whose spend clears the claim, for every set `M` of `inner`'s units and inside every server-day block `i`,
+PoUW's credited use `credited r i` (gates at `π` at fetch = 0, not proved otherwise) is at most the work of the
+inference blocks directly inside `i` outside `M`, plus the committed size claims (`claimedSize`) of the inference blocks
+directly inside `i` in `M`, for a device that receives no salt-dependent word during the window. At `M` = every inference
+block it says that a block's credit is at most its committed size claim, for a device that receives no salt-dependent
+word during the window. The statement carries no hypothesis on the device, so for any other device it is a premise not
+expected to hold. By the class's definition (`cls`), an inference block's window starts at or after its epoch's
+challenge tick. The credited use is fixed before the sampling coins, by the committed claim (the epoch's salt is a live
+coin that comes before the work). Stated with `+` on the right rather than `−` on the left, so no truncated subtraction
+enters it. -/
 def SpendIsWork (shown : P.Run → Prop) : Prop :=
   ∀ r, P.accepts r → shown r → ∀ (M : Finset (Fin (P.nIn r))) i, P.kind r i = true →
     P.credited r i ≤ (∑ u ∈ (P.infChildren r i).filter (· ∉ M), P.sizeIn r u) +
@@ -193,31 +196,47 @@ block's input is to be stated in information is open. -/
 def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → survives r → ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (b r i))
 
-/-- **The memory wipe: input at most from its own past, for the attested boundary** (the server-day block its one-server
-case), at `wipePastBound (E i)` bits (`E i` plus 8,600,000,000), `E i` the bits that leave the boundary during the wipe that opens block `i`. From
-the streamed-label wipe's guarantee (a layer this one may not import, so the hypothesis `G`), over a uniform prior, at
-`2⁻⁴⁰` plus the PRF distinguisher's advantage `adv`. The guarantee is at "the fill is the whole memory" (`M = N·512`), so
-the memory size from the hardware description is a hypothesis of this row (`CapacityAtMost Capacity.memorySize`, keeping a
-device at each server). Open: `RunReads` and `WipeInformationGivesWidth`. A shape: its content is its premises. -/
-def WipeInputAtMost (G : Prop) (survives : P.Run → Prop) (E : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
-  G → P.RunReads G survives (2⁻¹ ^ 40 + adv) → P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
-    P.WipeInformationGivesWidth survives (fun r i => wipePastBound (E r i)) →
+/-- **The memory wipe: input at most from its own past, for every server-day block**, at `pastBound E k` bits: `E i`, the
+bits that leave the attested boundary during the wipe that opens block `i`, plus the wipe residual at its location's
+registered label count `N` and label width `b` (bits), the wipe's challenge count `k i` and the soundness exponent `s`,
+plus the location's storage the wipe does not cover. From `Pous.Guarantees.StreamedWipeResidual`, read on the runs at
+`k` (`RunReads`), at error `2^-s` plus the PRF distinguisher's advantage `adv`. That guarantee is for a fill that is the
+whole memory, `N · b` bits, so the row's hypotheses are: the location's memory in the hardware description (`memCap`,
+bits, `CapacityAtMost Capacity.memorySize`) is at most `N · b` plus the storage the wipe does not cover, so a hardware
+description listing more memory than the wipe fills makes the row's hypothesis false unless that term holds the rest;
+`N` and `k i` are positive; and the residual is below `N · b`. `k` is tied to what the wipe's check output only through
+`RunReads`; no attester's signed output is tied to it yet. Open: `RunReads` and `WipeInformationGivesWidth`. A shape:
+its content is its premises. -/
+def WipeInputAtMost (survives : P.Run → Prop) (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ)
+    (adv : ℝ≥0∞) : Prop :=
+  Pous.Guarantees.StreamedWipeResidual →
+    P.RunReads Pous.Guarantees.StreamedWipeResidual survives (2⁻¹ ^ P.wipeError + adv) →
+    P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
+    (∀ r i, P.kind r i = true →
+      memCap r i ≤ P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i) + P.uncovered (P.locOut r i)) →
+    (∀ r i, P.kind r i = true → 0 < P.wipeLabels (P.locOut r i) ∧ 0 < k r i ∧
+      Pous.StreamedWipe.wipeResidual (P.wipeLabels (P.locOut r i)) (k r i) (P.labelBits (P.locOut r i)) P.wipeError <
+        P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i)) →
+    P.WipeInformationGivesWidth survives (P.pastBound E k) →
       ExceptWith P.pr P.accepts
-        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (wipePastBound (E r i))))
-        (2⁻¹ ^ 40 + adv)
+        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (P.pastBound E k r i)))
+        (2⁻¹ ^ P.wipeError + adv)
 
 /-! ## Network attestation -/
 
-/-- **Every link of the attested boundary passes through an attester** (assumed, about the site): the block is everything
-behind one attester, the server-day block its one-server case — not a per-server figure where servers behind one attester
-are joined by links it does not see. In an accepted run, that block reads from the outside world at most the attester's
-ingress count `ingress r i` plus `covert r i`, an assumed number of bits for the covert channels the attester does not
-see, and its output to the outside world is at most the attester's egress count `egress r i`. It is that no link across
-the attested boundary bypasses one. -/
-def AttesterOnEveryLink (ingress egress covert : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+/-- **Every link of the attested boundary passes through an attester** (assumed, about the site). In an accepted run,
+for each server-day block `i`, its attested boundary's day block (the union of the boundary's server-day blocks that
+day, `HoldsBoundary`) reads from the outside world at most the attester's ingress count for that boundary and day plus
+the boundary's covert figure (`P.covert`, bits, assumed: the channels the attester does not see), and block `i`'s output
+to the outside world is at most the attester's egress count `egress r i` (bits). The links between servers behind one
+boundary are inside the union and not in the covert figure. A server behind a shared boundary has its input from the
+outside world bounded only through the union. -/
+def AttesterOnEveryLink (ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (egress : (r : P.Run) → Fin (P.nOut r) → ℕ) :
+    Prop :=
   ∀ r, P.accepts r → ∀ i, P.kind r i = true →
-    P.HoldsOut r i (.inputAtMost [.world] (ingress r i + covert r i)) ∧ P.HoldsOut r i (.outputAtMost (egress r i))
+    P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
+        (.inputAtMost [.world] (ingress r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i))) ∧
+      P.HoldsOut r i (.outputAtMost (egress r i))
 
 /-- **The record's unexplained bits are the block's undeclared output** (open, network-accounting): in an accepted run
 whose egress record the declared computation explains up to the missable cost and the charges, every server-day block's
@@ -225,17 +244,17 @@ egress count is at most `bOut i`. -/
 def RecordIsOutput (shown : P.Run → Prop) (egress bOut : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true → egress r i ≤ bOut r i
 
-/-- **Network attestation: input at most from the outside world, for the attested boundary** (the server-day block its
-one-server case), from `AttesterOnEveryLink` and the attester's ingress count at most `bIn i`. The `covert i` term, an
-assumed number of bits for the covert channels the attester does not see, lives **inside** the assumption
-(`AttesterOnEveryLink` bounds input by the ingress count plus `covert`), not added on here: covert channels are an assumed
-number of the adversary resource model's list, not zero, and the assumption is exactly the one that assumes them. A
-shape. -/
-def NetworkInputAtMost (ingress egress bIn covert : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  P.AttesterOnEveryLink ingress egress covert →
-    (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r i ≤ bIn r i) →
+/-- **Network attestation: input at most from the outside world, for each attested boundary's day block** (old subject:
+the server-day block), from `AttesterOnEveryLink` and the attester's ingress count at most `bIn` for that boundary and
+day. The boundary's covert figure (`P.covert`, bits, assumed) lives **inside** the assumption, not added on here. A
+server behind a shared boundary has its input from the outside world bounded only through the union. A shape. -/
+def NetworkInputAtMost (ingress bIn : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (egress : (r : P.Run) → Fin (P.nOut r) → ℕ) :
+    Prop :=
+  P.AttesterOnEveryLink ingress egress →
+    (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r (P.bnd r i) (P.dayOf r i) ≤ bIn r (P.bnd r i) (P.dayOf r i)) →
     ExceptWith P.pr P.accepts
-      (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))) 0
+      (fun r => ∀ i, P.kind r i = true → P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
+        (.inputAtMost [.world] (bIn r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)))) 0
 
 /-- **Network attestation: output at most to the outside world, for the attested boundary** (the server-day block its
 one-server case): a width bound that leaves the timing channel out. From `NetTiming.Attester.PhaseGetsBack`, which bounds
@@ -245,11 +264,11 @@ is carried by `RunReads` here, which reads the phase guarantee on the period's r
 head, and restoring it as its own premise is ours with lean. Its channel term, the log of how many timing and failure
 patterns the operator can choose, is no width of any gate; whether the output is stated in information for that part is
 open for training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape. -/
-def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut ingress egress' covert' : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (ε : ℝ≥0∞) : Prop :=
+def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut egress' : (r : P.Run) → Fin (P.nOut r) → ℕ)
+    (ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (ε : ℝ≥0∞) : Prop :=
   NetTiming.Attester.PhaseGetsBack →
     P.RunReads NetTiming.Attester.PhaseGetsBack shown ε → P.RecordIsOutput shown egress bOut →
-    P.AttesterOnEveryLink ingress egress' covert' →
+    P.AttesterOnEveryLink ingress egress' →
       ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ε
 
 /-! ## Registration -/
