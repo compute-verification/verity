@@ -1109,7 +1109,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted(set(histories) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's history tables")
         pins |= histories
-        reads = IF.registered_file(doc, mine, pins)
+        reads = IF.registered_file(doc, mine, pins, docket.get("roots") or ())
         if a.day_ledger:
             from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, remote as SPR
             key = Ch.key_of_record(json.loads(Path(a.challenger_key).read_text()))
