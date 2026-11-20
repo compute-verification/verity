@@ -273,18 +273,26 @@ def keys (j : Json) : Array String := match j with
   | .obj kvs => kvs.foldl (init := #[]) fun acc k _ => acc.push k
   | _ => #[]
 
-/-- The first place two dumps differ, as a path. -/
-partial def firstDiff (a b : Json) (at_ : String) : Option String :=
+/-- The first place two dumps differ, as a path, descending at most `fuel` levels: a pair still different at that depth differs
+at its own path. -/
+def firstDiffTo (fuel : Nat) (a b : Json) (at_ : String) : Option String :=
   if a.compress == b.compress then none else
-  match a, b with
-  | .obj _, .obj _ =>
-    let ks := (keys a ++ keys b).qsort (· < ·)
-    (ks.toList.findSome? fun k => firstDiff ((a.getObjVal? k).toOption.getD .null) ((b.getObjVal? k).toOption.getD .null)
-      s!"{at_}/{k}").orElse fun _ => some at_
-  | .arr x, .arr y =>
-    if x.size != y.size then some s!"{at_} (lengths {x.size} and {y.size})" else
-    ((List.range x.size).findSome? fun i => firstDiff x[i]! y[i]! s!"{at_}/{i}").orElse fun _ => some at_
-  | _, _ => some at_
+  match fuel with
+  | 0 => some at_
+  | n + 1 =>
+    match a, b with
+    | .obj _, .obj _ =>
+      let ks := (keys a ++ keys b).qsort (· < ·)
+      (ks.toList.findSome? fun k => firstDiffTo n ((a.getObjVal? k).toOption.getD .null) ((b.getObjVal? k).toOption.getD .null)
+        s!"{at_}/{k}").orElse fun _ => some at_
+    | .arr x, .arr y =>
+      if x.size != y.size then some s!"{at_} (lengths {x.size} and {y.size})" else
+      ((x.zip y).toList.zipIdx.findSome? fun ((u, v), i) => firstDiffTo n u v s!"{at_}/{i}").orElse fun _ => some at_
+    | _, _ => some at_
+
+/-- The first place two dumps differ, as a path. A value nests no deeper than its text is long, so the fuel is never spent
+before a leaf. -/
+def firstDiff (a b : Json) (at_ : String) : Option String := firstDiffTo (a.compress.length + b.compress.length + 1) a b at_
 
 /-- The `restrict` piece: `{descriptor, units, python}` (C's text, the block's units, Python's `restrict` bytes as text) to
 `{agree, at, root_nodes, definitions, digest_bytes, cost, lowers}`: whether Lean's `restrict` equals `Flock.Program.decode`
@@ -318,5 +326,9 @@ def piece (j : Json) : Except String Json := do
 #guard !sameInput (inputDefn "supplied" 16) (inputDefn "run" 16)
 #guard !sameInput (inputDefn "supplied" 16) (inputDefn "registration" 16)
 #guard (inputId? (inputDefn "supplied" 16).id).map (·.1) == some SUPPLIED
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 2, toJson 3]) "" == some " (lengths 2 and 3)"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2, toJson 3]) (Json.arr #[toJson 1, toJson 2]) "" == some " (lengths 3 and 2)"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 4]) "" == some "/1"
+#guard firstDiff (Json.arr #[toJson 1, toJson 2]) (Json.arr #[toJson 1, toJson 2]) "" == none
 
 end Spot.Restrict

@@ -340,6 +340,21 @@ def test_the_agreement_leaves_its_verdicts_not_its_work_tree_in_the_run_director
     assert not (out / "flock-agreement" / "upstream").exists() and not (out / "flock-agreement" / "inputs").exists()
 
 
+def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
+    """An agreement on refusals alone says so in the step's outcome line: refusals decided alike say nothing about a session
+    both verifiers accept."""
+    refused = [{"set": 0, "sessions": 48, "agree": 48, "disagree": [], "accepted": 0, "passed_every_check": 0},
+               {"set": 1, "skipped": "no upstream binary"}]
+    said = CHECK.agreement_outcome(refused)
+    assert said.startswith("1 sets: 48 of 48 sessions agree, 0 disagree; 0 accepted") and "NO SESSION IS ACCEPTED" in said
+    both = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 3, "passed_every_check": 2}]
+    said = CHECK.agreement_outcome(both)
+    assert "3 accepted by the Lean verifier and by upstream, 2 refused last" in said and "NO SESSION" not in said
+    split = [{"set": 0, "sessions": 50, "agree": 49, "disagree": ["s7"], "accepted": 3, "passed_every_check": 0}]
+    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 refused" in CHECK.agreement_outcome(split)
+    assert "NO SESSION" not in CHECK.agreement_outcome([])
+
+
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
     """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
     launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run
@@ -1161,7 +1176,8 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
     """`agreement_closure` leaves out every `.md` of the agreement's directory and the verifier's packages, so no file it keeps
     may read one: no Python string but a docstring, no shell text but a comment and no lakefile names a doc, and the Lean
     code, comments aside, has no `include_str` (the one way a Lake build reads a file it doesn't compile) and names a doc
-    only to cite a section of it (`PROTOCOL.md §1` in an error message)."""
+    only to cite a section of it (`PROTOCOL.md §1` in an error message); a doc's bare name counts inside a string literal,
+    not as a Lean name (a constant `PROTOCOL` is no doc)."""
     import ast
 
     files = CHECK.tracked_files()
@@ -1186,7 +1202,9 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
             reads += [f"{f}: names a doc"] if doc.search(text) else []
         elif f.endswith(".lean"):
             code = _lean_code(text)
-            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*(\.md\b(?! §)|README|PROTOCOL(?!\.md §))", code)]
+            strings = " ".join(re.findall(r'"(?:[^"\\]|\\.)*"', code))
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*\.md\b(?! §)", code)]
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"\S*(README|PROTOCOL(?!\.md §))", strings)]
     assert not reads, f"a file the agreement's key covers reads Markdown the key leaves out; key it in agreement_closure: {reads}"
 
 

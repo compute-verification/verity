@@ -129,7 +129,7 @@ from typing import Any
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier import levels as LV
-from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
@@ -620,8 +620,7 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
-                           capture_output=True, text=True)
+        p = LC.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())])
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
