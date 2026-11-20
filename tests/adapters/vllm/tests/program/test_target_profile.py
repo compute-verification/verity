@@ -447,7 +447,7 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
     assert p.lag() == e.lag() == 1                                                                                  # orthogonal to LAG
     d = p.moe_construction_declaration()
     assert d["value"] == "padded" and d["declared_explicitly"] is True and d["attested"] is False
-    assert "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}" in d["definitions"] and "LMoeFfnL_v1" in d["lift_of_record"] and d["profile_digest"] == p.digest()
+    assert "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}" in d["definitions"] and d["profile_digest"] == p.digest()
     assert "MoeExpertGemm_v1{E,K,N}" in e.moe_construction_declaration()["definitions"]
     # explicit indexed-read-ordered: the same construction as undeclared, a different (explicit) digest; explicit indexed-read keeps the old router
     o = e.with_overrides(moe_construction="indexed-read-ordered")

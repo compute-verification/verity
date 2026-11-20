@@ -22,7 +22,7 @@ stops included (`_kept_prover`).
   v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
   (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
   (``--deployed-key``), over the machine's cores.
-* **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
+* **The binaries.** The Lean verifier, the ZK server's Lean and the door's lowering check (`flock-lower-check`) are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
   nothing: on a machine with no checkout, not its Rust toolchain or not its crates the tests skip, saying so. The
@@ -142,7 +142,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "verity-verify-proof", "zk-server": LEAN / "flock-zk-server"}
+    lean = {"lean": LEAN / "verity-verify-proof", "zk-server": LEAN / "flock-zk-server", "lower": LEAN / "flock-lower-check"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"

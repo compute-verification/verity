@@ -12,11 +12,17 @@ public import Spot.Edges
 public import Spot.RecordText
 public import Spot.Restrict
 public import Spot.Partition
+public import Spot.Admitted
 public import Circuits.DefinitionDigest
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
+public import Std.Data.HashSet
 import all Init.Util
+meta import Flock
+meta import Spot.Restrict
+meta import Spot.Edges
+meta import Circuits.DefinitionDigest
 
 /-!
 # One-stage v2: the parameters, one statement's check, and a member's statement and files
@@ -136,17 +142,6 @@ def cutsOf (prog : V Flock.Program.Prog) (partition : Json) : V (List (String ×
   if !hasEdge P then return []
   ioCuts P (← Partition.evaluate { desc := .ofProg P, prog := P } (getD partition "query"))
 
-/-- A block circuit's input rows: each parameter `(name, bits)` a row of its own, or, cut `k` ways (`cuts`, `ioCuts`'
-for its template), `k` rows `name#j` of `bits / k` each, in order (`interface.RowLayout.cut`, `row_name`). -/
-def cutRows (cuts : List (String × Nat)) (ins : Array (String × Nat)) : Array (String × Nat) :=
-  ins.flatMap fun (n, b) => match cuts.lookup n with
-    | some k => if k ≤ 1 then #[(n, b)] else (Array.range k).map fun j => (s!"{n}#{j}", b / k)
-    | none => #[(n, b)]
-
-#guard cutRows [("x", 4)] #[("x", 1024), ("w", 256)] ==
-  #[("x#0", 256), ("x#1", 256), ("x#2", 256), ("x#3", 256), ("w", 256)]
-#guard cutRows [] #[("x", 1024)] == #[("x", 1024)]
-
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: C, the registered Program with its wires (as JSON and
 as the bytes `--program` reads), the partition object, the public file's committed SHA-512 (the commitment) and theta's
 registration (the registered file, which states no position), and the first unit of the statement's block. -/
@@ -163,54 +158,6 @@ structure Own where
   blocks : Thunk (V (Option (Array (Nat × Nat)))) := Thunk.mk fun _ => Flock.HmRow.blocksOf partition program
   cuts : Thunk (V (List (String × List (String × Nat)))) := Thunk.mk fun _ => cutsOf prog.get partition
 
-/-- The layout C_S's template is lowered at (`one_circuit.LAYOUT`). -/
-def LAYOUT : String := "iv/hybrid/4"
-
-/-- The templates a template query lists (`one_circuit._listed`); none for another query. -/
-def listedOf (partition : Json) : Option (Array String) :=
-  let q := partition.getObjValD "query"
-  let ps := q.getObjValD "params"
-  match q.getObjValAs? String "name" with
-  | .ok "Q_template_instance" => some #[(ps.getObjValAs? String "template").toOption.getD ""]
-  | .ok "Q_template_instances" => match ps.getObjValD "templates" with
-    | .arr ts => some (ts.map fun t => (t.getStr?).toOption.getD "")
-    | _ => none
-  | _ => none
-
-/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, lowered at its one template (the Definition
-its root's non-input nodes call, which the query lists) by `Flock.Lower.lower` and written by `Flock.Compose.compose`:
-input rows the template's parameters as bit rows, each cut as in(S)'s cuts `cuts` give for the template (`ioCuts`,
-`cutRows`), output ports its return fields `o{j}` in whole u16 words, META's `program_digests` the template's
-`definitionDigest` read off `CJ`, C's descriptor. Refuses a block over several templates by name. -/
-def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
-    V ByteArray := do
-  let some listed := listedOf partition
-    | throw (Flock.OneCircuit.notDerived
-        "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
-  let some root := S.defs[S.root]? | throw "lower: C_S's root is not one of its Definitions"
-  let mut called : Array String := #[]
-  for k in [0:root.body.nodes.size] do
-    if Spot.Edges.isInputNode S k then continue
-    let key := ((root.body.nodes[k]?).bind (S.defs[·.fn]?) |>.map (·.key)).getD ""
-    if !called.contains key then called := called.push key
-  let keys := called.qsort (· < ·)
-  let #[key] := keys
-    | throw s!"lower: C_S's root calls {keys.toList}, and a block's units are instances of one template"
-  if !listed.contains key then throw s!"lower: C_S's template {key} is not one the partition's query lists"
-  let some d := S.index[key]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
-  let some fn := S.defs[d]? | throw s!"lower: C_S's template {key} is no Definition of C_S"
-  let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
-  let ins := cutRows ((cuts.lookup key).getD []) (fn.params.map fun (n, t) => (n, bits t))
-  let outs := (Flock.Program.fieldsOf fn.ret).toArray.mapIdx fun j f => (s!"o{j}", (bits f + 15) / 16)
-  let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
-  let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
-    ((CJ.getObjValD "definitions").getObjValD key)
-  let nIn := ins.foldl (fun a p => a + (p.2 + 15) / 16) 0
-  let nOut := outs.foldl (· + ·.2) 0
-  let t ← Flock.Lower.lower S d (Array.replicate nIn 16) (Array.replicate nOut 16)
-  Flock.Compose.compose { name := s!"unit/{key}", body := .tmpl t LAYOUT, ins, outs, programDigests := [(key, digest)] }
-    ((partition.getObjValAs? String "program").toOption.getD "") (Flock.hexOf (← Flock.HmRow.partitionDigest partition))
-
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
 Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s
@@ -220,8 +167,10 @@ def restrictOn (CJ : V Json) (prog : V Flock.Program.Prog) (blocks : V (Option (
   let some bs ← blocks | throw "restrict: the partition object has no blocks"
   let some (lo, hi) := bs.find? (·.1 == block)
     | throw s!"restrict: no block of the partition starts at unit {block}"
-  let S ← Spot.Restrict.restrict (← prog) ((List.range' lo (hi - lo)).toArray)
-  lowerBlock (← CJ) partition (← cuts) S
+  let P ← prog
+  let us := (List.range' lo (hi - lo)).toArray
+  let S ← Spot.Restrict.restrict P us
+  lowerBlock (← CJ) partition (← cuts) S (admittedBlock P us)
 
 /-- `restrictOn` on C's bytes. -/
 def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray :=
@@ -493,7 +442,8 @@ def NOT_ONE_MEMBER : String :=
 
 /-- The window's trees of its templates' fields: each root of the record `rec` whose port is `<template>/<field>`
 of a template of `ts` (`templateOf`), by template, as `(field, root)` in the record's order, each root its domain,
-leaves and root under the bare field. One pass over the record's roots. -/
+leaves and root under the bare field, and `tree`, the tree's own port `<template>/<field>`, which `headerHeldAt` reads.
+One pass over the record's roots. -/
 def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Array (String × Json)) :=
   match getD rec "roots" with
   | .arr rs => rs.foldl (fun acc r => match getD r "port" with
@@ -501,14 +451,14 @@ def fieldTreesOf (ts : Std.HashSet String) (rec : Json) : Std.HashMap String (Ar
       | some (t, f) =>
         if ts.contains t then
           acc.insert t ((acc.getD t #[]).push (f, Json.mkObj [("domain", getD r "domain"),
-            ("leaves", getD r "leaves"), ("port", .str f), ("root", getD r "root")]))
+            ("leaves", getD r "leaves"), ("port", .str f), ("root", getD r "root"), ("tree", .str port)]))
         else acc
       | none => acc
     | _ => acc) {}
   | _ => {}
 
 /-- The window's tree of template `template`'s field `field` among the trees `ft` (`fieldTreesOf`), under the port
-name `port`: its domain, leaves and root; none where the record names no such tree. -/
+name `port`: its domain, leaves, root and `tree`; none where the record names no such tree. -/
 def fieldRootIn (ft : Std.HashMap String (Array (String × Json))) (template field port : String) : Option Json :=
   ((ft.getD template #[]).find? (·.1 == field)).map fun (_, e) =>
     Json.mkObj [("domain", getD e "domain"), ("leaves", getD e "leaves"), ("port", .str port), ("root", getD e "root")]
@@ -586,13 +536,6 @@ def rootsByPort (rec : Json) : Std.HashMap String Json :=
 `committed/<port>`, `<port>` the record's root's. -/
 def COMMITTED : String := "committed/"
 
-/-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
-(`COMMITTED`), and `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
-once for the window, by node; none for a registered value's port. -/
-def treePortOf (q : Flock.Registered.Port) : Option String :=
-  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
-  else if Flock.Registered.isFreshValue q.value then some q.value else none
-
 /-- Whether `v` is a field tree's name `<template>/o<j>` (`Flock.Registered.fieldTree`), the value `treeReads`
 holds a wired row of in(S) to. -/
 def fieldTreeName (v : String) : Bool :=
@@ -600,8 +543,16 @@ def fieldTreeName (v : String) : Bool :=
   | l :: _ :: _ => l.startsWith "o" && l.length > 1 && (l.drop 1).toString.all Char.isDigit
   | _ => false
 
-/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`): which
-writer's tree a wired port reads is C's, and until it is derived from C here the port is refused. -/
+/-- The record's port of the tree a registered port `q` opens: `<port>` for a port read as `committed/<port>`
+(`COMMITTED`), `input/n<w>` for run input node `w`'s tree (`Flock.Registered.isFreshValue`), which the record holds
+once for the window, by node, and `<template>/o<j>` for a template's field tree (`fieldTreeName`), which `portTreeHeld`
+admits only as the member's own output; none for a registered value's port. -/
+def treePortOf (q : Flock.Registered.Port) : Option String :=
+  if q.value.startsWith COMMITTED then some (q.value.drop COMMITTED.length).toString
+  else if Flock.Registered.isFreshValue q.value || fieldTreeName q.value then some q.value else none
+
+/-- The refusal of a registered port `port` of `who` whose value is a field tree's name (`fieldTreeName`) that is not
+`who`'s own output at its template's tree: a wired input's writer tree is not opened here yet. -/
 def WIRED_TREE_WHY (who port : String) : String :=
   s!"registered: {who}'s port {port}: a wired port's tree is not derived from C yet"
 
@@ -620,9 +571,12 @@ def TREE_OTHER (who port tree what : String) : String :=
 /-- A registered port `q` of `who` that opens a committed tree (`treePortOf`) held to the record's root at that
 tree's port among `byPort` (`rootsByPort`): its root, domain and leaf count are the record's, refused by name
 (`TREE_UNHELD`, `TREE_OTHER`). The domain binds the window, so a tree of another window refuses. A port whose value
-is a field tree's name refuses first (`WIRED_TREE_WHY`). -/
-def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Registered.Port) : V Unit :=
-  if !q.value.startsWith COMMITTED && fieldTreeName q.value then throw (WIRED_TREE_WHY who q.name) else
+is a field tree's name is opened only as the member's own output, `<tmpl>/<port>` for the member's template `tmpl`,
+whose rows `Flock.Registered.outReads` reads at the leaves C gives; any other refuses first (`WIRED_TREE_WHY`). -/
+def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (tmpl : Option String) (q : Flock.Registered.Port) :
+    V Unit :=
+  if !q.value.startsWith COMMITTED && fieldTreeName q.value && tmpl.all (s!"{·}/{q.name}" != q.value) then
+    throw (WIRED_TREE_WHY who q.name) else
   match treePortOf q with
   | none => pure ()
   | some t =>
@@ -636,11 +590,14 @@ def portTreeHeld (byPort : Std.HashMap String Json) (who : String) (q : Flock.Re
 
 /-- **A registered file's committed trees are its window's**: every port of the registered file `j` of `who` that
 opens a committed tree is held to the record's root of it (`portTreeHeld`, at `byPort`, `rootsByPort`); no file, no
-port. One pass over the file's ports, each a lookup. -/
-def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) : V Unit :=
+port, at the member's template `tmpl` (none for the one statement, whose ports open no field tree). One pass over the
+file's ports, each a lookup. -/
+def registeredTreesHeld (byPort : Std.HashMap String Json) (who : String) (j : Option Json) (tmpl : Option String := none) :
+    V Unit :=
   match j with
   | none => pure ()
-  | some j => (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who)
+  | some j =>
+    (Flock.Registered.ofJson j).mapError (s!"{who}: {·}") >>= fun own => own.forM (portTreeHeld byPort who tmpl)
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -1446,6 +1403,82 @@ def headerHeld (rec h : Json) : V Unit :=
   | some p => throw (UNWIRED_WHY p)
   | none => if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
 
+/-- The refusal of a member's public file whose header's `instances` is not its slice's population, which `headerHeldAt`
+checks on the header as parsed, before it drops any port. -/
+def POPULATION_WHY : String := "public file: not the registration's: population"
+
+/-- The refusal of a member's public file whose port `p` is held in `tree`, its template's field tree that every member of
+the template shares, where the member's registered reads open no row of it at `tree` and the header's root there is not
+the registration's (`headerHeldAt`). -/
+def SHARED_UNREAD (p tree : String) : String :=
+  s!"public file: port {p} is held in the shared tree {tree}, and the member's registered reads open no row of it " ++
+    "there: a member's rows of a tree other members' rows share are held to the registration's root by opening it at " ++
+    "the leaves C gives, and the header's own root there is no commitment to them"
+
+/-- The slice `rec` and the header `h` without port `p`'s root and domain. -/
+def dropPort (rec h : Json) (p : String) : Json × Json :=
+  let rs := match getD rec "roots" with | .arr rs => rs.filter (getD · "port" != .str p) | _ => #[]
+  let drop := fun (o : Json) => Json.mkObj ((entries o).filter (·.1 != p)).toList
+  let fv := getD h "frame_v3"
+  let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
+  (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
+
+/-- Port `p` reads `v` as a registered value of the verifier's: its registered file's ports `held` hold `p` at `v`,
+a value that names no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field tree
+(`fieldTreeName`), the trees `treePortOf` opens. -/
+def registeredAt (held : Array Flock.Registered.Port) (p v : String) : Bool :=
+  !v.startsWith COMMITTED && !Flock.Registered.isFreshValue v && !fieldTreeName v &&
+    held.any fun q => q.name == p && q.value == v
+
+/-- The refusal of a member's public file whose port `p`, which the slice holds no root of, is read at `v`, which the
+verifier's registered file holds at `p` as no registered value (`headerHeldAt`). -/
+def UNREGISTERED_WHY (p v : String) : String :=
+  s!"public file: port {p} reads {v}, and the verifier's registered file holds no registered value {v} at {p}: a " ++
+    "port the registration holds no root of is held only at a registered value's root"
+
+/-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
+template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
+(`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
+root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
+whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
+root of that `reads` names and the header names is held by those reads too where the verifier's registered file's
+ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
+that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
+read a registered or supplied input node (`regNode`), so it is not compared either; at any other value it refuses by
+name (`UNREGISTERED_WHY`). Every other port is `headerHeld`'s. -/
+def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Registered.Port) (rec h : Json) : V Unit := do
+  if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
+  let fv := getD h "frame_v3"
+  let shared := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
+    match getD r "port", getD r "tree" with
+    | .str p, .str t => some (p, t, r)
+    | _, _ => none
+  let mut cur := (rec, h)
+  for (p, t, r) in shared do
+    if reads.contains (p, t) then
+      cur := dropPort cur.1 cur.2 p
+    else if !(getD (getD fv "roots") p matches .null)
+        && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
+      throw (SHARED_UNREAD p t)
+  for (p, v) in reads do
+    if !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
+      if !registeredAt held p v then throw (UNREGISTERED_WHY p v)
+      cur := dropPort cur.1 cur.2 p
+  headerHeld cur.1 cur.2
+
+/-- The member's registered reads, `(port, value)` each, from its registered file (none without one). -/
+def Member.reads (m : Member) : V (Array (String × String)) :=
+  match m.own.registered with
+  | none => pure #[]
+  | some j => ((Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")).map (·.map fun q => (q.name, q.value))
+
+/-- The member's registered file's ports (none without one): the verifier's registered values `headerHeldAt` holds a
+port at. -/
+def Member.held (m : Member) : V (Array Flock.Registered.Port) :=
+  match m.own.registered with
+  | none => pure #[]
+  | some j => (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}")
+
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
 `headerHeld` at the member's `slice` of the registration): its strata are the registration's restricted to its units,
@@ -1456,7 +1489,7 @@ def Member.population (m : Member) (slice : Json) (pubB : ByteArray) : V Unit :=
   let strata ← Partition.strata (← Program.parse m.own.program) (getD m.own.partition "query")
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeld slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- A member's circuit held to the parameters' units a proof block, at the units a proof block `g` its circuit file
 parses with: a circuit file that parses with another `vus_per_block` refuses. One that does not parse (`none`) passes
@@ -1767,7 +1800,7 @@ def Member.populationOn (m : Member) (strata : V (Array (String × Array (Nat ×
   let strata ← strata
   let h ← FilePart.header pubB
   m.heldAt strata h
-  headerHeld slice h
+  headerHeldAt (← m.reads) (← m.held) slice h
 
 /-- `Member.population` is `Member.populationOn` at the strata of the member's partition's query over its program's
 parse. -/

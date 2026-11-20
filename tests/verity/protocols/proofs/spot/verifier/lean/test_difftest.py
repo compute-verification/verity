@@ -230,9 +230,19 @@ SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.i
     Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
     Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
-#: `SETUPS[3]` with a partition object naming its proof blocks, one unit each: the door derives the drawn block's circuit
-#: from them (`one_circuit.block`), and refuses an object naming none.
-BLOCKED = Setup(SETUPS[3].program, SETUPS[3].query, blocks=[[(u, u + 1) for u in range(SETUPS[3].population)]])
+XOR16 = PrimitiveDefinition("CoreSpotXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
+                            register=False)
+#: `PAIR` and `TRIPLE` over u16 words, the one form the door lowers (`OneStageZk.admitted`), each `x` a 128-byte row,
+#: past a compression before its last block, which a Flock block's pin needs.
+PAIR16 = bind(CompositeDefinition("CoreSpotPair16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                  lambda B, S, x: B.call(XOR16, x[0], x[1]), register=False))
+TRIPLE16 = bind(CompositeDefinition("CoreSpotTriple16", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                    lambda B, S, x: B.call(XOR16, B.call(XOR16, x[0], x[1]), x[2]), register=False))
+_MIXED16 = Setup(PN.mixed_population_program([(PAIR16, 2), (TRIPLE16, 3)]),
+                 P.template_instances_query([PAIR16.id, TRIPLE16.id]))
+#: `SETUPS[3]`'s population over u16 words, with a partition object naming its proof blocks, one unit each: the door
+#: derives the drawn block's circuit from them (`one_circuit.block`), and refuses an object naming none.
+BLOCKED = Setup(_MIXED16.program, _MIXED16.query, blocks=[[(u, u + 1) for u in range(_MIXED16.population)]])
 
 
 def _registered_program(name: str, n: int, extra, registered) -> Program:
@@ -362,7 +372,7 @@ GENESIS = "9e" * 64
 BX, BOUT = (f"{codec.descriptor_id(BLOCK)}/{p}" for p in ("x", "o0"))
 BOUNDARY = Setup(PN.population_program(BLOCK, 4), P.template_instance_query(BLOCK.id), names=(BOUT, BX), rows=(3, 3))
 INTERIOR = Setup(PN.population_program(PAIR, 6), P.template_instance_query(PAIR.id))
-PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR]}
+PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR, BLOCKED]}
 PROGRAMS[PO.program_sha512(Program(BLOCK))] = Program(BLOCK)
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: The strata a work table may name: the templates' and the Calls'.
@@ -554,7 +564,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified", "verdicts", "window_values", "coins", "released")
+                               "certified", "verdicts", "window_values", "coins", "commitments", "released")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -617,7 +627,7 @@ def decode_params(j) -> dict:
             raise D.Reject(str(e)) from None
     try:
         G.marked_rows(PROGRAMS[sha], j["registered"] or {}, G.sources(j.get("supplied", {})), j.get("coins"),
-                      j.get("released"), len(j["log"]))
+                      j.get("commitments"), j.get("released"), len(j["log"]))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "pinned" in j:
@@ -739,7 +749,7 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
                    compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"),
-                   coins=p.get("coins"), released=p.get("released"))
+                   coins=p.get("coins"), commitments=p.get("commitments"), released=p.get("released"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -752,7 +762,8 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
                    pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
-                   verdicts=p.get("verdicts"), coins=p.get("coins"), released=p.get("released"))
+                   verdicts=p.get("verdicts"), coins=p.get("coins"), commitments=p.get("commitments"),
+                   released=p.get("released"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -3070,7 +3081,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
-    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    table = {PAIR16.id: 2, TRIPLE16.id: {"floor": 1, "work": 1}}
     uncovered = {"a stratified design": ({"k": 3, "law": "stratified"}, None, "stratified"),
                  "a work design": ({"k": 3, "law": "work"}, table, "work"),
                  "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),

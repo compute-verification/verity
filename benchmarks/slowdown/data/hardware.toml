@@ -16,8 +16,8 @@ basis = "flop-model"
 
 [location.h100-hgx]
 devices = { value = 8, unit = "GPU", source = "NVIDIA DGX H100 datasheet: 8 x H100 SXM5 on one NVLink switch domain", status = "datasheet" }
-flops = { value = 1.583087616e16, unit = "FLOP/s", low = 7.91543808e15, high = 1.583087616e16, source = "calibration/census/hardware.json h100-sxm-80gb-tensor/e4m3 x 8; low: h100-sxm-80gb-tensor/bf16 x 8", status = "datasheet" }
-memory = { value = 5.49755813888e12, unit = "bit", source = "calibration/census/hardware.json h100-sxm-80gb-tensor memory_bytes x 8 GPUs", status = "datasheet" }
+flops = { value = 1.58312e16, unit = "FLOP/s", low = 7.9152e15, high = 1.58312e16, source = "calibration/census/hardware.json h100-sxm-80gb-sm/e4m3's datasheet reading x 8; low: h100-sxm-80gb-sm/bf16's", status = "datasheet" }
+memory = { value = 5.49755813888e12, unit = "bit", source = "calibration/census/hardware.json h100-sxm-80gb-sm memory_bytes x 8 GPUs", status = "datasheet" }
 hosts = { value = 1, unit = "server", source = "one DGX H100", status = "datasheet" }
 host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX H100 datasheet: 2 TB system memory", status = "datasheet" }
 host_ops = { value = 4.5875e14, unit = "op/s", source = "2 x Xeon Platinum 8480C (DGX H100 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.0 GHz base, tiers' host_share method", status = "derived" }
@@ -26,7 +26,7 @@ links = { value = 4.8e12, unit = "bit/s", low = 3.2e12, high = 4.8e12, source = 
 # memory and links are the cards' (slowdown/params.py CARDED), as in location.h200-hgx-rack4.
 [location.h200-hgx]
 devices = { value = 8, unit = "GPU", source = "NVIDIA HGX H200: 8 GPUs on one NVLink switch domain", status = "datasheet" }
-flops = { value = 1.583087616e16, unit = "FLOP/s", low = 7.91543808e15, high = 1.583087616e16, status = "datasheet", source = "calibration/census/hardware.json h100-sxm-80gb-tensor/e4m3: 1978.85952e12 dense FP8, x 8 (H200 is H100's compute with more HBM); low: BF16" }
+flops = { value = 1.58312e16, unit = "FLOP/s", low = 7.9152e15, high = 1.58312e16, status = "datasheet", source = "calibration/census/hardware.json h100-sxm-80gb-sm/e4m3's datasheet reading: 1978.9e12 dense FP8, x 8 (H200 is H100's compute with more HBM); low: BF16" }
 hosts = { value = 1, unit = "server", source = "one DGX H200", status = "datasheet" }
 host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX H200 datasheet: 2 TB system memory", status = "datasheet" }
 host_ops = { value = 4.5875e14, unit = "op/s", source = "2 x Xeon Platinum 8480C (DGX H200 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.0 GHz base (2.9% of the GPUs' FP8 rate)", status = "derived" }
@@ -63,7 +63,7 @@ links = { value = 3.2e12, unit = "bit/s", source = "benchmarks/nci/tiers.py DEFA
 # Four DGX H200s whose certifiers sit on the rack's uplinks only: the servers' links to each other are seen by none.
 [location.h200-hgx-rack4]
 devices = { value = 32, unit = "GPU", source = "4 x location.h200-hgx", status = "derived" }
-flops = { value = 6.332350464e16, unit = "FLOP/s", low = 3.166175232e16, high = 6.332350464e16, source = "4 x location.h200-hgx flops", status = "derived" }
+flops = { value = 6.33248e16, unit = "FLOP/s", low = 3.16608e16, high = 6.33248e16, source = "4 x location.h200-hgx flops", status = "derived" }
 hosts = { value = 4, unit = "server", source = "4 DGX H200s", status = "derived" }
 host_memory = { value = 6.4e13, unit = "bit", source = "4 x location.h200-hgx host_memory", status = "derived" }
 host_ops = { value = 1.835e15, unit = "op/s", source = "4 x location.h200-hgx host_ops", status = "derived" }

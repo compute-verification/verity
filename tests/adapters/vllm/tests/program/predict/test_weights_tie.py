@@ -28,9 +28,6 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
-    registered as H1R,
-)
 
 from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S
@@ -106,7 +103,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     tie names it unrooted, as the registration does. Its templates, in the order its first batches them: the field's rows
     and last row, the table's rows (one byte pending) and last row, whose ``data`` alone are row-seg ports, then the shard's
     rows of each width (1024, 64 and 512 words, in first use) at its one phase (each row whole blocks) and its last row. The verifier makes the tie, its circuit's
-    digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its shape
+    digest and its audit inputs without committing a weight (`weight_value` refuses here), and its shape
     entries are the weights record's but the rotary table's, which names no root."""
     reg, (d, man) = S._registered(), x
     registration = WW.weights_registration(reg, Path(d).parent / "r.salts", d, checkpoints_manifest=man, grain=GRAIN)
@@ -116,7 +113,6 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
         raise AssertionError("the verifier commits no weight")
 
     monkeypatch.setattr(WW, "weight_value", no)
-    monkeypatch.setattr(H1R, "commit", no)
     t = WT.tie(reg, d, man, grain=GRAIN)
     shard = (Path(d) / "model.safetensors").read_bytes()
     base = 8 + struct.unpack("<Q", shard[:8])[0]
