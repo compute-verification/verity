@@ -126,23 +126,39 @@ TILE_FOREIGN = "tile-body-foreign"
 TILE_SCHEME = "tile-statics-not-the-scheme"
 C_DIGEST = "tile-c-digest-differs"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
-#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum
+#: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum; a tile
+#: is below the served floor (`test_instance`), so the passed audit is a test instance's and credits nothing
 AUDIT_SHORT = "tile-audit-short"
 AUDIT_STRAY = "tile-audit-stray"
+TEST_INSTANCE = "tile-test-instance"
+
+
+def test_instance(statics: Mapping[str, Any]) -> str | None:
+    """Why a tile of ``statics`` is a test instance's, or None when it is at the served floor: its depth K at least
+    `pearl_c.K_MIN` and its tile `pearl_c.TILE` × `pearl_c.TILE` (TM × TN), the constants the Lean credit's `plan` reads
+    (`Check.K_MIN`, `Check.TILE`), below which a pass credits nothing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
+
+    k, tm, tn = statics["K"], statics["TM"], statics["TN"]
+    if k >= C.K_MIN and (tm, tn) == (C.TILE, C.TILE):
+        return None
+    return (f"is K = {k} at {tm} × {tn}, not the served K of at least {C.K_MIN} at {C.TILE} × {C.TILE}: a test "
+            "instance, which credits nothing")
 
 
 @dataclass(frozen=True)
 class LaidTile:
     """A credited tile of C as C's laying lays it: ``index`` its place among C's tiles in C's root order, ``gates`` its
     gates [lo, hi) in C, ``amount`` its credited MACs (`tile_macs` on its template's statics, public in C before any
-    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, and ``kinds`` its m_s: its blocks in each
-    stratum, by the stratum's descriptor id."""
+    coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, ``kinds`` its m_s: its blocks in each
+    stratum, by the stratum's descriptor id, and ``test`` why it is a test instance's (`test_instance`), or None."""
 
     index: int
     gates: tuple[int, int]
     amount: int
     blocks: tuple[int, ...]
     kinds: Mapping[str, int]
+    test: str | None = None
 
 
 #: Every static of `TILE`, by what holds it. ``credit``: `tile_macs` reads it. ``scheme``: `KERNEL` fixes it at the tile's
@@ -293,7 +309,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         kinds: dict[str, int] = {}
         for b in blocks:
             kinds[of[b]] = kinds.get(of[b], 0) + 1
-        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds)))
+        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds),
+                            test_instance(fn.bindings)))
     return out
 
 
@@ -309,7 +326,8 @@ def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequen
     its draw, an empty one included, is no evidence. Then every tile is credited when each of those verdicts passed, and
     none when any failed: the bound on spoiled tiles counts bad blocks over all of S at the draw's rate, which holds for
     the tiles together and clears no tile by the strata it holds alone. A stratum outside S neither credits nor spoils.
-    A verdict on a block of no stratum is refused (`AUDIT_STRAY`)."""
+    A verdict on a block of no stratum is refused (`AUDIT_STRAY`). An audit that passed over a tile below the served floor
+    is refused (`TEST_INSTANCE`): a test instance credits nothing."""
     import bisect
 
     if not tiles:
@@ -329,7 +347,11 @@ def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequen
         raise ValueError(f"{AUDIT_SHORT}: {len(short)} strata holding a tile's block lack their registered count of "
                          f"drawn blocks with a verdict, first {short[0]}: {drawn[short[0]]} drawn of "
                          f"{counts.get(short[0], 0)}")
-    return [] if failed else list(tiles)
+    if failed:
+        return []
+    if test := next((t for t in tiles if t.test), None):
+        raise ValueError(f"{TEST_INSTANCE}: tile {test.index} {test.test}")
+    return list(tiles)
 
 
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
