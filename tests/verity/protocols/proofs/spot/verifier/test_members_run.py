@@ -92,7 +92,7 @@ class Window:
     file is its block's C_S lowered (`lowered`), among the files once it is derived."""
 
     def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
-        self.at, self.files = at, []
+        self.at, self.files, self.underived = at, [], {}
         program = json.loads(DESCRIPTOR)
         self.descriptor = DESCRIPTOR
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
@@ -102,8 +102,8 @@ class Window:
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
             try:
                 self.put(lowered(name))
-            except (OC.NotDerived, OC.Refused):
-                pass
+            except (OC.NotDerived, OC.Refused) as e:
+                self.underived[name] = str(e)
             members[name] = {"public": self.put(public), "registered": None, "block": k, "vus_per_block": 1}
             if name not in sessions:
                 continue
