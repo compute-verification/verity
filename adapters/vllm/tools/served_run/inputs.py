@@ -70,9 +70,9 @@ def tokenize(port: int, dataset: str, s: serves.Serves) -> int:
     prompts = sorted({tuple(b["prompt"]) for b in serves.door(ds.kind, (b for _, b in ds.timed(*serves.timing("at-once")[:1], **serves.timing("at-once")[1])))})
     for i, ids in enumerate(prompts):
         text = tk.decode(list(ids))
-        req = urllib.request.Request(f"http://127.0.0.1:{port}/tokenize", headers={"Content-Type": "application/json"},
-                                     data=json.dumps({"prompt": text, "add_special_tokens": False}).encode())
-        with urllib.request.urlopen(req, timeout=60) as r:
+        body = json.dumps({"prompt": text, "add_special_tokens": False}).encode()
+        with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/tokenize", data=body,
+                                                           headers={"Content-Type": "application/json"}), timeout=60) as r:
             live = json.load(r)["tokens"]
         for who, got in (("tokenizer file", tk.encode(text, add_special_tokens=False)), ("endpoint /tokenize", live)):
             if list(got) != list(ids):
