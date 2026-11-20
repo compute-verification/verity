@@ -3471,15 +3471,13 @@ def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_s
 
 
 @pytest.mark.parametrize("n, said", [
-    (40, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: accept, against c "),
-    (1, "BLOCK-COUNTS class 4,32,4, the picked window alone: [block-counts] 2025-11-01: refuse: the blocks' exact count "
-        "is more than n = 1, against c "),
+    (40, "BLOCK-COUNTS class 4,32,4 refused (ValueError, exit 1)"),
     (None, "BLOCK-COUNTS: none, since the run declares no c, k and n"),
 ])
-def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_count_private(tmp_path, n, said):
-    """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
-    `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
-    count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
+def test_block_counts_refuses_a_window_circuit_no_registration_binds(tmp_path, n, said):
+    """`served_verdicts.sh block-counts 0` runs the real `verity-vllm block-counts` on window 0's circuit record at the
+    class beside the window's advice registration, which binds no circuit record: the count is refused and nothing is
+    published or kept; with no policy it says so and judges nothing."""
     from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
@@ -3504,14 +3502,9 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     (line,) = (out / "verdicts.txt").read_text().splitlines()
     assert rc == 0 and line.startswith(said), line
     public, private = out / "block-counts-4-32-4.json", d / "private" / "block-counts-4-32-4.json"
-    if n is None:
-        assert not public.exists() and not private.exists()
-        return
-    doc, held = json.loads(public.read_text()), json.loads(private.read_text())
-    assert (doc["verdict"], doc["n"]) == ("accept" if n == 40 else "refuse", n)
-    assert not {"blocks", "total", "windows"} & set(doc) and not any("blocks" in c for c in doc["classes"])
-    assert (held["total"], held["windows"], private.stat().st_mode & 0o777) == (2, 1, 0o600)
-    assert " 2 blocks" not in line and "count 2" not in line
+    assert not public.exists() and not private.exists()
+    if n is not None:
+        assert "is not the circuit record the registration binds (None)" in (d / "block-counts-4-32-4.err").read_text()
 
 
 W63K4 = "8,32,4,4,16"
