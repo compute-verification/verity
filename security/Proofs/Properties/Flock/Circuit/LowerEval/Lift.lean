@@ -992,6 +992,51 @@ theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) 
     · exact Or.inr (Or.inl h)
     · exact Or.inr (Or.inr h)
 
+def noScan : Flock.Program.Form → Bool
+  | .scan => false
+  | _ => true
+
+theorem noScan_form {f : Flock.Program.Form} (h : noScan f = true) : f = .prim ∨ f = .call ∨ f = .batch := by
+  cases f <;> simp_all [noScan]
+
+/-- `BatchNested`'s clauses at fuel `f`, each composite callee's at fuel `f - 1`; false at fuel 0. -/
+def batchNestedF (P : Prog) : ℕ → ℕ → Bool
+  | 0, _ => false
+  | f + 1, d =>
+    !(P.defs[d]!).prim &&
+    (P.defs[d]!).body.nodes.all (fun nd => noScan nd.form &&
+      if (P.defs[nd.fn]!).prim then
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key || (gateKind? (P.defs[nd.fn]!).key).isSome
+      else decide (nd.fn < d) && batchNestedF P f nd.fn) &&
+    (P.defs[d]!).body.nodes.any (fun nd =>
+      !(P.defs[nd.fn]!).prim || isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key)
+
+/-- `BatchNested` decided, at fuel the Definition's index plus one: a composite callee is earlier. -/
+def batchNestedB (P : Prog) (d : ℕ) : Bool := batchNestedF P (d + 1) d
+
+theorem batchNested_of_F (P : Prog) : ∀ f d, batchNestedF P f d = true → BatchNested P d
+  | 0, _, h => by simp [batchNestedF] at h
+  | f + 1, d, h => by
+    simp only [batchNestedF, Bool.and_eq_true, Bool.not_eq_true', Array.all_eq_true', Array.any_eq_true'] at h
+    obtain ⟨⟨hp, hall⟩, hex⟩ := h
+    refine .mk hp (fun nd h => noScan_form (hall nd h).1) (fun nd h hp' => ?_) (fun nd h hp' => ?_)
+      (fun nd h hp' hw => ?_) ?_
+    · have := (hall nd h).2
+      simp only [hp', Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at this
+      exact this.1
+    · have := (hall nd h).2
+      simp only [hp', Bool.false_eq_true, ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at this
+      exact batchNested_of_F P f _ this.2
+    · have := (hall nd h).2
+      rw [hp'] at hw
+      simp only [hp', ↓reduceIte, hw, Bool.false_or] at this
+      exact ⟨hp', this⟩
+    · obtain ⟨nd, h, hx⟩ := hex
+      exact ⟨nd, h, by simpa using hx⟩
+
+theorem batchNested_of_B {P : Prog} {d : ℕ} (h : batchNestedB P d = true) : BatchNested P d :=
+  batchNested_of_F P (d + 1) d h
+
 /-- **`LiftCalls`**: the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
 Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node
 calling its primitive's Boolean Definition, where every value of `S`'s Boolean map is a key of its index. A template of
