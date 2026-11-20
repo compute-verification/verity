@@ -9,7 +9,7 @@ egress (accepted, not certified) and one whose egress is out of range (rejected)
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
 verdict it is aimed at; a commitment of no reads, refused by both as they decode it; and `--server NAME --fill BYTES
 serve`, the served road's, which refuses by name a case of another server than the served node NAME, and one whose
-labels fill less than the registered BYTES, and answers the served node's as `serve` does; and the deployed command's
+labels fill less than the fill floor BYTES, and answers the served node's as `serve` does; and the deployed command's
 refusal by name of `serve` or `check` with no served node and fill."""
 
 from __future__ import annotations
@@ -180,10 +180,10 @@ def test_a_test_signed_wipe_is_never_the_deployed_protocols(deployed_server):
 
 OTHER_SERVER = C.OTHER_SERVER
 #: `MemoryAttester.WipeProtocol.unheld`'s refusal, the deployed command's for `serve` or `check` with no served node
-#: and registered fill
-UNHELD = ("verity/wipe/v0: serve and check are held to the served node and the memory registered for it: --server NAME "
-          "--fill BYTES serve, or --server NAME --fill BYTES check PARAMS COMMITMENT EVIDENCE; there is no form without "
-          "them")
+#: and fill floor
+UNHELD = ("verity/wipe/v0: serve and check are held to the served node and the fill floor the card file gives: "
+          "--server NAME --fill BYTES serve, or --server NAME --fill BYTES check PARAMS COMMITMENT EVIDENCE; there is "
+          "no form without them")
 
 
 def _served(exe: str, served: str, cases: list[dict], fill: int = 0) -> list[dict]:
@@ -214,8 +214,8 @@ def test_the_served_road_refuses_a_wipe_of_another_server_by_name(exe):
         assert a["commitment"] == mine["commitment"] and a["public"] is None
 
 
-def test_the_served_road_refuses_a_wipe_below_the_registered_fill():
-    """Held to a registered fill one byte above the honest wipe's, the honest wipe is refused by name before its
+def test_the_served_road_refuses_a_wipe_below_the_fill_floor():
+    """Held to a fill floor one byte above the honest wipe's, the honest wipe is refused by name before its
     signature or its reads; at its own fill it is accepted. The Lean and its Python twin answer alike at each."""
     honest = C.build("honest")
     filled = json.loads(bytes.fromhex(honest["commitment"]))["labels"] * sw.LABEL_BYTES

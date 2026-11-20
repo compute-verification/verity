@@ -233,9 +233,10 @@ node besides the one to a challenger on its own host, which the subprotocol adds
 "to", "via"}`, with `mbps` and `counted_by` (the network attester that counts it) when known (`wipe_party.link`).
 `trusted_sha512` is the verifier's pin, the SHA-512 of the memory attester's public key in 128 lowercase hex digits:
 the only key a session is accepted under. A challenger on its own host needs it; `None` trusts the key a challenger on
-this node made for the run. `fill_bytes` is the verifier's too, the bytes registered as the memory the wipe fills on the
-served node (a card file's `store.wipe_fill`), which the judge holds the session's fill to (`wipe-protocol --fill`): a
-session whose labels fill less is rejected. `None` registers none, and the judge holds the fill to 0 bytes."""
+this node made for the run. `fill_bytes` is the verifier's too, the fill floor the card file gives for the served
+node's card (its `store.wipe_fill`, a floor on the fill and not the card's memory), which the judge holds the session's
+fill to (`wipe-protocol --fill`): a session whose labels fill less is rejected. `None` gives none, and the judge holds
+the fill to 0 bytes."""
 LINK_KEYS = {"name", "to", "via", "mbps", "counted_by"}
 DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, "spare_bytes": 0, "direct": True}
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
@@ -417,7 +418,8 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node and the
-    registered fill (``--server NODE --fill wipe.fill_bytes serve``), once `ready` returns for it (a caller whose build runs beside the wipe waits there);
+    fill floor (``--server NODE --fill wipe.fill_bytes serve``), once `ready` returns for it (a caller whose build
+    runs beside the wipe waits there);
     without it the wipe is undecided, whatever the Python said (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of

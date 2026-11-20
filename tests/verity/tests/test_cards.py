@@ -122,8 +122,8 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
 MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"}, "host": {"disk.read"}}
 
 #: The entries one card of a kind holds alone, each with its card: a ceiling only that card's protocol states, built on
-#: its MEASURED_ONLY entries, so no other card of the kind has what it sums; and the wipe's fill (`store.wipe_fill`),
-#: registered only for the card the served wipe runs on.
+#: its MEASURED_ONLY entries, so no other card of the kind has what it sums; and the wipe's fill floor
+#: (`store.wipe_fill`), given only for the card the served wipe runs on.
 ONE_CARD = {"gpu": {"store.chip": "rtx-pro-6000-server", "store.wipe_fill": "h200-sxm-141gb"}}
 
 

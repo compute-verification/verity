@@ -3,8 +3,8 @@ module
 public import MemoryAttester.WipeProtocol
 
 /-! `wipe-protocol`: the command line of `MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`, the
-streamed-label wipe's verdict under S1's LMS, held to the served node NAME and the BYTES registered as the memory the
-wipe fills there (`MemoryAttester.WipeProtocol.mainOf`). `id` prints the protocol id; `--server NAME --fill BYTES check
+streamed-label wipe's verdict under S1's LMS, held to the served node NAME and the fill floor BYTES the card file
+gives (`MemoryAttester.WipeProtocol.mainOf`). `id` prints the protocol id; `--server NAME --fill BYTES check
 PARAMS COMMITMENT EVIDENCE` reads three files and prints the outcome's canonical JSON line; `--server NAME --fill BYTES
 serve` reads one case a line on standard input, `{"commitment": hex, "evidence": hex, "params": JSON}`, and prints one
 outcome line for each. Each refuses by name a case of another server than NAME, and one whose labels fill less than

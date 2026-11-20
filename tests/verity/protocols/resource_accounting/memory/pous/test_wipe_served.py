@@ -23,7 +23,7 @@ BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "audit
 
 
 def test_its_settings_and_facts_are_period_json_s_wipe_with_none_unset() -> None:
-    """Every key of `period.json`'s ``wipe`` but the verifier's (the pin and the registered fill) is a parameter or a
+    """Every key of `period.json`'s ``wipe`` but the verifier's (the pin and the fill floor) is a parameter or a
     fact, none both, and their defaults are CONFIG's but for the served store: a card's (``cuda``), streamed natively.
     The declaration writes its own defaults, since loading it loads no prover file; this holds them to CONFIG and
     UNSET."""
@@ -90,7 +90,7 @@ def _ctx(tmp_path, given=None, **launcher):
     (BOUND, {"pins": [PIN | {"protocol": "pous"}]}, "the pins handed to it give the memory-challenger no key for the wipe"),
     (BOUND, {"wipe_stream": "/exec/wipe_stream"}, "wipe_stream is the streamer of a memory attester on this node; one on "
                                                   "its own host (host, address, command) builds its own"),
-    (BOUND, {"fill": None}, "no fill registered for the card (ctx['fill'], the card file's store.wipe_fill)"),
+    (BOUND, {"fill": None}, "no fill floor for the card (ctx['fill'], the card file's store.wipe_fill)"),
     ({}, {}, "no challenger binding (host, address, command) and run_keys unset")])
 def test_the_attach_refuses_by_name_before_any_session(tmp_path, monkeypatch, settings, launcher, why) -> None:
     monkeypatch.setattr(wipe_run, "subprotocol", lambda *a, **kw: pytest.fail("a session started"))

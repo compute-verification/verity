@@ -33,8 +33,8 @@ the facts:
 - ``trusted``: a key the run pins for the wipe itself (the launcher's ``WIPE_KEY_SHA512``), trusted in place of the pins'
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
-- ``fill``: the bytes registered as the memory the wipe fills on this node's card (the card file's
-  ``store.wipe_fill``), `period.json`'s ``wipe.fill_bytes``, which the judge holds the session's fill to; a ``cuda``
+- ``fill``: the fill floor the card file gives for this node's card (its ``store.wipe_fill``, a floor on the fill and
+  not the card's memory), `period.json`'s ``wipe.fill_bytes``, which the judge holds the session's fill to; a ``cuda``
   store without it is refused;
 - ``judge``: the Lean ``wipe-protocol`` executable. Without it the wipe is undecided (`wipe_period.NO_JUDGE`);
 - ``wipe_stream``: the native streamer (``wipe_stream.c``) its launcher built where programs run, `period.json`'s
@@ -192,7 +192,7 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
     if "party" not in ctx:
         out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
     if s["store"] == "cuda" and not (type(ctx.get("fill")) is int and ctx["fill"] > 0):
-        out.append("no fill registered for the card (ctx['fill'], the card file's store.wipe_fill), which the judge "
+        out.append("no fill floor for the card (ctx['fill'], the card file's store.wipe_fill), which the judge "
                    "holds a cuda store's fill to")
     if ctx.get("wipe_stream") and s["host"]:
         out.append("wipe_stream is the streamer of a memory attester on this node; one on its own host (host, address, "

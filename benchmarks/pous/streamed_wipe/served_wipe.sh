@@ -22,7 +22,8 @@
 #                      refused
 #   WIPE_NODE          the wiped server's id (this host's name)
 #   WIPE_CARD          the card's SKU the wipe is measured for (h200-sxm-141gb), a cuda store's only; `any` is refused
-#                      by name: the SKU is checked, and the judge holds the fill to its card file's store.wipe_fill
+#                      by name: the SKU is checked, and the judge holds the fill to its card file's fill floor,
+#                      store.wipe_fill
 # The reads are the declaration's (`WIPE.settings`' reads, 0: the memory attester chooses them, wipe_party.READS on the
 # auditor's party), never this launcher's. The Lean judge, wipe-protocol, is the wipe's declared executable
 # (`Launch.executables`, declared.py), built here in a scratch copy of verity/ (never this tree's .lake) whose place
@@ -111,10 +112,11 @@ ctx = {"process": H.PIECE, "side_of": Side.of, "private": f"{serve_dir}/private"
 try:
     settings = S.settings(wipe, given)
     if settings["store"] == "cuda":
-        # the verifier's registered fill: the card file's, never the node's settings
+        # the verifier's fill floor: the card file's, never the node's settings
         store = device.load_card(sku, directory=Path(cards))["store"]
         if "wipe_fill" not in store:
-            raise ValueError(f"wipe: the card file {sku} registers no store.wipe_fill, the memory the wipe fills")
+            raise ValueError(f"wipe: the card file {sku} gives no store.wipe_fill, the fill floor the judge holds "
+                             f"the wipe to")
         ctx["fill"] = int(device.number(store["wipe_fill"]))
     # the scheme's attach hands the party in (below); this check runs before it, so it hands the scheme's own
     if why := WS.refusals(ctx | {"settings": settings, "pins": json.loads(pins) if pins else None,
