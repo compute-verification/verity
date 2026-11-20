@@ -3,25 +3,40 @@
 every file checked against its sha256 first. Standard library only, with `git` and `lake`. `setup.sh` runs it with the
 machine's own `python3`, which may be older than the workspace's 3.12, so it keeps to syntax Python 3.10 parses.
 
-    python tools/verity/lean/cache.py get [PKG...]       restore main's cached build of each package (default: every package with
+    python tools/verity/lean/cache.py get [PKG...] [--branch NAME]
+                                                  restore main's cached build of each package (default: every package with
                                                   a `lean-audit.json`) into Lake's local cache; `lake build` then unpacks
                                                   those modules instead of compiling them
+    python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME] [--platform TRIPLE]
+                                                  write each package's built executables to DIR/<package>/<name>, each
+                                                  checked first; no Lean toolchain is needed
     python tools/verity/lean/cache.py build PKG OUT      (integration, inside the build's sandbox) `lake build` PKG writing Lake's
-                                                  cache under OUT, and stage what it built in OUT/stage
-    python tools/verity/lean/cache.py publish --tree DIR --rev SHA --out DIR PKG...
+                                                  cache under OUT, and stage what it built in OUT/stage and its executables
+                                                  in OUT/bin
+    python tools/verity/lean/cache.py publish --tree DIR --rev SHA --out DIR [--branch NAME] PKG...
                                                   (integration, as root outside the sandbox) hash each package's
-                                                  `out_dir(OUT, PKG)`/stage and upload it with the key in /etc/verity/lean-cache.env
-    python tools/verity/lean/cache.py prune [--keep N] [--dry-run]
+                                                  `out_dir(OUT, PKG)`/stage and /bin and upload them with the key in
+                                                  /etc/verity/lean-cache.env
+    python tools/verity/lean/cache.py prune [--keep N] [--dry-run] [--branch NAME]
                                                   (integration) delete what no record of the last N published commits needs
 
-The bucket (`LEAN_CACHE_BUCKET`, `verity-lean-cache`) holds everything under `main/`, which a 7-day lock keeps from being
-overwritten or deleted:
-- `main/<toolchain>/<platform>/<package>/<manifest>/<rev>.sha256.json`: one record per published commit and package, the
+The bucket (`LEAN_CACHE_BUCKET`) holds `main/` and, for a branch's commits, `branch/<name>/`, which a 7-day lock keeps
+from being overwritten or deleted; each holds, under its own prefix:
+- `<toolchain>/<platform>/<package>/<manifest>/<rev>.sha256.json`: one record per published commit and package, the
   sha256 and size of every file `lake cache stage` wrote: Lake's `outputs.jsonl` (each module's input hash to its archive)
   and one archive per module, then for each dependency the build compiled (ArkLib and the packages it brings; not Mathlib
   and its own dependencies, which Mathlib's cache provides, nor a path dependency, a package of its own) its mappings
-  `dep.<scope>.jsonl` and its modules' artifacts;
-- `main/blobs/<sha256>`: each of those files under its own hash, shared across commits.
+  `dep.<scope>.jsonl` and its modules' artifacts; and under `bin`, each executable the build left in `.lake/build/bin/`
+  (an empty `bin` for a package that builds none);
+- `blobs/<sha256>`: each of those files under its own hash, shared across that prefix's commits.
+
+`main/` holds only commits on `origin/main`, and `branch/<name>/` only commits on `origin/<name>`, with its own blobs and its
+own prune; `get` reads `main/` first, and a branch only when told to (`--branch`).
+
+A fetched executable is for the prover finding out whether its evidence passes, and for development. Its integrity is the
+publisher's key and a sha256 against a record in this bucket: enough for completeness, not for a verdict an auditor relies
+on, which comes from executables built from the commit's source by whoever relies on them. A run of record that takes its
+verifier from `get --bin` says so in its output.
 
 The client downloads every file itself and checks it against the record before Lake sees it, then hands them to Lake
 (`lake cache unstage`, then `lake cache unstage DIR <scope>` per dependency). Lake never reads the bucket, because its
@@ -70,8 +85,12 @@ from pathlib import Path
 SCHEMA = "lean-cache/v1"
 TOP = "main/"
 BLOBS = TOP + "blobs/"
+#: a branch's prefix, `branch/<name>/`, beside `TOP` (`top`)
+BRANCH = "branch/"
 RECORD = ".sha256.json"
 MAPPING = "outputs.jsonl"
+#: the record's key for the package's executables, and the directory beside its stage where `build` copies them
+BIN = "bin"
 #: a staged dependency's mappings are `dep.<scope>.jsonl`, beside the root package's `outputs.jsonl`
 DEP = "dep."
 #: Lake's output of `build`, beside its stage
@@ -331,14 +350,23 @@ def identity(root: Path, pkg: str, plat: str | None = None) -> dict:
     return {"package": pkg, "toolchain": toolchain, "platform": plat, "manifest": sha256(m) if m.is_file() else EMPTY_SHA}
 
 
-def scope(ident: dict) -> str:
+def prefix_of(branch: str | None = None) -> str:
+    """Where ``branch``'s records and blobs live (`branch/<name>/`), or main's (`TOP`) for none."""
+    if branch is None:
+        return TOP
+    if not NAME.match(branch):
+        raise CacheError(f"not a branch name: {branch!r}")
+    return f"{BRANCH}{branch}/"
+
+
+def scope(ident: dict, prefix: str = TOP) -> str:
     """The key prefix of a package's records (elan's spelling of the toolchain: `leanprover--lean4---v4.34.0`)."""
     tc = ident["toolchain"].replace("/", "--").replace(":", "---")
-    return f"{TOP}{tc}/{ident['platform']}/{ident['package']}/{ident['manifest'][:16]}"
+    return f"{prefix}{tc}/{ident['platform']}/{ident['package']}/{ident['manifest'][:16]}"
 
 
-def record_key(ident: dict, rev: str) -> str:
-    return f"{scope(ident)}/{rev}{RECORD}"
+def record_key(ident: dict, rev: str, prefix: str = TOP) -> str:
+    return f"{scope(ident, prefix)}/{rev}{RECORD}"
 
 
 def check_record(raw: bytes, ident: dict, rev: str) -> dict:
@@ -355,8 +383,11 @@ def check_record(raw: bytes, ident: dict, rev: str) -> dict:
     files = rec.get("files")
     if not isinstance(files, dict) or MAPPING not in files:
         raise CacheError(f"its record lists no {MAPPING}")
+    bins = rec.get(BIN, {})
+    if not isinstance(bins, dict):
+        raise CacheError(f"its record's {BIN} is not a table of executables")
     total = 0
-    for name, f in files.items():
+    for name, f in [*files.items(), *bins.items()]:
         if not (isinstance(name, str) and NAME.match(name) and isinstance(f, dict) and isinstance(f.get("sha256"), str)
                 and SHA.match(f["sha256"]) and type(f.get("bytes")) is int and f["bytes"] >= 0):
             raise CacheError(f"its record has a bad entry {name!r}")
@@ -473,10 +504,30 @@ def former(root: Path, pkg: str) -> list[str]:
     return [f for f in m.former(pkg, m.recorded(root)) if PACKAGE.match(f) and ".." not in f.split("/")]
 
 
+def find(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], ident: dict,
+         branch: str | None = None) -> tuple[str, dict, str] | None:
+    """(prefix, identity, rev) of ``pkg``'s newest record among ``revs`` (newest first): under main's prefix, at the
+    package's path and then at each path it had before a layout move, then under ``branch``'s the same way. None when none
+    has one; a quarantined scope is passed over."""
+    for prefix in (TOP, *((prefix_of(branch),) if branch else ())):
+        # A layout move renames a package's directory and no byte Lake hashes, and records are keyed by that directory:
+        # until integration publishes a commit after the move, the build is under the path the package had before it.
+        for at in (ident, *({**ident, "package": old} for old in former(root, pkg))):
+            sc = scope(at, prefix)
+            if not quarantined(sc, q) and (rev := newest(s3, sc, revs)) is not None:
+                return prefix, at, rev
+    return None
+
+
+def built_by(prefix: str) -> str:
+    """Whose build a record under ``prefix`` is, for the log: `main's` or `branch/<name>'s`."""
+    return "main's" if prefix == TOP else f"{prefix.rstrip('/')}'s"
+
+
 def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=print, env=os.environ, plat: str | None = None,
-            lake: list[str] | None = None) -> bool:
-    """Main's newest cached build of ``pkg`` among ``revs`` into Lake's local cache, every file checked first. False when
-    there is nothing to restore; CacheError when a check fails."""
+            lake: list[str] | None = None, branch: str | None = None) -> bool:
+    """Main's newest cached build of ``pkg`` among ``revs`` (``branch``'s where main has none) into Lake's local cache, every
+    file checked first. False when there is nothing to restore; CacheError when a check fails."""
     if plat is None and shutil.which("lean", path=_elan_env(env)["PATH"]) is None:
         log(f"lean-cache: {pkg}: no Lean toolchain here (bash tools/verity/lean/setup.sh {pkg} installs elan, the pinned "
             f"toolchain and the dependencies); building from source")
@@ -489,21 +540,15 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
     if not fetched_deps(root / pkg):
         log(f"lean-cache: {pkg}: its dependencies aren't fetched (run tools/verity/lean/setup.sh {pkg}); building from source")
         return False
-    rev, at = newest(s3, sc, revs), ident
-    if rev is None:
-        # A layout move renames a package's directory and no byte Lake hashes, and records are keyed by that directory:
-        # until integration publishes a commit after the move, main's build is under the path the package had before it.
-        for old in former(root, pkg):
-            was = {**ident, "package": old}
-            if not quarantined(scope(was), q) and (rev := newest(s3, scope(was), revs)) is not None:
-                at = was
-                break
-    if rev is None:
-        log(f"lean-cache: {pkg}: no cached build of an ancestor of HEAD ({sc}); building from source")
+    found = find(root, pkg, s3, revs, q, ident, branch)
+    if found is None:
+        log(f"lean-cache: {pkg}: no cached build of an ancestor of HEAD ({sc}"
+            f"{f', nor under {prefix_of(branch)}' if branch else ''}); building from source")
         return False
-    raw = s3.get(record_key(at, rev))
+    prefix, at, rev = found
+    raw = s3.get(record_key(at, rev, prefix))
     if raw is None:
-        raise CacheError(f"{record_key(at, rev)} was listed but can't be read")
+        raise CacheError(f"{record_key(at, rev, prefix)} was listed but can't be read")
     rec = check_record(raw, at, rev)
     local = lake_cache(ident, env)
     deps = sorted(n[len(DEP):-len(".jsonl")] for n in rec["files"] if n != MAPPING and mapping(n))
@@ -518,8 +563,9 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
                 shutil.copyfile(mine, stage / name)
             else:
                 todo.append((name, f))
+        blobs = prefix + "blobs/"
         with ThreadPoolExecutor(THREADS) as ex:
-            list(ex.map(lambda nf: s3.download(BLOBS + nf[1]["sha256"], stage / nf[0], nf[1]["sha256"], nf[1]["bytes"]), todo))
+            list(ex.map(lambda nf: s3.download(blobs + nf[1]["sha256"], stage / nf[0], nf[1]["sha256"], nf[1]["bytes"]), todo))
         for dep in [None, *deps]:
             if dep is not None:
                 os.replace(stage / f"{DEP}{dep}.jsonl", stage / MAPPING)
@@ -533,38 +579,90 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
     arts = sum(not mapping(n) for n in rec["files"])
     with_deps = f", with {len(deps)} dependencies ({', '.join(deps)})" if deps else ""
     moved = "" if at is ident else f" (published as {at['package']}, before a layout move)"
-    log(f"lean-cache: {pkg}: main's build at {rev[:12]}{moved} restored ({arts} artifacts"
+    log(f"lean-cache: {pkg}: {built_by(prefix)} build at {rev[:12]}{moved} restored ({arts} artifacts"
         f"{with_deps}; {got >> 20} MiB in {len(todo)} files "
         f"fetched and checked in {time.monotonic() - t0:.0f} s, {len(rec['files']) - len(todo)} already here); "
         f"`lake build` unpacks them")
     return True
 
 
-def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, fetch_state=None) -> int:
+def default_platform() -> str:
+    """The target triple Lake names this machine's builds by, where no `lean` is here to say it (`get --bin`)."""
+    u = os.uname()
+    if u.sysname != "Linux":
+        raise CacheError(f"no published executables run on {u.sysname}: give --platform")
+    return f"{u.machine}-unknown-linux-gnu"
+
+
+def fetch_bin(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], dest: Path, log=print, plat: str | None = None,
+              branch: str | None = None) -> bool:
+    """``pkg``'s executables in its newest published build among ``revs`` (`find`), each written to ``dest``/<pkg>/<name>
+    with mode 755 once every one of them is checked against the record. False when nothing is published; CacheError when a
+    check fails or the record lists no executables (it was published before records held them)."""
+    if plat is None and shutil.which("lean", path=_elan_env()["PATH"]) is None:
+        plat = default_platform()
+    ident = identity(root, pkg, plat)
+    found = find(root, pkg, s3, revs, q, ident, branch)
+    if found is None:
+        log(f"lean-cache: {pkg}: no published build of an ancestor of HEAD ({scope(ident)}"
+            f"{f', nor under {prefix_of(branch)}' if branch else ''})")
+        return False
+    prefix, at, rev = found
+    key = record_key(at, rev, prefix)
+    raw = s3.get(key)
+    if raw is None:
+        raise CacheError(f"{key} was listed but can't be read")
+    rec = check_record(raw, at, rev)
+    if BIN not in rec:
+        raise CacheError(f"{key} lists no executables: it was published before records held them")
+    out = dest / pkg
+    out.mkdir(parents=True, exist_ok=True)
+    blobs, exes = prefix + "blobs/", sorted(rec[BIN].items())
+    with tempfile.TemporaryDirectory(prefix=".lean-cache-bin-", dir=out) as tmp:
+        with ThreadPoolExecutor(THREADS) as ex:
+            list(ex.map(lambda nf: s3.download(blobs + nf[1]["sha256"], Path(tmp) / nf[0], nf[1]["sha256"], nf[1]["bytes"]),
+                        exes))
+        for name, _ in exes:
+            os.chmod(Path(tmp) / name, 0o755)
+            os.replace(Path(tmp) / name, out / name)
+    log(f"lean-cache: {pkg}: {len(exes)} executables of {built_by(prefix)} build at {rev[:12]} in {out}, each checked "
+        f"against its record (for the prover and development: a verdict of record is built from the commit's source)")
+    return True
+
+
+def get(root: Path, pkgs: list[str], env=os.environ, log=print, now=time.time, fetch_state=None, bin_dir: Path | None = None,
+        branch: str | None = None, plat: str | None = None) -> int:
     """`get`: 0 when every package was restored or had nothing to restore, 1 when a check failed (that package builds from
-    source)."""
+    source). With ``bin_dir``, each package's executables instead (`fetch_bin`), and 1 also for a package that has none
+    published or a cache that can't be read: what was asked for isn't there."""
+    want = 1 if bin_dir is not None else 0
     if env.get("LEAN_CACHE", "").strip().lower() in OFF:
         log("lean-cache: off on this machine (LEAN_CACHE); building from source")
-        return 0
+        return want
     s3 = reader(env)
     if s3 is None:
         log(f"lean-cache: no read credential ({', '.join(READ_ENV)}); building from source")
-        return 0
+        return want
     cache = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / DOWNLOADS
     ok, q, why = state(env.get("LEAN_CACHE_STATE_URL") or STATE_URL, cache, now(), fetch_state)
     if not ok:
         log(f"lean-cache: {why}; building from source")
-        return 0
+        return want
     revs, status = ancestors(root), 0
     for pkg in pkgs:
         try:
-            restore(root, pkg, s3, revs, q, log, env)
+            if bin_dir is not None:
+                if not fetch_bin(root, pkg, s3, revs, q, bin_dir, log, plat, branch):
+                    status = 1
+            else:
+                restore(root, pkg, s3, revs, q, log, env, branch=branch)
         except CacheError as e:
             log(f"lean-cache: {pkg}: {e}; building from source")
             status = 1
         except (OSError, ValueError, ET.ParseError) as e:     # urllib's errors are OSErrors
             log(f"lean-cache: {pkg}: the cache is unreachable ({getattr(e, 'code', None) or type(e).__name__}); "
                 f"building from source")
+            status = max(status, want)
     return status
 
 
@@ -663,7 +761,7 @@ def build(pkg: Path, out: Path, lake: list[str] | None = None) -> int:
             return p.returncode
         shutil.rmtree(out / "stage", ignore_errors=True)
         rc = subprocess.run([*lake, "cache", "stage", str(out / MAPPING), str(out / "stage")], cwd=pkg, env=env).returncode
-        return rc or stage_deps(pkg, out, env, lake)
+        return rc or stage_deps(pkg, out, env, lake) or stage_bin(pkg, out)
     finally:
         shutil.rmtree(out / "lake-cache", ignore_errors=True)
         if copied:
@@ -691,6 +789,21 @@ def merged(tree: Path, rev: str, main: str = "origin/main") -> None:
         raise CacheError(f"{tree} has changes outside its build directories: {dirty.splitlines()[0]} ...")
 
 
+def stage_bin(pkg: Path, out: Path) -> int:
+    """Into ``out``/bin, made anew: each executable `lake build` left in ``pkg``/.lake/build/bin (a regular file with an
+    execute bit and a plain name; Lake's traces beside them are neither), copied by the build's user inside the sandbox.
+    Empty for a package that builds none."""
+    dest = out / BIN
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir()
+    src = pkg / ".lake" / "build" / "bin"
+    for p in sorted(src.iterdir()) if src.is_dir() else []:
+        st = p.lstat()
+        if stat.S_ISREG(st.st_mode) and st.st_mode & 0o111 and NAME.match(p.name):
+            shutil.copyfile(p, dest / p.name)
+    return 0
+
+
 def _opendir(name: str, at: int | None = None) -> int:
     try:
         return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=at)
@@ -706,15 +819,34 @@ def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
     directory is opened relative to its parent and each file relative to the stage, all with `O_NOFOLLOW`, and a file's
     bytes are read once, from the descriptor whose `fstat` was checked, into ``into``, a directory only root writes. A link
     planted to the key (or a hard link to it) is refused, and a file changed afterwards changes nothing uploaded."""
+    files = _staged(out, pkg, into, "stage")
+    if MAPPING not in files:
+        raise CacheError(f"{out}/{pkg}/stage has no {MAPPING}")
+    return files
+
+
+def staged_bin(out: Path, pkg: str, into: Path) -> dict[str, dict]:
+    """{name: {sha256, bytes}} of every executable `build` copied into `out_dir(out, pkg)`/bin (`stage_bin`), read as
+    `staged` reads the stage; {} where there is no such directory, and CacheError where it is a link."""
+    return _staged(out, pkg, into, BIN, missing_ok=True)
+
+
+def _absent(name: str, at: int) -> bool:
+    return name not in os.listdir(at)
+
+
+def _staged(out: Path, pkg: str, into: Path, part: str, missing_ok: bool = False) -> dict[str, dict]:
     fd = _opendir(str(out))
     try:
-        for part in [out_dir(out, pkg).name, "stage"]:
-            nxt = _opendir(part, fd)
+        for d in [out_dir(out, pkg).name, part]:
+            if missing_ok and d == part and _absent(d, fd):
+                return {}
+            nxt = _opendir(d, fd)
             os.close(fd)
             fd = nxt
         files, total = {}, 0
         for name in sorted(os.listdir(fd)):
-            where = f"{out}/{pkg}/stage/{name}"
+            where = f"{out}/{pkg}/{part}/{name}"
             if not NAME.match(name):
                 raise CacheError(f"{where!r} is not a plain file: its name")
             try:
@@ -727,7 +859,7 @@ def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
                     raise CacheError(f"{where} is not a plain file (mode {st.st_mode:o}, {st.st_nlink} links)")
                 total += st.st_size
                 if total > MAX_BYTES:
-                    raise CacheError(f"{out}/{pkg}/stage holds more than the {MAX_BYTES >> 30} GiB a package may")
+                    raise CacheError(f"{out}/{pkg}/{part} holds more than the {MAX_BYTES >> 30} GiB a package may")
                 h, n = hashlib.sha256(), 0
                 with open(into / name, "xb") as w:
                     while chunk := os.read(f, 1 << 20):
@@ -743,17 +875,15 @@ def staged(out: Path, pkg: str, into: Path) -> dict[str, dict]:
             files[name] = {"sha256": h.hexdigest(), "bytes": n}
     finally:
         os.close(fd)
-    if MAPPING not in files:
-        raise CacheError(f"{out}/{pkg}/stage has no {MAPPING}")
     return files
 
 
-def put_blob(s3: S3, p: Path, f: dict) -> bool:
-    """``p`` under its sha256; True when it was uploaded, False when the same bytes were already stored."""
+def put_blob(s3: S3, p: Path, f: dict, blobs: str = BLOBS) -> bool:
+    """``p`` under its sha256 below ``blobs``; True when it was uploaded, False when the same bytes were already stored."""
     body = p.read_bytes()
     if hashlib.sha256(body).hexdigest() != f["sha256"]:
         raise CacheError(f"{p} is not the file that was hashed")
-    key = BLOBS + f["sha256"]
+    key = blobs + f["sha256"]
     if s3.put(key, body):
         return True
     have = s3.head(key)
@@ -762,15 +892,20 @@ def put_blob(s3: S3, p: Path, f: dict) -> bool:
     return False
 
 
-def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, plat: str | None = None) -> str:
-    """Upload one package's build of ``rev``, staged in `out_dir(out, pkg)`/stage: its blobs, then its record. Returns what
-    happened."""
+def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, plat: str | None = None,
+                prefix: str = TOP) -> str:
+    """Upload one package's build of ``rev``, staged in `out_dir(out, pkg)`/stage and /bin, under ``prefix``: its blobs, then
+    its record. Returns what happened."""
     ident = identity(tree, pkg, plat)
     with tempfile.TemporaryDirectory(prefix="lean-cache-publish-") as tmp:
-        snap = Path(tmp)
+        snap, snap_bin = Path(tmp) / "stage", Path(tmp) / BIN
+        snap.mkdir()
+        snap_bin.mkdir()
         files = staged(out, pkg, snap)
-        rec = json.dumps({"schema": SCHEMA, "rev": rev, **ident, "files": files}, indent=1, sort_keys=True).encode() + b"\n"
-        key = record_key(ident, rev)
+        bins = staged_bin(out, pkg, snap_bin)
+        rec = json.dumps({"schema": SCHEMA, "rev": rev, **ident, "files": files, BIN: bins}, indent=1,
+                         sort_keys=True).encode() + b"\n"
+        key = record_key(ident, rev, prefix)
         old = s3.get(key)
         if old is not None:
             if old != rec:
@@ -780,27 +915,29 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
                 return "kept"
             return "already published"
         t0 = time.monotonic()
+        uploads = [(snap / n, f) for n, f in sorted(files.items())] + [(snap_bin / n, f) for n, f in sorted(bins.items())]
         with ThreadPoolExecutor(THREADS) as ex:
-            new = list(ex.map(lambda nf: put_blob(s3, snap / nf[0], nf[1]), sorted(files.items())))
+            new = list(ex.map(lambda pf: put_blob(s3, pf[0], pf[1], prefix + "blobs/"), uploads))
     if not s3.put(key, rec) and s3.get(key) != rec:
         raise CacheError(f"{key} was published meanwhile with other contents")
-    up = sum(f["bytes"] for (n, f), was in zip(sorted(files.items()), new) if was)
+    up = sum(f["bytes"] for (_, f), was in zip(uploads, new) if was)
     deps = sum(mapping(n) for n in files) - 1
-    log(f"lean-cache: {pkg}: published {key} ({len(files) - 1 - deps} artifacts, {deps} dependencies; {sum(new)} new "
-        f"blobs, {up >> 20} MiB, in "
-        f"{time.monotonic() - t0:.0f} s)")
+    log(f"lean-cache: {pkg}: published {key} ({len(files) - 1 - deps} artifacts, {deps} dependencies, {len(bins)} "
+        f"executables; {sum(new)} new blobs, {up >> 20} MiB, in {time.monotonic() - t0:.0f} s)")
     return "published"
 
 
 def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print, main: str = "origin/main",
-            plat: str | None = None) -> int:
-    """`publish`: each package in ``pkgs`` from `out_dir(out, pkg)`/stage. 0 when each was published (or already was), 1
-    when any was refused. ``out`` is a directory root made; run it only once no process of the build's user is left."""
-    merged(tree, rev, main)
+            plat: str | None = None, branch: str | None = None) -> int:
+    """`publish`: each package in ``pkgs`` from `out_dir(out, pkg)`/stage and /bin, under main's prefix, or under ``branch``'s
+    for a commit on `origin/<branch>`. 0 when each was published (or already was), 1 when any was refused. ``out`` is a
+    directory root made; run it only once no process of the build's user is left."""
+    prefix = prefix_of(branch)
+    merged(tree, rev, f"origin/{branch}" if branch else main)
     status = 0
     for pkg in pkgs:
         try:
-            publish_one(tree, rev, pkg, out, s3, log, plat)
+            publish_one(tree, rev, pkg, out, s3, log, plat, prefix)
         except CacheError as e:
             log(f"lean-cache: {pkg}: not published: {e}")
             status = 1
@@ -808,11 +945,12 @@ def publish(tree: Path, rev: str, out: Path, pkgs: list[str], s3: S3, log=print,
 
 
 def prune(s3: S3, keep: int = 20, min_age_s: float = 7 * 86400, now: float | None = None, dry_run: bool = False,
-          log=print) -> int:
-    """Delete the records of all but the ``keep`` newest published commits, and the blobs no remaining record names, each
-    only once it is older than ``min_age_s`` (the lock refuses earlier)."""
+          log=print, prefix: str = TOP) -> int:
+    """Delete the records under ``prefix`` of all but the ``keep`` newest commits published there, and the blobs no remaining
+    record there names, each only once it is older than ``min_age_s`` (the lock refuses earlier)."""
     now = time.time() if now is None else now
-    objs = s3.list(TOP)
+    blob_prefix = prefix + "blobs/"
+    objs = s3.list(prefix)
     records = [o for o in objs if o["key"].endswith(RECORD)]
 
     def _rev(o: dict) -> str:
@@ -830,12 +968,12 @@ def prune(s3: S3, keep: int = 20, min_age_s: float = 7 * 86400, now: float | Non
             continue
         raw = s3.get(o["key"])
         try:
-            files = json.loads(raw)["files"] if raw is not None else None
-            needed |= {f["sha256"] for f in files.values()}
+            rec = json.loads(raw) if raw is not None else None
+            needed |= {f["sha256"] for f in [*rec["files"].values(), *rec.get(BIN, {}).values()]}
         except (ValueError, KeyError, TypeError, AttributeError):
             log(f"lean-cache: prune: {o['key']} is unreadable; deleting nothing")
             return 1
-    blobs = [o for o in objs if o["key"].startswith(BLOBS) and o["key"][len(BLOBS):] not in needed
+    blobs = [o for o in objs if o["key"].startswith(blob_prefix) and o["key"][len(blob_prefix):] not in needed
              and now - o["modified"] >= min_age_s]
     for o in drop + blobs:
         if not dry_run:
@@ -850,9 +988,16 @@ def prune(s3: S3, keep: int = 20, min_age_s: float = 7 * 86400, now: float | Non
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    g = sub.add_parser("get", help="restore main's cached build of each package")
+    g = sub.add_parser("get", help="restore main's cached build of each package, or with --bin write its executables")
     g.add_argument("packages", nargs="*")
     g.add_argument("--root", type=Path, default=None)
+    g.add_argument("--bin", type=Path, default=None, metavar="DIR",
+                   help="write each package's executables to DIR/<package>/<name>, each checked first; for the prover "
+                        "and development, not for a verdict of record (built from the commit's source by whoever relies "
+                        "on it)")
+    g.add_argument("--branch", help="read this branch's builds (`branch/<name>/`) where main has none")
+    g.add_argument("--platform", help="the target triple of the executables (default: `lean --version`'s, else this "
+                                      "machine's `<arch>-unknown-linux-gnu`)")
     b = sub.add_parser("build", help="(integration, in the sandbox) build PKG writing Lake's cache, and stage it")
     b.add_argument("package", type=Path)
     b.add_argument("out", type=Path)
@@ -863,18 +1008,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--key-file", default=KEY_FILE)
     p.add_argument("--main", default="origin/main")
+    p.add_argument("--branch", help="publish a commit of `origin/<name>` under `branch/<name>/` (not main's prefix)")
     p.add_argument("--platform", help="the toolchain's target triple, so root never runs elan (default: `lean --version`)")
     r = sub.add_parser("prune", help="(integration) delete what the last N published commits don't need")
     r.add_argument("--keep", type=int, default=20)
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--key-file", default=KEY_FILE)
+    r.add_argument("--branch", help="prune `branch/<name>/` (default: main's prefix)")
     a = ap.parse_args(argv)
     if a.cmd == "get":
         here = Path.cwd()
         root = a.root or Path(subprocess.run(["git", "-C", str(here), "rev-parse", "--show-toplevel"],
                                              capture_output=True, text=True).stdout.strip() or here)
         pkgs = [os.path.relpath((here / x).resolve(), root.resolve()) for x in a.packages] or packages(root)
-        return get(root.resolve(), pkgs)
+        try:
+            return get(root.resolve(), pkgs, bin_dir=a.bin and a.bin.resolve(), branch=a.branch, plat=a.platform)
+        except CacheError as e:
+            print(f"lean-cache: {e}", file=sys.stderr)
+            return 2
     if a.cmd == "build":
         return build(a.package.resolve(), a.out.resolve())
     try:
@@ -885,11 +1036,15 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "publish":
         try:
             return publish(a.tree.resolve(), a.rev, Path(os.path.abspath(a.out)), a.packages, s3, main=a.main,
-                           plat=a.platform)
+                           plat=a.platform, branch=a.branch)
         except CacheError as e:
             print(f"lean-cache: nothing published: {e}", file=sys.stderr)
             return 1
-    return prune(s3, a.keep, dry_run=a.dry_run)
+    try:
+        return prune(s3, a.keep, dry_run=a.dry_run, prefix=prefix_of(a.branch))
+    except CacheError as e:
+        print(f"lean-cache: nothing pruned: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

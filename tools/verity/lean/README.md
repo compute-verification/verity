@@ -20,8 +20,11 @@ statement reads, the audit fails on any difference, and a changed record is show
 bash tools/verity/lean/setup.sh PKG
   elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when Mathlib is a dependency, and main's cached
   build of PKG (`cache.py`)
-python tools/verity/lean/cache.py get [PKG...]
-  main's cached build of each package, every file sha256-checked
+python tools/verity/lean/cache.py get [PKG...] [--branch NAME]
+  main's cached build of each package, every file sha256-checked (a branch's where main has none)
+python tools/verity/lean/cache.py get --bin DIR [PKG...] [--branch NAME]
+  each package's built executables (its Lean verifiers among them) in DIR/<package>/, sha256-checked, with no Lean here:
+  for the prover and development, not for a verdict of record
 python tools/verity/lean/check.py [--build] PKG...
   audit these packages (--build: setup.sh and lake build first)
 python tools/verity/lean/check.py --update PKG...
@@ -325,8 +328,8 @@ The auditor:
 - `merge.py`: git's merge drivers for `lean-audit.json`, import lines, lakefile lists and the limits.
 - `claim_ids.py`: the claim ids' table, `verity/commitments/claim_ids.json`, from the ids the locks' premise entries
   carry (`--write`).
-- `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
-  never reads it. `run_daily.py`: its daily publish.
+- `cache.py`: the build cache: main's compiled modules and built executables (and a branch's, under `branch/<name>/`),
+  published on merge and restored sha256-checked; the audit never reads it. `run_daily.py`: its daily publish.
 
 Lean's job in `check` and the tools around the audit:
 
