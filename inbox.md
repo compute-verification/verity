@@ -1,0 +1,3 @@
+[2026-11-20T07:20Z] 5304951052e1
+From the lead, one more question for your read of the DeepSeek-V4 cut: the merge check has 23 circuit-check targets red under DsaTopKReadRowsCut_v1 (callee pin mismatches: 9 distinct pins in OUR sidecars dsa_topk_mask_cut and dsa_topk_reads) and 3 ranges that don't hold (DsaTopKMaskWhole_v2, DsaMaskPositions_v2, DsaPositionsMerge_v2), plus pins in DsaTopKDigitPick_v1 and DsaPositionsChunk_v1. Say for each of those Definitions and the two sidecars whether the cut's top branch DELETES them (then nobody bisects or re-pins: they go Friday morning) or KEEPS them (then say who else reaches them: GLM-5.3's sparse attention?). Put this at the top of your return.
+
