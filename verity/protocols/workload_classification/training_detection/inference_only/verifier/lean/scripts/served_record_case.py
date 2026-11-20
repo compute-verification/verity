@@ -192,11 +192,55 @@ def served_case(program: str, record: str, log: list[dict], limits: dict, count:
     return case, changed
 
 
-def verdicts(case: dict) -> dict:
-    """The reference's two verdicts on `case`, form-only: the rate rule's whole verdict and the count's."""
+def why_nodes(case: dict) -> str:
+    """Which clause of the reference's `nodes_held` refuses `case`, with the values the clause was looking at: every
+    `return False` of that function, re-run on the case, says its source line and the loop's locals. The reference's
+    own verdict is `{"error": "nodes"}` for each, and the Lean's too; this is the harness's reading, not a rule."""
+    import ast
+
+    path = Path(ref.__file__)
+    fn = next(n for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.FunctionDef) and n.name == "nodes_held")
+    text = path.read_text()
+    saw: list = []
+    clause: dict[int, str] = {}
+    for node in sorted((n for n in ast.walk(fn) if isinstance(n, ast.If)), key=lambda n: n.end_lineno - n.lineno, reverse=True):
+        for r in (r for b in node.body for r in ast.walk(b) if isinstance(r, ast.Return)):
+            clause[r.lineno] = " ".join((ast.get_source_segment(text, node.test) or "").split())
+
+    class Traced(ast.NodeTransformer):
+        def visit_Return(self, node):
+            if isinstance(node.value, ast.Constant) and node.value.value is False:
+                return ast.copy_location(ast.Return(ast.parse(f"_no({node.lineno}, locals())", mode="eval").body), node)
+            return node
+
+    def no(lineno: int, seen: dict) -> bool:
+        saw.append((lineno, {k: v for k, v in seen.items() if isinstance(v, (int, str, tuple)) and not k.startswith("_")}))
+        return False
+
+    traced = ast.fix_missing_locations(Traced().visit(fn))
+    original = ref.nodes_held
+    ref.__dict__["_no"] = no
+    exec(compile(ast.Module([traced], []), str(path), "exec"), ref.__dict__)
+    try:
+        ref.check_detail(case["instance"], case["trusted"], form_only=True)
+    finally:
+        ref.nodes_held = original
+    if not saw:
+        return "no clause of nodes_held refused it"
+    lineno, seen = saw[0]
+    shown = ", ".join(f"{k}={str(v)[:60]}" for k, v in sorted(seen.items()) if k in ("k", "n", "what", "w", "b", "q", "os", "e", "kc", "lo", "hi", "A", "M", "tid", "port"))
+    return f"{path.name}:{lineno}: `if {clause.get(lineno, '?')}` refuses ({shown})"
+
+
+def verdicts(case: dict, explain: bool = False) -> dict:
+    """The reference's two verdicts on `case`, form-only: the rate rule's whole verdict and the count's. With `explain`
+    a `nodes` refusal carries ``message``, `why_nodes`' reading."""
     inst, tr = case["instance"], case["trusted"]
-    return {"check": ref.check_detail(inst, tr, form_only=True),
-            "count": ref.count(inst, tr, case["count"], form_only=True)}
+    got = {"check": ref.check_detail(inst, tr, form_only=True),
+           "count": ref.count(inst, tr, case["count"], form_only=True)}
+    if explain and got["check"].get("error") == "nodes":
+        got["check"] = {**got["check"], "message": why_nodes(case)}
+    return got
 
 
 def line(obj) -> str:
@@ -236,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out / f"{a.name}.case.json").write_text(line(case))
     if a.case_only:
         return 0
-    got = verdicts(case)
+    got = verdicts(case, explain=True)
     (a.out / f"{a.name}.reference.json").write_text(line(got))
     print(f"check: {json.dumps(got['check'], sort_keys=True)}")
     print(f"count: {json.dumps(got['count'], sort_keys=True)}")

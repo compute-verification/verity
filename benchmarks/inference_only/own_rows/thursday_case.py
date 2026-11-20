@@ -4,7 +4,8 @@ writes, its log a deployment record registering every registered parameter but t
 record registering those, every root a stand-in. Then the case with `--nodes` and the reference's verdicts, and the
 H200 policy's count limits beside the session policy's own `c` and `k` on this record.
 
-argv: TREE OUT
+argv: TREE OUT [LAYERS [R,P,O]]: the model's layers (its config's, 16, by default) and the window class
+(4,27,2 by default), to scale the case down.
 """
 import collections
 import hashlib
@@ -14,6 +15,8 @@ import time
 from pathlib import Path
 
 tree, out = Path(sys.argv[1]), Path(sys.argv[2])
+layers = int(sys.argv[3]) if len(sys.argv) > 3 else None
+R, P, O = (int(x) for x in sys.argv[4].split(",")) if len(sys.argv) > 4 else (4, 27, 2)
 out.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(tree / "tests/adapters/vllm"))
 SCRIPTS = tree / "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts"
@@ -28,9 +31,11 @@ import served_record_case as SRC  # noqa: E402
 
 t = time.perf_counter()
 cfg = json.loads((tree / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+if layers is not None:
+    cfg["num_hidden_layers"] = layers
 reg = T.Registered.of(T.Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(T.RTXPRO6000)),
                       default_seed=7)
-circuit = WCirc.lower(reg, WC.WindowClass(4, 27, 2), None, requests=[WC.Request(0, j, 27, 2) for j in range(4)]).circuit
+circuit = WCirc.lower(reg, WC.WindowClass(R, P, O), None, requests=[WC.Request(0, j, P, O) for j in range(R)]).circuit
 program, query = circuit.program()
 desc_bytes = b"".join(descriptor_chunks(program))
 print("lowered in", round(time.perf_counter() - t, 1), "s; description sha256", hashlib.sha256(desc_bytes).hexdigest(),
@@ -96,6 +101,8 @@ for name, nodes in (("thursday", False), ("thursday-nodes", True)):
     print(name, "changed:", changed, "declared nodes:", len(decl),
           dict(collections.Counter(("run" if (d.get("param") in run_values) else "param" if "param" in d else "table")
                                    for d in decl)), flush=True)
-    got = SRC.verdicts(case)
+    t = time.perf_counter()
+    got = SRC.verdicts(case, explain=True)
+    print(name, "reference seconds:", round(time.perf_counter() - t, 1), flush=True)
     print(name, "check:", json.dumps(got["check"], sort_keys=True), flush=True)
     print(name, "count:", json.dumps(got["count"], sort_keys=True), flush=True)
