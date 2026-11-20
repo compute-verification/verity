@@ -133,3 +133,27 @@ Several functions are twins only, because the Lean decides their verdict inside 
 only refuse to go on, never credit. The verdict of record checks the same rules again in Lean, except `salt.unit_reason`
 and `core_check.recorded_reason`: they guard a certified execution phase, which only the prover's `served_commit.Challenger`
 class runs, and no command runs one, so no verdict of record rechecks them yet.
+
+### Refusals only Python makes
+
+No Lean verdict makes these refusals. Each runs in the served road's challenger,
+`verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py`, and its own test stays until a Lean check makes it:
+
+| Code | What it holds | Where |
+| --- | --- | --- |
+| `unknown` | A check, sample or outcome names an execution phase that was never registered. | `Challenger._held` |
+| `not-drawn` | An execution phase is checked or delivered before its sample. | `Challenger._drawn` |
+| `drawn` | An execution phase's sampling coin opens once, and a second sample is refused. | `Challenger.select` |
+| `late-registration` | An execution phase registers before its epoch's draw coin is released. | `Challenger.register` |
+| `certifier` | A certified execution phase is its own pass's, with no replay and no recorded salt, and the certifier reveals what it committed. | `Challenger._certified` |
+| `unsalted` | A certified execution phase's sampled proof block reads its salt (`salt.unit_reason`). | `Challenger._certified` |
+| `reregistered` | A certified execution phase enters the registration ledger once per stream and prover. | `Challenger._certified` |
+| `level` | A registration's grid level has a population. | `register` |
+| `law` | The window's draw follows a subset sampling design. | `draw_bytes` |
+| `units` | The outcome's proof blocks are exactly the sampled ones, in order. | `Challenger.outcome` |
+| `public` | The outcome's public items are exactly `window.PUBLIC`. | `Challenger.outcome` |
+| `pouw-verifier` | An accepted stream outcome is accepted by the Lean answer too. | `Challenger.outcome` |
+| `lean-run` | The challenger runs the Lean verifier and gets a documented status from it. | `LEAN_RUN` |
+| `public-header` | The Lean verifier's verdict names the challenger's copy of the public file. | `PUBLIC_HEADER` |
+
+`reject`, Python's answer form, and `lean-python-disagree`, the of-record comparison, leave with the twins.
