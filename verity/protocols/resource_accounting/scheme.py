@@ -159,8 +159,11 @@ class Credited:
     that no reader imports the scheme's package for it. The circuit builder's: ``circuit``, the credited circuit of one
     product with its units, their public rows, honest values and reference outputs (each part's own arguments, in its
     docstring); ``laid``, its credited units as the circuit's laying lays them, each with its amount and the proof blocks
-    it holds, from the laid circuit's strata and the digest registered before any coin; ``credit``, those units credited
-    on an audit's verdicts, or refused by name. The credit reader's: ``served``, why a run's scheme instance is not the
+    it holds, read from the registered circuit: the laid circuit it is handed is refused unless its digest is the one
+    registered before any coin, and the units and their blocks are that circuit's own; ``credit``, those units credited
+    on an audit's verdicts, or refused by name, where the drawn blocks with their verdicts and each stratum's count of
+    drawn blocks are tables its caller supplies, not read from the registered circuit or the draw's record, so a credit is
+    only as good as the caller's reading of the draw. The credit reader's: ``served``, why a run's scheme instance is not the
     served one (a test instance's, which credits nothing), or None; ``assumption``, the named assumption a run of a
     scheme instance is credited at."""
 
