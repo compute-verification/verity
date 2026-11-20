@@ -1194,7 +1194,8 @@ _GATE_ID = re.compile(r"^((And|Xor)([2-9]|[1-9][0-9]+)|Not|Const1\[0x[01]\])_v1$
 def lift_shape(desc: dict, start: str) -> tuple[list[str], list[str]]:
     """Lean's lift to bits (`Flock.Lift.closure`) from Definition ``start`` of descriptor ``desc``, by ids alone: (the
     composites it lifts, those reaching a word primitive; the composites it leaves as they are though a parameter or the
-    return is wider than one bit). ValueError where a reached word primitive has no Boolean Definition."""
+    return is wider than one bit). ValueError where a reached word primitive has no Boolean Definition, or a lifted
+composite's key is a Definition of ``desc`` already."""
     defs, callees, boolean = desc["definitions"], desc["callees"], desc.get("boolean", {})
 
     def prim(f: str) -> bool:
@@ -1226,6 +1227,10 @@ def lift_shape(desc: dict, start: str) -> tuple[list[str], list[str]]:
             raise ValueError("the lift to bits: a cycle of calls")
         wordy.update((f, any(wordy[c] for c in calls(f))) for f in ready)
     composites = [f for f in seen if not prim(f)]
+    for f in composites:
+        lifted = f[:-1] + ',IR="boolean"}' if f.endswith("}") else f + '{IR="boolean"}'
+        if wordy[f] and lifted in defs:
+            raise ValueError(f"the lift to bits: '{lifted}' is already a Definition of C")
     return (sorted(f for f in composites if wordy[f]),
             sorted(f for f in composites if not wordy[f] and not (all(on_bits(t) for _, t in defs[f]["body"]["params"])
                                                                    and on_bits(defs[f]["body"]["ret_type"]))))

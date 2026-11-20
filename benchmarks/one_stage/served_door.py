@@ -334,7 +334,7 @@ def step(a) -> int:
                     exe = Path(a.lower) if a.lower else PF.lower_executable()
                     rec["build_s"] = round(time.perf_counter() - t, 1)
                     t = time.perf_counter()
-                    text = OC.lower(c_s, part, lambda: exe)
+                    text = OC.lower(c_s, part, lambda: exe, formed=OC.formed_in(c, part, [(u, u + 1)]))
                     (d / f"circuit-{u}.txt").write_bytes(text)
                     from verity.circuits import partition_object as PO
                     (d / f"partition-{u}.json").write_bytes(PO.canonical(part))

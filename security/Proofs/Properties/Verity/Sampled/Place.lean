@@ -44,11 +44,11 @@ noncomputable def placeFrom (C : Verity.Boolean.Circuit) (rows : Fin C.N → Opt
 
 open Classical in
 /-- **The place the committed files register for gate `g`**: the files parsed as `verify --zk` parses them (the
-circuit file and its tables by `Flock.Desc.parse`, the public file by `HmIn.loadPublic` with no public input port),
+circuit file and its tables by `Flock.Desc.parseStmt`, the public file by `HmIn.loadPublic` with no public input port),
 the deployed commitment's layout at that parse (`Live.Cd`'s), and `placeFrom` there at the gate's claims position;
 `none` where the files don't parse. -/
 noncomputable def placeOfRead (r : Verity.FileRead) (g : Fin r.circuit.N) : Option Place :=
-  match Flock.Desc.parse r.tags r.circuitFile r.tables with
+  match Flock.Desc.parseStmt r.tags r.circuitFile r.tables with
   | .error _ => none
   | .ok D =>
     match Flock.HmIn.loadPublic r.tags D.unroll {} r.publicFile with

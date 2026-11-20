@@ -30,9 +30,6 @@ NO_CASE = {
         "concats nest at most `Steps.FUEL` = 2^62 deep (the grid's own parse, `parsePartsIn 4`, reads a fixed shape one level deep)",
     "definitions nest deeper than this verifier follows": "definitions nest at most `Steps.FUEL` = 2^62 deep",
     "program: not UTF-8": "the port's descriptor is a JSON string, which is UTF-8; `Program.decode` takes bytes",
-    NAMED["UNCHECKED"]: "not written: a part refused by structure whose first wrong leaf lies past `Widths.WALK` = 2^20 leaves is an "
-                        "explicit one (an affine part's is found by bisection, a strided or grid one is undecided first): a descriptor "
-                        "of over 2^20 references, some 15 MB",
     **{t: AFTER_DECODE for t in (
         "program: references nest deeper than this verifier follows",
         "program: alias {a.compress} names no argument of an earlier node",

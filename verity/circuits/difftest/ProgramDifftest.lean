@@ -55,6 +55,18 @@ def decodeText : Difftest.Fn := fun j => do
     | .ok _ => Json.mkObj [("ok", true)]
     | .error e => Json.mkObj [("ok", false), ("message", Json.str e)]
 
-def table : String → Option Difftest.Fn := Difftest.table [("decode", decode), ("decode_text", decodeText)]
+/-- `decodeWith`, the decoder the verifier's setups run over a hash oracle, at SHA-512 in `Except`: `decode`'s answer
+(`{"ok": true, "program_digest", "boolean"}`), or `{"ok": false, "message": TEXT}`. -/
+def decodeWithText : Difftest.Fn := fun j => do
+  let text ← match j.getObjValAs? String "descriptor" with
+    | .ok s => pure s
+    | .error _ => throw "descriptor: not a string"
+  return match Flock.Program.decodeWith (M := Except String) (fun b => pure (Flock.Sha512.hash b)) text.toUTF8 with
+    | .ok P => Json.mkObj [("ok", true), ("program_digest", Flock.hexOf P.sha512),
+        ("boolean", Json.mkObj ((P.boolean.toList.mergeSort (fun a b => a.1 ≤ b.1)).map fun (k, v) => (k, Json.str v)))]
+    | .error e => Json.mkObj [("ok", false), ("message", Json.str e)]
+
+def table : String → Option Difftest.Fn :=
+  Difftest.table [("decode", decode), ("decode_text", decodeText), ("decode_with", decodeWithText)]
 
 end ProgramDifftest
