@@ -128,6 +128,16 @@ def unitOuts (P : Prog) (g : ℕ) : Array Spot.BlockFront.Port :=
   | .ok ps => ps
   | .error _ => #[]
 
+/-- **Unit `g` resolves**: it is a member of a root node of C, its operands are located (`Spot.BlockFront.operandsW`
+returns), and each of its return leaves resolves to a gate (`resolve`). On an accept its operands come from
+`admittedBlock`, which runs `operandsW` on every unit of the block; no check of the accept resolves every return leaf
+(`front` resolves only those read outside the block). -/
+def UnitResolves (P : Prog) (g : ℕ) : Prop :=
+  ∃ k m x, Spot.BlockFront.unitAt P g = .ok (k, m) ∧ (P.defs.getD P.root default).body.nodes[k]? = some x ∧
+    (∃ ops, Spot.BlockFront.operandsW P x m = .ok ops) ∧
+    ∀ l < (P.defs.getD x.fn default).ret.leaves, ∃ q,
+      resolve P P.rootScope { p := false, i := k, j := m * (P.defs.getD x.fn default).ret.leaves + l } = .ok q
+
 /-- C's values at unit `g`'s arguments, in its template's parameter order, as bits: the trace at each argument's gate,
 whether that gate is outside the block (a port of the front) or inside it (another unit's return leaf). -/
 def argBits {P : Prog} (X : (ofProgram P).Trace) (g : ℕ) : List Bool := portBits X (unitArgs P g)
@@ -159,13 +169,18 @@ def OutsAgree {P : Prog} {n : ℕ} (Pt : Verity.Partition (ofProgram P) n) (a : 
 /-- **`DoorLengths`**: at every unit of the block, the bits of a trace of C at its arguments are exactly the input
 rows' bits, and at its return leaves exactly the return fields', the block's units admitted in C (`admittedBlock`), so `getD`'s default never stands for a bit. Lengths
 only: the order of the bits inside a word (`portBits`, low bit first) meets the lift's leaf order in `BlockEvalDoor`,
-which evaluates the lift on these bits. -/
+which evaluates the lift on these bits. C is topological (`Prog.orderViolation`), which the partition's order check (`Spot.Partition.evaluate`) refuses
+without on every accept; every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
+inference-only's checks accept (`Desc.walkable`, `Desc.analyze`) and which SPOT's accept checks nowhere; and every unit
+of the block resolves (`UnitResolves`). -/
 def DoorLengths : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Spot.BlockFront.front P units = .ok fr →
+    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ g ∈ units, UnitResolves P g) →
     ∀ (X : (ofProgram P).Trace), ∀ g ∈ units, (argBits X g).length = bitsOf a.ins ∧ (outBits X g).length = bitsOf a.fields
 
 /-- **`LowerEvalDoor`, `LowerEval` at the door.** For the block's Program `restrict P units` of a decoded C with no root
@@ -197,7 +212,10 @@ def RestrictBodyAgrees : Prop :=
 /-- **`BlockEvalDoor`**: in block `u`'s local evaluation `Y` of a trace of C, each unit `g` of the block, an instance of
 the template `Spot.OneStageZk.admitted` admits, the block's units admitted in C (`admittedBlock`), lifted to bits
 (`Flock.Lift.lift`), evaluates on `Y` at its arguments to `Y` at its return leaves, bit for bit. An argument inside
-the block reads `Y` at another unit's return leaf. -/
+the block reads `Y` at another unit's return leaf. C is topological (`Prog.orderViolation`), which the partition's order check (`Spot.Partition.evaluate`) refuses
+without on every accept; every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
+inference-only's checks accept (`Desc.walkable`, `Desc.analyze`) and which SPOT's accept checks nowhere; and every unit
+of the block resolves (`UnitResolves`). -/
 def BlockEvalDoor : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ),
@@ -205,6 +223,8 @@ def BlockEvalDoor : Prop :=
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.BlockFront.front P units = .ok fr → Flock.Lift.lift S a.d = .ok (L, e) →
+    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ g ∈ units, UnitResolves P g) →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace, ∀ g ∈ units,
       let Y := (partOf P blocks).localEval X u.castSucc
