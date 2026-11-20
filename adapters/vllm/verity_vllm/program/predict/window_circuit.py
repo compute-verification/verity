@@ -35,7 +35,7 @@ one allocation after the walk, in slot order, whatever the Programs' order: entr
 Programs' row reads it as. A Program past the
 positions a key block holds at the model and grain is refused at the first position past them, naming that bound. A
 collector's rows and an entry's are a few words at a small class, too narrow for a proof block of their own, so none is a
-unit of its own. The state rows each lane's unit reads and the entries are the circuit's external ports.
+unit of its own. The state rows `ScanState_v1` reads and the entries are the circuit's external ports.
 A slot's Program
 hands all its outputs to the scan at its anchor, which carries them across windows (`SC_GROUP`), so no Program runs into the
 next window. `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window past the class's envelope and
@@ -350,8 +350,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     if len(entry_units) != 1 or any(r.entry_unit is None for r in progs):
         raise Unexpressible(f"the Programs' entries are units of {sorted(entry_units)}, not each one of one template")
     circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(*(f"{descriptor_id(s)}/state" for s in scans if descriptor_id(s) in b.units),
-                                   f"{entry_units.pop()}/o0"),
+                         external=(f"{otid}/state", f"{entry_units.pop()}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg, order=IF.ordered(b.units, wires, b.starts) if wires else None,
                          blocks=IF.Blocks(programs, max(r.positions for r in progs), tuple(inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans, None if order is None else tuple(order), tuple(empty),
