@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tests/verity/protocols/proofs/spot/verifier/lean"))
+sys.path.insert(0, str(ROOT / "tests/verity/protocols/proof/spot/verifier/lean"))
 
 import test_difftest as T  # noqa: E402
 from verity.circuits import codec  # noqa: E402

@@ -10,7 +10,7 @@ Pearl+'s instance of `Verity.Scheme`, a family over its game's setting (`Setting
 tiles, the sample's weight, the workload, the adversary and its declarations, the number of samples, the budget, the
 TT_OUT target `g₀`, the gap `γ = γn/γd`, the resolution `D` and the oracle bound `q`. Its game is
 Pearl-C's sampled audit sampled as the run samples (`Pouw.PearlC.GGapSampledDraw`, `Definitions.Pouw.PearlC.TileSample`),
-whose python is `verity.protocols.resource_accounting.compute.pouw.scheme` (`pearl-plus`).
+whose python is `verity.protocols.accounting.compute.pouw.scheme` (`pearl-plus`).
 
 * **Blocks** are the layout's audit tiles, `Fin NT` of `TR.tiling`.
 * **The unit.** The sides are naturals in one unit: `1/(D·γd)` of the cost model's unit (one dense FP8 MAC at the H100's

@@ -10,8 +10,8 @@ import pytest
 
 from verity import config as K
 from verity.channel import Refused
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.scheme import Launch
+from verity.protocols.run import schemes
+from verity.protocols.accounting.scheme import Launch
 from verity_cli import run as R
 
 REG = R.registry()
@@ -23,7 +23,7 @@ OWNERS = {"pouw": "compute-accounting"}
 def test_the_undeclared_rows_only_shrink() -> None:
     grown = sorted(set(T.UNDECLARED) - set(OWNERS))
     assert not grown, (f"served_table.UNDECLARED gained {grown}: a component is a scheme's declaration "
-                       "(verity.protocols.compose.schemes), never a new row here")
+                       "(verity.protocols.run.schemes), never a new row here")
     now = sorted(n for n in T.UNDECLARED if n in schemes.DECLARATIONS)
     assert not now, "; ".join(f"{n} is declared now: {OWNERS[n]} deletes its row from served_table.UNDECLARED "
                               "(and from OWNERS here)" for n in now)
@@ -100,14 +100,14 @@ def test_the_attesters_piece_is_its_declarations_and_neither_the_tables_former_n
     """The network attester's piece is its scheme's `launch_attester` with network-period and network-rows of its
     Lake package: the table's former ``attester_entry``, ``_attester_piece`` and ``ATTESTER_PIECE``, and the
     variables served_verdicts.sh reads the piece's commands from, set to another, change none of it."""
-    from verity.protocols.resource_accounting.network import scheme as NS
+    from verity.protocols.accounting.network import scheme as NS
 
     def piece() -> tuple:
         p = T._pieces(T.MANIFESTS["network-attester"])[T.WORKERS]
         return p.hooks.__code__, p.scripts, p.executables
 
     before = piece()
-    package = "verity/protocols/resource_accounting/network/verifier/lean"
+    package = "verity/protocols/accounting/network/verifier/lean"
     assert before == (NS._attester_hooks.__code__, (NS.ATTESTER_PIECE,),
                       tuple(schemes.get("network-attester").pieces[T.WORKERS].executables))
     assert [(e.package, e.target) for e in before[2]] == [(package, "network-period"), (package, "network-rows")]

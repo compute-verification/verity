@@ -85,11 +85,11 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a7  # noqa: E402
 from verity.commitments import docket_digest as DD
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
-from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.protocols.proof.spot.prover import docket as DK  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
 from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -694,7 +694,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
     ``out``."""
     from circuit_check import targets as TG
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.protocols.proof.spot.verifier.one_stage import registered as G
     from verity.commitments import registered_value as RV
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program

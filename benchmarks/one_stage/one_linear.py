@@ -136,8 +136,8 @@ def window(a: argparse.Namespace) -> int:
     from verity.commitments import docket_digest as DD, registered_value as RV
     from verity.commitments.periods import interface as IF
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity.protocols.proofs.spot.prover import docket as DK
-    from verity.protocols.proofs.spot.verifier import service as S
+    from verity.protocols.proof.spot.prover import docket as DK
+    from verity.protocols.proof.spot.verifier import service as S
 
     t0, out = time.perf_counter(), Path(a.out)
     ck = checkpoint(Path(a.cache))
@@ -174,7 +174,7 @@ def two_levels() -> tuple[bytes, dict]:
 
 
 def levels(_a: argparse.Namespace) -> int:
-    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    from verity.protocols.proof.spot.verifier.one_stage import one_circuit as OC
 
     c, part = two_levels()
     try:

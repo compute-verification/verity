@@ -65,7 +65,7 @@ LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.
 MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
 #: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
 #: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
-VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFIER = "verity/protocols/proof/flock/verifier"
 VERIFY_PROOF_ROOT = "FlockVerify"
 
 

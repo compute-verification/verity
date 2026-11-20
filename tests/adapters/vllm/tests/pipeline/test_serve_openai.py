@@ -18,13 +18,13 @@ import numpy as np
 import pytest
 import torch
 from verity import hooks as H
-from verity.protocols.compose import schemes as declarations
-from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
-from verity.protocols.resource_accounting.network.verifier import id_form as IDF
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.run import schemes as declarations
+from verity.protocols.accounting.network.prover import ids_protocol as idp
+from verity.protocols.accounting.network.verifier import id_form as IDF
+from verity.protocols.accounting.network.verifier import io_tie as IT
 from verity import release as REL
-from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
-from verity.protocols.resource_accounting.scheme import Lacks
+from verity.protocols.accounting.network.verifier.link_frame import HEADER
+from verity.protocols.accounting.scheme import Lacks
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR

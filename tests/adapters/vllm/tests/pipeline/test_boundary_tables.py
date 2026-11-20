@@ -24,9 +24,9 @@ from verity.circuits.types import Array
 from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.verifier.one_stage import partition as P
+from verity.protocols.proof.spot.verifier.one_stage import verifier as V
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks

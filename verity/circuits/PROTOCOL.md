@@ -2,7 +2,7 @@
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
-implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
+implementation, such as the Lean port of `Q_word` (`verity/protocols/proof/spot/verifier/lean/`). It describes the bytes the codec writes and moves no digest.
 
 - Reference: `verity.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
   `definition_digest`),
@@ -836,7 +836,7 @@ block's port is follows from the Program's description alone: the SPOT verifier 
 over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
 that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
 return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root
-call or batch calls (`Spot.CertifiedRows`, `verity/protocols/proofs/spot/verifier/one_stage/certified_rows.py`).
+call or batch calls (`Spot.CertifiedRows`, `verity/protocols/proof/spot/verifier/one_stage/certified_rows.py`).
 
 An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
 unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those
@@ -918,7 +918,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/protocols/resource_accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/protocols/accounting/compute/pouw/prover/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf

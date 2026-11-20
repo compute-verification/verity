@@ -81,7 +81,7 @@ from verity_bench.vllm.presets import (
 SCHEMA = "verity-bench/steady-spec/v0"
 #: what a point's time depends on in the tree, beside its spec's setup: the prover (its sources, its patches of
 #: upstream and its Python, which drives the provers), the scripts that build it, and the script that times it
-CLOSURE = ("verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "benchmarks/one_stage/server_rate.py")
+CLOSURE = ("verity/protocols/proof/flock/prover", "verity/protocols/proof/flock/prover/pod", "benchmarks/one_stage/server_rate.py")
 #: what of `CLOSURE`'s directories is no source: tests, documents and the interpreter's caches
 NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
 #: the row's field for the versions the node side read on the node: the driver's (`driver`) and the toolkit's

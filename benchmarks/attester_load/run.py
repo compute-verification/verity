@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVE = ROOT / "verity/protocols/resource_accounting/network/attester/network_attester_serve.py"
+SERVE = ROOT / "verity/protocols/accounting/network/attester/network_attester_serve.py"
 FIRST, LAST, TICK = ("network-accounting/attester-added-first-byte", "network-accounting/attester-added-last-byte",
                      "network-accounting/attester-tick-lateness")
 #: a cell's header bytes (`link_frame.HEADER`): an id event fills the rest of its cell, and the id form fails any other size
@@ -54,7 +54,7 @@ SESSION_LOG = "warden.json"
 
 def schedule(scan_class: str, overrides: dict[str, int]) -> dict[str, int]:
     """The scan class's schedule, its network attester's integer fields (`network_attester.W63`, `W63K4`), with `overrides` in place."""
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     W = schemes.catalog("network-attester", "attester")
 

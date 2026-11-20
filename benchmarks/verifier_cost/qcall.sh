@@ -10,11 +10,11 @@ O=${OUT:?run under research run, which sets OUT}
 cfg=${1:?usage: qcall.sh CONFIG X...}
 shift
 uv sync -q --all-packages --extra torch-cpu
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof) && \
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-difftest); } > "$O/build.log" 2>&1 \
+{ (cd verity/protocols/proof/flock/verifier && lake build verity-verify-proof) && \
+  (cd verity/protocols/proof/spot/verifier/lean && lake build spot-difftest); } > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log" >&2; exit 1; }
-FV=$PWD/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
-SP=$PWD/verity/protocols/proofs/spot/verifier/lean/.lake/build/bin/spot-difftest
+FV=$PWD/verity/protocols/proof/flock/verifier/.lake/build/bin/verity-verify-proof
+SP=$PWD/verity/protocols/proof/spot/verifier/lean/.lake/build/bin/spot-difftest
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 uv run python - "$cfg" "$d" "$O" <<'EOF'

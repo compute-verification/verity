@@ -27,7 +27,7 @@ from verity.commitments.frame_v3.vectors import expand
 from verity.circuits.ops.fp32 import Bf16Add
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import Bf16GtStrict, SelectBf16
-from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as door
+from verity.protocols.proof.spot.verifier.one_stage import one_circuit as door
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 REWRITE = ("the vector differs from the tree's; a change meant to move it rewrites it with "

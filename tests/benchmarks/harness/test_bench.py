@@ -429,7 +429,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
+    from verity.protocols.accounting.compute.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
@@ -502,8 +502,8 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
     """A protocol arm whose entry is a declared scheme's name hands it settings it takes, read as
     `verity_vllm.LLM` reads them (`option_settings`) and checked by the scheme's own `settings`: its in-process coins
     the string its settings say, ``coins = "in-process"``, or, where the spec gives one, its challenger's address alone."""
-    from verity.protocols.compose import schemes
-    from verity.protocols.resource_accounting.scheme import settings
+    from verity.protocols.run import schemes
+    from verity.protocols.accounting.scheme import settings
     from verity_vllm.llm import option_settings
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")

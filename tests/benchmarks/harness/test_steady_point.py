@@ -149,10 +149,10 @@ BOUND = {
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
     "the warm sessions": {"spec": {"row0": {"warm": 3}}},
     "the period its sessions file in": {"spec": {"row0": {"period": 4}}},
-    "the prover's source": {"files": {"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
-    "a kernel": {"files": {"verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
-    "a new source file": {"files": {"verity/protocols/proofs/flock/prover/src/extra.rs": "\n"}},
-    "the build's flags": {"files": {"verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
+    "the prover's source": {"files": {"verity/protocols/proof/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
+    "a kernel": {"files": {"verity/protocols/proof/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
+    "a new source file": {"files": {"verity/protocols/proof/flock/prover/src/extra.rs": "\n"}},
+    "the build's flags": {"files": {"verity/protocols/proof/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
     "the timing script": {"files": {"benchmarks/one_stage/server_rate.py": "# times otherwise\n"}},
     "the setup's text": {"files": {SETUP: "export VERITY_BENCH_STEADY_BIN=/other/prover\n"}},
 }
@@ -164,8 +164,8 @@ UNBOUND = {
     "where a statement is staged": {"spec": {"row0": {"staged": "/dev/shm/gemm64"}}},
     "the row's other counts": {"spec": {"row0": {"provers": [2]}}},
     "another row": {"spec": {"row": [SPEC["row"][0], SPEC["row"][1] | {"n": 8, "warm": 4}]}},
-    "the prover's tests": {"files": {"tests/verity/protocols/proofs/flock/prover/test_prover.py": "def test(): assert 1\n"}},
-    "a document": {"files": {"verity/protocols/proofs/flock/prover/README.md": "the prover, again\n"}},
+    "the prover's tests": {"files": {"tests/verity/protocols/proof/flock/prover/test_prover.py": "def test(): assert 1\n"}},
+    "a document": {"files": {"verity/protocols/proof/flock/prover/README.md": "the prover, again\n"}},
     "a file outside the closure": {"files": {"benchmarks/harness/verity_bench/cli.py": "# the harness\n"}},
 }
 
@@ -191,8 +191,8 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh",
-                            "verity/protocols/proofs/flock/prover/cuda/ntt.cu", "verity/protocols/proofs/flock/prover/src/main.rs"}
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/proof/flock/prover/pod/70-class-sweep.sh",
+                            "verity/protocols/proof/flock/prover/cuda/ntt.cu", "verity/protocols/proof/flock/prover/src/main.rs"}
     assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
@@ -208,19 +208,19 @@ def test_in_a_checkout_only_tracked_files_count_so_a_shipped_tree_gives_the_same
     root, spec = tree(tmp_path, name="checkout")
     git(root)
     assert identities(tmp_path, "checkout") == shipped
-    for left in ("verity/protocols/proofs/flock/prover/target/release/flock-circuit", "verity/protocols/proofs/flock/prover/src/draft.rs",
-                 "verity/protocols/proofs/flock/prover/pod/notes.sh"):
+    for left in ("verity/protocols/proof/flock/prover/target/release/flock-circuit", "verity/protocols/proof/flock/prover/src/draft.rs",
+                 "verity/protocols/proof/flock/prover/pod/notes.sh"):
         (root / left).parent.mkdir(parents=True, exist_ok=True)
         (root / left).write_text("left by a build\n")
     assert identities(tmp_path, "checkout") == shipped, "untracked"
-    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proof/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
                       )[POINT] != shipped[POINT], "a tracked file as the working tree has it"
-    subprocess.run(["git", "add", "verity/protocols/proofs/flock/prover/src/draft.rs"], cwd=root, check=True)
-    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": FILES[
-        "verity/protocols/proofs/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
+    subprocess.run(["git", "add", "verity/protocols/proof/flock/prover/src/draft.rs"], cwd=root, check=True)
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proof/flock/prover/src/main.rs": FILES[
+        "verity/protocols/proof/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
 
 
-@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh"])
+@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/proof/flock/prover/pod/70-class-sweep.sh"])
 def test_a_tree_without_a_path_the_identity_covers_is_refused(tmp_path, gone):
     root, spec = tree(tmp_path, files={gone: None})
     with pytest.raises(ValueError, match=f"holds no {re.escape(gone.rsplit('/', 1)[0] if 'pod' in gone else gone)}"):

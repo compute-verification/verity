@@ -25,12 +25,12 @@ inputs = [
     # the network attester makes them, which the server's feed reads in a network attester trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
-    "verity/protocols/resource_accounting/network/verifier/__init__.py",
-    "verity/protocols/resource_accounting/network/verifier/release.py",
-    # `verity.protocols.resource_accounting.network.verifier.pacer` (the probes' tests): the network attester's clock, which its
+    "verity/protocols/accounting/network/verifier/__init__.py",
+    "verity/protocols/accounting/network/verifier/release.py",
+    # `verity.protocols.accounting.network.verifier.pacer` (the probes' tests): the network attester's clock, which its
     # probes read
-    "verity/protocols/resource_accounting/network/verifier/pacer.py", "verity/protocols/__init__.py",
-          "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/network/__init__.py",
+    "verity/protocols/accounting/network/verifier/pacer.py", "verity/protocols/__init__.py",
+          "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/network/__init__.py",
     # the integration's `errors` re-exports `verity.errors.Refused`
     "verity/errors.py", "benchmarks/network_e2e/traces"]
 

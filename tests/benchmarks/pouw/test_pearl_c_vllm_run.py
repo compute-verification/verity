@@ -6,7 +6,7 @@ from conftest import load
 
 
 def test_a_served_arm_runs_only_declared_schemes_by_name_and_names_any_other():
-    from verity.protocols.compose import schemes
+    from verity.protocols.run import schemes
 
     SS = load("pearl_c_vllm/served_step.py")
     assert SS.undeclared(["pearl-plus"]) is None
