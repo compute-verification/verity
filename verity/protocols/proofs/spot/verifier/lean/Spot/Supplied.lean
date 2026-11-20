@@ -32,7 +32,8 @@ holds before the sample, so the prover never chooses it.
 **Scope.** Nothing reads the storage session's three bodies (`pous.session.round_coin/v1`, `.header/v1`, `.context/v1`)
 through the door yet: they are definitions with their refusals, held to the Python's by `spot-difftest`. The verifier holds
 a function's value as a coin (`coins`: what a coin is released as) or as a released commitment (`commitments`: registered
-before any coin, so the order rule, `order`, counts `coins` alone). A round's coin is held to the coin root of the
+before any coin: the order rule, `order`, counts `coins` alone as coins, and holds the `place` each held commitment carries
+before the place of every coin read beside it). A round's coin is held to the coin root of the
 commitment the verifier holds, never to one the coin carries, and a session that did not end complete with all its rounds has
 no statement.
 -/
@@ -496,6 +497,13 @@ def ofMark (coins commitments : Array (String × ByteArray)) (v : String) (m : M
     throw s!"supplied input {v}: {m.fn}'s value is {8 * n} bits, and the mark says {m.bits}"
   return #[(if m.layout == "le" then #[(LE, "")] else #[]) ++ ss]
 
+/-- The place a held commitment was registered at: its JSON's `place`, a natural; none for a text that is no JSON object of
+one. -/
+private def commitmentPlace (b : ByteArray) : Option Nat := do
+  let s ← String.fromUTF8? b
+  let .ok j := Flock.JsonParse.parse s | none
+  nat? (getD j "place")
+
 /-- A Python list of strings' repr, as `supplied.check_order` names the late commitments. -/
 private def pyNames (xs : List String) : String := "[" ++ ", ".intercalate (xs.map fun x => "'" ++ x ++ "'") ++ "]"
 
@@ -504,8 +512,11 @@ coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin whe
 verifier holds (`coins`), at its place in `released` (`{function: n}`: the coin was released after n records, this one
 the `records`-th, its commitments before any coin it reads); its rows' sources read the commitments: a `value`'s or
 `port`'s root this record's, at place `records`, and `position` the log's, at `records - 1`. Refused where `released`
-is not an object of a place by supplied function, or names no place of a coin read beside a commitment. -/
-def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coins : Array (String × ByteArray))
+is not an object of a place by supplied function, or names no place of a coin read beside a commitment. A held commitment
+(`commitments`) is no coin, but a coin follows it: the `place` its JSON carries (where the verifier registered it) is
+before the place of every coin a mark reads, `E_SUPPLIED_ORDER` naming the commitments at or after it, and refused where a
+commitment has no place or the coin has none in `released`. -/
+def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coins commitments : Array (String × ByteArray))
     (released : Json) (records : Nat) : V Unit := do
   let places ← match released with
     | .null => pure #[]
@@ -525,6 +536,19 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
         | none => acc.push (name, place)) acc) acc) (#[] : Array (String × Nat))
   let fns := (marked.foldl (fun l (_, m) => if coins.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
     ([] : List String)).mergeSort (· ≤ ·)
+  let cms := (marked.foldl (fun l (_, m) => if commitments.any (·.1 == m.fn) && !l.contains m.fn then l ++ [m.fn] else l)
+    ([] : List String)).mergeSort (· ≤ ·)
+  if !cms.isEmpty && !fns.isEmpty then
+    let placed ← cms.mapM fun c => do
+      let some p := (commitments.find? (·.1 == c)).bind (commitmentPlace ·.2)
+        | throw s!"released: the verifier names no place of {c}'s commitment, which a coin it holds follows"
+      pure (c, p)
+    for f in fns do
+      let some (_, coinAt) := places.find? (·.1 == f)
+        | throw s!"released: the verifier names no place of {f}'s coin, which follows a commitment it holds"
+      let late := (placed.filter (·.2 ≥ coinAt)).map fun (c, _) => "commitment " ++ c
+      unless late.isEmpty do
+        throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
   for f in fns do
     if reads.isEmpty then return
     let some (_, coinAt) := places.find? (·.1 == f)
@@ -562,7 +586,7 @@ def piece (j : Json) : Except String Json := do
       | _, _ => throw "binding is not {stream, prover}"
   let rec_ := getD j "record"
   let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins commitments v m)
-  order ms rows coins (getD j "released") log.size
+  order ms rows coins commitments (getD j "released") log.size
   let out ← ms.mapM fun (v, m) => do
     let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
     let rs ← ofMark coins commitments v m

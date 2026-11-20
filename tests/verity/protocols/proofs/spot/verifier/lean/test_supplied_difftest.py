@@ -60,7 +60,7 @@ def reference(j):
             raise ValueError("binding")
         held = {f: bytes.fromhex(h) for f, h in coins.items()}
         commit = {f: bytes.fromhex(h) for f, h in commitments.items()}
-        G.order(ms, {v: G.of_mark(held, commit, v, m) for v, m in ms.items()}, held, j.get("released"), len(log))
+        G.order(ms, {v: G.of_mark(held, commit, v, m) for v, m in ms.items()}, held, commit, j.get("released"), len(log))
         out = {}
         for v, m in ms.items():
             w = G._nat(widths.get(v))
@@ -251,15 +251,17 @@ def mark_of(fn: str, args: dict, head: int | None = None) -> dict:
     return {"supplied": fn, "args": args, "layout": "le", "bits": bits}
 
 
-def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int | None = None) -> dict:
-    """One input marked ``fn`` read at 16-bit leaves, the verifier holding ``tables``, its ``(coins, commitments)``."""
+def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int | None = None, released=...) -> dict:
+    """One input marked ``fn`` read at 16-bit leaves, the verifier holding ``tables``, its ``(coins, commitments)``, and the
+    round coin released at place 1 unless ``released`` says otherwise (None: no places)."""
     mark = mark_of(fn, args, args.get("head"))
     if bits is not None:
         mark = {**mark, "bits": bits}
     coins, commitments = tables
+    released = {ROUND: 1} if released is ... and fn == ROUND else None if released is ... else released
     return {"program": desc([["x0", 1, mark]], [2]), "coins": {f: c.hex() for f, c in coins.items()},
             "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {"x0": 16}, "record": RECORD, "log": [],
-            "binding": BINDING}
+            "binding": BINDING, **({} if released is None else {"released": released})}
 
 
 @functools.cache
@@ -271,7 +273,7 @@ def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...
     salts = [fixed(f"salt{seed}/{j}", MA.HM96.salt_bytes) for j in range(k)]
     tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
     c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
-    return {"commitment": c.to_json(), "ended": "complete", "rounds": k,
+    return {"commitment": c.to_json(), "ended": "complete", "rounds": k, "place": 0,
             "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex(),
             "openings": [tree.opening(j).to_json() for j in range(k)]}
 
@@ -344,6 +346,10 @@ MUTATIONS = {
     "rounds 2^32": lambda d, j: d.update(rounds=1 << 32),
     "rounds string": lambda d, j: d.update(rounds="3"),
     "coin carries a commitment": lambda d, j: d.update(carried=d["commitment"]),
+    "place after the coin": lambda d, j: d.update(place=1),
+    "place at the coin": lambda d, j: d.update(place=2),
+    "place string": lambda d, j: d.update(place="0"),
+    "no place": lambda d, j: d.pop("place"),
     "coin carries a root": lambda d, j: d.update(coin_root=_flip(d["commitment"]["coin_root"])),
 }
 #: the numbers of a text, changed to a form that is no canonical natural: the field and what its value becomes
@@ -370,7 +376,7 @@ def sessions(draw) -> dict:
             MUTATIONS[name](doc, rnd if rnd < k else 0)
         except (KeyError, IndexError, TypeError, AttributeError):
             pass
-    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key") if x in doc})
+    commit = CASES.text({x: doc[x] for x in ("commitment", "ended", "rounds", "key", "place") if x in doc})
     coin = CASES.text({x: doc[x] for x in ("openings", "carried", "coin_root") if x in doc})
     if draw(st.integers(0, 6)) == 0:
         commit = _formed(commit, draw(st.sampled_from(COMMITMENT_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
@@ -389,7 +395,8 @@ def sessions(draw) -> dict:
     fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT]))
     tables = (coins, commitments)
     if fn == ROUND:
-        return session_instance(fn, {"round": rnd}, tables, draw(st.sampled_from([96, 96, 96, 64])))
+        placed = draw(st.sampled_from([{ROUND: 1}] * 8 + [{ROUND: 0}, {ROUND: 3}, {}, None]))
+        return session_instance(fn, {"round": rnd}, tables, draw(st.sampled_from([96, 96, 96, 64])), placed)
     if fn == CONTEXT:
         return session_instance(fn, {}, tables, draw(st.sampled_from([848, 848, 848, 832])))
     head = max(1, _head_of(tables) + draw(st.sampled_from([0, 0, 0, 0, 0, 0, -1, 1])))
@@ -460,7 +467,7 @@ def test_a_mark_whose_bits_are_not_the_values_is_refused():
 
 #: the order rule's input: the program reads the root the record registers for ``w`` beside ``x0``
 def _ordered(fn: str, args: dict, tables, released=None) -> dict:
-    return {**session_instance(fn, args, tables), "program": desc(
+    return {**session_instance(fn, args, tables, released=None), "program": desc(
         [["x0", 1, mark_of(fn, args, args.get("head"))], ["rw", 1, ROOTS[0]]], [2, 3]), "widths": {"x0": 16, "rw": 1},
         **({"released": released} if released is not None else {})}
 
@@ -486,3 +493,29 @@ def test_a_released_commitment_is_not_a_coin_to_the_order_rule(pieces):
     with pytest.raises(D.Reject, match="E_SUPPLIED_ORDER"):
         reference(j)
     assert "E_SUPPLIED_ORDER" in pieces.call("supplied_marks", j)[1]
+
+
+def _programmed(marks, tables, released) -> dict:
+    """The marks as inputs of one program, each its own: the verifier's tables and the places its coins are released at."""
+    inputs = [[f"x{i}", 1, mark_of(fn, args, args.get("head"))] for i, (fn, args) in enumerate(marks)]
+    coins, commitments = tables
+    return {"program": desc(inputs, [2] * len(inputs)), "coins": {f: c.hex() for f, c in coins.items()},
+            "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {f"x{i}": 16 for i in range(len(marks))},
+            "record": RECORD, "log": [], "binding": BINDING, "released": released}
+
+
+@needs_lake
+@pytest.mark.parametrize("name, marks, tables, released, why", CASES.ORDER_REFUSALS, ids=[r[0] for r in CASES.ORDER_REFUSALS])
+def test_a_commitment_must_precede_its_coin_in_lean_by_the_same_text(pieces, name, marks, tables, released, why):
+    j = _programmed(marks, tables, released)
+    with pytest.raises(D.Reject) as e:
+        reference(j)
+    kind, text = pieces.call("supplied_marks", j)
+    assert kind != "output" and text == str(e.value) == why, text
+
+
+@needs_lake
+@pytest.mark.parametrize("name, marks, tables, released", CASES.ORDER_HOLDS, ids=[r[0] for r in CASES.ORDER_HOLDS])
+def test_the_order_that_holds_is_accepted_by_both(pieces, name, marks, tables, released):
+    j = _programmed(marks, tables, released)
+    assert reference(j) and pieces.call("supplied_marks", j)[0] == "output"

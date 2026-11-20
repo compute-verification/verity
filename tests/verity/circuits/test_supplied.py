@@ -134,8 +134,9 @@ def test_each_function_has_its_lean_body(name):
 #: the header and the context
 VECTORS = json.loads((Path(__file__).parent / "pous_session_vectors.json").read_text())
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
-#: what the verifier holds of the session as a released commitment: the commitment, how the session ended and its rounds, the key
-RELEASE = {"commitment": VECTORS["commitment"], "ended": "complete", "rounds": 3, "key": VECTORS["key"]}
+#: what the verifier holds of the session as a released commitment: the commitment, how the session ended and its rounds, the key,
+#: and the place the verifier registered it at (before the place its coin is released at, 1)
+RELEASE = {"commitment": VECTORS["commitment"], "ended": "complete", "rounds": 3, "key": VECTORS["key"], "place": 0}
 
 
 def text(doc) -> str:
@@ -339,3 +340,50 @@ def test_the_coin_root_is_the_verifiers_never_the_cois():
     assert refusal(held(coin=coin_of(VECTORS["openings"], commitment=other)), ROUND, round=0).endswith(
         "holds more than its openings: the coin root is the verifier's own")
     assert refusal(with_commitment(coin_root=other["coin_root"]), ROUND, round=0).endswith("is not its committed coin")
+
+
+HEADER_0 = (HEADER, {"head": 753})
+ROUND_0 = (ROUND, {"round": 0})
+CONTEXT_0 = (CONTEXT, {})
+LATE = "E_SUPPLIED_ORDER: ['commitment pous.session.header/v1', 'commitment pous.session.round_coin/v1'] registered after "
+#: each refusal of the order rule over a session read by the round coin and the header: (name, the marks, the verifier's tables,
+#: the places `released` gives the coins, the text): a commitment after its coin, at its coin's place, with no place, beside a
+#: coin with none
+ORDER_REFUSALS = [
+    ("a commitment placed after its coin", (ROUND_0, HEADER_0), held(place=5), {ROUND: 2}, LATE + ROUND + ", which a supplied value reads"),
+    ("a commitment placed at its coin's place", (ROUND_0, HEADER_0), held(place=2), {ROUND: 2}, LATE + ROUND + ", which a supplied value reads"),
+    ("a commitment with no place", (ROUND_0, HEADER_0), held(place=None), {ROUND: 2},
+     "released: the verifier names no place of " + HEADER + "'s commitment, which a coin it holds follows"),
+    ("a commitment whose place is no natural", (ROUND_0, HEADER_0), held(place="0"), {ROUND: 2},
+     "released: the verifier names no place of " + HEADER + "'s commitment, which a coin it holds follows"),
+    ("a coin with no place", (ROUND_0, HEADER_0), held(), {},
+     "released: the verifier names no place of " + ROUND + "'s coin, which follows a commitment it holds"),
+]
+#: the same marks in an order that holds: the commitment's place before the coin's
+ORDER_HOLDS = [("a commitment before its coin", (ROUND_0, HEADER_0), held(place=0), {ROUND: 1}),
+               ("a commitment held and no coin read", (HEADER_0,), held(place=7), {}),
+               ("a coin read with no commitment held", (ROUND_0,), ({ROUND: held()[0][ROUND]}, {}), {})]
+
+
+def order_of(marks, tables, released):
+    coins, commitments = tables
+    marked = {f"x{i}": mark(fn, **args) for i, (fn, args) in enumerate(marks)}
+    G.order(marked, {}, {f: b for f, b in coins.items()}, commitments, released, 0)
+
+
+@pytest.mark.parametrize("name, marks, tables, released, why", ORDER_REFUSALS, ids=[r[0] for r in ORDER_REFUSALS])
+def test_a_commitment_must_precede_the_coin_it_is_read_beside(name, marks, tables, released, why):
+    with pytest.raises(ValueError) as e:
+        order_of(marks, tables, released)
+    assert str(e.value) == why
+
+
+@pytest.mark.parametrize("name, marks, tables, released", ORDER_HOLDS, ids=[r[0] for r in ORDER_HOLDS])
+def test_the_order_that_holds_is_accepted(name, marks, tables, released):
+    order_of(marks, tables, released)
+
+
+def test_an_unread_commitment_or_coin_has_no_place_to_hold():
+    """Only the functions a mark names count: the held ones the program doesn't read need no place."""
+    order_of((HEADER_0,), held(place=None), {})
+    order_of((CONTEXT_0,), held(place=None), {ROUND: 0})

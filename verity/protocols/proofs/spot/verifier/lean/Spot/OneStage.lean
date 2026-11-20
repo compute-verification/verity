@@ -327,7 +327,7 @@ def markedRows (j : Json) (registered : Array (String × Nat)) (params : Array R
     if (m.layout == "digest") != Supplied.digests p.ty then
       throw s!"supplied input {v}: layout {m.layout} reads whole digests only into a parameter of whole digests"
     return (v, ← Supplied.ofMark coins commitments v m)
-  Supplied.order marked rows coins (getD j "released") records
+  Supplied.order marked rows coins commitments (getD j "released") records
   return rows
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and

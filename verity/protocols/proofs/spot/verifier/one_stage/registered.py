@@ -816,19 +816,31 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
             raise ValueError(f"supplied input {v}: layout {m['layout']} reads whole digests only into a parameter of "
                              "whole digests")
         out[v] = of_mark(held, commit, v, m)
-    order(got, out, held, released, records)
+    order(got, out, held, commit, released, records)
     return out
 
 
+def _commitment_place(b: bytes) -> int | None:
+    """The place a held commitment was registered at: its JSON's ``place``, a natural; None for a text that is no JSON object
+    of one (`Supplied.commitmentPlace`)."""
+    try:
+        doc = json.loads(b.decode("utf-8"))
+    except ValueError:
+        return None
+    return _nat(doc.get("place")) if isinstance(doc, dict) else None
+
+
 def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
-          held: Mapping[str, bytes], released: Mapping[str, int] | None, records: int) -> None:
+          held: Mapping[str, bytes], commit: Mapping[str, bytes], released: Mapping[str, int] | None, records: int) -> None:
     """§5.4's order rule at registration (`Supplied.order`): every commitment C's marks read is registered before every
     coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin where its function's value is one the
     verifier holds (`held`), at its place in `released` (`{function: n}`: the coin was released after n records, this
     one the `records`-th, its commitments before any coin it reads); its body's sources read the commitments: a
     ``value``'s or ``port``'s root this record's, at place `records`, and ``position`` the log's, at `records` - 1.
     ValueError where `released` is not an object of a place by supplied function, or names no place of a coin read
-    beside a commitment."""
+    beside a commitment. A held commitment (`commit`) is no coin, but a coin follows it: the ``place`` its JSON carries
+    (where the verifier registered it) is before the place of every coin a mark reads, `E_SUPPLIED_ORDER` naming the
+    commitments at or after it, and refused where a commitment has no place or the coin has none in `released`."""
     if released is not None and not (isinstance(released, Mapping) and all(
             f in SU.FUNCTIONS and _nat(n) is not None for f, n in released.items())):
         raise ValueError("released is an object of a place by supplied function")
@@ -839,7 +851,19 @@ def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[
             if at is not None:
                 name = "log" if k == "position" else n
                 reads[name] = max(reads.get(name, at), at)
-    for f in sorted({m["supplied"] for m in marked.values() if m["supplied"] in held}):
+    cms = sorted({m["supplied"] for m in marked.values() if m["supplied"] in commit})
+    cos = sorted({m["supplied"] for m in marked.values() if m["supplied"] in held})
+    if cms and cos:
+        placed = {}
+        for c in cms:
+            if (p := _commitment_place(commit[c])) is None:
+                raise ValueError(f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows")
+            placed[f"commitment {c}"] = p
+        for f in cos:
+            if f not in (released or {}):
+                raise ValueError(f"released: the verifier names no place of {f}'s coin, which follows a commitment it holds")
+            SU.check_order(placed, released[f], f)
+    for f in cos:
         if not reads:
             return
         if f not in (released or {}):
