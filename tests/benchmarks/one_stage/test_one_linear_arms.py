@@ -43,7 +43,7 @@ CASES = {
                                        "ARM forged-drawn REFUSED forged_outcome passes on no_proof_released", 0),
     "forged-one not drawn": ("forged-one", 0, WINDOW, {"ok": True, "draw": [3, 9, 40, 100]},
                              "ARM forged-one ACCEPT the forged unit's block 0 is not drawn", 0),
-    "forged-one accepted, drawn": ("forged-one", 0, WINDOW, {"ok": True, "draw": [0, 9, 40, 100]},
+    "forged-one accepted, drawn": ("forged-one", 0, WINDOW, {"ok": True, "draw": [1, 9, 40, 100]},
                                    "ARM forged-one FAIL accepted with the forged unit's block 0 drawn", 1),
     "forged-one rejected, drawn": ("forged-one", 1, WINDOW, {"ok": False, "audit": {"accepted": False, "why": ["m0"]},
                                                              "draw": [0, 9, 40, 100]},

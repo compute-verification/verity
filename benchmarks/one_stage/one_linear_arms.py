@@ -20,6 +20,7 @@ CRASH = re.compile(r"^Traceback \(most recent call last\)|panicked at|^PANIC|INT
 #: The prefix of `OneStageZk.SUBSET_ONLY`'s text, which names the sampling design's kind after it.
 SUBSET_ONLY = "the sampling design is "
 SUBSET_ONLY_TAIL = "which the one-statement audit's soundness statement doesn't cover"
+#: `one_linear.sh`'s ``--forge 1``; a summary's ``draw`` lists the drawn units.
 FORGED_UNIT = 1
 EXPECTS = {"honest": "ACCEPT", "registered": "REFUSED", "forged-drawn": "REFUSED", "forged-one": "ACCEPT or REFUSED",
            "stratified": "REFUSED"}
@@ -54,10 +55,11 @@ def judge(arm: str, status: int, log: str, summary: dict | None) -> tuple[str, s
             if not w.get("units") or not w.get("blocks") or not isinstance(draw, list) \
                     or not all(isinstance(b, int) for b in draw):
                 return "ERROR", "an accept whose window step or draw this judge can't read", False
-            block = FORGED_UNIT // (w["units"] // w["blocks"])
-            if block in draw:
-                return "FAIL", f"accepted with the forged unit's block {block} drawn ({draw})", False
-            return "ACCEPT", f"the forged unit's block {block} is not drawn ({draw})", True
+            per = w["units"] // w["blocks"]
+            block = FORGED_UNIT // per
+            if block in {u // per for u in draw}:
+                return "FAIL", f"accepted with the forged unit's block {block} drawn (units {draw})", False
+            return "ACCEPT", f"the forged unit's block {block} is not drawn (units {draw})", True
         return "ACCEPT", "status 0, summary ok", arm == "honest"
     if status == 0:
         return "ERROR", "status 0 with a summary that is not ok", False
