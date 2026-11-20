@@ -1438,7 +1438,7 @@ def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
 
 
 def short_y(path: Path, pos: int, drop: int) -> None:
-    """Call `pos`'s y rows file less its last `drop` bytes, committed as the verifier's opener reads it (`VR.f32_row`: row
+    """Call `pos`'s y rows file less its last `drop` bytes, committed as the verifier's opener reads it (`VR.PO.f32_row`: row
     i is the words the file holds of its bytes [2ni, 2n(i + 1)), a ragged row's whole ones here) under a new root, which the
     manifest then names: a prover's own y whose last real row is short, and opens."""
     man = json.loads(path.read_text())
@@ -1450,7 +1450,7 @@ def short_y(path: Path, pos: int, drop: int) -> None:
     data = data[:len(data) - drop]
     rows = [data[2 * n * i:2 * n * (i + 1)] for i in range(real)]
     d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
-    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
+    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.PO.f32_row(r[:len(r) & ~1], len(r), 0) + ys[HM96_SALT * i:HM96_SALT * (i + 1)])
                         for i, r in enumerate(rows)])
     u["y"] = {"root": tree[-64:].hex(), "rows": PPDR._write(file, data, digest=False),
               "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree), "salts": u["y"]["salts"]}
@@ -1498,7 +1498,7 @@ def test_check_y_holds_each_opened_row_to_its_tiles_columns():
                                   epoch=types.SimpleNamespace(salt=salt, workload=types.SimpleNamespace(
                                       matmuls=[types.SimpleNamespace(index=index)])),
                                   man={"matmuls": [{"real_rows": real, "y": {"root": tree[-64:].hex()}}]})
-        return VR.check_y(p, 0, tile, v, (VR.opening(tree, real, 7, values[7], 64),))
+        return VR.check_y(p, 0, tile, v, (VR.PO.opening(tree, real, 7, values[7], 64),))
 
     words = lambda *w: np.array(w, "<u4").tobytes()  # noqa: E731
     assert reason(words(5, 5, 0, 0)) is None
@@ -2753,7 +2753,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
         return {"path": path, "bytes": size}
 
     def tree(path: str, count: int) -> dict:
-        return named(path, 64 * (2 * VR.pow2(count) - 1))
+        return named(path, 64 * (2 * VR.PO.pow2(count) - 1))
 
     roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
     weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],
