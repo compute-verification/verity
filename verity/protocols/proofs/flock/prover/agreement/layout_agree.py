@@ -16,12 +16,12 @@ import dataclasses
 import hashlib
 import json
 import random
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from circuit_type_agree import flat, toy_table, tree, _width
+from circuit_type_agree import flat, tree, _width
+import lean_run as LR
 
 from verity.circuits import library
 from verity.circuits.codec import canonical_json
@@ -252,7 +252,7 @@ def main() -> int:
         f = out / f"{i}.json"
         f.write_text(json.dumps(c))
         files.append(str(f))
-    p = subprocess.run([a.lean, "layout", *files], capture_output=True, text=True, check=False)
+    p = LR.run([a.lean, "layout", *files])
     lean = {}
     for line in p.stdout.splitlines():
         if line.startswith("LAYOUT "):

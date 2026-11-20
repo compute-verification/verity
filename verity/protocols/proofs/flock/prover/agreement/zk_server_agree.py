@@ -26,9 +26,10 @@ import copy
 import hashlib
 import json
 import struct
-import subprocess
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits.codec import canonical_json
 from verity_flock import zk_server_transcript as FT
@@ -319,7 +320,7 @@ def decide(lean: str, out: Path, named: list[tuple[str, dict, dict]]) -> list[di
     for k, (pub, files) in enumerate(groups.items()):
         pf = out / f"public-{k}.json"
         pf.write_text(pub)
-        p = subprocess.run([lean, "contract", "--public", str(pf), *files], capture_output=True, text=True)
+        p = LR.run([lean, "contract", "--public", str(pf), *files], ok_statuses=LR.VERIFY_EXITS)
         lines = [json.loads(x) for x in p.stdout.splitlines()]
         bad = next((v["error"] for v in lines if "public" in v), None)
         for f in files:
