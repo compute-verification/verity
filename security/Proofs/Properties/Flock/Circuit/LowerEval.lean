@@ -86,6 +86,68 @@ theorem batch0Callees : Batch0Callees := by
   rw [← getElem!_pos _ k hk]
   exact ((hok d hd).2.1 k hk).1
 
+/-- **`LowerGateBodies` for a template of word-primitive calls and axis-0 batches**, on `LiftCalls`: the lowering of
+its lift evaluates through gates alone, and the lift puts each node's Boolean Definition in its place. -/
+theorem gateBodies_batch0 (hLC : LiftCalls) {bytes : ByteArray} {P S L : Prog} {units : Array ℕ} {d e : ℕ}
+    {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {a : Spot.OneStageZk.Admit} {t : Tmpl.Tmpl}
+    (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[]) (hs : Spot.Restrict.restrict P units = .ok S)
+    (ha : Spot.OneStageZk.admitted partition cuts S = .ok a) (hda : a.d = d)
+    (hd : d < P.defs.size) (hco : Batch0 P d) (hne : 0 < (P.defs[d]!).body.nodes.size)
+    (hl : Flock.Lift.lift S d = .ok (L, e)) (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) : GateBodies P d := by
+  have _ := ha
+  obtain ⟨Q, e', hq, hG⟩ := lower_gates hbt
+  rw [hda, hl] at hq
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hq
+  obtain ⟨rfl, rfl⟩ := hq
+  obtain ⟨hle, hpre, hbool, hidx, -⟩ := restrictShape P units S hs
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
+  have hbodyS := bodyOf_eq hm hbool hidx
+  have hord := batch0Callees bytes P h hr d hd hco
+  have hSd : S.defs[d]! = P.defs[d]! := hpre d hd
+  have hcoS : PrimNodes S d := by
+    refine ⟨by rw [hSd]; exact hco.1, fun nd hnd => ?_⟩
+    rw [hSd] at hnd
+    have hlt : nd.fn < P.defs.size := by have := hord nd hnd; omega
+    rw [hpre _ hlt]
+    exact (hco.2 nd hnd).2
+  have hcont : ∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true := by
+    intro k v hv
+    rw [hbool] at hv
+    obtain ⟨w, hw, -, hkey, hword⟩ := hkeys k v hv
+    obtain ⟨b, -, hbo, -⟩ := hmap w hw (by rw [hkey]; exact hword)
+    rw [hkey] at hbo
+    unfold Prog.bodyOf? at hbo
+    rw [hv] at hbo
+    have hb' : P.index[v]? = some b := hbo
+    rw [Std.HashMap.contains_eq_isSome_getElem?, hidx v b hb']
+    rfl
+  obtain ⟨heS, hLpre, -, fnOf, primOf, gatesOf, hLe, hfn⟩ :=
+    hLC S L d e hcont hl (by omega) hcoS (by rw [hSd]; exact hne)
+  rw [hSd] at hLe hfn
+  have hLP' : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]! := fun i hi => by
+    rw [getElem!_def, getElem!_def, hLpre i (by omega), get?_of_pre hle hpre hi]
+  have hLe' : L.defs[e]! = Flock.Lift.liftDef (P.defs[d]!) fnOf primOf gatesOf := by simp [getElem!_def, hLe]
+  intro nd hnd b hb
+  obtain ⟨n, hn, rfl⟩ := Array.mem_iff_getElem.1 hnd
+  have hnD' : n < (Flock.Lift.liftDef (P.defs[d]!) fnOf primOf gatesOf).body.nodes.size := by
+    rw [liftDef_nodes_size]; exact hn
+  obtain ⟨hfn', -, -⟩ := liftDef_node (P.defs[d]!) fnOf primOf gatesOf hn hnD'
+  have hfnP : ((P.defs[d]!).body.nodes[n]).fn < P.defs.size := by have := hord _ hnd; omega
+  have hbS := hfn _ hnd
+  rw [hpre _ hfnP, hbodyS] at hbS
+  obtain rfl : b = fnOf ((P.defs[d]!).body.nodes[n]).fn := Option.some.inj (hb.symm.trans hbS)
+  cases hG with
+  | prim hp _ =>
+    rw [hLe', liftDef_prim, hco.1] at hp
+    cases hp
+  | comp _ _ hnd' =>
+    have hmem : (Flock.Lift.liftDef (P.defs[d]!) fnOf primOf gatesOf).body.nodes[n] ∈ (L.defs[e]!).body.nodes := by
+      rw [hLe']; exact Array.getElem_mem hnD'
+    have hgL := hnd' _ hmem
+    rw [hfn'] at hgL
+    exact gateDef_prefix hLP' hgL (body_lt hm hbS)
+
 theorem foldlM_inv {α β : Type} (l : List α) (f : β → α → Option β) (I : ℕ → β → Prop)
     (hstep : ∀ n (hn : n < l.length) b, I n b → ∃ b', f b l[n] = some b' ∧ I (n + 1) b') :
     ∀ k n b, k + n = l.length → I n b → ∃ o, (l.drop n).foldlM f b = some o ∧ I l.length o
@@ -449,7 +511,8 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
     (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
-    (hb0 : Batch0 P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
+    (hb0 : Batch0 P (P.child P.rootScope k m).d) (hgb : GateBodies P (P.child P.rootScope k m).d)
+    (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
     outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) := by
@@ -550,7 +613,7 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
     exact unit_param_word hd hr hu hR' Y h1 h2 hq hqN
   have hPd : P.defs[(P.child P.rootScope k m).d]? = some (P.defs[(P.child P.rootScope k m).d]!) := by
     rw [getElem!_pos P.defs _ hdl]; exact getElem?_pos P.defs _ hdl
-  obtain ⟨-, -, -, hout, -, -⟩ := hT bytes P hd hr _ hdl hb0
+  obtain ⟨-, -, -, hout, -, -⟩ := hT bytes P hd hr _ hdl hb0 hgb
   -- the walk over the template's nodes
   have hstep : ∀ n (hn : n < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.toList.length)
       (outs : Array (List (List Bool))),
@@ -745,11 +808,11 @@ theorem unitWordComputes_calls (hT : Batch0Typed) {bytes : ByteArray} {P : Prog}
     (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
-    (hco : CallsOnly P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
+    (hco : CallsOnly P (P.child P.rootScope k m).d) (hgb : GateBodies P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
     outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) :=
-  unitWordComputes_batch0 hT hd hr hG hu hR (batch0_of_calls hco) Y hY
+  unitWordComputes_batch0 hT hd hr hG hu hR (batch0_of_calls hco) hgb Y hY
 
 end UnitWordProof
 

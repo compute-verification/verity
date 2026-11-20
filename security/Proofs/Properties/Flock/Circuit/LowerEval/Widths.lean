@@ -928,15 +928,275 @@ def FrontUnitRanges : Prop :=
     ∀ g ∈ units, ∃ k m, Spot.BlockFront.unitAt P g = .ok (k, m) ∧
       ∀ h, InUnit P k m h → Spot.BlockFront.inside fr.ranges h = true
 
+section GateDefs
+open Flock.Lower Flock.Chain.LowerDef
+
+/-- Definition `d` of `P` evaluates through §9 gates alone (`gateOf?`): a primitive that is one, or a composite each of
+whose nodes calls such a Definition placed before it. An input primitive is none. -/
+inductive GateDef (P : Prog) : ℕ → Prop
+  | prim {d : ℕ} : (P.defs[d]!).prim = true → (gateOf? (P.defs[d]!).id).isSome = true → GateDef P d
+  | comp {d : ℕ} : (P.defs[d]!).prim = false → (∀ nd ∈ (P.defs[d]!).body.nodes, nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, GateDef P nd.fn) → GateDef P d
+
+theorem foldlM_isSome {α β : Type} (f : β → α → Option β) :
+    ∀ (l : List α) (init : β), (∀ b, ∀ a ∈ l, (f b a).isSome = true) → (l.foldlM f init).isSome = true
+  | [], _, _ => rfl
+  | a :: l, init, h => by
+    obtain ⟨c, hc⟩ := Option.isSome_iff_exists.1 (h init a (by simp))
+    rw [List.foldlM_cons, hc]
+    exact foldlM_isSome f l c fun b a' ha' => h b a' (by simp [ha'])
+
+theorem mapM_isSome {α β : Type} [Inhabited β] (f : α → Option β) (l : List α) (h : ∀ a ∈ l, (f a).isSome = true) :
+    (l.mapM f).isSome = true := by
+  rw [Flock.Chain.LowerDef.mapM_some (g := fun a => (f a).getD default) fun a ha => ?_]
+  · rfl
+  · obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 (h a ha)
+    simp [hv]
+
+theorem bind_isSome {α β : Type} {a : Option α} {f : α → Option β} (ha : a.isSome = true)
+    (hf : ∀ v, (f v).isSome = true) : (a.bind f).isSome = true := by
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 ha
+  rw [hv]
+  exact hf v
+
+/-- **A Definition through gates alone evaluates on every input**, at fuel one past its place. -/
+theorem gateDef_total (P : Prog) : ∀ d, d < P.defs.size → GateDef P d → ∀ x : List Bool,
+    (evalDef? P (d + 1) d x).isSome = true := by
+  intro d
+  induction d using Nat.strong_induction_on with
+  | _ d ih =>
+  intro hd hg x
+  have hdc : P.defs[d]? = some (P.defs[d]!) := by
+    rw [getElem!_pos P.defs d hd]; exact Array.getElem?_eq_getElem hd
+  cases hg with
+  | prim hp hgt =>
+    obtain ⟨g, hg⟩ := Option.isSome_iff_exists.1 hgt
+    rw [evalDef?_succ]
+    simp [walkStep, Wires.bool, hdc, hp, hg]
+  | comp hp hlt hnd =>
+    rw [evalDef?_succ, walkStep_eq hdc hp]
+    have hf := foldlM_isSome (walkNode P (evalDef? P d) d x (paramStarts (P.defs[d]!).params))
+      (P.defs[d]!).body.nodes.toList #[] fun outs nd hn => by
+        have hn' : nd ∈ (P.defs[d]!).body.nodes := Array.mem_def.2 hn
+        have hfd := hlt nd hn'
+        have hcal : P.defs[nd.fn]? = some (P.defs[nd.fn]!) := by
+          rw [getElem!_pos P.defs nd.fn (by omega)]; exact Array.getElem?_eq_getElem (by omega)
+        obtain ⟨G, hG⟩ : ∃ G : List Bool → List Bool, ∀ ins, evalDef? P d nd.fn ins = some (G ins) := by
+          refine ⟨fun ins => (evalDef? P d nd.fn ins).getD [], fun ins => ?_⟩
+          obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 (ih nd.fn hfd (by omega) (hnd nd hn') ins)
+          show evalDef? P d nd.fn ins = some ((evalDef? P d nd.fn ins).getD [])
+          rw [FlockSoundness.EvalBool.evalDef?_mono P hfd hv]
+          rfl
+        unfold walkNode
+        simp only [Nat.not_le.2 hfd, ite_false, hcal, hG]
+        cases nd.form <;> simp
+        all_goals first
+          | exact bind_isSome (mapM_isSome _ _ fun _ _ => rfl) fun _ => rfl
+          | exact bind_isSome (foldlM_isSome _ _ _ fun _ _ _ => rfl) fun _ => rfl
+    obtain ⟨o, ho⟩ := Option.isSome_iff_exists.1 hf
+    rw [ho]
+    rfl
+
+theorem gateDef_done {P : Prog} {f : ℕ} {s s' : St} {r : ℕ × Array ℕ} (h : (gateDef P f).run s = .ok (r, s')) :
+    s'.done = s.done := by
+  unfold gateDef at h
+  obtain ⟨s1, s2, h1, h2⟩ := st_bind_ok h
+  have h1' : (Except.ok (s, s) : Except String (St × St)) = .ok (s1, s2) := h1
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h1'
+  obtain ⟨h1a, h1b⟩ := h1'
+  subst s1 s2
+  split at h2
+  · rename_i r0 hr0
+    have h2' : (Except.ok (r0, s) : Except String ((ℕ × Array ℕ) × St)) = .ok (r, s') := h2
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h2'
+    obtain ⟨-, h2b⟩ := h2'
+    subst s'
+    rfl
+  dsimp only at h2
+  split at h2
+  case h_2 => exact absurd h2 (st_throw _ _ _)
+  rename_i g hg
+  obtain ⟨a, s3, h3, h4⟩ := st_bind_ok h2
+  have h3' : (StateT.lift (({} : Work).op g ((Array.range (P.defs[f]!).paramLeaves).map Flock.Lower.Form.input)) :
+      M (Work × Flock.Lower.Form)).run s = .ok (a, s3) := h3
+  obtain ⟨a', -, hq⟩ := st_lift_ok h3'
+  simp only [Prod.mk.injEq] at hq
+  obtain ⟨hqa, hqb⟩ := hq
+  subst a s3
+  obtain ⟨r1, s4, h5, h6⟩ := st_bind_ok h4
+  rw [emit_run] at h5
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h5
+  obtain ⟨h5a, h5b⟩ := h5
+  subst r1 s4
+  obtain ⟨u, s5, h7, h8⟩ := st_bind_ok h6
+  rw [modify_run] at h7
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h7
+  obtain ⟨-, h7b⟩ := h7
+  subst s5
+  have h8' : (Except.ok (_, _) : Except String ((ℕ × Array ℕ) × St)) = .ok (r, s') := h8
+  simp only [Except.ok.injEq, Prod.mk.injEq] at h8'
+  obtain ⟨-, h8b⟩ := h8'
+  subst s'
+  rfl
+
+/-- `lowerDef`'s cache of lowered Definitions holds Definitions through gates alone. -/
+def GateCache (P : Prog) (s : St) : Prop := ∀ f r, s.done[f]? = some r → GateDef P f
+
+theorem nodes_gates {P : Prog} {low : ℕ → M (ℕ × Array ℕ)} {defn : Defn} {d : ℕ} {st : Array ℕ}
+    (hlow : ∀ f (s s1 : St) (r : ℕ × Array ℕ), (low f).run s = .ok (r, s1) → GateCache P s →
+      GateDef P f ∧ GateCache P s1) :
+    ∀ (L : List Node) (w w' : Work) (s s' : St), (L.foldlM (nodeStep P low defn d st) w).run s = .ok (w', s') →
+      GateCache P s → (∀ x ∈ L, x.fn < d ∧ GateDef P x.fn) ∧ GateCache P s'
+  | [], w, w', s, s', h, hI => by
+    have h' : (Except.ok (w, s) : Except String (Work × St)) = .ok (w', s') := h
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h'
+    obtain ⟨-, rfl⟩ := h'
+    exact ⟨fun x hx => absurd hx (by simp), hI⟩
+  | x :: L, w, w', s, s', h, hI => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨w1, s1, h1, h2⟩ := st_bind_ok h
+    obtain ⟨hfn, -, hc⟩ := nodeStep_cases h1
+    have hx : GateDef P x.fn ∧ GateCache P s1 := by
+      rcases hc with ⟨-, -, e, rets, s2, hl, rfl, -⟩ | ⟨-, hpr, g, hg, hb⟩ | ⟨-, -, e, rets, s2, hl, rfl, -⟩
+      · exact hlow _ _ _ _ hl hI
+      · refine ⟨.prim hpr (by rw [hg]; rfl), ?_⟩
+        rcases hb with ⟨-, e, rets, s2, hgd, rfl, -⟩ | ⟨-, rfl, -⟩
+        · intro f r hr
+          rw [gateDef_done hgd] at hr
+          exact hI f r hr
+        · exact hI
+      · exact hlow _ _ _ _ hl hI
+    obtain ⟨hL, hI2⟩ := nodes_gates hlow L w1 w' s1 s' h2 hx.2
+    refine ⟨fun y hy => ?_, hI2⟩
+    rcases List.mem_cons.1 hy with rfl | hy
+    · exact ⟨hfn, hx.1⟩
+    · exact hL y hy
+
+/-- **What `lowerDef` lowers evaluates through gates alone**: it refuses a node whose callee is a primitive that is no
+§9 gate (an input primitive), and lowers each composite callee first. -/
+theorem lowerDef_gates {P : Prog} :
+    ∀ (fuel d : ℕ) (s s' : St) (r : ℕ × Array ℕ), (lowerDef P fuel d).run s = .ok (r, s') → GateCache P s →
+      GateDef P d ∧ GateCache P s'
+  | 0, d, s, s', r, h, _ => by
+    rw [lowerDef] at h
+    exact absurd h (st_throw _ _ _)
+  | fuel + 1, d, s, s', r, h, hI => by
+    rw [lowerDef] at h
+    obtain ⟨s1, s2, h1, h2⟩ := st_bind_ok h
+    have h1' : (Except.ok (s, s) : Except String (St × St)) = .ok (s1, s2) := h1
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h1'
+    obtain ⟨h1a, h1b⟩ := h1'
+    subst s1 s2
+    split at h2
+    · rename_i r0 hr0
+      have h2' : (Except.ok (r0, s) : Except String ((ℕ × Array ℕ) × St)) = .ok (r, s') := h2
+      simp only [Except.ok.injEq, Prod.mk.injEq] at h2'
+      obtain ⟨-, rfl⟩ := h2'
+      exact ⟨hI d r0 hr0, hI⟩
+    dsimp only at h2
+    split at h2
+    · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
+    rename_i hpr
+    obtain ⟨u, s1, hb, h2⟩ := st_bind_ok h2
+    obtain ⟨_, -, hq⟩ := st_lift_ok hb
+    simp only [Prod.mk.injEq] at hq
+    obtain ⟨-, hq⟩ := hq
+    subst s1
+    split at h2
+    · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
+    split at h2
+    · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
+    split at h2
+    · first | exact absurd h2 (st_throw_bind _ _ _ _) | exact absurd h2 (st_throw _ _ _)
+    have hpr' : (P.defs[d]!).prim = false := by simpa using hpr
+    obtain ⟨w, s3, h3, h4⟩ := st_bind_ok h2
+    obtain ⟨hN, hI3⟩ := nodes_gates (fun f s s1 r h hI => lowerDef_gates fuel f s s1 r h hI) _ _ _ _ _ h3 hI
+    have hG : GateDef P d := .comp hpr' (fun nd hn => (hN nd (Array.mem_toList_iff.2 hn)).1)
+      (fun nd hn => (hN nd (Array.mem_toList_iff.2 hn)).2)
+    obtain ⟨wr, s4, h5, h6⟩ := st_bind_ok h4
+    obtain ⟨wr', -, hq⟩ := st_lift_ok h5
+    simp only [Prod.mk.injEq] at hq
+    obtain ⟨hqa, hqb⟩ := hq
+    subst wr s4
+    obtain ⟨w2, rets⟩ := wr'
+    dsimp only at h6
+    obtain ⟨r1, s5, h7, h8⟩ := st_bind_ok h6
+    rw [emit_run] at h7
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h7
+    obtain ⟨h7a, h7b⟩ := h7
+    subst r1 s5
+    obtain ⟨u, s6, h9, h10⟩ := st_bind_ok h8
+    rw [modify_run] at h9
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h9
+    obtain ⟨-, h9b⟩ := h9
+    subst s6
+    have h10' : (Except.ok (_, _) : Except String ((ℕ × Array ℕ) × St)) = .ok (r, s') := h10
+    simp only [Except.ok.injEq, Prod.mk.injEq] at h10'
+    obtain ⟨-, rfl⟩ := h10'
+    refine ⟨hG, fun f r' hr' => ?_⟩
+    simp only [Std.HashMap.getElem?_insert] at hr'
+    split at hr'
+    · rename_i hff
+      simp only [beq_iff_eq] at hff
+      subst hff
+      exact hG
+    · exact hI3 f r' hr'
+
+/-- **The lowering reaches gates alone**: where `lower` writes a template of Definition `d` of `P`, the lift to bits
+of `d` evaluates through §9 gates alone. -/
+theorem lower_gates {P : Prog} {d : ℕ} {inP outP : Array ℕ} {t : Tmpl.Tmpl}
+    (hl : Flock.Lower.lower P d inP outP = .ok t) :
+    ∃ Q e, Flock.Lift.lift P d = .ok (Q, e) ∧ GateDef Q e := by
+  unfold Flock.Lower.lower at hl
+  obtain ⟨t', hb, -⟩ := Flock.TmplOrder.bind_ok hl
+  unfold Flock.Lower.build at hb
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at hb
+  split at hb
+  · cases hb
+  cases hq : Flock.Lift.lift P d with
+  | error err => simp [hq] at hb
+  | ok qe =>
+  obtain ⟨Q, e⟩ := qe
+  simp only [hq] at hb
+  cases hdf : Q.defs[e]? with
+  | none => simp [hdf] at hb
+  | some defn =>
+  simp only [hdf] at hb
+  split at hb
+  · cases hb
+  split at hb
+  · cases hb
+  cases hrun : StateT.run (Flock.Lower.lowerDef Q (Q.defs.size + 1) e) {} with
+  | error err => simp [hrun] at hb
+  | ok v =>
+  obtain ⟨⟨e', rets⟩, s⟩ := v
+  exact ⟨Q, e, rfl, (lowerDef_gates _ _ _ _ _ hrun fun f r hr => by simp at hr).1⟩
+
+theorem gateDef_prefix {P L : Prog} (hpre : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]!) {b : ℕ}
+    (h : GateDef L b) : b < P.defs.size → GateDef P b := by
+  induction h with
+  | prim hp hg => intro hb; exact .prim (by rwa [← hpre _ hb]) (by rwa [← hpre _ hb])
+  | @comp d hp hlt _ ih =>
+    intro hb
+    rw [hpre _ hb] at hp hlt ih
+    exact .comp hp hlt fun nd hn => ih nd hn (by have := hlt nd hn; omega)
+
+/-- Each Boolean Definition a node of Definition `d` of `P` leads to (`Prog.bodyOf?`) evaluates through gates alone. -/
+def GateBodies (P : Prog) (d : ℕ) : Prop :=
+  ∀ nd ∈ (P.defs[d]!).body.nodes, ∀ b, P.bodyOf? (P.defs[nd.fn]!).key = some b → GateDef P b
+
+end GateDefs
+
 /-- **`UnitComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
 `g`'s return leaves hold, bit for bit, `Prog.evalBool` on `g`'s argument bits of the lift to bits (`Flock.Lift.lift`)
-of the template `admitted` gives, where that template is `g`'s callee. -/
+of the template `admitted` gives, where that template is `g`'s callee and the block's lowering (`blockTmpl`) succeeds. -/
 def UnitComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
-    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Flock.Lift.lift S a.d = .ok (L, e) →
+    Spot.OneStageZk.blockTmpl S a = .ok t →
     (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d →
@@ -1246,11 +1506,13 @@ def UnitWidths : Prop :=
 
 /-- **`UnitWordComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
 `g`'s return leaves' words are its callee's value on its arguments' words (`wordEval`), where C's gates
-are located and `g` resolves, as `UnitWidths` reads. -/
+are located, `g` resolves, as `UnitWidths` reads, and each Boolean Definition its callee's nodes lead to evaluates
+through gates alone (`GateBodies`). -/
 def UnitWordComputes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → UnitResolves P g →
+      GateBodies P (P.child P.rootScope k m).d →
       ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
@@ -1258,12 +1520,13 @@ def UnitWordComputes : Prop :=
 
 /-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of the template `admitted` gives, a Definition of C
 taken in the block's Program, evaluated on bits (`Prog.evalBool`), is C's value of it on words (`wordEval`), bit for
-bit, on words of its parameter leaf widths. -/
+bit, on words of its parameter leaf widths, where each Boolean Definition its nodes lead to evaluates through gates
+alone (`GateBodies`). -/
 def LiftWordEval : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
     decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) →
+    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) → GateBodies P a.d →
     ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[a.d]!) →
       Prog.evalBool L e x.flatten = (wordEval P a.d x).flatten
 
