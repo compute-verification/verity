@@ -412,17 +412,55 @@ def tree_leaf(program, kw: int, m: int) -> int:
     return sum(nd.n if nd.form == "batch" else 1 for nd in nodes[:kw] if descriptor_id(nd.fn) == t) + m
 
 
-def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict) -> dict:
-    """The verifier's ``--registered`` file over its program and the partition's query, position-free
-    (`registered.reads_file`), with each committed field of ``outs`` (an output row's or a wired input row's)."""
+def reads(program, partition, rows: dict, roots: dict[str, str], outs: dict, template: str, ports=None) -> dict:
+    """The verifier's ``--registered`` file of ``template``'s statements over its program and the partition's query,
+    position-free (`registered.reads_file`), with each committed field of ``outs`` (an output row's or a wired input
+    row's)."""
     from verity.commitments import registered_value as RV
     from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-    f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots,
-                       schemas={v: RV.SCHEMA_HM96_SHA512_ROW_V2 for v in rows}, positions=False)
+    f = REG.reads_file(program, partition["query"], {v: len(rs[0]) for v, rs in rows.items()}, roots, ports=ports,
+                       schemas={v: RV.SCHEMA_HM96_SHA512_ROW_V2 for v in rows}, positions=False, template=template)
     for p, out in outs.items():
         f["ports"][p] = {"value": out.value, "root": out.root.hex(), "leaves": out.leaves, "words": out.words,
                          "word_bits": 16, "domain": out.domain.domain_id.hex(), RV.SCHEMA_KEY: out.schema}
     return f
+
+
+def others(program, partition, rows: dict, roots: dict[str, str], outs: dict, drawn: str, own: dict, d: Path) -> dict:
+    """Two wrong ``--registered`` files for the drawn statement, each the drawn template's file ``own`` with one read
+    another template's file holds: ``registered-foreign.json`` adds a port of a parameter the drawn template does not
+    have, and ``registered-confused.json`` replaces a port the two templates both name with the other's read, of another
+    value or row kind. The door must refuse each by name. The first is also handed to the verifier's Python
+    (`registered.reads_file`'s ``ports``) for the drawn template, which refuses it by name too."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.program import input_id
+    kind = ("value", "leaves", "words", "word_bits", "row_schema")
+    mine = own["ports"]
+    found: dict = {}
+    for t in dict.fromkeys(descriptor_id(nd.fn) for nd in program.root.body.nodes if input_id(nd.fn.id) is None):
+        if t == drawn or {"foreign", "confused"} <= set(found):
+            continue
+        try:
+            theirs = {p: e for p, e in reads(program, partition, rows, roots, outs, t)["ports"].items() if p not in outs}
+        except ValueError as e:
+            found.setdefault("unread", {})[t] = str(e)
+            continue
+        if "foreign" not in found and (extra := sorted(set(theirs) - set(mine))):
+            p = extra[0]
+            try:
+                reads(program, partition, rows, roots, outs, drawn, ports={p: p})
+                python = None
+            except ValueError as e:
+                python = str(e)
+            found["foreign"] = {"template": t, "port": p, "value": theirs[p]["value"], "python_refusal": python}
+            (d / "registered-foreign.json").write_text(json.dumps({**own, "ports": {**mine, p: theirs[p]}}))
+        shared = sorted(p for p in set(theirs) & set(mine) if [theirs[p].get(k) for k in kind] != [mine[p].get(k) for k in kind])
+        if "confused" not in found and shared:
+            p = shared[0]
+            found["confused"] = {"template": t, "port": p, "drawn": {k: mine[p].get(k) for k in kind},
+                                 "other": {k: theirs[p].get(k) for k in kind}}
+            (d / "registered-confused.json").write_text(json.dumps({**own, "ports": {**mine, p: theirs[p]}}))
+    return found
 
 
 def stage(a) -> int:
@@ -494,6 +532,8 @@ def stage(a) -> int:
                          "core for this stage to stage")
     block_no = cores[int.from_bytes(hashlib.sha512(coin).digest(), "little") % len(cores)]
     (index,) = [tl.index for tl in tiles if block_no in tl.blocks]
+    drawn_tid = descriptor_id(program.root.body.nodes[m_.units[block_no][0]].fn)
+    assert drawn_tid == descriptor_id(core), (drawn_tid, descriptor_id(core))
     rec["draw"] = {"coin": coin.hex(), "block": block_no, "tile": index, "amount": tiles[index].amount,
                    "of": "one block uniformly of the wired cores' stratum, the block this stage stages; its tile is "
                          "credited its amount only when every stratum it has a block in passed (credited_tiles)"}
@@ -641,14 +681,19 @@ def stage(a) -> int:
             name, trows = field_tree(program, made, kw, f, words_of[kw, f])
             committed[kw, f] = output(program, name, trows, False)
         held = {p: committed[kw, f] for p, (kw, _m, f) in fed.items()}
-        (d / "registered.json").write_text(json.dumps(reads(program, part, rows, roots, outs | held)))
+        own = reads(program, part, rows, roots, outs | held, drawn_tid)
+        (d / "registered.json").write_text(json.dumps(own))
         if tag == "honest":
             bad_roots = roots | {"unit": register(program, wrong_unit, supplied)["unit"].root.hex()}
-            (d / "registered-wrong.json").write_text(json.dumps(reads(program, part, rows, bad_roots, outs | held)))
+            (d / "registered-wrong.json").write_text(
+                json.dumps(reads(program, part, rows, bad_roots, outs | held, drawn_tid)))
             zero = [list(r) for r in out_rows["o2"]]
             zero[index][0] = 0
             not_ok = outs | {"o2": output(program, f"{key}/o2", zero, True)}
-            (d / "registered-not-ok.json").write_text(json.dumps(reads(program, part, rows, roots, not_ok | held)))
+            (d / "registered-not-ok.json").write_text(
+                json.dumps(reads(program, part, rows, roots, not_ok | held, drawn_tid)))
+            rec["other_templates"] = others(program, part, rows, roots, outs | held, drawn_tid, own, d)
+            print("OTHER-TEMPLATES " + json.dumps(rec["other_templates"]), flush=True)
         at = {p: r for p, r in ln.reads[index].items() if p in dict(core.signature()[0])}
         tables, salts, registered = {}, {}, {}
         for p, (v, j) in at.items():
@@ -696,10 +741,10 @@ def door(a) -> int:
     PF.lower_executable = lambda: Path(a.lower)
     restrict, memo = OC.restrict, {}
 
-    def once(c: bytes, partition, units) -> bytes:
+    def once(c: bytes, partition, units, decoded=None) -> bytes:
         key = (hashlib.sha512(c).hexdigest(), json.dumps(partition, sort_keys=True), json.dumps([list(u) for u in units]))
         if key not in memo:
-            memo[key] = restrict(c, partition, units)
+            memo[key] = restrict(c, partition, units, decoded)
         return memo[key]
 
     OC.restrict = once
@@ -721,8 +766,9 @@ def door(a) -> int:
     honest = call("honest", "registered.json")
     if "dishonest" in a.session:
         call("dishonest", "registered.json")
-    for name in ("registered-wrong.json", "registered-not-ok.json"):
-        call("honest", name)
+    for name in ("registered-wrong.json", "registered-not-ok.json", "registered-foreign.json", "registered-confused.json"):
+        if (h / name).exists():
+            call("honest", name)
     if honest["refusal"] is None and honest["findings"] and all(f["accepted"] for f in honest["findings"]):
         print(f"ACCEPT the door accepts drawn block {draw_['units']} of C, a unit of {partition['query']['params']['template']}"
               ": the tile with its noise derived inside from the salt and W's root, read with its unit, rows and col from the "
