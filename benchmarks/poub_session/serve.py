@@ -309,7 +309,11 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
         raise
     finally:
         if v is not None:
-            v.stop()
+            try:
+                v.stop(check="error" not in out)
+            except verifier.lv.LeanError as e:
+                out["error"] = e
+                out.pop("verifier", None)
 
 
 def fit_main(a: argparse.Namespace) -> int:

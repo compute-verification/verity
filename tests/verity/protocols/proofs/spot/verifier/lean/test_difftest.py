@@ -3326,6 +3326,46 @@ def fanout(j):
         raise D.Reject(str(e)) from None
 
 
+def run_input_roots(j):
+    """Each member's `[port, tree]` at C's run input nodes' trees and the refusal of a reader of a held or tied
+    parameter's node whose roots hold no entry at its tree (`members._run_input_roots`, `members._held_roots`;
+    `OneStageZk.runInputRoots`, `OneStageZk.heldRootsHeld`), refused for another query or one that doesn't apply."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc = _obj(j.get("program"), "program")
+    held = [] if j.get("held") is None else j["held"]
+    if not isinstance(held, list) or not all(isinstance(h, list) and len(h) == 2 and all(_nat(x) for x in h)
+                                             for h in held):
+        raise D.Reject("held is not a list of [first, count]")
+    query = _obj(j.get("query"), "query")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    if not P.is_template_query(query):
+        raise D.Reject("not a template query")
+    members = j.get("members")
+    if not isinstance(members, list) or not all(
+            isinstance(m, list) and len(m) == 2 and isinstance(m[0], str) and isinstance(m[1], list) and m[1]
+            and all(isinstance(u, list) and len(u) == 2 and all(_nat(x) for x in u) for u in m[1]) for m in members):
+        raise D.Reject("members is not a list of [name, [[first, end], ...]]")
+    ms = {n: {"units": us} for n, us in members}
+    if len(ms) != len(members):
+        raise RuntimeError("the strategy drew two members of one name")
+    program = PROGRAMS[sha]
+    try:
+        reads = P.held_reads(program, query, [range(f, f + n) for f, n in held])
+        roots = M._run_input_roots(program, query, ms, {"roots": j.get("roots")}, {})
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    try:
+        M._held_roots(ms, reads, roots)
+        why = None
+    except M._Refused as e:
+        why = str(e)
+    return {"roots": [[n, [[r["port"], r["tree"]] for r in roots.get(n, [])]] for n in ms], "held": why}
+
+
 @functools.cache
 def _readers(rows: int, plan: tuple, registered: bool) -> Program:
     """A root over `x`, `rows` pairs of bytes (registered with `registered`), of one instance of `PAIR` per step of
@@ -3386,6 +3426,25 @@ def fanout_cases(draw) -> dict:
     return case
 
 
+@st.composite
+def run_input_cases(draw) -> dict:
+    """`fanout_cases`' programs and queries, the units of a template query that applies split among one to four members
+    in runs, and the record's roots at a random set of `input/n<w>` trees."""
+    case = draw(fanout_cases())
+    program = PROGRAMS[PO.program_sha512(case["program"])]
+    try:
+        n = sum(c for *_, c in PO.TemplatePartition(program, case["query"]).ranges)
+    except (P.QueryRefused, ValueError, KeyError):
+        n = 1
+    cuts = sorted(set(draw(st.lists(st.integers(1, n - 1), max_size=3)))) if n > 1 else []
+    bounds = [0, *cuts, max(n, 1)]
+    case["members"] = [[f"T/m{i}", [[lo, hi]]] for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
+    nodes = len(program.root.body.nodes)
+    case["roots"] = [{"port": f"input/n{w}", "root": "aa" * 64, "domain": "dd" * 64, "leaves": 1}
+                     for w in sorted(set(draw(st.lists(st.integers(0, nodes - 1), max_size=nodes))))]
+    return case
+
+
 PIECES = "spot-difftest"
 
 
@@ -3418,6 +3477,8 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
 UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
     st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
 FANOUT = D.Port(PIECES, "fanout", fanout, st.one_of(fanout_cases(), JSON), package=PACKAGE)
+RUN_INPUT_ROOTS = D.Port(PIECES, "run_input_roots", run_input_roots, st.one_of(*[run_input_cases()] * 6, JSON),
+                         package=PACKAGE)
 _X0, _X00 = ((0, 0, 0), (0, 0, 1)), ((0, 0, 0),) * 4
 #: Programs R8 reads past a population's: two calls of `PAIR` on `x`'s first pair, a batch of three broadcasting it (a
 #: run Input two proof blocks read), and a call reading the first's result whose result a batch of two maps (F 4).
@@ -6507,7 +6568,7 @@ pieces = D.server_fixture(DECODE)
 callers = D.server_fixture(CALLER)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300), (FANOUT, 400), (RUN_INPUT_ROOTS, 400),
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
@@ -6967,10 +7028,10 @@ def test_glm53s_all_reduce_at_three_rows_is_refused_past_the_widest_class(pieces
     """GLM-5.3's TP8 MNNVL all-reduce at three rows, as `tp_allreduce.circuit-check.py`'s `_glm53_served` binds it
     (`AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}`), returns 294,912 bits: Lean's slots and the Python's partition refuse
     its instance by the widest class."""
-    from verity_vllm.definitions.registry import tp_allreduce as TA
-    c = next(c for c in TA.CAPTURED if (c.N, c.world, c.device, c.route) == (6144, 8, None, "fi_ar_comm"))
-    d, statics = TA.route_binding(c, 8, max(3, c.lo), 6144, 3)
-    unit = bind(d, **statics)
+    from verity_vllm.definitions.registry.catalog import load
+    from verity.commitments.periods import interface as IF
+    load()
+    unit = IF.resolve("AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}")
     query = P.template_instance_query(unit.id)
     why = "commits 294912 bits, more than the widest class, 262144"
     with pytest.raises(P.QueryRefused, match=why):
@@ -7584,6 +7645,8 @@ def test_a_many_port_registration_agrees(pieces):
 
     assert codes(lambda rs: None) == []
     assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
+    assert codes(lambda rs: rs.insert(0, {**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
     assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]

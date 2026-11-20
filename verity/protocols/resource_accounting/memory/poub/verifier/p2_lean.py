@@ -92,21 +92,28 @@ class Lean:
         self.send(request, body)
         return self.read()
 
-    def close(self) -> None:
-        """Ends the process. One that has exited (a request crashed it) can't take what a failed `send` left in its
-        stdin's buffer: `unsent` is the error closing it raised then, and the process is waited for all the same."""
+    def close(self, check: bool = True) -> None:
+        """Ends the process: its input closed, then its end waited for. One that has exited (a request crashed it) can't
+        take what a failed `send` left in its stdin's buffer: `unsent` is the error closing it raised then, and the
+        process is waited for all the same. With ``check``, `LeanError` by name (`LC.LEAN_PANIC`, `LC.LEAN_EXIT`) where
+        it wrote a panic line while it ended or ended with a status but 0: an answer read from it is not used."""
         try:
             self.proc.stdin.close()
         except OSError as e:
             self.unsent = e
-        self.proc.wait()
+        self.proc.stdout.read()
+        code = self.proc.wait()
+        self.stderr.seek(0)
+        err = self.stderr.read().decode("utf-8", "replace")
         self.stderr.close()
+        if check and (why := (f"{LC.LEAN_PANIC}: {panic}" if (panic := LC.panic_line(err)) else LC.exit_why(code))):
+            raise LeanError(why)
 
     def __enter__(self) -> Lean:
         return self
 
     def __exit__(self, *exc: object) -> None:
-        self.close()
+        self.close(check=exc[0] is None)
 
 
 __all__ = ["BUILD_LOCK", "PACKAGE", "build"]
