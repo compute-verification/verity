@@ -145,17 +145,41 @@ def _tied(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> dict[str, Any]
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
-#: the served window's loads (served_verdicts.sh's LOAD); ``front``, network-accounting's: the network attester's front's
-#: group is the run's one load and its audited window
-LOADS = ("varied", "fixed", "front")
+#: the served window's loads (served_verdicts.sh's LOAD) an application names by ``load``; ``front``, network-accounting's:
+#: the network attester's front's group is the run's one load and its audited window
+LOADS = ("varied", "front")
+#: an application's load: ``load`` (one of `LOADS`), or an input ``dataset`` the adapter plays at its ``timing``
+LOAD_KEYS = (("load",), ("dataset", "timing"))
+
+
+def _door(params: Mapping[str, Any]) -> None:
+    """The adapter's statement and its door (`verity_vllm.inputs.serves`) over the application's ``dataset`` at its ``timing``,
+    read through without the engine or a tokenizer; refused by the door's name."""
+    import input_datasets
+    from verity_vllm.inputs import serves
+    try:
+        serves.served(params["model"], params["revision"], params["precision"], params["slots"], params["window-steps"])
+        rule, parameters = serves.timing(params["timing"])
+        ds = input_datasets.open(params["dataset"])
+        serves.door(ds.kind, (b for _, b in ds.timed(rule, **parameters)))
+    except (serves.Refused, input_datasets.Refused) as e:
+        name, text = serves.refusal(e)
+        raise Refused(name, f"[workload.params] dataset {params['dataset']!r}: {text}") from e
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:
     """The served window's public shape: the model at its revision and precision, the window's request ``slots``, its
-    engine steps (``window-steps``) and its ``load`` (served_verdicts.sh's LOAD)."""
-    known = {"model", "revision", "precision", "slots", "window-steps", "load"}
+    engine steps (``window-steps``) and its load: a ``load`` (served_verdicts.sh's LOAD), or an input ``dataset`` and its
+    ``timing``, which the adapter's door reads through here (`_door`). Both, or neither, is refused (``load``)."""
+    base = {"model", "revision", "precision", "slots", "window-steps"}
+    known = base.union(*LOAD_KEYS)
     if extra := sorted(set(params) - known):
         raise Refused("unknown-key", f"[workload.params]: {', '.join(extra)} (known: {', '.join(sorted(known))})")
+    said = [keys for keys in LOAD_KEYS if any(k in params for k in keys)]
+    if len(said) != 1 or not all(k in params for k in said[0]):
+        raise Refused("load", "[workload.params] names its load by load (one of " + ", ".join(LOADS) + "), or by "
+                              "dataset and timing (an input dataset and at-once or rate:R), one of the two whole, not "
+                              f"{', '.join(sorted(k for keys in LOAD_KEYS for k in keys if k in params)) or 'neither'}")
     for k in ("model", "precision"):
         if not isinstance(params[k], str) or not params[k]:
             raise Refused("workload", f"{k} is a non-empty string, not {params[k]!r}")
@@ -164,9 +188,12 @@ def _served(params: Mapping[str, Any]) -> dict[str, Any]:
     for k in ("slots", "window-steps"):
         if type(params[k]) is not int or params[k] < 1:
             raise Refused("workload", f"{k} is a positive integer, not {params[k]!r}")
-    if params["load"] not in LOADS:
-        raise Refused("workload", f"load is one of {', '.join(LOADS)}, not {params['load']!r}")
-    return {k: params[k] for k in sorted(known)}
+    if "load" in params and params["load"] not in LOADS:
+        raise Refused("load", f"load is one of {', '.join(LOADS)}, not {params['load']!r}: an input dataset is named by "
+                              "dataset and timing")
+    if "dataset" in params:
+        _door(params)
+    return {k: params[k] for k in sorted(base.union(*said))}
 
 
 _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
@@ -212,7 +239,7 @@ ROWS: dict[str, str] = {n: row for n, (_, row, _) in UNDECLARED.items()} | {
 SERVED = Workload(SERVED_WINDOW, frozenset({"windows", "noise", "store", "receipts", "ingress-relay"}),
                   (Role(WORKERS, "developer", needs=("serve",)),), _served,
                   {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d400d796ee589e7737d03a919526bf800",
-                   "precision": "verity_int8", "slots": 4, "window-steps": 16, "load": "varied"})
+                   "precision": "verity_int8", "slots": 4, "window-steps": 16})
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: remote's auditor parties' machine, which isn't at the site: remote puts no auditor's device there
 AUDITOR_REMOTE = "auditor-remote"
@@ -258,11 +285,12 @@ def listed(demo: str) -> tuple[str, ...]:
 
 
 #: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
-#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload, and
-#: onsite_network_front only the front's load
+#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve Pearl+ untied at this workload and its input
+#: dataset, the other three name their load, and onsite_network_front only the front's
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-         "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_network_front": {"load": "front"}}
+         "precision": "bfloat16", "slots": 4, "window-steps": 2, "dataset": "llama32_1b_fixed_4_27_2", "timing": "at-once"}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_compute": {"load": "varied"},
+               "onsite_network": {"load": "varied"}, "onsite_network_front": {"load": "front"}}
 
 
 def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
@@ -277,8 +305,9 @@ def configuration(commit: str, demo: str = "onsite_full",
     parameters stated (with the application's own, `DEMO_VALUES`, and its listed schemes' `tied`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the application lists: no code states a key)."""
     protocols = listed(demo)
-    cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     workload = DEMO_VALUES.get(demo, {})
+    named = replace(SERVED, default_params={**SERVED.default_params, **workload})
+    cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: named}, commit)
     params = tied(protocols) if demo in DEMO_VALUES else {}
     cfg["workload"]["params"] = {**SERVED.default_params, **workload}
     stated = {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}
@@ -466,10 +495,18 @@ def row_id(model: str, precision: str, slots: int) -> str:
 
 
 def _serve(cfg, params, bound, pinned):
+    """The served window's runner's variables; for an input dataset, ``LOAD=dataset`` with ``DATASET`` and ``TIMING``,
+    and the class it commits (``V3C_CLASS``, ``CLASSES``) the adapter's statement's (`verity_vllm.inputs.serves.SERVES`)."""
     w = cfg["workload"]["params"]
-    return {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
-            "ROW_ID": row_id(w["model"], w["precision"], w["slots"]),
-            "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
+    out = {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
+           "ROW_ID": row_id(w["model"], w["precision"], w["slots"]),
+           "WINDOW_STEPS": str(w["window-steps"]), "V3C_LAW": cfg["service"]["law"]}
+    if "load" in w:
+        return {**out, "LOAD": w["load"]}
+    from verity_vllm.inputs import serves
+    s = serves.served(w["model"], w["revision"], w["precision"], w["slots"], w["window-steps"])
+    return {**out, "LOAD": "dataset", "DATASET": w["dataset"], "TIMING": w["timing"], "V3C_CLASS": s.window_class,
+            "CLASSES": s.window_class}
 
 
 def _pouw(cfg, params, bound, pinned):

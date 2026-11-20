@@ -15,6 +15,6 @@ testpaths = ["."]
 addopts = "-q -p no:cacheprovider"
 
 [tool.verity.tests]
-# serve_load.py, whose fixed load the generator is held to, and the workload file the recorded definition reads, which
-# the runner fetches before the suite as an entry of artifacts.json under these inputs
-inputs = ["adapters/vllm/tools/served_run/serve_load.py", "adapters/vllm/workloads/workload_qwen05_32x16_1req.json"]
+# The workload file the recorded definition reads, which the runner fetches before the suite as an entry of artifacts.json
+# under these inputs
+inputs = ["adapters/vllm/workloads/workload_qwen05_32x16_1req.json"]
