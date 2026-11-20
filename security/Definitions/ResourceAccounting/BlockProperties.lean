@@ -176,7 +176,7 @@ structure Runs (L : Type*) where
   winOut : (r : Run) → Fin (nOut r) → Window
   claimsOut : (r : Run) → Fin (nOut r) → List Property
   /-- **The claimed free-block capacity**: the number the prover commits for each server-day block, committed data the
-  check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a hidden field of the model. It is a claim, like
+  check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a quantity the model computes. It is a claim, like
   the size and input claims in `claimsOut`: it does not carry M or the block's children, which a per-block `Placed.Holds`
   `Property` cannot see, so it is a committed claim field rather than a `Property` (a verifier sees only what is committed).
   What makes `FreeClaimHolds` true of it is that it is at least `cap − b + tol` (`ClaimCoversConversion`): the server-day
@@ -221,7 +221,7 @@ noncomputable def HoldsOut (r : P.Run) (i : Fin (P.nOut r)) (p : Property) : Pro
 
 open Classical in
 /-- **The gates at unlisted locations** in run `r`: the computed gates placed at a leaf no listed location holds. Hidden
-hardware's work is theirs (`hidden_work_le`). -/
+hardware's work is at most theirs (`hidden_work_le`). -/
 noncomputable def hiddenGates (r : P.Run) : Finset (Fin (P.actual r).N) :=
   (P.actual r).computed.filter fun g => ∀ X ∈ P.listed, (P.actual r).x g ∉ X
 
