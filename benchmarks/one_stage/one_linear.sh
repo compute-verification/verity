@@ -55,9 +55,10 @@ echo "LAW the zero-knowledge audit's proved statement covers a subset design, so
 echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
 OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && OK=0
 if [ $OK = 0 ]; then
-  echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on open premises"
+  echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; each block is single-range (no block spans two root nodes)"
+  echo "ACCEPT no proved statement is about the file the door writes; every accept at the door rests on the lift preserving evaluation, by reading and by the fuzzer"
   echo "ACCEPT the lowering's rows for this template were checked against the evaluator ($ROWS), one unit a block"
-  echo "ACCEPT scanned for the two shapes lean found on 19 Nov: none (C sha256 $(sha256sum $B/c/C.json | cut -c1-64))"
+  echo "ACCEPT scanned for the two word shapes (word_shape_scan.py): none (C sha256 $(sha256sum $B/c/C.json | cut -c1-64))"
   echo "ACCEPT recorded under a rate the verifier resolves to a subset of 4 of 144 blocks; the rated design is not on one-circuit"
 else
   echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H"
