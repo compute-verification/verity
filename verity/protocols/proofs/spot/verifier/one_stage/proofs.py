@@ -217,7 +217,7 @@ def tmpl_why(circuit: Path) -> str | None:
     try:
         meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
     except ValueError:
-        meta = None
+        return TMPL_FLAT_WHY
     if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
             or meta.get("statement") != TMPL_STATEMENT:
         return TMPL_FLAT_WHY
@@ -273,11 +273,16 @@ def _refusal(why: str) -> str:
 def reads_registered(program: bytes) -> bool:
     """Whether the program descriptor `program` has an input bound at docket (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
+    return not _reads_none_registered(program)
+
+
+def _reads_none_registered(program: bytes) -> bool:
+    """Whether `program` is JSON whose `definitions` object names no `RegisteredInput<w>_v1`; False for any other text."""
     try:
         defs = json.loads(program)["definitions"]
     except (ValueError, KeyError, TypeError):
-        return True
-    return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
+        return False
+    return isinstance(defs, dict) and not any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
 #: `OneStageZk.WORD`: the bound on each length a session's statement holds, which writes every length in an 8-byte word
@@ -742,7 +747,7 @@ def verdicts_v2(proof: Proof, *, program: Mapping[str, Any], partition: Mapping[
 
 
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
-           "SIZE_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
+           "SIZE_CLASS_MAX", "TMPL_SWITCH", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "circuit_lookups",
            "draw_fits_why", "drawn_block", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "not_zk_why", "order_why", "own_tables", "population_why", "printed", "printed_size",
            "proved_units", "reads_registered", "tables_match_why", "tables_why", "template_why", "units_exactly",
