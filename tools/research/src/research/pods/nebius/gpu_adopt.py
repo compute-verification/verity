@@ -13,7 +13,7 @@ runner's `--id`) and `who=adopted:<lane>`, so gpu-lease hands i to nobody else, 
 holds i already, two jobs share the GPU (`collision`). Each finding is a line in $GPU_ADOPT_LOG (default
 /workspace/research/gpu-adopt.jsonl), which the duty loop reads; adopting is announced once per process and GPU.
 Only a process listed both before and after the leases are read is judged. No process's environment
-is read. On a cluster node ($GPU_ADOPT_SPLIT_FILE, default /etc/vy/direct-gpus, present) Kueue's pods hold GPUs without gpu-lease,
+is read. Where a split file ($GPU_ADOPT_SPLIT_FILE, default /etc/vy/direct-gpus) is present, the queue's jobs hold GPUs without gpu-lease,
 so this probe judges nothing there.
 """
 from __future__ import annotations

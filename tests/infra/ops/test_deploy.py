@@ -1116,7 +1116,7 @@ def test_an_entry_whose_source_the_ref_lacks_is_absent_and_a_ref_deploys_its_own
 
 def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
     nodes = deploy.load()
-    assert {"vy-nebius-1", "vy-nebius-2"} <= set(nodes)
+    assert "vy-nebius-2" in nodes
     for node in nodes.values():
         assert node.record.startswith("/") and node.managed
         for e in node.entries:
@@ -1346,7 +1346,7 @@ def test_each_unit_is_installed_with_the_environment_files_and_scripts_it_names_
                 for f in [x for x in envs if x != "/etc/environment"] + scripts:
                     assert f in paths or f.startswith(tuple(trees)), f"{node.name}: {u} reads {f}, which deploy.toml doesn't install there"
                 seen += 1
-    assert seen >= 7
+    assert seen >= 6
 
 
 def test_environment_files_hold_settings_never_credentials():
@@ -1510,12 +1510,12 @@ LEAN_CACHE = {"/usr/local/sbin/vy-lean-build-setup": f"{_N}/lean_build_setup.sh"
               "/etc/systemd/system/vy-lean-cache-daily.timer": f"{_N}/vy-lean-cache-daily.timer"}
 
 
-def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_node_1_only_and_starts_nothing():
+def test_deploy_puts_the_sandbox_its_setup_and_the_daily_units_on_cpu_4_only_and_starts_nothing():
     nodes = deploy.load()
-    n1 = {e.path: e for e in nodes["vy-nebius-1"].entries}
+    cpu4 = {e.path: e for e in nodes["vy-nebius-cpu-4"].entries}
     for path, src in LEAN_CACHE.items():
-        assert n1[path].src == src and n1[path].run == [], path
-        assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-1"].managed), path
+        assert cpu4[path].src == src and cpu4[path].run == [], path
+        assert any(fnmatch.fnmatch(path, m) for m in nodes["vy-nebius-cpu-4"].managed), path
     assert not set(LEAN_CACHE) & {e.path for e in nodes["vy-nebius-2"].entries}
     for src in (deploy.SRC / _N / "lean_build_setup.sh", deploy.SRC / _N / "lean_sandbox.py", deploy.SRC / "tools/verity/lean/run_daily.py"):
         assert os.access(src, os.X_OK), src                                         # installed with the repository's mode

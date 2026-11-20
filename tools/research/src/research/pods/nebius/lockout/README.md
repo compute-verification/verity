@@ -14,19 +14,19 @@ This prints that machine's steps in order, each with what it runs and its rollba
 
 ## What it does
 
-This directory takes root away from `research` on both nodes and on a CPU node (vy-nebius-cpu-N). Its four tools are installed by
+This directory takes root away from `research` on node 2 and on a CPU node (vy-nebius-cpu-N). Its four tools are installed by
 deploy.toml: `vy-admin-setup`, `vy-seal-runs`, `vy-sudo` and `vy-lockout` (`vy-lockout plan NODE` prints the node's steps with their
 checks). After the lock-out, agents can read run dirs but not change them. Each ended run is sealed: `vy-seal-runs.timer` makes a run
 dir root's and read-only once its status is terminal and custody vouches for it (store.custody's own rule, never time alone).
 `research` keeps only the root forms its node's allowlist names, each with its evidence in `lockout.py`, and gets no cluster-admin:
-`sudoers/50-vy-research` (`ALLOW`) on both nodes, `sudoers/50-vy-research-cpu` (`CPU_ALLOW`) on a CPU node, staged there under the
+`sudoers/50-vy-research` (`ALLOW`) on node 2, `sudoers/50-vy-research-cpu` (`CPU_ALLOW`) on a CPU node, staged there under the
 same name. Root moves to `vy-admin`, which only Dan and infra's lead hold. Every sudo use is logged to the journal, and vy-admin's
 sessions also go under `/var/log/sudo-io`.
 
 A CPU node keeps what a run and the store need: a job user's unit, its stop and what it left in the run dir (`research run
 --job-user`, through `vy-sudo`), `vy-seal-runs delete` and `evict`, the start of `vy-lean-cache-daily.service`, and `sudo -n true`.
 It may run as itself and as nobody else: its image leaves `ubuntu` in sudo, adm and lxd. It has no loop to switch and no cluster,
-so steps 4 to 6 below are not in its plan. Its sshd lets only `research` log in (vm_setup.sh's `AllowUsers`), so step 2 there
+so step 4 below is not in its plan. Its sshd lets only `research` log in (vm_setup.sh's `AllowUsers`), so step 2 there
 also reloads ssh once deploy has staged `/etc/ssh/sshd_config.d/11-vy-admin.conf` (`sudo sshd -t && sudo systemctl reload ssh`). Anything else that ran as root there through `research` moves to a root unit or to
 vy-admin before the node's fallback expires (`EXCLUDED`); `vy-lockout audit --node NODE` lists what would be refused, before the
 lock-out too, and anyone may run it.
@@ -38,8 +38,7 @@ Every step runs as vy-admin on the node and has its own rollback. Without `--app
 1. Deploy: `research deploy install NODE --by WHO --apply` on a node; on a CPU node, whose lock-out files are deploy.toml's
    step `lockout`, which an install of the whole machine leaves out, `research deploy install NODE --only lockout --by WHO`
    first: it prints what it would write and the allowlist research keeps there, and refuses while the machine holds a check
-   slot. A CPU node the step's `held` names waits for its reason. It stages the tools, `/usr/local/lib/vy-lockout/` and node 1's
-   `/etc/vy/env/root.env`, and starts nothing. From this deploy on, `research run --job-user USER` asks `vy-sudo` for its
+   slot. A CPU node the step's `held` names waits for its reason. It stages the tools and `/usr/local/lib/vy-lockout/`, and starts nothing. From this deploy on, `research run --job-user USER` asks `vy-sudo` for its
    unit, and `vy-sudo` starts one only as a job user: an account root has listed in the group `vy-job`. No tool here makes a
    job user. Before the deploy, on the node, run `sudo groupadd -f --system vy-job`, then `sudo usermod -aG vy-job USER` for
    each account made for jobs and nothing else, or for a new one
@@ -54,19 +53,15 @@ Every step runs as vy-admin on the node and has its own rollback. Without `--app
    `vy-lockout roots --back --apply`. A sealed dir's former owner and mode are in `/var/lib/vy-seal-runs/sealed.jsonl`.
 4. Switch: `vy-lockout switch NODE --unit U --apply`, one loop at a time in `SWITCH` order. It stops the tmux loop and starts
    its unit. Rollback: `--back`, newest first.
-5. Root units: `vy-lockout root-units vy-nebius-1` runs the loops that need cluster-admin as root. It refuses while any
-   code or directory such a loop runs or writes isn't root's alone. Rollback: `--back`.
-6. Kubeconfig: `vy-lockout kubeconfig --apply` gives research a read-only token (`research-view.yaml`) in place of its admin
-   certificate. Then run `k3s certificate rotate` in a quiet window. Rollback: `--back`.
-7. Harden: `vy-lockout harden --apply` takes ubuntu out of lxd, takes `cap_sys_ptrace` off py-spy and puts research in
+5. Harden: `vy-lockout harden --apply` takes ubuntu out of lxd, takes `cap_sys_ptrace` off py-spy and puts research in
    systemd-journal. Rollback: `--back`.
-8. Sudoers: once `vy-lockout preflight NODE` passes, `vy-lockout sudoers --node NODE --apply` installs the node's allowlist and
+6. Sudoers: once `vy-lockout preflight NODE` passes, `vy-lockout sudoers --node NODE --apply` installs the node's allowlist and
    a 24 h fallback granting ALL, and moves cloud-init's `NOPASSWD: ALL` grant aside. Preflight refuses while the admin login
    doesn't work: it wants an ssh login as vy-admin newer than its keys and its sudoers file, and the step itself run from a
    vy-admin login. `vy-sudo-fallback-expire.timer` removes the fallback at its expiry, and only vy-admin can put it back
    (`vy-lockout fallback on`). From this step on, `research deploy install` runs `sudo python3` and so needs vy-admin's login
    (`research deploy install NODE --login vy-admin`, with `--only lockout` for a CPU node's lock-out files). Rollback: `vy-lockout rollback --apply`.
-9. Watch: during the 24 h, `vy-lockout audit` counts what research ran that the allowlist would refuse, and after them what
+7. Watch: during the 24 h, `vy-lockout audit` counts what research ran that the allowlist would refuse, and after them what
    sudo did refuse. It prints command shapes, never arguments. Fix each such form by PR before the fallback expires. Once the fallback is gone, research's
    `sudo -n true` still passes, since it is on the allowlist, and any other root command (`sudo -n id`) is refused.
 
