@@ -59,6 +59,7 @@ import argparse
 import bisect
 import hashlib
 import json
+import os
 import random
 import re
 import subprocess
@@ -583,12 +584,14 @@ def render(rows: Sequence[dict]) -> str:
 
 
 def built_at() -> str:
-    """The commit of the tree that built C, and the `one-circuit` commit it holds where the clone has that ref."""
+    """The commit of the tree that built C, and the `one-circuit` commit it holds: the merge-base with that ref where the
+    clone has it, else ``ONE_CIRCUIT`` from the environment."""
     def git(*a: str) -> str:
         p = subprocess.run(["git", "-C", str(ROOT), *a], capture_output=True, text=True)
         return p.stdout.strip() if p.returncode == 0 else ""
     head = git("rev-parse", "HEAD") or "unknown"
-    oc = next((m for ref in ("origin/one-circuit", "one-circuit") if (m := git("merge-base", "HEAD", ref))), "")
+    oc = next((m for ref in ("origin/one-circuit", "one-circuit") if (m := git("merge-base", "HEAD", ref))),
+              os.environ.get("ONE_CIRCUIT", ""))
     return f"{head} (one-circuit {oc})" if oc else head
 
 
