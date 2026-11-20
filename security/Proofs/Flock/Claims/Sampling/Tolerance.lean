@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Sampling.Escape
   stratum by `choose_div_le_pow_of_rate`, at counts `k_s ≤ n_s`.
 * `toleranceOfCounts`: every set the counts design misses with probability at least δ holds declared use at most
   `tolerance` (`ToleranceOfCounts`).
+* `toleranceCappedOfCounts`: and at most `toleranceCapped` (`ToleranceCappedOfCounts`); both from `countsBounds`.
 -/
 
 @[expose] public section
@@ -145,11 +146,19 @@ theorem ceil_div_ge (a d : ℕ) (hd : 0 < d) : a ≤ (a + d - 1) / d * d := by
   generalize d * ((a + d - 1) / d) = m at h1 ⊢
   omega
 
-/-- **`ToleranceOfCounts`, proved**: a set the counts design misses with probability at least δ has, in each stratum
-it draws, `t_s` blocks with `∑ t_s k_s/n_s ≤ ln(1/δ)` (`countsPaLeProd`, `1 − x ≤ e^{−x}`), so declared use at most
-`t_s u_s ≤ (k_s t_s / n_s) · u_s n_s / k_s`; in each stratum it never draws, at most the stratum's whole declared use. -/
-theorem toleranceOfCounts : ToleranceOfCounts := by
-  intro ns ks w δ L b hδ hlen hk hL B hB hPa
+/-- **What a missed set holds, stratum by stratum**: a set the counts design misses with probability at least δ has, in
+each stratum it draws, `t_s` blocks with `∑ t_s k_s/n_s ≤ ln(1/δ)` (`countsPaLeProd`, `1 − x ≤ e^{−x}`). So the strata it
+draws hold at most the largest `stratumTerm`, each of them at most its own term and its whole declared use, and a
+stratum it never draws holds at most its whole declared use. -/
+theorem countsBounds {ns ks : List ℕ} {w : ℕ → ℕ} {δ : ℝ} {L b : ℕ} (hδ : 0 < δ) (hlen : ks.length = ns.length)
+    (hk : ∀ p ∈ ns.zip ks, p.2 ≤ p.1) (hL : Real.log (1 / δ) ≤ (L : ℝ) / 2 ^ b) {B : Finset ℕ}
+    (hB : B ⊆ range ns.sum) (hPa : δ ≤ (OneStage.counts ks).Pa ns B) :
+    ∑ v ∈ B, w v ≤ (((List.range ns.length).filter fun s => ks[s]! = 0).map (stratumUse ns w)).sum +
+        ∑ s ∈ (range ns.length).filter (fun s => ks[s]! ≠ 0), ∑ v ∈ inStratum ns s B, w v ∧
+      ∑ s ∈ (range ns.length).filter (fun s => ks[s]! ≠ 0), ∑ v ∈ inStratum ns s B, w v ≤
+        (((List.range ns.length).filter fun s => ks[s]! ≠ 0).map (stratumTerm ns ks w L b)).foldr max 0 ∧
+      ∀ s ∈ (range ns.length).filter (fun s => ks[s]! ≠ 0),
+        ∑ v ∈ inStratum ns s B, w v ≤ min (stratumTerm ns ks w L b s) (stratumUse ns w s) := by
   have hget : ∀ s, s < ns.length → ks[s]! ≤ ns[s]! := fun s hs => by
     have hs' : s < ks.length := hlen ▸ hs
     have hz : s < (ns.zip ks).length := by simp [hlen, hs]
@@ -194,53 +203,50 @@ theorem toleranceOfCounts : ToleranceOfCounts := by
     rw [Real.log_exp] at h2
     rw [one_div, Real.log_inv]
     linarith
-  -- the tolerance's two parts
+  -- the tolerance's parts
   set D := (range ns.length).filter fun s => ks[s]! ≠ 0 with hD
-  set Z := (range ns.length).filter fun s => ks[s]! = 0 with hZ
   set lam : ℝ := (L : ℝ) / 2 ^ b with hlam
-  set ratio := ((List.range ns.length).filter fun s => ks[s]! ≠ 0).map (fun s =>
-    (L * stratumUseMax ns w s * ns[s]! + ks[s]! * 2 ^ b - 1) / (ks[s]! * 2 ^ b)) |>.foldr max 0 with hratio
-  have hwholeZ : ∑ s ∈ Z, ∑ v ∈ inStratum ns s B, w v ≤
-      ((((List.range ns.length).filter fun s => ks[s]! = 0)).map (stratumUse ns w)).sum := by
-    rw [sum_filter_list]
-    exact Finset.sum_le_sum fun s _ => hwhole s
-  have hcs : ∀ s ∈ D, (stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]! * lam ≤ ratio := fun s hs => by
-    obtain ⟨hs1, hs2⟩ := Finset.mem_filter.1 hs
+  set ratio := (((List.range ns.length).filter fun s => ks[s]! ≠ 0).map (stratumTerm ns ks w L b)).foldr max 0
+    with hratio
+  have hterm' : ∀ s ∈ D, (stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]! * lam ≤ stratumTerm ns ks w L b s :=
+      fun s hs => by
+    obtain ⟨-, hs2⟩ := Finset.mem_filter.1 hs
+    unfold stratumTerm
     have hkpos : 0 < ks[s]! * 2 ^ b := Nat.mul_pos (Nat.pos_of_ne_zero hs2) (by positivity)
     have hle := ceil_div_ge (L * stratumUseMax ns w s * ns[s]!) (ks[s]! * 2 ^ b) hkpos
-    have hmem : (L * stratumUseMax ns w s * ns[s]! + ks[s]! * 2 ^ b - 1) / (ks[s]! * 2 ^ b) ≤ ratio :=
-      le_foldr_max _ (List.mem_map.2 ⟨s, List.mem_filter.2 ⟨List.mem_range.2 (Finset.mem_range.1 hs1),
-        by simpa using hs2⟩, rfl⟩)
     have hle' : ((L * stratumUseMax ns w s * ns[s]! : ℕ) : ℝ) ≤
         (((L * stratumUseMax ns w s * ns[s]! + ks[s]! * 2 ^ b - 1) / (ks[s]! * 2 ^ b) : ℕ) : ℝ) *
           ((ks[s]! * 2 ^ b : ℕ) : ℝ) := by exact_mod_cast hle
     have hkR : (0 : ℝ) < ((ks[s]! * 2 ^ b : ℕ) : ℝ) := by exact_mod_cast hkpos
-    have hq : (((L * stratumUseMax ns w s * ns[s]! + ks[s]! * 2 ^ b - 1) / (ks[s]! * 2 ^ b) : ℕ) : ℝ) ≤ ratio := by
-      exact_mod_cast hmem
     have hk0 : (0 : ℝ) < ks[s]! := by exact_mod_cast Nat.pos_of_ne_zero hs2
     calc (stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]! * lam
         = ((L * stratumUseMax ns w s * ns[s]! : ℕ) : ℝ) / ((ks[s]! * 2 ^ b : ℕ) : ℝ) := by
           rw [hlam]; push_cast; field_simp
       _ ≤ _ := (div_le_iff₀ hkR).2 hle'
-      _ ≤ ratio := hq
+  have hcs : ∀ s ∈ D, (stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]! * lam ≤ ratio := fun s hs => by
+    obtain ⟨hs1, hs2⟩ := Finset.mem_filter.1 hs
+    have hmem : stratumTerm ns ks w L b s ≤ ratio :=
+      le_foldr_max _ (List.mem_map.2 ⟨s, List.mem_filter.2 ⟨List.mem_range.2 (Finset.mem_range.1 hs1),
+        by simpa using hs2⟩, rfl⟩)
+    exact (hterm' s hs).trans (by exact_mod_cast hmem)
+  have hterm : ∀ s ∈ D, (∑ v ∈ inStratum ns s B, w v : ℝ) ≤
+      r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!) := fun s hs => by
+    obtain ⟨hs1, hs2⟩ := Finset.mem_filter.1 hs
+    have hk0 : (ks[s]! : ℝ) ≠ 0 := by exact_mod_cast hs2
+    have hn0 : (ns[s]! : ℝ) ≠ 0 := by
+      have := hget s (Finset.mem_range.1 hs1)
+      exact_mod_cast (show ns[s]! ≠ 0 by omega)
+    have h := hcnt s
+    have h' : (∑ v ∈ inStratum ns s B, w v : ℝ) ≤ (t s : ℝ) * stratumUseMax ns w s := by exact_mod_cast h
+    calc _ ≤ (t s : ℝ) * stratumUseMax ns w s := h'
+      _ = r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!) := by
+        rw [hr]; field_simp
+  have hnn : ∀ s ∈ D, 0 ≤ r s * t s := fun s hs =>
+    mul_nonneg (hr01 s (Finset.mem_filter.1 hs).1).1 (Nat.cast_nonneg _)
+  have hDsum : ∑ s ∈ D, r s * t s ≤ lam :=
+    (Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun s hs _ =>
+      mul_nonneg (hr01 s hs).1 (Nat.cast_nonneg _)).trans (hlog.trans hL)
   have hdrawn : ∑ s ∈ D, (∑ v ∈ inStratum ns s B, w v : ℝ) ≤ ratio := by
-    have hterm : ∀ s ∈ D, (∑ v ∈ inStratum ns s B, w v : ℝ) ≤
-        r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!) := fun s hs => by
-      obtain ⟨hs1, hs2⟩ := Finset.mem_filter.1 hs
-      have hk0 : (ks[s]! : ℝ) ≠ 0 := by exact_mod_cast hs2
-      have hn0 : (ns[s]! : ℝ) ≠ 0 := by
-        have := hget s (Finset.mem_range.1 hs1)
-        exact_mod_cast (show ns[s]! ≠ 0 by omega)
-      have h := hcnt s
-      have h' : (∑ v ∈ inStratum ns s B, w v : ℝ) ≤ (t s : ℝ) * stratumUseMax ns w s := by exact_mod_cast h
-      calc _ ≤ (t s : ℝ) * stratumUseMax ns w s := h'
-        _ = r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!) := by
-          rw [hr]; field_simp
-    have hnn : ∀ s ∈ D, 0 ≤ r s * t s := fun s hs =>
-      mul_nonneg (hr01 s (Finset.mem_filter.1 hs).1).1 (Nat.cast_nonneg _)
-    have hDsum : ∑ s ∈ D, r s * t s ≤ lam :=
-      (Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun s hs _ =>
-        mul_nonneg (hr01 s hs).1 (Nat.cast_nonneg _)).trans (hlog.trans hL)
     refine (Finset.sum_le_sum hterm).trans ?_
     rcases (show (0 : ℝ) ≤ lam by positivity).lt_or_eq with hpos | hzero
     · calc ∑ s ∈ D, r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!)
@@ -254,19 +260,35 @@ theorem toleranceOfCounts : ToleranceOfCounts := by
       calc ∑ s ∈ D, r s * t s * ((stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]!)
           = 0 := Finset.sum_eq_zero fun s hs => by rw [h0 s hs, zero_mul]
         _ ≤ ratio := Nat.cast_nonneg _
-  have hfin : (∑ v ∈ B, w v : ℝ) ≤
-      ((((List.range ns.length).filter fun s => ks[s]! = 0)).map (stratumUse ns w)).sum + ratio := by
-    rw [show (∑ v ∈ B, w v : ℝ) = ((∑ v ∈ B, w v : ℕ) : ℝ) by push_cast; rfl, hsplit,
-      ← Finset.sum_filter_add_sum_filter_not (range ns.length) (fun s => ks[s]! = 0)]
-    push_cast
-    have hz : (∑ s ∈ Z, (∑ v ∈ inStratum ns s B, w v : ℝ)) ≤
-        ((((List.range ns.length).filter fun s => ks[s]! = 0)).map (stratumUse ns w)).sum := by
-      exact_mod_cast hwholeZ
-    push_cast at hz
-    exact add_le_add hz hdrawn
-  have : ∑ v ∈ B, w v ≤ tolerance ns ks w L b := by
-    unfold tolerance
-    exact_mod_cast hfin
-  exact this
+  refine ⟨?_, by exact_mod_cast hdrawn, fun s hs => le_min ?_ (hwhole s)⟩
+  · rw [hsplit, ← Finset.sum_filter_add_sum_filter_not (range ns.length) (fun s => ks[s]! = 0)]
+    refine Nat.add_le_add_right ?_ _
+    rw [sum_filter_list]
+    exact Finset.sum_le_sum fun s _ => hwhole s
+  · have h1 := hterm s hs
+    have h2 : r s * t s ≤ lam := (Finset.single_le_sum hnn hs).trans hDsum
+    have h3 : (0 : ℝ) ≤ (stratumUseMax ns w s : ℝ) * ns[s]! / ks[s]! := by positivity
+    have h4 : (∑ v ∈ inStratum ns s B, w v : ℝ) ≤ stratumTerm ns ks w L b s :=
+      h1.trans ((mul_le_mul_of_nonneg_right h2 h3).trans (by rw [mul_comm]; exact hterm' s hs))
+    exact_mod_cast h4
+
+/-- **`ToleranceOfCounts`, proved**, from `countsBounds`. -/
+theorem toleranceOfCounts : ToleranceOfCounts := by
+  intro ns ks w δ L b hδ hlen hk hL B hB hPa
+  obtain ⟨h1, h2, -⟩ := countsBounds hδ hlen hk hL hB hPa
+  unfold tolerance
+  dsimp only
+  exact h1.trans (Nat.add_le_add_left h2 _)
+
+/-- **`ToleranceCappedOfCounts`, proved**, from `countsBounds`: the drawn strata hold at most the largest term and at
+most the sum of their capped terms. -/
+theorem toleranceCappedOfCounts : ToleranceCappedOfCounts := by
+  intro ns ks w δ L b hδ hlen hk hL B hB hPa
+  obtain ⟨h1, h2, h3⟩ := countsBounds hδ hlen hk hL hB hPa
+  unfold toleranceCapped
+  dsimp only
+  refine h1.trans (Nat.add_le_add_left (le_min h2 ?_) _)
+  rw [sum_filter_list]
+  exact Finset.sum_le_sum h3
 
 end Claims.Sampling
