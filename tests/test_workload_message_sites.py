@@ -31,10 +31,6 @@ LEFT: list[tuple[str, str]] = [
     ("Circuit writer adapters/vllm/verity_vllm/records/predicted_row.py", "declares the record, which aot.py writes"),
     ("CommitmentScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", "flags whose values are the scheme's "
      "settings, read by the parser"),
-    ("H1RunCommitment reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
-    ("H1RunCommitment writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", "runs the prover's command; the record it "
-     "writes is read as H1Registration"),
-    ("H1State reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
     ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
     ("RegisteredCompiler reader adapters/vllm/verity_vllm/pipeline/advice.py", "flags whose values are the compiler's "
      "name and digest, which the advice binds"),

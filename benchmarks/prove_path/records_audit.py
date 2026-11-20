@@ -1136,7 +1136,11 @@ def audit(a: argparse.Namespace) -> int:
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
-    a.door_lower = Path(a.lower)
+    if a.lower is None:
+        from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+        a.door_lower = PF.lower_executable()
+    else:
+        a.door_lower = Path(a.lower)
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
@@ -1276,8 +1280,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
-    p.add_argument("--lower", required=True, help="the door's `flock-lower-check`, which lowers each member's block (`a5.door_circuit`)")
+    p.add_argument("--lower", help="the door's `flock-lower-check`, which lowers each member's block (`a5.door_circuit`); "
+                   "else built (`proofs.lower_executable`)")
     p.add_argument("--zk-server", required=True)
+    p.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit: places a templated member circuit's unit rows (`a0.templated`), which its prover and verifier read")
     p.add_argument("--gpus", type=A5.cards, help="as a5's --gpus: the proof server's cards, their indices comma-separated "
                    "(0,1), as nvidia-smi numbers them; default the CPU")
     p.add_argument("--out", required=True)
