@@ -1634,6 +1634,19 @@ private def chainRootsT (roots : List (String × String)) : V (Std.HashMap Strin
   some [#[Json.str "bb"], #[Json.str "aa"], #[Json.str "aa"]]
 #guard whyT (chainRootsT [("G/c0/x", "bb"), ("G/c2/x", "cc")]) == OWN_ROOT_WHY "G/c2" "x"
 
+/-- `chain()` with its first two root nodes one member, `G/c01`: units 2 and 3 read units 0 and 1 inside it. -/
+private def chainMs01 : Array Member := #[memberT "G/c01" #[(0, 4)], memberT "G/c2" #[(4, 6)], memberT "G/c3" #[(6, 8)]]
+
+private def chainRoots01 (roots : List (String × String)) : V (Std.HashMap String (Array Json)) := do
+  let W ← derivedWiring chainP chainRs
+  fieldRoots W (chainRs.map fun r => (r.template, r.first, r.count)) chainMs01
+    (fieldTreesOf (templatesOf (chainMs01.toList.map (·.name))) (chainRecT roots)) (← rootsOf chainMs01 (chainRecT roots))
+
+-- C states the wire into units 2 and 3, but a member over two ranges meets none (`fieldRoots`' `inRange`): `G/c01`'s
+-- `x` gets no writer's tree, and a root of its own there stands, so its in-member read is held to no output row
+#guard ((chainRoots01 []).toOption.map fun r => (r.getD "G/c01" #[]).size) == some 0
+#guard whyT (chainRoots01 [("G/c01/x", "bb")]) == ""
+
 /-- `fieldTreesHeld` on `chain()`'s derived trees (`derivedFieldTrees`) and a registration of the roots given, each
 its port and leaf count. -/
 private def chainTreesT (roots : List (String × Nat)) : String :=
