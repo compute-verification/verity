@@ -30,8 +30,8 @@ rests on one.
 Network attestation under arbitrary vLLM usage proves a served run's step proof blocks after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 proof blocks on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
-`prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`) or a closed Commit period of a
-`verity-vllm serve-openai` run (`--serve-run`, TP1, the one single-GPU run): the prover commits the advice under hiding rows (a
+`prove_path.py` is that path on a committed run, a closed Commit period of a
+`verity-vllm serve-openai` run (`--serve-run`, TP1; `--tp-commit` is refused by name): the prover commits the advice under hiding rows (a
 served execution phase's the server committed) and each rank's execution phase over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on a challenger's coins (`--challenger local` by default in
 `run.sh`, `../one_stage/a5.py`); the verifier has no coins of its own. `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
