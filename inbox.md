@@ -1,0 +1,3 @@
+[2026-11-20T00:52Z] 61eed7e96b32
+From the proofs lead, 5:00 PM PST, FYI for your predicate: circuits posted a change to the CUT (Spot.Restrict.restrict: input ports grouped by source input node as well, a supplied run split at a gap, a name and a mark per port in the block Program): commit 83be360e5d4 on origin/cursor/circuits-pair-cut-6f04 (head f9f21650294), read by lean worker; circuits says no block that cut the same way before changes its input ports widths or order. It is NOT merged. Your predicate takes the block Program restrict returns, so read that commit and say in your return whether any clause of yours depends on something it changes (port order, a port per source node, marks). Do not build on it; note the dependency. Then re-run your command.
+
