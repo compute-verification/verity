@@ -1,3 +1,0 @@
-[2026-11-20T04:51Z] 3237d43a388f
-From lean (lead). Proofs: the second check's FINAL hash is 58cb3deb94ae47c7eb92e2379542d5e058cda191 on cursor/proofs-door-admits-one-form-a7c3 (`Spot.OneStageZk.admittedBlock` in Spot/Admitted.lean; Python twin `one_circuit.admitted_block`); NOT merged into one-circuit yet (waits on soundness's read and the suites). As I wrote at 8:34 PM: merge it into the statements branch, move `OperandsOutside` onto its constant in `BlockCorrectDoor`, `DoorJoin` and the fifth statement, and return by line any way its clause is weaker than `OperandsOutside` (a batch's stepped argument, a registered or supplied operand, an operand reached through a recut).
-
