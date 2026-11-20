@@ -267,11 +267,12 @@ def module_of(file: str) -> str:
 
 
 def run_tests(w: Path, tests: list[str], timeout: float, extra_env: dict | None = None, reach_out: Path | None = None,
-              targets: list[str] | None = None, maxfail: bool = True) -> tuple[str, float, str]:
+              targets: list[str] | None = None, maxfail: bool = True,
+              deselect: dict | None = None) -> tuple[str, float, str]:
     """('pass'|'fail'|'timeout', seconds, tail) running ``tests`` (grouped by suite, one pytest each) in worker ``w``."""
     t0 = time.monotonic()
     py = str(ROOT / ".venv" / "bin" / "python")
-    args = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not slow", "--no-header", "-rN", "-W", "ignore"]
+    args = [py, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "not slow", "--no-header", "-rfE", "-W", "ignore"]
     if os.environ.get("MUT_SLOW"):
         args[args.index("-m"):args.index("-m") + 2] = []
     if maxfail:
@@ -288,11 +289,12 @@ def run_tests(w: Path, tests: list[str], timeout: float, extra_env: dict | None 
     for _suite, ts in groups.items():
         left = timeout - (time.monotonic() - t0)
         try:
-            p = subprocess.run(args + ts, cwd=w, env=env_for(w, extra), capture_output=True, text=True,
+            des = [x for t in ts for d in (deselect or {}).get(t, []) for x in ("--deselect", d)]
+            p = subprocess.run(args + des + ts, cwd=w, env=env_for(w, extra), capture_output=True, text=True,
                                timeout=max(left, 1))
         except subprocess.TimeoutExpired:
             return "timeout", time.monotonic() - t0, ""
-        tail = (p.stdout + p.stderr)[-1500:]
+        tail = (p.stdout + p.stderr)[-40000:]
         if p.returncode not in (0, 5):
             return "fail", time.monotonic() - t0, tail
     return "pass", time.monotonic() - t0, tail
@@ -325,8 +327,16 @@ def reach(spec: dict, out: Path, jobs: int, base: Path, step: str | None = None)
         ro = w / ".mut" / f"reach-{i}.json"
         st, dt, tail = run_tests(w, [f], timeout=900, reach_out=ro, targets=targets, maxfail=False)
         seen = json.loads(ro.read_text()) if ro.exists() else []
-        res[f] = {"status": st, "secs": round(dt, 1), "reached": seen, "tail": tail[-600:] if st != "pass" else ""}
-        print(f"reach {f}: {st} {dt:.0f}s, {len(seen)} target functions", flush=True)
+        bad = []
+        if st == "fail":
+            bad = [ln.split(" ", 1)[1].split(" - ", 1)[0].strip() for ln in tail.splitlines()
+                   if ln.startswith(("FAILED ", "ERROR "))]
+            if bad:
+                st2, dt2, tail2 = run_tests(w, [f], timeout=900, maxfail=False, deselect={f: bad})
+                st, tail = ("pass" if st2 == "pass" else "fail"), tail2
+        res[f] = {"status": st, "secs": round(dt, 1), "reached": seen, "deselect": bad,
+                  "tail": tail[-1500:] if (st != "pass" or bad) else ""}
+        print(f"reach {f}: {st} {dt:.0f}s, {len(seen)} target functions, {len(bad)} deselected", flush=True)
 
     with ThreadPoolExecutor(len(workers)) as ex:
         list(ex.map(one, enumerate(files)))
@@ -392,7 +402,8 @@ def run(spec: dict, outdir: Path, jobs: int, base: Path, step: str | None) -> No
                     rec.update(status="SURVIVED", why="no test file reaches this function", secs=0)
                     return rec
                 budget = 3 * sum(reach_map[t]["secs"] for t in ts) + 120
-                st, dt, tail = run_tests(w, ts, timeout=budget)
+                st, dt, tail = run_tests(w, ts, timeout=budget,
+                                         deselect={t: reach_map[t].get("deselect", []) for t in ts})
                 rec.update(status={"pass": "SURVIVED", "fail": "KILLED", "timeout": "KILLED"}[st],
                            how=st, secs=round(dt, 1), tail=tail[-500:] if st == "fail" else "")
                 return rec
