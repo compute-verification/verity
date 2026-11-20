@@ -25,6 +25,12 @@ def D_field : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1"
 
 def D_fieldbig : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2047]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2048]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]],["Tuple",[["Array",2047,["Value",1]],["Value",1]]]]}"#
 
+/-- (x, Not y) at x of 2048 bits: the 1-bit `y` and `Not y` are each the LAST parameter and return field. -/
+def D_last : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2048,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2048]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2048,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2048,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2048]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2049]},"ret_type":["Tuple",[["Array",2048,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2048,["Value",1]],["Tuple",[["Array",2048,["Value",1]],["Value",1]]]]}"#
+
+/-- E(x : Array 2047 (Value 1)) = x with its last bit negated: one parameter and one return field, alone. -/
+def D_one : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,2046,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,2046]},{"affine":["n",0,0,1]}]},"ret_type":["Array",2047,["Value",1]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1}],"fn":2,"form":"call","out":1}],"params":[],"ret":{"affine":["n",1,0,2047]},"ret_type":["Array",2047,["Value",1]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]]]}"#
+
 def show? {α} (f : α → String) : V α → String
   | .ok a => "ok " ++ f a
   | .error e => "REFUSED: " ++ e
@@ -115,5 +121,43 @@ def realReport (d key : String) (us : Array Nat) (x : Array Bool) (oks : List (S
   [("honest (o0, o1) = (5, 1)", bitsOf 5 2048 ++ bitsOf 1 16), ("WRONG (o0, o1) = (5, 0)", bitsOf 5 2048 ++ bitsOf 0 16),
    ("WRONG (o0, o1) = (5 + 2^2047, 0): Not y at o0's bit 2047", bitsOf (5 + 2^2047) 2048 ++ bitsOf 0 16),
    ("(o0, o1) = (5 + 2^2047, 1)", bitsOf (5 + 2^2047) 2048 ++ bitsOf 1 16)]
+
+/-- The lowered rows of `d`'s `key` against the honest output `o` on input `x`: whether it satisfies; each output bit
+flipped alone (those NOT rejected listed, padding included: index `i` is the port's bit `i`); and each input bit at
+`inPad` set to 1 with `o` kept (those still satisfied are padding the rows leave free). -/
+def flipReport (d key : String) (x o : Array Bool) (inPad : List Nat) : List String :=
+  match realLower d key #[0] with
+  | .error e => ["lowerBlock's lower REFUSED: " ++ e]
+  | .ok (t, b) =>
+    let composed := match Test.Compose.read b with
+      | .ok c => match Test.Compose.agrees b c with
+        | .ok true => "compose + door's reader: ok, reads back as the block"
+        | .ok false => "compose + door's reader: read, NOT the block"
+        | .error e => "agrees REFUSED: " ++ e
+      | .error e => "compose/reader REFUSED: " ++ e
+    match Tmpl.Tmpl.rows t with
+    | .error e => ["rows REFUSED: " ++ e]
+    | .ok acc =>
+      let k := t.constPos
+      let sum := fun (z : Array Bool) (r : Array Nat) => r.foldl (fun b c => b != (c == k || z.getD c false)) false
+      let ok := fun (z : Array Bool) => z.getD k false && (List.range acc.ra.size).all fun c =>
+        !(acc.set.getD c false) || z.getD c false == (sum z acc.ra[c]! && sum z acc.rb[c]!)
+      let put := fun (x : Array Bool) => match Test.Lower.solve t x with
+        | .ok z => (List.range o.size).foldl (fun z i => z.set! (Lower.outBit t i) o[i]!)
+            (z ++ Array.replicate (t.constPos + 2) false)
+        | .error _ => #[]
+      let zh := put x
+      let notRej := (List.range o.size).filter fun i => ok (zh.set! (Lower.outBit t i) (!o[i]!))
+      let freeIn := inPad.filter fun i => ok (put (x.set! i true))
+      [s!"lowerBlock: ins {b.ins} outs {b.outs}", composed, s!"honest satisfies every row: {ok zh}",
+       s!"output port bits {o.size}; flipped alone and NOT rejected: {notRej}",
+       s!"input padding bits {inPad} set to 1, rows still satisfied (free): {freeIn}"]
+
+-- the last field: x = 5 (2048 bits), y = 0 (word 128); C's (o0, o1) = (5, 1); o1's padding is the port's bits 2049..2063
+#eval flipReport D_last "E_v1" (bitsOf 5 2048 ++ bitsOf 0 16) (bitsOf 5 2048 ++ bitsOf 1 16) (List.range' 2049 15)
+-- y = 1: C's (o0, o1) = (5, 0)
+#eval flipReport D_last "E_v1" (bitsOf 5 2048 ++ bitsOf 1 16) (bitsOf 5 2048 ++ bitsOf 0 16) (List.range' 2049 15)
+-- one field alone: x = 5 + 2^2046 (2047 bits); C's output 5 (bit 2046 negated); the port's bit 2047 is padding
+#eval flipReport D_one "E_v1" (bitsOf (5 + 2^2046) 2048) (bitsOf 5 2048) [2047]
 
 end Scratch.FieldEval
