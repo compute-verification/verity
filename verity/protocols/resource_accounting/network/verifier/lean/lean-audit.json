@@ -41,7 +41,7 @@
     "Flock.Public",
     "Flock.WindowRecord",
     "InferenceOnlyVerifier.Desc",
-    "InferenceOnlyVerifier.DefinitionDigest",
+    "Circuits.DefinitionDigest",
     "NetworkVerifier.ScanOk",
     "NetworkVerifier.Period.ConnectionRows",
     "NetworkVerifier.Period.Start",
@@ -80,7 +80,7 @@
     "Flock.Public",
     "Flock.WindowRecord",
     "InferenceOnlyVerifier.Desc",
-    "InferenceOnlyVerifier.DefinitionDigest",
+    "Circuits.DefinitionDigest",
     "NetworkVerifier.ScanOk",
     "NetworkVerifier.Period.ConnectionRows",
     "NetworkVerifier.Period.Start"

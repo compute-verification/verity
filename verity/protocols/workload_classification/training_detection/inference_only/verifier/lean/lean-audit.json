@@ -121,7 +121,7 @@
     "Spot.Wires",
     "Spot.RecordText",
     "InferenceOnlyVerifier.Theta",
-    "InferenceOnlyVerifier.DefinitionDigest"
+    "Circuits.DefinitionDigest"
    ],
    "except": [],
    "why": "the check of an execution phase's circuit record is code, as InferenceOnlyVerifier.Theta is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires, what the record's text declares (Spot.RecordText) and the Definition's closure digest; nothing of InferenceOnlyVerifier.Count, no Mathlib and nothing of Security"
@@ -135,11 +135,6 @@
    "imports": ["InferenceOnlyVerifier.Theta", "CoreProtocol.Protocol"],
    "except": [],
    "why": "the inference-only policy as a core protocol is code: the policy's check (InferenceOnlyVerifier.Theta) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
-  },
-  "InferenceOnlyVerifier.DefinitionDigest": {
-   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
-   "except": [],
-   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   },
   "InferenceOnlyVerifier.RecordRows": {
    "imports": ["InferenceOnlyVerifier.Record"],
