@@ -270,4 +270,224 @@ theorem admitWhole : AdmitWhole := by
     simp at this
     omega
 
+/-- **`HomoBits`**: a type of one leaf width (`Widths.homo`) has that width at each of its leaves, so its bits are its
+leaves times the width. -/
+def HomoBits : Prop :=
+  ∀ (t : Ty) (w : ℕ), Widths.homo t = some w → t.widths.foldl (· + ·) 0 = t.leaves * w
+
+theorem foldl_snd_eq (l : List (String × ℕ)) (a : ℕ) :
+    l.foldl (fun x y => x + y.2) a = a + (l.map Prod.snd).sum := by
+  induction l generalizing a with
+  | nil => simp
+  | cons x l ih => simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons]; omega
+
+theorem bitsOf_eq (rs : Array (String × ℕ)) : bitsOf rs = (rs.toList.map Prod.snd).sum := by
+  unfold bitsOf
+  rw [← Array.foldl_toList, foldl_snd_eq]
+  simp
+
+theorem cutRows_toList (cs : List (String × ℕ)) (ins : Array (String × ℕ)) :
+    (Spot.OneStageZk.cutRows cs ins).toList = ins.toList.flatMap fun x => (Spot.OneStageZk.cutRows cs #[x]).toList := by
+  unfold Spot.OneStageZk.cutRows
+  simp [Array.toList_flatMap]
+
+theorem cutRows_one (cs : List (String × ℕ)) (n : String) (b : ℕ) :
+    (Spot.OneStageZk.cutRows cs #[(n, b)]).toList = match cs.lookup n with
+      | some k => if k ≤ 1 then [(n, b)] else (List.range k).map fun j => (s!"{n}#{j}", b / k)
+      | none => [(n, b)] := by
+  unfold Spot.OneStageZk.cutRows
+  cases hk : cs.lookup n with
+  | none => simp [hk]
+  | some k => by_cases k1 : k ≤ 1 <;> simp [hk, k1]
+
+theorem bitsOf_cutRows (cs : List (String × ℕ)) (ins : Array (String × ℕ))
+    (h : ∀ x ∈ ins.toList, ∀ k, cs.lookup x.1 = some k → 2 ≤ k → k ∣ x.2) :
+    bitsOf (Spot.OneStageZk.cutRows cs ins) = bitsOf ins := by
+  rw [bitsOf_eq, bitsOf_eq, cutRows_toList]
+  generalize ins.toList = l at h ⊢
+  induction l with
+  | nil => simp
+  | cons x l ih =>
+    rw [List.flatMap_cons, List.map_append, List.sum_append, List.map_cons, List.sum_cons,
+      ih fun y hy => h y (List.mem_cons_of_mem _ hy)]
+    obtain ⟨n, b⟩ := x
+    have hd := h (n, b) List.mem_cons_self
+    rw [cutRows_one]
+    congr 1
+    cases hk : cs.lookup n with
+    | none => simp
+    | some k =>
+      by_cases k1 : k ≤ 1
+      · simp [k1]
+      · simp only [k1, if_false]
+        simp [Function.comp_def, List.sum_replicate, Nat.mul_div_cancel' (hd k hk (by omega))]
+
+theorem sum_foldl_add (arr : Array ℕ) : arr.foldl (· + ·) 0 = arr.toList.sum := by
+  rw [← Array.foldl_toList]
+  suffices h : ∀ (l : List ℕ) (a : ℕ), l.foldl (· + ·) a = a + l.sum by simpa using h arr.toList 0
+  intro l
+  induction l with
+  | nil => simp
+  | cons x l ih => intro a; simp only [List.foldl_cons, ih, List.sum_cons]; omega
+
+theorem foldl_append_toList {β : Type} (fs : List β) (g : β → Array ℕ) (acc : Array ℕ) :
+    (fs.foldl (fun a t => a ++ g t) acc).toList = acc.toList ++ fs.flatMap fun t => (g t).toList := by
+  induction fs generalizing acc with
+  | nil => simp
+  | cons x l ih => simp [ih]
+
+theorem sum_map_flatMap {β : Type} (l : List β) (g : β → Array ℕ) :
+    (l.map fun x => (g x).toList.sum).sum = (l.flatMap fun x => (g x).toList).sum := by
+  induction l with
+  | nil => simp
+  | cons x l ih => simp_all [List.flatMap_cons, List.sum_append]
+
+/-- The return fields' bits are the return's. -/
+theorem fields_bits (ret : Ty) :
+    ((fieldsOf ret).map fun f => f.widths.foldl (· + ·) 0).sum = ret.widths.foldl (· + ·) 0 := by
+  cases ret with
+  | value w => simp [fieldsOf]
+  | array n e => simp [fieldsOf]
+  | tuple fs =>
+    simp only [fieldsOf, sum_foldl_add, Ty.widths]
+    rw [← Array.foldl_toList, foldl_append_toList]
+    simpa using sum_map_flatMap fs.toList Ty.widths
+  | record fs =>
+    simp only [fieldsOf, sum_foldl_add, Ty.widths]
+    rw [← Array.foldl_toList, foldl_append_toList]
+    simpa [Function.comp_def] using sum_map_flatMap fs.toList fun x => x.2.widths
+
+theorem bitsOf_fields (ret : Ty) :
+    bitsOf ((fieldsOf ret).toArray.mapIdx fun j f => (s!"o{j}", f.widths.foldl (· + ·) 0)) =
+      ret.widths.foldl (· + ·) 0 := by
+  rw [bitsOf_eq, ← fields_bits]
+  congr 1
+  apply List.ext_getElem <;> simp
+
+theorem lookup_mem {cs : List (String × ℕ)} {n : String} {k : ℕ} (h : cs.lookup n = some k) : (n, k) ∈ cs := by
+  induction cs with
+  | nil => simp at h
+  | cons x l ih =>
+    obtain ⟨m, j⟩ := x
+    by_cases hm : n = m
+    · subst hm; simp [List.lookup] at h; subst h; exact List.mem_cons_self
+    · have : (n == m) = false := by simpa using hm
+      simp only [List.lookup, this] at h
+      exact List.mem_cons_of_mem _ (ih h)
+
+theorem find?_of_nodup {ps : List (String × Ty)} {p : String × Ty} (hn : (ps.map Prod.fst).Nodup) (hp : p ∈ ps) :
+    ps.find? (·.1 == p.1) = some p := by
+  induction ps with
+  | nil => cases hp
+  | cons q qs ih =>
+    rw [List.map_cons, List.nodup_cons] at hn
+    rcases List.mem_cons.1 hp with rfl | hp
+    · simp
+    · have hq : (q.1 == p.1) = false := by
+        have : q.1 ≠ p.1 := fun e => hn.1 (e ▸ List.mem_map_of_mem hp)
+        simpa using this
+      rw [List.find?_cons, hq]
+      exact ih hn.2 hp
+
+theorem count_flatMap_ge {β : Type} (l : List β) (g : β → List String) (a : String) (P : β → Bool)
+    (h : ∀ x ∈ l, P x = true → a ∈ g x) : (l.filter P).length ≤ (l.flatMap g).count a := by
+  induction l with
+  | nil => simp
+  | cons x l ih =>
+    rw [List.flatMap_cons, List.count_append]
+    have ih' := ih fun y hy => h y (List.mem_cons_of_mem _ hy)
+    by_cases hx : P x = true
+    · rw [List.filter_cons_of_pos hx, List.length_cons]
+      have := List.count_pos_iff.2 (h x List.mem_cons_self hx)
+      omega
+    · rw [List.filter_cons_of_neg hx]
+      omega
+
+theorem count_fst_le (ps : List (String × Ty)) (n : String) :
+    (ps.map Prod.fst).count n ≤ (ps.filter fun x => x.1 == n).length := by
+  induction ps with
+  | nil => simp
+  | cons x l ih =>
+    by_cases hx : x.1 = n
+    · simp [hx]; omega
+    · simp [hx]; omega
+
+/-- **`AdmitLeaves`**, from `admitted_walk` and `HomoBits`. -/
+theorem admitLeaves (hH : HomoBits) : AdmitLeaves := by
+  intro partition cuts S a Q e ha hq
+  obtain ⟨fn, L, dl, l, -, hlift, hl, hoff, hins, hfields, -, -, hcut, hnames⟩ := admitted_walk ha
+  rw [hlift] at hq
+  cases hq
+  have hg : Q.defs.getD e default = l := by
+    rw [Array.getD_eq_getD_getElem?, hl]; rfl
+  rw [hg]
+  obtain ⟨hp, hr⟩ := leavesOff_none hoff
+  have hnd : (fn.params.toList.map Prod.fst).Nodup := by
+    rw [List.nodup_iff_count_le_one]
+    intro n
+    by_contra hc
+    have h2 := count_fst_le fn.params.toList n
+    let cs := (cuts.lookup a.key).getD []
+    let r : String := match cs.lookup n with
+      | some k => if k ≤ 1 then n else s!"{n}#{(0 : ℕ)}"
+      | none => n
+    have hrow : ∀ x ∈ fn.params.toList.map (fun p => (p.1, p.2.widths.foldl (· + ·) 0)), (x.1 == n) = true →
+        r ∈ ((Spot.OneStageZk.cutRows cs #[x]).toList.map Prod.fst) := by
+      intro x _ hx
+      have hx : x.1 = n := by simpa using hx
+      obtain ⟨m, b⟩ := x
+      simp only at hx
+      subst hx
+      rw [cutRows_one]
+      simp only [r]
+      cases hk : cs.lookup m with
+      | none => simp
+      | some k =>
+        by_cases k1 : k ≤ 1
+        · simp [k1]
+        · simp only [k1, if_false]
+          simp
+          first | omega | exact ⟨0, by omega, by first | rfl | simp⟩
+    have hge := count_flatMap_ge (fn.params.toList.map fun p => (p.1, p.2.widths.foldl (· + ·) 0))
+      (fun x => (Spot.OneStageZk.cutRows cs #[x]).toList.map Prod.fst) r (fun x => x.1 == n) hrow
+    have hlen : ((fn.params.toList.map fun p => (p.1, p.2.widths.foldl (· + ·) 0)).filter fun x => x.1 == n).length =
+        (fn.params.toList.filter fun x => x.1 == n).length := by
+      rw [List.filter_map, List.length_map]; rfl
+    have hin : 2 ≤ (a.ins.toList.map fun x => x.1).count r := by
+      rw [hins, cutRows_toList, List.map_flatMap, Array.toList_map]
+      exact le_trans (by omega) hge
+    rw [List.count_eq_length_filter] at hin
+    have hall : 2 ≤ ((a.ins.map (·.1) ++ a.fields.map (·.1)).filter (· == r)).size := by
+      rw [← Array.length_toList, Array.toList_filter, Array.toList_append, List.filter_append, List.length_append,
+        Array.toList_map, Array.toList_map]
+      omega
+    have hmem : r ∈ a.ins.map (·.1) ++ a.fields.map (·.1) := by
+      rw [Array.mem_def, Array.toList_append, Array.toList_map]
+      exact List.mem_append_left _ (List.count_pos_iff.1 (by rw [List.count_eq_length_filter]; omega))
+    exact hnames r hmem (decide_eq_true (Nat.lt_of_lt_of_le (by decide) hall))
+  constructor
+  · rw [hins, bitsOf_cutRows, ← hp]
+    · rw [bitsOf, Array.foldl_map]
+    · intro x hx k hk hk2
+      rw [Array.toList_map, List.mem_map] at hx
+      obtain ⟨p, hp', rfl⟩ := hx
+      obtain ⟨n', t', hf, hc⟩ := hcut _ (lookup_mem hk)
+      rw [← Array.find?_toList, find?_of_nodup hnd hp'] at hf
+      have ht : p.2 = t' := congrArg Prod.snd (Option.some.inj hf)
+      rw [← ht] at hc
+      obtain ⟨w, hw⟩ : ∃ w, Widths.homo p.2 = some w := by
+        cases h : Widths.homo p.2 with
+        | none => simp [h] at hc
+        | some w => exact ⟨w, rfl⟩
+      simp [hw] at hc
+      have hk' : p.2.leaves % k = 0 := by omega
+      simp only
+      rw [hH _ _ hw]
+      exact Dvd.dvd.mul_right (Nat.dvd_of_mod_eq_zero hk') w
+  · rw [hfields, bitsOf_fields, hr]
+
+/-- **`LowerEvalDoor`**, on `HomoBits`. -/
+theorem lowerEvalDoor (hH : HomoBits) : LowerEvalDoor :=
+  lowerEvalDoor_of admitWhole (admitLeaves hH)
+
 end Flock.Chain
