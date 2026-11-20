@@ -100,22 +100,15 @@ from verity.protocols.resource_accounting.memory.pous.verifier.verifier import D
 
 log = logging.getLogger(__name__)
 
-PROTOCOL = SC.PROTOCOL
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
-COIN_TREE = SC.COIN_TREE
-RECORDS = SC.RECORDS
-COIN_TAG = SC.COIN_TAG
-COIN_BINDING = SC.COIN_BINDING
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
-COIN_SCHEMA = SC.COIN_SCHEMA
 RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory attester runs on: a microsecond (the network attester's 100 ms buckets are far too coarse)."""
-COMPLETE, LATE = SC.COMPLETE, SC.LATE
 HM96 = SC.HM96
 
 
@@ -175,9 +168,9 @@ class CoinTree:
             raise ValueError("a coin tree has one salt per index, every index a block")
         self.session, self.blocks, self.indices, self.key = session, blocks, tuple(indices), HM96.check_key(key)
         self.salts = tuple(salts)
-        self.domain = _domain(COIN_BINDING, session, len(self.indices))
+        self.domain = _domain(SC.COIN_BINDING, session, len(self.indices))
         hm = [coin_leaf(self.key, session, j, i, s) for j, (i, s) in enumerate(zip(self.indices, self.salts, strict=True))]
-        self._levels = tree_levels(self.domain, [self.domain.leaf(j, j, COIN_SCHEMA, h) for j, h in enumerate(hm)])
+        self._levels = tree_levels(self.domain, [self.domain.leaf(j, j, SC.COIN_SCHEMA, h) for j, h in enumerate(hm)])
         self.root = self._levels[-1][0]
 
     @classmethod
@@ -218,8 +211,8 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return SC.header_fields(self.session, self.coin_root, self.coin_key, self.binding, self.blocks, self.k, self.limit_ns,
-                                self.block_bytes)
+        return SC.header_fields(self.session, self.coin_root, _sha512(self.coin_key), self.binding, self.blocks, self.k,
+                                self.limit_ns, self.block_bytes)
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -269,8 +262,8 @@ def records_digest(rounds: Sequence[Round]) -> bytes:
 
 def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
     """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
-    head = SC.header(commitment.session, commitment.coin_root, commitment.coin_key, commitment.binding, commitment.blocks,
-                     commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
+    head = SC.header(commitment.session, commitment.coin_root, _sha512(commitment.coin_key), commitment.binding,
+                     commitment.blocks, commitment.k, commitment.limit_ns, commitment.block_bytes, ended, len(rounds))
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 
@@ -792,9 +785,9 @@ class MemoryAttester:
         r = Round(j, i, send, receipt, block_digest(block))
         self.rounds.append(r)
         if not 0 <= r.elapsed_ns <= self._commitment.limit_ns:
-            self.ended = LATE
+            self.ended = SC.LATE
         elif len(self.rounds) == self.coins.k:
-            self.ended = COMPLETE
+            self.ended = SC.COMPLETE
         return r
 
     def run(self, respond: Callable[[int], bytes]) -> SignedSession:
@@ -874,7 +867,7 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
-    if signed.ended != COMPLETE or len(signed.rounds) != commitment.k:
+    if signed.ended != SC.COMPLETE or len(signed.rounds) != commitment.k:
         reasons.append(f"the session ended {signed.ended} after {len(signed.rounds)} of {commitment.k} rounds")
     by_j = {o.j: o for o in openings}
     late = wrong = 0
@@ -893,10 +886,10 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "MATCHED", "PREMISE",
-           "PREMISE_BEFORE", "PROTOCOL", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COMMITTED", "HM96", "LMS", "MATCHED", "PREMISE",
+           "PREMISE_BEFORE", "REHEARSAL", "SEED_BYTES", "UNCOMMITTED", "committed", "create_leaf_state",
            "deployed_key", "holds", "key_tree", "pinned", "premise", "trusted_device",
-           "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryAttester", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",

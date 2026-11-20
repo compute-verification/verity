@@ -3,20 +3,18 @@ h1u.cu's formulas (kh_j10r_rows_bytes, kh_j10r_jw_bytes, kh_j10r_ws_bytes, kh_j1
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 import verity.protocols.experimental.dither.prover.j10r_ws as JWS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-DITHER = (Path(__file__).resolve().parents[4] / "benchmarks" / "hash" / "dither")
+DITHER = Path(__file__).resolve().parents[5] / "verity" / "protocols" / "experimental" / "dither" / "prover"
 
 #: the frozen shape's up and down (kraqwxsc's served shapes on the H200) and Llama-3.1-8B's four linears
 #: at a 64-row slot, (M, N, K)

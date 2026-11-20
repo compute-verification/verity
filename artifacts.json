@@ -172,7 +172,6 @@
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links",
-  "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals",
   "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "calibration/training/data/v3-selection.json",

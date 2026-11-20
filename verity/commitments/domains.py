@@ -16,9 +16,8 @@ module and the Lean equal, entry for entry; refuses a literal of the table in th
 switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
-# PoUW: the protocol and its identifier
+# PoUW: the protocol
 POUW_PROTOCOL = "verity/pouw/v1"
-POUW_IDENTIFIER = "verity/pouw/identifier/v1"
 POUW_PASS_MANIFEST = "verity/pouw/pass-manifest/v1"
 
 # PoUW: epochs: coins, salts and the weights they bind
@@ -77,7 +76,6 @@ POUW_SEED = "verity/pouw/seed/v2"
 POUW_RECEIPT = "verity/pouw/receipt/v1"
 POUW_NOISE = "verity/pouw/noise/v1"
 POUW_CALL_SEED = "verity/pouw/call-seed/v1"
-POUW_EPS1_SEED = "eps1-sm120-h1fx1/seed/v1"
 POUW_DITHER_CALL = "verity/pouw/dither/call/v1"
 POUW_DITHER_FILL = "verity/pouw/dither/fill/v1"
 POUW_DITHER_OPERAND = "verity/pouw/dither/operand/v1"
