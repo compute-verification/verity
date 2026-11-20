@@ -46,7 +46,7 @@ except OSError:
 keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "failed_drawn", "forged")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
-  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json
+  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json | tee $B/$1.arm
 }
 audit honest $RULE "--weights committed" ""; H=$?
 audit registered $RULE "" ""; G=$?
@@ -83,6 +83,6 @@ if [ $OK = 0 ]; then
   echo "ACCEPT scanned for the two word shapes (word_shape_scan.py): none (C sha256 $(sha256sum $B/c/C.json | cut -c1-64))"
   echo "ACCEPT recorded under a rate the verifier resolves to a subset of 4 of 144 blocks; the rated design is not on one-circuit"
 else
-  echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H members_lean ${ML:-?}"
+  echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV members_lean ${ML:-?}; $(cat $B/honest.arm 2>/dev/null || echo 'ARM honest: no verdict')"
 fi
 [ $OK = 0 ] && [ $G = 0 ] && [ $F = 0 ] && [ $U = 0 ] && [ $R = 0 ]

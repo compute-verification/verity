@@ -26,6 +26,26 @@ EXPECTS = {"honest": "ACCEPT", "registered": "REFUSED", "forged-drawn": "REFUSED
            "stratified": "REFUSED"}
 
 
+#: `Record.checks`' refusal of evidence naming no session root, which an honest window whose ports are all held by
+#: its members' registered reads meets: a completeness limit of the record, not a refusal of the window's values.
+NO_ROOTS = ("REJECT at roots: the audit record refuses a window whose evidence names no session root "
+            "(Record.checks' emptiness refusal); every port is held by the members check (headerHeldAt), so this "
+            "is a completeness limit, not a wrong value")
+
+
+def refusal(summary: dict) -> str | None:
+    """Why ``summary`` is no accept, or None for an accept: the record's failed checks (`a5`'s ``checks_failed``)."""
+    audit = summary.get("audit") or {}
+    if summary.get("ok") is True and audit.get("accepted") is True:
+        return None
+    failed = audit.get("checks_failed") or {}
+    if set(failed) == {"roots"} and not (failed["roots"] or {}).get("ports"):
+        return NO_ROOTS
+    if failed:
+        return "REJECT at " + ", ".join(sorted(failed)) + ": " + json.dumps(failed, sort_keys=True, default=str)[:600]
+    return "REJECT: " + json.dumps({"refused": summary.get("refused"), "why": audit.get("why")}, default=str)[:600]
+
+
 def _window(log: str) -> dict:
     for line in log.splitlines():
         if line.startswith("STEP ") and '"step": "window"' in line:
@@ -71,8 +91,8 @@ def judge(arm: str, status: int, log: str, summary: dict | None) -> tuple[str, s
         return "REFUSED", f"the members check: {str(members.get('reason') or members.get('codes'))[:300]}", True
     if arm == "forged-one" and audit.get("accepted") is False:
         return "REFUSED", f"the audit record rejects: {json.dumps(audit.get('why'), default=str)[:300]}", True
-    why = summary.get("refused") or audit.get("refused") or audit.get("why")
-    return "REJECT", f"status 1, not {EXPECTS[arm]} by its name: {json.dumps(why, default=str)[:300]}", False
+    why = refusal(summary) or "REJECT"
+    return "REJECT", f"status 1, not {EXPECTS[arm]} by its name: {why[len('REJECT'):].lstrip(': ')[:700]}", False
 
 
 def main(argv: list[str]) -> int:

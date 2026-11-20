@@ -1443,6 +1443,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
     summary["audit"]["members_lean"] = result["checks"]["members_lean"]
+    summary["audit"]["checks_failed"] = {x: y.get("detail") for x, y in result["checks"].items()
+                                         if x != "members_lean" and not y.get("ok")}
     if "registered_reads" in result:
         summary["audit"]["registered_reads"] = result["registered_reads"]["ok"]
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
