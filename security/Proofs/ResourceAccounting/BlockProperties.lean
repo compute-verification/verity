@@ -2,6 +2,7 @@ module
 
 public import Definitions.Compose.Guarantees.Blocks
 public import Definitions.Registration.Physical
+public import Proofs.Pous.StreamedWipe.Residual
 import Mathlib.Tactic
 
 /-!
@@ -23,8 +24,10 @@ locations. `chain` proves `Chain`.
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
 smaller of the server-day size limit and its inference and free blocks' limits, plus the assumed hidden hardware size;
 `serverSize_le` bounds a server-day block's size by its capacity's limit and `serverInput_le` its input from its own past
-and the outside world by the input limit; `capacity_binds` and `input_binds` show each refusing alone, at one gate and
-at one bit, and `covert_decides` a run the covert figure alone decides. `credited_excluded` refuses a server-day block
+plus its attested boundary's day block's input from the outside world by the input limit; `boundary_one_server` gives
+back the server-day block's own bound where it is alone behind its boundary that day (`boundaryBlocks_one`); `capacity_binds` and `input_binds` show each refusing alone, at one gate and
+at one bit, `covert_decides` a run the covert figure alone decides, and `wipe_count_decides` the wipe's registered
+numbers and challenge count deciding the check. `credited_excluded` refuses a server-day block
 whose PoUW credited use is above its capacity, `credited_le_capacity` gives that comparison from `SpendIsWork` and
 `ComputeRate`, and `credited_binds` shows it refusing at one gate. Those limits are per server-day block, and
 `cut_multiplies` shows a cut into more server-day blocks passing where the uncut run does not; a server-day block is a
@@ -38,7 +41,7 @@ records that no top block is in no class (the partitions' `kind` is total), so t
 cannot be stated; nothing sits inside an inference block, the finest scale here, so the other cannot be stated either.
 `cls_free_of_before_salt` makes a unit labelled inference that starts before its epoch's challenge tick a free block,
 `freeChild_le` puts a free block's work under the free limit, and `salt_label_free` shows both on one run.
-`realizesExcept_of_rows` gives `RealizesExcept` from the rows, and `serverDayBounds_old` shows its server-day clause
+`realizesExcept_of_rows` gives `RealizesExcept` from the rows, and `blockBounds_old` shows its server-day clause
 giving `OldServerClause`, every committed claim holding, at claims lists whose claims are at least the established bounds.
 -/
 
@@ -187,7 +190,7 @@ theorem listed_gate_in_period (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
 
 open Classical in
 /-- **No computed gate escapes both the server-day bounds and the hidden bound**: every computed gate lies in a
-server-day block, which `ServerDayBounds` reads, or is at a leaf no listed location holds (`hiddenGates`, whose work
+server-day block, which `BlockBounds` reads, or is at a leaf no listed location holds (`hiddenGates`, whose work
 `lim.hidden` bounds, assumed). -/
 theorem gate_serverDay_or_unlisted (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
     (hg : g ∈ (P.actual r).computed) :
@@ -544,7 +547,8 @@ theorem check_spec {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run} (hc : I
     (∀ i, P.kind r i = true → P.credited r i ≤ P.capacity r i) ∧
     (∀ i, P.kind r i = true → P.capacity r i - P.credited r i + P.tol ≤ lim.freeSize) ∧
     (∀ i, P.kind r i = true → P.capacity r i ≤ lim.cS) ∧
-    (∀ i, P.kind r i = true → wipePastBound (P.wipeEgress r i) + (P.ingressCount r i + P.covert r i) ≤ lim.kS) ∧
+    (∀ i, P.kind r i = true → P.boundaryPastBound r (P.bnd r i) (P.dayOf r i) +
+          (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)) ≤ lim.kS) ∧
     (∀ u, P.cls r u ≠ Class.inference → (P.claimsIn r u).isEmpty = true) := by
   simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
   obtain ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩ := hc
@@ -573,7 +577,8 @@ theorem check_capacity {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
 
 theorem check_input {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
     (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
-    wipePastBound (P.wipeEgress r i) + (P.ingressCount r i + P.covert r i) ≤ lim.kS :=
+    P.boundaryPastBound r (P.bnd r i) (P.dayOf r i) +
+      (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)) ≤ lim.kS :=
   (check_spec hc).2.2.2.2.2.2.1 i hki
 
 theorem check_innerEmpty {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
@@ -590,22 +595,65 @@ theorem serverSize_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M :
   have h : P.sizeOut r i ≤ P.capacity r i := (hout i hki).1
   exact h.trans (check_capacity hc i hki)
 
+/-- A server-day block's wipe bound is at most the sum over its attested boundary's server-day blocks that day. -/
+theorem pastBound_le_boundary (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    P.pastBound P.wipeEgress P.wipeChallenges r i ≤ P.boundaryPastBound r (P.bnd r i) (P.dayOf r i) := by
+  unfold Runs.boundaryPastBound
+  exact Finset.single_le_sum (f := fun j => P.pastBound P.wipeEgress P.wipeChallenges r j)
+    (fun _ _ => Nat.zero_le _) (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hki, rfl, rfl⟩)
+
 /-- **The limits bind what comes in**: under the check and `RealizesExcept`, a server-day block's input from its own
-past and the outside world together is at most `lim.kS` bits. Its input from another block at its location during its
-window (`.block`) is not bounded here. -/
+past plus its attested boundary's day block's input from the outside world is at most `lim.kS` bits. Its input from
+another block at its location during its window (`.block`) is not bounded here, and neither is its own input from the
+outside world where its boundary holds other servers: that is bounded only through the union. -/
 theorem serverInput_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M) (i : Fin (P.nOut r))
     (hki : P.kind r i = true) :
-    (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past, .world] ≤ lim.kS := by
+    (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past] +
+      (P.actual r).blockInput (P.θ r) (P.boundaryLoc r (P.bnd r i) (P.dayOf r i))
+        (P.boundaryBlock r (P.bnd r i) (P.dayOf r i)) [.world] ≤ lim.kS := by
   obtain ⟨-, -, -, -, -, hout, -⟩ := hreal
   obtain ⟨-, hp, hw⟩ := hout i hki
   have h1 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past] ≤
-      wipePastBound (P.wipeEgress r i) := hp
-  have h2 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.world] ≤
-      P.ingressCount r i + P.covert r i := hw
-  have := blockInput_past_world_le (P.θ r) (P.locOut r i) (P.outerBlock r i)
+      P.pastBound P.wipeEgress P.wipeChallenges r i := hp
+  have h2 : (P.actual r).blockInput (P.θ r) (P.boundaryLoc r (P.bnd r i) (P.dayOf r i))
+      (P.boundaryBlock r (P.bnd r i) (P.dayOf r i)) [.world] ≤
+      P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i) := hw
+  have := pastBound_le_boundary P r i hki
   have := check_input hc i hki
   omega
+
+/-- A block's input from the outside world reads its gates and location only, not its window. -/
+theorem blockInput_world_gates {A : Placed L} (θ : Finset (Fin A.N)) (X : Finset L) {b b' : Verity.Block A.toCircuit}
+    (h : b.gates = b'.gates) : A.blockInput θ X b [.world] = A.blockInput θ X b' [.world] := by
+  simp only [Placed.blockInput, List.toFinset_cons, List.toFinset_nil, insert_empty_eq, Finset.singleton_biUnion,
+    Placed.sourceGates, h]
+
+/-- **A one-server attested boundary gives back the server-day block's statement**: when server-day block `i` is the
+only one behind its attested boundary on its day, its boundary's day block has an input bound from the outside world
+exactly when block `i` has it, at every bound `k` (bits). -/
+theorem boundary_one_server (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
+    (hone : P.boundaryBlocks r (P.bnd r i) (P.dayOf r i) = {i}) (k : ℕ) :
+    P.HoldsBoundary r (P.bnd r i) (P.dayOf r i) (.inputAtMost [.world] k) ↔
+      P.HoldsOut r i (.inputAtMost [.world] k) := by
+  have hloc : P.boundaryLoc r (P.bnd r i) (P.dayOf r i) = P.locOut r i := by
+    simp only [Runs.boundaryLoc, hone, Finset.singleton_biUnion]
+  have hg : (P.boundaryBlock r (P.bnd r i) (P.dayOf r i)).gates = (P.outerBlock r i).gates := by
+    simp only [Runs.boundaryBlock, Runs.outerBlock, hone, Finset.singleton_biUnion]
+  simp only [Runs.HoldsBoundary, Runs.HoldsOut, Placed.Holds, hloc, blockInput_world_gates _ _ hg]
+
+/-- **A boundary whose listed location is its own holds one server a day**: when no other server-day block's location
+shares server-day block `i`'s attested boundary, `i` is the only server-day block behind it on its day (`oneBlock`). -/
+theorem boundaryBlocks_one (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.kind r i = true)
+    (hinj : ∀ j, P.kind r j = true → P.bnd r j = P.bnd r i → P.locOut r j = P.locOut r i) :
+    P.boundaryBlocks r (P.bnd r i) (P.dayOf r i) = {i} := by
+  ext j
+  simp only [Runs.boundaryBlocks, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+  constructor
+  · rintro ⟨hkj, hb, hd⟩
+    exact P.oneBlock r j i hkj hki (hinj j hkj hb) hd
+  · rintro rfl
+    exact ⟨hki, rfl, rfl⟩
 
 /-- **A server-day block whose capacity is above `cS` fails the check**, whatever the rest of the run (gates at the run's
 pricing). -/
@@ -615,11 +663,12 @@ theorem capacity_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) 
   exact absurd (check_capacity (by simpa using hc) i hki) (by omega)
 
 /-- **A server-day block whose input bounds sum above `kS` fails the check**, whatever the rest of the run: the wipe's
-bound on its input from its own past plus the network attester's ingress count plus the covert figure, above `lim.kS`
-bits. -/
+bounds summed over its attested boundary's server-day blocks that day, plus the boundary's ingress count that day, plus
+its covert figure, above `lim.kS` bits. -/
 theorem serverInput_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
     (hki : P.kind r i = true)
-    (hbig : lim.kS < wipePastBound (P.wipeEgress r i) + (P.ingressCount r i + P.covert r i)) :
+    (hbig : lim.kS < P.boundaryPastBound r (P.bnd r i) (P.dayOf r i) +
+      (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i))) :
     InferenceOnly.check lim P r = false := by
   by_contra hc
   exact absurd (check_input (by simpa using hc) i hki) (by omega)
@@ -729,16 +778,19 @@ theorem serverDay_count_le (P : Runs L) (r : P.Run) (Ls : Finset (Finset L)) (hL
           exact P.oneBlock r i j (Finset.mem_filter.mp hi).2 (Finset.mem_filter.mp hj).2 hij.1 hij.2
     _ = Ls.card * P.nDays := by rw [Finset.card_product, Finset.card_univ, Fintype.card_fin]
 
-/-- **The run's input from the server-day blocks' own past and the outside world, in the limits and the count**: under
-the check and `RealizesExcept`, summed over the server-day blocks it is at most the listed locations times the days
-times `lim.kS` bits. The count is servers times days only where the listed locations are pairwise disjoint, which
+/-- **The run's input from the server-day blocks' own past and their boundaries' input from the outside world, in the
+limits and the count**: under the check and `RealizesExcept`, each server-day block's input from its own past plus its
+attested boundary's day block's input from the outside world, summed over the server-day blocks, is at most the listed
+locations times the days times `lim.kS` bits. The count is servers times days only where the listed locations are pairwise disjoint, which
 belongs to the hardware description (`Hardware.units` in `Registration/Physical.lean`); no statement here changes with
 it. -/
 theorem serverInput_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
     ∑ i ∈ univ.filter (fun i => P.kind r i = true),
-        (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past, .world] ≤
+        ((P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past] +
+          (P.actual r).blockInput (P.θ r) (P.boundaryLoc r (P.bnd r i) (P.dayOf r i))
+            (P.boundaryBlock r (P.bnd r i) (P.dayOf r i)) [.world]) ≤
       Ls.card * P.nDays * lim.kS := by
   calc _ ≤ ∑ _i ∈ univ.filter (fun i => P.kind r i = true), lim.kS :=
         Finset.sum_le_sum fun i hi => serverInput_le lim P r M hc hreal i (Finset.mem_filter.mp hi).2
@@ -813,7 +865,8 @@ def oneDay (p : TickSpan) : p.Cut 1 where
 open Classical in
 /-- One run of the circuit `placed n` at credited use `cr` gates and tolerance `tl` gates: no fresh input, one server-day
 block holding the whole circuit as one inference block, claimed of size at most 1 gate and 0 bits of fresh input; the
-server-day block's wipe egress, ingress count and covert figure are 0 bits. The server-day block's window is ticks 1 to `n`, where `placed n` computes its `n` gates,
+server-day block's wipe egress, its attested boundary's ingress count and covert figure are 0 bits, and its wipe is one
+label of one bit at one challenge and soundness exponent 0 bits, so its wipe bound is `demoPast` bits. The server-day block's window is ticks 1 to `n`, where `placed n` computes its `n` gates,
 one a tick; its location's rate is 1 gate a tick, so its capacity is `n` gates, its work. -/
 noncomputable def demoRuns (n cr tl : ℕ) : Runs Unit where
   Run := Unit
@@ -842,9 +895,15 @@ noncomputable def demoRuns (n cr tl : ℕ) : Runs Unit where
   rate _ := 1
   credited _ _ := cr
   tol := tl
+  wipeLabels _ := 1
+  labelBits _ := 1
+  uncovered _ := 0
+  wipeError := 0
   wipeEgress _ _ := 0
-  ingressCount _ _ := 0
-  covert _ _ := 0
+  wipeChallenges _ _ := 1
+  boundary _ := 0
+  ingressCount _ _ _ := 0
+  covert _ := 0
   nIn _ := 1
   inner _ := Partition.whole (placed n).toCircuit
   ref _ := { parent := id, sub := fun g => by cases (Partition.whole (placed n).toCircuit).unit g <;> simp }
@@ -882,11 +941,18 @@ noncomputable def demoRuns (n cr tl : ℕ) : Runs Unit where
     simp only [placed, line] at this ⊢
     omega
 
-/-- The one-gate demo's server-day block holds the three bounds. -/
-theorem demo_serverDayBounds_one : (demoRuns 1 1 0).ServerDayBounds () := by
-  intro i _
-  fin_cases i
-  refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _), holds_input_mono (k := 0) ?_ (Nat.zero_le _)⟩
+/-- The demos' wipe bound on a server-day block's input from its own past, in bits: the wipe residual at one label of
+one bit, one challenge and soundness exponent 0 bits, with no egress and no uncovered storage. -/
+def demoPast : ℕ := Pous.StreamedWipe.wipeResidual 1 1 1 0
+
+/-- The one-gate demo's server-day block and its attested boundary's day block hold the three bounds. -/
+theorem demo_blockBounds_one : (demoRuns 1 1 0).BlockBounds () := by
+  intro i hki
+  have hone := boundaryBlocks_one _ _ i hki fun _ _ _ => rfl
+  refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _),
+    (boundary_one_server _ _ i hone _).mpr (holds_input_mono (k := 0) ?_ (Nat.zero_le _))⟩
+  all_goals clear hone hki
+  all_goals fin_cases i
   · show (placed 1).work _ _ ≤ 1
     simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]
     decide
@@ -895,11 +961,14 @@ theorem demo_serverDayBounds_one : (demoRuns 1 1 0).ServerDayBounds () := by
     simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
     decide
 
-/-- The two-gate demo's server-day block holds the three bounds. -/
-theorem demo_serverDayBounds_two : (demoRuns 2 1 1).ServerDayBounds () := by
-  intro i _
-  fin_cases i
-  refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _), holds_input_mono (k := 0) ?_ (Nat.zero_le _)⟩
+/-- The two-gate demo's server-day block and its attested boundary's day block hold the three bounds. -/
+theorem demo_blockBounds_two : (demoRuns 2 1 1).BlockBounds () := by
+  intro i hki
+  have hone := boundaryBlocks_one _ _ i hki fun _ _ _ => rfl
+  refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _),
+    (boundary_one_server _ _ i hone _).mpr (holds_input_mono (k := 0) ?_ (Nat.zero_le _))⟩
+  all_goals clear hone hki
+  all_goals fin_cases i
   · show (placed 2).work _ _ ≤ 2
     simp only [demoRuns, Runs.outerBlock, Partition.whole, Partition.gates, Placed.work]
     decide
@@ -923,7 +992,7 @@ theorem honest_feasible : (demoRuns 1 1 0).Realizes () := by
     · show (placed 1).blockInput _ _ _ _ ≤ 0
       simp only [demoRuns, Runs.innerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
-  · exact demo_serverDayBounds_one
+  · exact demo_blockBounds_one
 
 /-- The free blocks of `demoRuns n cr tl` are none (its one inner block is an inference block). -/
 theorem demo_freeChildren_empty (n cr tl : ℕ) (i : Fin ((demoRuns n cr tl).nOut ())) :
@@ -955,16 +1024,16 @@ theorem two_not_realizesExcept : ¬ (demoRuns 2 0 0).RealizesExcept () ∅ :=
   fun h => two_not_feasible (realizesExcept_empty_realizes _ _ h)
 
 /-- The demos' limits: one inference block of size claim at most 1 gate and fresh input claim at most 0 bits, no free
-block, no hidden hardware, and the given free work limit (gates) and server-day capacity limit (gates); the server-day
-input limit is `wipePastBound kS` bits, `kS` bits above the wipe's bound at 0 bits of egress. -/
+block, no hidden hardware, and the given free work limit (gates) and server-day capacity limit (gates); the input limit
+of an attested boundary's day block is `demoPast + kS` bits, `kS` bits above the demos' one wipe bound. -/
 noncomputable def demoLimits (freeSize cS kS : ℕ) : InferenceOnly.Limits :=
-  { n := 1, c := 1, k := 0, m := 0, freeSize := freeSize, cS := cS, kS := wipePastBound kS, hidden := 0, share := 0,
+  { n := 1, c := 1, k := 0, m := 0, freeSize := freeSize, cS := cS, kS := demoPast + kS, hidden := 0, share := 0,
     allowance := 0 }
 
 /-- **The honest run passes the check and realizes at the empty tolerance**: `demoRuns 1 1 0` (capacity 1 gate, credited
 use 1 gate, tolerance 0 gates) at honest limits (one inference block of size at most 1 gate and fresh input at most 0
 bits, no free block, free work at most 0 gates, the server-day block's capacity at most 1 gate and its input bounds at
-most `wipePastBound 0` bits)
+most `demoPast` bits)
 passes `check` and is in the feasible set with no tolerance. -/
 theorem honest_checks :
     InferenceOnly.check (demoLimits 0 1 0) (demoRuns 1 1 0) () = true ∧
@@ -1059,13 +1128,13 @@ theorem freeBound_binds :
   · simp [demoRuns, Circuit.width]
   · intro u _ hu; exact absurd (Finset.mem_univ u) hu
   · intro u hu; exact absurd (rfl : (demoRuns 2 1 1).cls () u = Class.inference) hu
-  · exact demo_serverDayBounds_two
+  · exact demo_blockBounds_two
   · intro u _; rfl
 
-/-- `demoRuns 1 1 0` with its server-day block's ingress count at `ig` bits and covert figure at `cv` bits (wipe egress
-0 bits). -/
+/-- `demoRuns 1 1 0` with its one attested boundary's ingress count at `ig` bits each day and its covert figure for the
+period at `cv` bits (wipe egress 0 bits). -/
 noncomputable def demoIn (ig cv : ℕ) : Runs Unit :=
-  { demoRuns 1 1 0 with ingressCount := fun _ _ => ig, covert := fun _ _ => cv }
+  { demoRuns 1 1 0 with ingressCount := fun _ _ _ => ig, covert := fun _ => cv }
 
 /-- **The capacity comparison bites alone, at one gate**: `demoRuns 2 2 0` (capacity 2 gates, credited use 2 gates)
 fails the check at `cS` = 1 gate and passes it at `cS` = 2 gates, every other limit the same; no other comparison reads
@@ -1076,20 +1145,37 @@ theorem capacity_binds :
   ⟨capacity_excluded (demoLimits 0 1 0) (demoRuns 2 2 0) () ⟨0, Nat.one_pos⟩ rfl (by decide), by decide⟩
 
 /-- **The input comparison bites alone, at one bit**: `demoIn 1 0` (wipe egress 0 bits, ingress count 1 bit, covert
-figure 0 bits) fails the check at `kS = wipePastBound 0` bits and passes it at one bit more, every other limit the same;
+figure 0 bits) fails the check at `kS = demoPast` bits and passes it at one bit more, every other limit the same;
 no other comparison reads `kS`. -/
 theorem input_binds :
     InferenceOnly.check (demoLimits 0 1 0) (demoIn 1 0) () = false ∧
       InferenceOnly.check (demoLimits 0 1 1) (demoIn 1 0) () = true :=
   ⟨serverInput_excluded (demoLimits 0 1 0) (demoIn 1 0) () ⟨0, Nat.one_pos⟩ rfl (by decide), by decide⟩
 
-/-- **The covert figure alone decides**: at the same limits (`kS = wipePastBound 0` bits) and the same attested counts
-(wipe egress 0 bits, ingress count 0 bits), the run passes the check with a covert figure of 0 bits (`demoIn 0 0`) and
-fails it with 1 bit (`demoIn 0 1`). -/
+/-- **The covert figure alone decides**: at the same limits (`kS = demoPast` bits) and the same counts (wipe egress
+0 bits, ingress count 0 bits), the run passes the check when its attested boundary's covert figure for the period is
+0 bits (`demoIn 0 0`) and fails it at 1 bit (`demoIn 0 1`). -/
 theorem covert_decides :
     InferenceOnly.check (demoLimits 0 1 0) (demoIn 0 0) () = true ∧
       InferenceOnly.check (demoLimits 0 1 0) (demoIn 0 1) () = false :=
   ⟨by decide, serverInput_excluded (demoLimits 0 1 0) (demoIn 0 1) () ⟨0, Nat.one_pos⟩ rfl (by decide)⟩
+
+/-- `demoRuns 1 1 0` with its location's wipe at `N` labels of 512 bits, soundness exponent 40 bits and `k` challenges
+(wipe egress 0 bits, no uncovered storage). -/
+noncomputable def demoWipe (N k : ℕ) : Runs Unit :=
+  { demoRuns 1 1 0 with wipeLabels := fun _ => N, labelBits := fun _ => 512, wipeError := 40,
+    wipeChallenges := fun _ _ => k }
+
+/-- **The wipe's registered numbers and its challenge count decide**: at 512-bit labels and soundness exponent 40 bits,
+the wipe residual is 8,549,712,478 bits at 40,625,000,000 labels and 74,000 challenges and 16,666,681,461 bits at the
+served H200 wipe's 2,319,974,400 labels and 2,152 challenges, so at `kS` = 10,000,000,000 bits, every other limit the
+honest one, the first run passes the check and the second fails it. -/
+theorem wipe_count_decides :
+    Pous.StreamedWipe.wipeResidual 40625000000 74000 512 40 = 8549712478 ∧
+      Pous.StreamedWipe.wipeResidual 2319974400 2152 512 40 = 16666681461 ∧
+      InferenceOnly.check { demoLimits 0 1 0 with kS := 10000000000 } (demoWipe 40625000000 74000) () = true ∧
+      InferenceOnly.check { demoLimits 0 1 0 with kS := 10000000000 } (demoWipe 2319974400 2152) () = false := by
+  decide
 
 /-- **The credited comparison bites, at one gate**: `demoRuns 1 1 0` (capacity 1 gate, credited use 1 gate) passes the
 check at the honest limits, and `demoRuns 1 2 0` (credited use 2 gates, one above its capacity) fails it, every limit the
@@ -1155,8 +1241,8 @@ def twoDays : (⟨1, 2⟩ : TickSpan).Cut 2 where
 
 /-- One run of the circuit `placed 2` at credited use `cr` gates in each server-day block and tolerance `tl` gates, cut at
 one location into two server-day blocks, gate 1 during tick 1 and gate 2 during tick 2, each holding its gate as one
-inference block claimed of size at most 1 gate and 0 bits of fresh input, each server-day block's wipe egress, ingress
-count and covert figure 0 bits. Its location's rate is 1 gate a tick, so each
+inference block claimed of size at most 1 gate and 0 bits of fresh input, each server-day block's wipe egress, and the
+one attested boundary's ingress count and covert figure, 0 bits, each wipe bound `demoPast` bits. Its location's rate is 1 gate a tick, so each
 server-day block's capacity is 1 gate. Its period, ticks 1 and 2, is registered as two days of one tick, one server-day
 block each. -/
 noncomputable def demoCut (cr tl : ℕ) : Runs Unit where
@@ -1187,9 +1273,15 @@ noncomputable def demoCut (cr tl : ℕ) : Runs Unit where
   rate _ := 1
   credited _ _ := cr
   tol := tl
+  wipeLabels _ := 1
+  labelBits _ := 1
+  uncovered _ := 0
+  wipeError := 0
   wipeEgress _ _ := 0
-  ingressCount _ _ := 0
-  covert _ _ := 0
+  wipeChallenges _ _ := 1
+  boundary _ := 0
+  ingressCount _ _ _ := 0
+  covert _ := 0
   nIn _ := 2
   inner _ := cutTwo
   ref _ := { parent := id, sub := fun g => by simp }
@@ -1246,9 +1338,10 @@ theorem pooled_counts_tol_once :
 
 /-- The cut witness's limits: at most 2 inference blocks in the run, each of size claim at most 1 gate and fresh input
 claim at most 0 bits; no free block; each server-day block's capacity − credited use + tolerance at most 1 gate, its
-capacity at most 2 gates and its input bounds at most `wipePastBound 0` bits; no hidden hardware. -/
+capacity at most 2 gates and each attested boundary's day block's input bounds at most `demoPast` bits; no hidden
+hardware. -/
 noncomputable def cutLimits : InferenceOnly.Limits :=
-  { n := 2, c := 1, k := 0, m := 0, freeSize := 1, cS := 2, kS := wipePastBound 0, hidden := 0, share := 0,
+  { n := 2, c := 1, k := 0, m := 0, freeSize := 1, cS := 2, kS := demoPast, hidden := 0, share := 0,
     allowance := 0 }
 
 /-- **Cutting a location's ticks multiplies the per-block limits**: the circuit `placed 2` (2 gates of work at one
@@ -1272,9 +1365,12 @@ theorem cut_multiplies :
   · simp [demoCut, Circuit.width]
   · intro u _ hu; exact absurd (Finset.mem_univ u) hu
   · intro u hu; exact absurd (by simp [demoCut, Runs.cls] : (demoCut 1 1).cls () u = Class.inference) hu
-  · intro i _
-    fin_cases i <;>
-      refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _), holds_input_mono (k := 0) ?_ (Nat.zero_le _)⟩
+  · intro i hki
+    have hone := boundaryBlocks_one _ _ i hki fun _ _ _ => rfl
+    refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _),
+      (boundary_one_server _ _ i hone _).mpr (holds_input_mono (k := 0) ?_ (Nat.zero_le _))⟩
+    all_goals clear hone hki
+    all_goals fin_cases i
     all_goals first
       | (show (placed 2).work _ _ ≤ 1
          simp only [demoCut, Runs.outerBlock, Partition.gates, Placed.work]; decide)
@@ -1361,8 +1457,8 @@ theorem not_mem_of_isEmpty {α : Type*} {l : List α} (h : l.isEmpty = true) (p 
 
 /-- **The rows give the feasible set with a tolerance**: an accepted run that passes the check, with the declared row's
 tolerance set `M` and its conclusion outside `M`, the wipe's row's bound on every server-day block's input from its own
-past, network attestation's row's bound on its input from the outside world (the ingress count plus the covert
-figure), and `ComputeRate` over the listed locations at the hardware description's rates, which bounds every
+past, network attestation's row's bound on its attested boundary's day block's input from the outside world (the
+boundary's ingress count that day plus its covert figure), and `ComputeRate` over the listed locations at the hardware description's rates, which bounds every
 server-day block's size by its capacity, realizes its claims outside `M` (`RealizesExcept r M`), under four named
 premises: `RegisteredReadsOpenLog` (`θ`'s gates are input gates), `RegisteredWidthAtMost`, `PricingChargesEveryGate`
 and `InferenceClaimsDeclared`. The check gives that a unit of `inner` that is not an inference block carries no claim. -/
@@ -1377,8 +1473,10 @@ theorem realizesExcept_of_rows (lim : InferenceOnly.Limits) (P : Runs L) {Root :
     (hdecl : ∀ u ∈ (univ.filter fun u => P.cls r u = Class.inference) \ M,
       P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (cDecl r u)) ∧
         P.HoldsIn r u (.inputAtMost [.past, .block, .world] (kDecl r u)))
-    (hpast : ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (wipePastBound (P.wipeEgress r i))))
-    (hworld : ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (P.ingressCount r i + P.covert r i))) :
+    (hpast : ∀ i, P.kind r i = true →
+      P.HoldsOut r i (.inputAtMost [.past] (P.pastBound P.wipeEgress P.wipeChallenges r i)))
+    (hworld : ∀ i, P.kind r i = true → P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
+      (.inputAtMost [.world] (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)))) :
     P.RealizesExcept r M := by
   refine ⟨fun a hamem => (hreads r ha a hamem).1, hwidth r ha, hprice r, ?_, ?_, ?_,
     fun u hu => (Finset.mem_filter.mp (hMsub hu)).2⟩
@@ -1398,7 +1496,7 @@ theorem realizesExcept_of_rows (lim : InferenceOnly.Limits) (P : Runs L) {Root :
 
 `OldServerClause` is a server-day clause over committed claims lists, one per top block: every claim holds.
 `ClaimsAtLeastBounds` holds of claims lists whose every claim is at least a bound the rows establish.
-`serverDayBounds_old` proves that `ServerDayBounds` gives `OldServerClause` at such lists. -/
+`blockBounds_old` proves that `BlockBounds` gives `OldServerClause` at such lists. -/
 
 /-- **The server-day clause over committed claims**, a claims list `cl i` per top block: every claim holds. -/
 def OldServerClause (P : Runs L) (r : P.Run) (cl : Fin (P.nOut r) → List Property) : Prop :=
@@ -1406,27 +1504,30 @@ def OldServerClause (P : Runs L) (r : P.Run) (cl : Fin (P.nOut r) → List Prope
 
 /-- **Claims at least the established bounds**: a hidden-hardware block carries none, and every claim of a server-day
 block is a size claim of at least its capacity (gates), an input claim from exactly its own past of at least the wipe's
-bound, or one from exactly the outside world of at least the ingress count plus the covert figure (bits). -/
+bound, or, for a block alone behind its attested boundary that day, one from exactly the outside world of at least the
+boundary's ingress count that day plus its covert figure (bits). -/
 def ClaimsAtLeastBounds (P : Runs L) (r : P.Run) (cl : Fin (P.nOut r) → List Property) : Prop :=
   ∀ i, (P.kind r i = false → cl i = []) ∧
     (P.kind r i = true → ∀ p ∈ cl i,
       (∃ s, p = .sizeAtMost s ∧ P.capacity r i ≤ s) ∨
-        (∃ s, p = .inputAtMost [.past] s ∧ wipePastBound (P.wipeEgress r i) ≤ s) ∨
-        (∃ s, p = .inputAtMost [.world] s ∧ P.ingressCount r i + P.covert r i ≤ s))
+        (∃ s, p = .inputAtMost [.past] s ∧ P.pastBound P.wipeEgress P.wipeChallenges r i ≤ s) ∨
+        (P.boundaryBlocks r (P.bnd r i) (P.dayOf r i) = {i} ∧ ∃ s, p = .inputAtMost [.world] s ∧
+          P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i) ≤ s))
 
-/-- **The new server-day clause gives the old one**: a run whose server-day blocks hold the three bounds holds every
-claim of any claims lists whose claims are at least those bounds. -/
-theorem serverDayBounds_old (P : Runs L) (r : P.Run) (cl : Fin (P.nOut r) → List Property)
-    (h : P.ServerDayBounds r) (hcl : ClaimsAtLeastBounds P r cl) : OldServerClause P r cl := by
+/-- **The new server-day clause gives the old one**: a run whose server-day blocks and attested boundaries' day blocks
+hold the three bounds holds every claim of any claims lists whose claims are at least those bounds; a claim of input
+from the outside world only for a block alone behind its attested boundary that day. -/
+theorem blockBounds_old (P : Runs L) (r : P.Run) (cl : Fin (P.nOut r) → List Property)
+    (h : P.BlockBounds r) (hcl : ClaimsAtLeastBounds P r cl) : OldServerClause P r cl := by
   intro i p hp
   cases hki : P.kind r i with
   | false => rw [(hcl i).1 hki] at hp; simp at hp
   | true =>
     obtain ⟨hs, hpa, hw⟩ := h i hki
-    rcases (hcl i).2 hki p hp with ⟨s, rfl, hle⟩ | ⟨s, rfl, hle⟩ | ⟨s, rfl, hle⟩
+    rcases (hcl i).2 hki p hp with ⟨s, rfl, hle⟩ | ⟨s, rfl, hle⟩ | ⟨hone, s, rfl, hle⟩
     · exact holds_size_mono hs hle
     · exact holds_input_mono hpa hle
-    · exact holds_input_mono hw hle
+    · exact (boundary_one_server P r i hone _).mp (holds_input_mono hw hle)
 
 /-! ## The chain, with the protocols' rows named as types
 
@@ -1437,8 +1538,11 @@ most its capacity; `DeclaredBlocksRun` at the run's tolerance; `PousUseAtLeast` 
 conversions, their exclusivity premise open for memory and the link; `WipeInputAtMost`, `NetworkInputAtMost`,
 `NetworkOutputAtMost` with their premises), `RegisteredReadsOpenLog`, and three named premises the rows do not give:
 `RegisteredWidthAtMost`, `PricingChargesEveryGate` and `InferenceClaimsDeclared`. The wipe's row is read at the run's
-wipe egress and network attestation's input row at the run's ingress count and covert figure, so the server-day bounds
-`ServerDayBounds` and the check read are the ones those rows establish. Its check is the inference-only check. Its
+wipe egress and challenge count with its guarantee proved (`PousStreamedWipe.streamed_wipe_residual`), and network
+attestation's input row at the run's ingress count for each attested boundary and day, so the bounds `BlockBounds` and
+the check read are the ones those rows establish. What those bounds rest on: `wipeEgress`, `wipeChallenges` and
+`ingressCount` are tied to no attester's signed output yet; the covert figure is assumed; `lim.hidden` is assumed and no
+protocol holds it; and no instance of `Runs` exists, so nothing about a real run is proved by this file. Its check is the inference-only check. Its
 conclusion is the policy's: an accepted run's actual circuit is compliant except with the seven rows' soundness errors
 summed. It is proved from `chain`.
 
@@ -1478,22 +1582,27 @@ theorem rows_chain (P : Runs L)
     (hcapPoub : P.CapacityAtMost Capacity.linkCapacity enclosingPoub capPoub)
     (hexclPoub : P.DeclaredWorkExclusive (fun r _ i => freePoub r i) (fun r _ i => readsB r i) enclosingPoub)
     -- The memory wipe (with its memory-size capacity hypothesis).
-    (Gwipe : Prop) (survives : P.Run → Prop) (memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (adv : ℝ≥0∞)
-    (wipe : P.WipeInputAtMost Gwipe survives P.wipeEgress memEnclosing memCap adv) (hGwipe : Gwipe)
-    (hwipeRead : P.RunReads Gwipe survives (2⁻¹ ^ 40 + adv))
+    (survives : P.Run → Prop) (memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞)
+    (wipe : P.WipeInputAtMost survives P.wipeEgress P.wipeChallenges memEnclosing memCap adv)
+    (hwipeRead : P.RunReads Pous.Guarantees.StreamedWipeResidual survives (2⁻¹ ^ P.wipeError + adv))
     (hwipeCap : P.CapacityAtMost Capacity.memorySize memEnclosing memCap)
-    (hwipeInfo : P.WipeInformationGivesWidth survives (fun r i => wipePastBound (P.wipeEgress r i)))
-    -- Network attestation, input, at the run's ingress count (covert inside the attester's assumption).
+    (hwipeCover : ∀ r i, P.kind r i = true →
+      memCap r i ≤ P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i) + P.uncovered (P.locOut r i))
+    (hwipeSide : ∀ r i, P.kind r i = true → 0 < P.wipeLabels (P.locOut r i) ∧ 0 < P.wipeChallenges r i ∧
+      Pous.StreamedWipe.wipeResidual (P.wipeLabels (P.locOut r i)) (P.wipeChallenges r i)
+        (P.labelBits (P.locOut r i)) P.wipeError < P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i))
+    (hwipeInfo : P.WipeInformationGivesWidth survives (P.pastBound P.wipeEgress P.wipeChallenges))
+    -- Network attestation, input, at the run's ingress count for each attested boundary and day.
     (egressN : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (netIn : P.NetworkInputAtMost P.ingressCount egressN P.ingressCount P.covert)
-    (hatt : P.AttesterOnEveryLink P.ingressCount egressN P.covert)
+    (netIn : P.NetworkInputAtMost P.ingressCount P.ingressCount egressN)
+    (hatt : P.AttesterOnEveryLink P.ingressCount egressN)
     -- Network attestation, output.
-    (shownNet : P.Run → Prop) (bOut ingressN' egressN' covert' : (r : P.Run) → Fin (P.nOut r) → ℕ) (εnet : ℝ≥0∞)
-    (netOut : P.NetworkOutputAtMost shownNet egressN bOut ingressN' egressN' covert' εnet)
+    (shownNet : P.Run → Prop) (bOut egressN' : (r : P.Run) → Fin (P.nOut r) → ℕ)
+    (ingressN' : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (εnet : ℝ≥0∞)
+    (netOut : P.NetworkOutputAtMost shownNet egressN bOut egressN' ingressN' εnet)
     (hphase : NetTiming.Attester.PhaseGetsBack)
     (hnetRead : P.RunReads NetTiming.Attester.PhaseGetsBack shownNet εnet)
-    (hrecord : P.RecordIsOutput shownNet egressN bOut) (hatt' : P.AttesterOnEveryLink ingressN' egressN' covert')
+    (hrecord : P.RecordIsOutput shownNet egressN bOut) (hatt' : P.AttesterOnEveryLink ingressN' egressN')
     -- Registration: the registered input gates.
     {Root : Type} (log : Finset Root) (opensAt : (r : P.Run) → Fin (P.actual r).N → Root → Prop)
     (hregreads : P.RegisteredReadsOpenLog log opensAt)
@@ -1501,7 +1610,7 @@ theorem rows_chain (P : Runs L)
     (hwidth : P.RegisteredWidthAtMost) (hprice : P.PricingChargesEveryGate)
     (hinfC : P.InferenceClaimsDeclared f cDecl kDecl) :
     ExceptWith P.pr P.accepts (fun r => InferenceOnly.Compliant pol (P.actual r) (P.θ r))
-      (∑ x : Fin 7, (![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ 40 + adv, 0, εnet] : Fin 7 → ℝ≥0∞) x) := by
+      (∑ x : Fin 7, (![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ P.wipeError + adv, 0, εnet] : Fin 7 → ℝ≥0∞) x) := by
   set shownV : Fin 7 → P.Run → Prop :=
     ![ (fun r => ∀ (M : Finset (Fin (P.nIn r))) i, P.kind r i = true →
          P.credited r i - ∑ u ∈ (P.infChildren r i).filter (· ∈ M), claimedSize (P.claimsIn r u) ≤
@@ -1513,11 +1622,12 @@ theorem rows_chain (P : Runs L)
                P.HoldsIn r u (.inputAtMost [.past, .block, .world] (kDecl r u))),
        (fun r => ∀ (_M : Finset (Fin (P.nIn r))) i, P.kind r i = true → freePous r i ≤ capPous r i - bPous r i),
        (fun r => ∀ (_M : Finset (Fin (P.nIn r))) i, P.kind r i = true → freePoub r i ≤ capPoub r i - bPoub r i),
-       (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (wipePastBound (P.wipeEgress r i)))),
        (fun r => ∀ i, P.kind r i = true →
-         P.HoldsOut r i (.inputAtMost [.world] (P.ingressCount r i + P.covert r i))),
+         P.HoldsOut r i (.inputAtMost [.past] (P.pastBound P.wipeEgress P.wipeChallenges r i))),
+       (fun r => ∀ i, P.kind r i = true → P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
+         (.inputAtMost [.world] (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)))),
        (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ] with hshownV
-  set εV : Fin 7 → ℝ≥0∞ := ![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ 40 + adv, 0, εnet] with hεV
+  set εV : Fin 7 → ℝ≥0∞ := ![εpouw, εdecl, εpous, εpoub, 2⁻¹ ^ P.wipeError + adv, 0, εnet] with hεV
   have hcover : ∀ r, P.accepts r → (∀ x ∈ Finset.univ, shownV x r) →
       ∃ M, P.FreeWorkAtMost r M ∧ P.RealizesExcept r M := by
     intro r ha hall
@@ -1538,7 +1648,7 @@ theorem rows_chain (P : Runs L)
         (fun r _ i => bPous r i) enclosingPous capPous εpous pous hcapPous hexclPous
     · exact (freeBlockAtMost P) Capacity.linkCapacity (fun r _ i => freePoub r i) (fun r _ i => readsB r i)
         (fun r _ i => bPoub r i) enclosingPoub capPoub εpoub poub hcapPoub hexclPoub
-    · exact wipe hGwipe hwipeRead hwipeCap hwipeInfo
+    · exact wipe PousStreamedWipe.streamed_wipe_residual hwipeRead hwipeCap hwipeCover hwipeSide hwipeInfo
     · exact netIn hatt fun _ _ _ _ => le_rfl
     · exact netOut hphase hnetRead hrecord hatt'
   exact chain P (InferenceOnly.check lim) pol Finset.univ shownV εV hthm (fun r ha => hcheck r ha) hcover hest
