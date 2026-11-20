@@ -81,10 +81,10 @@ class RootView(PeerReads, PX.PrefixInput):
     _pos_ident: bool
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
-                 compact: bool = False, checks: Iterable[int] = ()):
+                 compact: bool = False, checks: Iterable[int] = (), digest: str | None = None):
         self.label = label
         self.compact = bool(compact)
-        self.digest = desc.get("digest") or codec.program_digest(desc)
+        self.digest = digest or codec.program_digest(desc)
         registry = _registry()
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out

@@ -85,7 +85,6 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
     pj = json.loads(raw)
     del raw
     desc = pj["program"]
-    desc.setdefault("digest", pj.get("digest"))
     rows = []
     ih = hashlib.sha256()
     with open(os.path.join(d, "instances.jsonl"), "rb") as f:
@@ -147,7 +146,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         if p_idx and max(p_idx) != len(names) - 1:
             raise ValueError(f"{d}: instances read parameter {max(p_idx)} as the largest, program.json puts `weights` at {len(names) - 1}")
         w_param = len(names) - 1
-    p = cls(label, desc, {}, tok_node=0, oracle_rows=rows, compact=compact)
+    p = cls(label, desc, {}, tok_node=0, oracle_rows=rows, compact=compact, digest=pj.get("digest"))
     # a tensor-parallel rank fold: one homogeneous `peers_<i>` Record per request = ONE Input node at the parameter's index (every
     # parameter before the weights is homogeneous, one node each); its fields (issue order, leaf offsets) come from `peers_layout`.  The k of a
     # field is its ordinal among the REQUEST's fields = the rank Program's `peers_<k>` for that request.
