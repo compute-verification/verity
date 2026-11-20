@@ -488,18 +488,18 @@ def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole(
 
 
 def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
-    """C of `counts[i]` units of the i-th of two Boolean templates (XOR of two bits, of three), in that order, its
-    ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
+    """C of `counts[i]` units of the i-th of two Boolean templates (NOT of each bit of ``x``, of one word, of two), in that
+    order, its ``Q_template_instances`` partition object with one unit a block, and the templates' ids."""
     from verity.circuits import codec
     from verity.circuits import partition_object as PO
-    from verity.circuits.boolean import BIT, xor_gate
+    from verity.circuits.boolean import BIT, NOT
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.population import wired_population_program
     from verity.circuits.types import Array
     # ``pad``, read by no gate, is a row past a compression before its last block, which a Flock block's pin needs
-    ts = [bind(CompositeDefinition(f"DoorLowerXor{n}", 0, (),
-                                   lambda S, n=n: ((("x", Array(n, BIT)), ("pad", Array(1024, BIT))), BIT),
-                                   lambda B, S, x, pad, n=n: B.call(xor_gate(n), x), register=False)) for n in (2, 3)]
+    ts = [bind(CompositeDefinition(f"DoorLowerNot{n}", 0, (),
+                                   lambda S, n=n: ((("x", Array(16 * n, BIT)), ("pad", Array(1024, BIT))), Array(16 * n, BIT)),
+                                   lambda B, S, x, pad: B.batch(NOT, x, axes=(0,)), register=False)) for n in (1, 2)]
     ts = [(t, m) for t, m in zip(ts, counts) if m]
     ids = [codec.descriptor_id(t) for t, _ in ts]
     program, query = wired_population_program(ts, {"templates": [[tid, m] for tid, (_, m) in zip(ids, ts)]})
