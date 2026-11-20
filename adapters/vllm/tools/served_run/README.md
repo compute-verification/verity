@@ -101,8 +101,9 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
   which `verity-vllm predict row` writes from the workload alone before serving. The row's traced Build, made by
   `run.sh setup` and named in `placement.toml`'s `builds`, is its cross-check (`predict compare --predicted`), and the
   endpoint serves only when they agree.
-- The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
-  `LOAD=fixed` one full execution phase of fixed length).
+- The load: `serve_load.py`, `served_verdicts.sh`'s one execution phase of varied requests (`--varied`), or with
+  `LOAD=dataset` the input dataset `DATASET` at `TIMING` through the one sender, `verity_vllm.inputs.sender`, once the
+  adapter's door (`verity_vllm.inputs.serves`) takes it.
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
   H200s shared by card) unless the launch names another node (`--env NODE=vy-h100-1`, one H100), and its record is
   composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF cache, taps, traced Builds and Flock's build,

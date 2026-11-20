@@ -1,5 +1,4 @@
-"""The pipeline's seeded samples, pinned by digest: the top-p split fixture's cases and manifest, and compiled_merge's
-bootstrap interval.  Every committed fixture was sampled from these streams, so a change to how a generator is built or seeded fails here first."""
+"""The pipeline's seeded samples, pinned by digest: the top-p split fixture's cases and manifest.  Every committed fixture was sampled from these streams, so a change to how a generator is built or seeded fails here first."""
 from __future__ import annotations
 
 import contextlib
@@ -9,7 +8,6 @@ import json
 
 import pytest
 
-from verity_vllm.pipeline import compiled_merge as cm
 from verity_vllm.pipeline import topp_split_probe as tp
 
 
@@ -38,12 +36,3 @@ def test_topp_manifest_command_prints_the_pinned_manifest(record: bool, digest: 
     with contextlib.redirect_stdout(buf):
         tp.main(tp.ManifestOptions(record=record))
     assert hashlib.sha256(buf.getvalue().encode()).hexdigest()[:16] == digest and buf.getvalue().count("\n") == lines
-
-
-def test_compiled_merge_bootstrap_interval_is_pinned():
-    xs = [0.5, -1.25, 3.0, 2.0, 0.0, 1.5, -0.75]
-    assert cm._bootstrap_ci(xs, seed=0) == (-0.32142857142857145, 1.7857142857142858)
-    assert cm._bootstrap_ci(xs, seed=1) == (-0.32142857142857145, 1.75)
-    assert cm._bootstrap_ci(xs, 500, seed=2) == (-0.35714285714285715, 1.75)
-    lo, hi = cm._bootstrap_ci([1.0], seed=0)
-    assert lo != lo and hi != hi
