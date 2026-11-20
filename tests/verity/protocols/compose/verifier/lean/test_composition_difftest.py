@@ -109,7 +109,7 @@ def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, di
                 "sessions": [], "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": sampling_design,
               "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
-              "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": None}, "query": s.query,
+              "proofs": {"public": _sha(PUBLIC), "registered": None}, "query": s.query,
               "registered": None, "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
     return params, rec, evidence
 
@@ -808,7 +808,7 @@ def reusing_audit(m: dict) -> dict:
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
               "law": REUSING_SAMPLING_DESIGN, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
               "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
-              "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
+              "program": s.desc, "proofs": {"public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
