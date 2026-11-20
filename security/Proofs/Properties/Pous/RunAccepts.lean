@@ -169,7 +169,8 @@ theorem verifyOpening_coin {j : Nat} (hj : j < 105) :
   unfold Flock.FV3.Domain.verifyOpening
   rw [hclimb, hall]
   simp only [hroot, hbytes, hlen]
-  simp [domain, Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Sha512.scheme, hj]
+  simp [domain, Flock.SessionCoins.domain, Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Sha512.scheme,
+    hj]
 
 theorem findRev_honest {j : Nat} (hj : j < 105) :
     honestOpenings.findRev? (·.j == j) = some (honestOpening j) := by
