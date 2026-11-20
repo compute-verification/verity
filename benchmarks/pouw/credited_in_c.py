@@ -741,10 +741,10 @@ def door(a) -> int:
     PF.lower_executable = lambda: Path(a.lower)
     restrict, memo = OC.restrict, {}
 
-    def once(c: bytes, partition, units) -> bytes:
+    def once(c: bytes, partition, units, decoded=None) -> bytes:
         key = (hashlib.sha512(c).hexdigest(), json.dumps(partition, sort_keys=True), json.dumps([list(u) for u in units]))
         if key not in memo:
-            memo[key] = restrict(c, partition, units)
+            memo[key] = restrict(c, partition, units, decoded)
         return memo[key]
 
     OC.restrict = once
