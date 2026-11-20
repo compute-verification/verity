@@ -1321,4 +1321,92 @@ theorem doorLengths_of (hWd : UnitWidths) : DoorLengths := by
     key]
   simp [leafWidths]
 
+/-! ## The lift's bit layout, which `LiftWordEval` reads -/
+
+/-- **`BitAtSpec`**: word leaf `j` of `t` starts in `Ty.bitType t` at the sum of the widths before it, with its own
+width (`Flock.Lift.bitAt`). -/
+def BitAtSpec : Prop :=
+  ∀ (t : Ty) (j : ℕ), j < t.widths.size → Flock.Lift.bitAt t j = ((t.widths.toList.take j).sum, t.widths[j]!)
+
+/-- **`LiftSeqRefs`**: `liftSeq` puts in place of each word reference of a body the bits it occupies, `at_`'s run of
+them, in order, wherever `at_` agrees with `homo`'s one width. -/
+def LiftSeqRefs : Prop :=
+  ∀ (at_ : Bool → ℕ → ℕ → ℕ × ℕ) (homo : Bool → ℕ → Option ℕ) (s : Seq),
+    (∀ p i w, homo p i = some w → ∀ j, at_ p i j = (j * w, w)) →
+    (Flock.Lift.liftSeq at_ homo s).toArray.toList = s.toArray.toList.flatMap fun r =>
+      (List.range (at_ r.p r.i r.j).2).map fun t => ({ p := r.p, i := r.i, j := (at_ r.p r.i r.j).1 + t } : Ref)
+
+/-- **`BitTypeWidths`**: `Ty.bitType t` has a one-bit leaf for each bit of each of `t`'s leaves, in leaf order. -/
+def BitTypeWidths : Prop :=
+  ∀ t : Ty, (Ty.bitType t).widths.toList = t.widths.toList.flatMap fun w => List.replicate w 1
+
+/-- **`BitTypeAxis`**: a batch argument's axis of `t` is the same axis of `Ty.bitType t`, of the same length, the leaves
+below it the bits of the word leaves below it. -/
+def BitTypeAxis : Prop :=
+  ∀ (t : Ty) (ax n L : ℕ), t.axisDims ax = some (n, L) →
+    ∃ e : Ty, e.leaves = L ∧ (Ty.bitType t).axisDims ax = some (n, (Ty.bitType e).leaves) ∧
+      (Ty.bitType e).leaves = (e.widths.foldl (· + ·) 0)
+
+/-- **`ScanCarryBits`**: a scan node's lift keeps its sequences (`nxs`), and each sequence argument's length; its carries
+are its carries' bits. -/
+def ScanCarryBits : Prop :=
+  ∀ (d : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (gatesOf : ℕ → ℕ) (k : ℕ) (x : Node),
+    d.body.nodes[k]? = some x → x.form = .scan →
+    ∃ y, (Flock.Lift.liftDef d fnOf primOf gatesOf).body.nodes[k]? = some y ∧ y.nxs = x.nxs ∧ y.members = x.members ∧
+      y.args.size = x.args.size ∧ ∀ i < x.args.size, (y.args[i]!).ty = Ty.bitType (x.args[i]!).ty
+
+/-- **`RestrictWordEval`**: C's Definitions keep their value on words in the block's Program `restrict P units`. -/
+def RestrictWordEval : Prop :=
+  ∀ (P S : Prog) (units : Array ℕ), Spot.Restrict.restrict P units = .ok S →
+    ∀ d < P.defs.size, ∀ x, wordEval S d x = wordEval P d x
+
+theorem widths_homo_all {t : Ty} {w : ℕ} (h : Widths.homo t = some w) : ∀ x ∈ t.widths.toList, x = w := by
+  intro x hx
+  have hr := hb_mem_range t x (Array.mem_def.2 hx)
+  unfold Widths.homo at h
+  split at h
+  · rename_i hw
+    cases h
+    rw [hw] at hr
+    simpa using hr
+  · cases h
+
+theorem prefix_sums (l : List ℕ) : ∀ (acc : Array ℕ), 0 < acc.size →
+    (l.foldl (fun a w => a.push (a.back! + w)) acc).toList =
+      acc.toList ++ (List.range l.length).map fun i => acc.back! + (l.take (i + 1)).sum := by
+  induction l with
+  | nil => intro acc _; simp
+  | cons y l ih =>
+    intro acc _
+    rw [List.foldl_cons, ih _ (by simp)]
+    have hb : (acc.push (acc.back! + y)).back! = acc.back! + y := by simp [Array.back!]
+    rw [hb, List.length_cons, List.range_succ_eq_map]
+    simp [List.take_succ_cons, Nat.add_assoc]
+
+theorem bitAtSpec : BitAtSpec := by
+  intro t j hj
+  unfold Flock.Lift.bitAt
+  split
+  · rename_i w hw
+    have hall := widths_homo_all hw
+    have hjw : t.widths[j]! = w := by
+      rw [getElem!_pos t.widths j hj]
+      exact hall _ (Array.getElem_mem_toList hj)
+    rw [hjw]
+    have hs : ∀ (l : List ℕ), (∀ x ∈ l, x = w) → (l.take j).sum = (l.take j).length * w := by
+      intro l hl
+      have : ∀ x ∈ l.take j, x = w := fun x hx => hl x (List.mem_of_mem_take hx)
+      rw [List.sum_eq_card_nsmul _ w this, smul_eq_mul]
+    rw [hs _ hall, List.length_take, Array.length_toList, Nat.min_eq_left (Nat.le_of_lt hj)]
+  · have hp := prefix_sums t.widths.toList #[0] (by simp)
+    rw [Array.foldl_toList] at hp
+    congr 1
+    rw [getElem!_def, ← Array.getElem?_toList, hp]
+    cases j with
+    | zero => simp
+    | succ j =>
+      have hj' : j < t.widths.toList.length := by simp; omega
+      simp [List.getElem?_append_right, hj']
+
 end Flock.Chain
+
