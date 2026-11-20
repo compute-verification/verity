@@ -677,8 +677,8 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
-    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, and each wired port at its
-    writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, each port C reads from a run
+    input node at the docket's ``input/n<w>`` (`_run_input_roots`), and each wired port at its writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""

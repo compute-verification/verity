@@ -53,15 +53,33 @@ audit forged-one $RULE "--weights committed --forge 1" ""; U=$?
 audit stratified stratified-${RULE#rate:} "--weights committed" ""; R=$?
 echo "LAW the zero-knowledge audit's proved statement covers a subset design, so the accept is under $RULE, a subset draw over one stratum; the audit under a rated law waits on its claim"
 echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
-OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && OK=0
+ML=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))["audit"].get("members_lean") or {}; print("ok" if m.get("ran") is True and m.get("ok") is True else "no: "+json.dumps(m)[:300])' "$B/honest/summary.json" 2>/dev/null)
+echo "members_lean: ${ML:-no: no summary}"
+RP=$(python3 -c 'import json,sys
+def walk(x):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k == "rests_on_period_check" and v:
+                yield v
+            yield from walk(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from walk(v)
+print(json.dumps(next(walk(json.load(open(sys.argv[1]))), "")))' "$B/honest/summary.json" 2>/dev/null)
+[ "${RP:-\"\"}" = '""' ] || echo "REFUSED the accept rests on a period check that is not run: rests_on_period_check $RP"
+DELTA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("delta"))' "$B/honest/summary.json" 2>/dev/null)
+OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && [ "$ML" = ok ] \
+  && [ "${RP:-\"\"}" = '""' ] && OK=0
 if [ $OK = 0 ]; then
-  echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; the members' headers and populations are held by the Python members check"
+  echo "ACCEPT the proofs are verified by the Lean verifier in zero knowledge; Lean's members check ran and accepted the members' files and sessions (members_lean ran true, ok true)"
+  echo "ACCEPT Lean accepted the members at the δ it was handed: δ = $DELTA, the honest audit's summary.json delta, set by a5.py's --delta (its default; served_door_prove.sh passes none)"
+  echo "ACCEPT the members' files and sessions were checked by Lean against a registration and coins the Python audit handed it; not a statement about a served run"
   echo "ACCEPT the proofs are about the block circuits Lean's lowering derives from the registered circuit; each block is single-range (no block spans two root nodes)"
   echo "ACCEPT no proved statement is about the file the door writes; every accept at the door rests on the lift preserving evaluation, by reading and by the fuzzer"
   echo "ACCEPT the lowering's rows for this template were checked against the evaluator ($ROWS), one unit a block"
   echo "ACCEPT scanned for the two word shapes (word_shape_scan.py): none (C sha256 $(sha256sum $B/c/C.json | cut -c1-64))"
   echo "ACCEPT recorded under a rate the verifier resolves to a subset of 4 of 144 blocks; the rated design is not on one-circuit"
 else
-  echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H"
+  echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H members_lean ${ML:-?}"
 fi
 [ $OK = 0 ] && [ $F = 0 ]
