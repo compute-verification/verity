@@ -324,6 +324,24 @@ def output(program, value: str, rows: list[list[int]], supplied: bool):
                                 word_bits=16, schema=RV.SCHEMA_HM96_SHA512_ROW_V2)
 
 
+def order_runs(nodes: list[tuple[str, int, list[tuple]]]) -> list[tuple[str, int, int]]:
+    """A window's ``order`` from C's root units, ``(template, first unit, each member's writer fields)`` a root node in C's
+    order: a range a run of consecutive units of one template whose members read the same writers' fields, since the
+    window's Program lays each range as one batch (`population.wired_population_program`) and an edge reads one writer
+    field at every member (`edges._part_wires`). A batch whose members read different fields of one writer (eight line
+    units each one of the seed's index fields) is so as many ranges as it reads fields."""
+    order: list[tuple[str, int, int]] = []
+    last = None
+    for tid, lo, reads in nodes:
+        for mm, r in enumerate(reads):
+            if order and order[-1][0] == tid and order[-1][1] + order[-1][2] == lo + mm and last == r:
+                order[-1] = (tid, order[-1][1], order[-1][2] + 1)
+            else:
+                order.append((tid, lo + mm, 1))
+            last = r
+    return order
+
+
 def _field_starts(t) -> list[int]:
     """Where each output field (`verity.circuits.edges`' fields: a Tuple's or Record's members, else the whole) of a
     return type ``t`` starts, in leaves, and its end."""
@@ -903,7 +921,7 @@ def window(a) -> int:
     at: dict = {}
     outs = node_outputs(program, good, set(), at)
     scope, nodes = program.circuit.root_scope, program.root.body.nodes
-    fns, units, base, order = {}, {}, {}, []
+    fns, units, base = {}, {}, {}
     for kk, nd in enumerate(nodes):
         if is_input(nd.fn):
             continue
@@ -911,18 +929,14 @@ def window(a) -> int:
         fns.setdefault(tid, nd.fn)
         base[kk] = units.get(tid, 0)
         units[tid] = base[kk] + (nd.n if nd.form == "batch" else 1)
-        if order and order[-1][0] == tid:
-            order[-1] = (tid, order[-1][1], units[tid] - order[-1][1])
-        else:
-            order.append((tid, base[kk], units[tid] - base[kk]))
-    wires, cuts, external = [], {}, set()
+    wires, cuts, external, reads = [], {}, set(), {}
     inputs: dict[int, list] = {}
     for kk, nd in enumerate(nodes):
         if kk not in base:
             continue
         tid, count = descriptor_id(nd.fn), outs[kk].shape[0]
         axes = nd.axes if nd.form == "batch" else (None,) * len(nd.args)
-        inputs[kk] = []
+        inputs[kk], reads[kk] = [], [[] for _ in range(count)]
         for (p, ty), arg, ax in zip(nd.fn.signature()[0], nd.args, axes):
             rows, fed = [], set()
             for mm in range(count):
@@ -951,6 +965,7 @@ def window(a) -> int:
                     if last + 1 != _field_starts(nodes[kw].fn.signature()[1])[f + 1]:
                         raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads part of an output field of node {kw}")
                 c = len(pieces)
+                reads[kk][mm] += [(p, kw, f) for kw, _mw, f, _last in pieces]
                 if cuts.setdefault(tid, {}).setdefault(p, c) != c:
                     raise SystemExit(f"WINDOW-PORT: {tid} port {p} reads {c} writers' fields at one unit and "
                                      f"{cuts[tid][p]} at another")
@@ -964,6 +979,7 @@ def window(a) -> int:
                 inputs[kk].append(None)
     cuts = {t: {p: c for p, c in cs.items() if c > 1} for t, cs in cuts.items()}
     cuts = {t: cs for t, cs in cuts.items() if cs}
+    order = order_runs([(descriptor_id(nodes[kk].fn), base[kk], [tuple(r) for r in reads[kk]]) for kk in base])
     circuit = IF.Circuit("credited_in_c", tuple((fns[t], c) for t, c in units.items()), external=tuple(sorted(external)),
                          wires=tuple(IF.coalesce(wires)), cuts=cuts, order=tuple(order))
     wprog, wquery = circuit.program()
