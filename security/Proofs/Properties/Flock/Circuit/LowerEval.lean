@@ -936,13 +936,19 @@ def FrontUnitRanges : Prop :=
       ∀ h, InUnit P k m h → Spot.BlockFront.inside fr.ranges h = true
 
 /-- **`UnitComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
-`g`'s return leaves hold `Prog.evalBool` of its callee on its arguments, bit for bit. -/
+`g`'s return leaves hold, bit for bit, `Prog.evalBool` on `g`'s argument bits of the lift to bits (`Flock.Lift.lift`)
+of the template `admitted` gives, where that template is `g`'s callee. -/
 def UnitComputes : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Flock.Lift.lift S a.d = .ok (L, e) →
+    ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d →
+    ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
-        outBits Y g = Prog.evalBool P (P.child P.rootScope k m).d (argBits Y g)
+        outBits Y g = Prog.evalBool L e (argBits Y g)
 
 /-- **`AdmitCallee`**: every unit of a block whose C_S `admitted` admits, and whose units `admittedBlock` admits in C,
 calls the template `admitted` gives. -/
@@ -952,17 +958,6 @@ def AdmitCallee : Prop :=
     decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d
-
-/-- **`LiftAgreesOnArgs`** (open): the template's lift to bits evaluates, on a unit's argument bits in any trace of C,
-as C's Definition of the template. -/
-def LiftAgreesOnArgs : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
-    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
-    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Flock.Lift.lift S a.d = .ok (L, e) →
-    ∀ g ∈ units, ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
-      Prog.evalBool L e (argBits Y g) = Prog.evalBool P a.d (argBits Y g)
 
 section AdmitTriples
 open Std.Do
@@ -1187,15 +1182,14 @@ theorem admitCallee : AdmitCallee := by
   rw [show R.body.nodes[k]! = x by simp [getElem!_def, h1]]
   exact (Option.some.inj hS).symm
 
-/-- **`BlockEvalDoor`**, on `FrontUnitRanges`, `UnitComputes`, `AdmitCallee` and `LiftAgreesOnArgs`. -/
-theorem blockEvalDoor_of (hF : FrontUnitRanges) (hU : UnitComputes) (hC : AdmitCallee) (hL : LiftAgreesOnArgs) :
-    BlockEvalDoor := by
+/-- **`BlockEvalDoor`**, on `UnitComputes`. -/
+theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
   intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl blocks u hB X g hg Y
-  obtain ⟨k, m, hu, hin⟩ := hF P units fr hf g hg
+  obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  rw [hL bytes P partition cuts units S a L e hd hr hs ha hl g hg Y, hU bytes P hd hr g k m hu Y hY,
-    hC bytes P partition cuts units S a hd hs ha hab g hg k m hu]
+  exact (hU bytes P partition cuts units S a L e hd hr hs ha hl g hg k m hu
+    (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 end Flock.Chain
