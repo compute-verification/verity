@@ -1283,13 +1283,13 @@ SESSION_ROOTS = "session-roots"
 
 def live_roots(path_: Path | None) -> dict[str, str] | None:
     """The roots a unit's --zk session committed, ``{port: root}`` from its prover's first ``LIVE`` line; None when
-    there is no output, it doesn't read, or it carries no roots."""
+    there is no output or it carries no roots. An output that does not read is refused by name (`SESSION_ROOTS`)."""
     if path_ is None:
         return None
     try:
         lines = [json.loads(x[5:]) for x in path_.read_text().splitlines() if x.startswith("LIVE\t")]
-    except (OSError, ValueError):
-        return None
+    except (OSError, ValueError) as e:
+        raise _refused(SESSION_ROOTS, {"output": str(path_), "why": f"it does not read: {e}"}) from None
     roots = lines[0].get("roots") if lines else None
     return dict(roots) if isinstance(roots, Mapping) and roots else None
 

@@ -1365,6 +1365,10 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
     assert SC.live_roots(tmp_path / "prove.out") is None and SC.live_roots(None) is None
     (tmp_path / "prove.out").write_text('LIVE\t{"verdict": {"accepted": true, "why": ""}, "roots": {"W": "ab"}}\n')
     assert SC.live_roots(tmp_path / "prove.out") == {"W": "ab"}
+    (tmp_path / "prove.out").write_text("LIVE\t{not json\n")
+    with pytest.raises(S.Refused) as e:
+        SC.live_roots(tmp_path / "prove.out")
+    assert _codes(e) == {SC.SESSION_ROOTS}
 
 
 @LEAN
