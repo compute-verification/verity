@@ -42,6 +42,13 @@ theorem portsOnceAll_ok {slice : Member → Json} :
     · exact Member.portsOnce_ok h0
     · exact portsOnceAll_ok h m hm
 
+/-- Where `namesOnce` passes on the members `ms`, no two of them share a name. -/
+theorem namesOnce_ok {ms : Array Member} (h : namesOnce ms = .ok ()) : (ms.toList.map (·.name)).Nodup := by
+  unfold namesOnce at h
+  split at h
+  · cases h
+  · exact portTwice_nodup (by assumption)
+
 /-- **Where `membersRootsOf` returns, every member's slice names each port once**: at the roots it returns, each
 member of `ms`, sampled or not, has a slice whose every root names a port as a string, and no two the same. -/
 theorem membersRootsOf_portsOnce {p : Params} {ms : Array Member} {rec : Json} {roots : Std.HashMap String (Array Json)}
