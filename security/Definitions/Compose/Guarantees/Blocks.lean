@@ -63,7 +63,7 @@ def PouwUseAtLeast {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
     (b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ →
     P.RunReads (Pouw.PearlC.GGapSampledDraw CM Pr TR D Wd g δ) shown ε → P.SpendIsWork salt shown b →
-      P.UseAtLeast
+      P.UseAtLeast Capacity.computeRate
         (fun r i => ∑ u ∈ (P.infChildren r i).filter (fun u => salt r u ≤ (P.winIn r u).start), P.sizeIn r u) b ε
 
 /-! ## The declared blocks run -/
@@ -83,18 +83,47 @@ def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P
         P.HoldsIn r u (.function (f r u)) ∧ P.HoldsIn r u (.sizeAtMost (c r u)) ∧
           P.HoldsIn r u (.inputAtMost [.past, .block, .world] (k r u))) ε
 
-/-! ## PoUB and PoUS -/
+/-! ## PoUS and PoUB
 
-/-- **PoUB: use at least, in a server's memory reads of registered information** (open, memory-accounting with training).
-Not placed: which block's unregistered input this bounds, and whether it makes any term of the bound smaller, is not
-decided. By the memory-accounting lead's reading PoUB bounds what a server's processors read from memory that is not
-registered information over a window, an input only if memory is a location outside the block. -/
-def PoubUseAtLeast (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop := P.UseAtLeast use b ε
+PoUW, PoUS and PoUB are the three instances of `UseAtLeast`, over the three capacities of the hardware graph (compute
+rate, memory size, link capacity). Each feeds the one conversion `FreeBlockAtMost`, which gives the free block's size,
+its unregistered input from its own past, and its unregistered input from memory. What is still open is not how they are
+placed but three pieces of the model, each a named open `Prop` below owned by memory-accounting or lean. Three questions
+stay in these docstrings, owner memory-accounting: the on-chip state in bits, a floor on every bound at the chip's scale;
+whether PoUS holds at one tick or only on average over audits (a cut needs one tick); and whether PoUS and PoUB count
+information or wires. -/
 
-/-- **PoUS: use at least, in a server's memory holding registered information** (open, memory-accounting with training).
-Not placed. By the memory-accounting lead's reading PoUS bounds what a server's memory can hold that is not registered
-information at any moment, which would bound an input, from its own past, of any time slice of a server-day block. -/
-def PousUseAtLeast (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop := P.UseAtLeast use b ε
+/-- **PoUS: use at least, over the memory-size capacity.** In each server-day block `i`, at least `b r i` of the memory's
+registered content was held, in the quantity `held r i` (wires crossing a tick at the device's memory location, `Memory`
+in `Registration/Physical.lean`). Through `FreeBlockAtMost` it bounds the free block's unregistered input from its own
+past: what a server's memory can hold that is not registered information at any moment, which bounds the input, from its
+own past, of a time slice of a server-day block. Open on `DeviceMemoryIsLocation`; a cut at one tick is open (above). -/
+def PousUseAtLeast (held b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
+  P.UseAtLeast Capacity.memorySize held b ε
+
+/-- **PoUB: use at least, over the link capacity on the memory-to-chip link.** In each server-day block `i`, at least `b
+r i` of what the processors read from memory was registered information, in the quantity `reads r i` (wires crossing the
+link from the device's memory to its chip in the block's span, `Links` in `Registration/Physical.lean`). Through
+`FreeBlockAtMost` it bounds the free block's unregistered input from memory, an input only when memory is a location
+outside the block. Open on `DeviceMemoryIsLocation` and `PoubOnActualCircuit` (today PoUB is proved in a separate
+model). -/
+def PoubUseAtLeast (reads b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
+  P.UseAtLeast Capacity.linkCapacity reads b ε
+
+/-! ## What the model still owes (named open premises) -/
+
+/-- **A device's memory is a location of its own with a link to its chip** (open, owner lean and memory-accounting): the
+hardware graph places a device's memory at a location with a link to the chip's location, so that memory size and the
+memory-to-chip link are the `memorySize` and `linkCapacity` capacities PoUS and PoUB use. For that location to be sound
+it needs three conditions, each named: every gate placed at the memory location copies one value (`memCopiesOneValue`);
+the link from memory to chip has a latency ceiling (`memChipLatencyBounded`, main's `LatencyAtMost`); and the chip has
+its own memory size, its on-chip state (`chipHasMemorySize`). It carries those three as a conjunction. -/
+def DeviceMemoryIsLocation (memCopiesOneValue memChipLatencyBounded chipHasMemorySize : Prop) : Prop :=
+  memCopiesOneValue ∧ memChipLatencyBounded ∧ chipHasMemorySize
+
+/-- **PoUB's guarantee restated on the actual circuit** (open, owner memory-accounting): today PoUB is proved in a
+separate model; this is the premise that its bound holds of the actual circuit, so that `PoubUseAtLeast` reads it. -/
+def PoubOnActualCircuit (G : Prop) : Prop := G
 
 /-! ## The memory wipe -/
 
@@ -180,7 +209,9 @@ def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) 
   ∃ h : ∀ a ∈ θ, A.isInput a = true, pol (.ofCircuit A.toCircuit θ h)
 
 /-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check and realize their
-claims has a compliant actual circuit. -/
+claims has a compliant actual circuit. The policy needs no new theorem for PoUS and PoUB: its bound already takes any
+family of blocks that have a size and an unregistered input, so placing the free block's input from its own past (PoUS)
+and from memory (PoUB) adds terms to the same bound and states no new theorem here. -/
 def PolicyTheorem {L : Type*} (check : (P : Runs L) → P.Run → Bool) (pol : Policy) : Prop :=
   ∀ (P : Runs L) (r : P.Run), check P r = true → P.Realizes r → Compliant pol (P.actual r) (P.θ r)
 

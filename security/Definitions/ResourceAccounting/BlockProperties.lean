@@ -21,7 +21,9 @@ Core/Partition.lean`: every computed gate in exactly one unit, input gates in no
 
 Coverage, disjointness and the tree shape are the partitions' own (`Partition.input_iff`, `Partition.gates` a function,
 `Refines.sub`), so no field and no clause states them. Each block's location and window are fixed data (`locIn`/`winIn`,
-`locOut`/`winOut`), not the run's choice.
+`locOut`/`winOut`), not the run's choice, and each block's gates lie at its location during its window (`insideOut`,
+`insideIn`, main's `Placed.region`): a server-day block is a `region`, so its size is bounded by `ComputeRate` and its
+input and output by `Placed.ingress`/`egress`/`state` through main's lemmas, not assumed.
 
 The four properties, each built on the actual circuit's definitions:
 * **size**: its work at a pricing (`Placed.work`), in gates;
@@ -70,6 +72,21 @@ inductive Class where
   | inference
   | free
   | hidden
+  deriving DecidableEq
+
+/-- **A capacity of the hardware graph** (`security/Definitions/Registration/Physical.lean`: locations with a compute
+rate `ComputeRate` and a memory size `Memory`, links with a capacity `Links`, under `LatencyAtMost`). Each is used at a
+location or a link and counted in the actual circuit, with the same two lemma forms, a `UseAtLeast` and an
+`inputAtMost`:
+* `computeRate` at a location, counted as gates at the location in a span: use at least from PoUW; no input form.
+* `memorySize` at a location, counted as wires crossing a tick at the location: use at least from PoUS; input at most
+  from the memory wipe.
+* `linkCapacity` of a link, counted as wires crossing the link in a span: use at least from PoUB, on the link from a
+  device's memory to its chip; input at most from network attestation, on the network links. -/
+inductive Capacity where
+  | computeRate
+  | memorySize
+  | linkCapacity
   deriving DecidableEq
 
 namespace Placed
@@ -141,6 +158,13 @@ structure Runs (L : Type*) where
   winIn : (r : Run) → Fin (nIn r) → Window
   claimsIn : (r : Run) → Fin (nIn r) → List Property
   hiddenIff : ∀ r u, cls r u = Class.hidden ↔ kind r ((ref r).parent u) = false
+  /-- **A block is its place and time**: every server-day-or-hidden block's gates are computed at its location during
+  its window (main's `Placed.region`), so a server-day block is a `region` and its size is bounded by `ComputeRate`, not
+  assumed. -/
+  insideOut : ∀ r i, (outer r).gates i ⊆ (actual r).region (locOut r i) ↑((winOut r i).ticks)
+  /-- Every finer block too lies in its own location during its own window, so its input by source counts every gate at
+  its location after its window (main's `region`). It lies inside its parent's region by `Refines` and `insideOut`. -/
+  insideIn : ∀ r u, (inner r).gates u ⊆ (actual r).region (locIn r u) ↑((winIn r u).ticks)
 
 namespace Runs
 
@@ -194,15 +218,20 @@ def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
 deployment, bounds by `ε` the probability that an accepted run's own conclusion `shown` fails. -/
 def RunReads (G : Prop) (shown : P.Run → Prop) (ε : ℝ≥0∞) : Prop := G → ExceptWith P.pr P.accepts shown ε
 
-/-- **Use at least**: inside every server-day block `i`, at least `b r i` of a capacity was used, in the quantity
-`use r i`, except with probability at most `ε`. -/
-def UseAtLeast (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
+/-- **Use at least a capacity** (`what`, one of the three): inside every server-day block `i`, at least `b r i` of
+`what`'s capacity at `i`'s location or link was used, in the quantity `use r i`, except with probability at most `ε`.
+PoUW, PoUS and PoUB are its three instances, over `computeRate`, `memorySize` and `linkCapacity`; the one conversion
+`FreeBlockAtMost` turns each into a bound on a free-block quantity (its size, its input from its own past, its input from
+memory). -/
+def UseAtLeast (what : Capacity) (use b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞) : Prop :=
   ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → b r i ≤ use r i) ε
 
-/-- **The capacity figure**: every server-day block `i` has at most `cap r i` of the resource, in the quantity
-`enclosing r i`. It is the hardware description, an assumption nothing in Verity tests (owner none: the hardware
-description). -/
-def CapacityAtMost (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+/-- **The hardware description** for `what`: the number the hardware graph gives for a server-day block's capacity of
+`what` at its location or link (`ComputeRate`'s `Φ`, `Memory`'s `M`, `Links`' `β` in `Registration/Physical.lean`),
+`enclosing r i ≤ cap r i`. For `computeRate` the figure is not assumed: `sizeOut_le_compute` derives a server-day
+block's size from `ComputeRate` over its region. It stays here for `memorySize` and `linkCapacity`, what the hardware
+graph gives, an assumption nothing in Verity tests (owner none: the hardware description). -/
+def CapacityAtMost (what : Capacity) (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, ∀ i, P.kind r i = true → enclosing r i ≤ cap r i
 
 /-- **Declared work does not double as other work**: in an accepted run, inside every server-day block `i`, the free
@@ -212,12 +241,15 @@ is open. -/
 def DeclaredWorkExclusive (free use enclosing : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → ∀ i, P.kind r i = true → free r i + use r i ≤ enclosing r i
 
-/-- **The one conversion: capacity minus use bounds the free blocks.** Inside every server-day block `i`: a use lower
-bound, the capacity figure and exclusivity give the free blocks' quantity `free r i` at most `cap r i − b r i`, except
-with the use's probability. Proved by `ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
+/-- **The one conversion: capacity minus use bounds the free blocks.** For any capacity `what` (compute rate, memory
+size or link), inside every server-day block `i`: a use lower bound, the capacity figure and exclusivity give the free
+blocks' quantity `free r i` at most `cap r i − b r i`, except with the use's probability. Its three instances give the
+free block's size (from PoUW over `computeRate`), its unregistered input from its own past (from PoUS over `memorySize`)
+and its unregistered input from memory (from PoUB over `linkCapacity`). Proved by
+`ResourceAccounting.SecurityProofs.BlockProperties.freeBlockAtMost`. -/
 def FreeBlockAtMost : Prop :=
-  ∀ (free use enclosing cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞),
-    P.UseAtLeast use b ε → P.CapacityAtMost enclosing cap → P.DeclaredWorkExclusive free use enclosing →
+  ∀ (what : Capacity) (free use enclosing cap b : (r : P.Run) → Fin (P.nOut r) → ℕ) (ε : ℝ≥0∞),
+    P.UseAtLeast what use b ε → P.CapacityAtMost what enclosing cap → P.DeclaredWorkExclusive free use enclosing →
       ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → free r i ≤ cap r i - b r i) ε
 
 end Runs
