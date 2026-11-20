@@ -1982,6 +1982,66 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
   elif [ "$rc" = 0 ]; then RAN+=(network-attester)
   else FAILED+=(network-attester); say "network-attester: $(failed "$rc" "$dir/road.log")"; fi
 }
+road_sampled() {  # step 3 on the window's road: the window's record audited from its own files (records_audit.py audit), its circuit the prover's
+  local rec=$D/windows/w$K/record leanb=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin bin=$FW/flock-gpu-link/flock/target/release/flock-circuit
+  local s=$D/private/sampled-proofs main=$OUT/sampled-proofs/main.txt m0 law run rc b line
+  [ "$DEVELOPMENT" = 1 ] || { step_refused sampled-proofs "its circuit is the one the prover registered, and its coins the local challenger's: a development run's alone (DEVELOPMENT=1) until proofs' compile check runs and the auditor's challenger is wired"; return; }
+  for b in "$bin" "$leanb/verity-verify-proof" "$leanb/flock-zk-server" "$leanb/flock-lower-check" "$leanb/flock-tmpl-unit"; do
+    [ -x "$b" ] || { step_refused sampled-proofs "proofs' $(basename "$b") is not built at $b (build(): lake build in verity/protocols/proofs/flock/verifier, prover/pod/60-circuit.sh MODE=build)"; return; }
+  done
+  grep -q -- '"--prover-circuit"' "$TREE/benchmarks/prove_path/records_audit.py" \
+    || { step_refused sampled-proofs "proofs' records_audit.py takes no --prover-circuit, the audit of a circuit the prover registered with its compile check not run"; return; }
+  law=$("$PY" -c 'import json, sys; r = json.load(open(sys.argv[1])); print(r.get("rule") or (r.get("law") or {}).get("rule") or "")' "$rec/registration.json") || law=
+  law=${law:-$V3C_LAW}
+  [ -n "$law" ] || { step_refused sampled-proofs "the window's record registers no rule of its sampling design, and the configuration states none (V3C_LAW): proofs' audit holds the record to one"; return; }
+  # the commit verdict's run root, which the seal step held to the record's
+  run=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["run_root"])' "$D/windows/w$K/commit/verdict.json") \
+    || { step_refused sampled-proofs "the window's commit verdict has no run root"; return; }
+  (umask 077; mkdir -p "$s") && mkdir -p "$OUT/sampled-proofs" "$LOGS/sampled-proofs"
+  git -C "$TREE" rev-list --first-parent "${MAIN_SHA:-HEAD}" > "$main" 2>/dev/null && [ -s "$main" ] \
+    || { step_refused sampled-proofs "no first-parent line of main for its challenger session to pin on (${MAIN_SHA:-HEAD} has none in this tree)"; return; }
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/adapters/vllm
+  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$rec" --sampling-design "$law" \
+    --circuit "$(sha512sum "$rec/circuit.json" | cut -c1-128)" --prover-circuit --run "$run" --registered "$WREG" \
+    --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$bin" --lean "$leanb/verity-verify-proof" \
+    --zk-server "$leanb/flock-zk-server" --lower "$leanb/flock-lower-check" --tmpl-unit-bin "$leanb/flock-tmpl-unit" \
+    --lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB" --ports "${V3C_PORTS:-16}" --out "$s/audit") \
+    > "$LOGS/sampled-proofs/audit.log" 2> "$LOGS/sampled-proofs/audit.err"
+  rc=$?
+  grep -m1 '^RECORDS' "$LOGS/sampled-proofs/audit.log" > "$s/records.txt"
+  cp "$s/audit/summary.json" "$s/" 2>/dev/null
+  [ -s "$s/records.txt" ] && [ -s "$s/summary.json" ] \
+    || { FAILED+=(sampled-proofs); say "sampled-proofs: ERROR: the records audit stopped with no RECORDS row $(failed "$rc" "$LOGS/sampled-proofs/audit.err")"; return; }
+  line=$("$PY" - "$s/summary.json" "$s/audit/window/summary.json" "$law" "$OUT/sampled-proofs/summary.json" <<'EOF'
+import json, sys
+from pathlib import Path
+row, inner = json.load(open(sys.argv[1])), (json.load(open(sys.argv[2])) if Path(sys.argv[2]).is_file() else {})
+draw = row.get("draw") if isinstance(row.get("draw"), list) else []
+accepted = (row.get("audit") or {}).get("accepted")
+bad = sorted(u for u in draw for x in (inner.get("unlowered") or {}).values() if x["base"] <= u < x["base"] + x["n"])
+public = {"ok": row.get("ok"), "accepted": accepted, "sampled": len(draw), "drawn": draw, "unprovable_drawn": bad,
+          "compiled": "not checked", "circuit": "registered by the prover", "coins": "the local challenger's (DEVELOPMENT=1)"}
+Path(sys.argv[4]).write_text(json.dumps(public, indent=1, sort_keys=True))
+if not draw:
+    print("the law samples no block of this window: nothing would be proved")
+    sys.exit(3)
+said = (f"under {sys.argv[3]}, {len(draw)} drawn block(s) {draw}, on the local challenger's coins (DEVELOPMENT=1); "
+        "its circuit registered by the prover; the compile check did not run")
+if bad:
+    print(f"FAILED: {said}; drawn unit(s) {bad} of a block the door refuses to lower: a failed proof, not resampled "
+          "(its Definition in the serve dir's private/sampled-proofs/summary.json)")
+    sys.exit(4)
+print(f"{'Lean accepted' if accepted is True and row.get('ok') else 'REJECTED'}: {said}")
+sys.exit(0 if accepted is True and row.get("ok") else 1)
+EOF
+)
+  case $? in
+    0) RAN+=(sampled-proofs); say "sampled-proofs: $line" ;;
+    3) REFUSED+=(sampled-proofs); say "sampled-proofs: $line" ;;
+    *) FAILED+=(sampled-proofs); say "sampled-proofs: ${line:-ERROR: its summary has no public form} (records_audit.py exit $rc)" ;;
+  esac
+}
 window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
   [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE ties a window to a ROW's serve, and the window's road serves none: it ties nothing"; exit 3; }
   say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
@@ -2011,13 +2071,14 @@ EOF
   if inference_policy window; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
   if circuits; then RAN+=(circuits); else FAILED+=(circuits); fi
   block_counts; RAN+=(block-counts)
-  step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
+  road_sampled
   road_pieces
   road_wipe
   road_network
   if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
   else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
-  step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
+  if [[ " ${RAN[*]} " = *" sampled-proofs "* ]]; then step_refused record "served_verdicts.py record reads V3c's audit or a served arm's (sampled_of_record), and the road's audit is neither"
+  else step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"; fi
   step_refused composite "V3c, the composite and the hand-off read the record, which was not made"
   road_end 20
 }

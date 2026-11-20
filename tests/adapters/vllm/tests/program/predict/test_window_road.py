@@ -64,10 +64,12 @@ def _serve_dir(tmp_path, monkeypatch, application):
     return d
 
 
-def _road(tmp_path, monkeypatch, application, d, **env):
-    """``application``'s runner as `verity run` launches it on a node whose environment names the serve dir: its exit, its
-    lines and its public record (``state/out``)."""
+def _road(tmp_path, monkeypatch, application, d, law=None, **env):
+    """``application``'s runner as `verity run` launches it on a node whose environment names the serve dir, the auditor's
+    sampling design ``law`` where given: its exit, its lines and its public record (``state/out``)."""
     cfg = RUN.load(ROOT / "applications" / f"{application}.toml", RUN.registry())
+    if law is not None:
+        cfg = {**cfg, "service": {**cfg["service"], "law": law}}
     for k, v in {"D": str(d), "PRED": str(tmp_path / "predicted"), "SERVE_ROOT": str(tmp_path), "WINDOW_CLASS": "2,4,2",
                  "VENV": sys.prefix, "CUDA_HOME": str(tmp_path / "no-cuda"), "HF_HOME": str(tmp_path / "hf"), **env}.items():
         monkeypatch.setenv(k, v)
@@ -124,7 +126,8 @@ UNSAID = ("compiled by the registered compiler", "charged", "bounded by", "cappe
 @pytest.mark.slow
 def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
-    compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
+    compiler, each step after it run or refused by name: the sampled proofs run from the record (a development run's, at the record's
+    rate, on the local challenger's coins) and accepted by Lean, Pearl+ as needing a card (a processor has no gpu-lease), the
     record and the composite after them; the block counts count the record's circuit beside the registration that binds
     it. The end line counts what ran, refused and failed, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
@@ -132,7 +135,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     d = _serve_dir(tmp_path, monkeypatch, "remote")
     (tmp_path / "run").mkdir()
     path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
-    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
+    rc, log, out = _road(tmp_path, monkeypatch, "remote", d, law="rate:1/4", RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path,
+                         DEVELOPMENT="1")
     lines = log
     err = "\n".join(f.read_text()[-2000:] for f in sorted(d.glob("window-circuit-*.err")))
     log += f"\n(the window circuit's log, which stays on the node:)\n{err}"
@@ -143,15 +147,19 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
             "(candidate 135)") in log and "its circuit registered by the prover" in log, log
     published = lines + "".join(text for _, text in _published(out))
     assert not [p for p in UNSAID if p in published.lower()], [p for p in UNSAID if p in published.lower()]
-    assert ("sampled-proofs: not run: step 3's prove path (prove_path/run.sh) proves the units a partition file names "
-            "(PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'") in log, log
+    sampled = [x for x in lines.splitlines() if x.startswith("sampled-proofs: ")]
+    assert len(sampled) == 1 and sampled[0].startswith("sampled-proofs: Lean accepted: under rate:1/4, ") and sampled[0].endswith(
+        "on the local challenger's coins (DEVELOPMENT=1); its circuit registered by the prover; the compile check did not run"), log
+    summary = json.loads((out / "sampled-proofs" / "summary.json").read_text())
+    assert summary["accepted"] is True and summary["ok"] is True and summary["sampled"] > 0, summary
+    assert summary["compiled"] == "not checked" and summary["unprovable_drawn"] == [], summary
     assert ("pearl-plus: not run: needs a card: its piece takes its own gpu-lease, and this node has no gpu-lease: "
             "compute accounting's") in log, log
     assert "record: not run:" in log and "composite: not run:" in log, log
     end = _end(log)
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
-    assert "no verdict stands for a step that did not run" in end
-    assert end.endswith("no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
+    assert "sampled-proofs" in end.split("; refused ")[0] and "no verdict stands for a step that did not run" in end
+    assert end.endswith("this line states no δ or ε of the sampled proofs that ran; the circuit digest is kept private and NO public value fixes it before the coins"), end
     assert [x for x in lines.splitlines() if x.startswith("CLASS ")] == [
         "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
         "slots and outputs are the application's)"], lines
