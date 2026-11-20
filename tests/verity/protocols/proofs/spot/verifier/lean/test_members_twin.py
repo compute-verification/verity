@@ -86,12 +86,12 @@ class Audit:
     every tree's other rounds. The sample holds a unit of exactly the members of `sampled`: the challenger session is
     one whose coins give such a sample. With `setup`, `units` and `trees`, a window of that program's members, each
     its units, and its templates' field trees `<template>/o0`, each its leaves; `extra` are roots of members' own
-    beside `ports`."""
+    beside `ports`, and each port of `twice` is named by a second root, at another root."""
 
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, ...] = (A, B),
                  closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B),
                  setup: Setup | None = None, units: dict | None = None, trees: dict | None = None,
-                 extra: tuple[str, ...] = ()):
+                 extra: tuple[str, ...] = (), twice: tuple[str, ...] = ()):
         rng = random.Random(seed)
         units = UNITS if units is None else units
         names = tuple(units)
@@ -101,6 +101,7 @@ class Audit:
         s.ports |= {f"{t}/o0": {"domain": rng.randbytes(64).hex(), "leaves": n} for t, n in trees.items()}
         s.ports |= {p: s.ports[ports[1]] for p in extra}
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
+        roots += [{**r, "root": rng.randbytes(64).hex()} for r in roots if r["port"] in twice]
         self.partition = PO.build(s.program, s.query, [[units[n][0] for n in names]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,
                              partition=self.partition)
@@ -290,6 +291,17 @@ def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_r
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == ("proofs: roots: the registration's root zzz/out is no member's: a member's roots are named "
                    "<member>/<port>, and a window's tree of a template's field <template>/<field>")
+
+
+def test_a_members_slice_that_names_a_port_twice_is_refused_by_both(tmp_path):
+    """A docket naming the first member's port ``out`` twice, at its true root and at another: both refuse its slice by
+    name (`PORT_TWICE_WHY`), after the roots and before any member's file; with ``out`` named once, both end at the
+    first member's stand-in public file."""
+    why, (run, refused) = Audit("members-twin-port-twice", twice=(f"{A}/out",)).ask(tmp_path / "twice")
+    assert run is None and why == M.run_reason(run, refused) == f"proofs: {M.port_twice_why(A, 'out')}", (why, refused)
+    why, (run, refused) = Audit("members-twin-port-twice").ask(tmp_path / "once")
+    assert run is None and why == M.run_reason(run, refused), (why, refused)
+    assert why.startswith(f"proofs: member {A}: {M.UNREAD[1]}"), why
 
 
 def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp_path):
