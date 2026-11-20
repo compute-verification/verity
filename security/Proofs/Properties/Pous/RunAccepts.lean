@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Pous.Run
 public import Proofs.Properties.Pous.MemoryAttester.Attest
+public import Proofs.Properties.Pous.MemoryAttester.Inputs
 
 /-!
 # An accepted run of the composed check, without evaluating SHA-512
@@ -113,13 +114,13 @@ theorem zeros_get! {n i : Nat} (h : i < n) : (PousVerifier.Prim.zeros n).get! i 
   simp
 
 theorem checkKey_honest : checkKey honestCoinKey = .ok () := by
-  have hk : HM96.keyBytes = 256 := rfl
-  unfold checkKey
+  have hk : Flock.SessionCoins.HM96.keyBytes = 256 := rfl
+  unfold checkKey Flock.SessionCoins.checkKey
   simp [hk, honestCoinKey, zeros_size, zeros_get! (show 255 < 256 by decide), pure, Except.pure]
 
 theorem checkSalt_honest : checkSalt honestSalt = .ok () := by
-  have hs : HM96.saltBytes = 192 := rfl
-  unfold checkSalt
+  have hs : Flock.SessionCoins.HM96.saltBytes = 192 := rfl
+  unfold checkSalt Flock.SessionCoins.checkSalt
   simp [hs, honestSalt, zeros_size, pure, Except.pure]
 
 /-- Coin `j`'s hm96 leaf, of block 0 under the honest key and salt. -/
@@ -130,10 +131,8 @@ def coinValue (j : Nat) : ByteArray :=
 
 theorem coinLeaf_honest {j : Nat} (hj : j < 2 ^ 32) :
     coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok (coinValue j) := by
-  have h32 : j < 4294967296 := hj
-  obtain ⟨v, hv⟩ : ∃ v, coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok v := by
-    unfold coinLeaf coinDigest
-    simp [beN, h32, checkKey_honest, checkSalt_honest, bind, Except.bind, pure, Except.pure]
+  obtain ⟨v, hv⟩ : ∃ v, coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok v :=
+    Inputs.coinLeaf_of honestCoinKey honestSid j 0 honestSalt checkKey_honest hj (by decide) (zeros_size 192)
   unfold coinValue
   rw [hv]
 
@@ -159,7 +158,8 @@ theorem verifyOpening_coin {j : Nat} (hj : j < 105) :
         sibs (domain COIN_BINDING honestSid 105) coinLeafAt 7 0 j := List.getElem_mem _
     simp [honestOpening, hbytes, sibs_size _ _ hlf 7 0 j _ hm]
   have hlen : (honestOpening j).path.size = Flock.log2ceil (domain COIN_BINDING honestSid 105).count := by
-    simp [honestOpening, sibs_length, log2ceil_105, domain, Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make]
+    simp [honestOpening, sibs_length, log2ceil_105, domain, Flock.SessionCoins.domain, Flock.FV3.Sha512.Domain.make,
+      Flock.FV3.Domain.make]
   have hclimb : (domain COIN_BINDING honestSid 105).climb j COIN_SCHEMA (coinValue j) (honestOpening j).path =
       honestCoinRoot := by
     have h := climbL_nodeAt (domain COIN_BINDING honestSid 105) coinLeafAt 7 0 j
@@ -223,8 +223,9 @@ def honestCommitment (root : ByteArray) : ChallengePhaseCommitment :=
 
 theorem verifyCoin_honest (root : ByteArray) {j : Nat} (hj : j < 105) :
     verifyCoin (honestCommitment root) (honestOpening j) = true := by
-  unfold verifyCoin
-  have hc := coinLeaf_honest (j := j) (by omega)
+  unfold verifyCoin Flock.SessionCoins.verify
+  have hc : Flock.SessionCoins.coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok (coinValue j) :=
+    coinLeaf_honest (j := j) (by omega)
   simp only [honestCommitment] at hc ⊢
   simp only [show (honestOpening j).j = j from rfl, show (honestOpening j).index = 0 from rfl,
     show (honestOpening j).salt = honestSalt from rfl, hc, hj, blocks_pos, decide_true, Bool.true_and]
@@ -276,7 +277,7 @@ theorem message_honest (root digests : ByteArray) (hd : 64 ≤ digests.size) :
       obtain ⟨j, hj, rfl⟩ := ha
       have h32 : j < 4294967296 := by omega
       unfold Round.value
-      simp [beN, honestRound, h32, h64, bind, Except.bind, pure, Except.pure]
+      simp [beN, Flock.SessionCoins.beN, honestRound, h32, h64, bind, Except.bind, pure, Except.pure]
     exact ⟨bs.toArray, by rw [hbs]; rfl⟩
   unfold message recordsDigest recordsStream
   simp only [hvs, bind, Except.bind, pure, Except.pure]
