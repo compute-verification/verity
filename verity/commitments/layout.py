@@ -1,5 +1,4 @@
-"""Layout JSON: the rows a sequence slot commits each serving step, in the form ``slots._layout_json`` writes
-(``verity/commitments/cuda/commit_slots/slots.py``, whose README is the commit call's specification)::
+"""Layout JSON: the rows a sequence slot commits each serving step::
 
   {"name": str,
    "groups": [{"sources": [bytes a slot has in tensor i, ...],
