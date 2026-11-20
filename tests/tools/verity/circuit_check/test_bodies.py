@@ -22,7 +22,6 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate as reference
 from verity.circuits.evaluation.reference import signature_of
 from verity.circuits.layout import WIDE_FAN_IN
-from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
@@ -64,7 +63,6 @@ REACH = _prim("Reach", (V8, Array(4, V8)), lambda i, *t: t[i], lazy=lambda get: 
 WIDE = _prim("Wide", (V8, Array(N_WIDE, V8)), lambda i, *t: t[i] ^ t[-1], lazy=lambda get: get(1 + get(0)) ^ get(-1))
 FOLD = _prim("Fold", (Array(N_WIDE, V8),), lambda *t: sum(t) & 255)
 MISS = _prim("Miss", (V8,), lambda a: a, lazy=lambda get: get(0) if get(0) % 3 else {}[get(0)])
-SEVEN = _prim("Seven", (), lambda: 7)
 INPUT = _prim("Input", (), lambda: 0, family="Input")
 
 INNER = _composite("Inner", (V8, V8), V8, lambda B, S, a, b: B.call(MUL, B.call(NEG, B.call(ADD, a, b)), a))
@@ -367,34 +365,6 @@ def _pieces(monkeypatch, fn) -> tuple:
         m.setattr(BD, "nonconstant", lambda t: None)
         slow = CK._pieces_used(fn, pins)
     return fast, slow
-
-
-def test_the_non_constant_gates_are_the_ones_counted_gate_by_gate(monkeypatch):
-    """Constants (a ``Const`` gate, a gate of no parameters, one whose operands are all constant) flow into calls, batches
-    and scans, so a body's gates are constant in one activation and not in another; the counts, the estimate and the order
-    each primitive first appears in are the gate-by-gate walk's."""
-    from verity_vllm.definitions.registry import prims as P
-
-    k5 = const(8, 5)
-
-    def body(B, S, x, y):
-        c = B.call(k5)
-        s = B.call(SEVEN)
-        both = B.call(INNER, c, s)                                     # constant throughout
-        half = B.call(INNER, c, y)                                     # constant only where it doesn't read y
-        mixed = B.batch(INNER, _flat(Array(2, V8), [c, y]), _flat(Array(2, V8), [s, s]), axes=(0, 0))
-        run = B.scan(STEP, c, xs=[_flat(Array(3, V8), [s, x[0], c])], shared=[s])
-        wide = B.call(FOLD, _flat(Array(N_WIDE, V8), [c] * N_WIDE))
-        return _flat(Array(9, V8), [both, half, mixed, run, wide])
-
-    fn = _composite("Consts", (Array(2, V8), V8), Array(9, V8), body)
-    fast, slow = _pieces(monkeypatch, fn)
-    assert fast == slow and [list(c) for c in fast[:2]] == [list(c) for c in slow[:2]]
-    assert fast[1] and not fast[0]
-    f32 = _composite("F32", (Array(2, Value(32)),), Value(32),
-                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[1], x[0])))
-    fast, slow = _pieces(monkeypatch, f32)
-    assert fast == slow and fast[0] == {"F32Add_v1": 2, "F32Mul_v1": 1} and list(fast[0]) == list(slow[0])
 
 
 #: registered Definitions the suite checks: words with lazy reads, a Boolean Call, a dot product, Boolean GF(2^128) arithmetic

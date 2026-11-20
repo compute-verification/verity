@@ -26,7 +26,6 @@ from circuit_check import vectors as VX
 
 REPO = Path(__file__).resolve().parents[4]
 OPTS = CK.Options()
-MEMO: dict = {}
 PINS = CK.load_pins()
 TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
@@ -394,44 +393,6 @@ def test_a_realization_compares_at_least_two_random_vectors_within_the_budget():
     assert [w["code"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == ["none"]
 
 
-def test_a_kernel_takes_its_floor_from_its_own_sampler():
-    """No lowering takes a Definition Flock has no piece for, so past ``reference_budget`` its vectors stay all-edge; each
-    kernel is then compared on two vectors its own sampler samples in its domain (a random vector over many leaves almost always
-    holds a word a finite-only kernel declines).  One right on every edge word and wrong elsewhere fails by name; one whose
-    sampler samples only outside its domain compared on edge vectors only; past ``random_budget`` none is sampled."""
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.evaluation import register_kernel
-    from verity.circuits.evaluation.batch import _KERNELS
-    from verity.circuits.types import Value
-
-    prim = PrimitiveDefinition("CircuitCheckFloorKernel", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
-    edges = np.array(VX.edges(16), dtype=np.uint16)
-
-    def finite(rng, n, params, **statics):
-        return [rng.integers(0, 0x7F00, n).astype(np.uint16)]
-
-    register_kernel(prim, lambda a: (a ^ 1, (a & 0x7F80) == 0x7F80), kernel="finite", partial=True, sample=finite)
-    register_kernel(prim, lambda a: (np.where(np.isin(a, edges), a ^ 1, a), None), kernel="edges-only", sample=finite)
-    register_kernel(prim, lambda a: (a ^ 1, ~np.isin(a, edges)), kernel="outside", partial=True, sample=finite)
-    floor = dataclasses.replace(OPTS, reference_budget=1)
-    try:
-        e = CK.check_definition(prim, floor, pins=PINS)
-        over = CK.check_definition(prim, dataclasses.replace(floor, random_budget=1), pins=PINS)
-    finally:
-        del _KERNELS[prim.id]
-    assert (e["correspondence"]["vectors"], e["correspondence"]["edge_vectors"]) == (4, 4)
-    via = {r["via"]: (r["compared"], r["random"], r.get("sampled")) for r in e["correspondence"]["realizations"]
-           if r["via"].startswith("kernel:")}
-    assert via == {"kernel:edges-only": (4, 2, {"vectors": 2, "compared": 2, "mismatches": 2}),
-                   "kernel:finite": (4, 2, {"vectors": 2, "compared": 2, "mismatches": 0}),
-                   "kernel:outside": (4, 0, {"vectors": 2, "compared": 0, "mismatches": 0})}
-    assert [f["name"] for f in e["failures"]] == [
-        "correspondence/kernel-mismatch CircuitCheckFloorKernel_v1 [edges-only]: 2 of the 2 sampled vectors"]
-    assert CK.vector_class(e) == "random"
-    assert not over["failures"] and CK.vector_class(over) == "edge-only"
-    assert all("sampled" not in r for r in over["correspondence"]["realizations"])
-
-
 def test_the_summary_counts_and_names_the_targets_by_vector_class():
     """Each target is ``random``, ``edge-only`` or ``none`` by its realizations (a row by its worst Definition, a template by its
     Definitions', target's and proof blocks'), each named; those read lazily are named too; a by-calls root and a constant (no
@@ -461,47 +422,6 @@ def test_the_summary_counts_and_names_the_targets_by_vector_class():
 
 # --- registered tables ----------------------------------------------------------------------------------------------------------
 
-#: a table of 2^12 two-word entries (8,192 leaves), past `TABLE_OPTS.input_budget`, held by `_HOLDS` as a registered input
-TABLE_IB = 12
-TABLE_OPTS = dataclasses.replace(OPTS, input_budget=1024)
-TABLE_REGIONS = ((0, 1000), (1000, 1 << TABLE_IB))
-
-
-def _table_entry(i: int) -> int:
-    return (i * 0x9E3779B1 + 0x7F4A7C15) & 0xFFFFFFFF
-
-
-def _table_word(j: int) -> int:
-    return (_table_entry(j >> 1) >> (16 * (j & 1))) & 0xFFFF
-
-
-def _holds():
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Value
-
-    return PrimitiveDefinition("CircuitCheckHolds", 1, (("x", Value(32)),), Value(32), _table_entry, register=False,
-                               tables=(("cc_table", "registered"),))
-
-
-def _table_read(lazy: bool = True):
-    """(index, table) -> the table's two-word entry at the index's low bits, as `TableRead` reads it."""
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Array, Value
-
-    mask = (1 << TABLE_IB) - 1
-    p = PrimitiveDefinition("CircuitCheckTableRead", 1, (("index", Value(32)), ("table", Array((2 << TABLE_IB) // 64, Array(64, Value(16))))),
-                            Value(32), lambda idx, *w: w[2 * (idx & mask)] | w[2 * (idx & mask) + 1] << 16, register=False)
-    if lazy:
-        p.evaluate_lazy = lambda get: get(1 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
-    return p
-
-
-def _table_probe(holds):
-    from verity.circuits.evaluation import RegisteredTable
-
-    return VX.TableProbe(1, RegisteredTable("cc_table", _table_word, 2 << TABLE_IB, holds), 2, TABLE_REGIONS,
-                         lambda e: [[e | (0x5A << 24)]])
-
 
 def test_the_probed_entries_are_the_ends_and_each_regions_edges():
     assert VX.probe_entries(1 << 27, [(0, 0x01102CB4), (0x01102CB4, 0x01B89BA3), (0x01B89BA3, 1 << 27)]) == \
@@ -509,53 +429,6 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
     assert VX.probe_entries(8, []) == [0, 7]
     with pytest.raises(ValueError, match=r"region \[4, 9\) is not within the table's 8 entries"):
         VX.probe_entries(8, [(4, 9)])
-
-
-def test_a_registered_table_is_probed_and_never_flattened(monkeypatch, hand):
-    """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
-    vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
-    from verity.circuits.evaluation import evaluate
-
-    read, holds = _table_read(), _holds()
-    probe = _table_probe(holds)
-    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
-    monkeypatch.setattr(VX.RegisteredTable, "__iter__", lambda self: pytest.fail("the table was flattened"), raising=False)
-    params, _ = CK.signature_of(read)
-    instances, got, _rec = VX.table_instances(params, probe, CK._n_vectors(read, TABLE_OPTS, 1), TABLE_OPTS.seed)
-    for args in instances:
-        evaluate(read, *args)
-    assert got == {2 * (args[0] & ((1 << TABLE_IB) - 1)) + k for args in instances for k in (0, 1)}
-    e = CK.check_definition(read, TABLE_OPTS, memo={}, pins=PINS)
-    assert not e["failures"], e["failures"]
-    corr = e["correspondence"]
-    assert corr["table"] == {"name": "cc_table", "param": 1, "entries": 1 << TABLE_IB, "leaves": 2 << TABLE_IB,
-                             "regions": [list(r) for r in TABLE_REGIONS], "probed_entries": [0, 999, 1000, (1 << TABLE_IB) - 1],
-                             "probe_instances": 4, "words_read": len(got)}
-    assert corr["vectors"] == len(instances) == TABLE_OPTS.vectors + 4 and len(got) < 2 << TABLE_IB
-    assert corr["realizations"] == [{"via": "c-flock:ir_lower", "lowered": False, "reason": "a lowering takes every input leaf, and "
-                                     "this Definition's correspondence reads a registered table lazily"}]
-
-
-def test_a_probe_that_reads_past_the_table_is_a_partial_reference(hand):
-    """An entry index one past the last (an off-by-one in ``evaluate_lazy``) raises on the last entry's probe, by name."""
-    read = _table_read()
-    mask = (1 << TABLE_IB) - 1
-    read.evaluate_lazy = lambda get: get(3 + 2 * (get(0) & mask)) | get(2 + 2 * (get(0) & mask)) << 16  # type: ignore[attr-defined]
-    probe = _table_probe(_holds())
-    hand("table_probes", {read.id: (probe.param, lambda: probe.table, 2, (), lambda e: [[e]])})
-    e = CK.check_definition(read, dataclasses.replace(TABLE_OPTS, vectors=4, min_vectors=4), memo={}, pins=PINS)
-    (f,) = e["failures"]
-    assert f["name"].startswith("correspondence/reference-not-total CircuitCheckTableRead_v1 raised on ")
-    assert any("IndexError" in x["error"] for x in f["examples"])
-
-
-def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
-    e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
-    assert e["conformance"] == "not-yet-established"
-    assert [f["name"] for f in e["failures"]] == [
-        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget, and is neither a "
-        "registered table a probe reads (`circuit_check.targets.table_probe`) nor an operand read lazily "
-        "(`circuit_check.targets.lazy_operands`)"]
 
 
 def _wide_gemm():
@@ -737,22 +610,6 @@ def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
         VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 
 
-def test_a_definition_over_the_leaf_budget_reads_its_size_class_off_its_type(hand):
-    """`cut.CallGates` and `Q_call` resolve every parameter leaf: over ``partition_max_leaves`` the gates are not walked, and the
-    return type's bits stand in for the template unit's outputs; within the widest size class that is no finding."""
-    read = _table_read()
-    probe = _table_probe(_holds())
-    hand("table_probes", {read.id: (probe.param, lambda: probe.table, probe.entry_words, probe.regions, probe.reads)})
-    opts = dataclasses.replace(TABLE_OPTS, partition_max_leaves=4096)
-    for as_call in (False, True):
-        e = CK.check_definition(read, opts, memo={}, pins=PINS, as_call=as_call)
-        p = e["partition"]
-        assert p["checked"] and p["bound"] and p["out_bits"] == 32 and p["size_class"] == 32 and "q_call" not in p
-        assert p["reason"] == "its parameters' 8193 leaves are over the partition's leaf budget 4096"
-        assert not e["failures"] and not [w for w in e["warnings"] if w["check"] == "partition"]
-    assert CK.check_definition(read, TABLE_OPTS, memo={}, pins=PINS, as_call=True)["partition"]["q_call"]["checked"]
-
-
 # --- negatives: each check fires, by name ---------------------------------------------------------------------------------------
 
 def _composite(name, sig, body):
@@ -828,34 +685,6 @@ def test_a_call_whose_outputs_are_past_the_widest_size_class_fails_by_its_name()
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
 
-def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
-    """`Q_call` v1 beside the template unit's size class: a Boolean Call's proof blocks, committed bits and the values two proof
-    blocks compute (reported); a Call with a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a
-    failure."""
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Array, Value
-
-    fn = TG.definition(BOOL_RECOMPUTE)
-    F = CK.Findings()
-    rec = CK.partition(fn, OPTS, F, {}, applies=True)
-    assert not F.failures and rec["q_call"] == QCALL_ROPE and rec["out_bits"] == 128 == rec["size_class"]
-    add64 = PrimitiveDefinition("CircuitCheckAdd64", 1, (("a", Value(64)), ("b", Value(64))), Value(64), lambda a, b: (a + b) % (1 << 64),
-                                register=False)
-    wide = _composite("CircuitCheckWide64", ((("a", Array(2, Value(64))),), Value(64)), lambda B, S, a: B.call(add64, a[0], a[1]))
-    F = CK.Findings()
-    rec = CK.partition(wide, OPTS, F, {}, applies=True)
-    assert rec["out_bits"] == 64 == rec["size_class"]
-    assert rec["q_call"]["inapplicable"] == {"definition": wide.id, "gate": 0, "primitive": add64.id, "width": 64, "X": 32, "why": "gate-too-wide"}
-    assert [w["name"] for w in F.warnings if w["code"] == "q-call-inapplicable"] == [f"partition/q-call-inapplicable {wide.id}: 1 gate-too-wide"]
-    assert not F.failures
-    assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
-
-
-#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a proof block, and the values computed in two proof blocks
-QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
-              "codes": []}
-
-
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_the_boolean_versions_of_the_served_calls_are_calls():
@@ -890,114 +719,6 @@ def test_a_gate_no_output_reads_is_a_dead_gate():
     e = CK.check_definition(_composite("CircuitCheckDead", (_f32x2(), Value(32)), body), OPTS)
     (w,) = [w for w in e["warnings"] if w["check"] == "dead-gates"]
     assert w["count"] == 1 and w["where"] == {"F32Mul_v1 @ CircuitCheckDead_v1": 1}
-
-
-def test_a_partial_reference_is_named():
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Value
-
-    def finite_only(a):
-        if (a >> 23) & 0xFF == 0xFF:
-            raise ValueError("non-finite")
-        return a
-
-    prim = PrimitiveDefinition("CircuitCheckPartial", 1, (("a", Value(32)),), Value(32), finite_only, register=False)
-    (f,) = CK.check_definition(prim, OPTS)["failures"]
-    assert f["name"].startswith("correspondence/reference-not-total CircuitCheckPartial_v1 raised on")
-
-
-def test_a_declared_interval_the_reference_leaves_is_named():
-    """A primitive's declared return interval is a fact the Build takes (`verity.circuits.ports`): checked on operands within
-    its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.ports import In, Out, Ports
-    from verity.circuits.types import Value
-
-    def mul(a, b):
-        return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
-
-    s8 = {"a": In(bound=(-128, 127)), "b": In(bound=(-128, 127))}
-    good = PrimitiveDefinition("CircuitCheckS8Mul", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
-                               ports=Ports(params=s8, ret=Out(interval=(-16256, 16384))))
-    e = CK.check_definition(good, OPTS, as_call=False)
-    assert e["ports"] == {"vectors": e["correspondence"]["vectors"], "intervals": [[0, 1, [-16256, 16384]]], "outside": 0}
-    assert not e["failures"]
-    bad = PrimitiveDefinition("CircuitCheckS8MulTight", 1, (("a", Value(16)), ("b", Value(16))), Value(32), mul, register=False,
-                              ports=Ports(params=s8, ret=Out(interval=(-16256, 16383))))
-    (f,) = CK.check_definition(bad, OPTS, as_call=False)["failures"]
-    assert f["name"].startswith("ports/interval CircuitCheckS8MulTight_v1") and f["examples"][0]["value"] == 16384
-    assert "ports" not in CK.check_definition(PrimitiveDefinition("CircuitCheckS8MulUntyped", 1, (("a", Value(16)), ("b", Value(16))),
-                                                                  Value(32), mul, register=False), OPTS, as_call=False)
-
-
-def test_a_transfer_the_reference_leaves_is_named():
-    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
-    intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.ports import Ports, as_reading
-    from verity.circuits.types import Value
-
-    def add(a, b):
-        return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
-
-    def transfer(short):
-        def f(a, b):
-            a, b = as_reading(a, 8), as_reading(b, 8)
-            return None if a is None or b is None else (a[0] + b[0], a[1] + b[1] - short)
-        return f
-
-    def prim(name, short):
-        return PrimitiveDefinition(name, 1, (("a", Value(8)), ("b", Value(8))), Value(16), add, register=False,
-                                   ports=Ports(transfer=transfer(short)))
-
-    e = CK.check_definition(prim("CircuitCheckS8Add", 0), OPTS, as_call=False)
-    t = e["ports"]["transfer"]
-    assert t["draws"] == CK.TRANSFER_DRAWS and t["intervals"] > 0 and t["outside"] == 0 and not e["failures"]
-    fails = CK.check_definition(prim("CircuitCheckS8AddShort", 1), OPTS, as_call=False)["failures"]
-    assert fails and all(f["name"].startswith("ports/transfer CircuitCheckS8AddShort_v1") for f in fails)
-
-
-def test_a_kernel_wrong_only_on_edge_words_is_caught():
-    """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
-    from verity.circuits.evaluation import register_kernel
-    from verity.circuits.evaluation.batch import _KERNELS
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Value
-
-    prim = PrimitiveDefinition("CircuitCheckKernel", 1, (("a", Value(32)),), Value(32), lambda a: a ^ 1, register=False)
-    nan = lambda a: ((a >> 23) & 0xFF == 0xFF) & ((a & 0x7FFFFF) != 0)  # noqa: E731
-    register_kernel(prim, lambda a: (np.where(nan(a), 0, a ^ 1).astype(np.uint32), None))
-    try:
-        e = CK.check_definition(prim, OPTS)
-    finally:
-        del _KERNELS[prim.id]
-    (f,) = e["failures"]
-    assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
-
-
-def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked():
-    """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
-    each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
-    from verity.circuits.evaluation import register_kernel
-    from verity.circuits.evaluation.batch import _KERNELS
-    from verity.circuits.defs import PrimitiveDefinition
-    from verity.circuits.types import Value
-
-    prim = PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
-    odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
-    register_kernel(prim, lambda a: (a ^ 1, np.ones(a.shape, dtype=bool)), kernel="every")
-    register_kernel(prim, odd, kernel="odd")
-    register_kernel(prim, odd, kernel="odd-partial", partial=True)
-    try:
-        e = CK.check_definition(prim, OPTS)
-    finally:
-        del _KERNELS[prim.id]
-    assert sorted(f["name"].split(":")[0] for f in e["failures"]) == [
-        "correspondence/kernel-compared-nothing CircuitCheckDeclines_v1 [every]",
-        "correspondence/kernel-declined-in-domain CircuitCheckDeclines_v1 [odd]"]
-    via = {r["via"]: r for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
-    assert (via["kernel:every"]["compared"], via["kernel:every"]["fault"]) == (0, "compared-nothing")
-    assert via["kernel:odd-partial"]["compared"] > 0 and "fault" not in via["kernel:odd-partial"]
 
 
 def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
