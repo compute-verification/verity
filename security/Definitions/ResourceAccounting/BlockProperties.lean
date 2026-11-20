@@ -13,7 +13,8 @@ properties for each. The scales are `Verity.Partition`s of the actual circuit's 
 Core/Partition.lean`: every computed gate in exactly one unit, input gates in none), nested by `Verity.Partition.Refines`:
 
 * the **server-day blocks** and **hidden hardware's work**, a partition `outer` of the whole circuit (`kind u` says
-  which: a server-day block, or hidden hardware);
+  which, by location: a server-day block is at a location the hardware description lists, hidden hardware's work at
+  leaves no listed location holds);
 * the **inference blocks** and **free blocks** refining them, a partition `inner` with `inner.Refines outer`, a class
   per unit (`cls u`: inference, free, or hidden under a hidden parent);
 * the **proof blocks** refine the inference blocks; they are the proof layer's own `Verity.Partition` and carry no block
@@ -148,7 +149,9 @@ subadditive over finite unions), the verifier's acceptance, and each run's actua
 gates, and the two partitions the prover committed before any coin. `outer` partitions the whole circuit into server-day
 blocks and hidden hardware (`kind`); `inner` refines it into inference blocks, free blocks and hidden units (`cls`), a
 unit being hidden exactly when its server-day-or-hidden parent is hidden hardware (`hiddenIff`). Each block's location
-and window are fixed data. -/
+and window are fixed data. `kind` is a fact about location, not the prover's label: a top block is a server-day block
+exactly when its location is one the hardware description lists (`kindIff`), and a hidden block's location shares no
+leaf with a listed one (`hiddenUnlisted`). -/
 structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
@@ -163,6 +166,13 @@ structure Runs (L : Type*) where
   outer : (r : Run) → Partition (actual r).toCircuit (nOut r)
   kind : (r : Run) → Fin (nOut r) → Bool
   locOut : (r : Run) → Fin (nOut r) → Finset L
+  /-- **The locations the hardware description lists** (`Hardware.units` in `Registration/Physical.lean`), registered
+  information for the period. -/
+  listed : Set (Finset L)
+  /-- A top block is a server-day block exactly when its location is listed. -/
+  kindIff : ∀ r i, kind r i = true ↔ locOut r i ∈ listed
+  /-- A hidden block's location shares no leaf with any listed location. -/
+  hiddenUnlisted : ∀ r i, kind r i = false → ∀ X ∈ listed, Disjoint (locOut r i) X
   winOut : (r : Run) → Fin (nOut r) → Window
   claimsOut : (r : Run) → Fin (nOut r) → List Property
   /-- **The claimed free-block capacity**: the number the prover commits for each server-day block, committed data the
@@ -208,6 +218,12 @@ noncomputable def HoldsIn (r : P.Run) (u : Fin (P.nIn r)) (p : Property) : Prop 
 /-- Block `i` of `outer` in run `r` has the property `p`. -/
 noncomputable def HoldsOut (r : P.Run) (i : Fin (P.nOut r)) (p : Property) : Prop :=
   (P.actual r).Holds (P.π r) (P.θ r) (P.locOut r i) (P.outerBlock r i) p
+
+open Classical in
+/-- **The gates at unlisted locations** in run `r`: the computed gates placed at a leaf no listed location holds. Hidden
+hardware's work is theirs (`hidden_work_le`). -/
+noncomputable def hiddenGates (r : P.Run) : Finset (Fin (P.actual r).N) :=
+  (P.actual r).computed.filter fun g => ∀ X ∈ P.listed, (P.actual r).x g ∉ X
 
 /-- Block `u`'s size in run `r`, its work at the run's pricing, in gates. -/
 def sizeIn (r : P.Run) (u : Fin (P.nIn r)) : ℕ := (P.actual r).work (P.π r) ((P.inner r).gates u)
@@ -283,8 +299,8 @@ def UseAtLeast (what : Capacity) (use b : (r : P.Run) → Finset (Fin (P.nIn r))
 
 /-- **The hardware description** for `what`: the number the hardware graph gives for a server-day block's capacity of
 `what` at its location or link (`ComputeRate`'s `Φ`, `Memory`'s `M`, `Links`' `β` in `Registration/Physical.lean`),
-`enclosing r i ≤ cap r i`. For `computeRate` the figure is not assumed: `sizeOut_le_compute` derives a server-day
-block's size from `ComputeRate` over its region. It stays here for `memorySize` and `linkCapacity`, what the hardware
+`enclosing r i ≤ cap r i`. For `computeRate` the figure is not a premise of its own: `capacityAtMost_compute` derives it
+for every server-day block from `ComputeRate` over the listed locations, a server-day block's location being listed. It stays here for `memorySize` and `linkCapacity`, what the hardware
 graph gives, an assumption nothing in Verity tests (owner none: the hardware description). -/
 def CapacityAtMost (what : Capacity) (enclosing cap : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, ∀ i, P.kind r i = true → enclosing r i ≤ cap r i

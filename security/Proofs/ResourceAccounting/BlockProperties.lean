@@ -10,7 +10,10 @@ import Mathlib.Tactic
 `freeBlockAtMost` proves `FreeBlockAtMost`. `sizeAdds` proves that the blocks directly inside a server-day block have
 sizes adding to at most it, and `sizeExclusive` that a server-day block's free and inference children's work do not
 double-count. `conversion_le` is the conversion for size as one inequality, `freeClaimHolds_of_conversion` gives
-`FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `chain` proves `Chain`.
+`FreeClaimHolds` from it, and `conversion_bites` shows it tight at one gate. `listed_gate_in_serverDay` puts every
+computed gate at a listed location in a server-day block, `hidden_work_le` bounds hidden hardware's work by the work at
+unlisted locations, and `capacityAtMost_compute` gives the compute capacity from `ComputeRate` over the listed
+locations. `chain` proves `Chain`.
 
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
 smaller of the server-day size limit and its inference and free blocks' limits, plus the assumed hidden hardware size;
@@ -116,6 +119,43 @@ theorem sizeOut_le_compute (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (𝒳 :
     _ ≤ Φ (P.locOut r i) * ((P.winOut r i).start + (P.winOut r i).len - (P.winOut r i).start) :=
         hcr (P.locOut r i) hX _ _
     _ = Φ (P.locOut r i) * (P.winOut r i).len := by rw [Nat.add_sub_cancel_left]
+
+/-- **The compute capacity from the hardware description**: where every run meets `ComputeRate` over the listed locations,
+every server-day block's size is at most its location's rate `Φ` times its window's length, its location being listed
+(`kindIff`). -/
+theorem capacityAtMost_compute (P : Runs L) (Φ : Finset L → ℕ)
+    (hcr : ∀ r, (P.actual r).ComputeRate P.listed (P.π r) Φ) :
+    P.CapacityAtMost Capacity.computeRate P.sizeOut (fun r i => Φ (P.locOut r i) * (P.winOut r i).len) :=
+  fun r i hki => sizeOut_le_compute P r i P.listed Φ (hcr r) ((P.kindIff r i).mp hki)
+
+/-- **Every computed gate at a listed location lies in a server-day block**: the partition puts it in some top block,
+whose gates lie at its location (`insideOut`), and a hidden block's location shares no leaf with a listed one. -/
+theorem listed_gate_in_serverDay (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
+    (hg : g ∈ (P.actual r).computed) (X : Finset L) (hX : X ∈ P.listed) (hx : (P.actual r).x g ∈ X) :
+    ∃ i, P.kind r i = true ∧ g ∈ (P.outer r).gates i := by
+  rw [(P.outer r).computed_eq_biUnion] at hg
+  obtain ⟨i, -, hgi⟩ := Finset.mem_biUnion.mp hg
+  refine ⟨i, ?_, hgi⟩
+  cases hk : P.kind r i with
+  | true => rfl
+  | false =>
+    have hreg := P.insideOut r i hgi
+    simp only [Placed.region, Finset.mem_filter] at hreg
+    exact absurd hx (Finset.disjoint_left.mp (P.hiddenUnlisted r i hk X hX) hreg.2.1)
+
+/-- **Hidden hardware's work is the work at unlisted locations**: the hidden blocks' sizes add up to at most the work of
+the gates no listed location holds. -/
+theorem hidden_work_le (P : Runs L) (r : P.Run) :
+    ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ (P.actual r).work (P.π r) (P.hiddenGates r) := by
+  unfold Runs.sizeOut Placed.work
+  rw [← Finset.sum_biUnion (fun a _ b _ hab => (P.outer r).gates_disjoint a b hab)]
+  refine Finset.sum_le_sum_of_subset fun g hg => ?_
+  obtain ⟨i, hi, hgi⟩ := Finset.mem_biUnion.mp hg
+  have hk : P.kind r i = false := (Finset.mem_filter.mp hi).2
+  have hreg := P.insideOut r i hgi
+  simp only [Placed.region, Finset.mem_filter] at hreg
+  simp only [Runs.hiddenGates, Finset.mem_filter]
+  exact ⟨hreg.1, fun X hX hx => Finset.disjoint_left.mp (P.hiddenUnlisted r i hk X hX) hreg.2.1 hx⟩
 
 /-- The inference and free blocks directly inside a server-day block are the blocks directly inside it. -/
 theorem children_split (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
@@ -382,8 +422,8 @@ theorem serverInput_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Ru
   exact absurd (hin i hki).2.2 (by omega)
 
 /-- **The check bites, on the path the chain reads**: under a run that passes the inference-only check and realizes its
-claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with the assumed hidden hardware size
-`lim.hidden`, the whole circuit's work is at most, for each server-day block, the smaller of the server-day size limit
+claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with the work at unlisted locations at most
+`lim.hidden` (assumed), the whole circuit's work is at most, for each server-day block, the smaller of the server-day size limit
 `lim.cS` (its committed size claim, which the check caps at `lim.cS`) and the count of its inference blocks **outside**
 `M` at the size cap `lim.c` (each block's committed size claim, which the check caps at `lim.c`) plus the free-block limit
 `lim.freeSize`. The bound is in the limits alone: the free blocks and `M`'s inference blocks sit inside the committed
@@ -394,7 +434,7 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (hfree : P.FreeClaimHolds r M)
-    (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
+    (hhidden : (P.actual r).work (P.π r) (P.hiddenGates r) ≤ lim.hidden) :
     (P.actual r).work (P.π r) (P.actual r).computed ≤
       (∑ i ∈ univ.filter (fun i => P.kind r i = true),
         min lim.cS (((P.infChildren r i).filter (fun u => u ∉ M)).card * lim.c + lim.freeSize)) +
@@ -407,7 +447,7 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
   have hfalse : (univ.filter fun i => ¬ P.kind r i = true) = univ.filter fun i => P.kind r i = false := by
     apply Finset.filter_congr; intro i _; simp [Bool.not_eq_true]
   rw [hfalse]
-  refine add_le_add ?_ hhidden
+  refine add_le_add ?_ ((hidden_work_le P r).trans hhidden)
   refine Finset.sum_le_sum fun i hi => ?_
   simp only [mem_filter] at hi
   have hki := hi.2
@@ -432,7 +472,7 @@ theorem feasible_work_le_total (lim : InferenceOnly.Limits) (P : Runs L) (r : P.
     (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
     (hfree : P.FreeClaimHolds r M)
-    (hhidden : ∑ i ∈ univ.filter (fun i => P.kind r i = false), P.sizeOut r i ≤ lim.hidden) :
+    (hhidden : (P.actual r).work (P.π r) (P.hiddenGates r) ≤ lim.hidden) :
     (P.actual r).work (P.π r) (P.actual r).computed ≤
       (∑ i ∈ univ.filter (fun i => P.kind r i = true),
         min lim.cS ((P.infChildren r i).card * lim.c + lim.freeSize)) + lim.hidden := by
@@ -481,6 +521,9 @@ noncomputable def demoRuns (n : ℕ) (fc : ℕ) : Runs Unit where
   outer _ := Partition.whole (placed n).toCircuit
   kind _ _ := true
   locOut _ _ := {()}
+  listed := {{()}}
+  kindIff _ _ := by simp
+  hiddenUnlisted _ _ h := absurd h (by decide)
   winOut _ _ := ⟨0, n + 1⟩
   claimsOut _ _ := [.sizeAtMost n, .inputAtMost [.past] 0, .inputAtMost [.world] 0]
   claimedFree _ _ := fc
@@ -733,7 +776,7 @@ theorem top_blocks_classified (P : Runs L) (r : P.Run) (i : Fin (P.nOut r)) :
 
 `rows_chain` is the chain with each protocol's row fed to `chain` as a typed hypothesis, not named in a docstring. Its
 hypotheses are the rows (`PouwUseAtLeast` with its premises and the compute capacity `CapacityAtMost
-Capacity.computeRate P.sizeOut`; `DeclaredBlocksRun`; `ClaimCoversConversion`; `PousUseAtLeast` and `PoubUseAtLeast`
+Capacity.computeRate P.sizeOut`, which `capacityAtMost_compute` gives from `ComputeRate` over the listed locations; `DeclaredBlocksRun`; `ClaimCoversConversion`; `PousUseAtLeast` and `PoubUseAtLeast`
 with their conversions, their exclusivity premise open for memory and the link; `WipeInputAtMost`,
 `NetworkInputAtMost`, `NetworkOutputAtMost` with their premises; `RegistrationBinds` with `RegistrationSound` and
 `RegisteredReadsOpenLog`). Its conclusion is the policy's: an accepted run's actual circuit is compliant except with the

@@ -35,7 +35,8 @@ def isInputFrom (src : List Source) : Property → Bool
 input `k` (bits); the free blocks' count `m`; `freeSize` (gates), the limit on each server-day block's committed
 free-capacity claim, which pays for its free blocks' work and for the actual work of the inference blocks in the
 tolerance set together; each server-day block's size `cS` (gates) and its input from its own past and the outside world
-together `kS` (bits); the assumed hidden hardware size `hidden` (gates); and in the theorem's bound `share`, the share
+together `kS` (bits); `hidden` (gates), the bound on the work at leaves no listed location holds (`Runs.hiddenGates`),
+assumed: no protocol stands behind it; and in the theorem's bound `share`, the share
 of that free quantity (the free blocks' and the tolerance set's together), and the allowance inside inference blocks
 `allowance`. -/
 structure Limits where
