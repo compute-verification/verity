@@ -86,7 +86,7 @@ THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 
 EMB, GROUPS = "EmbeddingRead_v3{V=256,H=64}", "TokenSelectGroups_v1{C=64,G=16}"
 FEED, FEED1 = "TokenFeed_v1{NP=4,FIRST=false}", "TokenFeed_v1{NP=4,FIRST=true}"
 #: a served Program's collectors at a prompt position's dead select (the first position's and every later one's) and its entry
-OUT0, OUT, SLOT_ENTRY = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}", "SlotEntry_v1{KO=2,IDB=17,NP=1}"
+OUT0, OUT, SLOT_ENTRY = "OutCollect_v2{KO=2,FIRST=true}", "OutCollect_v2{KO=2,FIRST=false}", "SlotEntry_v2{KO=2,IDB=17,NP=1}"
 #: each position's select with its collector (the first position's, every later one's) and the last's with the slot's entry
 ENTRY = "SelectEntry_v1{V=256,C=16,KO=2,FIRST=false,IDB=17,NP=4}"
 COLLECT0, COLLECT = "SelectCollect_v1{V=256,C=16,KO=2,FIRST=true}", "SelectCollect_v1{V=256,C=16,KO=2,FIRST=false}"
