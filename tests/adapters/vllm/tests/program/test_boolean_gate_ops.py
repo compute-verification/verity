@@ -187,7 +187,7 @@ def test_lg2_where_measured_and_on_every_exponent_and_sign() -> None:
 
 def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
     """All 2^23 words of [1, 2) against `LG2_MEASURED`'s SHA-256 (about 10 s): the Boolean interpolator is the measured unit, not
-    only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
+    only its word view."""
     h = hashlib.sha256()
     for lo in range(0, 1 << 23, 1 << 19):
         m: np.ndarray = np.arange(lo, lo + (1 << 19), dtype=np.uint32)

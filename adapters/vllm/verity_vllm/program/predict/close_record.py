@@ -107,9 +107,7 @@ class Record:
         directory), closed under its key with its strings (`window_strings.handed_strings`), else with strings made here
         (`window_strings.strings_of`). -> what it wrote, its strings' cost and the seconds each part took."""
         from verity.circuits.codec import program_digest
-        from verity.protocols.resource_accounting.network.prover import (
-            scan_state_rows as SR,
-        )
+        from verity.protocols.compose import schemes
 
         from verity_vllm.pipeline import advice_windows as AW
         from verity_vllm.pipeline import window_advice as WA
@@ -119,6 +117,8 @@ class Record:
         from . import window_rows as WRS
         from . import window_strings as WS
         from . import window_weights as WW
+
+        SR = schemes.catalog("network-attester", "scan_state_rows")
 
         seconds: dict[str, float] = {}
         t = [time.perf_counter()]

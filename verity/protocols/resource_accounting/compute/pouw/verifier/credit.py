@@ -899,9 +899,9 @@ def _record_fns(v: Any) -> list:
     return out
 
 
-#: {SHA-512 of a descriptor: whether it decodes}: a real window's decode takes seconds, and one period reads its window's
-#: descriptor many times
-_DECODED: dict[bytes, bool] = {}
+#: {SHA-512 of a descriptor: None when it decodes, else the decoder's refusal}: a real window's decode takes seconds, and
+#: one period reads its window's descriptor many times
+_DECODED: dict[bytes, str | None] = {}
 
 
 def _decodes(descriptor: bytes) -> bool:
@@ -912,10 +912,10 @@ def _decodes(descriptor: bytes) -> bool:
     if key not in _DECODED:
         try:
             restrict.program(descriptor)
-            _DECODED[key] = True
-        except (restrict.Refused, IndexError, AttributeError, RecursionError):
-            _DECODED[key] = False
-    return _DECODED[key]
+            _DECODED[key] = None
+        except (restrict.Refused, IndexError, AttributeError, RecursionError) as e:
+            _DECODED[key] = f"{type(e).__name__}: {e}"
+    return _DECODED[key] is None
 
 
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
@@ -1906,10 +1906,10 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
 def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, draw: str,
                   units: list[int]) -> tuple[dict | None, tuple[str, str] | None]:
     """The produced record's root of each after-draw value of the window's sampled lanes-form leaves `units`, and None,
-    when the lanes evidence's record holds (`produced.check` against the sample root `registration`, the sampling coin's value
-    `draw` and the verifier's own entries: each leaf u's ``<prefix>partials@<u>``, (R/4)(C/8) rows of 2·`words`(K) u16
-    words under `produced.domain` of the window's descriptor digest `program` and the sample root); else None and the
-    refusal (``registration``, its P- codes)."""
+    when the lanes evidence's record holds (the Lean `Spot.Produced.check`, `lean("produced", …)`, against the sample root
+    `registration`, the sampling coin's value `draw` and the verifier's own entries: each leaf u's
+    ``<prefix>partials@<u>``, (R/4)(C/8) rows of 2·`words`(K) u16 words under `produced.domain` of the window's descriptor
+    digest `program` and the sample root); else None and the refusal (``registration``, its P- codes)."""
     (r, c), prefix, mine = layout["tile"], shape["prefix"], {}
     for u in units:
         k = leaf_k(layout, u)
@@ -1917,7 +1917,11 @@ def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registra
             name = LL.served(prefix, v, u)
             mine[name] = PR.entry(program, name, leaves, words, registration)
     rec = lanes["produced"]
-    codes = PR.check(rec, registration, draw, mine)
+    try:
+        codes = V.lean("produced", {"record": rec, "registration": registration, "draw": draw, "mine": mine})["codes"]
+    except (V.LeanError, TypeError, KeyError) as e:
+        return None, ("registration", f"the Lean check of the window's produced record gave no answer, so it stands "
+                                      f"refused: {e}")
     if codes:
         return None, ("registration", f"the window's produced record ({PR.FORMAT}) fails {', '.join(codes)}: it holds "
                                       "each drawn lanes-form leaf's partials@<u> under the window's draw root, fixed "

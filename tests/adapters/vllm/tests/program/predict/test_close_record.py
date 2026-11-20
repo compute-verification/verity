@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -155,6 +156,23 @@ def test_the_cards_part_runs_first_and_the_record_is_made_from_its_handoff_alone
     (to / "key.bin").unlink()
     with pytest.raises(ValueError, match="no key.bin"):
         rec.make(plan, 0, compiled, low, units, served, after, handoff=to)
+
+
+def test_the_launchers_strings_line_prints_the_cards_handed_strings(tmp_path, capsys):
+    """The record's strings are the card's handed ones (`window_strings.handed_strings`), which carry no
+    ``acquired_s``, or the host's (`window_strings.strings_of`): the launcher's WINDOW-STRINGS line prints either, so a
+    run whose record took the card's strings doesn't end in a KeyError after its record."""
+    text = (Path(__file__).parents[6] / "adapters/vllm/tools/served_run/h100_smoke.sh").read_text()
+    line = text[text.index("card_s = "):]
+    line = line[:line.index('"))\n') + 3]
+    twin = {"ports": 8, "of": 27, "units": 874496, "equal": True, "unequal": []}
+    handed = {"ports": 139, "where": "card, handed", "acquired": 3602952, "host": 163500, "host_s": 4.4, "handed_unleafed": 0}
+    (tmp_path / "line.py").write_text(line)
+    runpy.run_path(str(tmp_path / "line.py"), {"s": handed, "t": twin, "k": 0})
+    runpy.run_path(str(tmp_path / "line.py"), {"s": {**handed, "where": "HostTwin", "acquired_s": 0.0}, "t": twin, "k": 0})
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("WINDOW-STRINGS window 0: 139 ports, card (card, handed) 3602952 units, host 163500 units")
+    assert "EQUAL" in out[0] and "3602952 units in 0.0 s" in out[1]
 
 
 def test_the_launcher_runs_the_cards_parts_under_the_lease_and_the_record_after_it():

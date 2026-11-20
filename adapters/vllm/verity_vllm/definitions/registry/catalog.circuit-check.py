@@ -42,14 +42,6 @@ def kernels() -> list[Any]:
     return kernel_registry.registered()
 
 
-def table_probes() -> dict[str, tuple[int, Any, int, tuple[tuple[int, int], ...], Any]]:
-    """`tanh_rn` (2^27 entries of two words) as parameter 1 of the read that takes it, probed at its ends and its regions'
-    edges (`TANH_RN_REGIONS`)."""
-    from verity_vllm.definitions.registry import tables
-
-    return {"TableRead27x2_v1": (1, tables.tanh_rn_table, 2, tables.TANH_RN_REGIONS, lambda i: [[i], [i | 0xF8000000]])}
-
-
 def lazy_operands() -> dict[str, tuple[str, ...]]:
     """The parameters over the input budget that are operands, not a registered table, by the id of their Definition without
     statics."""

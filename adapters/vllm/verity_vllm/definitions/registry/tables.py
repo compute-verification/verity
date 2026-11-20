@@ -37,9 +37,6 @@ ROW_WORDS, WORD_BITS = 64, 16
 TABLES = {"gelu_tanh_bf16": (16, 1), "tanh_rn": (27, 2), "exp2_lut127": (8, 2)}
 #: `tanh_rn`'s region: identity below LO, ±1 from HI (`verity_flock.tail_pieces.TANH_BOUNDS["tanh_rn"]`)
 TANH_RN_LO, TANH_RN_HI = 0x39B89BA3, 0x41102CB4
-#: `tanh_rn`'s entries by where their words come from: the words 0x40000000 | i below HI's index, none (0) up to LO's, then the
-#: words 0x38000000 | i
-TANH_RN_REGIONS = ((0, TANH_RN_HI & 0x7FFFFFF), (TANH_RN_HI & 0x7FFFFFF, TANH_RN_LO & 0x7FFFFFF), (TANH_RN_LO & 0x7FFFFFF, 1 << 27))
 
 
 def table_type(name: str) -> Array:
@@ -115,5 +112,5 @@ def tanh_rn_table() -> RegisteredTable:
 
 GELU_TABLE = table_type("gelu_tanh_bf16")
 
-__all__ = ["GELU_TABLE", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "TANH_RN_REGIONS", "WORD_BITS", "gelu_tanh_bf16_words",
+__all__ = ["GELU_TABLE", "ROW_WORDS", "TABLES", "TANH_RN_HI", "TANH_RN_LO", "WORD_BITS", "gelu_tanh_bf16_words",
            "table_read", "table_type", "table_words", "tanh_rn_entry", "tanh_rn_table"]

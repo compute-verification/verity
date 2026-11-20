@@ -199,8 +199,8 @@ def decoded(desc: dict) -> codec.DecodedProgram:
     try:
         text = DT.canonical(desc)
     except (TypeError, ValueError):
-        text = None
-    if text is not None and _parsed(text) == desc:
+        return codec.decode_program(copy.deepcopy(desc), REGISTRY)
+    if _parsed(text) == desc:
         return _decoded_text(text)
     return codec.decode_program(copy.deepcopy(desc), REGISTRY)
 

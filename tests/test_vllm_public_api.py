@@ -411,7 +411,6 @@ _SHARED_WORDS = "until the shared word primitives move below both adapters"
 KNOWN_SITES = {
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
-    ("tests/adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.tf32_twin"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
     ("tests/adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
