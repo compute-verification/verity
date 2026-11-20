@@ -7,11 +7,10 @@ is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, firs
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-INPUT_ID = re.compile(r"^(Registered)?Input[1-9][0-9]*_v1$")
+from .program import input_id
 
 
 class Refusal(Exception):
@@ -257,7 +256,7 @@ class _Root:
                 node_args.append({"parts": _parts(g["refs"], args),
                                   "dims": None if ax is None else _axis_dims(types[g["type"]], ax)})
             args.append([g["parts"] for g in node_args])
-            self.nodes.append({"key": callees[x["fn"]], "input": prim and bool(INPUT_ID.match(callees[x["fn"]])),
+            self.nodes.append({"key": callees[x["fn"]], "input": prim and input_id(callees[x["fn"]]) is not None,
                                "form": x["form"], "members": x["n"] if x["form"] in ("batch", "scan") else 1,
                                "params": ps, "ret": ret, "out_leaves": _leaves(ret), "args": node_args})
 
