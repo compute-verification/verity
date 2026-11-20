@@ -241,7 +241,7 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
         for k, (lo, hi) in enumerate(s.blocks):
             py = _predicate(door.run(k, lo, hi).text)
             run = subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
-                                  str(k), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
+                                  str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
             assert _predicate(run.stderr) == py, (seed, k, s.doc(), run.stderr[-600:], py)
             clause = "holds" if py is None else py.split(", ", 1)[1].split(":")[0]
             seen[clause] = seen.get(clause, 0) + 1
