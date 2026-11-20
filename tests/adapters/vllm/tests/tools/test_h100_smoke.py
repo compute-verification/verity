@@ -22,7 +22,8 @@ PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/co
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
 #: the stand-in ``PY``: each call's argv (and, for the serve, its config) as one JSON line in ``$STUB_LOG``; the
-#: script's own Python run for real; every check off a card answered as a card-less machine answers it
+#: script's own Python run for real; every check off a card answered as a card-less machine answers it, a toolkit query
+#: as `kit.toolkit` answers it from ``$CUDA_HOME`` alone
 STUB = r'''
 import json, os, subprocess, sys
 a = sys.argv[1:]
@@ -36,9 +37,13 @@ if a[:1] == ["-"]:
 with open(os.environ["STUB_LOG"], "a") as fh:
     fh.write(json.dumps(rec) + "\n")
 if a[:2] == ["benchmarks/kernels/machine.py", "toolkit"]:
-    if "STUB_MACHINE" not in os.environ:
+    home = os.environ.get("CUDA_HOME")
+    if not home:
         sys.exit(1)
-    sys.exit(subprocess.run([sys.executable, os.environ["STUB_MACHINE"], *a[1:]]).returncode)
+    said = json.load(open(os.path.join(home, "version.json")))["cuda"]["version"]
+    if said != a[2] and not said.startswith(a[2] + "."):
+        sys.exit(1)
+    print(home)
 '''
 
 
@@ -159,8 +164,9 @@ def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
 
 
 def test_the_toolkit_is_12_9_unless_toolkit_names_another_and_cuda_home_must_be_that_one(tmp_path):
-    """``TOOLKIT`` (default 12.9) is the version the launcher asks machine.py for; a ``CUDA_HOME`` of another version is
-    refused by name off a machine whose record lists none, and one of that version is taken."""
+    """``TOOLKIT`` (default 12.9) is the version the launcher asks machine.py for; where machine.py gives none (a
+    ``CUDA_HOME`` of another version, off a machine whose record lists none) the launcher refuses by name, and where it
+    gives one (a ``CUDA_HOME`` of that version) the launcher goes on."""
     _, calls = run_dry(tmp_path / "default")
     assert [c["argv"] for c in calls if c["argv"][:2] == ["benchmarks/kernels/machine.py", "toolkit"]] == \
         [["benchmarks/kernels/machine.py", "toolkit", "12.9"]]
@@ -173,7 +179,7 @@ def test_the_toolkit_is_12_9_unless_toolkit_names_another_and_cuda_home_must_be_
         kit.mkdir()
         (kit / "version.json").write_text(json.dumps({"cuda": {"version": said}}))
         p, _ = run_dry(tmp_path / f"t{i}", DRY="0", TOOLKIT="13.0", CUDA_HOME=str(kit), HF_HOME=str(tmp_path / "hf"),
-                       PATH=f"{bin_}:{os.environ['PATH']}", STUB_MACHINE=str(ROOT / "benchmarks/kernels/machine.py"))
+                       PATH=f"{bin_}:{os.environ['PATH']}")
         assert p.returncode == 3, p.stdout + p.stderr
         if said.startswith("12.9"):
             assert "SMOKE REFUSED toolkit: neither CUDA_HOME nor the machine gives CUDA 13.0" in p.stdout, p.stdout + p.stderr
