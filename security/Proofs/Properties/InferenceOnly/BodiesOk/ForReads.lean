@@ -172,7 +172,7 @@ theorem decoded (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode byte
   have hfs : ((P.defs[d]!).body.nodes[k]!).fn < P.defs.size := by omega
   have hcc : CalleeOk P.defs[((P.defs[d]!).body.nodes[k]!).fn]! := (hok _ hfs).1
   cases hpc : (P.defs[((P.defs[d]!).body.nodes[k]!).fn]!).prim
-  · rw [(hcc.2 hpc).1]; exact hnd.2.2.2.2.2 i hi e L hdm hL
+  · rw [(hcc.2 hpc).1]; exact hnd.2.2.2.2.2.1 i hi e L hdm hL
   · rw [(hcc.1 hpc).1] at hip; exact absurd hip (Nat.not_lt_zero _)
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
