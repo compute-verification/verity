@@ -5,7 +5,6 @@ __pycache__/
 
 # Run outputs, evidence, and shipped source snapshots live in artifact storage (tests/test_repository.py is the backstop).
 out/
-!tests/benchmarks/numerical/bench/data/flock-runs/*/out/
 !benchmarks/exfiltration/made_up/out/
 runs/
 *.tgz
@@ -65,6 +64,7 @@ tests/verity/protocols/proofs/flock/prover/fixtures/hidden-outputs
 tests/verity/protocols/proofs/flock/prover/fixtures/honest-session
 tests/verity/protocols/proofs/flock/prover/fixtures/honest-plain
 tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree
+tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain
 tests/verity/protocols/compose/verifier/lean/fixtures/sampled-two-case
 calibration/machine_model/data/cover/corpus.json
 calibration/machine_model/data/cover/bu_12_9.json
@@ -81,7 +81,6 @@ tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-links
 tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions
-tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals
 tests/adapters/vllm/tests/protocols/fixtures/challenger_periods
 tests/benchmarks/network_e2e/encodings/fixtures
 tests/benchmarks/network_e2e/encodings/fixtures_draft

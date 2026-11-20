@@ -16,9 +16,8 @@ module and the Lean equal, entry for entry; refuses a literal of the table in th
 switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
-# PoUW: the protocol and its identifier
+# PoUW: the protocol
 POUW_PROTOCOL = "verity/pouw/v1"
-POUW_IDENTIFIER = "verity/pouw/identifier/v1"
 POUW_PASS_MANIFEST = "verity/pouw/pass-manifest/v1"
 
 # PoUW: epochs: coins, salts and the weights they bind
@@ -77,7 +76,6 @@ POUW_SEED = "verity/pouw/seed/v2"
 POUW_RECEIPT = "verity/pouw/receipt/v1"
 POUW_NOISE = "verity/pouw/noise/v1"
 POUW_CALL_SEED = "verity/pouw/call-seed/v1"
-POUW_EPS1_SEED = "eps1-sm120-h1fx1/seed/v1"
 POUW_DITHER_CALL = "verity/pouw/dither/call/v1"
 POUW_DITHER_FILL = "verity/pouw/dither/fill/v1"
 POUW_DITHER_OPERAND = "verity/pouw/dither/operand/v1"
@@ -283,7 +281,7 @@ POUS_COIN_TREE_HM96_SHA512 = "verity-pous/coin-tree/hm96-sha512/v1"
 POUS_MEMORY_CHALLENGER_COIN_TREE = "verity-pous/memory-challenger/coin-tree/v1"
 POUS_MEMORY_CHALLENGER_COIN = "verity-pous/memory-challenger/coin/v1"
 POUS_MEMORY_CHALLENGER_SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
-POUS_MEMORY_CHALLENGER_SESSION = "verity-pous/memory-challenger/session/v1"
+POUS_MEMORY_CHALLENGER_SESSION = "verity-pous/memory-challenger/session/v2"
 POUS_MEMORY_CHALLENGER_SETUP_RECORD = "verity-pous/memory-challenger/setup-record/v1"
 POUS_MEMORY_CHALLENGER = "verity-pous/memory-challenger/v2"
 POUS_ROUND_RECORDS_FRAME_V3_SHA512 = "verity-pous/round-records/frame-v3-sha512/v1"
@@ -292,7 +290,7 @@ POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512 = "verity-pous/streamed-wipe/ba
 POUS_STREAMED_WIPE_BATCH_RECORDS = "verity-pous/streamed-wipe/batch-records/v1"
 POUS_STREAMED_WIPE_END = "verity-pous/streamed-wipe/end/v1"
 POUS_STREAMED_WIPE_LABEL = "verity-pous/streamed-wipe/label/v1"
-POUS_STREAMED_WIPE_SESSION = "verity-pous/streamed-wipe/session/v2"
+POUS_STREAMED_WIPE_SESSION = "verity-pous/streamed-wipe/session/v3"
 POUS_STREAMED_WIPE_START = "verity-pous/streamed-wipe/start/v1"
 POUS_STREAMED_WIPE = "verity-pous/streamed-wipe/v2"
 POUS_W_COMMITMENT = "verity-pous/w-commitment/v2"

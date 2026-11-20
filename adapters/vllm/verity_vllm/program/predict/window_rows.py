@@ -66,6 +66,7 @@ from verity_vllm.query.manifest import format as RM
 from . import scan_state as SS
 from .window_builder import WEIGHTS, _spans
 from .window_circuit import Lowered, WindowClass
+from .window_lowering import node_family
 
 #: a unit's source: its node's served value, the Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
@@ -81,10 +82,10 @@ Weights = Callable[[str, int, int], np.ndarray]
 
 
 def positions(fn: Any) -> list[int]:
-    """Each node's position: a position begins at each embedding."""
+    """Each node's position: a position begins at each embedding (`window_lowering.node_family`)."""
     out, p = [], -1
     for n in fn.body.nodes:
-        p += n.fn.name == "Embedding"
+        p += node_family(n.fn) == "Embedding"
         out.append(p)
     return out
 
@@ -173,7 +174,7 @@ class Slot:
             self._node(j, node, served(self.position[j], j - first[self.position[j]], node))
 
     def _node(self, j: int, node: Any, served: tuple[str, list[np.ndarray]] | None) -> None:
-        fam, fields, what = node.fn.name, _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
+        fam, fields, what = node_family(node.fn), _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
         if fam == "Embedding":
             self._token(self.position[j], node.args[0])
         pin = _pinned(fam)
@@ -211,7 +212,7 @@ class Slot:
         self.carried.append(nxt)
 
     def _evaluate(self, node: Any, fields: list[Any], what: str) -> list[np.ndarray]:
-        if node.fn.name == "Embedding":
+        if node_family(node.fn) == "Embedding":
             V, H = node.fn.bindings["V"], node.fn.bindings["H"]
             label, lo, _hi = self._weight(node.args[1], V * H)
             t = self.tokens[-1]
@@ -543,7 +544,7 @@ class Rows:
             for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
-        emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
+        emb = [j for j, node in enumerate(nodes) if node_family(node.fn) == "Embedding"]
         for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
             self._put(r.tid, r.unit, "o1", np.ones((1, 1), dtype=np.uint16), EVALUATED)

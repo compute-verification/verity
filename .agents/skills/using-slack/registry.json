@@ -667,7 +667,6 @@
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
         "calibration/attester_timing/",
-        "benchmarks/scan_cost/",
         "benchmarks/attester_load/",
         "security/Definitions/Certifier.lean",
         "security/Definitions/Certifier/NetWitness.lean",
@@ -941,7 +940,6 @@
       "usergroup": "S0CAYGG5BDW",
       "linear": "HASH",
       "owns": [
-        "benchmarks/hash/",
         "benchmarks/kernels/"
       ],
       "branch_suffixes": [

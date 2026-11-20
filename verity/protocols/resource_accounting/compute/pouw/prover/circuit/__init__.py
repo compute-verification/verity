@@ -36,8 +36,6 @@ inside a row unit), and their Boolean bodies `verity.circuits.ops.boolean.words`
   each linear's B rows registered once for all its calls; its template-instance partition derives its units, and
   `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K execution phase in one
   read.
-* `admit`: an execution phase's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
-  the execution phase.
 * `live`: a round's served rows under rule A (`PouwLiveSlots_v2`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), none past its public max_tokens, for the public m that dense credit counts.

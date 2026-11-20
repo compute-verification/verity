@@ -58,6 +58,8 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
 from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, draw as D, hello as H, link_points as LP, docket as R
+from .lean_child import LEAN_PANIC, panic_line
+from .settings import lean_env
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -119,7 +121,8 @@ def _dumps(value: Any) -> str:
 
 class _Server:
     """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
-    the first call and again after it dies."""
+    the first call and again after it dies, in `lean_env`: a panic ends it, and a panic line on its standard error refuses
+    the call it answered."""
 
     def __init__(self, exe: str = EXE, package: Path = PACKAGE) -> None:
         self.exe, self.package = exe, package
@@ -134,7 +137,8 @@ class _Server:
             if self._proc is None or self._proc.poll() is not None:
                 self._stderr = tempfile.TemporaryFile()
                 self._proc = subprocess.Popen([str(executable(self.exe, self.package))], stdin=subprocess.PIPE,
-                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8")
+                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8",
+                                              env=lean_env())
             try:
                 self._proc.stdin.write(line + "\n")
                 self._proc.stdin.flush()
@@ -147,7 +151,14 @@ class _Server:
                 self._stderr.seek(0)
                 err = self._stderr.read().decode("utf-8", "replace")[-2000:]
                 self._proc = None
-                raise LeanError(f"{self.exe} ended on {fn}: {err}")
+                panic = panic_line(err)
+                raise LeanError(f"{LEAN_PANIC}: {panic}" if panic else f"{self.exe} ended on {fn}: {err}")
+            self._stderr.seek(0)
+            if (panic := panic_line(self._stderr.read())) is not None:
+                self._proc.kill()
+                self._proc.wait()
+                self._proc = None
+                raise LeanError(f"{LEAN_PANIC}: {panic}")
         try:
             msg = json.loads(reply)
         except ValueError:

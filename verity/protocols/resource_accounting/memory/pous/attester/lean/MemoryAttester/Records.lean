@@ -23,22 +23,16 @@ set_option backward.privateInPublic.warn false
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA)
 
 abbrev E := Except String
 
-abbrev PROTOCOL : String := SessionCoins.PROTOCOL
 def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
-abbrev COIN_TREE : String := SessionCoins.COIN_TREE
-abbrev RECORDS : String := SessionCoins.RECORDS
-abbrev COIN_TAG : ByteArray := SessionCoins.COIN_TAG
-abbrev COIN_BINDING : ByteArray := SessionCoins.COIN_BINDING
-def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v1".toUTF8.push 0
-abbrev COIN_SCHEMA : String := SessionCoins.COIN_SCHEMA
+def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v2".toUTF8.push 0
+/-- The session record's salt, the device's own draw a session: the signed digest hides the rows it covers. -/
+def RECORD_SALT_BYTES : Nat := 64
 def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
-abbrev COMPLETE : String := SessionCoins.COMPLETE
-abbrev LATE : String := SessionCoins.LATE
-abbrev CLOCK : String := SessionCoins.CLOCK
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
 A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
@@ -164,12 +158,20 @@ def pyJsonStr (s : String) : String := SessionCoins.pyJsonStr s
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds. -/
 def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
-  SessionCoins.header c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
+  SessionCoins.header c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
 
-/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
-def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
+/-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ salt ‖ u64 len ‖ header ‖ records digest)`,
+the salt `RECORD_SALT_BYTES` bytes, so it ends where the tag says and the header's length begins. The record's salt
+is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes from its coins source as the session opens
+(`challenger_party.Challenger._coins`, `wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in
+`MemoryAttester.__init__` when none is given; in Lean the device's own coins, `Session.Params.salt`), outside the
+session's commitment and before its first index is revealed, and read once, when `close()` signs; it makes the signed
+digest m a hiding commitment to the guessable header and records, and nothing in soundness rests on its being random or
+fresh: a salt the prover could choose would still leave the signature binding the same records. -/
+def message (c : ChallengePhaseCommitment) (salt : ByteArray) (ended : String) (rounds : Array Round) : E ByteArray := do
+  if salt.size ≠ RECORD_SALT_BYTES then throw s!"a session record's salt is {RECORD_SALT_BYTES} bytes"
   let head := (header c ended rounds.size).toUTF8
   let digest ← recordsDigest rounds
-  pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ digest))
+  pure (Sha512.hash (SESSION_TAG ++ salt ++ be64 head.size.toUInt64 ++ head ++ digest))
 
 end MemoryAttester

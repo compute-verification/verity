@@ -8,7 +8,7 @@ A name one directory holds is imported by that name. A name two directories hold
 most, the one whose own scripts import it so: `AHEAD` lists those directories and puts them first, and `FirstHolder`, a
 finder ahead of ``sys.path``, keeps the name theirs whoever imports it, whatever a script has put first on the path since
 (a launcher starts a script with its own directory first, and many scripts put it there themselves). Another holder's
-module comes from `load`, under a name of its own. ``test_script_imports.py`` holds the tree to this.
+module comes from `load`, under a name of its own.
 """
 from __future__ import annotations
 

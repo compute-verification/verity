@@ -24,6 +24,13 @@ unset CARGO_TARGET_DIR
 trap 'rm -rf $S' EXIT
 { hostname; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2; echo "template=$TEMPLATE"; } > $O/host.txt 2>&1; cat $O/host.txt
 timed() { local name=$1; shift; /usr/bin/time -o $O/time-$name.txt -f "TIME $name wall_s=%e maxrss_kb=%M rc=%x" "$@"; }
+answered() {  # LOG STATUS WANT LINE: a step gave its own answer: status WANT and a line matching LINE, with no traceback
+              # and no Lean panic line (verity.lean_process.panic_line); a refusal's status alone is no answer
+  [ "$2" = "$3" ] && grep -qE "$4" "$1" && ! grep -q '^Traceback (most recent call last):' "$1" \
+    && python3 -c 'import sys
+from verity.lean_process import panic_line
+sys.exit(panic_line(open(sys.argv[1], errors="replace").read()) is not None)' "$1"
+}
 
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server; LOW_BIN=$L/lean-$LSHA/flock-lower-check
@@ -69,6 +76,7 @@ challenger_built || exit 1
 
 $UV sync -q --all-packages --extra torch-cpu || exit 4
 wait $LP; [ -x $LEAN_BIN ] && [ -x $UNIT_BIN ] && [ -x $FW_BIN ] && [ -x $LOW_BIN ] && [ -x $RT_BIN ] && [ -x $CC_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+export LEAN_ABORT_ON_PANIC=1  # settings.py's ABORT_ON_PANIC, for every Lean run below and every process they start
 SD="$UV run -q python benchmarks/one_stage/served_door.py"
 if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: records_audit.py audit on a local challenger
   WIN="$SD window --tree ."; [ -n "${WINDOW_ARGS:-}" ] && WIN="$UV run -q python $WINDOW_ARGS"  # another window's builder
@@ -118,11 +126,17 @@ challenger_end $O/challenger; echo "challenger exit $?"
 SESS=$(dirname $(ls -1 $S/sessions/*/session.json | LC_ALL=C sort | tail -1)) || { tail -20 $O/serve.log; exit 7; }
 du -sb $SESS | tee $O/proof-size.txt
 challenger_audit $O/challenger $SESS
+bad=0
 for r in registered registered-wrong-out; do
   timed lean-$r $LEAN_BIN verify --zk --statement verity/flock-circuit/tmpl --circuit $D/circuit.txt --public $D/pub-1.bin --tables $D/tables \
     --partition $D/partition.json --program $D/program.json --registered $D/$r.json --session $SESS > $O/lean-$r.log 2>&1
-  echo "$r lean rc $?"; cat $O/time-lean-$r.txt; grep -h '^VERDICT' $O/lean-$r.log | head -1 | cut -c1-2500; tail -3 $O/lean-$r.log | cut -c1-600
+  lr=$?; echo "$r lean rc $lr"; cat $O/time-lean-$r.txt; grep -h '^VERDICT' $O/lean-$r.log | head -1 | cut -c1-2500; tail -3 $O/lean-$r.log | cut -c1-600
+  if [ $r = registered ]; then want=0 accepted=true; else want=1 accepted=false; fi
+  answered $O/lean-$r.log $lr $want "^VERDICT .*\"accepted\":$accepted[,}]" \
+    || { echo "ERROR lean-$r: verity-verify-proof verify ended with status $lr and not its own VERDICT accepted=$accepted"; bad=1; }
 done
 ( unset PYTHONPATH; timed door $SD step verify --dir $S --template "$TEMPLATE" --unit $U0 --lower $LOW_BIN --lean $LEAN_BIN --session $SESS ) > $O/door.txt 2>&1
-echo "door rc $?"; cat $O/time-door.txt; grep -h '^STEP' $O/door.txt | cut -c1-3000; tail -c 2000 $O/door.txt | grep -v '^STEP'
-true
+dr=$?; echo "door rc $dr"; cat $O/time-door.txt; grep -h '^STEP' $O/door.txt | cut -c1-3000; tail -c 2000 $O/door.txt | grep -v '^STEP'
+answered $O/door.txt $dr 0 '^STEP .*"refusal": null' \
+  || { echo "ERROR door: served_door.py step verify ended with status $dr and not its STEP line with no refusal"; bad=1; }
+exit $bad

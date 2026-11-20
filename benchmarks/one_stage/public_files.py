@@ -130,6 +130,7 @@ REFUSALS = {
     "draw-commitment-not-signed": "the record's draw commitment is not the one the draw session's challenger signed",
     "draw-coin-not-after-commitment": "the draw session's log does not show the run's commitment as the one root its draw coin followed",
     "source-not-draw-coin": "the record's source is not its draw session's coin",
+    "single-gpu-window-is-served": "a single-GPU window is a served one (--serve-run): the rows route's Commit is retired",
     "pearlplus-period-open-name": "pearlplus-period open needs --name",
     "pearlplus-period-rule-arguments": "pearlplus-period rule needs --lane and --coin",
     "pearlplus-period-close-arguments": "pearlplus-period close takes --lane and --windows together",

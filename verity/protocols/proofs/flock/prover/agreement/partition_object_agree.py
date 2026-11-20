@@ -7,8 +7,10 @@ cover (`_blocks_cover`) at the population the Python derived for that program, t
 Accepted on both sides or refused on both, a refusal with the Python's first code (its `keys` is Lean's keys refusal), and
 an accepted object's blocks the same. Writes DIR/result.json; exits 1 unless every case agrees.
 """
-import argparse, json, subprocess, sys
+import argparse, json, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits import partition_object as PO
 
@@ -67,7 +69,7 @@ def main():
         f.write_text(json.dumps({"object": o, "descriptor": v["descriptors"][d]}))
         files.append(str(f))
         want[str(f)] = (verified(o, d), PO.levels(o))
-    p = subprocess.run([a.lean, "partition-object", *files], capture_output=True, text=True)
+    p = LR.run([a.lean, "partition-object", *files])
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("PARTITIONOBJECT "):

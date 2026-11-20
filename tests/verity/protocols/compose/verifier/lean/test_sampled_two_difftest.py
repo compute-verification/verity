@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
 import json
 import random
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,9 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity.circuits import codec
+from verity.circuits.program import boolean_map
+from verity.circuits.restrict import _declared
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
 
@@ -210,11 +215,74 @@ def _at_two_levels(j: dict) -> dict:
     return {**{k: v for k, v in j.items() if k != "form"}, "levels": 2}
 
 
+def _v2(desc: dict) -> dict:
+    """A kept program descriptor at the schema the verifier reads: the case was kept at v1, which holds no Boolean
+    bodies, and no command remakes it while two levels are refused."""
+    if desc.get("schema") == codec.SCHEMA:
+        return desc
+    d = {**desc, "schema": codec.SCHEMA}
+    get = codec.definition_decoder(d, _declared(d))
+    p = codec.DecodedProgram(get(d["root"]), {}, d,
+                             tuple(get(f) for f in codec._record_function_ids(d["program_fn"]) if f in d["definitions"]))
+    p.boolean = boolean_map(p)
+    return codec.encode_program(p)
+
+
+def _reads_v2(r: dict | None) -> dict | None:
+    """Registered reads at `verity/registered-reads/v2`, which hold no positions: C and the partition give them."""
+    if r is None:
+        return None
+    return {"format": "verity/registered-reads/v2",
+            "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "reads_from")} for k, e in r["ports"].items()}}
+
+
+def _circuit_sha(program: dict, partition: dict, first: int) -> str:
+    """The SHA-512 of the circuit file Lean derives for the block starting at unit `first` (`spot-one-stage-zk
+    restrict`), the one a member's statement reads."""
+    with tempfile.TemporaryDirectory() as d:
+        cp, pp, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "circuit.txt")
+        cp.write_text(canonical(program))
+        pp.write_text(canonical(partition))
+        exe = D.build(R.ROOT / "verity/protocols/proofs/spot/verifier/lean", "spot-one-stage-zk")
+        p = subprocess.run([str(exe), "restrict", str(cp), str(pp), str(first), str(out)],
+                           capture_output=True, text=True, check=False)
+        assert p.returncode == 0, p.stdout + p.stderr
+        return hashlib.sha512(out.read_bytes()).hexdigest()
+
+
+def _kept_params(j: dict) -> dict:
+    """The kept case's params in today's forms: its programs at descriptor v2, the interior's partition naming that
+    program and its members' units as its blocks, each member naming its block rather than handing its units, and each
+    template's circuit the one Lean derives for its member's block. That digest is the verifier's own `restrict` output,
+    so the tests on these params do not check it independently: they check the refusal by name, and that it comes
+    before the evidence is read."""
+    j = copy.deepcopy(j)
+    for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
+        at[k] = _v2(at[k])
+    ip, members = j["interior"]["params"], j["interior"]["members"]
+    blocks = sorted(tuple(u) for m in members.values() for u in m["units"])
+    ip["partition"] = {**ip["partition"], "program": codec.program_digest(ip["program"]),
+                       "blocks": [[list(b) for b in blocks]]}
+    j["interior"]["members"] = {
+        name: {"block": blocks.index(tuple(m["units"][0])), "public": m["public"],
+               "registered": _reads_v2(m["registered"]), "vus_per_block": m["vus_per_block"]}
+        for name, m in members.items()}
+    firsts = {name: m["units"][0][0] for name, m in members.items()}
+    for t in ip["proofs"]["templates"]:
+        if t["template"] in firsts:
+            t["circuit"] = _circuit_sha(ip["program"], ip["partition"], firsts[t["template"]])
+    return j
+
+
+def _params() -> dict:
+    return _kept_params(json.loads((_case_dir() / "params.json").read_text()))
+
+
 def _check(tmp_path: Path, params: dict | None = None, evidence: dict | None = None) -> subprocess.CompletedProcess:
     """`vstar-recursive sampled check` on the kept play, at two levels, its params or evidence replaced where given."""
     d = _case_dir()
     files = []
-    for name, given in (("params.json", params), ("evidence.json", evidence)):
+    for name, given in (("params.json", params if params is not None else _params()), ("evidence.json", evidence)):
         f = tmp_path / name
         f.write_text(canonical(_at_two_levels(given if given is not None else json.loads((d / name).read_text()))))
         files.append(f)
@@ -252,7 +320,7 @@ def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
     root set to the boundary registration's is refused at its parameters and by name (`ONE_WINDOW`). The parameters
     still parse to the end, where the refusal is, which no refusal case above reaches: their interior names no
     members."""
-    params = json.loads((_case_dir() / "params.json").read_text())
+    params = _params()
     assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
     params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
     on = _check(tmp_path, params=params)

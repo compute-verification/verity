@@ -7,7 +7,7 @@ the manifest's op_path aliases to the one committed entry it names, and reads it
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, NamedTuple, Protocol
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -64,13 +64,6 @@ class Located(NamedTuple):
     lo: int
     hi: int
     dtype: str
-
-
-class WordStore(Protocol):
-    """What a replay reads of a store: `CommittedStore.words`, which a request's own replay answers as well
-    (`request_replay.Replay`, `recomputed_prefix.RecomputedPrefix`)."""
-
-    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]: ...
 
 
 class CommittedStore:

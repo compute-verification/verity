@@ -22,10 +22,13 @@ signers' schemes (`TEST_SCHEMES`, `pous_test_signer.SCHEMES`) are accepted only 
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COMPLETE)
 
-/-- A closed session: its commitment, how it ended, its round records, and the one signature over them. -/
+/-- A closed session: its commitment, its record's salt, how it ended, its round records, and the one signature over
+them. -/
 structure SignedChallengePhase where
   commitment : ChallengePhaseCommitment
+  salt : ByteArray
   ended : String
   rounds : Array Round
   scheme : String
@@ -33,7 +36,8 @@ structure SignedChallengePhase where
   signature : ByteArray
   deriving BEq, Inhabited
 
-def SignedChallengePhase.message (s : SignedChallengePhase) : E ByteArray := MemoryAttester.message s.commitment s.ended s.rounds
+def SignedChallengePhase.message (s : SignedChallengePhase) : E ByteArray :=
+  MemoryAttester.message s.commitment s.salt s.ended s.rounds
 
 /-- `lms_verify(params)(public_key, session, record, signature)`: false for a key of the wrong size; a signature of the
 wrong size is refused (Python's `ValueError`, which `verdict` reads as no signature). -/

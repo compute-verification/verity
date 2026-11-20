@@ -59,6 +59,7 @@ open PousVerifier.Properties.SecurityProofs (append_cancel mth_binds leaves_entr
 open MemoryAttester.Properties.SecurityProofs (forIn'_measure_eq)
 open Lean (Json)
 open Verity.CanonUtf8 (canonUtf8_flat eq_ok_of)
+open Flock.SessionCoins (COMPLETE)
 
 local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -714,12 +715,19 @@ private def honestCommitment : StreamedWipe.Commitment := ⟨.empty, .empty, ⟨
 /-- Its one batch: batch 0, of index 0, sent when the fill ended and answered at once with no wrong answer. -/
 private def honestBatch : StreamedWipe.Batch := ⟨0, 0, 1, 0, 0, 0, .empty⟩
 
-/-- The session, ended complete with an empty start mark under S1's scheme, the key `pk` and the signature `sig`. -/
+/-- A record salt of `RECORD_SALT_BYTES` zero bytes. -/
+private def zeroRecordSalt : ByteArray := ⟨Array.replicate RECORD_SALT_BYTES 0⟩
+
+private theorem zeroRecordSalt_size : zeroRecordSalt.size = RECORD_SALT_BYTES := by
+  simp [zeroRecordSalt, ByteArray.size]
+
+/-- The session, its record salted with zeros, ended complete with an empty start mark under S1's scheme, the key `pk`
+and the signature `sig`. -/
 private def honestWipe (pk sig : ByteArray) : StreamedWipe.Signed :=
-  ⟨honestCommitment, StreamedWipe.COMPLETE, .empty, 0, 0, #[honestBatch], LMS, pk, sig⟩
+  ⟨honestCommitment, zeroRecordSalt, StreamedWipe.COMPLETE, .empty, 0, 0, #[honestBatch], LMS, pk, sig⟩
 
 private theorem honest_message :
-    ∃ m, StreamedWipe.message honestCommitment StreamedWipe.COMPLETE .empty 0 0 #[honestBatch] = .ok m := by
+    ∃ m, StreamedWipe.message honestCommitment zeroRecordSalt StreamedWipe.COMPLETE .empty 0 0 #[honestBatch] = .ok m := by
   unfold StreamedWipe.message StreamedWipe.recordsRoot
   rw [Array.mapM_eq_mapM_toList]
   exact ⟨_, rfl⟩
@@ -852,7 +860,7 @@ private def toyPhaseCommitment : ChallengePhaseCommitment :=
 private def toyRound : MemoryAttester.Round := ⟨0, 0, 0, 0, blockDigest toyBlocks[0]!⟩
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedChallengePhase :=
-  ⟨toyPhaseCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
+  ⟨toyPhaseCommitment, zeroRecordSalt, COMPLETE, #[toyRound], LMS, pk, sig⟩
 private def toyRecord (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
   ⟨toySigned pk sig, toyPhaseCommitment, toyOpenings⟩
 
@@ -934,7 +942,7 @@ private theorem rtail_toy :
   decide +kernel
 
 private theorem verdict_toy (pk sig m : ByteArray)
-    (hm : MemoryAttester.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m)
+    (hm : MemoryAttester.message toyPhaseCommitment zeroRecordSalt COMPLETE #[toyRound] = .ok m)
     (hlms : lmsVerify Lms.deployed pk toyPhaseCommitment.session m sig = .ok true) :
     (MemoryAttester.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toyPhaseCommitment
       toyOpenings).accepted = true := by
@@ -973,7 +981,8 @@ private theorem checkAt_toy (pk sig : ByteArray)
   checkAt_of SCHEMES toyPoint [pk] toyPublic toyDigests (toyRecord pk sig) toySid rfl salt_toy digests_toy
     table_toy rfl rfl rfl rfl (beq_self_eq_true _) (beq_self_eq_true _) hv
 
-private theorem message_toy : ∃ m, MemoryAttester.message toyPhaseCommitment COMPLETE #[toyRound] = .ok m := by
+private theorem message_toy :
+    ∃ m, MemoryAttester.message toyPhaseCommitment zeroRecordSalt COMPLETE #[toyRound] = .ok m := by
   obtain ⟨v, hv⟩ : ∃ v, toyRound.value = .ok v := by
     have hd : toyRound.digest.size = 64 := Properties.Certifier.Bytes.hash_size _
     unfold MemoryAttester.Round.value
@@ -981,7 +990,8 @@ private theorem message_toy : ∃ m, MemoryAttester.message toyPhaseCommitment C
     exact ⟨_, rfl⟩
   unfold MemoryAttester.message MemoryAttester.recordsDigest MemoryAttester.recordsStream
   rw [Array.mapM_eq_mapM_toList]
-  simp only [List.toList_toArray, List.mapM_cons, List.mapM_nil, hv, bind, Except.bind, pure, Except.pure]
+  simp only [zeroRecordSalt_size, ne_eq, not_true_eq_false, ↓reduceIte, List.toList_toArray, List.mapM_cons,
+    List.mapM_nil, hv, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
 /-- **An honest run is accepted** (the instance of `RunAccepts`' honest lemma): for every key `Lms.key` derives at

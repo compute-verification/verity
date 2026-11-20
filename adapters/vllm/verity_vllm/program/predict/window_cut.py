@@ -8,7 +8,9 @@ its members, and a member's registered read names its call's table; the circuit'
 (`cut_values`).
 
 Refused by name (`Unexpressible`): a class Program with an int8 linear or no linear but its LM heads, a position whose
-linears aren't the first position's, and a linear whose y no rows of ``words`` doubled hand on in one unit.
+linears aren't the first position's, a linear whose y no rows of ``words`` doubled hand on in one unit, and a unit with a
+linear's, an int8 quant's or an embedding's name or its body but not both (`by_body.family`); and, by `by_body.egress`, a
+select's name over another body.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
+from .by_body import egress, family
 from .window_builder import Row
 from .window_class import PearlTables, WindowClass
 
@@ -29,8 +32,9 @@ from .window_class import PearlTables, WindowClass
 @dataclass(frozen=True)
 class Linears:
     """A class Program's linears as a cut at them takes them (`PearlTables`): ``heads`` its LM heads' nodes (GEMMs a token
-    select reads, which stay computed) and ``calls`` each position's other GEMMs in order, the same at every position, each
-    ``(K, N, W)``: its shape and the words of each row it hands its y on in."""
+    select reads, a select by its name or body as `by_body.egress` lists it, which stay computed) and ``calls`` each
+    position's other GEMMs in order, the same at every position, each ``(K, N, W)``: its shape and the words of each row it
+    hands its y on in."""
     heads: frozenset[int]
     calls: tuple[tuple[int, int, int], ...]
 
@@ -46,21 +50,27 @@ def _hands_on(N: int, W: int, rows: int) -> bool:
     return True
 
 
+def _linear(fn: Any) -> bool:
+    """Whether ``fn`` is a linear the cut takes, a `Gemm` by `by_body.family`."""
+    return family(fn, ("Gemm",), "the cut would hold another unit's output to Pearl+'s product") is not None
+
+
 def linears(fn: Any, words: int, rows: int) -> Linears:
     """The class Program ``fn``'s `Linears`, each call's W the least of ``words`` doubled that divides its N and leaves its
     `LinearOut_v3` within ``rows`` rows and a proof block Flock's composer proves (`interface.check_proof_block`; a call's
     y row is read whole), so the layout is one whether or not the circuit is then proved. Refused where it has an int8
     linear, a position's linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
-    if (q := next((n for n in nodes if n.fn.name == "Int8RowQuant"), None)) is not None:
+    if (q := next((n for n in nodes if family(n.fn, ("Int8RowQuant",), "an int8 linear is known by its quant's name")),
+                  None)) is not None:
         raise Unexpressible(f"{q.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
-    heads = frozenset(idx for n in nodes if n.fn.name == "TokenSelect"
+    heads = frozenset(idx for n in nodes if egress(n.fn)
                       for space, idx, _lo, _hi in runs(n.args[0].refs) if space == "n")
     by: list[list[tuple[int, int]]] = []
     for j, n in enumerate(nodes):
-        if n.fn.name == "Embedding":
+        if family(n.fn, ("Embedding",), "a position begins at each embedding"):
             by.append([])
-        elif n.fn.name == "Gemm" and j not in heads and by:
+        elif _linear(n.fn) and j not in heads and by:
             by[-1].append((n.fn.bindings["K"], n.fn.bindings["N"]))
     if not by or not by[0]:
         raise Unexpressible(f"{fn.id}: no BF16 linear (`Gemm_v2`) but its LM heads, so nothing for Pearl+'s tables to cut")

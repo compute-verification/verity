@@ -9,8 +9,8 @@ stream into buffers the plan owns (allocated once, at `plan`), so a CUDA graph c
     plan.receipts(i)                                        # call i's (units, 2 sets) int32 view
 
 Verity imports no tensor runtime: what the front end asks of one (the table's upload, the plan's buffers and the launches'
-stream) is `H1R`'s `upload`, `empty` and `stream`, which raise here and which the caller's subclass supplies (the
-benchmarks' `h1r_torch.H1R`, on torch).
+stream) is `H1R`'s `upload`, `empty` and `stream`, which raise here: `H1R` is defined here, and no runtime in the tree
+subclasses it.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import numpy as np
 Tensor = Any
 #: what `H1R`'s runtime methods raise until a subclass supplies them
 NEEDS_RUNTIME = ("H1R.{} needs a tensor runtime, which verity does not import (compute-accounting/dither-kernels-moved): "
-                 "use a subclass that supplies it, as the benchmarks' h1r_torch.H1R does")
+                 "use a subclass that supplies it")
 
 
 class _Call(C.Structure):

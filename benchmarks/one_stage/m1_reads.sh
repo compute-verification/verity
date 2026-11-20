@@ -6,8 +6,8 @@
 # Each "MODE SPEC" of RS_BUILD (MODE slots or inline) is built, for its size (ANDs, nonzeros, k_log). Each spec of RS_PROVE
 # (none by default) is built with its reads in slots, staged, proved under --zk and handed to the Lean verifier, and the
 # job exits 1 unless Lean accepts it. Lean refuses that form: under --zk a flat statement's unit returns its outputs, and
-# a unit whose reads are in lookup slots does not (`Flock.KsScope`, `ProvedScope.scopeOkH`); form_refusals.py's `tail`
-# case holds the refusal. So RS_PROVE is for a form the verifier takes. Records: $OUT/<tag>/m1.log.
+# a unit whose reads are in lookup slots does not (`Flock.KsScope`, `ProvedScope.scopeOkH`). So RS_PROVE is for a form the verifier takes.
+# Records: $OUT/<tag>/m1.log.
 # The router starts at E=32: M1's statement needs a row longer than one SHA-512 block (compose's pin range).
 # env: RS_PROVE, RS_BUILD (';'-separated)  RS_ARGS (more m1_unit.py arguments: --stage-ands N|auto|none, auto by default)  RS_MEM_GB=64 (the job's --mem-gb)  RS_CACHE
 set -uo pipefail

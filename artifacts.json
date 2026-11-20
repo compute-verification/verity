@@ -34,7 +34,7 @@
   "art:c301c7f124485ef41dda34186ac6846bccf7fcab99ad752bedac997b4d5bc0f4": "tests/adapters/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "tests/adapters/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "tests/adapters/vllm/tests/protocols/fixtures/challenger_periods",
-  "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs",
+  "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": "tests/verity/protocols/proofs/flock/prover/fixtures/forged-proofs",
   "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions",
   "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "tests/verity/commitments/fixtures/layouts",
   "art:5a029694eb35f29f9babee787dc9a2d875575e305788eaf59e0356524c9be2ff": "tests/benchmarks/network_e2e/encodings/fixtures",
@@ -43,7 +43,6 @@
   "art:844ad075fdd79a0e8723ed46a765d7422847d4edf1edb6ab70b3af3a5f2d0c7c": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/cache_step_vectors.json",
   "art:70f4d6ec7fc238d2dee69c6b90b832660934f67c2631d7884eaadc46b360fb75": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/replay_step_vectors.json",
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "tests/adapters/vllm/tests/regression/files.toml",
-  "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
   "art:08ab3b7ebebddff3d18d66ef890c8594b41c52388749aee610f3b117fad27de2": "adapters/vllm/data/logs/m6/log.jsonl.gz",
   "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "calibration/machine_model/data/cover/corpus.json",
   "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "calibration/machine_model/data/cover/bu_12_9.json",
@@ -167,12 +166,11 @@
   "art:76398a8149f3e74bd9959f043570e8187a48354f0c259fa85dd9cc23a4fbf11e": "tests/adapters/vllm/tests/records/data",
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "tests/adapters/vllm/tests/commit/serving_row_leaf_vector.json",
   "art:5a228652b1b2fae7c14df941448938b171f2e2add451b3270749bccc72a0da09": "tests/verity/protocols/proofs/flock/prover/fixtures/honest-session",
-  "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
+  "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": "tests/verity/protocols/proofs/flock/prover/fixtures/plain-tree",
   "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner",
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins",
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "tests/verity/protocols/proofs/flock/prover/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "tests/verity/protocols/proofs/flock/prover/fixtures/rec-links",
-  "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals",
   "art:d351a150a5b589d8ab65ab0ba90502150193d4bd84992e177db38c578bf8e1fd": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "calibration/training/data/v3-selection.json",
@@ -187,9 +185,10 @@
     "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
   },
   "art:7458391214a64fd498d7aa9db36460de928fe67a3de7ffe3e2ea1e465333284d": "tests/verity/circuits/count_vectors.jsonl",
-  "art:85b39907e7d0a079f4a17f2f2cad00865d09285b442269d11cbaa7184131bf48": "tests/verity/circuits/format_vectors.json",
-  "art:645e79087871accb66c8502db2a02cf17735c5115c74cde24a527a81269359d3": "tests/verity/circuits/qcall_vectors.json",
-  "art:f1830872b1c7ea92a2a7133812f2f25d821e67d7ac14bcf1b5953a7973104198": "tests/verity/circuits/qword_vectors.json",
+  "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain",
+  "art:1e19323c8f894a347c32f9b6a41c50f567b286210b66d6ef2cf9926566741518": "tests/verity/circuits/format_vectors.json",
+  "art:fc9d18e2a2e8474fd447b830cbe2a6b77c64118e0a463a5e05f1cf2c7f6a7295": "tests/verity/circuits/qcall_vectors.json",
+  "art:519d84c74b2560218cc9df4dab478a3e4def7d36ae09b95a815487e2abfe8105": "tests/verity/circuits/qword_vectors.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -214,10 +213,12 @@
       "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75",
       "art:3fb2a43cd8bdd9e9fb7b99b5442730cf24cf35fa384ac85a0b561da554640555"
     ],
-    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
+    "art:7fa434603c3b932b8c021cbc11fad9c5502e3f95f2ac19707ab1b44c780b952f": [
+      "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5",
       "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
     ],
-    "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": [
+    "art:bd47bdb13a0b1566dc57da0d3a84edc8bc9f7f40fe74fe2a2da399eec2ebd6c0": [
+      "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a",
       "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
     ],
     "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": [

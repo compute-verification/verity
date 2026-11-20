@@ -42,16 +42,19 @@ namespace MemoryAttester.Session.Properties
 
 open ResourceAccounting.Assumptions
 open MemoryAttester.Properties (Observed Recorded)
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-! ## The device's code in a session -/
 
 /-- What the device's code in a session reads besides its inputs. From its coins `ω`, which stand for all the device
 holds of its own, its key and the one-time key it signs at among them: the session's coin tree `coins ω`
-(`CoinTree.draw`: the session's id, its indices, the tree's hiding key and salts), its signer's public key
+(`CoinTree.draw`: the session's id, its indices, the tree's hiding key and salts), its record's salt `salt ω`, its
+signer's public key
 `publicKey ω`, and the one signature it makes, `sign ω session record` (`Signer.sign`). The session's parameters: the
 limit `Δ + RTT`, the answer's size, the root of the `C*` the session audits (`binding`) and the signer's scheme. -/
 structure Params (Ω : Type) where
   coins : Ω → CoinTree
+  salt : Ω → ByteArray
   limitNs : Nat
   blockBytes : Nat
   binding : ByteArray
@@ -62,7 +65,7 @@ structure Params (Ω : Type) where
 /-- The session's commitment, which the device builds before the session and releases once it is signed
 (`MemoryChallenger.Properties.Run.commitment`). -/
 def Params.commitment {Ω : Type} (p : Params Ω) (ω : Ω) : ChallengePhaseCommitment :=
-  (⟨p.coins ω, p.limitNs, p.blockBytes, p.binding, []⟩ : MemoryAttester.Properties.Run).commitment
+  (⟨p.coins ω, p.salt ω, p.limitNs, p.blockBytes, p.binding, []⟩ : MemoryAttester.Properties.Run).commitment
 
 /-- The device's channels in a session: its challenges, one frame an exchange to the prover over the session's
 connection, and its report, once the session is signed. -/
@@ -113,17 +116,18 @@ def roundSeen (coins : CoinTree) (limitNs blockBytes : Nat) (st : Recorded) (o :
     else if rounds.size == coins.k then some COMPLETE else none⟩
 
 /-- What the device sends once a round has ended the session whose record is `rec` (`close`, then `commitment` and
-`openings`): the frame that ends it, then its report, the session signed over `message` of its commitment, its end and
-its rounds. Nothing while the session is open, and nothing for a record `message` refuses. -/
+`openings`): the frame that ends it, then its report, the session signed over `message` of its commitment, its salt, its
+end and its rounds. Nothing while the session is open, and nothing for a record `message` refuses. -/
 def Params.closing {Ω : Type} (p : Params Ω) (ω : Ω) (rec : Recorded) : List (Ch × Msg) :=
   match rec.ended with
   | none => []
   | some ended =>
-    match message (p.commitment ω) ended rec.rounds with
+    match message (p.commitment ω) (p.salt ω) ended rec.rounds with
     | .ok m =>
       [(Ch.challenge, Msg.done),
         (Ch.report, Msg.report
-          ⟨p.commitment ω, ended, rec.rounds, p.scheme, p.publicKey ω, p.sign ω (p.commitment ω).session m⟩
+          ⟨p.commitment ω, p.salt ω, ended, rec.rounds, p.scheme, p.publicKey ω,
+            p.sign ω (p.commitment ω).session m⟩
           (p.commitment ω) (rec.rounds.map fun r => (p.coins ω).opening r.j))]
     | .error _ => []
 

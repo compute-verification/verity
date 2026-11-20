@@ -164,7 +164,7 @@ def _wipe_check_settings(values: Any) -> str | None:
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
     from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
-    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER})
+    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER, "development_of": period.development_of})
 
 
 WIPE = register(Scheme(

@@ -204,8 +204,10 @@ Example (the descriptor vector): `TRow_v1{N=4,OP={"fn":"TAdd32_v1"},C={"f64":"0x
 
 A node has exactly the keys of its form. Its argument sequences are body-scoped (§3): `p` names the body's parameters and `n`
 the body's nodes. Writers name only nodes before the reading node (`defs.Builder` cannot do otherwise), and the canonical layout
-relies on it (§6). A descriptor whose node names itself or a later node still decodes, so that checkers can name the defect;
-every partition query refuses it (`partition_object.order_violation`, §8). The body's `ret` may name any node.
+relies on it (§6). The decoder refuses a node's argument naming the node itself or a later one, after the argument's
+reference count, by the text `forward-reference: node K reads node I, which is not before it; a node reads the body's
+parameters and earlier nodes only` (`codec.forward_refusal`, the Lean decoder's `forwardRefusal`); every partition query
+refuses such a body too (`partition_object.order_violation`, §8). The body's `ret` may name any node.
 
 - **primitive**: the callee is a primitive; the arguments are its parameters, in order; `out` is its return type.
 - **call**: the callee is a composite; likewise, with `out` its `ret_type`.
@@ -220,8 +222,8 @@ Every leaf a node's argument or the body's `ret` names has the width its type gi
 width it was committed with. A sequence typed `Array<32, Value<8>>` whose references name an s32 word (a `Value<32>`) is a
 silent reinterpretation, a limb split no gate computes, and is refused (`E_REINTERPRET`, `defs.Builder.finish`). A runtime
 word becomes limbs only through a registered `LimbSplit` Definition that computes them and their carries (§12). The check
-reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node): a node that names itself
-or a later node is the order violation above, which decodes whatever the widths, so that its checkers name it.
+reads the leaves of the parameters and of the nodes before the reading node (for `ret`, every node), which are all a decoded
+node's arguments name (the order refusal above).
 
 An input node (§5.2) of N leaves of width W is the one exception: a position of width w, where w divides W, reads it
 *recut*, with q = W / w. Its references index the node's N·q leaves of width w, and leaf j of them is bits
@@ -479,6 +481,7 @@ list names whose body is not there yet.
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
 | `pous.session.header/v1` (the compact header) | commitment | supplied | `head` (its registered bytes) | 8 (head + head mod 2) |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
+| `pous.session.message/v1` | commitment | supplied | | 512 |
 | `pous.setup.salt/v1` | coin | supplied | | 192 |
 | `poub.read.pass_seed/v1` (the named exception to live coins: seeds inside a window) | coin, commitment | supplied | `window`, `pass` | 512 |
 | `poub.read.pass_root/v1` (released before the openings' coin) | commitment | supplied | `window`, `pass` | 512 |
@@ -489,17 +492,29 @@ list names whose body is not there yet.
 | `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-The storage session's three functions read what the memory attester released after the session, which the verifier holds
-by function name as a released commitment (`commitments`: JSON `{commitment, ended, rounds, key}`, the session commitment,
-how the session ended and its rounds, the registered LMS public key's hex) and, for the round coin, as a coin (`coins`: JSON
-`{openings}`). A commitment is registered before any coin, so the order rule counts `coins` alone. `pous.session.round_coin/v1`
-is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at an index below the
-commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is refused);
-`pous.session.header/v1` is the header of a session that ended complete with all `k` rounds, which the commitment's `ended`
-and `rounds` are compared with, so a late or short session has no statement; `pous.session.context/v1` is the 106 bytes the
-signature's message hashes before the record. Each number they read is a canonical natural (no sign, fraction, exponent or
-leading zero) within its field's width. Each refuses, by the name "no statement", what the held commitment or coin lacks or the
-arguments don't fit. Nothing reads these bodies through the door yet.
+The storage session's four functions read the session in two entries by when each of its parts exists. The verifier holds,
+by function name, what exists before the first coin as a commitment (`commitments`: JSON `{commitment, key, place}`: the
+header's fields, which hold the coin key by its hash, the LMS public key's hex and the place the verifier registered it at),
+and what the session releases after it as a coin (`coins`: JSON `{openings, coin_key}` for the round coin, `{ended, rounds}`
+for the header and `{message, signature}` for the message). A commitment is registered before any coin, so the order rule
+counts `coins` alone as coins and holds each commitment's place before the place of every coin read beside it.
+`pous.session.round_coin/v1` is `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin at
+an index below the commitment's blocks under the coin root of the commitment the verifier holds (a coin that carries one is
+refused), with the coin key that hashes to the commitment's; `pous.session.header/v1` is the header of a session that ended
+complete with all `k` rounds, which the coin's `ended` and `rounds` are compared with, so a late or short session has no
+statement; `pous.session.context/v1` is the 106 bytes the signature's message hashes before the record, of a key whose
+SHA-512 is one the verifier's `attester_keys` pin (the configuration's pins of the memory attester; no body takes the key
+the session's own object names); `pous.session.message/v1` is the 64-byte message m, under a pinned key and only when the
+coin's signature verifies over it there. The key, m and the signature are public; the signature's leaf shows how many
+signatures the attester has made. The record's salt is the memory attester's own draw, `RECORD_SALT_BYTES` (64) bytes
+from its coins source as the session opens (`challenger_party.Challenger._coins`,
+`wipe_challenger.MemoryAttesterParty.start`; `os.urandom` in `MemoryAttester.__init__` when none is given; in Lean the
+device's own coins, `Session.Params.salt`), outside the session's commitment and before its first index is revealed,
+and read once, when `close()` signs; it makes the signed digest m a hiding commitment to the guessable header and
+records, and nothing in soundness rests on its being random or fresh: a salt the prover could choose would still leave
+the signature binding the same records. The session id is 32 bytes. Each number they read is a canonical natural (no sign,
+fraction, exponent or leading zero) within its field's width. Each refuses, by the name "no statement", what the held
+commitment or coin lacks or the arguments don't fit. Nothing reads these bodies through the door yet.
 
 **A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
 and a short value, the verifier supplies the short value and the units compute the row inside. Either each unit reads the
@@ -651,8 +666,8 @@ changing any of them is a new version of the query.
 `WIRING` and `WIDE_FAN_IN` are pinned as data in `tests/verity/circuits/qword_vectors.json`, with vectors for every step of the algorithm, every
 refusal and a seeded random corpus.
 
-Vectors: `forward_reference` (a root node reading a later node decodes, gate 11 reading gate 39, and `evaluate` refuses it; a
-Call whose gate reads a later gate of the Call decodes, and `evaluate` and the `CallGraph` backstop refuse it); `qword_vectors.json`
+Vectors: `forward_reference` (the decoder's refusal of a root node reading a later node and of a Call's node reading a later
+node of the Call); `qword_vectors.json`
 → `order_refusals` for `verify`; `wiring`; `wide`: the descriptor of a Call with two identical wide gates, their operands as runs, and the Call's graph
 beside the same Call over a 4-leaf primitive (the narrow Call has the recompute pair `[2, 1]` and 5 inputs; the wide one has
 none and 1).
