@@ -74,6 +74,19 @@ C_DIGEST = "tile-c-digest-differs"
 AUDIT_SHORT = "tile-audit-short"
 AUDIT_STRAY = "tile-audit-stray"
 TEST_INSTANCE = "tile-test-instance"
+#: `laid_tiles`' refusal of a tile whose amount at `ANDS_PER_MAC` is more ANDs than its own blocks hold (`over_blocks`)
+TILE_OVER_BLOCKS = "tile-credit-over-its-blocks"
+
+#: The ANDs (`verity.circuits.count`'s, two-input AND gates of the Boolean bodies) a credited MAC must hold in its tile's
+#: own blocks, the rate of `over_blocks`' cap: public, fixed here in the scheme of record before any coin. It is read
+#: from the registered tile's own product unit, `inert_bound.Pc8CapWord` at `KERNEL`'s device, which computes one entry
+#: of the tile's product over K: its count is linear in K's promotion windows of w, less a fixed part, so its ANDs over K
+#: are least at the least K it binds, two windows, and this is its count at K = 2·w over 2·w, rounded down
+#: (`test_pearl_plus_laid_credit` recounts it from the registered Definition). A tile that computes its TR × TN credited
+#: entries in its product units therefore holds at least its amount at this rate at any K. It bounds what the registered
+#: circuit spends a MAC, not what any circuit computing a MAC must spend. ANDs, not `Definition.gates`, which counts a
+#: word primitive as one gate.
+ANDS_PER_MAC = 673
 
 
 def test_instance(statics: Mapping[str, Any]) -> str | None:
@@ -94,7 +107,9 @@ class LaidTile:
     """A credited tile of C as C's laying lays it: ``index`` its place among C's tiles in C's root order, ``gates`` its
     gates [lo, hi) in C, ``amount`` its credited MACs (`tile_macs` on its template's statics, public in C before any
     coin), ``blocks`` the laid C's proof blocks whose gates lie in its gates, ``kinds`` its m_s: its blocks in each
-    stratum, by the stratum's descriptor id, and ``test`` why it is a test instance's (`test_instance`), or None."""
+    stratum, by the stratum's descriptor id, ``test`` why it is a test instance's (`test_instance`), or None, and
+    ``ands`` its blocks' ANDs (`verity.circuits.count`), read from the laid C's own Boolean bodies, each block counted in
+    this tile alone: a laid root unit is held by the one tile whose gates hold its gates, and by no other."""
 
     index: int
     gates: tuple[int, int]
@@ -102,6 +117,7 @@ class LaidTile:
     blocks: tuple[int, ...]
     kinds: Mapping[str, int]
     test: str | None = None
+    ands: int = 0
 
 
 #: Every static of `TILE`, by what holds it. ``credit``: `tile_macs` reads it. ``scheme``: `KERNEL` fixes it at the tile's
@@ -242,12 +258,14 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     `codec.program_digest` registered before any coin (`C_DIGEST`): the tiles credited are those of the C the
     blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
     template-instance query): their blocks must be its root units, each of the one template its stratum names
-    (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile (`TILE_STRADDLES`)."""
+    (`BLOCK_NOT_UNIT`), and no unit may lie partly in a tile (`TILE_STRADDLES`). A tile whose amount at `ANDS_PER_MAC`
+    is more ANDs than its own blocks hold is refused (`TILE_OVER_BLOCKS`, `over_blocks`)."""
     import bisect
 
     from verity.circuits import laying as LY
     from verity.circuits import partition_object as PO
-    from verity.circuits.codec import program_digest
+    from verity.circuits.codec import descriptor_id, program_digest
+    from verity.circuits.count import count
 
     before = PO.TemplatePartition(program, LY.query(program))
     nodes = program.root.body.nodes
@@ -281,7 +299,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     spans = [before.gates(u) for u, _fn in tiles]
     starts, edges = [lo for lo, _hi in spans], {g for span in spans for g in span}
     held: list[list[int]] = [[] for _ in tiles]
-    root = laid.root.body
+    ands = [0] * len(tiles)
+    root, per = laid.root.body, count(laid)
     for k, _tid, a, n in after.ranges:
         g, at = root.nodes[k].fn.gates, root.offsets[k]
         for m in range(n):
@@ -289,6 +308,7 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
             i = bisect.bisect_right(starts, lo) - 1
             if i >= 0 and lo < spans[i][1] and hi <= spans[i][1] and (lo < hi or spans[i][0] < lo):
                 held[i].append(a + m)
+                ands[i] += per[descriptor_id(root.nodes[k].fn)].ands
             elif (i >= 0 and lo < spans[i][1]) or (i + 1 < len(spans) and spans[i + 1][0] < hi) or \
                     (lo == hi and lo in edges):
                 raise ValueError(f"{TILE_STRADDLES}: the laid C's root unit {a + m}, gates [{lo}, {hi}), lies partly "
@@ -298,9 +318,20 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         kinds: dict[str, int] = {}
         for b in blocks:
             kinds[of[b]] = kinds.get(of[b], 0) + 1
-        out.append(LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds),
-                            test_instance(fn.bindings)))
+        out.append(tile := LaidTile(i, span, tile_macs(fn.bindings), tuple(blocks), MappingProxyType(kinds),
+                                    test_instance(fn.bindings), ands[i]))
+        if why := over_blocks(tile):
+            raise ValueError(f"{TILE_OVER_BLOCKS}: {why}")
     return out
+
+
+def over_blocks(tile: LaidTile) -> str | None:
+    """Why ``tile``'s amount is more than its own blocks' ANDs hold at `ANDS_PER_MAC`, or None when it is not: the cap
+    is necessary, not credit, and bounds a tile by its own blocks only (`LaidTile.ands`)."""
+    if tile.amount * ANDS_PER_MAC <= tile.ands:
+        return None
+    return (f"tile {tile.index} is credited {tile.amount} MACs, at {ANDS_PER_MAC} ANDs a MAC more ANDs than its "
+            f"{len(tile.blocks)} blocks hold ({tile.ands})")
 
 
 def credited_tiles(tiles: Sequence[LaidTile], strata: Sequence[tuple[str, Sequence[Sequence[int]]]],

@@ -83,20 +83,65 @@ def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) ->
     of = {u: tid for tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
     assert [t.index for t in tiles] == [0, 1, 2]
     for t, tile in zip(tiles, ts):
-        assert sum(per[of[b]].ands for b in t.blocks) == whole[descriptor_id(tile.core)].ands
+        assert t.ands == sum(per[of[b]].ands for b in t.blocks) == whole[descriptor_id(tile.core)].ands
+        assert t.amount * PS.ANDS_PER_MAC <= t.ands
         assert sum(t.kinds.values()) == len(t.blocks) and len(t.kinds) > 6
         assert t.amount == PS.tile_macs(tile.core.bindings) == tile.real * 1 * K
 
 
 @pytest.mark.slow
 def test_a_unit_of_another_tile_or_of_none_is_not_counted(c) -> None:
-    """Slow: as above: the tiles' blocks are disjoint, each in its own gates, and the unit of no tile is in none."""
-    _ts, _program, _laid, strata, tiles, add = c
+    """Slow: as above: the tiles' blocks are disjoint, each in its own gates, and the unit of no tile is in none, so each
+    block's ANDs count toward one tile's cap at most."""
+    _ts, _program, laid, strata, tiles, add = c
     held = [set(t.blocks) for t in tiles]
     (reader,) = _units(strata, add)
     assert all(not a & b for i, a in enumerate(held) for b in held[i + 1:]) and reader not in set().union(*held)
     assert set().union(*held) | {reader} == {u for _tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
     assert all(s.gates[1] <= t.gates[0] and max(a) < min(b) for s, t, a, b in zip(tiles, tiles[1:], held, held[1:]))
+    per = count(laid)
+    assert sum(t.ands for t in tiles) + per[add].ands == per[descriptor_id(laid.root)].ands
+
+
+def test_a_tile_credited_one_mac_over_its_blocks_ands_is_refused_by_name() -> None:
+    """The cap is the tile's own blocks' ANDs at the registered rate: one MAC over is refused, at it is not."""
+    held = 10 * PS.ANDS_PER_MAC + PS.ANDS_PER_MAC - 1
+    at, over = (PS.LaidTile(0, (0, 1), m, (0,), {"A": 1}, None, held) for m in (10, 11))
+    assert PS.ANDS_PER_MAC > 0 and PS.over_blocks(at) is None
+    assert "tile 0 is credited 11 MACs" in PS.over_blocks(over)
+
+
+@pytest.mark.slow
+def test_laying_refuses_a_tile_over_its_blocks_ands_at_the_rate(c, monkeypatch) -> None:
+    """Slow: as above: at a rate one over what a tile's own blocks hold for its amount the laying refuses it by name, and
+    at the highest rate every tile's blocks hold it lays."""
+    ts, program, laid, strata, tiles, _add = c
+    top = min(t.ands // t.amount for t in tiles)
+    monkeypatch.setattr(PS, "ANDS_PER_MAC", top)
+    assert PS.laid_tiles(program, _fits(ts), strata, program_digest(laid)) == tiles
+    monkeypatch.setattr(PS, "ANDS_PER_MAC", top + 1)
+    with pytest.raises(ValueError, match=PS.TILE_OVER_BLOCKS):
+        PS.laid_tiles(program, _fits(ts), strata, program_digest(laid))
+
+
+@pytest.mark.slow
+def test_the_rate_is_the_registered_product_units_own_marginal_ands_a_mac() -> None:
+    """Slow: the rate is recounted from `Pc8CapWord`'s registered body at the scheme's device: its count is linear in its
+    promotion windows less a fixed part, so its ANDs over K are least at two windows, and those, rounded down, are the
+    rate."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import inert_bound as IB
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+
+    dev = PC.credited_product(PS.KERNEL, 2048, 64, 64, 128, 64).bindings["DEV"]
+    w = DEVICES[dev].window
+
+    def of(k: int) -> int:
+        program = Program(bind(IB.Pc8CapWordDef, K=k, DEV=dev))
+        return count(program)[descriptor_id(program.root)].ands
+
+    two, three, four = of(2 * w), of(3 * w), of(4 * w)
+    assert four - three == three - two and two < 2 * (three - two), "linear in windows, less a fixed part"
+    assert PS.ANDS_PER_MAC == two // (2 * w)
 
 
 @pytest.mark.slow
