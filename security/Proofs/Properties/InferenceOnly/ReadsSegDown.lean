@@ -295,6 +295,7 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
   unfold Desc.segDown at h
   cases hr : s.lanes
   · simp only [hr, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
     obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
@@ -399,6 +400,7 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
   unfold Desc.segDown at h
   cases hr : s.lanes
   · simp only [hr, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
     obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
@@ -527,6 +529,8 @@ theorem segDown_congr {f f' : Piece → Except String (Array Seg)} (s : Seg)
   unfold Desc.segDown
   cases hr : s.lanes
   · simp only [Bool.not_false, ↓reduceIte]
+    congr 1
+    funext u
     congr 1
     apply forIn_congr_arr
     intro q hq

@@ -4518,6 +4518,7 @@ theorem okIs_segDown (f : Piece → Except String (Array Seg)) (s : Seg) (hf : �
   unfold Desc.segDown at h
   cases hr : s.lanes
   · simp only [hr, Bool.not_false, ↓reduceIte] at h
+    obtain ⟨-, -, h⟩ := Walk.except_bind_ok h
     obtain ⟨o, ho, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h

@@ -581,11 +581,12 @@ def Piece.reshape (x : Piece) (rows len : Nat) : Option Piece :=
     some { x with len, rows, rowStride := (len : Int) * x.stride }
   else none
 
-/-- Segment `s` resolved by `f` (a piece resolved, `down`), copy by copy. A rowed segment's pieces are resolved once each,
-and stay a rowed segment when each, of a row a copy, resolves to one piece of its rows (`Piece.reshape`); else its
-periods are resolved one by one, up to `WALK`. -/
+/-- Segment `s` resolved by `f` (a piece resolved, `down`), copy by copy, up to `WALK` copies. A rowed segment's pieces
+are resolved once each, and stay a rowed segment when each, of a row a copy, resolves to one piece of its rows
+(`Piece.reshape`); else its periods are resolved one by one, up to `WALK`. -/
 def segDown (f : Piece → Except String (Array Seg)) (s : Seg) : Except String (Array Seg) := do
   if !s.lanes then
+    walkAtMost "copies of a segment resolved one by one" s.reps
     let mut out := #[]
     for q in (Array.range s.reps).flatMap s.copy do out := out ++ (← f q)
     return out
