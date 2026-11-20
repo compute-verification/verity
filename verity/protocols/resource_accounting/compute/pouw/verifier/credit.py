@@ -285,6 +285,11 @@ MODELS = Path(__file__).parent / "lean/check/models.json"
 PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text()).items()}
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
              "pins (models.json)")
+#: each pinned instance of `h1window.template` (its key, ``PouwH1WindowTile_v1{UNIT=…,K=k}``) with its closure digest
+#: (`codec.closure_digest`), written from the registry by ``test_h1_tile_pins.py``; the Lean embeds the same file. A
+#: template under a pinned key over another body, or under no pinned key, is no template (`_tile`)
+TILE_PINS_FILE = Path(__file__).parent / "lean/check/h1_tiles.json"
+TILE_PINS = json.loads(TILE_PINS_FILE.read_text())
 #: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
 #: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
 #: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`). Optional: a period-open that
@@ -815,7 +820,8 @@ def no_template(k: int) -> str:
             f"its id {TILE_FN}{{UNIT=…,K={k}}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows of K's n "
             f"chunk rows each (n = weights.chunks(K), each row 8·K/n + 32 bits: K/n codes and the row's scale, h1zy.ROW), "
             f"then {', '.join(SHARED)} (with J10-R's noise, then {', '.join(SHARED_J10R[len(SHARED):])}), at the same "
-            "R × C and in the same form at every K")
+            "R × C and in the same form at every K, and whose closure (its body and every Definition under it, "
+            "codec.closure_digest) is the registry's at an instance h1_tiles.json pins")
 
 
 def _chunks(k: int) -> int | str:
@@ -837,11 +843,22 @@ def tile_k(k: int) -> str:
             f"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}")
 
 
-def _tile(dj: Any, tid: str, k: int) -> tuple[int, int, bool] | None:
-    """The R × C of K = `k`'s template `dj` (its definition, under the id `tid`) and whether it is J10-R's (its
-    parameters end in `SHARED_J10R`), or None when it is not `h1window.template`'s: its A and B rows are n·R and n·C chunk
-    rows of 8·K/n + 32 bits each, n = `weights.chunks` (K)."""
-    if not (isinstance(dj, dict) and dj.get("form") == "composite" and dj.get("id") == TILE_FN):
+def _pinned(d: dict, tid: str) -> bool:
+    """Whether the closure digest of `tid` in the descriptor `d` is `tid`'s pin in `TILE_PINS`."""
+    if tid not in TILE_PINS:
+        return False
+    try:
+        return codec.closure_digest(d, tid) == TILE_PINS[tid]
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+
+
+def _tile(dj: Any, tid: str, k: int, d: dict) -> tuple[int, int, bool] | None:
+    """The R × C of K = `k`'s template `dj` (its definition in the descriptor `d`, under the id `tid`) and whether it is
+    J10-R's (its parameters end in `SHARED_J10R`), or None when it is not `h1window.template`'s: its A and B rows are n·R
+    and n·C chunk rows of 8·K/n + 32 bits each, n = `weights.chunks` (K), and its closure digest in `d` is `tid`'s pin
+    (`_pinned`), so the name over another body is no template."""
+    if not (isinstance(dj, dict) and dj.get("form") == "composite" and dj.get("id") == TILE_FN and _pinned(d, tid)):
         return None
     b, body = dj.get("bindings"), dj.get("body")
     if not (isinstance(b, dict) and sorted(b) == ["K", "UNIT"] and type(b["K"]) is int and b["K"] == k
@@ -929,7 +946,7 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     for k, t in tiles:
         if k % TILE_K_STEP or k >= TILE_K_LIMIT:
             return None, ("tile-k", tile_k(k))
-        got = _tile(defs.get(t["fn"]), t["fn"], k)
+        got = _tile(defs.get(t["fn"]), t["fn"], k, d)
         if got is None or rc not in (None, got):
             return no(no_template(k))
         rc = got

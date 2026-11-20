@@ -1,6 +1,7 @@
 module
 
 public import Std.Data.HashMap
+public import Circuits.DefinitionDigest
 public import Flock.FV3
 public import Flock.Bytes
 public import Flock.Hash
@@ -491,7 +492,8 @@ def noTemplate (k : Nat) : String :=
   s!"its id {TILE_FN}\{UNIT=…,K={k}}, whose parameters are a_k{k} and b_k{k}, the tile's R and C rows of K's n " ++
   "chunk rows each (n = weights.chunks(K), each row 8·K/n + 32 bits: K/n codes and the row's scale, h1zy.ROW), " ++
   "then " ++ ", ".intercalate SHARED ++ " (with J10-R's noise, then " ++ ", ".intercalate J10R ++
-  "), at the same R × C and in the same form at every K"
+  "), at the same R × C and in the same form at every K, and whose closure (its body and every Definition under it, " ++
+  "codec.closure_digest) is the registry's at an instance h1_tiles.json pins"
 
 /-- `credit.tile_k`: why `layoutOf` refuses the execution phase's tile at a K = `k` of at least one that its proof doesn't cover
 (`tile-k`), with its fix: the K to pad its linears' rows to, or past `TILE_K_LIMIT` the split. -/
@@ -528,13 +530,26 @@ def bitsOf : Nat → Flock.Program.Ty → Nat
 def defn? (P : Flock.Program.Prog) (id : String) : Option Flock.Program.Defn :=
   P.index[id]?.bind (P.defs[·]?)
 
-/-- `credit._tile`: the R × C of K = `k`'s template `d` (its decoded definition) and whether it is J10-R's (its
-parameters end in `SHARED` then `J10R`), or none when it is not `h1window.template`'s: a composite `TILE_FN` keyed
-`TILE_FN{UNIT=…,K=k}` (its binding record, which the decoder holds to its bindings), whose A and B rows are n·R and n·C
-chunk rows of 8·K/n + 32 bits each, n = `chunks?` K. -/
-def tileOf (d : Flock.Program.Defn) (k : Nat) : Option (Nat × Nat × Bool) := do
+/-- `credit.TILE_PINS`: each pinned instance of `h1window.template` (its key, `TILE_FN{UNIT=…,K=k}`) with its closure
+digest, from the same `h1_tiles.json` `credit.py` reads, which `test_h1_tile_pins.py` writes from the registry. -/
+def TILE_PINS : List (String × String) :=
+  match Json.parse (include_str "../h1_tiles.json") with
+  | .ok j => (fields j).filterMap fun (key, d) => (str? d).map (key, ·)
+  | .error _ => []
+
+/-- `credit._tile`: the R × C of K = `k`'s template `d` (its decoded definition in the descriptor `j`) and whether it is
+J10-R's (its parameters end in `SHARED` then `J10R`), or none when it is not `h1window.template`'s: a composite
+`TILE_FN` keyed `TILE_FN{UNIT=…,K=k}` (its binding record, which the decoder holds to its bindings), whose A and B rows
+are n·R and n·C chunk rows of 8·K/n + 32 bits each, n = `chunks?` K, and whose closure digest in `j`
+(`Flock.DefinitionDigest.closureDigest`: its body and every body under it) is its key's pin in `TILE_PINS`, so the
+name over another body is no template. -/
+def tileOf (j : Json) (d : Flock.Program.Defn) (k : Nat) : Option (Nat × Nat × Bool) := do
   let x ← chunks? k
   guard (!d.prim && d.id == TILE_FN)
+  let pin ← TILE_PINS.lookup d.key
+  guard (match Flock.DefinitionDigest.closureDigest j d.key with
+    | .ok h => h == pin
+    | .error _ => false)
   let [("UNIT", _), ("K", kb)] := (Flock.Program.recordPairs d.key).toList | none
   guard (kb == toString k)
   let names := d.params.toList.map (·.1)
@@ -574,8 +589,10 @@ function's record (`WINDOW_FN`'s `CALLS`, `LINEARS` and `M`), each K's template 
 whose A and B rows give R and C, at a K its tile's proof covers (else `tile-k`, `tileK`: a multiple of `TILE_K_STEP`
 below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs are each call's (M/R)·(n/C)
 instances of its K's template, in the calls' order: a call one instance and a batch its members, as the template query
-counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. -/
-def layoutOf (P : Flock.Program.Prog) : R Json := do
+counts units. Its cost is the descriptor's bytes, never the gates its nodes unroll to. `descriptor` is the bytes `P` was
+decoded from, whose JSON `tileOf` reads each template's closure from. -/
+def layoutOf (P : Flock.Program.Prog) (descriptor : ByteArray) : R Json := do
+  let some j := (String.fromUTF8? descriptor).bind loads? | layoutRefuse DESCRIPTOR_FORM
   let fn := P.programFn
   let pairs := if fn.startsWith (WINDOW_FN ++ "{") then Flock.Program.recordPairs fn else #[]
   unless pairs.toList.map (·.1) == RECORD do layoutRefuse NOT_WINDOW
@@ -596,7 +613,7 @@ def layoutOf (P : Flock.Program.Prog) : R Json := do
   let mut rc : Option (Nat × Nat × Bool) := none
   for (k, tid) in ts do
     if k % TILE_K_STEP != 0 || TILE_K_LIMIT ≤ k then throw ("tile-k", tileK k)
-    let some got := (defn? P tid).bind (tileOf · k) | layoutRefuse (noTemplate k)
+    let some got := (defn? P tid).bind (tileOf j · k) | layoutRefuse (noTemplate k)
     if rc.any (· != got) then layoutRefuse (noTemplate k)
     rc := some got
   let some (r, c, _) := rc | layoutRefuse NOT_WINDOW
@@ -2016,7 +2033,7 @@ def descriptorDrawn (executionPhase draw descriptor k : Json) : R (Array Nat) :=
   let some d := (match descriptor with
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
-  executionPhaseDrawn executionPhase draw k (← strata (← layoutOf (← programOf d)))
+  executionPhaseDrawn executionPhase draw k (← strata (← layoutOf (← programOf d) d))
 
 /-- `credit._window`: `executionPhase`'s credited calls (a call with m_s = 0 served rows is none), the layout it read from
 the descriptor and its calls' served rows (`Internal.servedRows`, at most the period's T table rows `rows`, whose
@@ -2034,7 +2051,7 @@ def executionPhaseLayout
       | .str s => if isHexBytes s then hex? (.str s) else none
       | _ => none) | layoutRefuse DESCRIPTOR_HEX
   let P ← programOf d
-  let layout ← layoutOf P
+  let layout ← layoutOf P d
   let some t := (nat? rows).filter (1 ≤ ·) | layoutRefuse ROWS_FORM
   let r := (match get layout "tile" with
     | .arr a => (nat? (a.getD 0 .null)).getD 0
