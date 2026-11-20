@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.Places
-public import Proofs.Properties.Flock.Circuit.LowerEval.PlacesAll
+public import Proofs.Properties.Flock.Circuit.LowerEval.Nested
 public import Proofs.Core.QSort
 
 /-! `UnitWordComputes` for templates of word-primitive calls and axis-0 batches. -/
@@ -228,39 +228,6 @@ theorem gateBodies_batch0 (hLC : LiftCalls) {bytes : ByteArray} {P S L : Prog} {
     have hgL := hnd' _ hmem
     rw [hfn'] at hgL
     exact gateDef_prefix hLP' hgL (body_lt hm hbS)
-
-/-- A Definition reached from `d` in a decoded C is placed in C, and reached from `d` in a Program that keeps C's
-Definitions. -/
-theorem reach_restrict {bytes : ByteArray} {P S : Prog} (h : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
-    (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {d y : ℕ} (hd : d < P.defs.size) (hy : Reach P d y) :
-    y < P.defs.size ∧ Reach S d y := by
-  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
-  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
-  induction hy with
-  | root => exact ⟨hd, .root⟩
-  | @callee y nd _ hp hn ih =>
-    obtain ⟨hyl, hS⟩ := ih
-    obtain ⟨n, hn', rfl⟩ := Array.mem_iff_getElem.1 hn
-    have hlt : ((P.defs[y]!).body.nodes[n]).fn < y := by
-      rw [← getElem!_pos _ n hn']; exact ((hok y hyl).2.1 n hn').1
-    exact ⟨by omega, .callee hS (by rw [hpre y hyl]; exact hp) (by rw [hpre y hyl]; exact Array.getElem_mem hn')⟩
-
-/-- A Definition reached from `d` in a Program that keeps a decoded C's Definitions is placed in C and reached from `d`
-in C: the walk over the keeping Program reaches no Definition C's walk does not. -/
-theorem reach_of_restrict {bytes : ByteArray} {P S : Prog} (h : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {d y : ℕ}
-    (hd : d < P.defs.size) (hy : Reach S d y) : y < P.defs.size ∧ Reach P d y := by
-  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
-  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
-  induction hy with
-  | root => exact ⟨hd, .root⟩
-  | @callee y nd _ hp hn ih =>
-    obtain ⟨hyl, hR⟩ := ih
-    rw [hpre y hyl] at hp hn
-    obtain ⟨n, hn', rfl⟩ := Array.mem_iff_getElem.1 hn
-    have hlt : ((P.defs[y]!).body.nodes[n]).fn < y := by
-      rw [← getElem!_pos _ n hn']; exact ((hok y hyl).2.1 n hn').1
-    exact ⟨by omega, .callee hR hp (Array.getElem_mem hn')⟩
 
 /-- **`LowerGateBodies`** holds: the lowering of the lift evaluates through gates alone (`lower_gates`); the lift places
 each composite reached from the template that reaches a word primitive lifted, its nodes calling where the lift places
