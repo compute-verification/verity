@@ -279,6 +279,9 @@ def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
 /-- Copy `m`'s pieces. -/
 def Seg.copy (s : Seg) (m : Nat) : Array Piece := if s.rowed then s.ps.map (·.row m) else shiftGates (m * s.shift) s.ps
 
+/-- The piece of a segment of one copy of one piece. -/
+def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 && !s.rowed then s.ps[0]? else none
+
 /-- Positions `[a, b)` of the pieces `ps` laid end to end. -/
 def slicePieces (ps : Array Piece) (a b : Nat) : Array Piece := Id.run do
   let mut out := #[]
@@ -519,7 +522,7 @@ def segDown (f : Piece → Except String (Array Seg)) (s : Seg) : Except String 
     return out
   let rs ← s.ps.mapM f
   let one (q : Piece) (r : Array Seg) : Option Piece := match r with
-    | #[x] => if x.reps == 1 && x.ps.size == 1 then x.ps[0]!.reshape q.rows q.len else none
+    | #[x] => x.single.bind (·.reshape q.rows q.len)
     | _ => none
   if let some ps := (s.ps.zip rs).mapM fun (q, r) => one q r then return #[{ s with ps }]
   walkAtMost "periods of a grid of several lanes resolved one by one" s.reps
@@ -928,9 +931,6 @@ def Piece.stack (p q : Piece) : Option Piece :=
         p.lv.isEmpty && q.lv.isEmpty then
       some { p with rows := p.rows + 1, rowStride := rs }
     else none
-
-/-- The piece of a segment of one copy of one piece. -/
-def Seg.single (s : Seg) : Option Piece := if s.reps == 1 && s.ps.size == 1 && !s.rowed then s.ps[0]? else none
 
 /-- `out` then `s`, `s` joined by `f` to `out`'s last segment where both are one copy of one piece and `f` joins them. -/
 def Seg.joinWith (f : Piece → Piece → Option Piece) (out : Array Seg) (s : Seg) : Array Seg :=

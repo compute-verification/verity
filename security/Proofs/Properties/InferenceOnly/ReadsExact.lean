@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.InferenceOnly.ReadsPieces
+public import Proofs.Properties.InferenceOnly.ReadsSegDown
 import all Init.Data.Array.QSort.Basic
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -6566,72 +6566,6 @@ they read (`specs_decoded`) and the return is the sequence of its parts (`RetPar
 summary `memoOf` makes of a reached Definition other than the root does, callees first (`reached_closed`,
 `memoOf_retOk`). -/
 
-/-- A loop appending what `F` gives each element: the outputs, element by element, after the start. -/
-theorem forIn_trace {β : Type} (F : β → Except String (Array Seg)) :
-    ∀ (l : List β) (acc out : Array Seg), forIn l acc (fun q (r : Array Seg) => do
-        let v ← F q
-        pure (ForInStep.yield (r ++ v))) = .ok out →
-      ∃ outs : List (Array Seg), List.Forall₂ (fun q v => F q = .ok v) l outs ∧ out = outs.foldl (· ++ ·) acc
-  | [], acc, out, h => by
-    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨[], .nil, h.symm⟩
-  | x :: l, acc, out, h => by
-    rw [List.forIn_cons] at h
-    obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
-    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
-    simp only [pure, Except.pure, Except.ok.injEq] at hy
-    subst hy
-    obtain ⟨outs, h1, h2⟩ := forIn_trace F l (acc ++ v) out h
-    exact ⟨v :: outs, .cons hv h1, h2⟩
-
-theorem forall2_append {α β : Type} {R : α → β → Prop} : ∀ {l1 : List α} {m1 : List β} {l2 : List α}
-    {m2 : List β}, List.Forall₂ R l1 m1 → List.Forall₂ R l2 m2 → List.Forall₂ R (l1 ++ l2) (m1 ++ m2)
-  | _, _, _, _, .nil, h2 => h2
-  | _, _, _, _, .cons h hrest, h2 => .cons h (forall2_append hrest h2)
-
-/-- Two such loops nested, over a sequence's segments and each one's pieces. -/
-theorem forIn_trace2 (F : Piece → Except String (Array Seg)) :
-    ∀ (l : List Seg) (acc out : Array Seg), forIn l acc (fun (s : Seg) (r : Array Seg) => do
-        let r' ← forIn s.ps r (fun q (r : Array Seg) => do
-          let v ← F q
-          pure (ForInStep.yield (r ++ v)))
-        pure (ForInStep.yield r')) = .ok out →
-      ∃ outs : List (Array Seg), List.Forall₂ (fun q v => F q = .ok v) (l.flatMap fun s => s.ps.toList) outs ∧
-        out = outs.foldl (· ++ ·) acc
-  | [], acc, out, h => by
-    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨[], .nil, h.symm⟩
-  | s :: l, acc, out, h => by
-    rw [List.forIn_cons] at h
-    obtain ⟨y, hy, h⟩ := Walk.except_bind_ok h
-    obtain ⟨r', hr', hy⟩ := Walk.except_bind_ok hy
-    simp only [pure, Except.pure, Except.ok.injEq] at hy
-    subst hy
-    rw [← Array.forIn_toList] at hr'
-    obtain ⟨o1, h1, e1⟩ := forIn_trace F _ acc r' hr'
-    obtain ⟨o2, h2, e2⟩ := forIn_trace2 F l r' out h
-    refine ⟨o1 ++ o2, ?_, ?_⟩
-    · rw [List.flatMap_cons]; exact forall2_append h1 h2
-    · rw [e2, e1, List.foldl_append]
-
-theorem segsPos_foldl : ∀ (outs : List (Array Seg)) (acc : Array Seg),
-    segsPos (outs.foldl (· ++ ·) acc) = segsPos acc ++ outs.flatMap segsPos
-  | [], acc => by simp
-  | v :: outs, acc => by
-    rw [List.foldl_cons, segsPos_foldl outs, segsPos_append, List.flatMap_cons, List.append_assoc]
-
-theorem mem_foldl : ∀ (outs : List (Array Seg)) (acc : Array Seg) (g : Seg),
-    g ∈ (outs.foldl (· ++ ·) acc).toList → g ∈ acc.toList ∨ ∃ v ∈ outs, g ∈ v.toList
-  | [], acc, g, h => .inl h
-  | v :: outs, acc, g, h => by
-    rw [List.foldl_cons] at h
-    rcases mem_foldl outs _ g h with h | ⟨w, hw, hg⟩
-    · rw [Array.toList_append, List.mem_append] at h
-      rcases h with h | h
-      · exact .inl h
-      · exact .inr ⟨v, List.mem_cons_self, h⟩
-    · exact .inr ⟨w, List.mem_cons_of_mem _ hw, hg⟩
-
 theorem agree_trace {P : Prog} {sc : Flock.Program.Scope} {F : Piece → Except String (Array Seg)}
     {T : Piece → List (Except String Nat)} : ∀ {qs : List Piece} {outs : List (Array Seg)},
     List.Forall₂ (fun q v => F q = .ok v) qs outs → (∀ q ∈ qs, ∀ v, F q = .ok v → Agree P sc (segsPos v) (T q)) →
@@ -6641,15 +6575,6 @@ theorem agree_trace {P : Prog} {sc : Flock.Program.Scope} {F : Piece → Except 
     rw [List.flatMap_cons, List.flatMap_cons]
     exact agree_append (hF q List.mem_cons_self v hv)
       (agree_trace hrest fun q' hq' => hF q' (List.mem_cons_of_mem _ hq'))
-
-theorem forall2_mem {α β : Type} {R : α → β → Prop} : ∀ {l : List α} {m : List β}, List.Forall₂ R l m →
-    ∀ b ∈ m, ∃ a ∈ l, R a b
-  | _, _, .nil, _, hb => absurd hb (by simp)
-  | _, _, .cons (a := a) (b := b') h hrest, b, hb => by
-    rcases List.mem_cons.1 hb with rfl | hb
-    · exact ⟨a, List.mem_cons_self, h⟩
-    · obtain ⟨a', ha', h'⟩ := forall2_mem hrest b hb
-      exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
 /-- A segment of Definition `d`'s body as `down` gives it: naming its `len` positions, each at or past 0 and naming a
 gate or a leaf of one of `d`'s parameters in range, its pieces each of positive count, of one copy at least. -/
