@@ -73,6 +73,7 @@ workers = 14
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
 # spot/prover/__init__.py, produced.py and served.py: pouw's h1 rows and network's charge rows import produced, and the
 # catalog's records digest served.py as an import site.
+# pous/prover/setup_proof.py: PoUS's setup sidecar binds its unit through it.
 # spot/prover/docket.py: verity_vllm's boundary rows, which a process the cache and superseded-versions tests start imports,
 # build the docket's record with it.
 inputs_only = true
@@ -110,6 +111,7 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "verity/protocols/resource_accounting/memory/pous/prover/decode_circuit.py", "verity/protocols/resource_accounting/memory/pous/prover/decode_circuit.circuit-check.py",
           "verity/protocols/resource_accounting/memory/pous/prover/setup_circuit.py", "verity/protocols/resource_accounting/memory/pous/prover/setup_circuit.circuit-check.py",
           "verity/protocols/resource_accounting/memory/pous/prover/setup_circuit.circuit-check.json",
+          "verity/protocols/resource_accounting/memory/pous/prover/setup_proof.py",
           "verity/protocols/resource_accounting/memory/pous/prover/verdict_circuit.py", "verity/protocols/resource_accounting/memory/pous/prover/verdict_circuit.circuit-check.py",
           "verity/protocols/resource_accounting/memory/pous/prover/session_circuit.py", "verity/protocols/resource_accounting/memory/pous/prover/session_circuit.circuit-check.py",
           "verity/protocols/resource_accounting/memory/pous/prover/session_circuit.circuit-check.json",
