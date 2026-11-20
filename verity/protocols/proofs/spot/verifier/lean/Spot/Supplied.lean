@@ -28,6 +28,13 @@ holds before the sample, so the prover never chooses it.
   `pack`; hm96-sha512 under the default key, the frame-v3-sha512 tree under the value's domain, its leaves framed by the
   format) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over `verity/one-stage/supplied-salt/v1`,
   the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them.
+
+**Scope.** Nothing reads the storage session's three bodies (`pous.session.round_coin/v1`, `.header/v1`, `.context/v1`)
+through the door yet: they are definitions with their refusals, held to the Python's by `spot-difftest`. The verifier holds
+a function's value as a coin (`coins`: what a coin is released as) or as a released commitment (`commitments`: registered
+before any coin, so the order rule, `order`, counts `coins` alone). A round's coin is held to the coin root of the
+commitment the verifier holds, never to one the coin carries, and a session that did not end complete with all its rounds has
+no statement.
 -/
 
 @[expose] public section
@@ -324,7 +331,7 @@ private def hexOpt : Json → Option ByteArray
   | _ => none
 
 private def numberOk (t : Array UInt8) : Bool :=
-  t == #[48] || (t.size > 0 && 49 ≤ t[0]! && t[0]! ≤ 57 && t.all fun c => 48 ≤ c && c ≤ 57)
+  t == #[48] || (t.size > 0 && 49 ≤ t[0]!.toNat && t[0]!.toNat ≤ 57 && t.all fun c => 48 ≤ c.toNat && c.toNat ≤ 57)
 
 /-- `registered.canonical_numbers`: every number in the JSON text `b` (read as JSON already) is `0` or digits with no
 leading zero: no sign, fraction or exponent, which Lean's reader takes as an integer where Python's reads a float or reads
@@ -339,7 +346,7 @@ private def canonicalNumbers (b : ByteArray) : Bool := Id.run do
       else if c == 92 then esc := true
       else if c == 34 then inStr := false
     else
-      let start := (48 ≤ c && c ≤ 57) || c == 43 || c == 45 || c == 46
+      let start := (48 ≤ c.toNat && c.toNat ≤ 57) || c == 43 || c == 45 || c == 46
       if tok.size > 0 && (start || c == 101 || c == 69) then tok := tok.push c
       else
         if tok.size > 0 then

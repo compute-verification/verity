@@ -167,7 +167,7 @@ private theorem field_size (b : ByteArray) : (field b).size = 8 + b.size := by
   rw [field, size_append, be64_size]
 
 private theorem beN_size {n x : Nat} {what : String} {b : ByteArray} (h : beN n x what = .ok b) : b.size = n := by
-  unfold beN at h
+  unfold beN Flock.SessionCoins.beN at h
   split at h
   · cases h
     simp [ByteArray.size]
