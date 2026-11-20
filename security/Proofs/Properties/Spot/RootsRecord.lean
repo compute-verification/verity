@@ -379,4 +379,235 @@ theorem carries_of_runTree {rec x : Json} (h : RunTree (OneStageZk.rootsByPort r
   obtain ⟨hm, hp⟩ := rootsByPort_get hg
   exact ⟨t, ht, r, hm, hp, hr, hd, hl⟩
 
+/-! ## Step 4: the window's trees of its templates' fields (`fieldTreesOf`, `fieldRootIn`, `ownFieldsOf`, `fieldRoots`) -/
+
+/-- **Each tree `fieldTreesOf` files under template `t` and field `f` is the record's root at `<t>/<f>`**, under that
+tree. -/
+def FieldTrees (rec : Json) (ft : Std.HashMap String (Array (String × Json))) : Prop :=
+  ∀ t, ∀ fe ∈ ft.getD t #[], getD fe.2 "tree" = .str (t ++ "/" ++ fe.1) ∧ Carries rec (t ++ "/" ++ fe.1) fe.2
+
+theorem mem_splits_of_templateOf {port t f : String} (h : OneStageZk.templateOf port = some (t, f)) :
+    (t, f) ∈ OneStageZk.splitsOf port := by
+  unfold OneStageZk.templateOf at h
+  exact List.mem_of_getLast? h
+
+theorem fieldTreesOf_trees (ts : Std.HashSet String) (rec : Json) : FieldTrees rec (OneStageZk.fieldTreesOf ts rec) := by
+  unfold OneStageZk.fieldTreesOf
+  split
+  · rename_i rs hrs
+    have hr : rootsOf rec = rs := by unfold rootsOf; rw [hrs]
+    rw [← Array.foldl_toList]
+    refine foldl_inv (FieldTrees rec) _ (· ∈ rs) ?_ rs.toList {} (fun a ha => Array.mem_toList_iff.1 ha) ?_
+    · intro acc r hr' hacc t fe hfe
+      try dsimp only at hfe
+      split at hfe
+      · rename_i port hp
+        split at hfe
+        · rename_i t0 f0 htf
+          split at hfe
+          · rw [Std.HashMap.getD_insert] at hfe
+            split at hfe
+            · rename_i ht
+              have ht' : t0 = t := beq_iff_eq.1 ht
+              subst ht'
+              rcases Array.mem_push.1 hfe with hfe | rfl
+              · exact hacc t0 fe hfe
+              · have hport := port_of_splits (mem_splits_of_templateOf htf)
+                obtain ⟨h1, h2, h3, h4⟩ := getD_e5 (getD r "domain") (getD r "leaves") (getD r "root") f0 port
+                refine ⟨by rw [h1, hport], r, hr ▸ hr', ?_, h2, h3, h4⟩
+                rw [hp, hport]
+            · exact hacc t fe hfe
+          · exact hacc t fe hfe
+        · exact hacc t fe hfe
+      · exact hacc t fe hfe
+    · intro t fe hfe
+      rw [Std.HashMap.getD_empty] at hfe
+      simp at hfe
+  · intro t fe hfe
+    rw [Std.HashMap.getD_empty] at hfe
+    simp at hfe
+
+/-- **`fieldRootIn`'s root is the record's root at `<template>/<field>`**, under the reader's port name. -/
+theorem fieldRootIn_carries {rec : Json} {ft : Std.HashMap String (Array (String × Json))} (hft : FieldTrees rec ft)
+    {template field port : String} {r : Json} (h : OneStageZk.fieldRootIn ft template field port = some r) :
+    getD r "port" = .str port ∧ Carries rec (template ++ "/" ++ field) r := by
+  unfold OneStageZk.fieldRootIn at h
+  obtain ⟨⟨f, e⟩, hfe, rfl⟩ := Option.map_eq_some_iff.1 h
+  have hb := Array.find?_some hfe
+  have hf : f = field := beq_iff_eq.1 hb
+  subst hf
+  try dsimp only
+  obtain ⟨-, r0, hm, hp, hr, hd, hl⟩ := hft template (f, e) (Array.mem_of_find?_eq_some hfe)
+  obtain ⟨h1, h2, h3, h4⟩ := getD_e4 (getD e "domain") (getD e "leaves") (getD e "root") port
+  exact ⟨h1, r0, hm, hp, h2.trans hr, h3.trans hd, h4.trans hl⟩
+
+/-- **Each root `ownFieldsOf` returns is one of `roots`, or a tree `ft` files.** -/
+theorem ownFieldsOf_mem {ft : Std.HashMap String (Array (String × Json))} {name : String} {roots : Array Json} :
+    ∀ x ∈ OneStageZk.ownFieldsOf ft name roots, x ∈ roots ∨ ∃ t, ∃ fe ∈ ft.getD t #[], x = fe.2 := by
+  unfold OneStageZk.ownFieldsOf
+  split
+  · exact fun x hx => Or.inl hx
+  · rename_i t _ _
+    rw [← Array.foldl_toList]
+    refine foldl_inv (fun got => ∀ x ∈ got, x ∈ roots ∨ ∃ t, ∃ fe ∈ ft.getD t #[], x = fe.2) _
+      (· ∈ ft.getD t #[]) ?_ _ roots (fun a ha => Array.mem_toList_iff.1 ha) (fun x hx => Or.inl hx)
+    intro got a ha hgot
+    obtain ⟨f, e⟩ := a
+    try dsimp only
+    split
+    · exact hgot
+    · intro x hx
+      rcases Array.mem_push.1 hx with hx | rfl
+      · exact hgot x hx
+      · exact Or.inr ⟨t, (f, x), ha, rfl⟩
+
+/-- **The three ways a root `x` a member named `n` reads is the record's** (`MembersRootsRecord`), each with the record's
+root it carries. -/
+def Good (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (rec : Json) (n : String) (x : Json) : Prop :=
+  (∃ b, getD x "port" = .str b ∧ Carries rec (n ++ "/" ++ b) x) ∨ (∃ q, getD x "tree" = .str q ∧ Carries rec q x) ∨
+  ∃ P rs W, Program.parse p.own.program = .ok P ∧ Partition.evaluate P (getD p.own.partition "query") = .ok rs ∧
+    OneStageZk.derivedWiring P.prog rs = .ok W ∧ ∃ w ∈ W.wires, (∃ m' ∈ ms, m'.name = n ∧ WireInto rs m' w) ∧
+      getD x "port" = .str w.port ∧ Carries rec (w.writer ++ "/" ++ w.out) x
+
+/-- Every root a map holds for every name is `Good`. -/
+def AllGood (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (rec : Json)
+    (acc : Std.HashMap String (Array Json)) : Prop :=
+  ∀ n, ∀ x ∈ acc.getD n #[], Good p ms rec n x
+
+theorem ownFields_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json}
+    {ft : Std.HashMap String (Array (String × Json))} (hft : FieldTrees rec ft) {roots : Std.HashMap String (Array Json)}
+    (h : AllGood p ms rec roots) :
+    AllGood p ms rec (ms.foldl (fun acc m => acc.insert m.name (OneStageZk.ownFieldsOf ft m.name (acc.getD m.name #[])))
+      roots) := by
+  rw [← Array.foldl_toList]
+  refine foldl_inv (AllGood p ms rec) _ (fun _ => True) ?_ _ roots (fun _ _ => trivial) h
+  intro acc m _ hacc n x hx
+  rw [Std.HashMap.getD_insert] at hx
+  split at hx
+  · rename_i hn
+    have hn' : m.name = n := beq_iff_eq.1 hn
+    subst hn'
+    rcases ownFieldsOf_mem x hx with hx | ⟨t, fe, hfe, rfl⟩
+    · exact hacc _ x hx
+    · obtain ⟨h1, h2⟩ := hft t fe hfe
+      exact Or.inr (Or.inl ⟨_, h1, h2⟩)
+  · exact hacc n x hx
+
+theorem runInputRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json}
+    {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {roots out : Std.HashMap String (Array Json)}
+    (hg : AllGood p ms rec roots) (h : OneStageZk.runInputRoots P rs ms rec roots = .ok out) : AllGood p ms rec out := by
+  intro n x hx
+  rcases runInputRoots_mem h n x hx with hx | hx
+  · exact hg n x hx
+  · obtain ⟨q, hq, hc⟩ := carries_of_runTree hx
+    exact Or.inr (Or.inl ⟨q, hq, hc⟩)
+
+theorem of_or_not {a b : Bool} (h : ¬ (a || !b) = true) : b = true := by
+  cases a <;> cases b <;> simp_all
+
+/-- **Step 4: `fieldRoots`' roots**: each root it gives a member is one `roots` gave it, or the record's root at the
+writer's output field `<w.writer>/<w.out>` of a wire `w` of `W` into a member of that name, at `w`'s port. -/
+theorem fieldRoots_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json} {P : Spot.Program}
+    {rs : Array Flock.TemplateQuery.TRange} {W : Spot.Wires.Wiring}
+    (hP : Program.parse p.own.program = .ok P) (hrs : Partition.evaluate P (getD p.own.partition "query") = .ok rs)
+    (hW : OneStageZk.derivedWiring P.prog rs = .ok W) {ft : Std.HashMap String (Array (String × Json))}
+    (hft : FieldTrees rec ft) {roots out : Std.HashMap String (Array Json)} (hg : AllGood p ms rec roots)
+    (h : OneStageZk.fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms ft roots = .ok out) :
+    AllGood p ms rec out := by
+  unfold OneStageZk.fieldRoots at h
+  try dsimp only at h
+  rw [← Array.foldlM_toList] at h
+  refine foldlM_inv (AllGood p ms rec) _ (· ∈ ms) ?_ _ roots out (fun a ha => Array.mem_toList_iff.1 ha) hg h
+  intro acc m acc' hm hf hacc
+  try dsimp only at hf
+  split at hf
+  · exact absurd hf (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+  cases hf
+  intro n x hx
+  rw [Std.HashMap.getD_insert] at hx
+  split at hx
+  · rename_i hn
+    have hn' : m.name = n := beq_iff_eq.1 hn
+    subst hn'
+    revert x
+    refine foldl_inv (fun got => ∀ x ∈ got, Good p ms rec m.name x) _ (· ∈ W.wires) ?_ W.wires _ (fun _ h => h)
+      (hg m.name)
+    intro got w hw hgot
+    try dsimp only
+    split
+    · exact hgot
+    · rename_i hc
+      have hin := of_or_not hc
+      split
+      · rename_i r hr
+        intro x hx
+        rcases Array.mem_push.1 hx with hx | rfl
+        · exact hgot x hx
+        · obtain ⟨hp, hcar⟩ := fieldRootIn_carries hft hr
+          obtain ⟨j, hj, hF⟩ := List.any_eq_true.1 hin
+          have hj' : j < rs.size := by simpa using hj
+          rw [getElem!_pos (rs.map fun r => (r.template, r.first, r.count)) j (by simpa using hj')] at hF
+          simp only [Array.getElem_map, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hF
+          refine Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hw, ⟨m, hm, rfl, rs[j], Array.getElem_mem hj', ?_⟩, hp,
+            hcar⟩)
+          exact ⟨hF.1.1.1.1, hF.1.1.1.2, hF.1.1.2⟩
+      · exact hgot
+  · exact hacc n x hx
+
+/-! ## Step 6: the composition (`membersRootsWired`, `membersRootsOf`) and the main theorem -/
+
+theorem membersRootsWired_good {p : OneStageZk.Params} {ms : Array OneStageZk.Member} {rec : Json}
+    {roots : Std.HashMap String (Array Json)} (h : OneStageZk.membersRootsWired p ms rec = .ok roots) :
+    AllGood p ms rec roots := by
+  unfold OneStageZk.membersRootsWired at h
+  try dsimp only at h
+  obtain ⟨r0, h0, h⟩ := ebind_ok h
+  obtain ⟨P, hP, h⟩ := ebind_ok h
+  obtain ⟨rs, hrs, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
+  obtain ⟨r2, h2, h⟩ := ebind_ok h
+  have hft := fieldTreesOf_trees (OneStageZk.templatesOf (ms.toList.map (·.name))) rec
+  have g0 : AllGood p ms rec r0 := fun n x hx => Or.inl (rootsOf_own h0 n x hx)
+  have g2 := runInputRoots_good (ownFields_good hft g0) h2
+  split at h
+  · cases h; exact g2
+  · obtain ⟨W, hW, h⟩ := ebind_ok h
+    exact fieldRoots_good hP hrs hW hft g2 h
+
+theorem slice_roots (m : OneStageZk.Member) (rec : Json) (roots : Std.HashMap String (Array Json)) :
+    getD (m.slice rec roots) "roots" = .arr (roots.getD m.name #[]) := by
+  unfold OneStageZk.Member.slice
+  with_unfolding_all rfl
+
 end Properties.Spot.RootsRecordProof
+
+namespace Properties.Spot.SecurityProofs
+
+open Properties.Spot.RootsRecordProof
+
+/-- **`MembersRootsRecord`**: where the per-member form's check accepts, every root of every member's slice is the
+committed record's one root of its port: the member's own port, the tree it names, or the exact writer's output field
+a wire into a member of its name names. -/
+theorem membersRootsRecord : MembersRootsRecord := by
+  intro p ms c ξ e sts bs pub prof h
+  have h3 := r3_of_checkMembersAt h
+  obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
+  unfold OneStageZk.membersRun at hr
+  obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
+  obtain ⟨roots, hroots, -⟩ := ebind_ok hr
+  refine ⟨roots, hroots, ?_⟩
+  unfold OneStageZk.membersRootsOf at hroots
+  obtain ⟨roots', hw, h2⟩ := ebind_ok hroots
+  obtain ⟨⟨⟩, -, h2⟩ := ebind_ok h2
+  cases h2
+  have hg := membersRootsWired_good hw
+  intro m _ x hx
+  rw [slice_roots] at hx
+  try dsimp only at hx
+  rcases hg m.name x hx with ⟨b, hb, hc⟩ | ⟨q, hq, hc⟩ | ⟨P, rs, W, hP, hrs, hW, w, hwm, hm', hp, hc⟩
+  · exact ⟨_, isRecordRoot_of_carries h3 hc, Or.inl ⟨b, hb, rfl⟩⟩
+  · exact ⟨q, isRecordRoot_of_carries h3 hc, Or.inr (Or.inl hq)⟩
+  · exact ⟨_, isRecordRoot_of_carries h3 hc, Or.inr (Or.inr ⟨P, rs, W, hP, hrs, hW, w, hwm, hm', hp, rfl⟩)⟩
+
+end Properties.Spot.SecurityProofs

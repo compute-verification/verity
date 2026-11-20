@@ -82,7 +82,9 @@ def WireInto (rs : Array Flock.TemplateQuery.TRange) (m : OneStageZk.Member) (w 
 every root of every member's slice (`OneStageZk.Member.slice`, at the roots `OneStageZk.membersRootsOf` returned) is
 the committed record's root for a port `q` (`IsRecordRoot`): the member's own port `<member>/<port>`, the tree the
 slice root names, or, for a wired port, `<writer>/<field>`, the window's tree of the exact output field that a wire
-of C's wiring under the verifier's partition (`OneStageZk.derivedWiring`) into the member at that port names. -/
+of C's wiring under the verifier's partition (`OneStageZk.derivedWiring`) into the member at that port names. The
+verifier keeps a member's roots by its name, so the wire is into a member of that name (the member itself where the
+members' names are distinct, as `OneStageZk.membersOf` reads them). -/
 def MembersRootsRecord : Prop :=
   ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
@@ -95,6 +97,7 @@ def MembersRootsRecord : Prop :=
               ∃ P rs W, Program.parse p.own.program = .ok P ∧
                 Partition.evaluate P (getD p.own.partition "query") = .ok rs ∧
                 OneStageZk.derivedWiring P.prog rs = .ok W ∧
-                ∃ w ∈ W.wires, WireInto rs m w ∧ getD r "port" = .str w.port ∧ q = w.writer ++ "/" ++ w.out)
+                ∃ w ∈ W.wires, (∃ m' ∈ ms, m'.name = m.name ∧ WireInto rs m' w) ∧ getD r "port" = .str w.port ∧
+                  q = w.writer ++ "/" ++ w.out)
 
 end Properties.Spot
