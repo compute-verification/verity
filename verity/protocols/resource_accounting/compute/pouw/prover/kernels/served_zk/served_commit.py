@@ -752,6 +752,17 @@ def rust_verdict(path_: Path | None) -> dict | None:
 #: the outcome's refusal when the challenger has no verdict of record of its own: it runs no Lean verifier, or its run
 #: of it panicked or ended with a status `verify` does not document
 LEAN_RUN = "lean-run"
+#: the outcome's refusal when the Lean verifier's verdict names a public file other than the challenger's copy
+PUBLIC_HEADER = "public-header"
+
+
+def _header_sha512(pub: bytes) -> str | None:
+    """The SHA-512 of a public file's header as the Lean verifier names it (``public_header_sha512``: the canonical JSON
+    of its first line); None when that line is no JSON."""
+    try:
+        return hashlib.sha512(canonical_json(json.loads(pub.split(b"\n", 1)[0]))).hexdigest()
+    except ValueError:
+        return None
 
 
 def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
@@ -760,8 +771,11 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
     ``pub`` (the challenger's copy of the bytes its statement digests) and the delivered session (the directory of the
     row's ``session`` record), in the verifier's environment through `lean_child` (`lean_verdict` of what it printed, and
     ``output_sha512`` the SHA-512 of its ``VERDICT`` lines as it printed them, the part of its output a replay
-    reproduces byte for byte). Refused by name (`LEAN_RUN`) where the run wrote a panic line or ended with a status
-    `verify` does not document: its answer is not read."""
+    reproduces byte for byte). ``public_headers`` is each ``VERDICT`` line's ``public_header_sha512``: one that names a
+    header other than the copy's, or an accepting line that names none, is refused by name (`PUBLIC_HEADER`), so the
+    verdict is about the file the opening check reads. The session's digest rests on a host the prover does not
+    control: the challenger's, which reads the delivered record itself (`deliver`). Refused by name (`LEAN_RUN`) where
+    the run wrote a panic line or ended with a status `verify` does not document: its answer is not read."""
     cmd = [verify, "verify", "--zk", "--circuit", str(row["circuit"]),
            *(a for k in ("partition", "program") if row.get(k) for a in (f"--{k}", str(row[k]))),
            "--statement", "verity/flock-circuit", "--public", str(pub), "--session", f"{Path(row['session']).parent}/"]
@@ -770,7 +784,16 @@ def run_lean(verify: str, row: Mapping[str, Any], pub: Path) -> dict:
     except LC.LeanPanic as e:
         raise _refused(LEAN_RUN, {"unit": row["unit"], "why": str(e)}) from None
     printed = "".join(f"{x}\n" for x in p.stdout.splitlines() if x.startswith("VERDICT "))
-    return {**lean_verdict(p.stdout), "output_sha512": hashlib.sha512(printed.encode()).hexdigest()}
+    got = lean_verdict(p.stdout)
+    try:
+        lines = [json.loads(x[8:]) for x in printed.splitlines()]
+    except ValueError:
+        lines = []
+    want = _header_sha512(pub.read_bytes())
+    named = [x.get("public_header_sha512") if isinstance(x, dict) else None for x in lines]
+    if any(h != want and (h is not None or (isinstance(x, dict) and x.get("accepted"))) for x, h in zip(lines, named)):
+        raise _refused(PUBLIC_HEADER, {"unit": row["unit"], "copy": want, "named": named})
+    return {**got, "output_sha512": hashlib.sha512(printed.encode()).hexdigest(), "public_headers": named}
 
 
 def statement(stage: dict, pub: bytes) -> dict:
@@ -1256,8 +1279,7 @@ class Challenger:
         if [u["unit"] for u in units] != D.proved(d.draw):
             raise _refused("units", {"given": [u["unit"] for u in units][:16], "drawn": D.proved(d.draw)[:16]})
         verdicts = {k: v for n in sorted({n for u in units for n in u["verdicts"]}) for k, v in _all(units, n).items()}
-        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]},
-                       session_roots=session_roots(units))
+        o = st.outcome(d, verdicts, {"units": [{"unit": u["unit"], **u["statement"]} for u in units]})
         public = {**reg.record["window"]["public"], "verdict": o.accepted, "drawn": d.units}
         body = st.records[-1]
         ans = OR.service_answer(o.accepted, list(o.verdict.codes), o.profile.to_json() if o.profile else None, reg.digest,
@@ -1277,46 +1299,17 @@ def _sessions(units: list[dict]) -> list[str]:
     return [hashlib.sha512(Path(u["session"]).read_bytes()).hexdigest() for u in units]
 
 
-#: the outcome's refusal when its sessions' roots can't be held to the record's
-SESSION_ROOTS = "session-roots"
+#: the verifier an outcome's opening verdict names: the challenger's own run of the opening check
+OPENING_CHECK = "the challenger's opening check"
 
 
-def live_roots(path_: Path | None) -> dict[str, str] | None:
-    """The roots a unit's --zk session committed, ``{port: root}`` from its prover's first ``LIVE`` line; None when
-    there is no output or it carries no roots. An output that does not read is refused by name (`SESSION_ROOTS`)."""
-    if path_ is None:
-        return None
-    try:
-        lines = [json.loads(x[5:]) for x in path_.read_text().splitlines() if x.startswith("LIVE\t")]
-    except (OSError, ValueError) as e:
-        raise _refused(SESSION_ROOTS, {"output": str(path_), "why": f"it does not read: {e}"}) from None
-    roots = lines[0].get("roots") if lines else None
-    return dict(roots) if isinstance(roots, Mapping) and roots else None
-
-
-def session_roots(units: list[dict]) -> dict[str, str]:
-    """``{port: root}`` the sampled proof blocks' sessions committed, which the stream holds port by port to the record's
-    roots. Refused by name (`SESSION_ROOTS`) when a block's session reports none, or two report different roots: the
-    outcome is never decided with that check skipped."""
-    first: dict[str, str] | None = None
-    for u in units:
-        if not u.get("roots"):
-            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports no roots"})
-        if first is None:
-            first = dict(u["roots"])
-        elif dict(u["roots"]) != first:
-            raise _refused(SESSION_ROOTS, {"unit": u["unit"], "why": "its session reports roots other than another's",
-                                           "ports": sorted(set(first) ^ set(u["roots"]) | {
-                                               p for p in set(first) & set(u["roots"]) if first[p] != u["roots"][p]})})
-    return first or {}
-
-
-def _units(rows: list[dict], verify: str | None, jobs: int = 1) -> list[dict]:
-    """The outcome's units from the job's rows (each unit's stage, public file, circuit, delivered session, opening
-    verdict, live log): the Lean verdict of record the challenger's own run of ``verify`` (`run_lean`, ``jobs`` at a
-    time) on a copy of the public file whose bytes the statement digests, and each with the roots its session committed
-    (`live_roots`). A row's handed-in Lean output is never read; with no ``verify`` the outcome is refused by name
-    (`LEAN_RUN`)."""
+def _units(rows: list[dict], verify: str | None, opening: Callable[[int, bytes, dict], str | None],
+           jobs: int = 1) -> list[dict]:
+    """The outcome's units from the job's rows (each unit's stage, public file, circuit, delivered session, the prover's
+    opening of its rows and its live log): the Lean verdict of record the challenger's own run of ``verify``
+    (`run_lean`, ``jobs`` at a time) on a copy of the public file whose bytes the statement digests, and the opening
+    verdict its own run of `opening` (`Challenger.check`) on that copy and the row's opening. A row's handed-in Lean
+    output and opening verdict are never read; with no ``verify`` the outcome is refused by name (`LEAN_RUN`)."""
     import tempfile
     from concurrent.futures import ThreadPoolExecutor
 
@@ -1330,11 +1323,12 @@ def _units(rows: list[dict], verify: str | None, jobs: int = 1) -> list[dict]:
             c.write_bytes(b)
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
             leans = list(ex.map(lambda a: run_lean(verify, *a), zip(rows, copies)))
+    whys = [opening(u["unit"], pub, _json(u["opening"])) for u, pub in zip(rows, pubs)]
     return [{"unit": u["unit"], "statement": statement(_json(u["stage"]), pub),
-             "verdicts": {"lean": lean, "opening": _json(u["opening"]),
-                          **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})},
-             "roots": live_roots(Path(u["rust"]) if u.get("rust") else None)}
-            for u, pub, lean in zip(rows, pubs, leans)]
+             "verdicts": {"lean": lean, "opening": {"of_record": False, "accepted": why is None, "why": why or "",
+                                                    "verifier": OPENING_CHECK},
+                          **({"rust": rust_verdict(Path(u["rust"]))} if u.get("rust") else {})}}
+            for u, pub, lean, why in zip(rows, pubs, leans, whys)]
 
 
 def _put(p: str | None, obj: Any) -> None:
@@ -1374,7 +1368,8 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
             o = ch.deliver(name, _sessions(_json(cmd["units"])))
             return ("DELIVERED", {"sessions": len(ch.sessions[name])}) if o is None else (o.verdict.codes[0].upper(), {})
         if op == "outcome":
-            o, public, body = ch.outcome(name, _units(_json(cmd["units"]), ch.verify, ch.lean_jobs))
+            o, public, body = ch.outcome(name, _units(_json(cmd["units"]), ch.verify,
+                                                      lambda unit, pub, op: ch.check(name, unit, pub, op), ch.lean_jobs))
             if cmd.get("out"):
                 _put(f"{cmd['out']}/outcome.json", {"accepted": o.accepted, "verdict": o.verdict.to_json(), "public": public,
                                                     "profile": o.profile.to_json() if o.profile else None,

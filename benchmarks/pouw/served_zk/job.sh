@@ -58,7 +58,7 @@
 #                              verifier accepts no unit without its Program                                    REJECT
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
 #        deliver-again         a second delivery of the same sample                                               REFUSED
-#        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
+#        outcome-foreign-proof the first unit's public file the other request's: its own opening fails on it   REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's, no roots read: every case      REFUSED
 #        replay                the challenger's requests again from its recorded coins, Lean sampling          SAME
@@ -329,7 +329,8 @@ v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" |
 expect shape-filler SAME "${v:-ERROR}"
 
 # ---- 6. deliver and outcome ---------------------------------------------------------------------------------------------------
-units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_OPENING FIRST_SESSION]: the sampled proof blocks' files, the first replaced
+units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_OPENING FIRST_SESSION]: the sampled proof blocks' files (each its
+                 # prover's opening of its rows, which the challenger checks itself), the first replaced
   "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" $UNITS <<'PY'
 import json, sys
 from pathlib import Path
@@ -339,7 +340,7 @@ for i, t in enumerate(units):
     u = f"{out}/u{t}"
     sessions = sorted(Path(f"{w}/u{t}/sessions").glob("*/session.json"))
     row = {"unit": int(t), "stage": f"{u}/stage.json", "pub": f"{u}/pub.bin", "circuit": f"{w}/u{t}/circuit.txt",
-           "opening": f"{out}/open-u{t}.json", "rust": f"{u}/prove.out",
+           "opening": f"{u}/opening.json", "rust": f"{u}/prove.out",
            "session": str(sessions[-1]) if sessions else f"{w}/u{t}/sessions/none",
            **{k: f"{w}/u{t}/{k}.json" for k in ("partition", "program") if Path(f"{w}/u{t}/{k}.json").exists()}}
     if i == 0 and any((st, pub, op, session)):
@@ -368,7 +369,7 @@ expect outcome-again REFUSED "$REPLY"
 ask deliver-again "$(req op deliver name honest units "$OUT/units-honest.json")"
 expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
-units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$OUT/open-foreign-proof.json"
+units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
 ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof replay honest)"
 expect retry-foreign-proof REFUSED "$REPLY"
