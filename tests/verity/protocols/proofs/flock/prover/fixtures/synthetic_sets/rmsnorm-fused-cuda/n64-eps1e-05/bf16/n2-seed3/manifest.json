@@ -60,7 +60,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "RMSNormFusedCuda_v2{N=64,EPS=1e-05}": "1749c3094959d6fbfb4d59eaeca088aa9ec427106920a03f8e1b25ddf88114b53b50c127a679190c71a6392c844d293682e444b155e21f96361ec60bbaa75a7d"
+   "RMSNormFusedCuda_v2{N=64,EPS=1e-05}": "4333dbca82395b3349afdfef406ae2046754a4bbede4594500eeaf33f9db5c99b84983ffd9220118254f1275a25a036234b0296109c03f1b1a3b713479e3c80d"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
