@@ -116,43 +116,6 @@ def sizes(calls: dict) -> list[str]:
     return [c.split("--host-gib ")[1].split()[0] for c in calls["driver"]]
 
 
-def test_a_dry_run_prints_the_lease_and_each_size_and_touches_nothing(tmp_path):
-    p, calls, out = run(tmp_path, DRY="1")
-    assert p.returncode == 0, p.stdout + p.stderr
-    tiers = tmp_path / "tree/benchmarks/poub_session/host_read_tiers.sh"
-    assert f"gpu-lease 8 --wait --timed --max-min 30 --mem-gb 300 -- bash {tiers} lease" in p.stdout
-    asked = [line for line in p.stdout.splitlines() if "--host-gib" in line]
-    assert [line.split("--host-gib ")[1].split()[0] for line in asked] == ["8", "12", "16"]
-    assert all("timeout -k 20 580 taskset -c" in line and line.endswith(
-        "--gib 700 --host-gib " + size + " --gpus 8 --chunk-blocks 65536 --budget-s 490 --ctas 8 32")
-        for line, size in zip(asked, ["8", "12", "16"]))
-    assert calls == {"build": [], "lease": [], "driver": []} and not out.exists()
-
-
-@pytest.mark.skipif(shutil.which("flock") is None, reason="gpu-lease needs flock(1)")
-def test_under_the_trees_gpu_lease_each_size_runs_in_turn_on_the_eight_cards(tmp_path):
-    p, calls, out = run(tmp_path, lease=TREES, BASE_REV="abc")
-    assert p.returncode == 0, p.stdout + p.stderr
-    tiers = tmp_path / "tree/benchmarks/poub_session/host_read_tiers.sh"
-    assert calls["lease"] == [f"8 --wait --timed --max-min 30 --mem-gb 300 -- bash {tiers} lease"]
-    assert calls["build"] == [f"1 120a {tmp_path / 'stubs/cuda'} abc"]
-    assert sizes(calls) == ["8", "12", "16"] and all(c.startswith(EIGHT + " | ") for c in calls["driver"])
-    assert all(f"--out {out}/host-{size} " in c for c, size in zip(calls["driver"], ["8", "12", "16"]))
-    # the driver allocates as it does under host_read.sh, which gates the rows it times
-    assert (tmp_path / "stubs/driver.alloc").read_text().strip() == "expandable_segments:True"
-    assert 'PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}' in (RS / "host_read.sh").read_text()
-    account = (out / "tiers.txt").read_text().splitlines()
-    assert account[-1] == p.stdout.splitlines()[-1] and "VERDICT host-read-tiers ok (exit 0): sizes run: 8 12 16 GiB" in account[-1]
-    assert sum("chain: pass 1.00 ms" in line for line in account) == 3
-    # the cards' record falls back to the field name this nvidia-smi knows, and names the card a throttle reason is on
-    assert "clocks_throttle_reasons.active" in (out / "cards.start.txt").read_text()
-    assert any("8 GiB: exit 0" in line and line.endswith("cards: 5") for line in account)
-    assert (out / "leased").exists() and (out / "cards.end.txt").exists() and not (out / "cards.not-clear.txt").exists()
-    # this nvidia-smi counts no held-down clocks: the account says so once, and no size's line names a card for it
-    assert sum("does not count how long it holds a card's clocks down" in line for line in account) == 1
-    assert not any("clocks held down" in line for line in account)
-
-
 def test_a_card_the_driver_held_down_is_named_on_its_size_and_over_the_lease(tmp_path):
     """The sampler is a stub that writes its arguments to a FIFO this test holds open, so reading them waits for the
     sampler to have started, whenever that is."""

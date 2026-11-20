@@ -41,7 +41,7 @@ STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_
 @pytest.mark.parametrize("mod", [phi3, gemma])
 def test_embedded_hf_config_is_the_registered_one(mod):
     if not mod.HF_CONFIG_PATH.exists():
-        pytest.skip("data/hf_configs is not shipped to pods")
+        pytest.skip("the role's config.json is not shipped to pods")
     assert json.loads(mod.HF_CONFIG_PATH.read_text()) == mod.HF_CONFIG
 
 

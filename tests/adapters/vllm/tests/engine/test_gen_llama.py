@@ -47,7 +47,6 @@ Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
 MANIFEST = REPO / "manifests" / "checkpoints.json"
-HF_CONFIGS = REPO / "data" / "hf_configs"
 STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_THETA", "MAX_POS", "BIAS", "tie_word_embeddings")
 CARD_C_FIELDS = ("model", "revision", *STATIC_KEYS, "BN")
 MODULES = {"LLAMA32_1B": L, "QWEN05": Q}
@@ -63,17 +62,14 @@ def _manifest_entry(case: str) -> dict:
 
 @pytest.mark.parametrize("case", sorted(MODULES))
 def test_config_json_copy_is_the_pinned_hub_file(case):
-    """The config.json beside the profile is byte-identical to the hub's at the pinned revision (manifest `config_sha256`) and,
-    as a dict, to the sweep's `data/hf_configs/<CASE>.config.json`."""
+    """The config.json beside the profile is byte-identical to the hub's at the pinned revision (manifest `config_sha256`)."""
     mod = MODULES[case]
     raw = mod.CONFIG_JSON.read_bytes()
     entry = _manifest_entry(case)
     assert hashlib.sha256(raw).hexdigest() == mod.CONFIG_SHA256 == entry["config_sha256"]
     assert entry["repo"] == mod.REPO_ID and entry["revision"] == mod.REVISION and entry["role"] == case
     assert mod.C["model"] == entry["repo"] and mod.C["revision"] == entry["revision"]
-    hf = HF_CONFIGS / f"{case}.config.json"
-    if hf.exists():
-        assert json.loads(hf.read_text()) == json.loads(raw) == mod.HF_CONFIG
+    assert json.loads(raw) == mod.HF_CONFIG
 
 
 @pytest.mark.parametrize("case", sorted(MODULES))

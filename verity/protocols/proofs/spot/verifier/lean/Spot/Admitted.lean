@@ -19,6 +19,7 @@ public import Std.Data.HashMap
 public import Std.Data.HashSet
 import all Init.Util
 meta import Flock
+meta import Flock.JsonParse
 meta import Spot.Restrict
 meta import Spot.Edges
 meta import Circuits.DefinitionDigest
@@ -156,7 +157,7 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
   let #[key] := keys
     | notAdmitted "one-template" s!"C_S's root calls {keys.toList}, and a block's units are instances of one template"
   if !listed.contains key then notAdmitted "listed" s!"C_S's template {key} is not one the partition's query lists"
-  let some d := S.index[key]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
+  let some d := S.index[key]? | notAdmitted "listed" s!"C_S's template {key} has no entry in C_S's index"
   let some fn := S.defs[d]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
   let cs := (cuts.lookup key).getD []
   let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
@@ -209,22 +210,23 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
   let named := units.qsort (· < ·)
   for i in [1:named.size] do
     if named[i - 1]! == named[i]! then notAdmitted "disjoint-ranges" s!"unit {named[i]!} is named twice in the block"
+  -- `unitAt`'s node is one of the root's (`Prog.calls`), so "no node of C's root" is unreachable by construction; the
+  -- member's scope is its node's callee (`Prog.child`)
   let us ← units.mapM fun u => do
     let (k, m) ← Spot.BlockFront.unitAt P u
-    let sc := P.child P.rootScope k m
-    let some d := P.defs[sc.d]? | notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
-    pure (u, k, m, sc.off, sc.off + d.gates)
-  let byLo := us.qsort fun a b => a.2.2.2.1 < b.2.2.2.1
-  for i in [1:byLo.size] do
-    let (u, _, _, _, hi) := byLo[i - 1]!
-    let (v, _, _, lo, _) := byLo[i]!
-    if lo < hi then notAdmitted "disjoint-ranges" s!"units {u} and {v} of the block hold gates in common"
-  for (u, k, m, _, _) in us do
     let some x := root.body.nodes[k]? | notAdmitted "one-callee" s!"unit {u} is no node of C's root"
     let some f := P.defs[x.fn]? | notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
+    let off := (P.child P.rootScope k m).off
+    pure (u, m, x, f, off, off + f.gates)
+  let byLo := us.qsort fun a b => a.2.2.2.2.1 < b.2.2.2.2.1
+  for i in [1:byLo.size] do
+    let (u, _, _, _, _, hi) := byLo[i - 1]!
+    let (v, _, _, _, lo, _) := byLo[i]!
+    if lo < hi then notAdmitted "disjoint-ranges" s!"units {u} and {v} of the block hold gates in common"
+  for (u, m, x, f, _, _) in us do
     if f.key != key then notAdmitted "one-callee" s!"unit {u} calls {f.key}, not the block's template {key}"
     for (g, _) in ← Spot.BlockFront.operandsW P x m do
-      if let some (v, _, _, _, _) := us.find? fun (_, _, _, lo, hi) => lo ≤ g && g < hi then
+      if let some (v, _, _, _, _, _) := us.find? fun (_, _, _, _, lo, hi) => lo ≤ g && g < hi then
         notAdmitted "operands-outside" s!"unit {u} reads gate {g}, which unit {v} of the block computes: a unit reads only gates outside its block"
 
 /-- **The door admits the block in C**: `admittedBlock` accepts it. -/
@@ -275,7 +277,7 @@ def admitE (d : String) (t : String := "E_v1") (cs : List (String × Nat) := [])
 
 /-- `lowerBlock` on unit 0 of the descriptor `d`, its template `E_v1`. -/
 def lowerE (d : String) : V ByteArray := do
-  let CJ ← Json.parse d
+  let CJ ← Flock.JsonParse.parse d
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
   lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0]) (admittedBlock P #[0])
@@ -365,7 +367,7 @@ def AA16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_
 def lowerIn (d t : String) (us : Array Nat) : V ByteArray := do
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", t)])]
-  lowerBlock (← Json.parse d) (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us) (admittedBlock P us)
+  lowerBlock (← Flock.JsonParse.parse d) (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us) (admittedBlock P us)
 
 /-- C's root `d` reading its input node 0 recut by 16. -/
 def recut0 (d : Flock.Program.Defn) : Flock.Program.Defn := { d with body := { d.body with recut := #[(0, 16)] } }

@@ -89,7 +89,7 @@
 # served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
 # declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and where `retain`
 # wrote no W the piece goes no further: without it there is no sample, no verdict and no
-# Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
+# Pearl+ line, and step 5 refuses for want of one (pearlplus-no-verdict); step 4 is `verify --tie W`, which holds the
 # passes to W, with PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`,
 # which refuses passes that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the
 # class's, and whose accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less
@@ -103,7 +103,10 @@
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`,
 # and the piece runs under umask 077, so every file it or a step writes there is 0600.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
-# wrote the piece.
+# wrote the piece. Where it has no verdict it writes no answer: on a node that lists no card it serves nothing and
+# refuses before step 1 (pearlplus-no-card; under PEARLPLUS_TIE the window's own serve took the card), and where step 2
+# or step 4 wrote no document step 5 refuses (pearlplus-no-verdict); either way its sentence is PIECE_DIR/refused.txt,
+# its POUW-REFUSED line says it, and it exits 2.
 set -uo pipefail
 for o in PEARLPLUS_DRAWS:PEARLPLUS_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-pearlplus: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
@@ -123,6 +126,13 @@ took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-${VENV:-/workspace/cp/venv312}}
 # shellcheck source=/dev/null
 . benchmarks/harness/env.sh
+rm -f "$P/refused.txt" "$P/development.json"
+CARDS=$(nvidia-smi -L 2>/dev/null)
+if [ -z "${PEARLPLUS_TIE:-}" ] && [[ $CARDS != *"GPU "* ]]; then
+  echo "pearlplus-no-card: this node lists no card (nvidia-smi -L), so Pearl+ serves nothing, has no verdict and" \
+    "the piece writes no answer" | tee "$P/refused.txt" | sed 's/^/POUW-REFUSED /'
+  exit 2
+fi
 NEEDED=$("$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer-needed \
   ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} 2> "$Q/volunteer-needed.log")
 RULE=${NEEDED#* } VOLUNTEER=${PEARLPLUS_VOLUNTEER-auto}
@@ -395,6 +405,6 @@ UN=()
   ${MAIN_FILE:+--main "$MAIN_FILE"} --coin "$P/coin-put.json" > "$Q/pearlplus.log" 2>&1
 rc=$?
 copy_back
-grep '^POUW-DEV ' "$Q/pearlplus.log"
+grep -E '^POUW-(DEV|REFUSED) ' "$Q/pearlplus.log"
 say "piece: served_verdicts.py pearlplus exit $rc"
 exit "$rc"
