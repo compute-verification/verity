@@ -597,6 +597,20 @@ EARLY = ["compile-time.lakefile", "unchecked.source", "compile-time.source", "or
          "compile-time.not-a-module"]
 
 
+def test_an_exempt_entry_is_a_reason_or_an_owner_an_issue_and_a_due_date():
+    """An `exempt` entry is the reason nothing imports the file, or {why, owner, issue, due} for a file left out of the
+    roots until its issue ends; any other form fails, and either form exempts its files."""
+    files = {"P.A": "P/A.lean", "P.B": "P/B.lean", "P.C": "P/C.lean"}
+    owed = {"why": "red until the statement is restated", "owner": "@proofs", "issue": "PRF-1", "due": "2026-11-23"}
+    pol = {"roots": ["P"], "exempt": {"P.A": "a scratch file", "P.B": owed}}
+    assert A.exempt_owed(owed) and not A.exempt_owed("a scratch file")
+    assert [(f.code, f.entry) for f in A.orphan_failures(pol, files, {"P.C"})] == []
+    for bad in ("", " ", {"why": "red"}, owed | {"owner": "proofs"}, owed | {"issue": "soon"}, owed | {"due": "Monday"},
+                owed | {"why": " "}, owed | {"more": 1}, 3):
+        fails = A.orphan_failures(pol | {"exempt": {"P.A": "a scratch file", "P.B": bad}}, files, {"P.C"})
+        assert [(f.code, f.entry) for f in fails] == [("orphan.exempt-form", "P.B")], bad
+
+
 def test_a_failure_the_sources_show_before_the_build_is_the_one_the_audit_of_the_build_gives(tmp_path, monkeypatch):
     """`sources_judge` reads the sources and the lock, no build: each failure it gives, the audit of the build gives
     again with the same code, entry and text and in the same order (`EARLY` is every code it can give).  What only the
