@@ -221,6 +221,6 @@ def test_the_wipe_gets_the_pins_and_configuration_the_road_hands_a_piece(tmp_pat
     p, calls = run_dry(tmp_path, APPLICATION=str(app), WIPE_CMD="true")
     assert p.returncode == 0 and "SMOKE DRY OK" in p.stdout, p.stdout[-2000:] + p.stderr[-2000:]
     said = next(c["said"] for c in calls if "said" in c)
-    want = served_table.deployment(run.load(app, run.registry()))
+    want = served_table.pins_and_configuration(run.load(app, run.registry()))
     assert said.splitlines() == [f"export {k}={shlex.quote(v)}" for k, v in want.items()]
     assert json.loads(want["VERITY_PINS"]) and any(x["protocol"] == "wipe" for x in json.loads(want["VERITY_PINS"]))

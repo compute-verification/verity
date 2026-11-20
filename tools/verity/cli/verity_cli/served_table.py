@@ -770,7 +770,7 @@ JOINED = ("SERVE_ARGS", "POUS_ARGS")
 CLASS_KEYS = ("V3C_CLASS", "CLASSES")
 
 
-def deployment(cfg: Mapping[str, Any]) -> dict[str, str]:
+def pins_and_configuration(cfg: Mapping[str, Any]) -> dict[str, str]:
     """The configuration's hash and its `[[pin]]` entries as the runner hands them to every piece
     (``VERITY_CONFIGURATION``, ``VERITY_PINS``); a launcher outside the road reads them from here."""
     return {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
@@ -782,7 +782,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
     piece's hooks, whichever party's they are, since the prover's pieces reach the auditor's sides through their
     bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
-    out = deployment(cfg)
+    out = pins_and_configuration(cfg)
     by: dict[str, str] = {}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]:
         for k, v in p.variables(cfg, bindings).items():

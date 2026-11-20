@@ -50,7 +50,7 @@ if [ -n "${WIPE_CMD:-}" ]; then  # the wipe reads the application's pins and con
 import shlex, sys
 from pathlib import Path
 from verity_cli import run, served_table
-for k, v in served_table.deployment(run.load(Path(sys.argv[1]), run.registry())).items():
+for k, v in served_table.pins_and_configuration(run.load(Path(sys.argv[1]), run.registry())).items():
     print(f"export {k}={shlex.quote(v)}")
 PINS
   ) || { echo "SMOKE REFUSED application: $APPLICATION's pins and configuration can't be read for the wipe"; exit 3; }
