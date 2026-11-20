@@ -806,6 +806,10 @@ def _header(public: Path) -> Any:
 #: `OneStageZk.POPULATION_WHY`: a header's ``instances`` not its slice's population, refused before any port is dropped
 POPULATION_WHY = "public file: not the registration's: population"
 
+#: `OneStageZk.PORT_TWICE_WHY`: a slice naming one port at two roots, refused after `POPULATION_WHY`
+PORT_TWICE_WHY = ("public file: the member's slice names a port at two roots: a port is held to the one root the "
+                  "registration gives it")
+
 
 def shared_unread(port: str, tree: str) -> str:
     """`OneStageZk.SHARED_UNREAD`: the refusal of a member's header port ``port`` held in its template's shared field tree
@@ -836,10 +840,14 @@ def _held_at(reads: Collection[tuple[str, str]], held: Mapping[str, Any], slice_
     template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of, that the
     header names and ``reads`` names at a value the verifier's registered file's ports ``held`` hold there as a
     registered value (`registered_at`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose header root
-    or domain is not the registration's, and (`unregistered_why`) for one read at any other value."""
+    or domain is not the registration's, (`unregistered_why`) for one read at any other value, and
+    (`PORT_TWICE_WHY`) for a slice naming one port at two roots."""
     h = header if isinstance(header, dict) else {}
     if not _same(h.get("instances"), slice_.get("population")):
         raise _Refused(POPULATION_WHY)
+    ports = [r.get("port") for r in slice_["roots"] if type(r.get("port")) is str]
+    if len(ports) != len(set(ports)):
+        raise _Refused(PORT_TWICE_WHY)
     fv = h["frame_v3"] if isinstance(h.get("frame_v3"), dict) else {}
     roots = fv["roots"] if isinstance(fv.get("roots"), dict) else {}
     domains = fv["domain_ids"] if isinstance(fv.get("domain_ids"), dict) else {}

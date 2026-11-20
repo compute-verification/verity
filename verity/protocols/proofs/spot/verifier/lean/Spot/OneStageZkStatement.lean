@@ -1415,6 +1415,18 @@ def SHARED_UNREAD (p tree : String) : String :=
     "there: a member's rows of a tree other members' rows share are held to the registration's root by opening it at " ++
     "the leaves C gives, and the header's own root there is no commitment to them"
 
+/-- The ports the slice `rec`'s roots name, in its roots' order. -/
+def slicePorts (rec : Json) : List String :=
+  ((match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
+    match getD r "port" with
+    | .str p => some p
+    | _ => none).toList
+
+/-- The refusal of a member's slice naming one port at two of its roots (`headerHeldAt`, after `POPULATION_WHY`): a
+port of the header is held to the one root its slice names. -/
+def PORT_TWICE_WHY : String :=
+  "public file: the member's slice names a port at two roots: a port is held to the one root the registration gives it"
+
 /-- The slice `rec` and the header `h` without port `p`'s root and domain. -/
 def dropPort (rec h : Json) (p : String) : Json × Json :=
   let rs := match getD rec "roots" with | .arr rs => rs.filter (getD · "port" != .str p) | _ => #[]
@@ -1445,9 +1457,11 @@ root of that `reads` names and the header names is held by those reads too where
 ports `held` hold it at that value as a registered value (`registeredAt`): `checkPort` opens every row of it under
 that file's root at the position C gives, and `OneCircuit.pos` reads such a value only at an input port whose units
 read a registered or supplied input node (`regNode`), so it is not compared either; at any other value it refuses by
-name (`UNREGISTERED_WHY`). Every other port is `headerHeld`'s. -/
+name (`UNREGISTERED_WHY`). Every other port is `headerHeld`'s. A slice naming one port at two roots refuses
+first, by name (`PORT_TWICE_WHY`), so each port of the header is held to the one root its slice names. -/
 def headerHeldAt (reads : Array (String × String)) (held : Array Flock.Registered.Port) (rec h : Json) : V Unit := do
   if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
+  if !decide (slicePorts rec).Nodup then throw PORT_TWICE_WHY
   let fv := getD h "frame_v3"
   let shared := (match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
     match getD r "port", getD r "tree" with
