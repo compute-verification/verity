@@ -69,7 +69,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # the compile slice and its pieces, the vLLM integration's compiler, which the cache and replay vectors and their tests import
           "adapters/vllm/verity_vllm/compiler",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/proofs/spot/__init__.py",
-          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py", "verity/commitments/gates/block_key.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/boolean/memcheck.py",
           # network attestation's `head_check` counts a Definition's ANDs with the census
           # (`census.BooleanWork`), and the advice code's codec imports it (`window_code`, network
           # attestation's `window_charge`, `arith_encode`):

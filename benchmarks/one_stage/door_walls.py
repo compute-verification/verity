@@ -95,6 +95,8 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
+from verity import lean_process as LP
+
 ROOT = Path(__file__).resolve().parents[2]
 LANES = 64
 WORD = 16
@@ -421,6 +423,8 @@ class Result:
         agree or Lean's door was not asked."""
         if not self.lean_door or self.lean_door.startswith("unasked"):
             return ""
+        if self.lean_door.startswith(CRASHED):
+            return f"lean's door gave no answer ({self.lean_door[len(CRASHED):]})"
         lean, py = self.lean_door, self.python_door
         if lean == ADMITTED and py == ADMITTED:
             return ""
@@ -436,6 +440,11 @@ ADMITTED = "admitted"
 #: what decides a block where Lean's door was asked: it checks no order of the Program's nodes, which an accept also
 #: needs (the partition's order check, `Partition.evaluate`)
 LEAN_DOOR = "spot-one-stage-zk restrict"
+#: `spot-one-stage-zk restrict` (`Spot/OneStageZk.lean`'s `main`): 0 C_S written, 1 the door's refusal, 2 a partition
+#: or a block it can't read
+RESTRICT_EXITS = frozenset({0, 1, 2})
+#: Lean's door where it wrote a panic line or ended at a status not in `RESTRICT_EXITS`: no answer, so a difference
+CRASHED = "crashed: "
 
 
 def clause(text: str) -> str:
@@ -458,8 +467,7 @@ def lean_door(exe: Callable[[], Path], c_file: Path, partition: dict, first: int
     pp, out = d / "partition.json", d / "circuit.txt"
     pp.write_bytes(PO.canonical(partition))
     out.unlink(missing_ok=True)
-    p = subprocess.run([str(exe()), "restrict", str(c_file), str(pp), str(first), str(out)], capture_output=True,
-                       text=True)
+    p = LP.run([str(exe()), "restrict", str(c_file), str(pp), str(first), str(out)], ok_statuses=RESTRICT_EXITS)
     if p.returncode == 0 and out.exists():
         return ADMITTED
     return f"refused: {(p.stderr or p.stdout).strip()[:1500]}"
@@ -601,6 +609,8 @@ class Door:
         d = Path(self._dir.name)
         try:
             return lean_door(self.lean, d / "C.json", self.partition, lo, d)
+        except LP.LeanPanic as e:
+            return f"{CRASHED}{str(e)[:300]}"
         except Exception as e:  # noqa: BLE001 - a census records the executable's crash by its text
             return f"unasked: {_err(e)[:300]}"
 
@@ -1038,6 +1048,11 @@ class Unlowered(Unchecked):
     """Lean's `Lower.lower` refuses the template: it has no rows to check."""
 
 
+#: `flock-lower-check DESC KEY INS OUTS IN TMPL OUT` (`FlockLowerCheck.main`): 0 the template written, 1 its refusal, 2
+#: its usage
+LOWER_EXITS = frozenset({0, 1, 2})
+
+
 def template_of(c_s: bytes, key: str, n_in: int, n_out: int, exe: Callable[[], Path]) -> tuple[Any, str]:
     """C_S's template ``key`` lowered as the door lowers it (`Lower.lower` at one 16-bit group a port word), written by
     `flock-lower-check`'s template mode and parsed (`tmpl.parse`); and the tool's output. Raises `Unlowered` when Lean
@@ -1047,9 +1062,8 @@ def template_of(c_s: bytes, key: str, n_in: int, n_out: int, exe: Callable[[], P
         d = Path(d)
         (d / "c_s.json").write_bytes(c_s)
         (d / "in.txt").write_text("0\n" * (WORD * n_in))
-        p = subprocess.run([str(exe()), str(d / "c_s.json"), key, ",".join([str(WORD)] * n_in),
-                            ",".join([str(WORD)] * n_out), str(d / "in.txt"), str(d / "t.tmpl"), str(d / "out.txt")],
-                           capture_output=True, text=True)
+        p = LP.run([str(exe()), str(d / "c_s.json"), key, ",".join([str(WORD)] * n_in), ",".join([str(WORD)] * n_out),
+                    str(d / "in.txt"), str(d / "t.tmpl"), str(d / "out.txt")], ok_statuses=LOWER_EXITS)
         if not (d / "t.tmpl").exists():
             raise Unlowered(f"flock-lower-check ({p.returncode}): {(p.stderr or p.stdout)[-1500:]}")
         return T.parse((d / "t.tmpl").read_text()), p.stdout + p.stderr
