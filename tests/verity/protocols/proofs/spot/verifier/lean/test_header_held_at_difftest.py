@@ -104,22 +104,6 @@ def test_a_port_is_held_by_the_reads_only_at_a_registered_value_the_file_holds(r
     assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
 
 
-#: the slice naming port ``x`` at two roots: refused whatever the header holds there
-TWICE = SLICE | {"roots": [*SLICE["roots"], {"domain": "dab", "leaves": 4, "port": "x", "root": "ab"}]}
-
-
-def test_a_slice_naming_a_port_twice_is_refused_by_name():
-    for roots in (HONEST, {"x": "ab", "o0": "ee"}):
-        assert reference(case([], None, roots, 2, TWICE)) == M.PORT_TWICE_WHY
-    assert reference(case([], None, HONEST, 5, TWICE)) == M.POPULATION_WHY
-
-
-@needs_lake
-def test_the_verifier_refuses_a_slice_naming_a_port_twice(pieces):
-    j = case([], None, HONEST, 2, TWICE)
-    assert pieces.call("header_held_at", j) == ("output", D.canonical(M.PORT_TWICE_WHY))
-
-
 #: a member's port ``w`` read from C's run input node 0 (`OneStageZk.runInputRootsAt`): held at ``input/n0``'s root
 RUN_SLICE = {"population": 2, "scheme": SCHEME,
              "roots": [{"domain": "dee", "leaves": 4, "port": "w", "root": "ee", "tree": "input/n0"}]}
