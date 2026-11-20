@@ -158,17 +158,6 @@ theorem ite_ok {α ε : Type} {c : Prop} [Decidable c] {x y : Except ε α} {a :
   · exact .inl ⟨hc, by rwa [if_pos hc] at h⟩
   · exact .inr ⟨hc, by rwa [if_neg hc] at h⟩
 
-/-- `admitted`'s `let #[key] := keys` at a one-key array, by `delta`: Lean generates no equations for an array-literal
-pattern. -/
-theorem matchKey_one {β : Sort _} (key : String) (h1 : String → β) (h2 : Array String → β) :
-    Spot.OneStageZk.admitted.match_17 (fun _ => β) ⟨[key]⟩ h1 h2 = h1 key := by
-  delta Spot.OneStageZk.admitted.match_17; rfl
-
-/-- `admitted`'s `let #[key] := keys` at any other array. -/
-theorem matchKey_ne {β : Sort _} (x : Array String) (h1 : String → β) (h2 : Array String → β) (hx : x.size ≠ 1) :
-    Spot.OneStageZk.admitted.match_17 (fun _ => β) x h1 h2 = h2 x := by
-  delta Spot.OneStageZk.admitted.match_17; rw [dif_neg hx]
-
 /-- What `admitted` checked of the template it admits: its Definition `fn` and lift `l`, `leaves-are-bits`, the rows
 and fields it returns, and `whole-words`. -/
 theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {S : Program.Prog}
@@ -195,12 +184,11 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   try dsimp only at h
   generalize Array.qsort called (fun x1 x2 => decide (x1 < x2)) = keys at h
   rcases keys with ⟨_ | ⟨key, _ | ⟨k2, rest⟩⟩⟩
-  · rw [matchKey_ne _ _ _ (by decide)] at h
+  · dsimp only at h
     exact absurd h notAdmitted_ne
   swap
-  · rw [matchKey_ne _ _ _ (by simp)] at h
+  · dsimp only at h
     exact absurd h notAdmitted_ne
-  rw [matchKey_one] at h
   try dsimp only at h
   rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
   · exact absurd h notAdmitted_bind_ne
@@ -1236,14 +1224,16 @@ def UnitWordComputes : Prop :=
         (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) ∧
           outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g)
 
-/-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of a Definition `d` of C, taken in the block's
-Program, evaluated on bits (`Prog.evalBool`), is C's value of `d` on words (`wordEval`), bit for bit, on words of `d`'s
-parameter leaf widths. -/
+/-- **`LiftWordEval`** (open): the lift to bits (`Flock.Lift.lift`) of the template `admitted` gives, a Definition of C
+taken in the block's Program, evaluated on bits (`Prog.evalBool`), is C's value of it on words (`wordEval`), bit for
+bit, on words of its parameter leaf widths. -/
 def LiftWordEval : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog) (d : ℕ) (L : Prog) (e : ℕ),
-    decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → d < P.defs.size →
-    Flock.Lift.lift S d = .ok (L, e) → ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[d]!) →
-      Prog.evalBool L e x.flatten = (wordEval P d x).flatten
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
+    decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    a.d < P.defs.size → Flock.Lift.lift S a.d = .ok (L, e) →
+    ∀ x : List (List Bool), x.map List.length = leafWidths (P.defs[a.d]!) →
+      Prog.evalBool L e x.flatten = (wordEval P a.d x).flatten
 
 /-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
 theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
@@ -1261,7 +1251,7 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComput
   unfold outBits argBits
   rw [portBits_eq, portBits_eq]
   change (outWords Y g).flatten = Prog.evalBool L e (argWords Y g).flatten
-  rw [ho, hL bytes P units S a.d L e hd hs hlt hl _ hw]
+  rw [ho, hL bytes P partition cuts units S a L e hd hs ha hlt hl _ hw]
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
