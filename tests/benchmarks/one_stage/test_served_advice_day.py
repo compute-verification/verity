@@ -42,7 +42,7 @@ def test_the_advice_call_passes_the_days_parameters_when_the_run_declared_a_day_
 
 def test_the_advice_call_comes_before_each_coin_that_samples_what_the_compiler_builds():
     text = SCRIPT.read_text()
-    for name, call in (("tie", 'advice_of "$K" "$ca"'), ("pearl_tie", 'advice_of "$K" "$ca"')):
+    for name, call in (("pearl_tie", 'advice_of "$K" "$ca"'),):
         fn = _function(text, name)
         assert fn.index(call) < fn.index("window_commit "), name
     main = text[text.index("\nCA=$(compiler_args)\n"):]

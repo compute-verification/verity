@@ -399,9 +399,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     a table the registration holds no salts for, and, publishing none of them, where any table's root is not its registered
     one (`_registered`)."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        registered_commit,
-    )
+    from verity.commitments.periods.rows import registered as registered_commit
 
     out: dict[str, Any] = {}
     for t, (what, n) in plan.what.items():
@@ -453,9 +451,7 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     the salts of ``committer``'s registration at the program it names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration holds no salts for, and for one
     whose root is not the registered one (`_registered`), which is then not held."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        registered_commit,
-    )
+    from verity.commitments.periods.rows import registered as registered_commit
 
     param = bnk_param(label, K)
     ys = _salts(committer, param)
@@ -475,7 +471,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     tables only where no earlier window of its process has.  Refused for a table the registration holds no salts for: the
     registration holds the shard's tables at its one width, and a table at any other is none of its; and, holding none of them,
     where a table's root is not the registered one (`_registered`)."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
+    from verity.commitments.periods.rows import registered as registered_commit
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
     W = shard_block(H)

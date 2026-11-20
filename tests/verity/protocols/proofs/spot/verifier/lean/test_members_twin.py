@@ -84,8 +84,8 @@ def _never(_):
 
 class Audit:
     """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its docket's two roots
-    named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member of
-    `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
+    named `ports` beside its templates' field trees `<template>/o0`, audited on a challenger session that releases
+    the sample and then opens one coin tree a member of `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
     the per-member parameters and evidence, and the files. Only
     the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
@@ -97,6 +97,7 @@ class Audit:
         rng = random.Random(seed)
         s = self.s = Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
+        s.ports |= {f"{t}/o0": {"domain": rng.randbytes(64).hex(), "leaves": n} for t, n in ((PAIR.id, 2), (TRIPLE.id, 3))}
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.partition = PO.build(s.program, s.query, [[UNITS[A][0], UNITS[B][0]]])
         self.rec = DK.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF,

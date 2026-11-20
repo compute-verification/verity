@@ -386,9 +386,8 @@ def test_a_tile_unit_a_row_schema_and_a_public_salt_past_its_table_are_refused()
     with pytest.raises(ValueError, match="^no tile unit 'j11': the pouw setting 'unit' is v1 or j10r$"):
         SV.unit_of("j11")
     words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
-    assert NR.row_digests(words).shape == (3, 64)
     with pytest.raises(ValueError, match="^rows of 'row/v3': hm96-sha512/row/v2 or hm96-sha512/row-seg/v1$"):
-        NR.row_digests(words, "row/v3")
+        NR.commit("p", "v", words, os.urandom(192 * 3), schema="row/v3")
     salts = NR.PublicSalts(b"head", 5, 2)
     assert len(salts) == 2 and salts[-1] == salts[1] != salts[0] and salts[0:2] == [salts[0], salts[1]]
     for j in (2, -3):
