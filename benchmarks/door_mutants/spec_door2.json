@@ -1,0 +1,42 @@
+{
+ "steps": [
+  {
+   "name": "door2",
+   "cap": 0,
+   "targets": [
+    {
+     "file": "verity/protocols/proofs/spot/verifier/one_stage/one_circuit.py",
+     "funcs": [
+      "admitted",
+      "template_form",
+      "admitted_block",
+      "lower"
+     ]
+    }
+   ],
+   "tests": [
+    "tests/verity/protocols/proofs/spot/verifier/test_door_form.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_refusals.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_form_refusals.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_members_run.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_proofs.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_second_wires_difftest.py",
+    "tests/benchmarks/one_stage/test_door_walls.py",
+    "tests/benchmarks/one_stage/test_one_linear.py",
+    "tests/adapters/vllm/tests/program/predict/test_row_floor_door.py",
+    "tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_credit_statements.py",
+    "tests/verity/protocols/resource_accounting/memory/pous/verifier/test_pous_setup_proof.py",
+    "tests/verity/circuits/test_partition_v2.py",
+    "tests/verity/circuits/test_laying.py"
+   ],
+   "slow": [
+    "tests/verity/protocols/proofs/spot/verifier/test_door_form.py",
+    "tests/verity/protocols/proofs/spot/verifier/test_one_circuit_chain.py",
+    "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py",
+    "tests/benchmarks/one_stage/test_door_walls.py"
+   ]
+  }
+ ]
+}

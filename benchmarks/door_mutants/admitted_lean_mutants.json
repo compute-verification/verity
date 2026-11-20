@@ -1,0 +1,210 @@
+[
+ {
+  "id": "A01",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 146,
+  "desc": "admitted: not a template query (notDerived)",
+  "old": "let some listed := listedOf partition\n    | throw (Flock.OneCircuit.notDerived\n        \"lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit\")",
+  "new": "let listed := (listedOf partition).getD #[]"
+ },
+ {
+  "id": "A02",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 149,
+  "desc": "one-template: C_S's root not a Definition",
+  "old": "let some root := S.defs[S.root]? | notAdmitted \"one-template\" \"C_S's root is not one of its Definitions\"",
+  "new": "let root := S.defs[S.root]?.getD default"
+ },
+ {
+  "id": "A03",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 156,
+  "desc": "one-template: the root calls more than one template",
+  "old": "let #[key] := keys\n    | notAdmitted \"one-template\" s!\"C_S's root calls {keys.toList}, and a block's units are instances of one template\"",
+  "new": "let key := keys[0]?.getD \"\""
+ },
+ {
+  "id": "A04",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 158,
+  "desc": "listed: template not listed by the query",
+  "old": "if !listed.contains key then notAdmitted \"listed\"",
+  "new": "if false then notAdmitted \"listed\""
+ },
+ {
+  "id": "A05",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 159,
+  "desc": "listed: template not in C_S's index",
+  "old": "let some d := S.index[key]? | notAdmitted \"listed\" s!\"C_S's template {key} is no Definition of C_S\"",
+  "new": "let d := S.index[key]?.getD 0"
+ },
+ {
+  "id": "A06",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 160,
+  "desc": "listed: index names no Definition",
+  "old": "let some fn := S.defs[d]? | notAdmitted \"listed\" s!\"C_S's template {key} is no Definition of C_S\"",
+  "new": "let fn := S.defs[d]?.getD default"
+ },
+ {
+  "id": "A07",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 165,
+  "desc": "port-names: a parameter name not plain",
+  "old": "if let some (n, _) := fn.params.find? (!plainName \u00b7.1) then",
+  "new": "if let some (n, _) := (fn.params.find? (!plainName \u00b7.1)).filter (fun _ => false) then"
+ },
+ {
+  "id": "A08",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 168,
+  "desc": "port-names: a port named twice",
+  "old": "if let some n := names.find? fun n => (names.filter (\u00b7 == n)).size > 1 then",
+  "new": "if let some n := names.find? fun n => (names.filter (\u00b7 == n)).size > 1 && false then"
+ },
+ {
+  "id": "A09",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 172,
+  "desc": "on-bits: the lift to bits refuses",
+  "old": "| .error _ => notAdmitted \"on-bits\" s!\"the lift to bits refuses C_S's template {key}\"",
+  "new": "| .error _ => pure (S, d)"
+ },
+ {
+  "id": "A10",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 173,
+  "desc": "on-bits: reaches a wide composite (wideFrom)",
+  "old": "if let some w := (wideFrom L dl)[0]? then",
+  "new": "if let some w := ((wideFrom L dl)[0]?).filter (fun _ => false) then"
+ },
+ {
+  "id": "A11",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 176,
+  "desc": "cut-rows: a cut names no parameter",
+  "old": "let some (_, t) := fn.params.find? (\u00b7.1 == p)\n      | notAdmitted \"cut-rows\" s!\"C_S's template {key}: a cut names {p}, which is no parameter\"",
+  "new": "let some (_, t) := fn.params.find? (\u00b7.1 == p)\n      | continue"
+ },
+ {
+  "id": "A12",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 178,
+  "desc": "cut-rows: a cut not into equal runs of one width",
+  "old": "if k < 2 || (Flock.Program.Widths.homo t).isNone || t.leaves % k != 0 then",
+  "new": "if false then"
+ },
+ {
+  "id": "A13",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 180,
+  "desc": "whole-words: no return field",
+  "old": "if fields.isEmpty then notAdmitted \"whole-words\"",
+  "new": "if false then notAdmitted \"whole-words\""
+ },
+ {
+  "id": "A14",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 182,
+  "desc": "whole-words: a row or field not whole u16 words",
+  "old": "if let some (n, b) := rs.find? fun (_, b) => b == 0 || b % 16 != 0 then",
+  "new": "if let some (n, b) := rs.find? fun (_, b) => (b == 0 || b % 16 != 0) && false then"
+ },
+ {
+  "id": "A15",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 184,
+  "desc": "leaves-are-bits: no lifted Definition",
+  "old": "let some l := L.defs[dl]? | notAdmitted \"leaves-are-bits\" s!\"C_S's template {key} has no lift to bits\"",
+  "new": "let l := L.defs[dl]?.getD default"
+ },
+ {
+  "id": "A16",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 185,
+  "desc": "leaves-are-bits: leaves differ from bits (leavesOff)",
+  "old": "if let some why := leavesOff fn l then",
+  "new": "if let some why := (leavesOff fn l).filter (fun _ => false) then"
+ },
+ {
+  "id": "B01",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 206,
+  "desc": "no-recut: C's root not a Definition",
+  "old": "let some root := P.defs[P.root]? | notAdmitted \"no-recut\" \"C's root is not one of its Definitions\"",
+  "new": "let root := P.defs[P.root]?.getD default"
+ },
+ {
+  "id": "B02",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 207,
+  "desc": "no-recut: C's root reads an input node recut",
+  "old": "if !root.body.recut.isEmpty then",
+  "new": "if false then"
+ },
+ {
+  "id": "B03",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 211,
+  "desc": "disjoint-ranges: a unit named twice",
+  "old": "if named[i - 1]! == named[i]! then notAdmitted",
+  "new": "if false then notAdmitted"
+ },
+ {
+  "id": "B04",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 215,
+  "desc": "one-callee: unit's scope Definition missing (unitAt/child)",
+  "old": "let some d := P.defs[sc.d]? | notAdmitted \"one-callee\" s!\"unit {u}'s callee is no Definition of C\"",
+  "new": "let d := P.defs[sc.d]?.getD default"
+ },
+ {
+  "id": "B05",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 221,
+  "desc": "disjoint-ranges: two units share gates",
+  "old": "if lo < hi then notAdmitted \"disjoint-ranges\"",
+  "new": "if false then notAdmitted \"disjoint-ranges\""
+ },
+ {
+  "id": "B06",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 223,
+  "desc": "one-callee: unit is no node of C's root",
+  "old": "let some x := root.body.nodes[k]? | notAdmitted \"one-callee\" s!\"unit {u} is no node of C's root\"",
+  "new": "let some x := root.body.nodes[k]? | continue"
+ },
+ {
+  "id": "B07",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 224,
+  "desc": "one-callee: node's callee is no Definition",
+  "old": "let some f := P.defs[x.fn]? | notAdmitted \"one-callee\" s!\"unit {u}'s callee is no Definition of C\"",
+  "new": "let some f := P.defs[x.fn]? | continue"
+ },
+ {
+  "id": "B08",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 225,
+  "desc": "one-callee: unit calls another template",
+  "old": "if f.key != key then notAdmitted \"one-callee\"",
+  "new": "if false then notAdmitted \"one-callee\""
+ },
+ {
+  "id": "B09",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 227,
+  "desc": "operands-outside: a unit reads a gate of the block",
+  "old": "if let some (v, _, _, _, _) := us.find? fun (_, _, _, lo, hi) => lo \u2264 g && g < hi then",
+  "new": "if let some (v, _, _, _, _) := us.find? fun (_, _, _, lo, hi) => lo \u2264 g && g < hi && false then"
+ },
+ {
+  "id": "B10",
+  "file": "verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean",
+  "line": 250,
+  "desc": "lowerBlock: admittedBlock (formed) not called",
+  "old": "  let a \u2190 admitted partition cuts S\n  formed a.key\n",
+  "new": "  let a \u2190 admitted partition cuts S\n"
+ }
+]

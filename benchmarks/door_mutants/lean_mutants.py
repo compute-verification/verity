@@ -26,6 +26,10 @@ TESTS = [
     "tests/verity/protocols/proofs/spot/verifier/lean/test_block_front_difftest.py",
     "tests/verity/protocols/proofs/spot/verifier/lean/test_restrict_block_circuit.py",
 ]
+if os.environ.get("MUT_TESTS"):
+    TESTS = os.environ["MUT_TESTS"].split(",")
+SPOT = ["Spot", *os.environ.get("MUT_SPOT_EXES", "").split(",")] if os.environ.get("MUT_SPOT_EXES") else ["Spot"]
+RESULTS = os.environ.get("MUT_RESULTS", "lean_results.jsonl")
 PY = str(ROOT / ".venv/bin/python")
 
 
@@ -43,7 +47,7 @@ def builds(paths: set[str]) -> list[tuple[str, int, float, str]]:
     if any("circuits/lean" in p for p in paths):
         out.append(("circuits",) + sh(["lake", "build", "Circuits"], C))
     out.append(("flock",) + sh(["lake", "build", *FLOCK], F))
-    out.append(("spot",) + sh(["lake", "build", "Spot"], S))
+    out.append(("spot",) + sh(["lake", "build", *SPOT], S))
     return out
 
 
@@ -70,7 +74,7 @@ def main(argv: list[str]) -> int:
     for m in muts:
         src = (ROOT / m["file"]).read_text()
         assert src.count(m["old"]) == 1, f"{m['id']}: its text occurs {src.count(m['old'])} times in {m['file']}"
-    res = OUT / "lean_results.jsonl"
+    res = OUT / RESULTS
     b = builds({"verity/circuits/lean"})
     print("baseline builds:", [(n, rc, round(dt)) for n, rc, dt, _ in b], flush=True)
     assert all(rc == 0 for _n, rc, _dt, _ in b), "\n".join(o[-3000:] for *_x, o in b)
@@ -92,7 +96,9 @@ def main(argv: list[str]) -> int:
             b = builds({m["file"]})
             rec["builds"] = [{"pkg": n, "rc": rc, "secs": round(dt), "tail": o[-2500:] if rc else ""} for n, rc, dt, o in b]
             if any(rc != 0 for _n, rc, _dt, _o in b):
-                rec["status"], rec["how"] = "KILLED", "build"
+                tail = "".join(o for _n, rc, _dt, o in b if rc)
+                guard = "did not evaluate to `true`" in tail or "#guard" in tail
+                rec["status"], rec["how"] = ("KILLED", "build #guard") if guard else ("INVALID", "build error, no #guard")
             else:
                 rc, dt, out = tests(deselect)
                 rec["tests_secs"] = round(dt)
