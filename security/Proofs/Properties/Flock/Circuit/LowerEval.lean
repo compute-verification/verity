@@ -59,4 +59,43 @@ theorem lowerEval : LowerEval := by
   rw [hout k hk hb]
   exact hl3 k hk'
 
+/-- `doorCol.go` at rows of whole u16 words lays bit `i` at `base + i`. -/
+theorem doorCol_go_whole : ∀ (rs : List (String × ℕ)), (∀ r ∈ rs, r.2 % 16 = 0) → ∀ i base,
+    doorCol.go rs i base = base + i
+  | [], _, i, base => rfl
+  | (nm, b) :: r, h, i, base => by
+    have hb : b % 16 = 0 := h (nm, b) (List.mem_cons_self ..)
+    have ih := doorCol_go_whole r (fun x hx => h x (List.mem_cons_of_mem _ hx))
+    unfold doorCol.go
+    split
+    · rfl
+    · rw [ih]; omega
+
+/-- At rows of whole u16 words the door's file lays each bit at its own index. -/
+theorem doorCol_whole {rs : Array (String × ℕ)} (h : ∀ r ∈ rs.toList, r.2 % 16 = 0) (i : ℕ) : doorCol rs i = i := by
+  unfold doorCol; rw [doorCol_go_whole _ h]; omega
+
+/-- **`AdmitWhole`**: every input row and return field `admitted` gives is whole u16 words (its clause `whole-words`). -/
+def AdmitWhole : Prop :=
+  ∀ {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {S : Program.Prog} {a : Spot.OneStageZk.Admit},
+    Spot.OneStageZk.admitted partition cuts S = .ok a →
+    (∀ r ∈ a.ins.toList, r.2 % 16 = 0) ∧ (∀ r ∈ a.fields.toList, r.2 % 16 = 0)
+
+/-- **`AdmitLeaves`**: the input rows and return fields `admitted` gives hold exactly the lifted template's parameter
+and return leaves (its clauses `cut-rows` and `leaves-are-bits`). -/
+def AdmitLeaves : Prop :=
+  ∀ {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {S : Program.Prog} {a : Spot.OneStageZk.Admit}
+    {Q : Program.Prog} {e : ℕ},
+    Spot.OneStageZk.admitted partition cuts S = .ok a → Flock.Lift.lift S a.d = .ok (Q, e) →
+    bitsOf a.ins = (Q.defs.getD e default).paramLeaves ∧ bitsOf a.fields = (Q.defs.getD e default).outLeaves
+
+/-- **`LowerEvalDoor`** from `LowerEval` at `blockTmpl`'s lowering, `AdmitWhole` and `AdmitLeaves`. -/
+theorem lowerEvalDoor_of (hW : AdmitWhole) (hL : AdmitLeaves) : LowerEvalDoor := by
+  intro partition cuts S a t n Q e ha ht hq hu hU hb z hs hone
+  obtain ⟨h1, h2⟩ := lowerEval hq ht hu hU hb hs hone
+  obtain ⟨hw1, hw2⟩ := hW ha
+  obtain ⟨hb1, hb2⟩ := hL ha hq
+  simp only [doorCol_whole hw1, doorCol_whole hw2, hb1, hb2]
+  exact ⟨h1, h2⟩
+
 end Flock.Chain
