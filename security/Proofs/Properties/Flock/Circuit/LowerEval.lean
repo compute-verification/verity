@@ -86,6 +86,86 @@ theorem batch0Callees : Batch0Callees := by
   rw [← getElem!_pos _ k hk]
   exact ((hok d hd).2.1 k hk).1
 
+theorem foldl_append_copies (w : Array ℕ) : ∀ (l : List ℕ) (acc : Array ℕ),
+    (l.foldl (fun a _ => a ++ w) acc).toList = acc.toList ++ (List.replicate l.length w.toList).flatten
+  | [], acc => by simp
+  | _ :: l, acc => by
+    rw [List.foldl_cons, foldl_append_copies w l, List.length_cons, List.replicate_succ, List.flatten_cons]
+    simp [List.append_assoc]
+
+theorem widths_array_flat (n : ℕ) (e : Ty) :
+    (Ty.array n e).widths.toList = (List.replicate n e.widths.toList).flatten := by
+  simp only [Ty.widths]
+  rw [← Array.foldl_toList, Array.toList_range, foldl_append_copies, List.length_range]
+  simp
+
+/-- A decoded argument's references, read in `D`'s body before node `k`, name leaves of its type's widths, in order. -/
+theorem arg_widths {D : Defn} {k : ℕ} {a : Arg} {ps : Array Part} (hpar : D.body.params = D.params)
+    (hps : a.seq = Seq.ofParts ps) (hcnt : a.seq.count = a.ty.leaves)
+    (hrefs : ∀ r ∈ a.seq.toArray.toList, RefIn D k r)
+    (hw : LeafWidths.SeqWide (LeafWidths.srcOf D.body k) a.ty a.seq) :
+    a.seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) = a.ty.widths.toList := by
+  have hsz : a.seq.toArray.size = a.seq.count := by rw [hps]; exact (ofParts_count ps).symm
+  apply List.ext_getElem (by simp [hsz, hcnt, hb_widths_size])
+  intro m h1 h2
+  simp only [List.length_map, Array.length_toList] at h1
+  have hm : m < a.seq.count := hsz ▸ h1
+  simp only [List.getElem_map, Array.getElem_toList]
+  have hget : a.seq.toArray[m] = a.seq.get m := by
+    have := ofParts_getD ps (hps ▸ hm)
+    rw [← hps] at this
+    rw [← this, Array.getD, dif_pos h1]
+    rfl
+  have hr : RefIn D k (a.seq.toArray[m]) := hrefs _ (Array.getElem_mem_toList h1)
+  rw [hget] at hr ⊢
+  obtain ⟨hp1, hp2, hj⟩ := hr
+  have hS : (LeafWidths.srcOf D.body k).ty? (a.seq.get m).p (a.seq.get m).i = some (tyAt D (a.seq.get m)) := by
+    unfold LeafWidths.srcOf Widths.Src.ty? tyAt
+    cases hp : (a.seq.get m).p
+    · obtain ⟨hik, hin⟩ := hp2 hp
+      simp [hik, hin, Array.getD]
+    · have hip := hp1 hp
+      simp [hpar, hip, Array.getD]
+  rw [← LeafWidths.wAt_widths _ _ (by rw [← hb_widths_size]; exact hj), hw m hm _ hS,
+    LeafWidths.wAt_widths _ _ (by rw [← hcnt]; exact hm)]
+  exact getElem!_pos _ m (by simpa using h2)
+
+/-- **`Batch0Axes`**, from the decoder: `buildNode`'s axis entries (`BodiesOk.AxesOk`), and each argument's references
+naming leaves of its type's widths (`LeafWidths.decoded_wide`). -/
+theorem batch0Axes : Batch0Axes := by
+  intro bytes P hdec hr d hd hB k hk hbat i hi
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨hcal, hnodes, -⟩ := hok d hd
+  have hpar := (hcal.2 hB.1).1
+  have hR := (batch0Refs bytes P hdec hr d hd hB).1 k hk
+  have hW := ((LeafWidths.decoded_wide bytes P hdec hr d hd hB.1).2).1 k hk
+  obtain ⟨-, hno, hargs⟩ := hnodes k hk
+  have hk' : (P.defs[d]!).body.nodes[k] = (P.defs[d]!).body.nodes[k]! := (getElem!_pos _ k hk).symm
+  rw [hk'] at hbat hi hR ⊢
+  generalize (P.defs[d]!).body.nodes[k]! = x at hno hargs hbat hi hR hW ⊢
+  obtain ⟨hsz, hcnt, -, -, -, -, hax⟩ := hno
+  obtain ⟨haxs, hall⟩ := hax hbat
+  obtain ⟨hnone, hsome⟩ := hall i hi
+  obtain ⟨⟨ps, hps, -⟩, -⟩ := hargs i hi
+  simp only [← Array.getElem!_eq_getD]
+  refine ⟨fun h0 => ?_, fun hn => ?_⟩
+  · obtain ⟨hrm, hdm⟩ := hsome 0 h0
+    have hty : (x.args[i]!).ty = .array x.n ((P.defs[x.fn]!).params[i]!).2 := by
+      revert hrm
+      rcases (x.args[i]!).ty with w | ⟨n', e⟩ | fs | fs
+      all_goals simp [Ty.removeAxis]
+    refine ⟨_, hty, by rw [hdm, hty]; rfl, hsz ▸ hi, rfl, ?_⟩
+    rw [← widths_array_flat, ← hty]
+    exact arg_widths hpar hps (hcnt i hi)
+      (hR _ (by rw [getElem!_pos x.args i hi]; exact Array.getElem_mem_toList hi)).2 (hW i hi)
+  · cases hx : x.axes[i]? with
+    | none => rw [Array.getElem?_eq_none_iff] at hx; omega
+    | some o =>
+      cases o with
+      | none => exact (hnone hx).1
+      | some ax => exact absurd hx (hn ax)
+
 /-- **`LowerGateBodies` for a template of word-primitive calls and axis-0 batches**, on `LiftCalls`: the lowering of
 its lift evaluates through gates alone, and the lift puts each node's Boolean Definition in its place. -/
 theorem gateBodies_batch0 (hLC : LiftCalls) {bytes : ByteArray} {P S L : Prog} {units : Array ℕ} {d e : ℕ}
@@ -931,6 +1011,12 @@ theorem batch0OutWidths : Batch0OutWidths := by
     rw [ho, hwv, widths_array_value]
     simp only [Node.members, hf]
     rfl
+
+/-- **`Batch0Typed`** holds: a template of word-primitive calls and axis-0 batches in a C `decode` accepts whose root has
+no recut, whose nodes' Boolean bodies evaluate through gates alone, has its references, callees, output widths,
+evaluations and axes typed. -/
+theorem batch0Typed : Batch0Typed :=
+  batch0Typed_of batch0Refs (batch0Calls_of batch0Callees batch0OutWidths batch0BoolEval batch0Axes)
 
 end UnitWordProof
 
