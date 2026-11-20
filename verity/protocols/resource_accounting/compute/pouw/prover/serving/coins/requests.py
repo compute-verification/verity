@@ -331,7 +331,7 @@ def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
     if round_root(salt, r, calls, requests, slots, receipts) != inner:
         return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
     if Wd.round_root(r, inner, segments) != root:
-        return f"round {r}'s root is not over its inner root and its A segments (`window.round_root`)"
+        return f"round {r}'s root is not over its inner root and its A segments (`credit.round_root`)"
     return None
 
 
