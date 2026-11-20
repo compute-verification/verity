@@ -160,13 +160,13 @@ theorem ite_ok {α ε : Type} {c : Prop} [Decidable c] {x y : Except ε α} {a :
 /-- `admitted`'s `let #[key] := keys` at a one-key array, by `delta`: Lean generates no equations for an array-literal
 pattern. -/
 theorem match11_one {β : Sort _} (key : String) (h1 : String → β) (h2 : Array String → β) :
-    Spot.OneStageZk.admitted.match_11 (fun _ => β) ⟨[key]⟩ h1 h2 = h1 key := by
-  delta Spot.OneStageZk.admitted.match_11; rfl
+    Spot.OneStageZk.admitted.match_17 (fun _ => β) ⟨[key]⟩ h1 h2 = h1 key := by
+  delta Spot.OneStageZk.admitted.match_17; rfl
 
 /-- `admitted`'s `let #[key] := keys` at any other array. -/
 theorem match11_ne {β : Sort _} (x : Array String) (h1 : String → β) (h2 : Array String → β) (hx : x.size ≠ 1) :
-    Spot.OneStageZk.admitted.match_11 (fun _ => β) x h1 h2 = h2 x := by
-  delta Spot.OneStageZk.admitted.match_11; rw [dif_neg hx]
+    Spot.OneStageZk.admitted.match_17 (fun _ => β) x h1 h2 = h2 x := by
+  delta Spot.OneStageZk.admitted.match_17; rw [dif_neg hx]
 
 /-- What `admitted` checked of the template it admits: its Definition `fn` and lift `l`, `leaves-are-bits`, the rows
 and fields it returns, and `whole-words`. -/
@@ -183,7 +183,8 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
       (∀ x ∈ (cuts.lookup a.key).getD [], ∃ n t, fn.params.find? (·.1 == x.1) = some (n, t) ∧
         ¬ (decide (x.2 < 2) || (Widths.homo t).isNone || t.leaves % x.2 != 0) = true) ∧
       (∀ n ∈ a.ins.map (·.1) ++ a.fields.map (·.1),
-        ¬ decide (((a.ins.map (·.1) ++ a.fields.map (·.1)).filter (· == n)).size > 1) = true) := by
+        ¬ decide (((a.ins.map (·.1) ++ a.fields.map (·.1)).filter (· == n)).size > 1) = true) ∧
+      S.index[a.key]? = some a.d := by
   unfold Spot.OneStageZk.admitted at h
   split at h
   na_close
@@ -242,7 +243,7 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
   split at h
   na_close
   refine ⟨_, _, _, _, by assumption, by assumption, by assumption, none_of_forall (by assumption), rfl, rfl, ?_, ?_,
-    forIn_unit_all hc fun x s hs => ?_, ?_⟩
+    forIn_unit_all hc fun x s hs => ?_, ?_, by assumption⟩
   · intro r hr
     have := Array.find?_eq_none.1 (none_of_forall2 (by assumption)) r hr
     simpa using this
@@ -262,7 +263,7 @@ theorem admitted_walk {partition : Lean.Json} {cuts : List (String × List (Stri
 /-- **`AdmitWhole`**, from `admitted_walk`'s `whole-words`. -/
 theorem admitWhole : AdmitWhole := by
   intro partition cuts S a ha
-  obtain ⟨_, _, _, _, -, -, -, -, -, -, hi, hf, -, -⟩ := admitted_walk ha
+  obtain ⟨_, _, _, _, -, -, -, -, -, -, hi, hf, -, -, -⟩ := admitted_walk ha
   refine ⟨fun r hr => ?_, fun r hr => ?_⟩
   · have := hi r (Array.mem_def.2 hr)
     simp at this
@@ -628,7 +629,7 @@ theorem count_fst_le (ps : List (String × Ty)) (n : String) :
 /-- **`AdmitLeaves`**, from `admitted_walk` and `homoBits`. -/
 theorem admitLeaves : AdmitLeaves := by
   intro partition cuts S a Q e ha hq
-  obtain ⟨fn, L, dl, l, -, hlift, hl, hoff, hins, hfields, -, -, hcut, hnames⟩ := admitted_walk ha
+  obtain ⟨fn, L, dl, l, -, hlift, hl, hoff, hins, hfields, -, -, hcut, hnames, -⟩ := admitted_walk ha
   rw [hlift] at hq
   cases hq
   have hg : Q.defs.getD e default = l := by
@@ -942,13 +943,13 @@ def UnitComputes : Prop :=
         Y h = (Flock.OfProgram.ofProgram P).op h Y) →
         outBits Y g = Prog.evalBool P (P.child P.rootScope k m).d (argBits Y g)
 
-/-- **`AdmitCallee`** (open): every unit of a block whose C_S `admitted` admits calls the template `admitted` gives. -/
+/-- **`AdmitCallee`**: every unit of a block whose C_S `admitted` admits, and whose units `admittedBlock` admits in C,
+calls the template `admitted` gives. -/
 def AdmitCallee : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
-    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front),
-    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
-    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr →
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit),
+    decode bytes = .ok P → Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d
 
 /-- **`LiftAgreesOnArgs`** (open): the template's lift to bits evaluates, on a unit's argument bits in any trace of C,
@@ -962,15 +963,148 @@ def LiftAgreesOnArgs : Prop :=
     ∀ g ∈ units, ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
       Prog.evalBool L e (argBits Y g) = Prog.evalBool P a.d (argBits Y g)
 
+section AdmitTriples
+open Std.Do
+set_option mvcgen.warning false
+
+theorem ac_mapM_mem {α β ε : Type} (f : α → Except ε β) :
+    ∀ (l : List α) (r : List β), l.mapM f = .ok r → ∀ x ∈ l, ∃ e ∈ r, f x = .ok e := by
+  intro l
+  induction l with
+  | nil => intro _ _ x hx; simp at hx
+  | cons y l ih =>
+    intro r h x hx
+    rw [List.mapM_cons] at h
+    obtain ⟨e, he, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨es, hes, h⟩ := Flock.HmNets.bind_ok h
+    change Except.ok (e :: es) = Except.ok r at h
+    cases h
+    rcases List.mem_cons.1 hx with rfl | hx
+    · exact ⟨e, List.mem_cons_self .., he⟩
+    · obtain ⟨e', he', hf⟩ := ih es hes x hx
+      exact ⟨e', List.mem_cons_of_mem _ he', hf⟩
+
+theorem ac_array_mapM_mem {α β ε : Type} (f : α → Except ε β) (xs : Array α) (ys : Array β)
+    (h : xs.mapM f = .ok ys) : ∀ x ∈ xs, ∃ e ∈ ys, f x = .ok e := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hm : xs.toList.mapM f with
+  | error e => rw [hm] at h; cases h
+  | ok r =>
+    rw [hm] at h
+    change Except.ok r.toArray = Except.ok ys at h
+    cases h
+    intro x hx
+    obtain ⟨e, he, hf⟩ := ac_mapM_mem f xs.toList r hm x (Array.mem_toList_iff.2 hx)
+    exact ⟨e, List.mem_toArray.2 he, hf⟩
+
+theorem ac_mapM_spec {α β : Type} (f : α → V β) (xs : Array α) :
+    ⦃⌜True⌝⦄ xs.mapM f ⦃⇓? ys => ⌜∀ x ∈ xs, ∃ e ∈ ys, f x = .ok e⌝⦄ := by
+  intro _
+  cases h : xs.mapM f with
+  | error e => exact True.intro
+  | ok ys => exact ac_array_mapM_mem f xs ys h
+
+theorem operandsW_spec (P : Prog) x m : ⦃⌜True⌝⦄ Spot.BlockFront.operandsW P x m ⦃⇓? _ => ⌜True⌝⦄ := exc_spec _
+
+/-- An entry `(u, k, m, lo, hi)` of `admittedBlock`'s table of units passes `one-callee`: root node `k` calls `key`. -/
+def CalleeOk (P : Prog) (key : String) (e : ℕ × ℕ × ℕ × ℕ × ℕ) : Prop :=
+  ∃ (x : Node) (f : Defn), (P.defs[P.root]!).body.nodes[e.2.1]? = some x ∧ P.defs[x.fn]? = some f ∧ f.key = key
+
+theorem ac_step {P : Prog} {key : String} {root : Defn} {pref : List (ℕ × ℕ × ℕ × ℕ × ℕ)}
+    {cur : ℕ × ℕ × ℕ × ℕ × ℕ} {x : Node} {f : Defn} (hr : P.defs[P.root]? = some root)
+    (h1 : root.body.nodes[cur.2.1]? = some x) (h2 : P.defs[x.fn]? = some f) (h3 : ¬ (f.key != key) = true)
+    (hinv : ∀ e ∈ pref, CalleeOk P key e) : ∀ e, e ∈ pref ∨ e = cur → CalleeOk P key e := by
+  intro e he
+  rcases he with he | rfl
+  · exact hinv e he
+  · have hroot : P.defs[P.root]! = root := by simp [getElem!_def, hr]
+    exact ⟨x, f, by rw [hroot]; exact h1, h2, by simpa using h3⟩
+
+theorem ac_lam {P : Prog} {u : ℕ} {e : ℕ × ℕ × ℕ × ℕ × ℕ} {k m : ℕ}
+    (h : (do
+      let (k, m) ← Spot.BlockFront.unitAt P u
+      let sc := P.child P.rootScope k m
+      let some d := P.defs[sc.d]? | Spot.OneStageZk.notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
+      pure (u, k, m, sc.off, sc.off + d.gates) : V (ℕ × ℕ × ℕ × ℕ × ℕ)) = .ok e)
+    (hk : Spot.BlockFront.unitAt P u = .ok (k, m)) : e.2.1 = k := by
+  rw [hk] at h
+  dsimp only [bind, Except.bind] at h
+  split at h
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    rw [← h]
+  · exact absurd h notAdmitted_ne
+
+theorem ac_final {P : Prog} {units : Array ℕ} {key : String} {us : Array (ℕ × ℕ × ℕ × ℕ × ℕ)}
+    {lam : ℕ → V (ℕ × ℕ × ℕ × ℕ × ℕ)}
+    (hlam : ∀ u e k m, lam u = .ok e → Spot.BlockFront.unitAt P u = .ok (k, m) → e.2.1 = k)
+    (hmap : ∀ x ∈ units, ∃ e ∈ us, lam x = .ok e) (hinv : ∀ e ∈ us.toList, CalleeOk P key e) :
+    ∀ u ∈ units, ∀ k m, Spot.BlockFront.unitAt P u = .ok (k, m) →
+      ∃ (x : Node) (f : Defn), (P.defs[P.root]!).body.nodes[k]? = some x ∧ P.defs[x.fn]? = some f ∧ f.key = key := by
+  intro u hu k m hk
+  obtain ⟨e, he, hf⟩ := hmap u hu
+  have := hlam u e k m hf hk
+  obtain ⟨x, f, h1, h2, h3⟩ := hinv e (Array.mem_toList_iff.2 he)
+  exact ⟨x, f, this ▸ h1, h2, h3⟩
+
+/-- `admittedBlock`'s `one-callee`: where it accepts, every unit's root node calls `key`. -/
+theorem admittedBlock_triple (P : Prog) (units : Array ℕ) (key : String) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.admittedBlock P units key
+    ⦃⇓? _ => ⌜∀ u ∈ units, ∀ k m, Spot.BlockFront.unitAt P u = .ok (k, m) →
+      ∃ (x : Node) (f : Defn), (P.defs[P.root]!).body.nodes[k]? = some x ∧ P.defs[x.fn]? = some f ∧ f.key = key⌝⦄ := by
+  unfold Spot.OneStageZk.admittedBlock
+  mvcgen [ac_mapM_spec, operandsW_spec, Spot.OneStageZk.notAdmitted, exc_throw_spec, -Spec.throw_Except] invariants
+  · ⇓? _ => ⌜True⌝
+  · ⇓? _ => ⌜True⌝
+  · ⇓? ⟨xs, _⟩ => ⌜∀ e ∈ xs.prefix, CalleeOk P key e⌝
+  · ⇓? _ => ⌜True⌝
+  all_goals first
+    | trivial
+    | (intro e he; simp at he; done)
+    | ((try simp only [List.mem_append, List.mem_singleton]);
+        exact ac_step (by assumption) (by assumption) (by assumption) (by assumption) (by assumption))
+    | (exact ac_final (fun u e k m h hk => ac_lam h hk) (by assumption) (by assumption))
+    | exact exc_wp_true _ _ (fun r => by cases r <;> exact True.intro)
+
+theorem admittedBlock_callee {P : Prog} {units : Array ℕ} {key : String}
+    (h : Spot.OneStageZk.admittedBlock P units key = .ok ()) :
+    ∀ u ∈ units, ∀ k m, Spot.BlockFront.unitAt P u = .ok (k, m) →
+      ∃ (x : Node) (f : Defn), (P.defs[P.root]!).body.nodes[k]? = some x ∧ P.defs[x.fn]? = some f ∧ f.key = key :=
+  exc_of_triple (admittedBlock_triple P units key) h
+
+theorem admitted_index {partition : Lean.Json} {cuts : List (String × List (String × ℕ))} {S : Prog}
+    {a : Spot.OneStageZk.Admit} (h : Spot.OneStageZk.admitted partition cuts S = .ok a) : S.index[a.key]? = some a.d := by
+  obtain ⟨_, _, _, _, -, -, -, -, -, -, -, -, -, -, hi⟩ := admitted_walk h
+  exact hi
+
+end AdmitTriples
+
+theorem child_d (P : Prog) (k m : ℕ) :
+    (P.child P.rootScope k m).d = ((P.defs[P.root]!).body.nodes[k]!).fn := rfl
+
+/-- **`AdmitCallee`** holds. -/
+theorem admitCallee : AdmitCallee := by
+  intro bytes P partition cuts units S a hd hs ha hab g hg k m hu
+  obtain ⟨x, f, h1, h2, h3⟩ := admittedBlock_callee hab g hg k m hu
+  have hfn : x.fn < P.defs.size := (Array.getElem?_eq_some_iff.1 h2).1
+  have hf : P.defs[x.fn]! = f := by simp [getElem!_def, h2]
+  have hP := (InferenceOnlyVerifier.Properties.SecurityProofs.DecodeKeys.decode_keys bytes P hd).2 x.fn hfn
+  rw [hf, h3] at hP
+  have hS := (restrictShape P units S hs).2.2.2.1 a.key x.fn hP
+  rw [admitted_index ha] at hS
+  rw [child_d]
+  generalize P.defs[P.root]! = R at h1 ⊢
+  rw [show R.body.nodes[k]! = x by simp [getElem!_def, h1]]
+  exact (Option.some.inj hS).symm
+
 /-- **`BlockEvalDoor`**, on `FrontUnitRanges`, `UnitComputes`, `AdmitCallee` and `LiftAgreesOnArgs`. -/
 theorem blockEvalDoor_of (hF : FrontUnitRanges) (hU : UnitComputes) (hC : AdmitCallee) (hL : LiftAgreesOnArgs) :
     BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e hd hr hs ha hf hl blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := hF P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
   rw [hL bytes P partition cuts units S a L e hd hr hs ha hl g hg Y, hU bytes P hd hr g k m hu Y hY,
-    hC bytes P partition cuts units S a fr hd hr hs ha hf g hg k m hu]
+    hC bytes P partition cuts units S a hd hs ha hab g hg k m hu]
 
 end Flock.Chain
