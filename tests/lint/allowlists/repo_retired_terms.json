@@ -1959,7 +1959,6 @@
     {"file": "tests/adapters/vllm/tests/program/predict/test_weights_tie.py", "count": 27},
     {"file": "tests/adapters/vllm/tests/program/predict/test_window_circuit.py", "count": 1},
     {"file": "tests/adapters/vllm/tests/program/predict/test_window_rows.py", "count": 1},
-    {"file": "tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "count": 18},
     {"file": "tests/adapters/vllm/tests/program/test_continuation.py", "count": 1},
     {"file": "tests/adapters/vllm/tests/program/test_fa3_launch_context.py", "count": 4},
     {"file": "tests/adapters/vllm/tests/program/test_fp8.py", "count": 3},
