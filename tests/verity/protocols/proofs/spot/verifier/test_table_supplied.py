@@ -88,9 +88,9 @@ def test_a_tables_supplied_rows_are_the_rows_r7_recomputes_from_the_programs_dig
              "schemas": {v: V2 for v in values},
              "supplied": {"embed/root": [[{"bytes": table.tree.root.hex()}]],
                           "embed/domain": [[{"bytes": table.dom.domain_id.hex()}]]}}
-    assert R.check(rec, **check).ok
     got = V.check(rec, **check)
     assert got.ok and got.codes == (), got
+    assert R.check(rec, **check).ok
     for of in ("root", "domain", "opened"):
         row = win.registered[f"embed/{of}"]
         assert row.program == pd and list(row.salts) == RV.supplied_salts(pd, f"embed/{of}", 1), of
