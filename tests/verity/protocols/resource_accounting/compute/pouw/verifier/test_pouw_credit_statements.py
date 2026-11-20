@@ -78,7 +78,7 @@ def stand_in(monkeypatch, exe: Path) -> None:
     lower.write_text("the stand-in lowering\n")
     monkeypatch.setattr(PF, "executable", lambda: exe)
     monkeypatch.setattr(PF, "lower_executable", lambda: lower)
-    monkeypatch.setattr(OC, "lower", lambda c_s, _partition, _exe, *_a: c_s)
+    monkeypatch.setattr(OC, "lower", lambda c_s, _partition, _exe, *_a, **_k: c_s)
 
 
 @pytest.fixture

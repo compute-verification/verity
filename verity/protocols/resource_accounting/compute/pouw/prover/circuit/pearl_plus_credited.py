@@ -1,7 +1,7 @@
-"""A credited linear of C as Pearl+'s product: its grid's units of `PearlPlusTileCoreWords_v4`, the tile on C's words with
+"""A credited linear of C as Pearl+'s product: its grid's units of `PearlPlusTileCoreWords_v5`, the tile on C's words with
 its noise derived inside, which are the linear's nodes in C and write its y, and each unit's public row.
 
-    PearlPlusTileCoreWords_v4{K,TM,TR,TN,N,RHO,RHOR,DEV}   on words
+    PearlPlusTileCoreWords_v5{K,TM,TR,TN,N,RHO,RHOR,DEV}   on words
         (a: Array<TM, f32[K]>, b: Array<TN, bf16[K]>, cert, salt: u16[16], root: u16[32], unit: u32, rows: Array<TM, u32>,
          col: u32)
         -> (digest: u8[64] as bits, y: Array<TR, bf16[TN]>, ok: u16)
@@ -20,7 +20,7 @@ its noise derived inside, which are the linear's nodes in C and write its y, and
                                                              the references its tests hold it to
 
 At a credited linear of C, y = x · Wᵀ over M rows of x (K words) and the weight's N columns, each grid tile is one unit
-`PearlPlusTileCoreWords_v4{K, TM, TR, TN, N, RHO, RHOR, DEV}` (`credited_product`), TR its rows below M, the rest filler
+`PearlPlusTileCoreWords_v5{K, TM, TR, TN, N, RHO, RHOR, DEV}` (`credited_product`), TR its rows below M, the rest filler
 (rows a call's A is padded with to whole tiles, held to zero by the core). Its ports read:
 
   - ``a``: the tile's TM rows of A, the linear's x rows widened to FP32 as their writers hold them (a filler row zero);
@@ -32,8 +32,8 @@ At a credited linear of C, y = x · Wᵀ over M rows of x (K words) and the weig
 
 The node derives its noise from seed_B = H_"seed-B"(salt ‖ root) inside: E_B's lines are its column tile's, F_A, F_B and G
 the call's; the core derives each row's E_A from the row's own digest.  Its top level is the noise's units and the core,
-each a Call or a map member: `PearlPlusTileSeed_v2` (the line key and each line's index), `PearlPlusTileLine_v3` mapped
-over eb's TN indices and over F's K for fa and for fb, `PearlPlusGramRow_v4` Called for each of F_B's 32 columns, and
+each a Call or a map member: `PearlPlusTileSeed_v4` (the line key, eb's TN lines and each of F's lines' index),
+`PearlPlusTileLine_v4` mapped over F's K for fa and for fb, `PearlPlusGramRow_v5` Called for each of F_B's 32 columns, and
 `PearlPlusTileCoreWired_v2`, eb, fa, fb and g crossing as values C wires from each producer's output row to its consumer's
 input row, each in the 16-bit words C commits its values in, which every reader reads at that width.  No K that the core takes fits the node whole in one proof block (the noise alone is about 370k · K ANDs), so
 C's laying (`verity.circuits.laying.lay`) opens it into those units (`cut`), each its own block: a line is 73,459 ANDs and
@@ -170,31 +170,30 @@ def _on_words(B, S, a, b, cert, salt, root, unit, rows, col):
 
 
 PearlPlusTileCoreWords = CompositeDefinition(
-    "PearlPlusTileCoreWords", 4, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
+    "PearlPlusTileCoreWords", 5, _STATICS, lambda S: (_node_params(S), _word_ret(S)),
     _on_words, refuse=PT.PearlPlusTileCoreV3.refuse, conformance=PT.PearlPlusTileCoreV3.conformance,
-    doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v2`(salt, "
-        "root, col), `PearlPlusTileLine_v3` over eb's TN indices one a unit and F's K eight units of K/8, `PearlPlusGramRow_v4` for each of F_B's 32 columns, and "
+    doc="A -h3 tile on C's words, its noise derived inside as maps (`pearl_plus_tile.noise`): `PearlPlusTileSeed_v4`(salt, "
+        "root, col) with eb's TN lines, `PearlPlusTileLine_v4` over F's K eight units of K/8, `PearlPlusGramRow_v5` for each of F_B's 32 columns, and "
         "`PearlPlusTileCoreWired_v2` on the tile's words and that noise by wire; the salt and the root in 16-bit words, two "
         "bytes a word, low byte first")
 
 
 def cut(t: SpecializedDefinition) -> list[tuple[SpecializedDefinition, int]]:
-    """The units C's laying (`verity.circuits.laying.lay`) makes of a binding of `PearlPlusTileCoreWords_v4`, which no
+    """The units C's laying (`verity.circuits.laying.lay`) makes of a binding of `PearlPlusTileCoreWords_v5`, which no
     binding fits whole (its noise alone is about 370k · K ANDs), each Definition bound with how many of it: its body's
     Calls and each map's members."""
     s = t.bindings
     g = s["K"] // PT.F_ROWS
-    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("eb", 1), s["TN"]), (PT.line("fa", g), PT.F_ROWS),
-            (PT.line("fb", g), PT.F_ROWS),
+    return [(PT.seed(s["K"], s["TN"]), 1), (PT.line("fa", g), PT.F_ROWS), (PT.line("fb", g), PT.F_ROWS),
             *((PT.gram_row(s["K"], s["DEV"], p), 1) for p in range(PT.R)), (bind(PearlPlusTileCoreWired, **s), 1)]
 
 
 #: staged as its cut (`circuit_check.checks.cut_of`)
-CUTS = {"PearlPlusTileCoreWords_v4": cut}
+CUTS = {"PearlPlusTileCoreWords_v5": cut}
 
 
 def credited_product(scheme: str, k: int, tm: int, tn: int, n: int, real: int | None = None) -> SpecializedDefinition:
-    """`PearlPlusTileCoreWords_v4` for ``scheme`` at depth ``k`` over a TM × TN tile of a linear of ``n`` columns, its first
+    """`PearlPlusTileCoreWords_v5` for ``scheme`` at depth ``k`` over a TM × TN tile of a linear of ``n`` columns, its first
     ``real`` rows real (every row when None): the core's statics (`pearl_plus_tile.core`)."""
     core = PT.core(PS.get(scheme), k, tm, tn, n, real)
     return bind(PearlPlusTileCoreWords, **{s: core.bindings[s] for s in _STATICS})
