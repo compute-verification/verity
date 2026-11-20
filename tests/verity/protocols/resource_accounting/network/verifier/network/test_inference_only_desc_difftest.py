@@ -82,11 +82,8 @@ def test_the_generator_covers_what_it_says():
     assert {m["theta_kind"] for m in made} == {"none", "all", "registered", "random"}
     assert {m["division"] for m in made} == {"single", "singletons", "runs", "random"}
     assert {r.get("error") for r in results} == set(vectors.MALFORMED) - {"not-topological"} | {None}
-    later = [m["instance"] for m in made if m["malformed"] == "not-topological"]
-    assert any("error" in reference.check_desc(i) for i in later)
-    for i in later:
-        got = reference.check_desc(i)
-        assert "error" not in got or (got == {"error": "program"} and _forward_refused(i))
+    later = [m["instance"] for m in made if m["malformed"] == "not-topological" and _forward_refused(m["instance"])]
+    assert later and all(reference.check_desc(i) == {"error": "program"} for i in later)
     good = [(m, r) for m, r in zip(made, results, strict=True) if "error" not in r]
     assert {r["failure"][1] for _, r in good if r["failure"]} == {"size", "nci"}
     assert any(r["complies"] for _, r in good)
