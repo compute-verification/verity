@@ -1,0 +1,3 @@
+[2026-11-20T10:25Z] a8854c363a84
+From the lead, a READING to add to your final return (five lines, by file and line, no code): in verity/circuits restrict.py (and its Lean twin Spot/Restrict.lean if cheap), when restrict builds the block circuit C_S from a decoded C: does every node of C_S keep a callee index that is in range of C_S's own Definitions, and does every call keep exactly its callee's number of parameters (arity)? Name the lines that copy or renumber Definitions and arguments, and anything that could leave an index out of range or an argument list shorter than the callee's parameters.
+
