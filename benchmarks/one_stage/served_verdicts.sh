@@ -2127,48 +2127,9 @@ if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ] && hold_
     say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3 ;;
   esac
 fi
-if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under Pearl+, its commit and audit tied to Pearl+'s W
-  [ -n "$V3C" ] || { say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS, and it is empty"; exit 3; }
-  [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
-  if [ -z "$FOLLOW" ] && [ "${1:-}" != v3c ]; then  # the serve's run, whose piece commits the window tied to W
-    outs=$(cut -d, -f3 <<< "$V3C")
-    [ "$LOAD" = fixed ] && [ "$WINDOW_STEPS" = "$outs" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE round s of Pearl+'s W is the window's s-th step, the class's s-th output, so the window is one full window of fixed length: LOAD=fixed (not $LOAD) and WINDOW_STEPS the class's outputs, $outs (not $WINDOW_STEPS)"; exit 3; }
-    IFS=, read -r slots prompt _ <<< "$V3C"
-    [ "$SLOTS" = "$slots" ] && [ "$PROMPTS" = "$prompt:$prompt" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the circuit cut at Pearl+'s linears reads its tables at the class's fixed load, its slots' requests of its prompt's ids each: SLOTS $slots (not $SLOTS) and PROMPTS $prompt:$prompt (not $PROMPTS)"; exit 3; }
-    [ "$PRECISION" = bfloat16 ] \
-      || { say "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint's linears as Pearl+'s FP8 product, and PRECISION is $PRECISION: set it bfloat16"; exit 3; }
-    [[ $ROW_ID == *__bf16__* ]] \
-      || { say "PREFLIGHT: PEARLPLUS_TIE serves the BF16 checkpoint, and ROW_ID $ROW_ID is no BF16 row's (its id names __bf16__): set ROW to the BF16 row's dir"; exit 3; }
-    [ -n "$BUILD_OF_RECORD" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the served compare holds the serve to ROW_ID $ROW_ID's Build of record, which this file pins none of: pin its PROGRAM_DIGEST:MANIFEST_DIGEST in the tied block's case, or give BUILD_OF_RECORD"; exit 3; }
-    case " $CLASSES " in *" $V3C "*) ;; *)
-      say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS $V3C, whose window circuit CLASSES ($CLASSES) doesn't count: add it"; exit 3 ;; esac
-    [[ " ${SERVE_ARGS:-} " != *" --prefix-caching "* ]] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE each request's prefill computes every row of its prompt, at which the cut circuit reads Pearl+'s tables, and SERVE_ARGS turns vLLM's prefix cache on (--prefix-caching): drop it"; exit 3; }
-    [ -z "${WINDOW:-}" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the window of record is the fixed load's, named by its requests, and WINDOW names one by number: unset it"; exit 3; }
-    [ -z "$PEARLC_CHALLENGER_GATE" ] || [ -n "${MAIN_FILE:-}" ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this tree's HEAD) need not hold: set MAIN_FILE to \`git rev-list --first-parent origin/main\` of a fresh fetch, sent with the run"; exit 3; }
-    DEFER=$(short_of_memory) || DEFER=
-    [ -z "$DEFER" ] || [ "$PRODUCT" = remote ] \
-      || { say "PREFLIGHT: under PEARLPLUS_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
-  fi
-fi
-if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit tied to Pearl+'s W, in the serve's run and in `served_verdicts.sh v3c` alike
-  TIED=PEARLPLUS_TIE WHOSE="Pearl+'s"
-  grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
-    || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
-  [ -n "$V3C_LAW" ] \
-    || { say "PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN"; exit 3; }
-  stratified=; [[ $V3C_LAW == stratified-rate:* ]] && stratified=1
-  [ -n "$stratified" ] || { [ "$TIED" = PEARLPLUS_TIE ] && [ "${PEARLPLUS_TIE_UNIFORM:-}" = 1 ]; } \
-    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, and a stratified rate (stratified-rate:NUM/DEN), the one rule the tie takes without PEARLPLUS_TIE_UNIFORM, samples a stratum of each reader template, which reaches every table only where each table's readers are templates of their own: V3C_LAW is $V3C_LAW"; exit 3; }
-  [ -z "$stratified" ] || [ "$TIED" != PEARLPLUS_TIE ] \
-    || grep -qs '"ROUND", "CALL"\]' "$TREE/adapters/vllm/verity_vllm/definitions/registry/linear_cut.py" \
-    || { say "PREFLIGHT: under PEARLPLUS_TIE this tree's cut reads every call of a linear shape with one template (its LinearARow takes no ROUND and CALL), so a stratified rate's stratum is a shape and its sample can leave a table Pearl+'s W registers with no sampled reader, and no rule that samples a stratum of each table's readers is written yet: set PEARLPLUS_TIE_UNIFORM=1 with a uniform rate (rate:NUM/DEN), whose record states its weaker tie"; exit 3; }
-fi
+for v in PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM; do
+  [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is refused: the tied leg is deleted: no window is tied to a W"; exit 3; }
+done
 # V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
 [ -z "$V3C" ] || [ -n "$COMPOSE" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
   || { say "PREFLIGHT: V3C_LAW is the rate V3c's window is committed under and its audit states to its stream, rate:NUM/DEN or stratified-rate:NUM/DEN, not $V3C_LAW: in place of a fixed count K, state K over the proof blocks the class's window registers (rate:K/N or stratified-rate:K/N)"; exit 3; }
