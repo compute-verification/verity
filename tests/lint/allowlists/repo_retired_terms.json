@@ -2046,7 +2046,6 @@
     {"file": "tests/benchmarks/network_traces/test_stop_verdicts.py", "count": 1},
     {"file": "tests/benchmarks/network_traces/test_wipe_egress.py", "count": 1},
     {"file": "tests/benchmarks/network_traces/test_wipe_gate.py", "count": 2},
-    {"file": "tests/benchmarks/numerical/bench/test_cell.py", "count": 2},
     {"file": "tests/benchmarks/numerical/bench/test_census_data.py", "count": 1},
     {"file": "tests/benchmarks/numerical/bench/test_input_sets.py", "count": 6},
     {"file": "tests/benchmarks/numerical/bench/test_lowerings.py", "count": 11},
