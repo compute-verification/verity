@@ -552,10 +552,10 @@ def stage(a) -> int:
                                  "kinds": dict(tl.kinds), "test_instance": tl.test} for tl in tiles]}
     print("AMOUNTS " + json.dumps(rec["amounts"]), flush=True)
     assert [tl.amount for tl in tiles] == [PS.tile_macs(tl.core.bindings) for tl in ln.tiles]
-    tests = sorted({tl.test for tl in tiles if tl.test})
-    rec["credit"] = {"credits": "nothing" if tests else "each tile its amount, when every stratum it has a block in "
-                                                          "passed (credited_tiles)",
-                     "refusal": f"{PS.TEST_INSTANCE}: C's tiles {tests[0]}" if tests else None}
+    test = next((tl for tl in tiles if tl.test), None)
+    rec["credit"] = {"credits": "nothing" if test else "each tile its amount, when every stratum it has a block in "
+                                                         "passed (credited_tiles)",
+                     "refusal": f"{PS.TEST_INSTANCE}: tile {test.index} {test.test}" if test else None}
     print("CREDIT " + json.dumps(rec["credit"]), flush=True)
 
     coin = os.urandom(64)
