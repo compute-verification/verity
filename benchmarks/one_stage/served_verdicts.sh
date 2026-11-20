@@ -1978,6 +1978,16 @@ window_road() {  # in TREE: the runner's steps in its order, each from the windo
   KN=$K CLASSES=$WINDOW_CLASS
   say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took"
   RAN+=(window)
+  say "$("$PY" - "$D/serve.json" "$WINDOW_CLASS" <<'EOF'
+import json, math, sys
+c = sys.argv[2]
+t = ((json.load(open(sys.argv[1])).get("engine") or {}).get("engine_kwargs") or {}).get("max_num_batched_tokens")
+s = int(c.split(",")[0])
+print(f"CLASS {c}: its bits are not counted: serve.json records no engine.engine_kwargs.max_num_batched_tokens" if not t else
+      f"CLASS {c}: {math.log2(int(t) // s):.2f} bits leave with it (its prompt length, one of the {int(t) // s} that fit {s} "
+      f"slots in {t} tokens a step; its slots and outputs are the application's)")
+EOF
+)"
   "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
     || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
   say "ADVICE: the close's registration (D/advice/wK), compiled at the close"

@@ -25,7 +25,8 @@ ROOT = Path(__file__).parents[6]
 COMPILER = {"name": "c", "digest": "cd" * 64}
 #: what a card's serve writes in serve.json beside the application's checkpoint and its device (`serve_seal.target_of`), the
 #: default profile standing in for the card's
-SERVED = {"execution": "bi-eager", "default_seed": DEFAULT_SEED}
+SERVED = {"execution": "bi-eager", "default_seed": DEFAULT_SEED,
+          "engine": {"execution": "bi-eager", "engine_kwargs": {"max_num_batched_tokens": 512}}}
 PROGRAM, WORKLOAD = "a1" * 64, "12" * 64
 
 
@@ -74,13 +75,37 @@ def _road(tmp_path, monkeypatch, application, d, **env):
     return rc, (state / "logs" / "served-window.log").read_text(), state / "out"
 
 
+def _digests(doc, path=""):
+    """Each 128-hex string of ``doc`` with its path."""
+    if isinstance(doc, dict):
+        return [x for k, v in doc.items() for x in _digests(v, f"{path}.{k}" if path else str(k))]
+    if isinstance(doc, list):
+        return [x for i, v in enumerate(doc) for x in _digests(v, f"{path}[{i}]")]
+    return [(path, doc)] if isinstance(doc, str) and len(doc) == 128 and set(doc) <= set("0123456789abcdef") else []
+
+
+def _plain(d):
+    """Every plain digest the window's registration carries (in its record's registration.json and index.json, and the
+    registration's own docket digest), by path: a hiding commitment's root and the registered compiler's digest are
+    public, and none of these may leave."""
+    from verity.commitments import docket_digest as DD
+
+    record = d / "windows" / "w0" / "record"
+    reg = json.loads((record / "registration.json").read_text())
+    found = {f"registration.json {k}": v for k, v in _digests(reg)}
+    found |= {f"index.json {k}": v for k, v in _digests(json.loads((record / "index.json").read_text()))}
+    found["the registration's docket digest"] = DD.digest(reg)
+    return {k: v for k, v in found.items() if v != COMPILER["digest"]
+            and not any(w in ("run", "root", "roots") or w.endswith(("_root", "_roots")) for w in k.replace("[", ".").split("."))}
+
+
 def _secret(d):
     """The declared circuit's description as the auditor must not see it: its templates' names and its digests (the
     registered compiler that builds it is public)."""
     record = d / "windows" / "w0" / "record"
     doc = json.loads((record / "circuit.json").read_text())
     return {str(t) for t, _ in doc["templates"]} | {hashlib.sha512((record / "circuit.json").read_bytes()).hexdigest(),
-                                                    PROGRAM, WORKLOAD}
+                                                    PROGRAM, WORKLOAD} | set(_plain(d).values())
 
 
 def _published(out):
@@ -102,6 +127,7 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     (tmp_path / "run").mkdir()
     path = os.pathsep.join(x for x in os.environ["PATH"].split(os.pathsep) if not (Path(x) / "gpu-lease").exists())
     rc, log, out = _road(tmp_path, monkeypatch, "remote", d, RESEARCH_RUN_DIR=str(tmp_path / "run"), PATH=path)
+    lines = log
     err = "\n".join(f.read_text()[-2000:] for f in sorted(d.glob("window-circuit-*.err")))
     log += f"\n(the window circuit's log, which stays on the node:)\n{err}"
     assert "PREFLIGHT" not in log and "ROW" not in log.replace("no ROW read", ""), log
@@ -116,8 +142,13 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
     assert end.startswith("ROAD END (the window's record): ran ") and "pearl-plus" in end and rc == 20, log
     assert "no verdict stands for a step that did not run" in end
     assert end.endswith("no sampled verdict, so no δ or ε: the sampled proofs did not run; the circuit digest is kept private and NO public value fixes it before the coins"), end
+    assert [x for x in lines.splitlines() if x.startswith("CLASS ")] == [
+        "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
+        "slots and outputs are the application's)"], lines
+    assert "prove_path.py window-circuit: truncated: a 8-bit field at bit 0 of 0" in err, err
     secret = _secret(d)
-    assert not [s for s in secret if s in end or s[:16] in end], end
+    assert _plain(d) and hashlib.sha512((d / "windows/w0/record/circuit.json").read_bytes()).hexdigest() in _plain(d).values()
+    assert not [s for s in secret if s in lines or s[:16] in lines], lines
     assert not [(f, s) for f, text in _published(out) for s in secret if s in f or s in text or s[:16] in text]
     names = json.loads((tmp_path / "run" / "private-paths.json").read_text())["names"]
     assert {"plans.jsonl", "handoff/", "circuit.json", "predicted.json"} <= set(names), names
