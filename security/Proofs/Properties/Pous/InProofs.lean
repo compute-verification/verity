@@ -211,7 +211,7 @@ theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt
     have hb : (honestCoinKey.size == 256 && honestCoinKey.get! (256 - 1) &&& 0x80 == 0) = true := by
       set_option maxRecDepth 100000 in decide
     unfold Flock.SessionCoins.checkKey
-    simp only [hkb, hb, if_true]
+    simp only [hkb, hb, ite_true]
     rfl
   exact Inputs.coinLeaf_of _ _ 0 0 _ hk (by decide) (by decide) (by simp [honestSalt, ByteArray.size])
 
@@ -222,8 +222,9 @@ def honestCommitment (leaf : ByteArray) : ChallengePhaseCommitment :=
 
 theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf) :
     verifyCoin (honestCommitment leaf) honestOpening = true := by
-  simp [verifyCoin, honestCommitment, honestOpening, h]
-  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
+  have h' : Flock.SessionCoins.coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := h
+  simp [verifyCoin, Flock.SessionCoins.verify, honestCommitment, honestOpening, h']
+  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain, Flock.SessionCoins.domain,
     Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Domain.leaf, Flock.FV3.Scheme.hash, Flock.FV3.hash,
     Flock.FV3.Sha512.scheme, Properties.Certifier.Bytes.hash_size]
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
