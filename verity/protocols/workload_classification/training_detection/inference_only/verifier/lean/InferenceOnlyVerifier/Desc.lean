@@ -674,6 +674,7 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
         if q.rows > 1 then byRow ()
         else if q.stride == 1 then fromCallee c fuel k 0 q.base.toNat (q.base.toNat + q.len)
         else
+          walkAtMost "leaves of a call's output read one by one" q.len
           let mut out := #[]
           for t in [0:q.len] do
             out := out ++ (← fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1))

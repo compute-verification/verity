@@ -1896,6 +1896,7 @@ def byRows (c : Desc.Ctx) (fuel : Nat) (q : Piece) : Except String (Array Seg) :
 
 /-- `fromCallee` of member 0 at each of a piece's positions in turn. -/
 def callPts (c : Desc.Ctx) (fuel k : Nat) (q : Piece) : Except String (Array Seg) := do
+  Desc.walkAtMost "leaves of a call's output read one by one" q.len
   let mut out := #[]
   for t in [0:q.len] do
     out := out ++ (← Desc.fromCallee c fuel k 0 (q.at t).toNat ((q.at t).toNat + 1))
@@ -2900,6 +2901,7 @@ theorem downSpec_callPts (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
     Agree c.P sc (segsPos segs) ((pos q).map (den c.P sc)) := by
   rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
   unfold callPts at h
+  have h := walkAtMost_bind _ _ _ h
   dsimp only at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   rw [range'_size] at h
@@ -7023,6 +7025,7 @@ theorem downShape_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeShape c fuel) 
     {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
   rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
   unfold callPts at h
+  have h := walkAtMost_bind _ _ _ h
   dsimp only at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   rw [range'_size] at h
@@ -10553,6 +10556,7 @@ theorem downW_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeW c fuel) (q : Pie
     {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, GateW c.P c.d s := by
   rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
   unfold callPts at h
+  have h := walkAtMost_bind _ _ _ h
   dsimp only at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   rw [range'_size] at h

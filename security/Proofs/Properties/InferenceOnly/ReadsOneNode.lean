@@ -770,6 +770,7 @@ theorem downN_callPts (c : Desc.Ctx) (fuel : Nat) (hC : CalleeN c fuel) (q : Pie
     {segs : Array Seg} (h : Desc.down c (fuel + 1) q = .ok segs) : ∀ s ∈ segs.toList, NodeW c.P c.d s := by
   rw [down_call_pts c fuel q ht hff hn hform h0 hr hs] at h
   unfold callPts at h
+  have h := walkAtMost_bind _ _ _ h
   dsimp only at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
   rw [range'_size] at h
