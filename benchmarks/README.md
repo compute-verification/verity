@@ -317,8 +317,7 @@ of the account (`scontrol show reservation`), which `--reservation=NAME` runs it
 
 ## Index
 
-Every directory has one row, in the group of what it measures; `tests/test_benchmarks_index.py` holds the rows to the
-tree. A directory's status is one of:
+Every directory has one row, in the group of what it measures. A directory's status is one of:
 
 - **maintained**: developed against the current tree, and its commands run from it;
 - **frozen**: kept so that what it measured can be measured again, and changed only to keep it running;
