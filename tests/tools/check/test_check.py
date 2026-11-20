@@ -340,6 +340,21 @@ def test_the_agreement_leaves_its_verdicts_not_its_work_tree_in_the_run_director
     assert not (out / "flock-agreement" / "upstream").exists() and not (out / "flock-agreement" / "inputs").exists()
 
 
+def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
+    """An agreement on refusals alone says so in the step's outcome line: refusals decided alike say nothing about a session
+    both verifiers accept."""
+    refused = [{"set": 0, "sessions": 48, "agree": 48, "disagree": [], "accepted": 0, "passed_every_check": 0},
+               {"set": 1, "skipped": "no upstream binary"}]
+    said = CHECK.agreement_outcome(refused)
+    assert said.startswith("1 sets: 48 of 48 sessions agree, 0 disagree; 0 accepted") and "NO SESSION IS ACCEPTED" in said
+    both = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 3, "passed_every_check": 2}]
+    said = CHECK.agreement_outcome(both)
+    assert "3 accepted by the Lean verifier and by upstream, 2 refused last" in said and "NO SESSION" not in said
+    split = [{"set": 0, "sessions": 50, "agree": 49, "disagree": ["s7"], "accepted": 3, "passed_every_check": 0}]
+    assert "49 of 50 sessions agree, 1 disagree; 3 accepted by the Lean verifier, 0 refused" in CHECK.agreement_outcome(split)
+    assert "NO SESSION" not in CHECK.agreement_outcome([])
+
+
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
     """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
     launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run
