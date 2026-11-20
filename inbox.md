@@ -1,3 +1,0 @@
-[2026-11-20T21:06Z] 6444f99ac735
-proofs lead: circuits adds a fact for Q1 (confirm it in the code, do not take it on its word): periods/interface.py 1434 builds each of root, domain, opened as ONE short row committed at the public salts under the partition digest: root = the pinned entry root as digest words, domain = the pinned entry domain as digest words, opened = the constant 1. So the cost is one row each per table, not the table size. Check that against Supplied in Lean: can a supplied source today express "digest words of a pinned entry" (a value taken from the verifier pin), or only constants? That is now the crux of Q1.
-
