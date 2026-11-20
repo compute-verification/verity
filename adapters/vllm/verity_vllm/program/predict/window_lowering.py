@@ -251,7 +251,7 @@ class _Program:
     def _Embedding(self, j: int, node: Any) -> None:
         V, H = node.fn.bindings["V"], node.fn.bindings["H"]
         tok, table = node.args
-        tid, u = self.b.unit(E.read(V, H))
+        tid, u = self.b.unit(E.opening(V, H))
         self.b.feed(tid, "tok", u, 1, self._token(tok))
         t = self.b.table(self.weight(table.refs, V * H), H, V)
         self.b.roots += [IF.TableRead(tid, "root", t.name, "root", u, 1), IF.TableRead(tid, "domain", t.name, "domain", u, 1)]

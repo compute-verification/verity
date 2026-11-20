@@ -131,7 +131,6 @@ verity_vllm/
   observe/           the observer's capture of an engine run, folded back into a Program (fold/) for the Match
   acquire/           value acquisition: the acquisition plan, and the hooks and native taps it installs
   commit/            the Commit: the GPU committer (committer/) and the rows-sha512 scheme (step_rows.py)
-  commitments/       the vllm-v1 scheme's hashlib reference, PROTOCOL.md and vectors (vllm_v1/); its leaf tree (leaves.py)
   check/             the checks: the Match (match/), replay, coverage, weights of record; a Commit's verdict (verdict.py)
   protocols/         the subprotocols' adapters: SPOT, PoUS, PoUB's node store on the engine (poub/)
     linear/          the linear-layer executor's interface

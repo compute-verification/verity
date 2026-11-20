@@ -4,7 +4,7 @@ public import Definitions.ResourceAccounting.Actual
 public import Definitions.Core.Blocks
 public import Definitions.Core.CircuitLevels
 public import Definitions.Core.Period
-public import Definitions.Pous.Guarantees.StreamedWipeResidual
+public import Definitions.Pous.Model.StreamedWipeResidual
 
 /-!
 # Blocks and their properties: the interface from accounting to policy
