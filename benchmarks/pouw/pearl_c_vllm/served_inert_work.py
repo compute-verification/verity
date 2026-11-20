@@ -188,7 +188,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
         raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
     return {"man": man, "sha256": sha, "scheme": scheme, "view": view, "epoch": epoch, "tile": index,
             "records": records, "transcript": transcript, "verifier": verifier,
-            "prover": VR.Opened(man, VR.Files(path.parent), verifier.refs)}
+            "prover": VR.prover_of(man, path.parent, verifier.refs)}
 
 
 def credited_macs(record: PW.UnitRecord) -> int:
