@@ -3,7 +3,7 @@ Boolean body (`versions.boolean_version`), since a Program over one without is r
 the list of those that have none yet, each with why. It is held exactly: a new primitive without a body fails, and so does
 one listed that has gained one, until its entry is removed, so the list only shrinks. A family made on demand
 (`codec.register_lazy_family`) is seen at the one member `ON_DEMAND` names for it, and every member of it is read as that one,
-whichever members other tests made first. A module is left out only when it needs a package outside the workspace that this
+whichever members other tests made first; a primitive a test module defines is not counted. A module is left out only when it needs a package outside the workspace that this
 environment lacks (a GPU runtime)."""
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def _word_primitives() -> dict[str, PrimitiveDefinition]:
     fams = _families()
     out = {}
     for d in list(REGISTRY.defs.values()):
-        if isinstance(d, PrimitiveDefinition) and is_word_primitive(d):
+        if isinstance(d, PrimitiveDefinition) and is_word_primitive(d) and not getattr(d.evaluate, "__module__", "").startswith("tests."):
             fid = descriptor_id(d)
             rep = next((fams[p.pattern] for p, _ in codec._LAZY_PRIMITIVE_FAMILIES if p.fullmatch(fid)), fid)
             out[rep] = d if rep == fid else lookup_primitive(REGISTRY, rep)

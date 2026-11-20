@@ -147,6 +147,7 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
   let some listed := listedOf partition
     | throw (Flock.OneCircuit.notDerived
         "lower : C_S of a partition that is no template query (Q_template_instance, Q_template_instances) -> its Boolean block circuit")
+  -- unreachable from a descriptor: `Spot.Restrict.restrict`'s C_S has its root among its Definitions
   let some root := S.defs[S.root]? | notAdmitted "one-template" "C_S's root is not one of its Definitions"
   let mut called : Array String := #[]
   for k in [0:root.body.nodes.size] do
@@ -156,7 +157,9 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
   let keys := called.qsort (· < ·)
   let #[key] := keys
     | notAdmitted "one-template" s!"C_S's root calls {keys.toList}, and a block's units are instances of one template"
+  -- unreachable through the door: the partition's query (`Partition.evaluate`) refuses a unit of a template it lists not
   if !listed.contains key then notAdmitted "listed" s!"C_S's template {key} is not one the partition's query lists"
+  -- this and the next unreachable from a descriptor: C_S indexes each of its Definitions
   let some d := S.index[key]? | notAdmitted "listed" s!"C_S's template {key} has no entry in C_S's index"
   let some fn := S.defs[d]? | notAdmitted "listed" s!"C_S's template {key} is no Definition of C_S"
   let cs := (cuts.lookup key).getD []
@@ -174,6 +177,8 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
   if let some w := (wideFrom L dl)[0]? then
     notAdmitted "on-bits" s!"C_S's template {key} reaches {w}, whose leaves are not all one bit after the lift to bits"
   for (p, k) in cs do
+    -- through the door only the width test refuses: `ioCuts` cuts a parameter of the template `leaves / fl` ways, `fl`
+    -- dividing its leaves, and keeps only the cuts of at least two
     let some (_, t) := fn.params.find? (·.1 == p)
       | notAdmitted "cut-rows" s!"C_S's template {key}: a cut names {p}, which is no parameter"
     if k < 2 || (Flock.Program.Widths.homo t).isNone || t.leaves % k != 0 then
@@ -182,6 +187,8 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
   for (what, rs) in [("input row", ins), ("return field", fields)] do
     if let some (n, b) := rs.find? fun (_, b) => b == 0 || b % 16 != 0 then
       notAdmitted "whole-words" s!"C_S's template {key}: {what} {n} of {b} bits is not a positive whole number of u16 words"
+  -- unreachable from a descriptor (`Flock.Lift.lift` gives its template's lift, its leaves its bits): guarded on a lift
+  -- changed by hand
   let some l := L.defs[dl]? | notAdmitted "leaves-are-bits" s!"C_S's template {key} has no lift to bits"
   if let some why := leavesOff fn l then notAdmitted "leaves-are-bits" s!"C_S's template {key}: {why}"
   return { key, d, ins, fields }
@@ -204,10 +211,14 @@ instance instDecidableAdmitted (partition : Json) (cuts : List (String × List (
   its template's parameter-leaf width and no row of the block circuit stands for a gate another unit computes.
 A function of C, the units and `key`; its work is the units' operands. -/
 def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : V Unit := do
+  -- unreachable from a descriptor: the decoder's root is one of its Definitions
   let some root := P.defs[P.root]? | notAdmitted "no-recut" "C's root is not one of its Definitions"
+  -- unreachable through the door: a root read recut is refused before, by the gate layout restrict reads (`recut-gates`,
+  -- `RC16`)
   if !root.body.recut.isEmpty then
     notAdmitted "no-recut" s!"C's root reads input nodes {(root.body.recut.map (·.1)).toList} recut, in leaves of part of their width"
   let named := units.qsort (· < ·)
+  -- unreachable through the door, whose units are a block's range of the partition
   for i in [1:named.size] do
     if named[i - 1]! == named[i]! then notAdmitted "disjoint-ranges" s!"unit {named[i]!} is named twice in the block"
   -- `unitAt`'s node is one of the root's (`Prog.calls`), so "no node of C's root" is unreachable by construction; the
@@ -215,6 +226,7 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
   let us ← units.mapM fun u => do
     let (k, m) ← Spot.BlockFront.unitAt P u
     let some x := root.body.nodes[k]? | notAdmitted "one-callee" s!"unit {u} is no node of C's root"
+    -- unreachable from a descriptor: the decoder resolves every node's callee to a Definition
     let some f := P.defs[x.fn]? | notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
     let off := (P.child P.rootScope k m).off
     pure (u, m, x, f, off, off + f.gates)
@@ -222,8 +234,10 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
   for i in [1:byLo.size] do
     let (u, _, _, _, _, hi) := byLo[i - 1]!
     let (v, _, _, _, lo, _) := byLo[i]!
+    -- unreachable from a descriptor, whose decoder lays the root's nodes at disjoint offsets
     if lo < hi then notAdmitted "disjoint-ranges" s!"units {u} and {v} of the block hold gates in common"
   for (u, m, x, f, _, _) in us do
+    -- unreachable through the door: C_S's root calls each unit's callee, and `admitted`'s `one-template` holds
     if f.key != key then notAdmitted "one-callee" s!"unit {u} calls {f.key}, not the block's template {key}"
     for (g, _) in ← Spot.BlockFront.operandsW P x m do
       if let some (v, _, _, _, _, _) := us.find? fun (_, _, _, _, lo, hi) => lo ≤ g && g < hi then
@@ -340,9 +354,6 @@ def liftPlusLeaf (S : Flock.Program.Prog) (d : Nat) : V (Flock.Program.Prog × N
   pure ({ L with defs := L.defs.modify dl fun l =>
     { l with params := l.params.modify 0 fun (n, _) => (n, .array 17 (.value 1)) } }, dl)
 
-#guard match admitWith E16 (fun fn => { fn with ret := .tuple #[] }) with
-  | .error e => e == s!"{NOT_ADMITTED}, whole-words: C_S's template E_v1 returns no field"
-  | .ok _ => false
 #guard match admitWith E16 (lift := liftPlusLeaf) with
   | .error e => e == s!"{NOT_ADMITTED}, leaves-are-bits: C_S's template E_v1: parameter x of 16 bits has 17 leaves after the lift to bits"
   | .ok _ => false
@@ -351,11 +362,13 @@ def liftPlusLeaf (S : Flock.Program.Prog) (d : Nat) : V (Flock.Program.Prog × N
 /-- C of one unit each of two templates, A(x : Array 16 (Value 1)) = map Not x and B the same. -/
 def AB16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_v0"],"definitions":{"A_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"A_v0"},"B_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"B_v0"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"axes":[0],"fn":2,"form":"batch","n":1,"out":1},{"args":[{"refs":{"affine":["n",1,0,16]},"type":1}],"axes":[0],"fn":3,"form":"batch","n":1,"out":1}],"params":[],"ret":{"concat":[{"affine":["n",2,0,16]},{"affine":["n",3,0,16]}]},"ret_type":["Tuple",[["Array",1,["Array",16,["Value",1]]],["Array",1,["Array",16,["Value",1]]]]]},"form":"composite","id":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1"}},"program_fn":"WiredPopulations_v1{templates=[\"A_v0\",\"B_v0\"],record=\"27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd\",counts=[1,1]}","root":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",16,["Value",1]],["Array",1,["Array",16,["Value",1]]]]}"#
 
-/-- `admitted` on the block of units `us` of the descriptor `d`, under a `Q_template_instances` query listing `ts`. -/
-def admitIn (d : String) (ts : List String) (us : Array Nat) : V Admit := do
+/-- `admitted` on the block of units `us` of the descriptor `d`, under a `Q_template_instances` query listing `ts`, at
+the cuts `cs`. -/
+def admitIn (d : String) (ts : List String) (us : Array Nat) (cs : List (String × List (String × Nat)) := []) :
+    V Admit := do
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instances"), ("params", Json.mkObj [("templates", Lean.toJson ts)])]
-  admitted (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us)
+  admitted (Json.mkObj [("query", q)]) cs (← Spot.Restrict.restrict P us)
 
 #guard refusedBy (admitIn AB16 ["A_v0", "B_v0"] #[0, 1]) "one-template" "C_S's root calls [A_v0, B_v0], and a block's units are instances of one template"
 #guard (admitIn AB16 ["A_v0", "B_v0"] #[1]).toOption.map (·.key) == some "B_v0"
@@ -424,5 +437,36 @@ Definition of C already, so the lift to bits refuses T. -/
 def COL : String := r#"{"boolean":{"CollideXor16_v1":"StandIn[CollideXor16]_v1"},"callees":["CollideXor16_v1","W_v0","W_v0{IR=\"boolean\"}","Input16_v1","T_v0","Xor2_v1"],"definitions":{"CollideXor16_v1":{"form":"primitive","id":"CollideXor16_v1","params":[["a",["Value",16]],["b",["Value",16]]],"ret":["Value",16]},"Input16_v1":{"form":"primitive","id":"Input16_v1","params":[],"ret":["Value",16]},"Root[WiredPopulations_v1{templates=('T_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1)}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":3,"form":"batch","n":2,"out":1},{"args":[{"refs":{"affine":["n",0,0,2]},"type":2}],"axes":[0],"fn":4,"form":"batch","n":1,"out":3}],"params":[],"ret":{"affine":["n",1,0,2]},"ret_type":["Tuple",[["Array",1,["Tuple",[["Value",16],["Value",16]]]]]]},"form":"composite","id":"Root[WiredPopulations_v1{templates=('T_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1)}]_v1"},"StandIn[CollideXor16]_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"explicit":[["p",0,0],["p",1,0]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,1],["p",1,1]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,2],["p",1,2]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,3],["p",1,3]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,4],["p",1,4]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,5],["p",1,5]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,6],["p",1,6]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,7],["p",1,7]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,8],["p",1,8]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,9],["p",1,9]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,10],["p",1,10]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,11],["p",1,11]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,12],["p",1,12]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,13],["p",1,13]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,14],["p",1,14]]},"type":4}],"fn":5,"form":"primitive","out":5},{"args":[{"refs":{"explicit":[["p",0,15],["p",1,15]]},"type":4}],"fn":5,"form":"primitive","out":5}],"params":[["a",["Array",16,["Value",1]]],["b",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["n",1,0,1]},{"affine":["n",2,0,1]},{"affine":["n",3,0,1]},{"affine":["n",4,0,1]},{"affine":["n",5,0,1]},{"affine":["n",6,0,1]},{"affine":["n",7,0,1]},{"affine":["n",8,0,1]},{"affine":["n",9,0,1]},{"affine":["n",10,0,1]},{"affine":["n",11,0,1]},{"affine":["n",12,0,1]},{"affine":["n",13,0,1]},{"affine":["n",14,0,1]},{"affine":["n",15,0,1]}]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"StandIn[CollideXor16]_v1"},"T_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0},{"refs":{"affine":["p",0,1,1]},"type":0}],"fn":1,"form":"call","out":0},{"args":[{"refs":{"affine":["p",0,0,1]},"type":0},{"refs":{"affine":["p",0,1,1]},"type":0}],"fn":2,"form":"call","out":0}],"params":[["x",["Array",2,["Value",16]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["n",1,0,1]}]},"ret_type":["Tuple",[["Value",16],["Value",16]]]},"form":"composite","id":"T_v0"},"W_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0},{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":0,"form":"primitive","out":0}],"params":[["a",["Value",16]],["b",["Value",16]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",16]},"form":"composite","id":"W_v0"},"W_v0{IR=\"boolean\"}":{"bindings":{"IR":"boolean"},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0},{"refs":{"affine":["p",0,0,1]},"type":0}],"fn":0,"form":"primitive","out":0}],"params":[["a",["Value",16]],["b",["Value",16]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",16]},"form":"composite","id":"W_v0"},"Xor2_v1":{"form":"primitive","id":"Xor2_v1","params":[["x",["Array",2,["Value",1]]]],"ret":["Value",1]}},"program_fn":"WiredPopulations_v1{templates=[\"T_v0\"],record=\"27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd\",counts=[1]}","root":"Root[WiredPopulations_v1{templates=('T_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1)}]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",16],["Array",2,["Value",16]],["Array",1,["Array",2,["Value",16]]],["Array",1,["Tuple",[["Value",16],["Value",16]]]],["Array",2,["Value",1]],["Value",1]]}"#
 
 #guard refusedBy (admitE COL "T_v0") "on-bits" "the lift to bits refuses C_S's template T_v0"
+
+/-- E(x y : Array 16 (Value 1)) = (), a template that returns no field. -/
+def NF16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[]},"ret_type":["Tuple",[]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"concat":[]},"ret_type":["Tuple",[]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[]]]}"#
+
+#guard refusedBy (lowerE NF16) "whole-words" "C_S's template E_v1 returns no field"
+
+/-- X(p : (Value 1, Value 16)) = (Not p.0, W16 p.1) reading p.0 from A(a : Value 1) = Not a, W16 a word primitive with
+a Boolean body on bits: in(S)'s cuts give X's p two rows of one leaf each, of two widths. -/
+def MIX : String := r#"{"annotations":{},"boolean":{"W16_v1":"W16B_v1"},"callees":["Input1_v1","Input16_v1","Not_v1","W16_v1","W16B_v1","A_v1","X_v1"],"definitions":{"A_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0}],"fn":2,"form":"primitive","out":0}],"params":[["a",["Value",1]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",1]},"form":"composite","id":"A_v1"},"Input16_v1":{"form":"primitive","id":"Input16_v1","params":[],"ret":["Value",16]},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[XProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,1]},"type":0}],"fn":5,"form":"call","out":0},{"args":[],"fn":1,"form":"primitive","out":1},{"args":[{"refs":{"concat":[{"affine":["n",1,0,1]},{"affine":["n",2,0,1]}]},"type":3}],"fn":6,"form":"call","out":3}],"params":[],"ret":{"affine":["n",3,0,2]},"ret_type":["Tuple",[["Value",1],["Value",16]]]},"form":"composite","id":"Root[XProg_v1]_v1"},"W16B_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":2}],"axes":[0],"fn":2,"form":"batch","n":16,"out":2}],"params":[["a",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"W16B_v1"},"W16_v1":{"form":"primitive","id":"W16_v1","params":[["a",["Value",16]]],"ret":["Value",16]},"X_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,1]},"type":0}],"fn":2,"form":"primitive","out":0},{"args":[{"refs":{"affine":["p",0,1,1]},"type":1}],"fn":3,"form":"primitive","out":1}],"params":[["p",["Tuple",[["Value",1],["Value",16]]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["n",1,0,1]}]},"ret_type":["Tuple",[["Value",1],["Value",16]]]},"form":"composite","id":"X_v1"}},"program_fn":"XProg_v1","root":"Root[XProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Value",16],["Array",16,["Value",1]],["Tuple",[["Value",1],["Value",16]]]]}"#
+
+#guard refusedBy (admitIn MIX ["A_v1", "X_v1"] #[1] [("X_v1", [("p", 2)])]) "cut-rows" "C_S's template X_v1: parameter p of 2 leaves cut 2 ways, not into equal runs of leaves of one width"
+#guard refusedBy (admitIn MIX ["A_v1", "X_v1"] #[1]) "whole-words" "C_S's template X_v1: input row p of 17 bits is not a positive whole number of u16 words"
+
+/-- E(x y : Array 16 (Value 1)) = (x, sixteen calls of Zero1), Zero1 a word primitive whose Boolean body is the input
+primitive `Input1_v1`, to which the evaluator gives no value. -/
+def IB16 : String := r#"{"annotations":{},"boolean":{"Zero1_v1":"Input1_v1"},"callees":["Input1_v1","Zero1_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,16]},{"affine":["n",0,0,16]}]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,32]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"},"Zero1_v1":{"form":"primitive","id":"Zero1_v1","params":[],"ret":["Value",1]}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]]}"#
+
+/-- What refuses `IB16`: the lowering (`Flock.Lower`'s `gateOf?`), or the decoder, where it refuses an input primitive
+as a word's Boolean body. -/
+def INPUT_BODY : List String := ["Input1_v1: not a Boolean gate (PROTOCOL.md §9)",
+  "definition 'E_v1' node 0: an input node (Input1_v1, the Boolean body of Zero1_v1) appears only in the root's body"]
+
+#guard match lowerE IB16 with | .error e => INPUT_BODY.contains e | .ok _ => false
+
+/-- `E16` with its two input batches one batch of two 16-bit leaves, which C's root reads in 1-bit leaves (recut). -/
+def RC16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input16_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,16]},{"affine":["n",0,0,16]}]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input16_v1":{"form":"primitive","id":"Input16_v1","params":[],"ret":["Value",16]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2,"out":4},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",0,16,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",1,0,32]},"ret_type":["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Array",16,["Value",1]],["Array",16,["Value",1]]]],["Value",16],["Array",2,["Value",16]]]}"#
+
+-- refused before `admittedBlock`'s `no-recut`, by the gate layout `Spot.Restrict.restrict` reads (`Circuits.Program.recutGates`)
+#guard match lowerE RC16 with
+  | .error e => e == "recut-gates: input nodes [0] are read in leaves of part of their width, which the gate layout doesn't lay out"
+  | .ok _ => false
 
 end Spot.OneStageZk
