@@ -5,9 +5,12 @@ minutes (default 12; the first run builds the Lean verifier, about 5 minutes). P
 furthest step the runner's own lines reached, the file:line its error output names, the first refusal's or error's text, the
 kind (accept, refused NAME, error, time limit) and the seconds. The exit code is 0 only if every application ended in
 the verifier's accept (`verity run`'s exit code 0). With `--out DIR`, each application's stdout and stderr and the
-table are kept there.
+table are kept there. NAME ... names the applications to run (default every file); what follows a `--` is handed unchanged
+to each `verity run NAME` (`--bindings FILE`, `--on MACHINE`). Each child inherits this process's environment, from which
+the runner's preflight reads D (the serve directory), PRED, WINDOW_CLASS and VENV. A run on a card needs a larger MINUTES
+(the record's step alone took 31 minutes on an H100).
 
-    research run --on auto --cwd clone -- bash -lc 'uv run verity bench application_census [--minutes MINUTES] --out "$OUT"'
+    research run --on auto --cwd clone -- bash -lc 'uv run verity bench application_census [--minutes MINUTES] [--out "$OUT"] [NAME ...] [-- VERITY_RUN_ARGUMENTS]'
 """
 from __future__ import annotations
 
@@ -57,9 +60,9 @@ def say(out: str, err: str) -> str:
     return (said or [x for x in out.splitlines() if x.strip()][-1:] or [""])[0].strip()
 
 
-def one(name: str, scratch: Path, seconds: float, keep: Path | None) -> list[str]:
+def one(name: str, scratch: Path, seconds: float, keep: Path | None, extra: list[str]) -> list[str]:
     start = time.monotonic()
-    p = subprocess.Popen([sys.executable, "-c", LAUNCH, "run", name, "--state", str(scratch / name / "state")],
+    p = subprocess.Popen([sys.executable, "-c", LAUNCH, "run", name, "--state", str(scratch / name / "state"), *extra],
                          cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
     limit = False
     try:
@@ -91,12 +94,18 @@ def table(rows: list[list[str]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="verity bench application_census", description=__doc__.split("\n\n")[0])
     ap.add_argument("--minutes", type=float, default=12, help="each application's time limit (default 12)")
+    ap.add_argument("names", nargs="*", metavar="NAME", help="applications to run (default every file)")
     ap.add_argument("--out", type=Path, help="keep each application's stdout and stderr and the table here")
-    a = ap.parse_args(argv)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    extra = argv[argv.index("--") + 1:] if "--" in argv else []
+    a = ap.parse_args(argv[:argv.index("--")] if "--" in argv else argv)
+    every = sorted(f.stem for f in (ROOT / "applications").glob("*.toml"))
+    if unknown := [n for n in a.names if n not in every]:
+        ap.error(f"{', '.join(unknown)}: NAME is one of {', '.join(every)}")
     keep = a.out
     scratch = Path(tempfile.mkdtemp(prefix="application-census-"))
     try:
-        rows = [one(f.stem, scratch, a.minutes * 60, keep) for f in sorted((ROOT / "applications").glob("*.toml"))]
+        rows = [one(n, scratch, a.minutes * 60, keep, extra) for n in a.names or every]
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     print(table(rows))
