@@ -228,6 +228,84 @@ theorem gateBodies_batch0 (hLC : LiftCalls) {bytes : ByteArray} {P S L : Prog} {
     rw [hfn'] at hgL
     exact gateDef_prefix hLP' hgL (body_lt hm hbS)
 
+/-- **`LowerGateBodies`**, on `LiftWordNodes`: a node whose callee's key has a Boolean Definition calls a word primitive
+(`Prog.BoolMapOk`, `DecodeKeys.decode_keys`), which the lift calls as that Definition, and the lowering of the lift
+evaluates through gates alone (`lower_gates`). -/
+theorem lowerGateBodies_of (hW : LiftWordNodes) : LowerGateBodies := by
+  intro bytes P partition cuts units S a L e t h hr hs ha hd hl hbt nd hnd b hb
+  have _ := ha
+  obtain ⟨Q, e', hq, hG⟩ := lower_gates hbt
+  rw [hl] at hq
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hq
+  obtain ⟨rfl, rfl⟩ := hq
+  obtain ⟨hle, hpre, hbool, hidx, -⟩ := restrictShape P units S hs
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
+  have hbodyS := bodyOf_eq hm hbool hidx
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨n, hn, rfl⟩ := Array.mem_iff_getElem.1 hnd
+  have hfnd : ((P.defs[a.d]!).body.nodes[n]).fn < a.d := by
+    rw [← getElem!_pos _ n hn]; exact ((hok a.d hd).2.1 n hn).1
+  have hfnP : ((P.defs[a.d]!).body.nodes[n]).fn < P.defs.size := by omega
+  have hpd : (P.defs[a.d]!).prim = false := by
+    cases hp : (P.defs[a.d]!).prim
+    · rfl
+    · have hn' := hn
+      rw [((hok a.d hd).1.1 hp).1] at hn'
+      exact absurd hn' (Nat.not_lt_zero _)
+  have hword : isWordPrim (P.defs[((P.defs[a.d]!).body.nodes[n]).fn]!).prim
+      (P.defs[((P.defs[a.d]!).body.nodes[n]).fn]!).key = true := by
+    unfold Prog.bodyOf? at hb
+    cases hv : P.boolean[(P.defs[((P.defs[a.d]!).body.nodes[n]).fn]!).key]? with
+    | none => rw [hv] at hb; cases hb
+    | some v =>
+      obtain ⟨w, -, hiw, -, hwd⟩ := hkeys _ v hv
+      have hif := (DecodeKeys.decode_keys bytes P h).2 _ hfnP
+      rw [hif] at hiw
+      obtain rfl := Option.some.inj hiw
+      exact hwd
+  have hSd : S.defs[a.d]! = P.defs[a.d]! := hpre a.d hd
+  have hSf := hpre _ hfnP
+  have hcont : ∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true := by
+    intro k v hv
+    rw [hbool] at hv
+    obtain ⟨w, hw, -, hkey, hword⟩ := hkeys k v hv
+    obtain ⟨b, -, hbo, -⟩ := hmap w hw (by rw [hkey]; exact hword)
+    rw [hkey] at hbo
+    unfold Prog.bodyOf? at hbo
+    rw [hv] at hbo
+    have hb' : P.index[v]? = some b := hbo
+    rw [Std.HashMap.contains_eq_isSome_getElem?, hidx v b hb']
+    rfl
+  have hndS : (P.defs[a.d]!).body.nodes[n] ∈ (S.defs[a.d]!).body.nodes := by rw [hSd]; exact hnd
+  obtain ⟨fnOf, primOf, gatesOf, hLe, hfn⟩ := hW S L a.d e hcont hl (by omega) (by rw [hSd]; exact hpd)
+    ⟨_, hndS, by rw [hSf]; exact hword⟩
+  obtain ⟨-, hLpre, -⟩ := liftKeeps hcont hl
+  rw [hSd] at hLe
+  have hLP' : ∀ i < P.defs.size, L.defs[i]! = P.defs[i]! := fun i hi => by
+    rw [getElem!_def, getElem!_def, hLpre i (by omega), get?_of_pre hle hpre hi]
+  have hLe' : L.defs[e]! = Flock.Lift.liftDef (P.defs[a.d]!) fnOf primOf gatesOf := by simp [getElem!_def, hLe]
+  have hnD' : n < (Flock.Lift.liftDef (P.defs[a.d]!) fnOf primOf gatesOf).body.nodes.size := by
+    rw [liftDef_nodes_size]; exact hn
+  obtain ⟨hfn', -, -⟩ := liftDef_node (P.defs[a.d]!) fnOf primOf gatesOf hn hnD'
+  have hbS := hfn _ hndS (by rw [hSf]; exact hword)
+  rw [hSf, hbodyS] at hbS
+  obtain rfl : b = fnOf ((P.defs[a.d]!).body.nodes[n]).fn := Option.some.inj (hb.symm.trans hbS)
+  cases hG with
+  | prim hp _ =>
+    rw [hLe', liftDef_prim, hpd] at hp
+    cases hp
+  | comp _ _ hnd' =>
+    have hmem : (Flock.Lift.liftDef (P.defs[a.d]!) fnOf primOf gatesOf).body.nodes[n] ∈ (L.defs[e]!).body.nodes := by
+      rw [hLe']; exact Array.getElem_mem hnD'
+    have hgL := hnd' _ hmem
+    rw [hfn'] at hgL
+    exact gateDef_prefix hLP' hgL (body_lt hm hbS)
+
+/-- **`LowerGateBodies`** holds. -/
+theorem lowerGateBodies : LowerGateBodies := lowerGateBodies_of liftWordNodes
+
 theorem foldlM_inv {α β : Type} (l : List α) (f : β → α → Option β) (I : ℕ → β → Prop)
     (hstep : ∀ n (hn : n < l.length) b, I n b → ∃ b', f b l[n] = some b' ∧ I (n + 1) b') :
     ∀ k n b, k + n = l.length → I n b → ∃ o, (l.drop n).foldlM f b = some o ∧ I l.length o

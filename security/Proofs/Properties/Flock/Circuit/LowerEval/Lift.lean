@@ -948,6 +948,17 @@ def LiftPlaces : Prop :=
     S.defs.size ≤ e ∧ ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
       ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
 
+/-- **`LiftWordNodes`** (open): the lift to bits of a composite `d` one of whose nodes calls a word primitive places `d`
+lifted at the index the lift returns, each node calling a word primitive calling that primitive's Boolean Definition
+(`Prog.bodyOf?`), whatever the node's form. -/
+def LiftWordNodes : Prop :=
+  ∀ (S L : Prog) (d e : ℕ), (∀ (k v : String), S.boolean[k]? = some v → S.index.contains v = true) →
+    Flock.Lift.lift S d = .ok (L, e) → d < S.defs.size → (S.defs[d]!).prim = false →
+    (∃ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true) →
+    ∃ fnOf primOf gatesOf, L.defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
+      ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
+        S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
+
 /-- **`LiftCalls`**, on `LiftPlaces`. -/
 theorem liftCalls_of (h : LiftPlaces) : LiftCalls := fun S L d e hc hl hd hp hn => by
   obtain ⟨he, hex⟩ := h S L d e hc hl hd hp hn

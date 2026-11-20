@@ -3,8 +3,8 @@ module
 public import Proofs.Properties.Flock.Circuit.LowerEval.Lift
 public import Proofs.Core.QSortPerm
 
-/-! Where the lift to bits places a template of word-primitive nodes: after `S`'s Definitions, each node calling its
-primitive's Boolean Definition. -/
+/-! Where the lift to bits places a composite with word-primitive nodes: after `S`'s Definitions, each node that calls a
+word primitive calling that primitive's Boolean Definition. -/
 
 @[expose] public section
 
@@ -29,19 +29,19 @@ def WordyInv (S : Prog) (d : ℕ) (wordy : Std.HashMap ℕ Bool) : Prop :=
   ∀ (x : ℕ) (b : Bool), wordy[x]? = some b → ((S.defs[x]!).prim = true → b = isWordPrim (S.defs[x]!).prim (S.defs[x]!).key) ∧
     (x = d → b = true)
 
-/-- `d` lifted: at `toL`'s place for it, after `S`'s Definitions, its key in the index, each node calling its
-primitive's Boolean Definition. -/
+/-- `d` lifted: at `toL`'s place for it, after `S`'s Definitions, its key in the index, each node that calls a word
+primitive calling that primitive's Boolean Definition. -/
 def Placed (S : Prog) (d : ℕ) (defs : Array Defn) (index : Std.HashMap String ℕ) (toL : Std.HashMap ℕ ℕ) : Prop :=
   ∃ e, toL[d]? = some e ∧ S.defs.size ≤ e ∧ index.contains (Flock.Lift.liftedKey (S.defs[d]!).key) = true ∧
     ∃ fnOf primOf gatesOf, defs[e]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
-      ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
+      ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true → S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)
 
-/-- The lift loop so far: `defs` and `index` extend `S`'s, `d`'s nodes' primitives still at their Boolean
+/-- The lift loop so far: `defs` and `index` extend `S`'s, the word primitives `d`'s nodes call still at their Boolean
 Definitions, and `d` placed once the loop has passed it. -/
 def LiftInv (S : Prog) (d : ℕ) (pre : List ℕ) (defs : Array Defn) (index : Std.HashMap String ℕ)
     (toL : Std.HashMap ℕ ℕ) : Prop :=
-  KInv S defs index ∧ (∀ nd ∈ (S.defs[d]!).body.nodes, ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧
-    toL[nd.fn]? = some bi) ∧ (d ∈ pre → Placed S d defs index toL)
+  KInv S defs index ∧ (∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
+    ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧ toL[nd.fn]? = some bi) ∧ (d ∈ pre → Placed S d defs index toL)
 
 theorem arr_get!_push {a : Array ℕ} {x i : ℕ} (h : i < a.size) : (a.push x)[i]! = a[i]! := by
   simp only [getElem!_def, Array.getElem?_push, if_neg (show i ≠ a.size by omega)]
@@ -138,9 +138,9 @@ theorem walk_prim {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array �
     · exact h5 y (by simpa [hyx] using hy)
 
 theorem walk_done {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array ℕ} {at_ : ℕ} {toB : Std.HashMap ℕ ℕ}
-    (hp : PrimNodes S d) (h : WalkInv S d seen todo at_ toB) (hge : ¬ at_ < todo.size) :
-    seen.contains d = true ∧ ∀ nd ∈ (S.defs[d]!).body.nodes, ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧
-      toB[nd.fn]? = some bi := by
+    (hp1 : (S.defs[d]!).prim = false) (h : WalkInv S d seen todo at_ toB) (hge : ¬ at_ < todo.size) :
+    seen.contains d = true ∧ ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
+      ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧ toB[nd.fn]? = some bi := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := h
   have hall : ∀ x ∈ todo.toList, seen.contains x = true := by
     intro x hx
@@ -151,11 +151,11 @@ theorem walk_done {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array �
     rw [Array.getElem_toList]; exact this
   have hd0 : seen.contains d = true := by
     have := h4 0 (by omega); rwa [h2] at this
-  refine ⟨hd0, fun nd hnd => ?_⟩
+  refine ⟨hd0, fun nd hnd hwn => ?_⟩
   obtain ⟨hc, -⟩ := h5 d hd0
-  have hfn := hall _ (hc hp.1 nd hnd)
+  have hfn := hall _ (hc hp1 nd hnd)
   obtain ⟨-, hw⟩ := h5 _ hfn
-  obtain ⟨bi, hb, hb'⟩ := hw (hp.2 nd hnd)
+  obtain ⟨bi, hb, hb'⟩ := hw hwn
   exact ⟨bi, hb', hb⟩
 
 theorem wordy_init (S : Prog) (d : ℕ) :
@@ -205,7 +205,7 @@ theorem inner_step {S : Prog} {d : ℕ} {w : Std.HashMap ℕ Bool} {Q : Prop} {p
     rw [this, hwc]; simp
 
 theorem wordy_comp {S : Prog} {d : ℕ} {w : Std.HashMap ℕ Bool} {pref : List ℕ} {c : ℕ} {r : Bool}
-    (hp : PrimNodes S d) (hn : 0 < (S.defs[d]!).body.nodes.size)
+    (hex : ∃ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true)
     (h : WordyInv S d w ∧ ∀ x ∈ pref, (w[x]?).isSome = true) (hpr : ¬ (S.defs[c]!).prim = true)
     (hr : r = true ∨ ∀ y ∈ (S.defs[c]!).body.nodes.toList, isWordPrim (S.defs[y.fn]!).prim (S.defs[y.fn]!).key = false) :
     WordyInv S d (w.insert c r) ∧ ∀ x ∈ pref ++ [c], ((w.insert c r)[x]?).isSome = true := by
@@ -220,10 +220,9 @@ theorem wordy_comp {S : Prog} {d : ℕ} {w : Std.HashMap ℕ Bool} {pref : List 
       subst e
       rcases hr with hr | hr
       · exact hr
-      · have hm : (S.defs[c]!).body.nodes[0] ∈ (S.defs[c]!).body.nodes.toList :=
-          Array.mem_toList_iff.2 (Array.getElem_mem hn)
-        have h1 := hr _ hm
-        rw [hp.2 _ (Array.getElem_mem hn)] at h1
+      · obtain ⟨nd, hnd, hw⟩ := hex
+        have h1 := hr _ (Array.mem_toList_iff.2 hnd)
+        rw [hw] at h1
         cases h1
     · rw [if_neg (by simpa using hcx)] at hx; exact hW x b hx
   · rw [Std.HashMap.getElem?_insert]
@@ -236,11 +235,12 @@ theorem wordy_comp {S : Prog} {d : ℕ} {w : Std.HashMap ℕ Bool} {pref : List 
       · exact absurd hx.symm hcx
 
 theorem lift_init {S : Prog} {d : ℕ} {toB : Std.HashMap ℕ ℕ}
-    (hT : ∀ nd ∈ (S.defs[d]!).body.nodes, ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧ toB[nd.fn]? = some bi) :
+    (hT : ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true →
+      ∃ bi, S.bodyOf? (S.defs[nd.fn]!).key = some bi ∧ toB[nd.fn]? = some bi) :
     LiftInv S d [] S.defs S.index toB := ⟨kinv_init S, hT, fun h => by simp at h⟩
 
 theorem lift_step {S : Prog} {d : ℕ} {pref : List ℕ} {defs : Array Defn} {index : Std.HashMap String ℕ}
-    {toL : Std.HashMap ℕ ℕ} {c : ℕ} {wordy : Std.HashMap ℕ Bool} (hp : PrimNodes S d)
+    {toL : Std.HashMap ℕ ℕ} {c : ℕ} {wordy : Std.HashMap ℕ Bool}
     (h : LiftInv S d pref defs index toL) (hc : (wordy[c]?.getD false && !(S.defs[c]!).prim) = true)
     (hk : ¬ index.contains (Flock.Lift.liftDef (S.defs[c]!) (fun f => toL[f]?.getD f) (fun f => (defs[f]!).prim)
       (fun f => (defs[f]!).gates)).key = true) :
@@ -253,12 +253,12 @@ theorem lift_step {S : Prog} {d : ℕ} {pref : List ℕ} {defs : Array Defn} {in
   obtain ⟨hK, hT, hP⟩ := h
   have hcp : (S.defs[c]!).prim = false := by
     simp only [Bool.and_eq_true, Bool.not_eq_true'] at hc; exact hc.2
-  refine ⟨kinv_push hK hk, fun nd hnd => ?_, fun hd => ?_⟩
-  · obtain ⟨bi, hb, ht⟩ := hT nd hnd
+  refine ⟨kinv_push hK hk, fun nd hnd hw => ?_, fun hd => ?_⟩
+  · obtain ⟨bi, hb, ht⟩ := hT nd hnd hw
     refine ⟨bi, hb, ?_⟩
     have hne : c ≠ nd.fn := by
       intro e
-      have h1 := hp.2 nd hnd
+      have h1 := hw
       rw [← e, hcp] at h1
       simp [isWordPrim] at h1
     rw [Std.HashMap.getElem?_insert, if_neg (by simpa using hne)]; exact ht
@@ -266,11 +266,11 @@ theorem lift_step {S : Prog} {d : ℕ} {pref : List ℕ} {defs : Array Defn} {in
     by_cases hcd : c = d
     · subst hcd
       refine ⟨defs.size, by simp, hK.1, ?_, (fun f => toL[f]?.getD f), (fun f => (defs[f]!).prim),
-        (fun f => (defs[f]!).gates), by simp, fun nd hnd => ?_⟩
+        (fun f => (defs[f]!).gates), by simp, fun nd hnd hw => ?_⟩
       · show (index.insert (Flock.Lift.liftedKey (S.defs[c]!).key) defs.size).contains
           (Flock.Lift.liftedKey (S.defs[c]!).key) = true
         simp
-      · obtain ⟨bi, hb, ht⟩ := hT nd hnd
+      · obtain ⟨bi, hb, ht⟩ := hT nd hnd hw
         rw [hb]
         show some bi = some (toL[nd.fn]?.getD nd.fn)
         rw [ht]; rfl
@@ -284,7 +284,7 @@ theorem lift_step {S : Prog} {d : ℕ} {pref : List ℕ} {defs : Array Defn} {in
       · exact absurd hd.symm hcd
 
 theorem lift_skip {S : Prog} {d : ℕ} {pref suff ord : List ℕ} {defs : Array Defn} {index : Std.HashMap String ℕ}
-    {toL : Std.HashMap ℕ ℕ} {c : ℕ} {wordy : Std.HashMap ℕ Bool} (hp : PrimNodes S d)
+    {toL : Std.HashMap ℕ ℕ} {c : ℕ} {wordy : Std.HashMap ℕ Bool} (hp1 : (S.defs[d]!).prim = false)
     (hW : WordyInv S d wordy ∧ ∀ x ∈ ord, (wordy[x]?).isSome = true) (hord : ord = pref ++ c :: suff)
     (h : LiftInv S d pref defs index toL) (hc : ¬ (wordy[c]?.getD false && !(S.defs[c]!).prim) = true) :
     LiftInv S d (pref ++ [c]) defs index toL := by
@@ -298,14 +298,14 @@ theorem lift_skip {S : Prog} {d : ℕ} {pref suff ord : List ℕ} {defs : Array 
     have hm : d ∈ ord := by rw [hord]; simp
     obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 (hW.2 d hm)
     have h1 := (hW.1 d b hb).2 rfl
-    simp [hb, h1, hp.1]
+    simp [hb, h1, hp1]
 
 theorem lift_final {S : Prog} {d : ℕ} {defs : Array Defn} {index : Std.HashMap String ℕ} {toL : Std.HashMap ℕ ℕ}
     {seen : Std.HashSet ℕ} (hs : seen.contains d = true)
     (h : LiftInv S d (seen.toArray.qsort (fun x1 x2 => decide (x1 < x2))).toList defs index toL) :
     S.defs.size ≤ toL[d]?.getD d ∧ ∃ fnOf primOf gatesOf,
       defs[toL[d]?.getD d]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
-      ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn) := by
+      ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true → S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn) := by
   have hm : d ∈ (seen.toArray.qsort (fun x1 x2 => decide (x1 < x2))).toList := by
     rw [Array.mem_toList_iff, (Verity.QSort.qsort_perm _ _).mem_iff, Std.HashSet.mem_toArray,
       Std.HashSet.mem_iff_contains]
@@ -314,11 +314,11 @@ theorem lift_final {S : Prog} {d : ℕ} {defs : Array Defn} {index : Std.HashMap
   simp only [he, Option.getD_some]
   exact ⟨hle, fnOf, primOf, gatesOf, hde, hfn⟩
 
-theorem closure_places (S : Prog) (d : ℕ) (hd : d < S.defs.size) (hp : PrimNodes S d)
-    (hn : 0 < (S.defs[d]!).body.nodes.size) :
+theorem closure_places (S : Prog) (d : ℕ) (hd : d < S.defs.size) (hp1 : (S.defs[d]!).prim = false)
+    (hex : ∃ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true) :
     ⦃⌜True⌝⦄ Flock.Lift.closure S #[d] ⦃⇓? r => ⌜S.defs.size ≤ r.2 d ∧ ∃ fnOf primOf gatesOf,
       r.1.defs[r.2 d]? = some (Flock.Lift.liftDef (S.defs[d]!) fnOf primOf gatesOf) ∧
-      ∀ nd ∈ (S.defs[d]!).body.nodes, S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)⌝⦄ := by
+      ∀ nd ∈ (S.defs[d]!).body.nodes, isWordPrim (S.defs[nd.fn]!).prim (S.defs[nd.fn]!).key = true → S.bodyOf? (S.defs[nd.fn]!).key = some (fnOf nd.fn)⌝⦄ := by
   unfold Flock.Lift.closure
   mvcgen [hashMap_forIn_spec, exc_throw_spec, -Spec.throw_Except] invariants
   · ⇓? ⟨_, seen, todo, at_, toB⟩ => ⌜WalkInv S d seen todo at_ toB⌝
@@ -334,14 +334,14 @@ theorem closure_places (S : Prog) (d : ℕ) (hd : d < S.defs.size) (hp : PrimNod
     | (exact walk_comp (by assumption) (by assumption) (by assumption) (by assumption))
     | (exact walk_prim (by assumption) (by assumption) (by assumption) (by assumption) (by assumption))
     | exact wordy_init S d
-    | (exact wordy_prim hp.1 (by assumption) (by assumption))
+    | (exact wordy_prim hp1 (by assumption) (by assumption))
     | (exact inner_step (by assumption) (by assumption) (by assumption))
     | exact Or.inr (fun y hy => by simp at hy)
-    | (exact wordy_comp hp hn (by assumption) (by assumption) (by assumption))
-    | (exact lift_init (walk_done hp (by assumption) (by assumption)).2)
-    | (exact lift_step hp (by assumption) (by assumption) (by assumption))
-    | (exact lift_skip hp (by assumption) (by assumption) (by assumption) (by assumption))
-    | (exact lift_final (walk_done hp (by assumption) (by assumption)).1 (by assumption))
+    | (exact wordy_comp hex (by assumption) (by assumption) (by assumption))
+    | (exact lift_init (walk_done hp1 (by assumption) (by assumption)).2)
+    | (exact lift_step (by assumption) (by assumption) (by assumption))
+    | (exact lift_skip hp1 (by assumption) (by assumption) (by assumption) (by assumption))
+    | (exact lift_final (walk_done hp1 (by assumption) (by assumption)).1 (by assumption))
 
 /-- **`LiftPlaces`** holds. -/
 theorem liftPlaces : LiftPlaces := by
@@ -352,8 +352,20 @@ theorem liftPlaces : LiftPlaces := by
   rw [hc] at h
   have h' : (Q, fnOf d) = (L, e) := by simpa [bind, Except.bind, pure, Except.pure] using h
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj h'
-  have hr := exc_of_triple (closure_places S d hd hp hn) hc
-  exact hr
+  obtain ⟨hle, fnOf, primOf, gatesOf, hde, hfn⟩ :=
+    exc_of_triple (closure_places S d hd hp.1 ⟨_, Array.getElem_mem hn, hp.2 _ (Array.getElem_mem hn)⟩) hc
+  exact ⟨hle, fnOf, primOf, gatesOf, hde, fun nd hnd => hfn nd hnd (hp.2 nd hnd)⟩
+
+/-- **`LiftWordNodes`** holds. -/
+theorem liftWordNodes : LiftWordNodes := by
+  intro S L d e _ h hd hp1 hex
+  unfold Flock.Lift.lift at h
+  rcases hc : Flock.Lift.closure S #[d] with _ | ⟨Q, fnOf⟩
+  · rw [hc] at h; simp [bind, Except.bind] at h
+  rw [hc] at h
+  have h' : (Q, fnOf d) = (L, e) := by simpa [bind, Except.bind, pure, Except.pure] using h
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h'
+  exact (exc_of_triple (closure_places S d hd hp1 hex) hc).2
 
 /-- **`LiftCalls`** holds. -/
 theorem liftCalls : LiftCalls := liftCalls_of liftPlaces
