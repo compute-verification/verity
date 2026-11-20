@@ -324,9 +324,7 @@ theorem segDown_rel {R : Tgt × Int → Tgt × Int → Prop} (f : Piece → Exce
       simp only [segPos]
       apply forall2_flatMap_same
       intro m hm
-      rw [copy_rowed s hr]
-      simp only [Desc.Seg.copy, ↓reduceIte]
-      rw [posAll_map, posAll_map]
+      rw [copy_rowed s hr, copy_rowed { s with ps := ps, shift := 0 } hr, posAll_map, posAll_map]
       refine forall2_flatMap (fun p q hpq => ?_) hpair
       obtain ⟨hq, r, hfr, hone⟩ := hpq
       obtain ⟨hrq, x, y, rfl, hy, hre⟩ := one_spec hone
