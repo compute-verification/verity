@@ -212,19 +212,21 @@ def RestrictBodyAgrees : Prop :=
 
 /-- **`BlockEvalDoor`**: in block `u`'s local evaluation `Y` of a trace of C, each unit `g` of the block, an instance of
 the template `Spot.OneStageZk.admitted` admits, the block's units admitted in C (`admittedBlock`), lifted to bits
-(`Flock.Lift.lift`), evaluates on `Y` at its arguments to `Y` at its return leaves, bit for bit. An argument inside
+(`Flock.Lift.lift`) and lowered (`Spot.OneStageZk.blockTmpl`, which refuses a primitive that is no §9 gate where the
+lift reaches it), evaluates on `Y` at its arguments to `Y` at its return leaves, bit for bit. An argument inside
 the block reads `Y` at another unit's return leaf. C is topological (`Prog.orderViolation`), which the partition's order check (`Spot.Partition.evaluate`) refuses
 without on every accept; every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
 inference-only's checks accept (`Desc.walkable`, `Desc.analyze`) and which SPOT's accept checks nowhere; and every unit
 of the block resolves (`UnitResolves`). -/
 def BlockEvalDoor : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
-    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ),
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ)
+    (t : Tmpl.Tmpl),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.BlockFront.front P units = .ok fr →
-    units.toList.Pairwise (· < ·) → Flock.Lift.lift S a.d = .ok (L, e) →
+    units.toList.Pairwise (· < ·) → Flock.Lift.lift S a.d = .ok (L, e) → Spot.OneStageZk.blockTmpl S a = .ok t →
     P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
