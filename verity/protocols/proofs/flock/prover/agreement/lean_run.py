@@ -31,8 +31,10 @@ OK = frozenset({0})
 #: `flock-zk-server finish`
 REFUSES = frozenset({0, 1})
 #: `verity-verify-proof verify` and `agree` (`verifyCmdBy`), and `rec-compose`: 0 every session accepted, 1 one refused, 2
-#: its inputs refused before any session; and `flock-zk-server contract`: 0, or 2 where a file can't be read
+#: its inputs refused before any session
 VERIFY_EXITS = frozenset({0, 1, 2})
+#: `flock-zk-server contract` (`Flock.ZkServer.Contract.cmd`): 0 every file's verdict, 2 a file or the public input unread
+CONTRACT_EXITS = frozenset({0, 2})
 #: `abort()`'s status, as a shell or a scope wrapping the process reports a SIGABRT
 ABORTED = 128 + signal.SIGABRT
 
@@ -47,7 +49,8 @@ class LeanExit(LeanPanic):
 
 
 def lean_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
-    """``environ`` (this process's when None) with `ABORT_ON_PANIC` set."""
+    """The environment a Lean executable whose answer can become a verdict starts in: ``environ`` (this process's when
+    None) with `ABORT_ON_PANIC` set, whatever ``environ`` holds."""
     return {**(os.environ if environ is None else environ), ABORT_ON_PANIC: "1"}
 
 
