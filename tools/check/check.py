@@ -1305,7 +1305,8 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
         print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
-    sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
+    v = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())
+    sets = v["replayable"]["sets"] + [s for s in v.get("live", {}).get("sets", []) if s.get("check")]    # ci.py --jobs: sets at once
     argv = [sys.executable, str(FLOCK_VERIFIER / "ci.py"), "--lean", str(verify or FLOCK_LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"),
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
@@ -1326,14 +1327,38 @@ def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None
 def agreement_outcome(sets: list[dict]) -> str:
     """The agreement's outcome in one line, from `ci.py`'s sets: how many sessions the two verifiers decide alike, how many
     the Lean verifier accepts (with no disagreement, upstream accepts them too), and, when it accepts none, that the
-    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept."""
+    agreement is on refusals only: a run of refusals agreeing says nothing about a session both verifiers accept. Each set
+    names the verifier it was compared with (`second`: upstream's pinned one, or our live server's recorded verdicts)."""
     ran = [r for r in sets if "skipped" not in r]
-    n, agree = sum(r.get("sessions", 0) for r in ran), sum(r.get("agree", 0) for r in ran)
-    disagree, accepted = sum(len(r.get("disagree") or ()) for r in ran), sum(r.get("accepted", 0) for r in ran)
-    last = sum(r.get("passed_every_check", 0) for r in ran)
+
+    def c(k, rs=ran):
+        return sum(r.get(k, 0) for r in rs)
+    n, agree = c("sessions"), c("agree")
+    disagree, accepted, last = sum(len(r.get("disagree") or ()) for r in ran), c("accepted"), c("passed_every_check")
+    seconds: dict[str, list[dict]] = {}
+    for r in ran:
+        seconds.setdefault(r.get("second", AGREEMENT_UPSTREAM), []).append(r)
+    by = " and by upstream" if set(seconds) <= {AGREEMENT_UPSTREAM} else " and by each set's second verifier"
     line = (f"{len(ran)} sets: {agree} of {n} sessions agree, {disagree} disagree; {accepted} accepted by the Lean verifier"
-            f"{' and by upstream' if accepted and not disagree else ''}, {last} refused last after passing every check")
-    return line + ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if n and not accepted else "")
+            f"{by if accepted and not disagree else ''}, {last} refused last after passing every check; as compared, "
+            f"{c('both_accept')} both accept, {c('both_refuse')} both refuse, {c('upstream_alone_accepts')} the second "
+            f"verifier alone accepts, {c('lean_alone_accepts')} the Lean verifier alone accepts; Lean's refusals: "
+            f"{c('refused_at_target')} at the check the vectors name, {c('refused_elsewhere')} at another, "
+            f"{c('refused_untargeted')} where they name none; compared with "
+            + "; ".join(f"{s}: sets {', '.join(str(r['set']) for r in rs)} ({c('accepted', rs)} accepted by the Lean verifier)"
+                        for s, rs in seconds.items()))
+    if alone := c("lean_alone_accepts"):
+        line += f"; FAILED: the Lean verifier alone accepts {alone}"
+    if panics := [p for r in ran for p in r.get("lean_panics") or ()]:
+        line += f"; ERROR: the Lean verifier panicked on {len(panics)} sessions ({', '.join(panics)}): their verdicts are not read"
+    if n and not accepted:
+        line += ("; NO SESSION IS ACCEPTED: the verifiers agree on refusals only" if not last else
+                 f"; NO SESSION IS ACCEPTED: 0 accepted; {last} passed every check and were refused last")
+    return line
+
+
+#: the second verifier of a set whose result names none
+AGREEMENT_UPSTREAM = "upstream's pinned verifier"
 
 
 #: the waits before each further fetch of a pinned file the agreement could not fetch, in seconds: it has no other copy to fall

@@ -355,6 +355,28 @@ def test_the_agreements_outcome_says_how_many_sessions_both_verifiers_accept():
     assert "NO SESSION" not in CHECK.agreement_outcome([])
 
 
+def test_the_agreements_outcome_names_each_sets_second_verifier_and_what_fails():
+    """Sessions refused only last are not refusals the verifiers agree on, a set compared with our live server is not read
+    as agreement with upstream, and the dangerous direction and a panic are said by name."""
+    last = [{"set": 0, "sessions": 50, "agree": 50, "disagree": [], "accepted": 0, "passed_every_check": 7, "both_accept": 7,
+             "both_refuse": 39, "upstream_alone_accepts": 4, "lean_alone_accepts": 0, "refused_at_target": 2,
+             "refused_elsewhere": 4, "refused_untargeted": 37}]
+    said = CHECK.agreement_outcome(last)
+    assert "NO SESSION IS ACCEPTED: 0 accepted; 7 passed every check and were refused last" in said
+    assert "refusals only" not in said
+    assert ("7 both accept, 39 both refuse, 4 the second verifier alone accepts, 0 the Lean verifier alone accepts; "
+            "Lean's refusals: 2 at the check the vectors name, 4 at another, 37 where they name none") in said
+    live = last + [{"set": "live6", "sessions": 3, "agree": 3, "disagree": [], "accepted": 1, "passed_every_check": 0,
+                    "both_accept": 1, "upstream_alone_accepts": 2, "second": "our live server's recorded verdicts"}]
+    said = CHECK.agreement_outcome(live)
+    assert "1 accepted by the Lean verifier and by each set's second verifier" in said and "NO SESSION" not in said
+    assert said.endswith("compared with upstream's pinned verifier: sets 0 (0 accepted by the Lean verifier); "
+                         "our live server's recorded verdicts: sets live6 (1 accepted by the Lean verifier)")
+    bad = [{**last[0], "disagree": ["f", "s"], "agree": 48, "lean_alone_accepts": 1, "lean_panics": ["s"]}]
+    said = CHECK.agreement_outcome(bad)
+    assert "FAILED: the Lean verifier alone accepts 1" in said and "ERROR: the Lean verifier panicked on 1 sessions (s)" in said
+
+
 def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
     """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
     launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run

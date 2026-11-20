@@ -32,8 +32,10 @@ their digests (`verity-verify-proof --archive`); upstream reads the paths. Write
 logs, DIR/upstream-verdicts.json (`agree`'s `--upstream-verdicts`) and DIR/result.json, whose `accepted` counts the sessions
 `verity-verify-proof verify` accepted (none of upstream's plain files), and whose `both_accept`, `both_refuse`,
 `upstream_alone_accepts` and `lean_alone_accepts` count the sessions by the two verdicts as compared (a session refused
-last, once every check has passed, as accepted); exits 1 if the verifiers disagree on any session or either misses an
-expectation.
+last, once every check has passed, as accepted). Its `refused_at_target`, `refused_elsewhere` and `refused_untargeted` count
+the Lean verifier's refusals by the reason the session's expectation names (none: a `case.json` alone), and `lean_panics` names
+the sessions whose Lean verifier wrote a panic (`PANIC_MARKS`), whose verdicts are not read. Exits 1 if the verifiers disagree
+on any session, either misses an expectation, the Lean verifier alone accepts one, or it panics.
 """
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -160,7 +162,16 @@ def upstream_cmd(a, public, extra=()):
     return [a.upstream, "replay", *extra, *modes(a), "--instances", public, flag, a.circuit, *tables, "--sessions"]
 
 
-def verdicts(a, slots=None):
+#: a Lean panic's message, whatever prefixes its line (the runtime's `PANIC at …`, the launch's `lean-panic:`, or a caught
+#: one printed as an error): the verifier's state past it is a default value, so no verdict it prints is read
+PANIC_MARKS = ("PANIC", "lean-panic:", "index out of bounds")
+
+
+def panicked(text):
+    return any(m in line for line in text.splitlines() for m in PANIC_MARKS)
+
+
+def verdicts(a, slots=None, panics=None):
     """Both verifiers on every session, `--jobs` processes at once: per public file, the sessions dealt into chunks, one Lean and
     one upstream process per chunk, and each sampled session in its own upstream process (`replay --drawn-only` builds only its
     sampled proof blocks' statement; upstream leaks a statement's matrices, so one process holds one statement). On upstream's
@@ -196,13 +207,18 @@ def verdicts(a, slots=None):
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}
+    panics = set() if panics is None else panics
 
     def read(ts):
         with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
             done = list(ex.map(run, ts))
-        for (kind, _cmd, _c), (out, err) in zip(ts, done):
+        for (kind, _cmd, c), (out, err) in zip(ts, done):
             lines, errs = logs[kind]
             errs.append(err)
+            if kind == "lean" and panicked(out + err):
+                # a panicking verifier's verdicts are not read, a refusal included: its sessions fail by name
+                panics.update(c)
+                continue
             for line in out.splitlines():
                 if kind == "lean" and line.startswith("VERDICT "):
                     v = json.loads(line[8:])
@@ -273,12 +289,15 @@ def main(argv=None, slots=None, quiet=False):
         case = Path(s) / "case.json"
         if case.exists():
             expect.setdefault(Path(s).name, {"accepted": json.loads(case.read_text())["expect"] == "accept", "why": ""})
-    lean, up = verdicts(a, slots)
+    panics = set()
+    lean, up = verdicts(a, slots, panics)
     rows, bad, passed = ["session\texpect\tlean\tupstream\tok\tlean_why\tupstream_why"], [], 0
-    both = {"both_accept": 0, "both_refuse": 0, "upstream_alone_accepts": 0, "lean_alone_accepts": 0}
+    both = {"both_accept": 0, "both_refuse": 0, "upstream_alone_accepts": 0, "lean_alone_accepts": 0,
+            "refused_at_target": 0, "refused_elsewhere": 0, "refused_untargeted": 0}
     for s in a.sessions:
         name = Path(s).name
         L, U, e = lean.get(s), up.get(s), expect.get(name)
+        target = e["why"] if e and not e["accepted"] and e.get("why") else None
         shown = L
         refuses = [a.lean_refuses_drawn] if a.lean_refuses_drawn is not None and drawn(s) else []
         last = [] if refuses else [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawless, not drawn(s)),
@@ -304,18 +323,24 @@ def main(argv=None, slots=None, quiet=False):
             ok = L is not None and U is not None and not L["accepted"] and L["why"].startswith(tuple(refuses))
         if e is not None:
             ok = ok and L["accepted"] == e["accepted"] and any(L["why"].startswith(w) for w in e.get("whys") or [e["why"]])
+        if L is not None and U is not None:
+            k = (("both_accept" if U["accepted"] else "lean_alone_accepts") if L["accepted"] else
+                 ("upstream_alone_accepts" if U["accepted"] else "both_refuse"))
+            both[k] += 1
+            # the dangerous direction fails whatever an expectation says
+            ok = ok and k != "lean_alone_accepts"
+        if L is not None and not L["accepted"]:
+            both["refused_untargeted" if target is None else
+                 "refused_at_target" if L["why"].startswith(target) else "refused_elsewhere"] += 1
         if not ok and name not in bad:
             bad.append(name)
-        if L is not None and U is not None:
-            both[("both_accept" if U["accepted"] else "lean_alone_accepts") if L["accepted"] else
-                 ("upstream_alone_accepts" if U["accepted"] else "both_refuse")] += 1
         av = lambda v: "-" if v is None else "A" if v["accepted"] else "R"
         rows.append("\t".join([name, av(e), av(shown), av(U), "yes" if name not in bad else "NO", (shown or {}).get("why", ""),
                                (U or {}).get("why", "")]))
     (a.out / "agreement.tsv").write_text("\n".join(rows) + "\n")
     result = {"statement": a.statement, "sessions": len(a.sessions), "agree": len(a.sessions) - len(bad), "disagree": bad,
               "accepted": sum(1 for s in a.sessions if (lean.get(s) or {}).get("accepted")), "passed_every_check": passed,
-              **both}
+              **both, "lean_panics": sorted(Path(s).name for s in panics)}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))
     if not quiet:
         print(json.dumps(result))
