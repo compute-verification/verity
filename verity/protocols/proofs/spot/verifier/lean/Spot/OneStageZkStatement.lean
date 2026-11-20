@@ -306,19 +306,57 @@ def Admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
 instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
     Decidable (Admitted partition cuts S) := inferInstanceAs (Decidable (_ = true))
 
+/-- **The block's form in C**, beside `admitted`'s on C_S: the units `units` of C, whose C_S `admitted` gave the template
+`key`, refused under `NOT_ADMITTED` by the first clause that fails:
+* `root-not-recut`: C's root reads no input node recut (`body.recut` is empty), which C_S's agreement with C assumes;
+* `units-disjoint`: no two units hold a gate in common;
+* `units-of-template`: every unit's callee is `key`;
+* `operands-outside`: every operand gate of every unit is outside the block, so each is a port of the block's front at
+  its template's parameter-leaf width and no row of the block circuit stands for a gate another unit computes.
+A function of C, the units and `key`; its work is the units' operands. -/
+def blockFormed (P : Flock.Program.Prog) (units : Array Nat) (key : String) : V Unit := do
+  let some root := P.defs[P.root]? | notAdmitted "root-not-recut" "C's root is not one of its Definitions"
+  if !root.body.recut.isEmpty then
+    notAdmitted "root-not-recut" s!"C's root reads input nodes {(root.body.recut.map (·.1)).toList} recut, in leaves of part of their width"
+  let us ← units.mapM fun u => do
+    let (k, m) ← Spot.BlockFront.unitAt P u
+    let sc := P.child P.rootScope k m
+    pure (u, k, m, sc.off, sc.off + ((P.defs[sc.d]?).map (·.gates)).getD 0)
+  let byLo := us.qsort fun a b => a.2.2.2.1 < b.2.2.2.1
+  for i in [1:byLo.size] do
+    let (u, _, _, _, hi) := byLo[i - 1]!
+    let (v, _, _, lo, _) := byLo[i]!
+    if lo < hi then notAdmitted "units-disjoint" s!"units {u} and {v} of the block hold gates in common"
+  for (u, k, m, _, _) in us do
+    let some x := root.body.nodes[k]? | notAdmitted "units-of-template" s!"unit {u} is no node of C's root"
+    let c := ((P.defs[x.fn]?).map (·.key)).getD ""
+    if c != key then notAdmitted "units-of-template" s!"unit {u} calls {c}, not the block's template {key}"
+    for (g, _) in ← Spot.BlockFront.operandsW P x m do
+      if let some (v, _, _, _, _) := us.find? fun (_, _, _, lo, hi) => lo ≤ g && g < hi then
+        notAdmitted "operands-outside" s!"unit {u} reads gate {g}, which unit {v} of the block computes: a unit reads only gates outside its block"
+
+/-- **The block is formed in C**: `blockFormed` accepts it. -/
+def BlockFormed (P : Flock.Program.Prog) (units : Array Nat) (key : String) : Prop :=
+  (blockFormed P units key).toOption.isSome = true
+
+instance (P : Flock.Program.Prog) (units : Array Nat) (key : String) : Decidable (BlockFormed P units key) :=
+  inferInstanceAs (Decidable (_ = true))
+
 /-- The template `lowerBlock` lowers C_S's block to at what `admitted` gives `a`: its template on bits, every input row
 and return field in u16 words. -/
 def blockTmpl (S : Flock.Program.Prog) (a : Admit) : V Flock.Tmpl.Tmpl :=
   Flock.Lower.lower S a.d (Array.replicate (a.ins.foldl (fun n p => n + p.2 / 16) 0) 16)
     (Array.replicate (a.fields.foldl (fun n p => n + p.2 / 16) 0) 16)
 
-/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, refused unless `admitted`, then lowered at its
+/-- **C_S's block circuit** (`one_circuit.lower`): `S`, the block's Program, refused unless `admitted` and `formed` at its
+template (the door's `blockFormed`, C's units' form), then lowered at its
 one template by `Flock.Lower.lower` and written by `Flock.Compose.compose` at the rows and fields `admitted` gives:
 output ports its return fields `o{j}` in u16 words, META's `program_digests` the template's `definitionDigest` read off
 `CJ`, C's descriptor. -/
-def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog) :
-    V ByteArray := do
+def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog)
+    (formed : String → V Unit := fun _ => pure ()) : V ByteArray := do
   let a ← admitted partition cuts S
+  formed a.key
   let outs := a.fields.map fun (n, b) => (n, b / 16)
   let tab := fun (k : String) => match CJ.getObjValD k with | .arr xs => xs | _ => #[]
   let digest ← Flock.DefinitionDigest.definitionDigest (tab "callees") (tab "types")
@@ -406,6 +444,29 @@ def admitIn (d : String) (ts : List String) (us : Array Nat) : V Admit := do
 #guard refusedBy (admitIn AB16 ["A_v0", "B_v0"] #[0, 1]) "one-template" "C_S's root calls [A_v0, B_v0], and a block's units are instances of one template"
 #guard (admitIn AB16 ["A_v0", "B_v0"] #[1]).toOption.map (·.key) == some "B_v0"
 
+/-- AB16 with its second unit an `A_v0` reading the first's return: units 0 and 1 of one template, 1 reading 0. -/
+def AA16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_v0"],"definitions":{"A_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"A_v0"},"B_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"B_v0"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"axes":[0],"fn":2,"form":"batch","n":1,"out":1},{"args":[{"refs":{"affine":["n",2,0,16]},"type":1}],"axes":[0],"fn":2,"form":"batch","n":1,"out":1}],"params":[],"ret":{"concat":[{"affine":["n",2,0,16]},{"affine":["n",3,0,16]}]},"ret_type":["Tuple",[["Array",1,["Array",16,["Value",1]]],["Array",1,["Array",16,["Value",1]]]]]},"form":"composite","id":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1"}},"program_fn":"WiredPopulations_v1{templates=[\"A_v0\",\"B_v0\"],record=\"27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd\",counts=[1,1]}","root":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",16,["Value",1]],["Array",1,["Array",16,["Value",1]]]]}"#
+
+/-- `lowerBlock` on the block of units `us` of the descriptor `d`, its template `t`, with the door's `blockFormed`. -/
+def lowerIn (d t : String) (us : Array Nat) : V ByteArray := do
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", t)])]
+  lowerBlock (← Json.parse d) (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us) (blockFormed P us)
+
+/-- C's root `d` reading its input node 0 recut by 16. -/
+def recut0 (d : Flock.Program.Defn) : Flock.Program.Defn := { d with body := { d.body with recut := #[(0, 16)] } }
+
+/-- `blockFormed` on the descriptor `d`'s units `us` at the template `t`, C's root first changed by `f`. -/
+def formedIn (d t : String) (us : Array Nat) (f : Flock.Program.Defn → Flock.Program.Defn := id) : V Unit := do
+  let P ← Flock.Program.decode d.toUTF8
+  blockFormed { P with defs := P.defs.modify P.root f } us t
+
+#guard refusedBy (lowerIn AA16 "A_v0" #[0, 1]) "operands-outside" "unit 1 reads gate 32, which unit 0 of the block computes: a unit reads only gates outside its block"
+#guard refusedBy (formedIn AB16 "A_v0" #[0, 1]) "units-of-template" "unit 1 calls B_v0, not the block's template A_v0"
+#guard refusedBy (formedIn AB16 "A_v0" #[0, 0]) "units-disjoint" "units 0 and 0 of the block hold gates in common"
+#guard refusedBy (formedIn AB16 "A_v0" #[0] recut0) "root-not-recut" "C's root reads input nodes [0] recut, in leaves of part of their width"
+#guard (formedIn AB16 "A_v0" #[0]).toOption.isSome && (formedIn AA16 "A_v0" #[1]).toOption.isSome
+
 /-- `E16` returning `Value 16` named by one leaf of `map Not y`: a template wide on its return alone. -/
 def R16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,16]},"type":1}],"axes":[0],"fn":1,"form":"batch","n":16,"out":1}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",16]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,1]},"ret_type":["Value",16]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Value",16]]}"#
 
@@ -446,8 +507,10 @@ def restrictOn (CJ : V Json) (prog : V Flock.Program.Prog) (blocks : V (Option (
   let some bs ← blocks | throw "restrict: the partition object has no blocks"
   let some (lo, hi) := bs.find? (·.1 == block)
     | throw s!"restrict: no block of the partition starts at unit {block}"
-  let S ← Spot.Restrict.restrict (← prog) ((List.range' lo (hi - lo)).toArray)
-  lowerBlock (← CJ) partition (← cuts) S
+  let P ← prog
+  let us := (List.range' lo (hi - lo)).toArray
+  let S ← Spot.Restrict.restrict P us
+  lowerBlock (← CJ) partition (← cuts) S (blockFormed P us)
 
 /-- `restrictOn` on C's bytes. -/
 def restrict (C : ByteArray) (partition : Json) (block : Nat) : V ByteArray :=
