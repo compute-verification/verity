@@ -437,10 +437,10 @@ theorem refOf_refOk {P : Prog} {d n : ℕ} (hB : Resolve.BodyOk P d) (hn : n < (
     rw [if_neg hb] at hop
     exact (hB.1 n hn).2.1 i t hop
 
-/-- **`UnitWordComputes` for a template of word-primitive calls and axis-0 batches**, on `Batch0Typed`: where C is topological, its gates
+/-- **`UnitWordComputes` for a template of word-primitive calls and axis-0 batches**, on `Batch0Typed`: where C's gates
 are located and unit `g` resolves. -/
 theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
     (hb0 : Batch0 P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
@@ -460,10 +460,7 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
   have hD : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hrt, hrp, -⟩ := BodiesOk.decode_root bytes P hd hr
   have hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false := ⟨hrt, hrp⟩
-  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
-  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
-    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
-    exact BodiesOk.body_ok P hD sc.d (hS sc.d hSd hpd).1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc _ => BodiesOk.decoded_bodyOk bytes P hd hr sc.d
   have hL := OperandWidths.decoded_laid bytes P hd hr
   obtain ⟨hsh, hmem⟩ := unitAt_shape hu
   have hc0 : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hb0.1
@@ -736,17 +733,17 @@ theorem unitWordComputes_batch0 (hT : Batch0Typed) {bytes : ByteArray} {P : Prog
       (M := fun i => ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[i]!).members) hO' hNres hx' hRef hretq hqN]
     rw [portWord_lt Y hqN, portWord_lt Y hqN]
 
-/-- **`UnitWordComputes` for a template of word-primitive calls**, on `Batch0Typed`: where C is topological, its gates
+/-- **`UnitWordComputes` for a template of word-primitive calls**, on `Batch0Typed`: where C's gates
 are located and unit `g` resolves. -/
 theorem unitWordComputes_calls (hT : Batch0Typed) {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok P)
-    (hr : (P.defs[P.root]!).body.recut = #[]) (hov : P.orderViolation = none)
+    (hr : (P.defs[P.root]!).body.recut = #[])
     (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
     {g k m : ℕ} (hu : Spot.BlockFront.unitAt P g = .ok (k, m)) (hR : UnitResolves P g)
     (hco : CallsOnly P (P.child P.rootScope k m).d) (Y : (Flock.OfProgram.ofProgram P).Trace)
     (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y) :
     outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) :=
-  unitWordComputes_batch0 hT hd hr hov hG hu hR (batch0_of_calls hco) Y hY
+  unitWordComputes_batch0 hT hd hr hG hu hR (batch0_of_calls hco) Y hY
 
 end UnitWordProof
 

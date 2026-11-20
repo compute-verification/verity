@@ -13,15 +13,15 @@ open Flock Flock.Lower Flock.Tmpl Flock.TmplValue Flock.Chain.LowerDef
 open Flock.Program hiding Form
 
 /-- **`UnitWidths`** holds. -/
-theorem unitWidths : UnitWidths := fun bytes P hd hr hov hG g k m hu hR =>
-  ⟨unitArgs_widths hd hr hov hG hu hR, unitOuts_widths hd hr hov hG hu hR⟩
+theorem unitWidths : UnitWidths := fun bytes P hd hr hG g k m hu hR =>
+  ⟨unitArgs_widths hd hr hG hu hR, unitOuts_widths hd hr hG hu hR⟩
 
 /-- **`UnitComputes`**, on `UnitWordComputes` and `LiftWordEval`. -/
 theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComputes := by
-  intro bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu hda Y hY
-  have ho := hW bytes P hd hr hov hG g k m hu (hRs g hg) Y hY
+  intro bytes P partition cuts units S a L e hd hr hs ha hab hl hG hRs g hg k m hu hda Y hY
+  have ho := hW bytes P hd hr hG g k m hu (hRs g hg) Y hY
   have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
-    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
+    rw [← (unitWidths bytes P hd hr hG g k m hu (hRs g hg)).1]
     simp [argWords, Function.comp_def, portWord_length]
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
@@ -39,20 +39,20 @@ theorem unitComputes_of (hW : UnitWordComputes) (hL : LiftWordEval) : UnitComput
 
 /-- **`BlockEvalDoor`**, on `UnitComputes`. -/
 theorem blockEvalDoor_of (hU : UnitComputes) : BlockEvalDoor := by
-  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl hov hG hRs blocks u hB X g hg Y
+  intro bytes P partition cuts units S a fr L e hd hr hs ha hab hf hl hG hRs blocks u hB X g hg Y
   obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
   have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
       Y h = (Flock.OfProgram.ofProgram P).op h Y :=
     fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
-  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl hov hG hRs g hg k m hu
+  exact (hU bytes P partition cuts units S a L e hd hr hs ha hab hl hG hRs g hg k m hu
     (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
 
 /-- **`DoorLengths`** holds. -/
 theorem doorLengths : DoorLengths := by
-  intro bytes P partition cuts units S a fr hd hr hs ha hab hf hov hG hRs X g hg
+  intro bytes P partition cuts units S a fr hd hr hs ha hab hf hG hRs X g hg
   obtain ⟨k, m, hu, -⟩ := frontUnitRanges P units fr hf g hg
   have hda := admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu
-  obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)
+  obtain ⟨hwa, hwo⟩ := unitWidths bytes P hd hr hG g k m hu (hRs g hg)
   obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
   have hdx : (P.child P.rootScope k m).d = x.fn := by
     rw [child_d]

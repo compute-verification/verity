@@ -168,8 +168,7 @@ def OutsAgree {P : Prog} {n : ℕ} (Pt : Verity.Partition (ofProgram P) n) (a : 
 /-- **`DoorLengths`**: at every unit of the block, the bits of a trace of C at its arguments are exactly the input
 rows' bits, and at its return leaves exactly the return fields', the block's units admitted in C (`admittedBlock`), so `getD`'s default never stands for a bit. Lengths
 only: the order of the bits inside a word (`portBits`, low bit first) meets the lift's leaf order in `BlockEvalDoor`,
-which evaluates the lift on these bits. C is topological (`Prog.orderViolation`), which the partition's order check (`Spot.Partition.evaluate`) refuses
-without on every accept; every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
+which evaluates the lift on these bits. Every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
 inference-only's checks accept (`Desc.walkable`, `Desc.analyze`) and which SPOT's accept checks nowhere; and every unit
 of the block resolves (`UnitResolves`). -/
 def DoorLengths : Prop :=
@@ -178,7 +177,7 @@ def DoorLengths : Prop :=
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Spot.BlockFront.front P units = .ok fr →
-    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ (X : (ofProgram P).Trace), ∀ g ∈ units, (argBits X g).length = bitsOf a.ins ∧ (outBits X g).length = bitsOf a.fields
 
@@ -211,8 +210,7 @@ def RestrictBodyAgrees : Prop :=
 /-- **`BlockEvalDoor`**: in block `u`'s local evaluation `Y` of a trace of C, each unit `g` of the block, an instance of
 the template `Spot.OneStageZk.admitted` admits, the block's units admitted in C (`admittedBlock`), lifted to bits
 (`Flock.Lift.lift`), evaluates on `Y` at its arguments to `Y` at its return leaves, bit for bit. An argument inside
-the block reads `Y` at another unit's return leaf. C is topological (`Prog.orderViolation`), which the partition's order check (`Spot.Partition.evaluate`) refuses
-without on every accept; every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
+the block reads `Y` at another unit's return leaf. Every gate of C is located (`GateOk`), which `GatesLocated` gives on a Program
 inference-only's checks accept (`Desc.walkable`, `Desc.analyze`) and which SPOT's accept checks nowhere; and every unit
 of the block resolves (`UnitResolves`). -/
 def BlockEvalDoor : Prop :=
@@ -222,7 +220,7 @@ def BlockEvalDoor : Prop :=
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.BlockFront.front P units = .ok fr → Flock.Lift.lift S a.d = .ok (L, e) →
-    P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
+    (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace, ∀ g ∈ units,
