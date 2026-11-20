@@ -244,7 +244,8 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
 of a batch whose members' return isn't one run, read by whole members. Leaves never shift: `ps` names a leaf with
 `reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). When `rowed`, copy `m`
-is instead row `m` of each of `ps`, each piece of `reps` rows: a grid of several lanes, copy `m` its period `m`. -/
+is instead row `m` of each of `ps`, each piece of `reps` rows, and `reps ≥ 2`: a grid of several lanes, copy `m` its
+period `m`. -/
 structure Seg where
   ps : Array Piece
   len : Nat
@@ -302,8 +303,8 @@ def Seg.slice (s : Seg) (a b : Nat) : Array Seg :=
       let lo := if t0 == 0 then m0 else m0 + 1
       let mid : Array Seg :=
         if lo < m1 then
-          if s.rowed then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
-          else #[{ s with ps := s.copy lo, reps := m1 - lo }]
+          if s.rowed && lo + 1 < m1 then #[{ s with ps := s.ps.map (·.rowsFrom lo (m1 - lo)), reps := m1 - lo }]
+          else #[{ s with ps := s.copy lo, reps := m1 - lo, rowed := false }]
         else #[]
       first ++ mid ++ part m1 0 t1
 
@@ -349,10 +350,10 @@ def lanePiece (run : Nat) (l : Lane) : Piece :=
   | [(r, d)] => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := r, rowStride := d }
   | lv => { tgt := .ref l.p l.i, base := l.b, stride := l.e, len := run, rows := l.periods, lv }
 
-/-- A grid part as segments: one lane's is its piece (`lanePiece`), several lanes' one segment whose copy `t` is the lanes'
-runs at period `t` (`Seg.rowed`), in `Part.get`'s order. -/
+/-- A grid part as segments: one lane's is its piece (`lanePiece`), several lanes' of one period their pieces, and of
+several periods one segment whose copy `t` is the lanes' runs at period `t` (`Seg.rowed`), in `Part.get`'s order. -/
 def ofGrid (run : Nat) (lanes : Array Lane) : Array Seg :=
-  if lanes.size == 1 then #[.one (lanePiece run lanes[0]!)]
+  if lanes.size == 1 || (lanes[0]?.map Lane.periods).getD 0 ≤ 1 then lanes.map fun l => .one (lanePiece run l)
   else #[{ ps := lanes.map (lanePiece run), len := lanes.size * run, reps := (lanes[0]?.map Lane.periods).getD 0,
            rowed := true }]
 
