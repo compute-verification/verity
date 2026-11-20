@@ -18,6 +18,10 @@ import hashlib
 import json
 from pathlib import Path
 
+#: `Flock.RecSetup.RECURSION_REFUSED`: the recursive form, refused by name once its composition's checks pass
+RECURSION_REFUSED = ("refused: the recursive form (V*'s statements over an inner session: a --rec-* flag, rec-compose, "
+                     "verity/sampled-proofs/recursive/v1) is built and refused, since no soundness theorem over the one "
+                     "circuit covers its accept")
 #: ``rec_shared``'s fields in `RecCompose.Shared`'s order: key, and what it is (`Shared.diff`'s words)
 SHARED = (
     ("rec_inner", "the verifier's inner shape, --rec-inner"),
@@ -364,3 +368,9 @@ def check_twin(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, s
     except Refused as e:
         return False, str(e)
     return True, ""
+
+
+def command_twin(*args, **kwargs) -> tuple[bool, str]:
+    """``rec-compose``'s verdict: `check_twin`'s refusal, else `RECURSION_REFUSED`."""
+    ok, why = check_twin(*args, **kwargs)
+    return (False, RECURSION_REFUSED) if ok else (ok, why)
