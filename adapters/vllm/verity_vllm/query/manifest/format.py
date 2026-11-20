@@ -30,7 +30,7 @@ from typing import Any
 from verity_vllm.records import required_manifest
 
 __all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
-           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM", "SCHEDULE_READERS",
+           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM",
            "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
            "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
            "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
@@ -487,12 +487,8 @@ TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect"
 #: could set) is refused by name.
 SAMPLER_INPUTS = frozenset({"seed"})
 
-#: [DSV4] a TP rank Program's WITNESS input `schedule`, each Marlin align call's key per pair, read by `MoeAlignRanks_v1` only; no
-#: builder emits it any more (every Program keys the align by the pair indices, the served deterministic align's order).  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
-#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
-#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+#: a Program input named `schedule` is neither the prompt nor a committed word, and nothing binds it: any Call that reads it is refused.
 SCHEDULE_PARAM = "schedule"
-SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 
 #: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.

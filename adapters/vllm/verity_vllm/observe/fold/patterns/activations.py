@@ -5,10 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from verity_vllm.definitions.registry.dsv4_moe import limit_bits
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
-from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name
+from verity_vllm.observe.fold.patterns.ops import bound_args, first, op_name
 from verity_vllm.observe.fold.patterns.resolutions import (
     _fmt,
     attribution_for,
@@ -66,25 +65,3 @@ class SiluAndMul:
             return unsupported(node, f"the record target's numerics profile binds no {self.kind} kind", numerics_profile=numerics)
         return Compute(spec, M, (PerRow(x),), (PerRow(out),), (node.id,), hint=hint_of(node, self.op),
                        kernels=("act_and_mul_kernel",), attribution=attribution_for(ctx, M, node.phase), pattern=self.name)
-
-
-@dataclass
-class SiluAndMulWithClamp(SiluAndMul):
-    """`_C.silu_and_mul_with_clamp(result!, input, limit, alpha=1, beta=0)` (DeepSeek-V4's SwiGLU limit) → the same Compute over the
-    vocabulary's `silu_mul_clamp{I,LIMIT}` (`SiluMulClamp_v1`), the Build's `SiluAndMulWithClampRule`; SwiGLU-OAI's alpha and beta
-    have no Definition."""
-
-    name: str = "act.silu_and_mul_with_clamp"
-    op: ClassVar[str] = "silu_and_mul_with_clamp"
-    kind: ClassVar[str] = "silu_mul_clamp"
-
-    def statics(self, node: TreeNode, a: dict) -> dict | Unsupported:
-        limit, alpha, beta = as_float(a.get("limit")), as_float(a.get("alpha", 1.0)), as_float(a.get("beta", 0.0))
-        if (alpha, beta) != (1.0, 0.0):
-            return unsupported(node, "silu_and_mul_with_clamp's alpha and beta are not 1 and 0 (SiluMulClamp_v1 is the clamp alone)",
-                               alpha=alpha, beta=beta)
-        try:
-            limit_bits(limit)
-        except (TypeError, ValueError) as e:
-            return unsupported(node, f"silu_and_mul_with_clamp's limit: {e}", limit=repr(a.get("limit")))
-        return {"LIMIT": limit}
