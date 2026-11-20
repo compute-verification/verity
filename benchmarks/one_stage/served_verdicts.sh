@@ -504,6 +504,8 @@ PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window a
 H1_KEY_OF_RECORD=27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc  # vy-challenger-1's
 H1_KEY_SHA512=${H1_KEY_SHA512:-$H1_KEY_OF_RECORD}
 POUW=${POUW:-}
+# window: every step on a window's serve's record in D (window_road); rows: the ROW's serve under the lease, then its steps
+ROAD=${ROAD:-window}
 H1_PEER=${H1_PEER:-vy-dc-h200}
 LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
 if [ "$POUW" = pearlplus ]; then
@@ -570,7 +572,8 @@ case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: 
 case $POUW in
   pearlplus) ;;
   h1) say "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"; exit 3 ;;
-  '') say "PREFLIGHT: POUW names PoUW's scheme, and the one left is Pearl+: POUW=pearlplus"; exit 3 ;;
+  # Pearl+'s hooks set POUW wherever the application lists compute accounting, so with none listed it is empty
+  '') ;;
   *) say "PREFLIGHT: POUW is pearlplus, not $POUW"; exit 3 ;;
 esac
 for v in H1_GATE H1_TIE H1_CIRCUITS H1_STATEMENTS H1_LIVE_EVIDENCE H1_RECEIPTS H1_PROTOCOLS_CONFIG; do
@@ -1156,6 +1159,7 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   c=$(io_class)
   [ -n "$c" ] || { say "INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"; return 0; }
   [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
+  [ "$ROAD" != window ] || phi=(--serve "$D/serve.json")  # the window's serve's own φ, after it served
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
     --revision "$REV" --lease-min "${LEASE_MIN:-60}" --tree "$(tree_sha)" "${phi[@]}" --out "$IO_POLICY" \
     2> "$D/inference-only-policy.err")
@@ -1812,6 +1816,122 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" "$@" \
   --product "$PRODUCT" 2>&1 | publish_lines
 }
+# The window's road (ROAD=window): the steps on what a window's serve left in D, after the lease, serving nothing and
+# reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
+# seal and the advice. A step the record holds nothing for refuses, naming what it lacks and whose it is.
+RAN=() REFUSED=() FAILED=()
+step_refused() { REFUSED+=("$1"); say "$1: not run: $2"; }
+road_end() {
+  say "ROAD END (the window's record): ran $(IFS=,; echo "${RAN[*]:-none}"); refused $(IFS=,; echo "${REFUSED[*]:-none}"); failed $(IFS=,; echo "${FAILED[*]:-none}"); no verdict stands for a step that did not run"
+  exit "$1"
+}
+road_stop() { FAILED+=("$1"); say "STOP at $1 (exit $2)"; road_end "$2"; }
+window_preflight() {  # K the close's window with a record (WINDOW's, else plans.jsonl's last); each thing absent refused by name
+  local miss=() f why
+  [ -e "$PY" ] || miss+=("PY, python under VENV")
+  [ -n "${WINDOW_CLASS:-}" ] || miss+=("WINDOW_CLASS, the class the serve took (its --window-class), which serve.json doesn't record")
+  if [ ! -f "$D/plans.jsonl" ]; then miss+=("D/plans.jsonl, the close's plan of each window")
+  elif ! K=$("$PY" - "$D/plans.jsonl" "${WINDOW:-}" 2>&1 <<'EOF'
+import json, sys
+lines = [json.loads(x) for x in open(sys.argv[1]) if x.strip()]
+p = next((x for x in reversed(lines) if sys.argv[2] in ("", str(x["window"]))), None)
+if p is None:
+    sys.exit(f"D/plans.jsonl has no line for {'WINDOW' if sys.argv[2] else 'any window'}")
+why = p.get("refused") or p.get("error") or p.get("pending") or (p.get("handoff") or {}).get("error") \
+    or (p.get("record") or {}).get("error")
+if why or "handoff" not in p:
+    sys.exit(f"D/plans.jsonl's close of its window made no record: {why or 'no handoff (the serve ran without --record)'}"[:600])
+print(p["window"])
+EOF
+  ); then miss+=("$K"); K=
+  fi
+  if [ -n "${K:-}" ]; then
+    for f in serve.json seals.jsonl "windows/w$K/commit/verdict.json" "windows/w$K/commit/runs.jsonl" \
+        "windows/w$K/handoff/handoff.json" "windows/w$K/record/circuit.json" "windows/w$K/record/registration.json" \
+        "windows/w$K/record/index.json" "advice/w$K/registration.json" "advice/w$K/private/advice.bin" weights_registration.json; do
+      [ -e "$D/$f" ] || miss+=("D/${f//w$K/wK}")
+    done
+  fi
+  [ -f "$PRED/predicted.json" ] || miss+=("PRED/predicted.json, predict row's Build before the lease")
+  [ ${#miss[@]} = 0 ] && return 0
+  why=$(printf '%s; ' "${miss[@]}")
+  say "PREFLIGHT: the window's record lacks ${why%; }"
+  return 3
+}
+window_seal() {  # the window's seal held to its record (close_record's finish opened its bundle to make it): the seal's
+  # run root, the record's circuit and its compiler, held to predict row's; the commit's bound Program digest beside the
+  # predicted workload digest, which no check here compares
+"$PY" - "$D" "$K" "$PRED" <<'EOF' 2>&1 | publish_lines
+import hashlib, json, sys
+from pathlib import Path
+d, k, pred = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
+w, why = d / "windows" / f"w{k}", []
+
+
+def found(doc, key):
+    if isinstance(doc, dict):
+        if key in doc:
+            return doc[key]
+        return next((x for v in doc.values() if (x := found(v, key)) is not None), None)
+    return None
+
+
+predicted = json.loads((pred / "predicted.json").read_text())
+seal = next((json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip() and json.loads(x)["window"] == k), None)
+v = json.loads((w / "commit" / "verdict.json").read_text())
+c = json.loads((w / "commit" / "runs.jsonl").read_text().splitlines()[0])["commit"]
+reg = json.loads((w / "record" / "registration.json").read_text())
+if seal is None or "error" in seal:
+    why.append(f"seals.jsonl has {'no seal' if seal is None else 'a failed seal'} of the window")
+run = found(reg, "run")
+if not v.get("run_root") or v.get("run_root") != run:
+    why.append(f"the seal's run root {str(v.get('run_root'))[:16]}… is not the record's {str(run)[:16]}…")
+if found(reg, "circuit") != hashlib.sha512((w / "record" / "circuit.json").read_bytes()).hexdigest():
+    why.append("the record's circuit.json is not the circuit its registration binds")
+compiler, p = found(reg, "compiler") or {}, predicted.get("compiler")
+same = bool(compiler) and compiler.get("digest") == (p.get("digest") if isinstance(p, dict) else p)
+print(f"SEAL: the window's seal, run root {str(v.get('run_root'))[:16]}…, and its record: {'PASS' if not why else 'FAIL (' + '; '.join(why) + ')'}")
+print(f"COMPILER: the record's {compiler.get('name')} {str(compiler.get('digest'))[:16]}…, predict row's {str(p)[:80]}: "
+      f"{'PASS' if same else 'FAIL'}")
+print(f"BOUND-PROGRAM: the commit's bound Program digest {str((c.get('binding') or {}).get('program_digest'))[:16]}…, "
+      f"the predicted workload digest {str(predicted.get('workload_digest'))[:16]}…")
+sys.exit(0 if same and not why else 1)
+EOF
+return "${PIPESTATUS[0]}"
+}
+window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
+  [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE is the rows' road's tie (ROAD=rows); the window's road ties nothing"; exit 3; }
+  say "ROAD: the window's record in D (the close's plan, handoff and record, the seal and the advice), after the lease; nothing served, no ROW read"
+  RAN+=(preflight)
+  say "PREDICT, SERVE: the window's serve's, before and under its lease (PRED/predicted.json, D)"
+  if window_seal; then RAN+=(seal); else road_stop seal 11; fi
+  mkdir -p "$OUT/serve" && "$PY" -c 'import hashlib, json, sys; s = next(x.rstrip("\n") for x in open(sys.argv[1]) if x.strip() and json.loads(x)["window"] == int(sys.argv[2])); print(json.dumps({"seal_sha512": hashlib.sha512(s.encode()).hexdigest()}))' "$D/seals.jsonl" "$K" > "$OUT/serve/phase.json" \
+    || { rm -f "$OUT/serve/phase.json"; road_stop window 21; }
+  KN=$K CLASSES=$WINDOW_CLASS
+  say "WINDOW: the close's, with its record (WINDOW's, else plans.jsonl's last), at the class the serve took ($CLASSES)"
+  RAN+=(window)
+  "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
+    || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
+  say "ADVICE: the close's registration (D/advice/wK), compiled at the close"
+  RAN+=(advice)
+  if inference_policy; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
+  if circuits; then RAN+=(circuits); block_counts; RAN+=(block-counts)
+  else FAILED+=(circuits); step_refused block-counts "it counts the circuits step's window circuit, which failed"; fi
+  step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
+  if [ "$POUW" = pearlplus ]; then
+    step_refused pearl-plus "Pearl+'s piece serves its own passes on a card (POUW_CMD's served_pearlplus.sh), and this road runs after the lease: compute accounting's"
+  fi
+  [ -z "${WIPE_CMD:-}" ] || step_refused wipe "the wipe runs on the served card's memory, which this road runs without: memory accounting's"
+  [ -z "${POUS_CMD:-}" ] || step_refused pous "PoUS's piece answers from the served card's memory, which this road runs without: memory accounting's"
+  [ -z "${BANDWIDTH_CMD:-}" ] || step_refused bandwidth "the bandwidth audit reads the served card's links, which this road runs without: memory accounting's"
+  [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ] \
+    || step_refused network-attester "its front stamps the requests during the serve, and its chain and period are on V3c's committed window, which this road doesn't make: network's"
+  if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
+  else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
+  step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
+  step_refused composite "V3c, the composite and the hand-off read the record, which was not made"
+  road_end 20
+}
 
 if [ "${1:-}" = serve ]; then host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
@@ -1892,6 +2012,12 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
     || { say "PREFLIGHT: the compose follow-on holds no witness of the served run, and this node's serve dir does ($(echo "$held" | head -1 | cut -c1-400)): compose on a node that holds the hand-off alone"; exit 3; }
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no python under VENV (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
+elif [ "$ROAD" = window ]; then
+  window_preflight || exit 3
+  logs_dir
+  window_road
+elif [ "$ROAD" != rows ]; then
+  say "PREFLIGHT: ROAD is window or rows, not $ROAD"; exit 3
 else
   host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3
   for f in ROW/manifest.json ROW/build_summary.json HIDDEN_SO PY; do
