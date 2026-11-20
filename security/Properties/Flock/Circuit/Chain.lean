@@ -179,6 +179,7 @@ def DoorLengths : Prop :=
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () → Spot.BlockFront.front P units = .ok fr →
+    units.toList.Pairwise (· < ·) →
     P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ (X : (ofProgram P).Trace), ∀ g ∈ units, (argBits X g).length = bitsOf a.ins ∧ (outBits X g).length = bitsOf a.fields
@@ -222,7 +223,8 @@ def BlockEvalDoor : Prop :=
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
     Spot.OneStageZk.admittedBlock P units a.key = .ok () →
-    Spot.BlockFront.front P units = .ok fr → Flock.Lift.lift S a.d = .ok (L, e) →
+    Spot.BlockFront.front P units = .ok fr →
+    units.toList.Pairwise (· < ·) → Flock.Lift.lift S a.d = .ok (L, e) →
     P.orderViolation = none → (∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h) →
     (∀ g ∈ units, UnitResolves P g) →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
@@ -241,7 +243,8 @@ def BlockCorrectDoor : Prop :=
     (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl) (nt : Net),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr → Spot.OneStageZk.admittedBlock P units a.key = .ok () →
+    Spot.BlockFront.front P units = .ok fr →
+    units.toList.Pairwise (· < ·) → Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt → nt.unitLog ≤ 32 →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
@@ -289,7 +292,8 @@ def DoorJoin : Prop :=
     (π : Fin (ofProgram P).N → Sc.Op) (z : ℕ → ℕ → Bool) (π' : ℕ → Fin (ofProgram P).N → Sc.Op),
     decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
     Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
-    Spot.BlockFront.front P units = .ok fr → Spot.OneStageZk.admittedBlock P units a.key = .ok () →
+    Spot.BlockFront.front P units = .ok fr →
+    units.toList.Pairwise (· < ·) → Spot.OneStageZk.admittedBlock P units a.key = .ok () →
     Spot.OneStageZk.blockTmpl S a = .ok t → Tmpl.unroll t = .ok nt → nt.unitLog ≤ 32 →
     BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) → Sc.Binds H →
     (partOf P blocks).Rblk Sc H enc (servedLayout P) c u.castSucc X π →
@@ -346,7 +350,8 @@ def PortsBind : Prop :=
     (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α) (blocks : Array (Array (ℕ × ℕ)))
     (u : Fin blocks.size) (c : Verity.Root → Sc.Com) (X : (ofProgram P).Trace)
     (π π' : Fin (ofProgram P).N → Sc.Op) (z : ℕ → Bool),
-    Spot.BlockFront.front P units = .ok fr → BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) →
+    Spot.BlockFront.front P units = .ok fr →
+    units.toList.Pairwise (· < ·) → BlockIs P blocks u fr → (∀ g, Function.Injective (enc g)) →
     (∀ q ∈ fr.ins ++ fr.outs, ∃ h : q.gate < (ofProgram P).N, ⟨q.gate, h⟩ ∈ (partOf P blocks).io u.castSucc) →
     Sc.Binds H → (partOf P blocks).Rblk Sc H enc (servedLayout P) c u.castSucc X π →
     PortsOpenAt Sc H enc (partOf P blocks) (servedLayout P) c fr t z π' →
@@ -508,14 +513,21 @@ def treeSc {α : Type} (Sc : _root_.Hash.StringCommitment α) (M : Verity.Root �
     | some tl => Sc.hashed H (C.2 tl.tree) (Nat.pair tl.leaf tl.slot) v π
     | none => []
 
-/-- The accepted per-member check over C's partition: `checkMembersAt` accepts, and `Pp`, `rs` are the program and
-ranges its `membersRootsOf` reads. -/
+/-- **Member `m`'s units are the block its circuit file is restricted to**: one range `[lo, hi)`, the partition's block
+that `restrictOn` finds by its first unit `m.own.first` (`Own.circuitFile`), as `membersOf` builds every member. -/
+def PicksBlock (m : Spot.OneStageZk.Member) : Prop :=
+  ∃ (bs : Array (ℕ × ℕ)) (lo hi : ℕ), m.own.blocks.get = .ok (some bs) ∧
+    bs.find? (·.1 == m.own.first) = some (lo, hi) ∧ m.units = #[(lo, hi)]
+
+/-- The accepted per-member check over C's partition: `checkMembersAt` accepts, `Pp`, `rs` are the program and
+ranges its `membersRootsOf` reads, and every member's units are the block it is restricted to (`PicksBlock`). -/
 def MembersAccept (p : Spot.OneStageZk.Params) (ms : Array Spot.OneStageZk.Member) (c : Spot.OneStage.Commitment)
     (Pp : Spot.Program) (rs : Array Flock.TemplateQuery.TRange) : Prop :=
   ∃ (ξ : ByteArray) (e : Spot.OneStageZk.Evidence) (sts : Array Spot.OneStageZk.StatementFiles) (bs : Core.Blobs)
     (pub : Spot.OneStage.Public) (prof : Core.Integrity),
     Spot.OneStageZk.checkMembersAt p ms c ξ e sts bs = .accept pub prof ∧
-    Spot.Program.parse p.own.program = .ok Pp ∧ Spot.Partition.evaluate Pp (Spot.getD p.own.partition "query") = .ok rs
+    Spot.Program.parse p.own.program = .ok Pp ∧
+    Spot.Partition.evaluate Pp (Spot.getD p.own.partition "query") = .ok rs ∧ ∀ m ∈ ms, PicksBlock m
 
 /-- **`TreeMapTotal`**: on an accept, every committed gate a member's block reads or writes (`Partition.io`) has a
 position at `servedLayout` and a leaf of a tree whose root the verifier holds before any coin (`HeldTree`). -/
