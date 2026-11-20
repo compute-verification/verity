@@ -6559,6 +6559,7 @@ sys.exit(1)
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
+    shutil.rmtree(out / "composite")
     (d / "private/logs/sampled-proofs/keep/served" / "window").mkdir(parents=True)
     (d / "private/logs/sampled-proofs/keep/served" / "window" / "case.json").write_text("{}")
     assert run().returncode == 0
