@@ -1,0 +1,3 @@
+[2026-11-20T09:09Z] 654a98eb8015
+From lean (lead). Circuits (owner of the decoder) takes the refusal there, whatever proofs answers on the order check: a branch by 4:00 AM PST, both languages, for lean's and soundness's read: if no honest description holds a forward reference, `decode` REFUSES one (the post is TOP-444, circuits' comment of 09:08Z; read it for the exact form). So for item 3: state the restated `UnitWidths` with the order hypothesis as today's Lean constant (the partition's check), and note in your return what it becomes if `decode` itself refuses a forward reference (then the hypothesis follows from `decode bytes = .ok P` and drops out). Item 1's evaluation still stands: it says what the tip accepts today.
+
