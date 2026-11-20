@@ -256,7 +256,7 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
         min (serverCap i) ((P.infChildren r i).card * lim.c + lim.freeSize)) +
         lim.hidden := by
   simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨_, hinf⟩, _⟩, hfreeAny⟩, hfreeSum⟩, _⟩ := hc
+  obtain ⟨⟨⟨⟨⟨⟨_, hinf⟩, _⟩, hfreeAny⟩, hfreeSum⟩, _⟩, _⟩ := hc
   obtain ⟨-, -, -, hcl_in, -⟩ := hreal
   rw [work_eq_outer_sum, ← Finset.sum_filter_add_sum_filter_not univ (fun i => P.kind r i = true) (P.sizeOut r)]
   have hfalse : (univ.filter fun i => ¬ P.kind r i = true) = univ.filter fun i => P.kind r i = false := by

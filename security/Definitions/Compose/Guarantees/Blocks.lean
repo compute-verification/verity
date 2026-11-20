@@ -131,8 +131,12 @@ def PoubOnActualCircuit (G : Prop) : Prop := G
 
 /-- **The wipe's information bound gives a width bound** (open, memory-accounting): in an accepted run where the prior
 content surviving the wipe is under its bound in information, every server-day block `i` reads at most `b i` bits from
-its own past. A block can read many bits that carry little information, so this needs a premise on how prior content lies
-in the gates it reads; whether a block's input is to be stated in information is open. -/
+its own past that is neither registered information nor what the auditor sends. A block that reads the wipe's own labels
+reads far more, and the labels are not registered information; the `Source` list has no place yet for what the auditor
+sends (challenges, wipe labels), so this row is open until that source is added as the architecture page names it: its
+`.past` source excludes registered information (`g ∉ θ`) but not the auditor's, which it must. A block can also read many
+bits that carry little information, so this needs a premise on how prior content lies in the gates it reads; whether a
+block's input is to be stated in information is open. -/
 def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   ∀ r, P.accepts r → survives r → ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (b r i))
 
@@ -164,10 +168,13 @@ def RecordIsOutput (shown : P.Run → Prop) (egress bOut : (r : P.Run) → Fin (
   ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true → egress r i ≤ bOut r i
 
 /-- **Network attestation: input at most from the outside world, for every server-day block**, from `AttesterOnEveryLink`
-and the attester's ingress count at most `bIn i`, with no sampled proof behind it. A shape. -/
-def NetworkInputAtMost (ingress egress bIn : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
+and the attester's ingress count at most `bIn i`, plus `covert i`, an assumed number of bits for the covert channels the
+attester does not see, with no sampled proof behind it. The covert channels are an assumed number of the adversary
+resource model's list, not zero: a bound with `covert = 0` would assume its own conclusion. A shape. -/
+def NetworkInputAtMost (ingress egress bIn covert : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
   P.AttesterOnEveryLink ingress egress → (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r i ≤ bIn r i) →
-    ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i))) 0
+    ExceptWith P.pr P.accepts
+      (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.world] (bIn r i + covert r i))) 0
 
 /-- **Network attestation: output at most to the outside world, for every server-day block**: a width bound that leaves
 the timing channel out. From `NetTiming.Attester.PhaseGetsBack`, which bounds how much of an execution phase's egress
@@ -221,8 +228,10 @@ def PolicyTheorem {L : Type*} (check : (P : Runs L) → P.Run → Bool) (pol : P
   ∀ (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r))),
     check P r = true → P.RealizesExcept r M → Compliant pol (P.actual r) (P.θ r)
 
-/-- **The inference-only policy** at the limits `lim`, with training efficiency `efficiency` (open on a declaration): a
-declaration complies when its training efficiency is at most `share + allowance`. -/
+/-- **The inference-only policy** at the limits `lim`, with training efficiency `efficiency`: a declaration complies when
+its training efficiency is at most `share + allowance`. Training efficiency is an undefined parameter here, a function of
+a declaration supplied by the policy's author; this layer fixes no definition for it and no utilization target, which are
+likewise parameters (`lim.share`, `lim.allowance`). Stating the target is the policy author's, not this layer's. -/
 def efficiencyAtMost (lim : Limits) (efficiency : RegisteredCircuit → ℝ) : Policy := fun d =>
   efficiency d ≤ lim.share + lim.allowance
 
