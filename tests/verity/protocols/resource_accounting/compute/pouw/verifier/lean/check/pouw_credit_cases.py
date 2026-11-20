@@ -693,7 +693,8 @@ def _stand_in(w: int) -> str:
 
 
 def _wired(desc: dict) -> dict:
-    """`desc` with each node's arguments, a batch's axes, each node's output and each body's return as Flock's decoder
+    """`desc` with each node's arguments, a batch's axes, each node's output, each body's return and `inputs` (one
+    parameter per input node leading the root) as Flock's decoder
     checks them (`Flock.Program.decode`), over its callees as they stand: each argument of its parameter's type, each
     leaf naming the first leaf of its own width among the body's parameters and earlier nodes (in the root an input's;
     a template's return of a width none of its parameters has, a `_stand_in` its body calls), so no word is read at
@@ -716,7 +717,7 @@ def _wired(desc: dict) -> dict:
 
     defs = desc["definitions"]
     for key, d in list(defs.items()):
-        if d["form"] != "composite":
+        if d["form"] != "composite" or key.startswith(ZERO_BODY):
             continue
         body, first = d["body"], {}
 
@@ -745,6 +746,9 @@ def _wired(desc: dict) -> dict:
             source("n", k, types[x["out"]])
         body["ret"] = refs(body["ret_type"], first)
     desc["types"] = types
+    nodes = defs[desc["root"]]["body"]["nodes"]
+    lead = next((k for k, x in enumerate(nodes) if not Cr._INPUT.fullmatch(desc["callees"][x["fn"]])), len(nodes))
+    desc["inputs"] = [[f"x{k}", 1] for k in range(lead)]
     return _bodied(desc)
 
 
@@ -913,6 +917,28 @@ def _alt_layout(rng: random.Random, lay: dict) -> dict:
         out = json.loads(json.dumps(lay))
 
 
+def _named(defs: dict, fid: str) -> set[str]:
+    """The definitions ``fid``'s bindings name (a template's unit, and the unit its chunked unit wraps)."""
+    names = " ".join(_strings(defs[fid].get("bindings", {})))
+    return {f for f in defs if f != fid and f in names}
+
+
+def _drop_unnamed(defs: dict, ids: set[str]) -> None:
+    """``ids`` less those another definition's bindings still name, deleted: nothing reaches them (`E_UNREACHED`)."""
+    while drop := {f for f in ids if f in defs} - {f for d in defs for f in _named(defs, d)}:
+        for f in drop:
+            del defs[f]
+
+
+def _strings(x: object) -> list[str]:
+    """Every string in ``x``, a JSON value, keys and values."""
+    if isinstance(x, str):
+        return [x]
+    if isinstance(x, dict):
+        return [s for k, v in x.items() for s in (k, *_strings(v))]
+    return [s for v in x for s in _strings(v)] if isinstance(x, list) else []
+
+
 def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, tile: int | None = None) -> str:
     """A descriptor of `lay`'s execution phase broken as `name` says, in hex."""
     desc = window_desc(rng, lay, j10r=j10r, tile=tile)
@@ -950,8 +976,10 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
                     t["id"] = "PouwH1WindowTile_v2"
                     _rekey(desc, tid, t["id"] + tid[len(Cr.TILE_FN):])
                 case "form":
+                    gone = _named(defs, tid)
                     _rekey(desc, tid, Cr.TILE_FN)
                     defs[Cr.TILE_FN] = {"form": "primitive", "id": Cr.TILE_FN, "params": [], "ret": ["Value", 16]}
+                    _drop_unnamed(defs, gone)
                     for x in root:
                         if desc["callees"][x["fn"]] == Cr.TILE_FN and x["form"] == "call":
                             x["form"] = "primitive"
@@ -968,7 +996,9 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
                 case "unit":
                     _rekey(desc, tid, f"{Cr.TILE_FN}{{K={k},UNIT={_canon(t['bindings']['UNIT'])}}}")
                 case "missing":
+                    gone = _named(defs, tid)
                     del defs[tid]
+                    _drop_unnamed(defs, gone)
                     root[:] = [x for x in root if desc["callees"][x["fn"]] != tid]
                 case "rc":
                     body["params"][1][1][1] += 1
