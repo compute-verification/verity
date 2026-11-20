@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -54,7 +55,7 @@ def _refuse(*_a, **_k):
     raise OC.Refused("E_LOWER", WHY)
 
 
-def _audit(tmp: Path, monkeypatch, units: list[int], stop: bool) -> tuple[dict, bool, dict]:
+def _audit(tmp: Path, monkeypatch, units: list[int], stop: str) -> tuple[dict, bool, dict]:
     mine = _window(tmp / "w")
     seen = {}
     check = A5.V.check
@@ -65,8 +66,13 @@ def _audit(tmp: Path, monkeypatch, units: list[int], stop: bool) -> tuple[dict, 
 
     monkeypatch.setattr(A5, "door_circuit", _refuse)
     monkeypatch.setattr(A5.V, "check", recorded)
-    if stop:
-        monkeypatch.setattr(A5.CS, "own_reads", lambda *a, **k: (_ for _ in ()).throw(Stop()))
+
+    def halt(*_a, **_k):
+        seen["summary"] = dict(inspect.currentframe().f_back.f_locals["summary"])
+        raise Stop
+
+    # "checks": past the registration, before the reads; "draw": past `failed_drawn`, before any proof server
+    monkeypatch.setattr(*{"checks": (A5.CS, "own_reads"), "draw": (A5, "proof_server")}[stop], halt)
     a = argparse.Namespace(door_lower=Path("door"), delta=0.5, zk_server=None, rule="stratified-rate:1/2", session_timeout=1,
                            window_root=mine.run, coins=None)
     try:
@@ -78,7 +84,7 @@ def _audit(tmp: Path, monkeypatch, units: list[int], stop: bool) -> tuple[dict, 
 
 
 def test_a_member_the_door_refuses_is_registered_and_r4_covers_it(tmp_path, monkeypatch, capsys):
-    summary, ok, seen = _audit(tmp_path, monkeypatch, [], stop=True)
+    summary, ok, seen = _audit(tmp_path, monkeypatch, [], stop="checks")
     said = capsys.readouterr().out
     assert ok is None, summary
     reg = seen["registration"].to_json()
@@ -87,6 +93,7 @@ def test_a_member_the_door_refuses_is_registered_and_r4_covers_it(tmp_path, monk
 
 
 def test_a_draw_of_a_member_the_door_refused_is_a_failed_proof_by_name(tmp_path, monkeypatch):
-    summary, ok, _seen = _audit(tmp_path, monkeypatch, [0], stop=False)
-    assert ok is False and summary["failed_drawn"] == {descriptor_id(G8): 1}, summary
-    assert WHY in summary["unlowered"]["0"]["why"], summary
+    _summary, _ok, seen = _audit(tmp_path, monkeypatch, [0], stop="draw")
+    summary = seen["summary"]
+    assert summary["failed_drawn"] == {descriptor_id(G8): 1}, summary
+    assert set(summary["unlowered"]) == {"0", "1"} and WHY in summary["unlowered"]["0"]["why"], summary
