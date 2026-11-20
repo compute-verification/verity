@@ -1,7 +1,7 @@
 module
 
 public import Definitions.ResourceAccounting.Actual
-public import Definitions.ResourceAccounting.BlockProperties.Policy
+public import Definitions.ResourceAccounting.BlockProperties
 public import Definitions.Compose.Additive
 public import Definitions.ResourceAccounting.Actual.Sampler
 public import Definitions.Poub.Bandwidth
