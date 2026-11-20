@@ -89,6 +89,23 @@ def one(name: str, scratch: Path, seconds: float, keep: Path | None, extra: list
     return [name, step(out), place(err), text, kind, str(took)]
 
 
+def road(name: str, state: Path, keep: Path | None) -> str:
+    found = ""
+    for log in sorted((state / "logs").glob("*.log")):
+        lines = log.read_text(errors="replace").splitlines()
+        at = [i for i, x in enumerate(lines) if x.startswith("ROAD END")]
+        if at:
+            block = [lines[at[-1]]]
+            for x in lines[at[-1] + 1:]:
+                if not x[:1].isspace():
+                    break
+                block.append(x)
+            found = "\n".join([f"{name} ({log.name}):", *block])
+    if found and keep:
+        (keep / f"{name}.road").write_text(found + "\n")
+    return found
+
+
 def table(rows: list[list[str]]) -> str:
     return "\n".join(" | ".join(r) for r in [list(HEAD), *rows])
 
@@ -107,10 +124,15 @@ def main(argv: list[str] | None = None) -> int:
     keep = a.out
     scratch = Path(tempfile.mkdtemp(prefix="application-census-"))
     try:
-        rows = [one(n, scratch, a.minutes * 60, keep, extra) for n in a.names or every]
+        rows, roads = [], []
+        for n in a.names or every:
+            rows.append(one(n, scratch, a.minutes * 60, keep, extra))
+            roads.append(road(n, scratch / n / "state", keep))
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     print(table(rows))
+    for r in filter(None, roads):
+        print("\n" + r)
     if keep:
         (keep / "table.txt").write_text(table(rows) + "\n")
     return 0 if rows and all(r[4] == "accept" for r in rows) else 1
