@@ -6,7 +6,7 @@ a registered Definition. The package's docstring and each module's say what it h
 ## Interface
 
 - **Provides:** the frontends that lower a traced model onto the Definitions (`frontend`), the workload Program over a
-  run's requests (`workload`), the lifted Program (`lifting`), and the provisional Definitions awaiting admission
+  run's requests (`workload`), and the provisional Definitions awaiting admission
   (`quarantine`).
 - **Loaded by:** the integration's `pipeline`, `observe`, `check`, `engine`, `acquire`, `query` and
   `protocols` packages and its tools, `circuit-check`, and the benchmarks that build or read a Program.
@@ -21,5 +21,5 @@ a registered Definition. The package's docstring and each module's say what it h
   `sampling_event` (the families of Calls that end an engine step, and the sampler construction a Program declares),
   `compiled_relations` (the compiled kernels' argument roles, and MKL's one-thread warm-up), `workload` (the workload
   Program, one rooted Program over a workload, and its requests, each a `RequestComponent`, and edge) and `inputs` (what
-  fills each input of a served Program, and its refusals). `lifting.continuation` is read too and states none yet. One
+  fills each input of a served Program, and its refusals). One
   name outside a list is read by other modules: `model._inv_freq`, by `check.weights_of_record` and `predict.build`.
