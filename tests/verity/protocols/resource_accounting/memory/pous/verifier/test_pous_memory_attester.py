@@ -17,6 +17,7 @@ from pous_fakes import Clock
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
+from verity.commitments import session_coins as SC
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import schemes
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
@@ -96,7 +97,7 @@ def test_coin_tree_is_released_after_the_last_answer():
 
 def test_honest_session_is_accepted_and_publishes_only_the_verdict():
     c, signed, signer = session()
-    assert signed.ended == mc.COMPLETE and len(signed.rounds) == K
+    assert signed.ended == SC.COMPLETE and len(signed.rounds) == K
     assert [r.index for r in signed.rounds] == list(coins().indices)
     assert all(r.digest == expected(r.index) and r.elapsed_ns == 20_000 for r in signed.rounds)
     v = judge(c, signed, signer)
@@ -197,7 +198,7 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
 
 def test_a_late_round_ends_the_session_with_no_retry():
     c, signed, signer = session(spend=lambda j: LIMIT + 1 if j == 4 else 20_000)
-    assert signed.ended == mc.LATE and len(signed.rounds) == 5 and signed.rounds[-1].elapsed_ns == LIMIT + 1
+    assert signed.ended == SC.LATE and len(signed.rounds) == 5 and signed.rounds[-1].elapsed_ns == LIMIT + 1
     with pytest.raises(RuntimeError, match="no round is retried"):
         c.challenge()
     v = judge(c, signed, signer)
@@ -221,7 +222,7 @@ def test_no_collection_runs_inside_the_rounds() -> None:
 
 def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():
     c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
-    assert signed.ended == mc.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
+    assert signed.ended == SC.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
     v = judge(c, signed, signer)
     assert not v.accepted and v.late == 1
 

@@ -599,7 +599,7 @@ def main(a: Options) -> int:
         gd = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "seconds": round(time.time() - t_phase, 3), "config_id": a.config_id,
               "stages": {r["stage"]: {"status": r["status"], "seconds": r.get("seconds")} for r in recs if r["stage"] in GPU_STAGES}}
         plan.p("gpu_done").write_text(json.dumps(gd, indent=1) + "\n")
-    # the phase's last word on the realized shape is a print, with no logger's head: `ops/cov_pod.sh` shows a GPU phase's
+    # the phase's last word on the realized shape is a print, with no logger's head: a pod's log shows a GPU phase's
     # first "[realized]" line as it is written, and these two are the ones a GPU phase writes
     try:
         real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)

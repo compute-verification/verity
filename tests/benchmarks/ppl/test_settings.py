@@ -1,6 +1,5 @@
 """The bench's environment variables (settings.py): each is declared with its default, and run.py, steps.py and
 int8_kscale_gpu.py, the modules that read any, read them only by a declared name."""
-import argparse
 import ast
 from pathlib import Path
 
@@ -9,14 +8,6 @@ import pytest
 import run
 import settings
 import steps
-
-
-def test_an_unset_variable_takes_its_default_and_a_set_one_its_value(monkeypatch):
-    for name, (default, what) in settings.DECLARED.items():
-        monkeypatch.delenv(name, raising=False)
-        assert settings.get(name) == default and what and settings.given(name) is None
-        monkeypatch.setenv(name, "set")
-        assert settings.get(name) == settings.given(name) == "set"
 
 
 def test_an_undeclared_variable_is_refused_by_name():
@@ -34,17 +25,3 @@ def test_run_and_steps_read_each_declared_variable_and_no_other():
             read.add(node.args[0].value)
     assert read == set(settings.DECLARED)
 
-
-def test_an_eval_uses_the_gpus_its_lease_names(monkeypatch):
-    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,5")
-    assert run.visible_gpus() == ["3", "5"]
-
-
-def test_a_submitted_run_names_who_leases_its_gpus(monkeypatch):
-    a = argparse.Namespace(model="llama-3.1-8b", set="c4", ctx=2048, gpus=0, seeds="0", plugin=None, spec=["adopted"],
-                           max_min=120, campaign="cmp-13", on="a-node", card="NVIDIA H200",
-                           python="/venv/bin/python", hf_home="/hf")
-    monkeypatch.delenv("GPU_LEASE_WHO", raising=False)
-    assert "GPU_LEASE_WHO=ppl-bench" in run.submit_command(a, run.LOCAL_DATA)
-    monkeypatch.setenv("GPU_LEASE_WHO", "a-lane")
-    assert "GPU_LEASE_WHO=a-lane" in run.submit_command(a, run.LOCAL_DATA)

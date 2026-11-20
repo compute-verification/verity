@@ -22,7 +22,7 @@
 #      PT_PERF=1: each prover process under `perf record -F PT_PERF_HZ` (default 499), its flat profile by symbol in perf.txt
 #      beside prove.tsv (the samples themselves are not kept); upstream's phase traces pass through as arguments
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
-#      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (stage_window.py's served members), each proved as it
+#      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (each holds circuit.txt, pub.bin, inst.bin and stage.json), each proved as it
 #      is under its directory's name after PT_UNITS' (which then defaults to none)
 #      PT_TMPL_UNIT: flock-tmpl-unit, which places a templated statement's unit; by default built once per Lean source under
 #      $FLOCK_WORK/tmpl-unit as pod/90-tmpl-unit.sh builds it (a FLOCK_WORK mounted noexec takes it built elsewhere)
@@ -34,7 +34,7 @@ FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
 STMTS=${PT_STATEMENTS:-}; [ -n "$STMTS" ] && UNITS=${PT_UNITS:-} || UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}
 NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
 for s in $STMTS; do for f in circuit.txt pub.bin inst.bin stage.json; do
-  [ -s $s/$f ] || { echo "PT_STATEMENTS: $s has no $f (stage_window.py stages one)"; exit 1; }; done; done
+  [ -s $s/$f ] || { echo "PT_STATEMENTS: $s has no $f"; exit 1; }; done; done
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
 TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }

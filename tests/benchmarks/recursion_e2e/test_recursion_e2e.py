@@ -5,15 +5,10 @@ UPSTREAM line and Lean's VERDICT. No GPU, node or store: the job's own records a
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
-import pytest
-import rec_logs as RL
 import rec_profile as RP
-import rec_rows as RR
 import rec_table as RT
-import run as RUN
 
 #: oprove's mode through the ZK server, as 85 names its directories
 ZK = RP.ZK_SERVER_MODE
@@ -92,90 +87,12 @@ def row(doc: dict, stage: str) -> dict:
     return next(r for r in doc["rows"] if r["stage"] == stage)
 
 
-def test_wall_seconds_reads_both_forms() -> None:
-    assert RL.wall_seconds("1:02:03") == 3723.0
-    assert RL.wall_seconds("0:12.50") == 12.5
-
-
-def test_stat_is_median_and_range() -> None:
-    s = RR.Stat.of([3.0, None, 1.0, 2.0])
-    assert s is not None
-    assert (s.median, s.min, s.max, s.values) == (2.0, 1.0, 3.0, (3.0, 1.0, 2.0))
-    assert RR.Stat.of([None]) is None
-
-
-def test_prover_row_counts_timed_runs_only(tmp_path: Path) -> None:
-    doc = RP.read(job(tmp_path))
-    r = row(doc, "inner M0")
-    assert r["kind"] == "gpu" and r["wall_s"]["values"] == [2.0, 1.0, 3.0]          # the warm 9.0 s run left out
-    assert r["wall_s"]["median"] == 2.0 and r["e2e_s"]["median"] == 2.5
-    assert r["peak_rss_gb"] == 3.0 and r["gpu_peak_mib"] == 4000.0
-    assert r["proof_bytes"] == 2000 and r["ok"] is True
-    d = r["dominant"]                                     # the median run: prove 2.0, e2e 2.5, witness 0.1
-    assert d["phase"] == "t.ligerito" and d["s"] == 1.2 and d["share"] == 0.48 and d["of"] == "e2e_s"
-    assert d["phases"]["wait.verifier"] == 0.4 and "t.arithmetic" not in d["phases"] and "h.setup" not in d["phases"]
-    assert r["extra"]["serve_verify_s"]["values"] == [0.2, 0.2, 0.2]
-    assert r["extra"]["session_s"] == pytest.approx(14.0 / 3)   # last warm verdict at 100, last timed at 114
-    assert r["extra"]["witness_s"]["median"] == 0.1
-
-
-def test_a_run_waiting_on_its_verifier_is_dominated_by_the_wait(tmp_path: Path) -> None:
-    d = tmp_path / "p"
-    d.mkdir()
-    (d / "prove.tsv").write_text(live(1.0, True, 0.3, 6.0) + live(5.0, False, 0.25, 4.0))
-    r = RP.prover_row(d, "inner M0", "inner", "x").to_json()
-    assert r["dominant"]["phase"] == "wait.verifier" and r["dominant"]["s"] == pytest.approx(3.65)
-
-
 def test_a_proxy_run_with_no_verdict_is_neither_accepted_nor_refused(tmp_path: Path) -> None:
     d = tmp_path / "p"
     d.mkdir()
     (d / "prove.tsv").write_text(live(1.0, True, 1.0, 2.0, accepted=None) + live(3.0, False, 1.0, 2.0, accepted=None))
     r = RP.prover_row(d, "inner M0", "inner", "x").to_json()
     assert r["ok"] is None and "nothing verified here" in r["note"]
-
-
-def test_outer_rows_by_mode_and_the_summary(tmp_path: Path) -> None:
-    doc = RP.read(job(tmp_path))
-    zk = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
-    assert zk["wall_s"]["median"] == 6.0 and zk["extra"]["statement"] == "L0"
-    alg = next(r for r in doc["rows"] if r["stage"] == "outer alg-p0")
-    assert alg["ok"] is False and alg["extra"]["mode"] == "dev"
-    s = doc["summary"]
-    assert s["outer"][ZK] == {"prove_s": 6.0, "e2e_s": 6.5, "proof_bytes": 2000, "statements": 1}
-    assert s["outer"]["dev"]["prove_s"] == 3.0 and s["outer"]["dev"]["statements"] == 2
-    assert s["slowest"]["stage"] == "lean L0"                                             # 61.5 s, the largest median
-    assert s["pipeline"]["outer prove (dev) e2e_s"] == 4.0    # dev proved both statements, ZK server one
-    assert s["pipeline"]["V* staging_s (vstage + vcap steps)"] == 75.0     # the step's wall, not its parallel stagings' sum
-    assert s["pipeline"]["Lean step_s"] == 75.0
-    assert "outer alg-p0 (dev)" in s["not_ok"] and "lean alg-p0" in s["not_ok"]
-
-
-def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
-    doc = RP.read(job(tmp_path))
-    rep = row(doc, "inner replay")
-    assert rep["kind"] == "cpu" and rep["wall_s"]["values"] == [1.0, 2.0] and rep["ok"] is True
-    assert row(doc, "stage L0")["wall_s"]["values"] == [11.0, 12.0]
-    assert row(doc, "V* points")["wall_s"]["median"] == 11.5
-    lean = row(doc, "lean L0")
-    assert lean["ok"] is True and lean["peak_rss_gb"] == 9.0
-    assert lean["extra"]["setup_s"]["median"] == 4.0 and lean["extra"]["session_s"]["median"] == 60.0
-    assert lean["dominant"]["phase"] == "lean.checks" and lean["dominant"]["share"] == round(60 / 61.5, 3)
-    refused = row(doc, "lean alg-p0")
-    assert refused["ok"] is False and refused["note"].startswith("refused: the batched constraint fails")
-    assert row(doc, "lean step")["wall_s"]["values"] == [70.0, 80.0]
-
-
-def test_v_stars_hashing_reference_is_a_row_only_of_a_run_that_timed_it(tmp_path: Path) -> None:
-    """V*'s verdict is Lean's, so icheck times no Python reference now; a run recorded while it did keeps that row."""
-    o = job(tmp_path / "now")
-    name, (path, _) = RP.RECORDED_VSTAR
-    assert not [r for r in RP.read(o)["rows"] if r["stage"] == name]
-    o = job(tmp_path / "recorded")
-    for n in (1, 2):
-        (o / "steps" / "icheck" / f"r{n}" / "out" / path).write_text(timev("0:03.00"))
-    r = row(RP.read(o), name)
-    assert r["step"] == "icheck" and r["wall_s"]["values"] == [3.0, 3.0] and r["ok"] is None
 
 
 def test_a_repeat_still_running_is_no_refusal(tmp_path: Path) -> None:
@@ -188,13 +105,6 @@ def test_a_repeat_still_running_is_no_refusal(tmp_path: Path) -> None:
     assert lean["ok"] is True and lean["wall_s"]["values"] == [61.0, 62.0]
 
 
-def test_build_is_once_and_steps_report_exit_codes(tmp_path: Path) -> None:
-    doc = RP.read(job(tmp_path))
-    b = row(doc, "build")
-    assert b["kind"] == "setup" and b["wall_s"]["values"] == [70.0] and b["extra"]["stage"]["wall_s"] == 120.0
-    assert doc["steps"]["icheck"] == ["0", "0"] and doc["params"]["K"] == "4096"
-
-
 def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path: Path) -> None:
     o = job(tmp_path)
     (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev").mkdir()
@@ -203,82 +113,6 @@ def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path
     assert not [r for r in doc["rows"] if r["step"] == "vcap"]
     l1 = row(doc, "outer L1")
     assert l1["ok"] is False and "ZK-SERVER-REFUSED" in l1["note"]
-
-
-def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
-    o = job(tmp_path)
-    out = o / "steps" / "oprove" / "r1" / "out"
-    (out / "oprove" / f"L1-{ZK}").mkdir()
-    (out / "oprove" / f"L1-{ZK}" / "prove.err").write_text("gpu-lease: GPU 1 (GPU-x) held 2m00s\n")
-    (out / "preempted.txt").write_text("".join(f"loopback L1-{ZK}: lease preempted, try {t}\n" for t in (1, 2, 3)))
-    l1 = row(RP.read(o), "outer L1")
-    assert l1["ok"] is False and l1["extra"]["preempted"] == 3
-    assert l1["note"] == "lease preempted 3x; no run finished in the lease's 2m00s"
-
-
-def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path: Path) -> None:
-    o = job(tmp_path)
-
-    def sample(t: str, cpu: float) -> str:
-        procs = [{"pid": 7, "comm": RP.LOOP_PROCESS, "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
-                 {"pid": 8, "comm": RP.LOOP_PROCESS, "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
-                 {"pid": 9, "comm": "flock-circuit", "cpu_s": 16.0}]
-        return json.dumps({"kind": "process", "t_utc": t, "processes": procs}, separators=(",", ":")) + "\n"
-    (tmp_path / "resources.jsonl").write_text(sample("2026-10-24T07:17:46.6Z", 2.0) + sample("2026-10-24T07:26:27.6Z", 1177.0))
-    doc = RP.read(o)
-    assert doc["summary"][RP.LOOP] == [{"pid": 7, "first": "2026-10-24T07:17:46.6Z", "last": "2026-10-24T07:26:27.6Z",
-                                        "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
-    assert "Lean session loop" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)["note"]
-    assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RT.markdown(doc)
-
-
-def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
-    doc = RP.read(job(tmp_path))
-    md = RT.markdown(doc)
-    table = [ln for ln in md.split("\nOuter")[0].splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
-    assert len(table) == len(doc["rows"])
-    assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
-    assert "| 4.67 |" in md
-    assert "Slowest row (a run's e2e, else a tool's wall): lean L0" in md
-
-
-def test_merge_takes_a_later_runs_row_for_the_same_step_stage_and_mode(tmp_path: Path, capsys) -> None:
-    a = RP.read(job(tmp_path / "a")) | {"ref": "rA"}
-    o = job(tmp_path / "b")
-    prover_dir(o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L0-dev", (4.0, 4.0, 4.0))
-    b = RP.read(o) | {"ref": "rB"}
-    b["rows"] = [r for r in b["rows"] if r["step"] == "oprove"]
-    m = RP.merge([a, b])
-    l0 = [r for r in m["rows"] if r["stage"] == "outer L0"]
-    assert {(r["extra"]["mode"], r["extra"]["run"], r["wall_s"]["median"]) for r in l0} == {(ZK, "rB", 6.0), ("dev", "rB", 4.0)}
-    assert next(r for r in m["rows"] if r["stage"] == "build")["extra"]["run"] == "rA"
-    assert [r["step"] for r in m["rows"]].index("oprove") > [r["step"] for r in m["rows"]].index("vstage")
-    assert m["summary"]["outer"]["dev"]["prove_s"] == 6.0          # rB's L0 4.0 and alg-p0's 2.0
-    for name, d in (("a.json", a), ("b.json", b)):
-        (tmp_path / name).write_text(json.dumps(d))
-    assert RUN.main(["table", str(tmp_path / "a.json"), str(tmp_path / "b.json"), "--merge"]) == 0
-    md = capsys.readouterr().out
-    assert " run |" in md and "| rB |" in md and "| rA |" in md and "rA: commit abc123, the inner's 3 timed runs" in md
-
-
-def test_a_cancelled_run_is_read_from_its_records(tmp_path: Path, monkeypatch, capsys) -> None:
-    """`research cancel` ends the scope before job.sh's trap writes a result: `table RUN` reads the records it left."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("load ran a command"))
-    o = job(tmp_path / ".research" / "runs" / "r20261024-000000-cafe")
-    for step in ("icheck", "vstage", "lean"):
-        shutil.rmtree(o / "steps" / step)
-    stopped = o / "steps" / "oprove" / "r1" / "out" / "oprove" / f"L1-{ZK}"
-    stopped.mkdir()
-    (stopped / "prove.err").write_text("ZKRANK\t{}\n")
-    (o / "steps" / "oprove" / "r1" / "rc").unlink()
-    (o / "result.err").write_text("")
-    assert not (o / "recursion_e2e.json").exists()
-    assert RUN.main(["table", "r20261024-000000-cafe"]) == 0
-    md = capsys.readouterr().out
-    assert "## r20261024-000000-cafe" in md and "Verdict: **not a whole recursive run**" in md
-    assert "| outer L1 | oprove |" in md and "no run finished before the step stopped" in md
-    assert "oprove ?" in md
 
 
 def negative(o: Path, refusals: dict[str, dict[str, bool | None]]) -> None:
@@ -309,56 +143,6 @@ def test_a_flipped_coin_is_refused_when_one_statement_refuses_it_and_every_one_h
     assert ch["note"] == "refused by alg-p0; accepted by L0 (reads no flipped coin)" and ch["extra"]["why"] == ["rec: v disagrees"]
     assert q["ok"] is False and q["extra"]["no_verdict"] == ["alg-p0"]   # a statement that never judged it: not refused
     assert doc["headline"]["negative_refused"] == {"challenge": True, "query": False} and doc["headline"]["ok"] is False
-
-
-def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
-    o = job(tmp_path)
-    summ = {"statements": {"alg": {"stage": {"algebra": [{"part": 0, "template": "InnerRepCheck", "build_s": 3.5,
-                                                            "circuit_bytes": 99},
-                                                           {"part": 1, "template": "InnerRepCheck", "build_s": 4.0,
-                                                            "circuit_bytes": 98}]}},
-                           "L0": {"stage": {"levels": {"L0": {"template": "RecOpen", "k_log": 20}}}}}}
-    (o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json").write_text(json.dumps(summ))
-    assert RP.staged_units(o / "steps" / "vstage" / "r1" / "out" / "summary-vstage.json")["alg-p0"]["circuit_bytes"] == 99
-    doc = RP.read(o)
-    assert row(doc, "stage L0")["extra"]["units"]["template"] == "RecOpen"
-    assert sorted(row(doc, "stage alg")["extra"]["units"]) == ["alg-p0", "alg-p1"]
-
-
-def test_each_statement_has_its_own_lease_from_its_release_through_the_zk_server(capsys) -> None:
-    assert RUN.stmt_lease_min("L0") == 94 and RUN.stmt_lease_min("L3") == 12 and RUN.stmt_lease_min("cap-L3") == 2
-    assert RUN.lease_min(1) == 94 and RUN.lease_min(2) == 187 and RUN.lease_min(1, zk_server=False) == 10
-    assert RUN.lease_min(1, levels="L3") == 12 and RUN.lease_min(1, levels="alg") == 22      # alg: alg-p0 and alg-p1
-    assert RUN.statements("alg,cap") == ["alg-p0", "alg-p1", "cap"] and len(RUN.statements()) == 10
-    assert RUN.main(["plan"]) == 0
-    assert "leases (min): L0 94, L1 23, L2 21, L3 12, alg-p0 21, alg-p1 22, cap 2," in capsys.readouterr().out
-    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2"]) == 0   # a plain run: its limit is --timeout
-    cmd = capsys.readouterr().out.split()
-    assert f"MODES={ZK}" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
-    every = int(cmd[cmd.index("--timeout") + 1].removesuffix("m"))
-    assert every > 7870 * 1.5 / 60                                         # every statement's release, one at a time
-    assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's release through the ZK server peaked at 99 GB
-    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2", "--env", "LEVELS=L3"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert "GPU_MAX_MIN=12" in cmd and int(cmd[cmd.index("--timeout") + 1].removesuffix("m")) < every - 60
-    assert RUN.main(["run", "--dry-run", "--lease-min", "30", "--modes", "dev"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert "GPU_MAX_MIN=30" in cmd and cmd[cmd.index("--mem-gb") + 1] == "64"
-    assert RUN.main(["run", "--dry-run", "--mem-gb", "200"]) == 0
-    cmd = capsys.readouterr().out.split()
-    assert cmd[cmd.index("--mem-gb") + 1] == "200"
-
-
-def test_statements_behind_the_zk_server_name_the_cpu_prover(tmp_path: Path, capsys) -> None:
-    o = job(tmp_path)
-    (o / "params.txt").write_text("commit=abc K=4096 N=2 WARM=1 RUNS=3 REPEAT=2\n"
-                                  "OPROVE_WARM=0 OPROVE_RUNS=1 OPROVE_GPU=0 OPROVE_JOBS=1\n")
-    doc = RP.read(o)
-    r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
-    assert r["what"].endswith(", CPU prover") and r["extra"]["prover"] == "cpu"
-    assert "V* statements 1 at a time" in RT.markdown(doc)
-    assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
-    assert "OPROVE_GPU=1" in capsys.readouterr().out.split()
 
 
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:

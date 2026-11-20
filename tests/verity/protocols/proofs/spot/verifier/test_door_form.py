@@ -170,18 +170,47 @@ def test_a_template_wide_on_its_return_alone_is_wide():
     assert len(body["params"]) == 1 and lift_shape(desc, "C_v1")[1] == ["C_v1"]
 
 
-def test_leaves_are_bits_refuses_a_lift_of_other_leaves():
-    """Lean's guard on `E16`'s `E_v1`: its bit types agree, and one more leaf in ``x`` or in a return field is refused
-    with Lean's text."""
-    from verity.circuits.boolean import BIT, bit_type
-    from verity.circuits.types import Array, Tuple
-    params, ret = R.program(descriptor("E16").encode()).defs["E_v1"].signature()
-    lifted = [(n, bit_type(t)) for n, t in params]
-    assert OC.leaves_off(params, lifted, ret, bit_type(ret)) is None
-    assert OC.leaves_off(params, [("x", Array(17, BIT))] + lifted[1:], ret, bit_type(ret)) == \
-        "parameter x of 16 bits has 17 leaves after the lift to bits"
-    assert OC.leaves_off(params, lifted, ret, Tuple(Array(16, BIT), Array(17, BIT))) == \
-        "return field o1 of 16 bits has 17 leaves after the lift to bits"
+def _e16_s():
+    """C_S of `E16`'s unit 0, decoded, as `Spot/Test/Admitted.lean`'s `admitS` takes it."""
+    d = descriptor("E16")
+    part = PO.build(json.loads(d), PO.template_instance_query("E_v1"), [[(0, 1)]])
+    return R.program(OC.restrict(d.encode(), part, [(0, 1)]))
+
+
+def test_a_partition_of_no_template_query_is_not_derived():
+    """Lean's guard: `admitted` under a query that lists no template is not derived, before C_S is read."""
+    with pytest.raises(OC.NotDerived) as e:
+        OC.admitted(_e16_s(), {"query": {"name": "Q_all"}})
+    assert str(e.value) == OC.PREFIX + OC.LOWER
+
+
+def test_a_template_with_no_definition_is_refused_by_listed():
+    """Lean's guard on C_S's index naming a Definition past its Definitions: `listed`, with Lean's text."""
+    with pytest.raises(OC.Refused) as e:
+        OC.template_form(_e16_s(), "Gone_v1", {})
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, listed: C_S's template Gone_v1 is no Definition of C_S"
+
+
+def test_a_template_returning_no_field_is_refused_by_whole_words(monkeypatch):
+    """Lean's guard on `E16`'s `E_v1` returning the empty tuple: `whole-words`, with Lean's text."""
+    from verity.circuits.types import Tuple
+    D = _e16_s()
+    fn = D.defs["E_v1"]
+    params, _ret = fn.signature()
+    monkeypatch.setattr(fn, "signature", lambda: (params, Tuple()))
+    with pytest.raises(OC.Refused) as e:
+        OC.template_form(D, "E_v1", {})
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, whole-words: C_S's template E_v1 returns no field"
+
+
+def test_two_units_holding_gates_in_common_are_refused_by_disjoint_ranges():
+    """Lean's guard on `AB16` with unit 1's node placed at gate 40, inside unit 0's gates [32, 48)."""
+    D = R.program(descriptor("AB16").encode())
+    D.root.body.offsets[3] = 40
+    q = PO.template_instances_query(["A_v0", "B_v0"])
+    with pytest.raises(OC.Refused) as e:
+        OC.admitted_block(D, {"query": q}, [(0, 2)], "A_v0")
+    assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, disjoint-ranges: units 0 and 1 of the block hold gates in common"
 
 
 def test_a_refused_block_reaches_no_executable():

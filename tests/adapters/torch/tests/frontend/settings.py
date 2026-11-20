@@ -13,16 +13,6 @@ DECLARED: dict[str, tuple[str, str]] = {
     "HF_HUB_OFFLINE": ("1", "Hugging Face's hub stays offline: the real-`transformers` tests build tiny random configs"),
     "TRANSFORMERS_OFFLINE": ("1", "`transformers` stays offline, as HF_HUB_OFFLINE"),
     "TOKENIZERS_PARALLELISM": ("false", "the tokenizers' thread pool stays off"),
-    "REALHF_STEPS": ("4", "test_derive_realhf: greedy decode steps"),
-    "REALHF_EVAL": ("1", "test_derive_realhf: 0 derives only, with no evaluation against torch"),
-    "REALHF_ONLY": ("", "test_derive_realhf: run only the cases whose id contains it"),
-    "REALHF_OUT": ("/tmp/realhf/realhf.jsonl", "test_derive_realhf: the JSONL file its rows are appended to"),
-    "REALHF_POS": ("", "test_derive_realhf: `static` passes position_ids=arange(T)[None] explicitly"),
-    "REALHF_HEAD": ("", "test_derive_realhf: the commit its rows name, in place of `git rev-parse`"),
-    "REALHF_PROBE": ("0", "test_derive_realhf: how many of its PROBES' transformers patches apply"),
-    "REALHF_GROUP": ("", "test_derive_hf5b_realhf: the case group it runs; empty, every group"),
-    "XFER_OUT": ("/tmp/xfer/transfer-derive.jsonl", "test_derive_transfer: the JSONL file its rows are appended to"),
-    "XFER_HEAD": ("", "test_derive_transfer: the commit its rows name, in place of `git rev-parse`"),
     "HARDEN_OUT": ("", "test_harden_moe: the directory its moe_results.json is written to; empty, none is"),
 }
 
