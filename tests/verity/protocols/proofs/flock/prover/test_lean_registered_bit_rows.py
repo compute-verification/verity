@@ -308,13 +308,14 @@ def test_two_rows_of_one_value_a_unit_are_accepted(one_value):
 
 def test_a_row_at_the_wrong_index_is_refused(staged):
     """C and the partition give every position: a reads file stating one is refused by its keys, and a statement whose x
-    rows are the registered rows shifted by one (each still a row of x's tree) opens nothing at the positions C gives."""
+    rows are the registered rows shifted by one (each still opening x's tree at its stated position) is refused at the
+    position C gives."""
     code, out = _statement(staged, _own(staged, "own-positions", lambda ps: ps["x"].update(reads=list(range(N)))))
     assert code == 2 and "no position: C and the partition give them" in out, out
     shifted = _write(staged, "shifted", {"x": (staged.regs["x"], list(range(1, N)) + [0]),
                                          "cs": (staged.regs[VALUE], POSITIONS)})
     code, out = _statement(staged, staged.dir / "own.json", shifted)
-    assert code == 1 and "port x: table row 0 does not open x's registered root" in out, out
+    assert code == 1 and "port x: unit 0 reads position 1, and the verifier's program reads 0" in out, out
 
 
 def test_a_row_of_another_value_is_refused(staged):
