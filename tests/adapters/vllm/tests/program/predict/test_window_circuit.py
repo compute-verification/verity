@@ -182,7 +182,7 @@ def test_a_served_window_is_its_requests_programs_and_no_padded_unit():
     assert _counts(class_circuit(S._registered(), CLASS, None, GRAIN))[EMB] == 10
     assert (circuit.blocks.slots, circuit.blocks.steps) == (2, 5)
     units, none = circuit.blocks.per_slot(dict.fromkeys(circuit.units, 1))
-    assert units[0] > units[1] and none == 0
+    assert units[0] > units[1] and none == 1 + 16 + 16
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}[SLOT_ENTRY]
     assert [(e.slot, e.radix, e.step) for e in circuit.blocks.inference if e.template == entry] == [(0, (1,), 4), (1, (1,), 3)]
     IF.Blocks.of(json.loads(json.dumps(circuit.blocks.doc(sum(circuit.units.values()), ""))), circuit.units, "")

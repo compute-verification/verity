@@ -122,7 +122,8 @@ def test_a_served_window_of_equal_requests_has_a_table(full):
     gates, fresh = _unrolled(full, slots)
     c, k = IB.budgets(full)
     assert gates == [c, c] and fresh == [k, k]
-    assert "others" not in IB.commit(full, PROGRAM)[0]
+    _, _, g0, f0 = IB.counts(full)
+    assert IB.commit(full, PROGRAM)[0]["others"] == {"gates": g0, "fresh": f0} and g0 > 0 and f0 > 0
 
 
 def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
@@ -135,7 +136,7 @@ def test_a_served_windows_blocks_of_their_own_positions_are_refused_by_name():
         IB.budgets(circuit)
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    with pytest.raises(ValueError, match="request blocks of other templates or units have no one session Definition"):
+    with pytest.raises(ValueError, match="units of no request .* are in no inference block"):
         BC.session(doc)
 
 
