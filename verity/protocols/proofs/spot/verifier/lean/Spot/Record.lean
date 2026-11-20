@@ -118,7 +118,9 @@ private def sortedInts (xs : Array Int) : Array Int := xs.qsort (· < ·)
 private def failed (code : String) (detail : Json) : Check := { codes := #[code], detail := entries detail }
 
 /-- `audit_record`'s checks, in its order: `draw` and `proved` always, then `receipt`, `served`, `roots` and `registered`
-only when they fail. `digest` is the registration's, `units` the sample's. -/
+only when they fail. `digest` is the registration's, `units` the sample's. `roots` holds each session root given to the
+registration's root of its port and names no coverage: that every port of every proved member's statement is held, by
+the registration's root or by a registered read, is `OneStageZk.headerHeldAt`'s, per member and port. -/
 def checks (reg receipt draw samplingDesign : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
     (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
@@ -136,7 +138,7 @@ def checks (reg receipt draw samplingDesign : Json) (units : Array Int) (provedU
       match registered.find? (·.1 == p) with
       | some (_, x) => if jeq (getD x "root") r then none else some p
       | none => some p)
-    if roots.isEmpty || !incorrect.isEmpty then
+    if !incorrect.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (incorrect.map Json.str))]))
   let want := registeredRoots reg
   let opened := sessionRegistered.getD #[]
@@ -233,7 +235,7 @@ def checksFast (reg receipt draw samplingDesign : Json) (units : Array Int) (pro
       match registered[p]?.map (p, ·) with
       | some (_, x) => if jeq (getD x "root") r then none else some p
       | none => some p)
-    if roots.isEmpty || !incorrect.isEmpty then
+    if !incorrect.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (incorrect.map Json.str))]))
   let want := registeredRoots reg
   let opened := sessionRegistered.getD #[]
