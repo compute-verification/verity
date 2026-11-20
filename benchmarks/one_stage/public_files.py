@@ -112,13 +112,10 @@ PUBLIC.update({f"D/{SERVED_ARM}/{p[4:]}": w for p, w in list(PUBLIC.items())
 #: Our tools' refusals that are one fixed sentence, with no path, host or value, by name: a refusal's name from this list
 #: may leave (`refusal`); its free text, and every other line of a tool's log, stays in the private directory
 REFUSALS = {
-    "serve-json-no-target-profile": "serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: --target F gives it",
-    "serve-json-no-execution-label": "serve.json records no execution label (execution, engine.execution), so φ can't be read",
     "advice-no-capped-compiler": "verity_vllm.pipeline.advice registers no capped compiler (its registered_compiler wraps none)",
     "advice-not-canonical": "the advice's bytes are not its canonical encoding",
     "scan-reader-not-passed": "a window's scan reads the network attester run its serve kept, or that it kept none, by the caller's reader, since SPOT imports neither the attester nor a benchmark: run this from a caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)",
     "request-without-end": "a request of the window has no END in the kept run's ingress",
-    "pearl-passes-without-window-registration": "--pearl-passes: give --window-registration W, Pearl+'s window record of the passes (served_passes.py retain --window-record W)",
     "window-commit-reader-not-passed": "window-commit reads the network attester run its serve kept, and names the scan state it opens for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py",
     "advice-compiler-absent": "a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), which this tree lacks",
     "scan-request-in-two-slots": "the scan starts one request in two slots of the window",
@@ -134,10 +131,10 @@ REFUSALS = {
     "draw-commitment-not-signed": "the record's draw commitment is not the one the draw session's challenger signed",
     "draw-coin-not-after-commitment": "the draw session's log does not show the run's commitment as the one root its draw coin followed",
     "source-not-draw-coin": "the record's source is not its draw session's coin",
-    "no-gate-command": "no gate command (--gate)",
     "pearlplus-period-open-name": "pearlplus-period open needs --name",
     "pearlplus-period-rule-arguments": "pearlplus-period rule needs --lane and --coin",
     "pearlplus-period-close-arguments": "pearlplus-period close takes --lane and --windows together",
+    "single-gpu-window-rows-route-retired": "a single-GPU window is a served one (--serve-run): the rows route's Commit is retired",
 }
 _BY_SENTENCE = {v: k for k, v in REFUSALS.items()}
 #: what a tool prints before its refusal: its name and command, or the exception's class, and a colon
