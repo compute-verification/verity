@@ -14,8 +14,9 @@ counts, span and windows in the serve dir's ``private/out``. `served_stock.sh`'s
 is a full aggregate (a stock run's file, or the composed run's ``private/out/serve/overhead.json``, each on the node), or
 a serve dir when it runs on the node; it refuses a published one.
 
-Two rulers, each the same code in both arms. The client's is `adapters/vllm/tools/served_run/serve_load.py`'s timings file, a ``--varied``
-or a ``--fixed`` load's alike (``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
+Two rulers, each the same code in both arms. The client's is the adapter's one sender's timings file
+(`verity_vllm.pipeline.send`), an input dataset's or `serve_load.py --varied`'s alike (``load.timings.json`` beside its
+record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;

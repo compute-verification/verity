@@ -1,7 +1,7 @@
 """`h100_smoke.sh`, dry, over a stand-in tree whose ``PY`` records what the script hands it: the serve, the load and the
-window commit it would start. The serve's limits and the fixed load follow the window class ``CLASS``, whose requests
-must start in the window's first step together, and the window commit is the applications' launcher's
-(`served_verdicts.sh`'s window_commit()), on the sealed window, off the card."""
+window commit it would start. The serve's limits follow the adapter's statement (`verity_vllm.serves`), the load is the
+input dataset ``DATASET`` through the one sender after the door passed it, and the window commit is the applications'
+launcher's (`served_verdicts.sh`'s window_commit()), on the sealed window, off the card."""
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +18,7 @@ SMOKE = Path("adapters/vllm/tools/served_run/h100_smoke.sh")
 VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
 #: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
 #: library and the adapter from the tree as on a node, whatever the test's environment installs
-PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research")
+PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "input_datasets")
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
 #: the stand-in ``PY``: each call's argv (and, for the serve, its config) as one JSON line in ``$STUB_LOG``; the
@@ -28,6 +28,8 @@ STUB = r'''
 import json, os, subprocess, sys
 a = sys.argv[1:]
 rec = {"argv": a}
+if a[:2] == ["-m", "verity_vllm.serves"]:
+    sys.exit(subprocess.run([sys.executable, *a]).returncode)
 if a[:1] == ["-"]:
     body = sys.stdin.read()
     if "verity_vllm" not in body and "runpy" not in body:
@@ -68,9 +70,9 @@ def run_dry(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess, li
     return p, [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 
 
-def served(calls: list[dict]) -> tuple[dict, list[str], list[str]]:
+def served(calls: list[dict], stdout: str) -> tuple[dict, list[str], list[str]]:
     serve = next(c for c in calls if c["argv"][1:2] == ["serve-openai"])
-    load = next(c["argv"][2:] for c in calls if c["argv"][2:3] and c["argv"][2].endswith("serve_load.py"))
+    load = re.search(r"^LOAD: (.*)$", stdout, re.M).group(1).split()
     commit = next(c["argv"][2:] for c in calls if c["argv"][1:2] == ["benchmarks/one_stage/window_commit.py"])
     return serve, load, commit
 
@@ -80,43 +82,37 @@ def opt(argv: list[str], name: str) -> str:
     return argv[argv.index(name) + 1]
 
 
-def test_the_serve_and_the_fixed_load_follow_the_window_class(tmp_path):
+def test_the_serve_follows_the_statement_and_the_load_is_the_dataset_through_the_one_sender(tmp_path):
     p, calls = run_dry(tmp_path)
     assert p.returncode == 0 and "SMOKE DRY OK" in p.stdout, p.stdout[-2000:] + p.stderr[-2000:]
-    serve, load, _ = served(calls)
+    serve, load, commit = served(calls, p.stdout)
     args = serve["argv"][1:]
-    assert [opt(args, k) for k in ("--window-class", "--max-num-seqs", "--max-model-len", "--window-steps",
-                                   "--window-requests")] == ["4,27,2", "4", "29", "2", "4"]
+    assert [opt(args, k) for k in ("--model", "--revision", "--precision", "--window-class", "--max-num-seqs",
+                                   "--max-model-len", "--window-steps", "--window-requests")] == \
+        ["unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "4,27,2", "4", "29", "2", "4"]
     assert "--protocols" not in args and "--scheme" not in args
     assert serve["config"] == {"network-attester": {"order": "release-order"}}
-    assert [opt(load, k) for k in ("--fixed", "--prompt-range", "--window-steps")] == ["4", "27:27", "2"]
+    assert load[:2] == ["-m", "verity_vllm.pipeline.send"]
+    assert [opt(load, k) for k in ("--dataset", "--timing")] == ["llama32_1b_fixed_4_27_2", "at-once"]
     assert re.fullmatch(r"[0-9a-f]{32}", opt(load, "--release")), load
+    assert opt(commit, "--class") == "4,27,2"
+    assert re.search(r"^DOOR llama32_1b_fixed_4_27_2: 4 records the class 4,27,2 takes; identity generated:", p.stdout, re.M)
     assert "1,24,4" not in (ROOT / SMOKE).read_text() and ".tie" not in (ROOT / SMOKE).read_text()
 
-    p, calls = run_dry(tmp_path / "other", CLASS="8,16,3")
-    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
-    serve, load, commit = served(calls)
-    args = serve["argv"][1:]
-    assert [opt(args, k) for k in ("--window-class", "--max-num-seqs", "--max-model-len", "--window-steps")] == \
-        ["8,16,3", "8", "19", "3"]
-    assert [opt(load, k) for k in ("--fixed", "--prompt-range", "--window-steps")] == ["8", "16:16", "3"]
-    assert opt(commit, "--class") == "8,16,3"
 
-
-def test_a_class_the_limits_do_not_admit_is_refused(tmp_path):
-    for i, (cls, why) in enumerate((("64,27,2", "past the engine's 512 a step"), ("4,27", "S,P,O[,LANES,EVERY]"),
-                                    ("4,0,2", "S,P,O[,LANES,EVERY]"))):
-        p, calls = run_dry(tmp_path / str(i), CLASS=cls)
-        assert p.returncode == 3 and "SMOKE REFUSED class" in p.stdout and why in p.stdout, p.stdout + p.stderr
-        assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
-    p, _ = run_dry(tmp_path / "wide", CLASS="64,27,2", MNBT="2048")
-    assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
+def test_a_dataset_the_door_refuses_and_a_class_past_the_engines_step_are_refused_before_the_serve(tmp_path):
+    p, calls = run_dry(tmp_path / "unknown", DATASET="no_such_dataset")
+    assert p.returncode == 3 and "SMOKE REFUSED dataset: REFUSED unknown-dataset" in p.stdout, p.stdout + p.stderr
+    assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
+    p, calls = run_dry(tmp_path / "narrow", MNBT="64")
+    assert p.returncode == 3 and "SMOKE REFUSED class" in p.stdout and "past the engine's 64 a step" in p.stdout, p.stdout
+    assert not any(c["argv"][1:2] == ["serve-openai"] for c in calls)
 
 
 def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_path):
     p, calls = run_dry(tmp_path)
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
-    _, _, commit = served(calls)
+    _, _, commit = served(calls, p.stdout)
     assert commit[0] == "window-commit"
     assert [opt(commit, k) for k in ("--window", "--class", "--sampling-design")] == ["0", "4,27,2", "rate:1/3481648"]
     assert "rate:" not in p.stdout and "(the registered sampling design)" in p.stdout, p.stdout
@@ -143,7 +139,7 @@ def test_the_window_commit_is_the_applications_launchers_entry_off_the_card(tmp_
 def test_the_serve_makes_each_windows_record_as_window_commit_does_unless_record_0_and_its_plan_is_preflighted_first(tmp_path):
     p, calls = run_dry(tmp_path)
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
-    serve, _, commit = served(calls)
+    serve, _, commit = served(calls, p.stdout)
     args = serve["argv"][1:]
     assert [opt(args, k) for k in ("--sampling-design", "--checkpoint-dir")] == \
         [opt(commit, k) for k in ("--sampling-design", "--checkpoint-dir")]
@@ -153,12 +149,12 @@ def test_the_serve_makes_each_windows_record_as_window_commit_does_unless_record
     assert script.index("serve.preflight(opts") < script.index('"${LEASE[@]}" ||')
     p, calls = run_dry(tmp_path / "plan", RECORD="0")
     assert p.returncode == 0, p.stdout[-2000:] + p.stderr[-2000:]
-    assert "--sampling-design" not in served(calls)[0]["argv"]
+    assert "--sampling-design" not in served(calls, p.stdout)[0]["argv"]
 
 
 def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
-    for var in ("PEARLPLUS_TIE", "SCHEME"):
-        env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: "1" if var == "PEARLPLUS_TIE" else "pearl-plus"}
+    for var, value in (("PEARLPLUS_TIE", "1"), ("SCHEME", "pearl-plus"), ("CLASS", "4,27,2")):
+        env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: value}
         p = subprocess.run(["bash", str(ROOT / SMOKE)], env=env, capture_output=True, text=True)
         assert p.returncode == 3 and f"h100_smoke.sh: {var} is retired" in p.stderr, p.stdout + p.stderr
 

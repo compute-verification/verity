@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Does: serves ONE window of bf16 Llama 3.2 1B (unsloth at 9535bd9b) on the H100 at the window class CLASS (default 4,27,2: 4
-#   slots of 27-token prompts, 2 outputs) through serve-openai with its rows-sha512 Commit, no scheme, and seals it, each
+# Does: serves ONE window of the vLLM adapter's statement (`verity_vllm.serves`: its model, revision, precision and window
+#   class), the input dataset DATASET (default llama32_1b_fixed_4_27_2) at once through its door, through serve-openai with its rows-sha512 Commit, no scheme, and seals it, each
 #   window's close planning its class circuit and leaving the card's part of its record (the acquired units' strings,
 #   made where they are committed, under the window's key: close_record.Record.handoff) and, with RECORD_IN_LEASE=1, the
 #   record too (RECORD=0: the plan alone); then, the lease released, on this host's processors: opens the sealed bundle
@@ -21,12 +21,12 @@
 #   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 set -euo pipefail
 [ -z "${PEARLPLUS_TIE:-}" ] || [ "$PEARLPLUS_TIE" = 0 ] || { echo "h100_smoke.sh: PEARLPLUS_TIE is retired (the window commit takes no tie); unset it" >&2; exit 3; }
+[ -z "${CLASS:-}" ] || { echo "h100_smoke.sh: CLASS is retired (the class is the adapter's statement's, verity_vllm.serves); unset it" >&2; exit 3; }
 [ -z "${SCHEME:-}" ] || { echo "h100_smoke.sh: SCHEME is retired (the smoke serves with no scheme; Pearl+ is served_verdicts.sh's POUW=pearlplus); unset it" >&2; exit 3; }
 SELF=adapters/vllm/tools/served_run/h100_smoke.sh
 TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd); cd "$TREE"
 ROW=llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager
-MODEL=unsloth/Llama-3.2-1B REV=9535bd9b1d1dea6acafbdc4813b728796aeb28da
-DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} CLASS=${CLASS:-4,27,2} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
+DRY=${DRY:-0} PY=${PY:-/workspace/venv312/bin/python} DATASET=${DATASET:-llama32_1b_fixed_4_27_2} LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 # the sampling design is the auditor's and not public: a printed line says only that one is registered
 DESIGN="(the registered sampling design)"
 # DEVELOPMENT_DESIGN=1: LAW is a development sampling design (default DEV_LAW, a uniform draw of 4 of class 4,27,2's
@@ -35,9 +35,10 @@ DEVELOPMENT_DESIGN=${DEVELOPMENT_DESIGN:-0} DEV_LAW=rate:4/3654200
 [ "$DEVELOPMENT_DESIGN" = 1 ] && LAW=${LAW:-$DEV_LAW}
 MNBT=${MNBT:-512} CAP=${CAP:-8388608} LAW=${LAW:-rate:1/3481648} WC_TIMEOUT=${WC_TIMEOUT:-90m} FIN_TIMEOUT=${FIN_TIMEOUT:-120m}
 RECORD_IN_LEASE=${RECORD_IN_LEASE:-0}
-# the window class (S,P,O[,LANES,EVERY]: slots, prompt ids, outputs) the serve's arena is sized from and the load fills
-[[ $CLASS =~ ^[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*(,[1-9][0-9]*,[1-9][0-9]*)?$ ]] \
-  || { echo "SMOKE REFUSED class: CLASS is S,P,O[,LANES,EVERY] of positive integers, not $CLASS"; exit 3; }
+export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
+# the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's statement
+read -r MODEL REV PRECISION CLASS <<< "$("$PY" -m verity_vllm.serves)"
+[ -n "$CLASS" ] || { echo "SMOKE REFUSED statement: python -m verity_vllm.serves printed no model and class"; exit 3; }
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
 [ $((SLOTS * PROMPT)) -le "$MNBT" ] || { echo "SMOKE REFUSED class: CLASS=$CLASS's $SLOTS prompts of $PROMPT ids are $((SLOTS * PROMPT))" \
   "tokens, past the engine's $MNBT a step (MNBT): its requests would not start in the window's first step together"; exit 3; }
@@ -61,23 +62,24 @@ if [ "$DRY" = 1 ] && [ -n "${CARD_SKU:-}" ]; then echo "DRY: CARD_SKU $CARD_SKU 
 else CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku); fi || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
 export CUDA_HOME CARD_SKU HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-served-run}
 export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
-SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
+SNAP=$HF_HOME/hub/models--${MODEL//\//--}/snapshots/$REV
 { [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || { [ "$DRY" = 1 ] && echo "DRY: $MODEL at $REV is not in $HF_HOME (the dry run loads no model)"; } || {
   echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
     "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
 D=$SR/serve PRED=$SR/predicted PORT=${PORT:-18282}
 mkdir -p "$SR" "$OUT"
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export VERITY_PROTOCOLS_CONFIG="{\"private\": \"$SR/private\"}"
 WL=adapters/vllm/workloads/$ROW.json
 say() { echo "$1"; [ "$DRY" = 1 ] || echo "$1" > "$OUT/smoke.txt"; }
 
-# the fixed load: S requests of P prompt ids and O outputs, released together under a release run in the network attester's
-# release order, so they start in the window's first step and fill one window of O steps (served_verdicts.sh's LOAD=fixed)
+# the load: DATASET at once, released together under a release run in the network attester's release order, so its
+# requests start in the window's first step (served_verdicts.sh's LOAD=dataset); the door refuses, before the lease, a
+# dataset the class can't take
 RELEASE=${RELEASE:-$(tr -d - < /proc/sys/kernel/random/uuid)}
-LOAD=(adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --fixed "$SLOTS" --window-steps "$OUTPUTS"
-  --prompt-range "$PROMPT:$PROMPT" --release "$RELEASE" --seed 1 --out "$SR/load.jsonl")
+LOAD=(-m verity_vllm.pipeline.send --port "$PORT" --dataset "$DATASET" --timing at-once --release "$RELEASE" --out "$SR/load.jsonl")
+DOOR=$("$PY" -m verity_vllm.serves door "$DATASET" at-once) || { echo "SMOKE REFUSED dataset: $DOOR"; exit 3; }
+echo "$DOOR"
 REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
 [ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "${RECORD:-1}" = 0 ] || [ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)
@@ -90,7 +92,7 @@ from verity.protocols.compose import schemes
 print(json.dumps({schemes.named("provides", "admission"): {"order": "release-order"}}))
 EOF
 ) || { echo "SMOKE REFUSED admission: no one declared scheme provides admission (verity.protocols.compose.schemes, above)"; exit 3; }
-SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision bfloat16
+SERVE=(serve-openai --model "$MODEL" --revision "$REV" --out "$D" --port "$PORT" --precision "$PRECISION"
   --run-id "smoke-${RESEARCH_RUN_ID:-local}" --seal --max-num-batched-tokens "$MNBT" --window-steps "$OUTPUTS"
   --row-build "$PRED" --window-requests "$SLOTS" --window-class "$CLASS" --max-num-seqs "$SLOTS"
   --max-model-len "$((PROMPT + OUTPUTS))" --window-gb 4 --disk-floor-gb 5 --seal-hold-gb 8
@@ -200,13 +202,7 @@ ext = native_ext.ext()
 assert not native_jit.missing_bindings(ext, os.path.join(native_ext.HERE, "native_collect.cpp"))
 print(f"COMMITTER BUILT ITS NATIVE COLLECTOR: CARD_SKU {sku}, arch {cuda_arch(sku)}, CUDA_HOME {home}, every binding present")
 EOF
-  "$PY" - "$CLASS" "${LOAD[@]}" <<'EOF'
-import runpy, sys
-S, P, O = (int(x) for x in sys.argv[1].split(",")[:3])
-a = runpy.run_path(sys.argv[2])["parser"]().parse_args(sys.argv[3:])
-assert (a.fixed, a.window_steps, a.prompt_range, a.varied) == (S, O, f"{P}:{P}", 0) and len(a.release) == 32, a
-print("LOAD PARSED: fixed", a.fixed, "request(s) of", a.prompt_range, "tokens over", a.window_steps, "window steps, release run", a.release[:8])
-EOF
+  echo "LOAD: ${LOAD[*]}"
   echo "LEASE: ${LEASE[*]}"
   [ -z "${WIPE_CMD:-}" ] || echo "WIPE under the lease before serve-openai: $WIPE_CMD $D all $D/pieces/wipe"
   window_commit_of 0
