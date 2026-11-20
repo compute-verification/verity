@@ -14,8 +14,7 @@ before any row is graded, `kernel_refusal` runs core `self_check` of each graded
 reference, which evaluates through the primitives' evaluators (`kernel_registry.check`, once a family per process).  That is a
 sample, the limit of what this module holds: 6 seeded instances of each of the kernel's check specialisations, small statics the
 reference evaluates, not the served ones.  A kernel that is its Definition there but not on a committed row's operands, or not at
-the served statics, grades that row by the kernel; what holds it there is the kernel's own tests, not this check.  A delegate's
-family (`delegate.DELEGATES`) has no row kernel and is not self-checked here: its protocol answers for it.
+the served statics, grades that row by the kernel; what holds it there is the kernel's own tests, not this check.
 
 A Boolean Build's row names two Definitions (`build_instances._word_rows`): ``spec``, the word Definition whose family's row
 kernel grades it, and ``bits``, the Boolean Definition the Program Calls, the one of the two the Build's descriptor holds.
@@ -38,16 +37,11 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
-__all__ = ["of_record", "premises"]
+__all__ = ["of_record"]
 
 SHOWN = 5
 #: the instances of each check specialisation a row kernel is sampled on, against its Definition and against a Boolean row's gates
 SAMPLES = 6
-#: what a replay that evaluates a Boolean Definition's row holds of its kernel and what it does not, on its record (`premises`)
-BOOLEAN_PREMISE = (f"the replay holds a Boolean row's kernel to the gates of the Boolean Definition its Build bound by sample only: "
-                   f"{SAMPLES} inputs at each of the kernel check's small statics, where a function-valued static the Build binds "
-                   f"nowhere is this tree's newest Boolean version and the body may reach Definitions the served one does not; "
-                   f"nothing holds the kernel to the gates at a served binding")
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}
 #: (word family, Boolean family) -> why the word family's row kernel is not that Boolean family's gates ([] when it is) and the
@@ -62,20 +56,12 @@ _UNBUILT = (AssertionError, AttributeError, LookupError, NotImplementedError, Ty
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     """The specializations of the rows the replay evaluates, each ``(spec, bound)``: ``spec`` is the row's word Definition, of a
-    family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
+    family with a row kernel (`rows.ROWS`), and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
-    from verity_vllm.check.replay.delegate import DELEGATES
     from verity_vllm.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
-    return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows
-                   if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
-
-
-def premises(rows: Iterable[dict[str, Any]]) -> list[str]:
-    """What a replay of ``rows`` holds only in part, for its record: `BOOLEAN_PREMISE` when it evaluates a Boolean Definition's
-    row."""
-    return [BOOLEAN_PREMISE] if any(bound != spec for spec, bound in evaluated_specs(rows)) else []
+    return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows if spec_family(str(r["spec"])) in ROWS})
 
 
 def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[dict[str, Any]]], *, what: str) -> None:

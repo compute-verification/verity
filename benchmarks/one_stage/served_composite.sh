@@ -43,7 +43,9 @@
 # directories it left out can't be read), it says so (`COMPOSITE: not run`) and exits 1, since no product's Lean
 # answered. It exits 1 only where the step itself fails, not for a piece's summary or answer that doesn't parse: that
 # makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED line names
-# the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote
+# the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1. A product whose
+# composite.py printed no VERDICT line or a traceback, or refused its Lean's answer (composite.py's ERROR line: a panic
+# line, a signal, a status other than 0, 1 or 2), gets a `COMPOSITE PRODUCT: ERROR` line and no answer. PRODUCT=remote
 # (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone: under
 # POUW=pearlplus remote's composite of record (`remote-v1`, `Core.Remote.V1`, whose work
 # subprotocol is Pearl+'s run verdict, served_cases.py's Pearl+ case; composite.py remote-v1), and where the tree
@@ -181,9 +183,12 @@ EOF
   "${scope[@]}" timeout -k 1m "${COMPOSITE_TIMEOUT:-60m}" "$TPY" benchmarks/one_stage/composite.py "$x" "${cases[@]}" \
     --private-out "$P/$x/private" --public-out "$OUT/composite/$x" --exe "$e" "${dev[@]}" > "$P/$x.log" 2>&1
   r=$?
-  grep -E '^(NOT_ESTABLISHED|VERDICT) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  grep -E '^(NOT_ESTABLISHED|VERDICT|ERROR) ' "$P/$x.log" | sed "s/^/COMPOSITE $x: /" | tee -a "$OUT/verdicts.txt"
+  # A Python traceback exits 1, a reject's status: only a VERDICT line, with no traceback, makes 0, 1 or 2 an answer.
   case $r in
-    0 | 1 | 2) ;;
+    0 | 1 | 2) grep -q '^VERDICT ' "$P/$x.log" && ! grep -q '^Traceback (most recent call last):' "$P/$x.log" \
+      || { say "COMPOSITE $x: ERROR composite.py ended with status $r and printed no verdict, its log on the node"; bad=1; } ;;
+    67) bad=1 ;;
     65) say "COMPOSITE $x: composite.py wrote no public line (exit 65: they share bytes with a case's evidence)"; bad=1 ;;
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac

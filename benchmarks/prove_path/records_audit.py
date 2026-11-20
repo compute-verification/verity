@@ -232,8 +232,10 @@ PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")
 
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
-    its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
+    its blocks), and Pearl+'s (`pearl_plus_tile`, the tile's blocks, and `pearl_plus_credited`, its credit reader), which
+    `interface`'s own walk can't import, being a later place's; a refusal names the registry modules that failed to import."""
     from verity_vllm.definitions.registry.catalog import load
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited, pearl_plus_tile  # noqa: F401  (they register as they load)
 
     _, errors = load()
     try:

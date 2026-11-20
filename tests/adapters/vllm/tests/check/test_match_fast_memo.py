@@ -113,7 +113,7 @@ def test_a_views_hash_is_kept_by_whether_it_is_unfolded(compact, stats):
 
 @FORMS
 def test_unfolding_a_padded_program_against_a_flat_one_is_the_records_comparison(compact, stats):
-    """The comparison `program-compare` asks for, through the fast path's functions: the unfolded side's operands are the
+    """The comparison `program_compare.main` asks for, through the fast path's functions: the unfolded side's operands are the
     record's function's, so the document is the record's, and a view's hash of that sequence is counted once."""
     def sides():
         return reads._mux_reader([("n", reads.M, 0, 2)], compact=compact), reads._flat_reader([("n", reads.E, 2, 4)], compact=False)

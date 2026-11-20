@@ -55,6 +55,7 @@ from verity.commitments.crypto import lms
 from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
+from verity.lean_process import lean_env
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.scheme import (Executable, Lacks, Launch, LaunchRefused, Scheme, declared,
                                                              settings)
@@ -834,7 +835,7 @@ def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, An
     is this machine's settings for the runner, under the pieces' hooks: a setting the configuration's pieces set is
     theirs."""
     node = {k: str(v) for k, v in bindings.get(WORKERS, {}).get(SERVED_WINDOW, {}).items()}
-    env = {**os.environ, **node, **variables(cfg, bindings)}
+    env = lean_env({**os.environ, **node, **variables(cfg, bindings)})
     env |= {**composite(env), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:

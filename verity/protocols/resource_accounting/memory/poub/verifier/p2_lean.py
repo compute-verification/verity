@@ -11,8 +11,11 @@ import functools
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
+
+from verity import lean_process as LC
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
 EXE = "poub-verifier"
@@ -58,7 +61,9 @@ class Lean:
     checks it and `read` after."""
 
     def __init__(self, path: Path) -> None:
-        self.proc = subprocess.Popen([str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        self.stderr = tempfile.TemporaryFile("a+b")
+        self.proc = subprocess.Popen([str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
+                                     env=LC.lean_env())
         self.unsent: OSError | None = None
 
     def send(self, request: dict[str, Any], body: bytes = b"") -> None:
@@ -66,12 +71,18 @@ class Lean:
             self.proc.stdin.write(json.dumps(request, separators=(",", ":")).encode() + b"\n" + body)
             self.proc.stdin.flush()
         except (OSError, ValueError) as e:
-            raise LeanError(f"the process is gone: {e}") from None
+            raise LeanError(f"{LC.exit_why(self.proc.wait()) or 'the process is gone'}: {e}") from None
 
     def read(self) -> Any:
         line = self.proc.stdout.readline()
+        self.stderr.seek(0)
+        err = self.stderr.read().decode("utf-8", "replace")
+        if (panic := LC.panic_line(err)) is not None:
+            self.proc.kill()
+            raise LeanError(f"{LC.LEAN_PANIC}: {panic}")
         if not line:
-            raise LeanError(f"the process ended ({self.proc.poll()})")
+            code = self.proc.wait()
+            raise LeanError(f"{LC.exit_why(code) or f'the process ended ({code})'}: {err[-2000:]}")
         msg = json.loads(line)
         if "error" in msg:
             raise LeanError(msg["error"])
@@ -89,6 +100,7 @@ class Lean:
         except OSError as e:
             self.unsent = e
         self.proc.wait()
+        self.stderr.close()
 
     def __enter__(self) -> Lean:
         return self

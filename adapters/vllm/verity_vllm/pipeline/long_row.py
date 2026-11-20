@@ -34,29 +34,17 @@ decode step i.
 
 It stands in for the request Definition that will hold the row: its operands (the row's index scores, n and the table's
 openings) are whatever the replay gives it, and nothing here ties them to the committed prompt or the served history.
-
-**The interior** of a class registered inline over it, from the check and the class's instances a replay block alone: `window`,
-its templates' members and their units a block, as `interior_rows.interior_window` takes them, and `links`, the block's
-parameters the interior registers as values (`interior_links`): the scores, n and the reads' rows, salts and paths the replay
-gives, and the table's root and domain and the index rows the verifier supplies (`supplied`). `links` states them in closed
-form, since round 2's derivation (`interior_links.links`) reads the block's Program, which at the served statics builds every
-unit's body; the tests hold the two to each other at small statics.
-`spans` is a sampled span's units as `interior_rows.interior` commits them, one `interior_rows.Span` a template: every unit's
-rows and outputs in u16 words, computed from each instance's scores and n and the table its reads open by the units'
-references (`dsa_topk_mask_cut.values`, `dsa_topk_reads.values`, `interior_links.table_reads`), never by a Definition.
 """
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Sequence
-from typing import Any, cast
+from typing import Any
 
-import numpy as np
 from verity.circuits import boolean as BL
-from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR
@@ -166,170 +154,3 @@ def layout(run: str, check: SpecializedDefinition | None = None, spans: int = 1)
     `OUTPUTS`), so n_rho = 2, instance i the row at decode step i. Its replay block returns each read's ok, the check's
     verdicts, which the class commits as its return (`boundary_rows.Layout.verdicts`)."""
     return BR.Layout(served() if check is None else check, 0, 1, PROMPT, OUTPUTS, spans, run, inline=True, verdicts=True)
-
-
-def window(check: SpecializedDefinition, n_rho: int) -> tuple[tuple[Any, ...], tuple[int, ...]]:
-    """The interior window of a class whose replay block is ``n_rho`` instances of ``check`` inlined, as
-    `interior_rows.interior_window` takes it: the templates ``check``'s body calls, in the order of their first call
-    (`boundary_rows.Layout.templates`), each its unit member on bit rows named after its parameters (`chunk_rows.unit_member`,
-    `interior_rows.named`), and each one's units a block, its calls an instance times ``n_rho``."""
-    from verity_vllm.pipeline import chunk_rows as CR
-    from verity_vllm.pipeline import interior_rows as IR
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    calls = Counter(descriptor_id(d) for _, d in units(check))
-    cells = tuple(n * n_rho for n in calls.values())
-    return tuple(IR.named(CR.unit_member(SRW.template(t), n)) for t, n in zip(calls, cells, strict=True)), cells
-
-
-def supplied(check: SpecializedDefinition, n_rho: int) -> dict[str, tuple[int, ...] | None]:
-    """The block's parameters the verifier supplies (`interior_links.Supply`), by name: the table's ``root`` and ``domain``,
-    each sampled span's the table round 1 served for it (None), and the index rows ``c`` and ``i``, a block's rows instance
-    by instance, each instance's `index_values`."""
-    index = index_values(check.bindings["TOPK"])
-    return {"root": None, "domain": None, **{p: tuple(v) * n_rho for p, v in index.items()}}
-
-
-def links(check: SpecializedDefinition, n_rho: int, tables: bool = False) -> tuple[Any, ...]:
-    """The links of the replay block of ``n_rho`` instances of ``check`` inlined, as the interior registers their values and
-    in round 2's order (`interior_links.links` on the block, which this is held to): each template's port that reads a
-    parameter of the block, the value named as round 2 names it, the parameter's name, or ``<block>/<parameter>`` where
-    round 1's record names a port with a ``/`` (``tables``: the class has history tables, `boundary_rows.Layout.layers`).
-
-    * a unit of the mask's cut that reads scores: its block of them, row b of an instance's blocks, and the instance's n
-      (`Operand`: the replay's);
-    * a chunk's ``c`` and a slot's ``j``: its row of the block's ``c`` and ``i`` (`Supply`: `supplied`'s indices);
-    * a read's ``root`` and ``domain``: its instance's row (`Supply`: the table round 1 served), and its ``row``, ``salt``
-      and ``path``, a row a read (`Operand`).
-
-    ValueError where the row's blocks are not all `BLOCK` keys: a block's scores are one row of the parameter."""
-    from verity_vllm.pipeline import chunk_rows as CR
-    from verity_vllm.pipeline import interior_links as IL
-
-    N, TOPK, block, READ = (check.bindings[k] for k in ("N", "TOPK", "BLOCK", "READ"))
-    bl = X.blocks(N, TOPK, block)
-    if {hi - lo for lo, hi in bl} != {block}:
-        raise ValueError(f"{descriptor_id(check)}: its blocks {bl[:2]}..{bl[-1]} are not {block} keys each, and a unit's "
-                         "scores are one whole row of the block's parameter")
-    key = descriptor_id(BR.inlined(check, n_rho))
-    sup = supplied(check, n_rho)
-
-    def value(p: str) -> str:
-        return f"{key}/{p}" if tables else p
-
-    def words(d: SpecializedDefinition, port: str) -> int:
-        return dict(d.signature()[0])[port].leaves // 16
-
-    every = tuple(range(n_rho))
-    out: list[Any] = []
-    for u in X.plan(N, TOPK, block):
-        if u.keys[1] <= u.keys[0]:
-            continue
-        t, b = descriptor_id(u.defn), bl.index(cast(tuple[int, int], tuple(u.keys)))
-        if any(x.template == t for x in out):
-            raise ValueError(f"{t} is two units of an instance: its units would read two blocks' scores")
-        out += [IL.Operand(t, "scores", value("scores"), n_rho * len(bl), tuple(i * len(bl) + b for i in every),
-                           words(u.defn, "scores")),
-                IL.Operand(t, "n", value("n"), n_rho, every, words(u.defn, "n"))]
-    chunk, slot = _index_units(N, TOPK)
-    chunks = -(-TOPK // R.CHUNK)
-    out += [IL.Supply(descriptor_id(chunk), CR.INDEX_ROWS[chunk.base_id], value("c"), n_rho * chunks, tuple(range(n_rho * chunks)),
-                      sup["c"]),
-            IL.Supply(descriptor_id(slot), CR.INDEX_ROWS[slot.base_id], value("i"), n_rho * R.CHUNK,
-                      tuple(i * R.CHUNK + j % R.CHUNK for i in every for j in range(TOPK)), sup["i"])]
-    read = descriptor_id(READ)
-    out += [IL.Supply(read, p, value(p), n_rho, tuple(i for i in every for _ in range(TOPK))) for p in IL.TABLE]
-    out += [IL.Operand(read, p, value(p), n_rho * TOPK, tuple(range(n_rho * TOPK)), words(READ, p)) for p in IL.READ[3:]]
-    return tuple(out)
-
-
-def _words(ty: Any, v: Any) -> np.ndarray:
-    """A value of type ``ty`` as its row's u16 words, the low word first: an int, a sequence of u32 words where ``ty`` is
-    32 bits of each, else a sequence of bits, the last word's padding 0."""
-    w = -(-sum(ty.leaf_widths()) // 16)
-    if isinstance(v, (int, np.integer)):
-        return np.asarray([(int(v) >> 16 * k) & 0xFFFF for k in range(w)], dtype=np.uint16)
-    v = np.asarray(v, dtype=np.uint64)
-    if 2 * len(v) == w:
-        return v.astype("<u4").view("<u2")
-    if len(v) > ty.leaves:
-        raise ValueError(f"{len(v)} bits for a value of {ty.leaves}")
-    bits = np.zeros(16 * w, dtype=np.uint8)
-    bits[:len(v)] = v
-    return np.packbits(bits, bitorder="little").view("<u2")
-
-
-def _instance(check: SpecializedDefinition, scores: Sequence[int], n: int, table: Any) -> list[tuple[list, list]]:
-    """One instance's units in body order (`units`), each its parameters' rows and its outputs' in u16 words: the row's
-    ``scores`` (N f32 words) and ``n`` through the mask's cut and the index (their references), each wired parameter its
-    writer's output as the body wires it (`_args`), the index rows the verifier's (`index_values`), and read j opening
-    ``table`` at slot unit j's position."""
-    from verity_vllm.pipeline import interior_links as IL
-
-    N, TOPK, block = (check.bindings[k] for k in ("N", "TOPK", "BLOCK"))
-    if len(scores) != N:
-        raise ValueError(f"{len(scores)} scores for a row of {N} keys")
-    bl, plan = X.blocks(N, TOPK, block), {u.key: u for u in X.plan(N, TOPK, block)}
-    got = X.values(list(scores), int(n), TOPK, block)
-    got |= R.values([bit for b, (lo, hi) in enumerate(bl) for bit in got[("mask", b)][0][:hi - lo]], TOPK, block)
-    reads = IL.table_reads(table, [got[("slot", j)][0] for j in range(TOPK)])
-    index = index_values(TOPK)
-    out: dict[tuple, list[np.ndarray]] = {}
-    done: list[tuple[list, list]] = []
-    for key, defn in units(check):
-        params, ret = defn.signature()
-        fields = ret.fields if isinstance(ret, Tuple) else (ret,)
-        if key[0] == "read":
-            rows = [reads["rows"][p][key[1]] for p, _ty in params]
-            outs = [reads["outs"][f"o{f}"][key[1]] for f in range(len(fields))]
-        else:
-            outs = [_words(ty, v) for ty, v in zip(fields, got[key], strict=True)]
-            if key in plan:
-                u = plan[key]
-                lo, hi = u.keys
-                if len({p for p, _w, _f in u.wires}) != len(u.wires):
-                    raise ValueError(f"{descriptor_id(defn)}: a parameter of two writers, which no row here joins")
-                given = {p: out[w][f] for p, w, f in u.wires}
-                if hi > lo:
-                    given |= {"scores": _words(Array(hi - lo, R.F32), scores[lo:hi]), "n": _words(R.I32, int(n) & 0xFFFFFFFF)}
-                rows = [given[p] for p, _ty in params]
-            elif key[0] == "positions":
-                rows = [out[("mask", key[1])][0]]
-            elif key[0] == "merge":
-                rows = [out[("positions", b)][f] for f in (0, 1) for b in range(len(bl))]
-            elif key[0] == "chunk":
-                rows = [out[("merge",)][0], _words(R.I32, index["c"][key[1]])]
-            else:
-                rows = [out[("chunk", key[1] // R.CHUNK)][0], _words(R.I32, index["i"][key[1] % R.CHUNK])]
-        for (p, ty), r in zip(params, rows, strict=True):
-            if len(r) != sum(ty.leaf_widths()) // 16:
-                raise ValueError(f"{descriptor_id(defn)}: its {p!r} row is {sum(ty.leaf_widths()) // 16} words, not {len(r)}")
-        out[key] = outs
-        done.append((rows, outs))
-    return done
-
-
-def spans(check: SpecializedDefinition, rid: str, rows: Sequence[tuple[Sequence[int], int]], table: Any,
-          program: str) -> tuple[Any, ...]:
-    """A sampled span's units as `interior_rows.interior` takes them: one `interior_rows.Span` a template of
-    ``check`` in `window`'s order, its units instance by instance (its ``group`` a template's units an instance), each
-    unit's rows and outputs in u16 words. ``rows``: each instance's (scores, n), the row's N index scores as f32 words and
-    its n, as the replay gives them; ``table``: the history table the span's reads open (`interior_links.kept_table`, the
-    one round 1 served); ``rid`` and ``program``: the request and the digest of the Program it was replayed from."""
-    from verity_vllm.pipeline import chunk_rows as CR
-    from verity_vllm.pipeline import interior_rows as IR
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    ids = [descriptor_id(d) for _, d in units(check)]
-    per: dict[str, list[tuple[list, list]]] = {t: [] for t in ids}
-    for scores, n in rows:
-        for t, unit in zip(ids, _instance(check, scores, n, table), strict=True):
-            per[t].append(unit)
-    out = []
-    for t, got in per.items():
-        m = IR.named(CR.unit_member(SRW.template(t), len(got)))
-        data = {"rows": {p: np.stack([r[g] for r, _o in got]) for g, (p, _w) in enumerate(m.rows)},
-                "outs": {p: np.stack([o[g] for _r, o in got]) for g, (p, _w) in enumerate(m.outs)}}
-        each = len(got) // len(rows)
-        out.append(IR.Span(rid, m, data, [[i * each, (i + 1) * each, rid, i] for i in range(len(rows))], program, group=each))
-    return tuple(out)

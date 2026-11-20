@@ -1,5 +1,5 @@
-"""Workload 101's fourth Build and Match, fetched from the evidence store: the Build's request Program declares the plain
-construction, and its preserved capture folds under it as the Match's comparison reads it (`test_fold_sampler_construction`).
+"""Workload 101's fourth Build, fetched from the evidence store: its request Program declares the plain construction, and the
+fold's select under it is what the Match's comparison reads (`test_fold_sampler_construction`).
 """
 from __future__ import annotations
 
@@ -20,9 +20,8 @@ from verity_vllm.observe.fold.patterns.sampling import (
 )
 from verity_vllm.program import sampling_event as SE
 
-#: workload 101's fourth try: its Build (`build_request/`) and its records (the Match's files)
+#: workload 101's fourth try: its Build (`build_request/`)
 BUILD_101 = "art:7fef3bd2ef46404067d0c4a534cd0fef72e730f4d01c8b7a6a20022eb5edd9f7"
-ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 
 
 def _store():
@@ -43,4 +42,3 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
     assert SE.program_sampler_construction([str(build / "build_request")]) == PLAIN
     pattern = with_sampler_construction(_profile(TokenSelectGumbelTopP()), PLAIN).patterns[0]
     assert {_as_compared(k) for k in selects} == {_fold_select(128256, pattern)} == {"GumbelTopPTokenSelect_v1{V=128256}"}
-
