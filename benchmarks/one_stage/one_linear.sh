@@ -2,7 +2,8 @@
 # One real linear layer's Gemm_v2 slices (`one_linear.py`) audited on the records audit's road (`served_door_prove.sh`'s
 # AUDIT_RULE branch): registered, committed, drawn on a local challenger's live coins, each drawn block cut, lowered and
 # composed by Lean's door, proved in zero knowledge behind the ZK server and verified by the Lean verifier. Then the
-# negatives: the weight as a registered read (refused today by the members check's header rule); the partition at
+# negatives: the weight as a registered read, an honest window refused today (a completeness probe: R8-shared-input,
+# since the pinned weight is no value a tie registers, or past it the members check's header rule); the partition at
 # two levels refused at the door before any coin; a changed output word in every block (so in every drawn one)
 # refused; one changed output word in one unit, accepted unless its block is drawn; a stratified rate refused by its
 # kind (SUBSET_ONLY). Each arm passes only on its own outcome, a negative's refusal by its name, and a crash is an
@@ -29,7 +30,7 @@ except OSError:
 keep = ("ok", "accepted", "verdict", "refused", "epsilon", "eps", "bound", "delta", "law", "drawn", "failed_drawn", "forged")
 print("SUMMARY " + json.dumps({k: s[k] for k in s if k in keep}, default=str)[:3000])
 EOF
-  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json $B/$1/audit.err $B/$1/window.txt | tee $B/$1.arm
+  python3 benchmarks/one_stage/one_linear_arms.py $1 $r $B/$1.log $B/$1/summary.json $B/$1/audit.err $B/$1/window.txt $B/$1/audit.log | tee $B/$1.arm
 }
 audit honest $RULE "--weights committed" ""; H=$?
 audit registered $RULE "" ""; G=$?

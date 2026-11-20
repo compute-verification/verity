@@ -24,6 +24,11 @@ SUBSET_ONLY = "the sampling design is "
 SUBSET_ONLY_TAIL = "which the one-statement audit's soundness statement doesn't cover"
 #: `one_linear.sh`'s ``--forge 1``; a summary's ``draw`` lists the drawn units.
 FORGED_UNIT = 1
+#: The registration's R8 refusal of a run Input two proof blocks read (`docket.SHARED_WHY`). The registered arm's weight
+#: is pinned, not a value the verifier's tie registers, so R8 holds it shared and refuses the honest window before the
+#: draw: the arm is a completeness probe, refused today by R8 or, past it, by the members check's header rule. The
+#: members check's refusals on a real window are a5's member negatives'.
+R8_SHARED = "R8-shared-input"
 EXPECTS = {"honest": "ACCEPT", "registered": "REFUSED", "forged-drawn": "REFUSED", "forged-one": "ACCEPT or REFUSED",
            "stratified": "REFUSED"}
 
@@ -46,6 +51,18 @@ def refusal(summary: dict) -> str | None:
     if failed:
         return "REJECT at " + ", ".join(sorted(failed)) + ": " + json.dumps(failed, sort_keys=True, default=str)[:600]
     return "REJECT: " + json.dumps({"refused": summary.get("refused"), "why": audit.get("why")}, default=str)[:600]
+
+
+def _checks_before_draw(log: str) -> dict:
+    """The checks a5 printed when it refused before the draw (its ``A5 {"refused_before_draw": ...}`` line in the audit's
+    log), which records_audit's summary keeps only as booleans."""
+    for line in log.splitlines():
+        if line.startswith('A5 {"refused_before_draw"'):
+            try:
+                return json.loads(line[3:]).get("checks") or {}
+            except ValueError:
+                return {}
+    return {}
 
 
 def _window(log: str) -> dict:
@@ -89,6 +106,10 @@ def judge(arm: str, status: int, log: str, summary: dict | None) -> tuple[str, s
     if arm == "stratified" and SUBSET_ONLY in text and SUBSET_ONLY_TAIL in text:
         return "REFUSED", f"SUBSET_ONLY: {text[text.index(SUBSET_ONLY):][:200]}", True
     members = audit.get("members_lean") or {}
+    registration = (summary.get("checks") or _checks_before_draw(log)).get("registration") or {}
+    if arm == "registered" and R8_SHARED in (registration.get("codes") or []):
+        return "REFUSED", f"{R8_SHARED} before the draw, a completeness limit: " \
+                          f"{json.dumps((registration.get('detail') or {}).get(R8_SHARED), default=str)[:300]}", True
     if arm == "registered" and members.get("ran") is True and members.get("ok") is False:
         return "REFUSED", f"the members check: {str(members.get('reason') or members.get('codes'))[:300]}", True
     if arm == "forged-one" and audit.get("accepted") is False:

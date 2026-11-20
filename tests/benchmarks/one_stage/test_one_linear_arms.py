@@ -45,6 +45,18 @@ CASES = {
     "registered refused by the members check": (
         "registered", 1, WINDOW, {"ok": False, "audit": {"members_lean": {"ran": True, "ok": False, "reason": "port w"}}},
         "ARM registered REFUSED the members check: port w", 0),
+    "registered refused by R8 before the draw": (
+        "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {
+            "ok": False, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}},
+        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+    "registered refused by R8, read off a5's line": (
+        "registered", 1, WINDOW + 'A5 {"refused_before_draw": {"registration": false}, "checks": {"registration": '
+        '{"ok": false, "codes": ["R8-shared-input"], "detail": {"R8-shared-input": {"inputs": [0]}}}}}\n',
+        {"ok": False, "checks_before_draw": {"registration": False}},
+        'ARM registered REFUSED R8-shared-input before the draw, a completeness limit: {"inputs": [0]}', 0),
+    "registered refused before the draw by another check": (
+        "registered", 1, WINDOW, {"ok": False, "checks": {"registration": {"ok": False, "codes": ["R3-root"]}}},
+        "ARM registered REJECT status 1, not REFUSED by its name", 1),
     "stratified refused by SUBSET_ONLY": ("stratified", 1, WINDOW, {"ok": False, "refused": {"params": SUBSET}},
                                           "ARM stratified REFUSED SUBSET_ONLY: the sampling design is stratified", 0),
     "forged-drawn by forged_outcome": ("forged-drawn", 0, WINDOW,
