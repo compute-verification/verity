@@ -76,7 +76,8 @@ def pouw_periods() -> dict[str, list[dict]]:
     make): a few honest ones, and one of each refusal of `credit.period_credit` and of each break of the protocol's
     framing. A period is accepted or rejected, never undecided."""
     PPC = R.POUW_PERIOD_CASES
-    return {R.ACCEPT: [PPC.instance(random.Random(f"honest/{s}")) for s in range(3)],
+    return {R.ACCEPT: [PPC.serve(PPC.credit_cases.period_instance(random.Random(f"honest/{s}"), windows=1, real=True,
+                                                                  **PPC.COVERED)) for s in range(3)],
             R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
 
 OS = R.ONE_STAGE
