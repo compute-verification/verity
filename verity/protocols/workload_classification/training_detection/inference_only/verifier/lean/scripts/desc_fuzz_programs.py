@@ -614,6 +614,74 @@ def copies(seed: int) -> str:
     return P.text("R_v1")
 
 
+def _lanes_grid(rng: random.Random, space: str, idx: int, N: int) -> tuple[dict, int] | None:
+    """A grid part over leaves `[0, N)` of one collection, its lanes of two or three levels, that only the grid form spells,
+    with its count; or none."""
+    for _ in range(50):
+        g, run = rng.choice([1, 1, 2, 3]), rng.choice([1, 1, 2])
+        rads = [rng.choice([2, 2, 3]) for _ in range(rng.choice([2, 2, 3]))]
+        lanes = []
+        for _j in range(g):
+            e = rng.choice([1, 1, 2, -1])
+            lv = tuple((r, rng.choice([-3, -2, 1, 2, 3, 4, 5, 7])) for r in rads)
+            lo, hi = lane_bounds(run, (space, idx, 0, e, lv))
+            if hi - lo >= N:
+                break
+            lanes.append((space, idx, rng.randint(-lo, N - 1 - hi), e, lv))
+        if len(lanes) == g and isinstance(q := spell(run, lanes), Grid):
+            return q.to_json(), q.count
+    return None
+
+
+def lanes(seed: int) -> str:
+    """Grid parts of lanes of several levels where a lane's intervals decide what is read: `C` reads its parameter through
+    one (`Desc.Summary.used`, `Piece.levelIvs`); at the root, an input, a batch of a primitive on it, a primitive reading
+    that batch's gates through a grid (a lane piece of gates, `freshWidth`), calls of `C` on the input and on the batch,
+    and a batch of `C` over the input's rows."""
+    rng = random.Random(seed)
+    P = Program(rng)
+    t = V(8)
+    N, m = rng.randint(12, 48), rng.randint(2, 3)
+    cb = Body(P, [A(N, t)], 10 ** 6)
+    for _ in range(rng.randint(1, 2)):
+        gr = _lanes_grid(rng, "p", 0, N)
+        if gr is None:
+            continue
+        ref, cnt = gr
+        key = P.prim([A(cnt, t)], t)
+        cb.push({"args": [{"refs": ref, "type": P.ty(A(cnt, t))}], "fn": P.fn(key), "form": "primitive", "out": P.ty(t)},
+                t, [cnt], 1, "prim")
+    if not cb.nodes:
+        key = P.prim([t], t)
+        cb.push({"args": [{"refs": {"affine": ["p", 0, 0, 1]}, "type": P.ty(t)}], "fn": P.fn(key), "form": "primitive",
+                 "out": P.ty(t)}, t, [1], 1, "prim")
+    c = P.composite(cb, t, {"affine": ["n", len(cb.nodes) - 1, 0, 1]})
+    root = Body(P, [], 10 ** 6)
+    x = P.input(8, rng.random() < 0.5)
+    root.push({"args": [], "axes": [], "fn": P.fn(x), "form": "batch", "n": m * N, "out": P.ty(A(m * N, t))},
+              A(m * N, t), [], m * N, "input")
+    op = P.prim([t], t)
+    root.push({"args": [{"refs": {"affine": ["n", 0, 0, N]}, "type": P.ty(A(N, t))}], "axes": [0], "fn": P.fn(op),
+               "form": "batch", "n": N, "out": P.ty(A(N, t))}, A(N, t), [N], N, "batch")
+    for _ in range(rng.randint(1, 4)):
+        r = rng.random()
+        if r < 0.3 and (gr := _lanes_grid(rng, "n", 1, N)) is not None:
+            ref, cnt = gr
+            key = P.prim([A(cnt, t)], t)
+            root.push({"args": [{"refs": ref, "type": P.ty(A(cnt, t))}], "fn": P.fn(key), "form": "primitive",
+                       "out": P.ty(t)}, t, [cnt], 1, "prim")
+        elif r < 0.75:
+            k, b = rng.choice([(0, rng.randrange(m * N - N + 1)), (1, 0)])
+            root.push({"args": [{"refs": {"affine": ["n", k, b, N]}, "type": P.ty(A(N, t))}], "fn": P.fn(c),
+                       "form": "call", "out": P.ty(t)}, t, [N], P.sig[c][3], "call")
+        else:
+            root.push({"args": [{"refs": {"affine": ["n", 0, 0, m * N]}, "type": P.ty(A(m, A(N, t)))}], "axes": [0],
+                       "fn": P.fn(c), "form": "batch", "n": m, "out": P.ty(A(m, t))}, A(m, t), [m * N],
+                      m * P.sig[c][3], "batch")
+    P.composite(root, t, {"affine": ["n", len(root.nodes) - 1, 0, 1]}, "R_v1")
+    return P.text("R_v1")
+
+
 def passscan(n: int) -> str:
     """A gate reading the carry of a scan of `n` iterations of a step that passes its carry through, from an input."""
     P = Program(random.Random(0))
@@ -1017,7 +1085,8 @@ def v2(text: str) -> str:
 
 #: Programs reading grid parts, apart from `programs()` and the data the audit pins.
 GRID = (("grid", _bare(lambda s: program(s, grids=True)), range(0, 2000), 0.3, 1),
-        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 200), 0.3, 1))
+        ("grid-big", _bare(lambda s: program(s, scale=3, grids=True)), range(0, 200), 0.3, 1),
+        ("lanes", _bare(lanes), range(0, 600), 0.2, 1))
 
 
 def grid_programs():
