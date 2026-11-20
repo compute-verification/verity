@@ -106,7 +106,7 @@ class _Program:
         self.norms: dict[int, tuple[Row, ...]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
-        #: its lane's `ScanSlots_v4` unit (`window_circuit.lower` gives it), each position's `SelectCollect_v1` unit but the
+        #: its lane's `ScanSlots_v5` unit (`window_circuit.lower` gives it), each position's `SelectCollect_v1` unit but the
         #: last and its `SelectEntry_v1` unit
         self.scan_unit: tuple[str, int] | None = None
         self.collects: list[tuple[str, int]] = []
@@ -257,7 +257,7 @@ class _Program:
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
-        """The next position's token: the first's its lane's `ScanSlots_v4` unit's, of the scan state row at its anchor
+        """The next position's token: the first's its lane's `ScanSlots_v5` unit's, of the scan state row at its anchor
         (with the slot it carries, its occupancy word and its head), below the class's prompt limit every other's
         `TokenFeed_v1`'s (its slot its predecessor's, ``sel`` the previous position's select), past it the previous select.
         A served Program's below its prompt length is `TokenFeed_v1{FIRST=True}`'s, its prompt's id, and past it the previous
@@ -672,7 +672,7 @@ class _Program:
 
     def place_empty(self, scan: tuple[str, int], collect: tuple[str, int], entry: tuple[str, int]) -> None:
         """An empty lane's collector (`io_shell.OutCollect_v1{FIRST}`, unit ``collect``) on the head and first token of its
-        lane's `ScanSlots_v4` unit ``scan``, and its entry (unit ``entry`` of the window's entries) on that unit's occupancy
+        lane's `ScanSlots_v5` unit ``scan``, and its entry (unit ``entry`` of the window's entries) on that unit's occupancy
         word and the collector's state: units of this Program's slot, so no wire leaves it."""
         (tid, u), (ct, cu), (et, eu) = scan, collect, entry
         self.b.feed(ct, "head", cu, 1, (Row(tid, u, "o3", 4),))
