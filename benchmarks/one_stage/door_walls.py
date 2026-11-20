@@ -232,15 +232,17 @@ def lean_case_wide() -> tuple[bytes, dict]:
 
 
 def pearl_plus() -> tuple[bytes, dict]:
-    """Pearl+'s credited linear (`credited_in_c.py`'s C at its default size, K,TM,TN,N,M = 256,1,1,1,2, with its
-    reader), laid under the composer's limit as its stage lays it."""
+    """Pearl+'s credited linear (`credited_in_c.py`'s C at K,TM,TN,N,M = 256,1,1,64,2, with its reader), laid under
+    the composer's limit as its stage lays it. Its reader adds rows of N = 64 BF16 words: a reader of one word a row
+    has no row that spans a compression before its last block, which the composer refuses, and no path of record lays
+    one."""
     import importlib.util
     from verity.circuits import laying as LY
     spec = importlib.util.spec_from_file_location("credited_in_c", ROOT / "benchmarks/pouw/credited_in_c.py")
     m = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = m
     spec.loader.exec_module(m)
-    program = LY.lay(m.linear(256, 2, 1, (1, 1), True).program, m.fits)
+    program = LY.lay(m.linear(256, 2, 64, (1, 1), True).program, m.fits)
     return _bytes(program), LY.query(program)
 
 
