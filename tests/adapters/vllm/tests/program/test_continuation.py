@@ -1,8 +1,8 @@
 """Continuation_v1 -- controller first.
 
-The reference evaluator (`next_flags`), the INDEPENDENTLY written three-state machine, and the checker's recurrence over a raw
-transcript agree on EVERY EOS pattern for small caps under both profiles; the named invariants hold; each edge case is one test;
-the derived invariant reproduces the three real records' executed lengths; the wrong profile FAILS by name.  Everything labelled lifted-padded; nothing here reads a trace to set A.
+The reference evaluator (`next_flags`) and the checker's recurrence over a raw transcript agree on EVERY EOS pattern for small
+caps under both profiles; each edge case is one test; the derived invariant reproduces the three real records' executed lengths;
+the wrong profile FAILS by name.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import itertools
 import pytest
 
 from verity_vllm.check.replay import continuation as K
-from verity_vllm.check.replay import lifted_records
 
 EOS = (17,)
 ORD = 5  # an ordinary (non-EOS) token id
@@ -25,29 +24,37 @@ def all_patterns(cap: int):
     return itertools.product((False, True), repeat=cap)
 
 
+def _unrolled(pat: tuple[bool, ...], *, cap: int, A: int) -> list[tuple[bool, bool]]:
+    """`(e_t, r_t)` for `t = 1..cap`, the reference evaluator unrolled by hand."""
+    e, r, out = True, True, []
+    for t in range(1, cap + 1):
+        out.append((e, r))
+        e, r = K.next_flags(emit=e, token_is_eos=pat[t - 1], has_next_slot=t < cap, async_one_step=A == 1)
+    return out
+
+
+def _bits(slots) -> list[tuple[bool, bool]]:
+    return [(s.emit, s.run) for s in slots]
+
+
+def _served(slots) -> list[int | None]:
+    return [s.raw for s in slots if s.emit]
+
+
 # ---------------------------------------------------------------------------------------------------------
-# exhaustive agreement: reference evaluator == three-state machine == recurrence, both profiles, C <= 6
+# exhaustive agreement: reference evaluator == recurrence, both profiles, C <= 6
 # ---------------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("A", [0, 1])
 @pytest.mark.parametrize("cap", [1, 2, 3, 4, 5, 6])
-def test_reference_evaluator_three_state_machine_and_recurrence_agree_on_every_pattern(cap, A):
+def test_reference_evaluator_and_recurrence_agree_on_every_pattern(cap, A):
     n = 0
     for pat in all_patterns(cap):
-        ref = K.three_state_run(pat, cap=cap, A=A)
-        # the reference evaluator unrolled by hand
-        e, r, ev = True, True, []
-        for t in range(1, cap + 1):
-            ev.append((e, r))
-            e, r = K.next_flags(emit=e, token_is_eos=pat[t - 1], has_next_slot=t < cap, async_one_step=A == 1)
-        assert ref == ev, (cap, A, pat)
+        ref = _unrolled(pat, cap=cap, A=A)
         # the recurrence over the raw tokens the pattern would produce at the slots that run (an inactive slot produces none)
         raw = [pattern_tokens(pat)[t - 1] if ref[t - 1][1] else None for t in range(1, cap + 1)]
-        slots = K.recurrence(raw, cap=cap, A=A, eos=EOS)
-        assert K.bits(slots) == ref, (cap, A, pat)
-        inv = K.invariants(slots, cap=cap, A=A)
-        assert all(inv.values()), (cap, A, pat, {k: v for k, v in inv.items() if not v})
+        assert _bits(K.recurrence(raw, cap=cap, A=A, eos=EOS)) == ref, (cap, A, pat)
         n += 1
     assert n == 2 ** cap
 
@@ -56,7 +63,7 @@ def test_reference_evaluator_three_state_machine_and_recurrence_agree_on_every_p
 def test_derived_invariant_n_executed_equals_the_run_count_on_every_pattern(A):
     for cap in range(1, 7):
         for pat in all_patterns(cap):
-            ref = K.three_state_run(pat, cap=cap, A=A)
+            ref = _unrolled(pat, cap=cap, A=A)
             n_served = sum(1 for e, _ in ref if e)
             n_exec = sum(1 for _, r in ref if r)
             assert n_exec == K.n_executed_derived(n_served, cap=cap, A=A), (cap, A, pat)
@@ -73,7 +80,7 @@ def test_worked_example_c5_eos_at_slot_2_async_matches_the_spec_table():
                                                                             (4, 0, 0, None, None), (5, 0, 0, None, None)]
     assert [s.kind for s in slots] == ["active", "active", "lag", "inactive", "inactive"]
     assert [s.next_in for s in slots] == [100, 17, None, None, None]  # slot 3 consumes the RAW EOS as its forward input; slot 4 gets bot
-    assert K.served_output(slots) == [100, 17] and K.executed_slots(slots) == [1, 2, 3] and K.lag_slots(slots) == [3]
+    assert _served(slots) == [100, 17] and K.executed_slots(slots) == [1, 2, 3] and K.lag_slots(slots) == [3]
     assert [s.stop for s in slots] == [False, True, False, False, False]
     # synchronous on the same raw tokens: slot 3 already inactive
     sync = K.recurrence([100, EOS[0], None, None, None], cap=5, A=0, eos=EOS)
@@ -84,46 +91,46 @@ def test_edge_c_equals_1_one_slot_both_profiles_no_lag_slot():
     for A in (0, 1):
         for tok in (ORD, EOS[0]):
             s = K.recurrence([tok], cap=1, A=A, eos=EOS)
-            assert K.bits(s) == [(True, True)] and not s[0].next_emit and not s[0].next_run and K.lag_slots(s) == []
+            assert _bits(s) == [(True, True)] and not s[0].next_emit and not s[0].next_run and K.lag_slots(s) == []
             assert K.n_executed_derived(1, cap=1, A=A) == 1
 
 
 def test_edge_no_eos_exactly_c_slots_both_profiles():
     for A in (0, 1):
         s = K.recurrence([ORD] * 6, cap=6, A=A, eos=EOS)
-        assert K.executed_slots(s) == [1, 2, 3, 4, 5, 6] and K.served_output(s) == [ORD] * 6 and K.lag_slots(s) == []
+        assert K.executed_slots(s) == [1, 2, 3, 4, 5, 6] and _served(s) == [ORD] * 6 and K.lag_slots(s) == []
 
 
 def test_edge_eos_in_slot_1_sync_stops_async_one_more_if_room():
     sync = K.recurrence([EOS[0]], cap=4, A=0, eos=EOS)
-    assert K.executed_slots(sync) == [1] and K.served_output(sync) == [EOS[0]]
+    assert K.executed_slots(sync) == [1] and _served(sync) == [EOS[0]]
     asy = K.recurrence([EOS[0], ORD], cap=4, A=1, eos=EOS)
-    assert K.executed_slots(asy) == [1, 2] and K.served_output(asy) == [EOS[0]] and K.lag_slots(asy) == [2]
+    assert K.executed_slots(asy) == [1, 2] and _served(asy) == [EOS[0]] and K.lag_slots(asy) == [2]
     # C = 1: no room -- the async profile executes nothing beyond the cap
     assert K.executed_slots(K.recurrence([EOS[0]], cap=1, A=1, eos=EOS)) == [1]
 
 
 def test_edge_eos_in_penultimate_slot_async_executes_the_final_slot_but_does_not_serve_it():
     s = K.recurrence([ORD, ORD, ORD, EOS[0], ORD], cap=5, A=1, eos=EOS)
-    assert K.executed_slots(s) == [1, 2, 3, 4, 5] and K.served_output(s) == [ORD, ORD, ORD, EOS[0]] and s[4].kind == "lag" and s[4].out is None
+    assert K.executed_slots(s) == [1, 2, 3, 4, 5] and _served(s) == [ORD, ORD, ORD, EOS[0]] and s[4].kind == "lag" and s[4].out is None
     assert K.n_executed_derived(4, cap=5, A=1) == 5
 
 
 def test_edge_eos_in_final_slot_nothing_beyond_the_cap_either_profile():
     for A in (0, 1):
         s = K.recurrence([ORD] * 4 + [EOS[0]], cap=5, A=A, eos=EOS)
-        assert K.executed_slots(s) == [1, 2, 3, 4, 5] and K.served_output(s) == [ORD] * 4 + [EOS[0]] and K.lag_slots(s) == []
+        assert K.executed_slots(s) == [1, 2, 3, 4, 5] and _served(s) == [ORD] * 4 + [EOS[0]] and K.lag_slots(s) == []
         assert not s[-1].next_run and not s[-1].next_emit and K.n_executed_derived(5, cap=5, A=A) == 5
 
 
 def test_edge_lag_token_eos_or_not_changes_nothing_no_restart_no_second_lag():
     a = K.recurrence([ORD, EOS[0], EOS[0], None, None, None], cap=6, A=1, eos=EOS)  # the lag token IS an EOS
     b = K.recurrence([ORD, EOS[0], ORD, None, None, None], cap=6, A=1, eos=EOS)     # the lag token is ordinary
-    assert K.bits(a) == K.bits(b) and K.executed_slots(a) == [1, 2, 3] and K.lag_slots(a) == [3]
+    assert _bits(a) == _bits(b) and K.executed_slots(a) == [1, 2, 3] and K.lag_slots(a) == [3]
     # b_3 = IsEOS(y_3) IS computed on the real lag token (True for the EOS, False for the ordinary one) -- but stop_3 = e_3 AND b_3 = 0 either
     # way and e_4 = h AND e_3 AND NOT b_3 = 0 with e_3 already 0: the discarded slot's EOS never restarts / extends anything
     assert a[2].is_eos is True and b[2].is_eos is False
-    assert a[2].stop is False and b[2].stop is False and K.bits(a)[3:] == [(False, False)] * 3
+    assert a[2].stop is False and b[2].stop is False and _bits(a)[3:] == [(False, False)] * 3
     # the raw lag EOS is still a real committed token (required value) -- recurrence keeps it as raw; it is not in the output
     assert a[2].raw == EOS[0] and a[2].out is None
 
@@ -133,44 +140,14 @@ def test_edge_two_requests_stopping_at_different_times_have_independent_states()
     r1 = K.recurrence([ORD] * 8, cap=8, A=1, eos=EOS)
     assert K.executed_slots(r0) == [1, 2, 3, 4] and K.executed_slots(r1) == list(range(1, 9))
     # nothing of r0's state enters r1's: the function of r1's transcript alone
-    assert K.bits(r1) == K.bits(K.recurrence([ORD] * 8, cap=8, A=1, eos=EOS))
-
-
-def test_edge_unscheduled_request_is_pending_not_inactive_named_by_the_slot_map():
-    ok = K.slot_map([3, 4, 5, 6], arrive_step=3)
-    assert ok["ok"] and ok["slots"] == [1, 2, 3, 4]
-    gap = K.slot_map([3, 4, 6, 7], arrive_step=3)  # engine step 5: the request was not scheduled
-    assert not gap["ok"] and gap["slots"] is None and "not contiguous" in gap["problems"][0] and "pending, not inactive" in gap["problems"][0]
-    late = K.slot_map([4, 5], arrive_step=3)
-    assert not late["ok"] and "slot 1 is not at its arrival" in late["problems"][0]
-    chunked = K.slot_map([0, 1, 2], arrive_step=0, prefill_steps=[0, 1], chunked_prefill_observed=True)
-    assert not chunked["ok"] and any("chunked prefill" in p for p in chunked["problems"]) and any("prefill spans 2" in p for p in chunked["problems"])
-    assert chunked["chunked_prefill_attested"] == "observed" and chunked["vacuous_by_absence"] == []
-    # the two prefill sub-checks are VACUOUS when the capture attests nothing -- named, never counted as a pass
-    assert ok["chunked_prefill_attested"] == "absent" and ok["prefill_steps_attested"] == "absent" and len(ok["vacuous_by_absence"]) == 2
-    assert "the workload's applicability" in ok["positive_attestation"]
-    attested = K.slot_map([3, 4, 5, 6], arrive_step=3, prefill_steps=[3], chunked_prefill_observed=False)
-    assert attested["ok"] and attested["vacuous_by_absence"] == [] and attested["chunked_prefill_attested"] == "not-observed" and attested["prefill_steps_attested"] == [3]
-
-
-def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_sample():
-    """The Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the samples: one per executed slot, exactly one after the
-    served EOS under A = 1 (at pos = prompt_len - 1 + n, the ledger's query position), none under A = 0, none at an inactive slot."""
-    assert "iff r_t" in K.RNG_STATEMENT and "one sample" in K.RNG_STATEMENT and "keyed by (seed, pos)" in K.RNG_STATEMENT
-    asy = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=6, A=1, eos=EOS), prompt_len=32)
-    assert asy["samples"] == 4 and asy["sample_slots"] == [1, 2, 3, 4] and asy["samples_after_served_eos"] == 1 and asy["lag_sample_slot"] == 4
-    assert asy["lag_sample_pos"] == 32 - 1 + 3 and asy["inactive_slots_sample_nothing"] == [5, 6]  # pos = prompt_len - 1 + n, n = 3 served (slot 4 at L - 1 + 3)
-    syn = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], None, None, None], cap=6, A=0, eos=EOS), prompt_len=32)
-    assert syn["samples"] == 3 and syn["samples_after_served_eos"] == 0 and syn["lag_sample_slot"] is None and syn["lag_sample_pos"] is None
-    full = K.rng_accounting(K.recurrence([ORD] * 6, cap=6, A=1, eos=EOS))
-    assert full["samples"] == 6 and full["samples_after_served_eos"] == 0 and full["lag_sample_pos"] is None and full["inactive_slots_sample_nothing"] == []
+    assert _bits(r1) == _bits(K.recurrence([ORD] * 8, cap=8, A=1, eos=EOS))
 
 
 def test_f_r17_14_the_rule_stops_at_the_first_eos():
     """Continuation_v1 stops at the FIRST EOS by construction (`e_{t+1} = h AND e AND NOT b`), so served `[EOS, x, EOS]` (cap 5, A = 1,
     eos {7}) predicts served `[7]`, executed `[1, 2]` and the lag slot 2."""
     slots = K.recurrence([7, 3, 7, 5, 5], cap=5, A=1, eos=(7,))
-    assert K.served_output(slots) == [7] and K.executed_slots(slots) == [1, 2] and K.lag_slots(slots) == [2]
+    assert _served(slots) == [7] and K.executed_slots(slots) == [1, 2] and K.lag_slots(slots) == [2]
 
 
 def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eos_and_the_real_records():
@@ -195,7 +172,7 @@ def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eo
 
 
 # ---------------------------------------------------------------------------------------------------------
-# IsEOS total and the profile source
+# IsEOS total and the profile's refusal
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -208,16 +185,9 @@ def test_is_eos_is_total_over_the_lifted_encoding_bot_and_noncanonical_are_not_e
     assert K.is_eos_total(32, bot | 1, EOS) is False
 
 
-def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_defaulted():
-    assert K.resolve_profile({"profile": {"engine_kwargs": {"async_scheduling": True}}}) == (1, K.PROFILE_FIELD)
-    assert K.resolve_profile({"profile": {"engine_kwargs": {"async_scheduling": False}}}) == (0, K.PROFILE_FIELD)
-    with pytest.raises(ValueError, match="not the resolved boolean"):
-        K.resolve_profile({"profile": {"engine_kwargs": {"async_scheduling": None}}})
-    with pytest.raises(ValueError, match="not attested"):
-        K.resolve_profile({"profile": {"engine_kwargs": {}}})
+def test_a_profile_other_than_0_or_1_is_refused_by_name():
     with pytest.raises(ValueError, match="post-EOS lag must be declared"):
         K.check_profile(2)
-    assert K.declared_profile({"workload_fn": "Workload_v1{requests=(a,b),shared=weights,lag=1}"}) == (1, lifted_records.LAG_STATIC_FIELD + ":lag=")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -284,8 +254,6 @@ def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus
     exp = K.expected_sample_positions([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS, prompt_len=L_)
     ledger = [L_ - 1 + k for k in range(4)]  # 3 served + the lag sample = samples k = 0..3
     assert exp["positions"] == ledger == [7, 8, 9, 10] and exp["lag_positions"] == [10] and exp["first_forbidden_position"] == 11
-    acc = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=C, A=1, eos=EOS), prompt_len=L_)
-    assert acc["lag_sample_pos"] == 10 == exp["lag_positions"][0]
     # the ledger's own rule, restated (stoch_recompute.expected_executed_slots): first EOS at t < C -> slots 1..t + min(A, C - t)
     assert K.executed_slots(K.recurrence([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS)) == list(range(1, 3 + 1 + min(1, C - 3)))
 

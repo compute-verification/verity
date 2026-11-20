@@ -153,7 +153,6 @@
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^HuggingFaceTB/SmolLM2\\-360M$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
   {"file": "verity_vllm/definitions/registry/b1.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-1\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"},
-  {"file": "verity_vllm/check/replay/lifted_records.py", "kind": "table", "symbol": "_LAG_STATIC_RE", "pattern": "^_LAG_STATIC_RE$", "class": "L", "retires": "stays", "tag": "R17 lifted", "inventory": "A20"},
   {"file": "verity_vllm/definitions/registry/spec.py", "kind": "model-name", "symbol": "<module>", "pattern": "^Qwen/Qwen2\\.5\\-0\\.5B$", "class": "L", "retires": "stays", "tag": "", "inventory": "provenance pins of Definitions"}
  ]
 }
