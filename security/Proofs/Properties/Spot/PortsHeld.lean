@@ -454,21 +454,56 @@ theorem eq_of_nodup_filterMap {α β : Type} {f : α → Option β} (l : List α
     cases hc : f c with
     | none =>
       simp only [List.filterMap_cons, hc] at h
-      rcases List.mem_cons.1 ha with rfl | ha
-      · rw [hc] at hfa; cases hfa
-      rcases List.mem_cons.1 hb with rfl | hb
-      · rw [hc] at hfb; cases hfb
+      rcases List.mem_cons.1 ha with ea | ha
+      · rw [ea, hc] at hfa; cases hfa
+      rcases List.mem_cons.1 hb with eb | hb
+      · rw [eb, hc] at hfb; cases hfb
       exact ih h ha hb
     | some y' =>
       simp only [List.filterMap_cons, hc, List.nodup_cons] at h
       obtain ⟨hy', h⟩ := h
-      rcases List.mem_cons.1 ha with rfl | ha <;> rcases List.mem_cons.1 hb with rfl | hb
-      · rfl
-      · rw [hc] at hfa; cases hfa
+      rcases List.mem_cons.1 ha with ea | ha <;> rcases List.mem_cons.1 hb with eb | hb
+      · rw [ea, eb]
+      · rw [ea, hc] at hfa; cases hfa
         exact absurd (List.mem_filterMap.2 ⟨b, hb, hfb⟩) hy'
-      · rw [hc] at hfb; cases hfb
+      · rw [eb, hc] at hfb; cases hfb
         exact absurd (List.mem_filterMap.2 ⟨a, ha, hfa⟩) hy'
       · exact ih h ha hb
+
+theorem filterMap_of_mapM {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {ps : List β}, l.mapM f = some ps → l.filterMap f = ps
+  | [], ps, h => by simp at h; subst h; rfl
+  | a :: l, ps, h => by
+    cases hfa : f a with
+    | none => simp [List.mapM_cons, hfa] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [List.mapM_cons, hfa, hl] at h
+      | some bs =>
+        simp [List.mapM_cons, hfa, hl] at h
+        subst h
+        simp [List.filterMap_cons, hfa, filterMap_of_mapM hl]
+
+/-- The ports the slice `slice`'s roots name, as strings, in its roots' order. -/
+def slicePortsOf (slice : Json) : List String :=
+  ((match getD slice "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
+    match getD r "port" with
+    | .str q => some q
+    | _ => none).toList
+
+theorem slicePortsOf_nodup {s : Json} {ps : List String} (h : OneStageZk.slicePorts s = some ps)
+    (hnd : ps.Nodup) : (slicePortsOf s).Nodup := by
+  unfold OneStageZk.slicePorts at h
+  unfold slicePortsOf
+  split at h
+  · rename_i rs hrs
+    rw [hrs]
+    dsimp only
+    rw [Array.toList_filterMap]
+    have e := filterMap_of_mapM h
+    rw [← e] at hnd
+    exact hnd
+  · cases h
 
 theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Array Flock.Registered.Port}
     {slice hd : Json} (hw : Wf hd) (hs : ∃ m : Std.TreeMap.Raw String Json compare, slice = .obj m ∧ m.WF)
@@ -523,7 +558,7 @@ theorem portsHeld_of_headerHeldAt {reads : Array (String × String)} {held : Arr
   refine ⟨r.2, rI.2 _ hmem, by rw [hport, hrp'], fun r' hr' hp' => ?_, he2, ?_⟩
   · rw [slicePortsOf, Array.toList_filterMap] at hnd
     exact eq_of_nodup_filterMap _ hnd (Array.mem_toList_iff.2 hr') (Array.mem_toList_iff.2 (rI.2 _ hmem))
-      (by simp only [hp']) (by simp only [hport, hrp'])
+      (y := p) (by simp only [hp']) (by simp only [hport, hrp'])
   · rw [hrp', hDom' p hpD] at hd2
     exact hd2
 
@@ -538,11 +573,12 @@ theorem header_wf {pubB : ByteArray} {hd : Json} (h : FilePart.header pubB = .ok
       exact FlockDeploy.wf_norm j
   · first | cases h | (simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h; done)
 
-theorem membersPortsHeld (once : MembersPortsOnce) : MembersPortsHeld := by
+theorem membersPortsHeld : MembersPortsHeld := by
   intro p ms c ξ e sts bs pub prof h
   obtain ⟨r, hr, -, -⟩ := OneStageZk.checkMembersAt_accept h
   obtain ⟨roots, hroots, hfiles⟩ := OneStageZk.membersRun_files hr
   refine ⟨roots, hroots, fun m hm => ?_⟩
+  obtain ⟨ps, hps, hnd⟩ := OneStageZk.membersRootsOf_portsOnce hroots m hm
   obtain ⟨a, ha, -, -, -, hpop⟩ := hfiles m hm
   rw [(_root_.Verity.Sampled.MemberForm.statement_checks ha).2] at hpop
   unfold OneStageZk.Member.population at hpop
@@ -553,7 +589,6 @@ theorem membersPortsHeld (once : MembersPortsOnce) : MembersPortsHeld := by
   obtain ⟨rd, hrd, hpop⟩ := ebind_ok hpop
   obtain ⟨hl, hhl, hpop⟩ := ebind_ok hpop
   exact ⟨a, hd, rd, hl, ha, hh, hrd, hhl,
-    portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (once p ms c.record roots hroots m hm)
-      hpop⟩
+    portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (slicePortsOf_nodup hps hnd) hpop⟩
 
 end Properties.Spot.PortsHeldProof

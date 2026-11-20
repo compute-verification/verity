@@ -16,16 +16,14 @@ holds its public file's header there (`OneStageZk.headerHeldAt`). `MembersPortsH
 * **at a registered value**: the slice holds no root of the port, and the member's registered reads name the port at a
   value the verifier's registered file holds at it as a registered value (`OneStageZk.registeredAt`);
 * **at the slice's root**: the one root of the slice naming the port is the header's root there, and its domain the
-  header's domain there. That the slice names each port at most once is `MembersPortsOnce`, which the proof takes as
-  a hypothesis.
+  header's domain there. That the slice names each port at most once is the members check's refusal
+  (`OneStageZk.Member.portsOnce`, `OneStageZk.membersRootsOf_portsOnce`).
 
 It names the read that holds a port of the first two kinds and does not say that the read opened: that each row of it
 opens under the registration's root at the leaf C gives is the session's (`Flock.Registered.checkPort`), which runs
-only for a statement the sample holds. It holds a port to the slice's root. The slice's roots are
-`OneStageZk.membersRootsOf p ms c.record`'s, a function of the parameters and the record that reads nothing of the
-evidence. Each of them copies one root of the record (its `root`, `domain` and `leaves`) under a port name: `rootStep`
-copies a member's own, `fieldTreesOf` the window's field trees (`ownFieldsOf`, `fieldRoots`), and `runInputRootsAt` a
-run input node's tree (`rootsByPort`). No theorem states that copy; the code of `membersRootsOf` is the only tie.
+only for a statement the sample holds. It holds a port to the slice's root, which the verifier computes from the
+parameters and the committed record alone (`OneStageZk.membersRootsOf p ms c.record`), reading nothing of the
+evidence; no theorem yet states which record root each one is.
 -/
 
 @[expose] public section
@@ -52,23 +50,12 @@ def PortHeld (reads : Array (String × String)) (held : Array Flock.Registered.P
 def PortsHeld (reads : Array (String × String)) (held : Array Flock.Registered.Port) (slice h : Json) : Prop :=
   ∀ pr ∈ entries (getD (getD h "frame_v3") "roots"), PortHeld reads held slice h pr.1 pr.2
 
-/-- The ports the slice `slice`'s roots name, as strings, in its roots' order. -/
-def slicePortsOf (slice : Json) : List String :=
-  ((match getD slice "roots" with | .arr rs => rs | _ => #[]).filterMap fun r =>
-    match getD r "port" with
-    | .str q => some q
-    | _ => none).toList
-
-/-- **Where the verifier's roots of the members return, each member's slice names each port at most once**, ports
-compared as strings. -/
-def MembersPortsOnce : Prop :=
-  ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (rec : Json) (roots : Std.HashMap String (Array Json)),
-    OneStageZk.membersRootsOf p ms rec = .ok roots → ∀ m ∈ ms, (slicePortsOf (m.slice rec roots)).Nodup
-
-/-- **What the per-member form's check accepts holds every port of every member's statement**: the verifier's roots
-of the members (`OneStageZk.membersRootsOf`) returned, and every member of the parameters, sampled or not, has its
-statement read at its slice of the registration, the header of that statement's public file parsed, its registered
-reads and the verifier's registered file's ports read, and every port of the header held there (`PortsHeld`). -/
+/-- **What the per-member form's check accepts holds every port of every member's statement**: every port of every
+member's statement is held to a root the verifier computes from the committed record (`membersRootsOf`); no theorem
+yet states which record root each one is. The verifier's roots of the members (`OneStageZk.membersRootsOf`) returned,
+and every member of the parameters, sampled or not, has its statement read at its slice of the registration, the
+header of that statement's public file parsed, its registered reads and the verifier's registered file's ports read,
+and every port of the header held there (`PortsHeld`). -/
 def MembersPortsHeld : Prop :=
   ∀ (p : OneStageZk.Params) (ms : Array OneStageZk.Member) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : OneStageZk.Evidence) (sts : Array OneStageZk.StatementFiles) (bs : Core.Blobs) (pub : OneStage.Public)
