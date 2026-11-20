@@ -425,11 +425,12 @@ def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, m
 
 
 def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
-    """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
+    """Every pinned binary a set replays on has a stored honest session or a selftest record for the preflight to replay."""
     import json
 
     sets = json.loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
-    assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
+    smoked = {s["pr83"] for s in sets if (s.get("sessions") or s.get("selftest")) and "tables" not in s["statement"]}
+    assert smoked and smoked == {s["pr83"] for s in sets}
 
 
 def test_the_rule_the_gate_reads(monkeypatch):
@@ -1322,6 +1323,24 @@ def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
     assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
+
+
+def test_the_agreements_smoke_replay_takes_a_selftest_case_upstream_accepted_live(tmp_path, monkeypatch):
+    """A set with only a selftest record smokes on a case upstream accepted live; without one, the preflight would find no
+    session to replay."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    (v / "selftest_records.py").write_text(
+        "import json, sys\nfrom pathlib import Path\nfor c, ok in (('a-forged', False), ('b-honest', True)):\n"
+        "    d = Path(sys.argv[2]) / c\n    d.mkdir(parents=True)\n"
+        "    (d / 'case.json').write_text(json.dumps({'live': {'accepted': ok}}))\n")
+    sets = [{"pr83": "cc", "lean_statement": "s", "statement": {"circuit": "art:cc/c", "public": "art:cc/p"},
+             "selftest": ["art:cc/records"]}]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    [(c, cmd, e)] = CHECK.upstream_smoke(tmp_path)
+    assert (c, Path(cmd[-1]).name, e) == ("cc", "b-honest", {"accepted": True})
 
 
 def _fake_run(monkeypatch, groups, pre=()):

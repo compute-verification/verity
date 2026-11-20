@@ -1061,7 +1061,8 @@ class LeanZkServer:
         if (panic := LC.panic_line(err)) is not None:
             raise ValueError(f"{LC.LEAN_PANIC}: {panic}")
         if not out:
-            raise ValueError(f"{self.binary} live: exited ({self.proc.poll()})")
+            rc = self.proc.wait()
+            raise ValueError(f"{self.binary} live: {LC.exit_why(rc) or f'exited ({rc})'}")
         try:
             got = json.loads(out)
         except json.JSONDecodeError:

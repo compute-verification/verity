@@ -11,7 +11,8 @@ program's digest and its Boolean map; and `digests.json`, each file's SHA-256.
 The cases: `format_vectors.json`'s descriptors (the format's, `wide`'s and `registered_program`'s), each of
 `test_format_spec.REJECT`'s refusals of the first, a `boolean` key named twice (a JSON object keeps a key's last value,
 in both decoders' parsers), `chain()`, a GEMM chain whose word primitives' bodies are the catalog's, and
-`recut_vectors.reads()`, reads of an input node at another width, `test_codec_refusals.DECODER`'s descriptors, and `decode_refusals.CASES`, the refusals of the Lean decoder no other case reaches."""
+`recut_vectors.reads()`, reads of an input node at another width, `test_codec_refusals.DECODER`'s descriptors and
+`FORWARD`'s controls, and `decode_refusals.CASES`, the refusals of the Lean decoder no other case reaches."""
 from __future__ import annotations
 
 import argparse
@@ -60,12 +61,17 @@ def cases() -> list[tuple[str, str, object]]:
 
 
 def refusal_cases() -> list[tuple[str, str, object]]:
-    """`test_codec_refusals.DECODER`'s descriptors, each the smallest that trips one refusal of `codec.py`'s decoder."""
+    """`test_codec_refusals.DECODER`'s descriptors, each the smallest that trips one refusal of `codec.py`'s decoder, and
+    `test_codec_refusals.FORWARD`'s controls, each forward reference's read in honest order."""
     out = []
     for label, make, edit, _text in refusals.DECODER:
         d, registry = make()
         edit(d)
         out.append((f"refusal: {label}", json.dumps(d, ensure_ascii=False, separators=(",", ":")), registry))
+    for label, make, honest, _forward, _outcome in refusals.FORWARD:
+        d, registry = make()
+        honest(d)
+        out.append((f"control: {label}", json.dumps(d, ensure_ascii=False, separators=(",", ":")), registry))
     return out
 
 

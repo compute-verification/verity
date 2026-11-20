@@ -119,6 +119,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
+* `wires_disjoint`: whether a list of wires is pairwise disjoint, by the pair by pair check and by the sorted sweep
+  (`Wires.pairwiseDisjoint`, `Wires.pairwiseDisjointFast`).
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
@@ -1209,7 +1211,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.runsPiece),
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
-   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
+   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef), ("wires_disjoint", Wires.disjointPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),

@@ -441,6 +441,10 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
         · obtain ⟨u, h3, -⟩ := Walk.except_bind_ok h2
           exact absurd h3 (by intro h; injection h)
         rename_i hc
+        try dsimp only at h2
+        split at h2
+        · obtain ⟨u, h3, -⟩ := Walk.except_bind_ok h2
+          exact absurd h3 (by intro h; injection h)
         injection h2 with h2
         refine ⟨ty, ps, by rw [getElem!_pos args a ha, ← h2], ?_, ?_, by simpa using hc, ?_⟩
         · exact Walk.parsePartsIn_valid _ _ (earlier_ok' _ _ _ _ hn1) _ _ _ hps
