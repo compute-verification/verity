@@ -273,8 +273,9 @@ theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decO
     hf x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
   have hopen : (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 o.1 o.2 = true := by
     rcases hbr with ⟨own, reg, hown, hreg, hq, hread⟩ | ⟨hc1, hq, hrooted⟩
-    · obtain ⟨tb, _idx, ht, -, hregs⟩ := rows_open hset hown hsx hck j hj
-      obtain ⟨q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
+    · obtain ⟨own', hw⟩ := derived_of_setup hset hown sts[j] (Array.getElem_mem hj)
+      obtain ⟨tb, _idx, ht, -, hregs⟩ := rows_open hset hown hsx hck j hj own' hw
+      obtain ⟨_reg', -, -, q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
       obtain rfl : q' = q := Option.some.inj (hq'.symm.trans hq)
       obtain ⟨-, -, hopens⟩ := hrows n hn
       exact hread tb positions paths ht hent hopens
