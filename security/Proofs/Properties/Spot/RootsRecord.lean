@@ -2,6 +2,9 @@ module
 
 public import Properties.Spot.PortsHeld
 public import Proofs.Properties.Spot
+public import Proofs.Flock.Soundness.Refine.Rep
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-! # Proof that each member's slice root is the committed record's root for its port (`Properties.Spot.MembersRootsRecord`) -/
 
@@ -9,6 +12,7 @@ public import Proofs.Properties.Spot
 
 open Lean (Json)
 open Spot
+open FlockSoundness.Refine (ebind_ok)
 
 namespace Properties.Spot.RootsRecordProof
 
@@ -107,5 +111,272 @@ theorem rootsOf_port_unique {rec : Json} {v : Docket.Verifier} (h3 : R3 rec v) {
   refine eq_of_pairwise hp (fun _ _ => jeq_symm_false) (Array.mem_toList_iff.2 h1) (Array.mem_toList_iff.2 h0) ?_
   rw [p0, p1, jeq_str_self]
   simp
+
+
+/-- **`x` carries the record `rec`'s root of port `q`**: a root of the record naming `q`, whose root, domain and leaves
+`x` has. -/
+def Carries (rec : Json) (q : String) (x : Json) : Prop :=
+  ∃ r0 ∈ rootsOf rec, getD r0 "port" = .str q ∧ getD x "root" = getD r0 "root" ∧
+    getD x "domain" = getD r0 "domain" ∧ getD x "leaves" = getD r0 "leaves"
+
+theorem isRecordRoot_of_carries {rec : Json} {v : Docket.Verifier} (h3 : R3 rec v) {q : String} {x : Json}
+    (h : Carries rec q x) : IsRecordRoot rec q x := by
+  obtain ⟨r0, hm, hp, hr, hd, hl⟩ := h
+  exact ⟨r0, hm, hp, fun r1 h1 p1 => rootsOf_port_unique h3 hm h1 hp p1, hr, hd, hl⟩
+
+/-! ## Folds -/
+
+theorem foldl_inv {α β : Type} (P : β → Prop) (f : β → α → β) (S : α → Prop)
+    (hf : ∀ b a, S a → P b → P (f b a)) :
+    ∀ (l : List α) (b : β), (∀ a ∈ l, S a) → P b → P (l.foldl f b)
+  | [], _, _, hb => hb
+  | a :: l, b, hl, hb =>
+    foldl_inv P f S hf l (f b a) (fun x hx => hl x (List.mem_cons_of_mem _ hx)) (hf b a (hl a (by simp)) hb)
+
+theorem foldlM_inv {ε α β : Type} (P : β → Prop) (f : β → α → Except ε β) (S : α → Prop)
+    (hf : ∀ b a b', S a → f b a = .ok b' → P b → P b') :
+    ∀ (l : List α) (b b' : β), (∀ a ∈ l, S a) → P b → l.foldlM f b = .ok b' → P b'
+  | [], b, b', _, hb, h => by cases h; exact hb
+  | a :: l, b, b', hl, hb, h => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨c, hc, h⟩ := ebind_ok h
+    exact foldlM_inv P f S hf l c b' (fun x hx => hl x (List.mem_cons_of_mem _ hx))
+      (hf b a c (hl a (by simp)) hc hb) h
+
+/-! ## Step 3: a member's own roots (`rootStep`'s fold) -/
+
+theorem getD_e4 (d l r : Json) (b : String) :
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r)]) "port" = .str b ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r)]) "root" = r ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r)]) "domain" = d ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r)]) "leaves" = l := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> with_unfolding_all rfl
+
+theorem splitsFrom_mem : ∀ (pre cs : List Char) {a b : String}, (a, b) ∈ OneStageZk.splitsFrom pre cs →
+    a.toList ++ '/' :: b.toList = pre.reverse ++ cs
+  | _, [], _, _, h => by simp [OneStageZk.splitsFrom] at h
+  | pre, c :: cs, a, b, h => by
+    by_cases hc : c = '/'
+    · rw [OneStageZk.splitsFrom, if_pos hc] at h
+      rcases List.mem_cons.1 h with h | h
+      · simp only [Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        simp [String.toList_ofList, hc]
+      · have := splitsFrom_mem (c :: pre) cs h
+        simpa using this
+    · rw [OneStageZk.splitsFrom, if_neg hc] at h
+      have := splitsFrom_mem (c :: pre) cs h
+      simpa using this
+
+/-- A way `splitsOf` reads the port `port` as `<a>/<b>` is `port` itself. -/
+theorem port_of_splits {port a b : String} (h : (a, b) ∈ OneStageZk.splitsOf port) : port = a ++ "/" ++ b := by
+  have e := splitsFrom_mem [] port.toList h
+  have hs : ("/" : String).toList = ['/'] := by first | rfl | decide | simp
+  rw [← String.toList_inj, String.toList_append, String.toList_append, hs]
+  simpa using e.symm
+
+/-- `rootStep` returns its map unchanged, or pushes on a member `name`'s roots the root `r` under `bare`, where
+`splitsOf` reads `r`'s port as `<name>/<bare>`. -/
+theorem rootStep_cases {ts : Std.HashSet String} {acc acc' : Std.HashMap String (Array Json)} {r : Json}
+    (h : OneStageZk.rootStep ts acc r = .ok acc') :
+    acc' = acc ∨ ∃ port name bare, getD r "port" = .str port ∧ (name, bare) ∈ OneStageZk.splitsOf port ∧
+      acc' = acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
+        ("port", .str bare), ("root", getD r "root")])) := by
+  unfold OneStageZk.rootStep at h
+  split at h
+  · rename_i port hp
+    dsimp only at h
+    split at h
+    · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+    · split at h
+      · cases h; exact Or.inl rfl
+      · split at h
+        · rename_i name bare hf
+          cases h
+          have hm : (name, bare) ∈ (OneStageZk.splitsOf port).filter fun x => acc.contains x.1 := by
+            rw [hf]; simp
+          exact Or.inr ⟨port, name, bare, hp, (List.mem_filter.1 hm).1, rfl⟩
+        · split at h
+          · cases h; exact Or.inl rfl
+          · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+        · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+  · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+
+theorem mem_modify_push {acc : Std.HashMap String (Array Json)} {name n : String} {e x : Json}
+    (h : x ∈ (acc.modify name (·.push e)).getD n #[]) : x ∈ acc.getD n #[] ∨ (name = n ∧ x = e) := by
+  rw [Std.HashMap.getD_modify] at h
+  split at h
+  · rename_i hn
+    have hn' : name = n := beq_iff_eq.1 hn
+    subst hn'
+    rw [Std.HashMap.getD_eq_getD_getElem?]
+    cases ha : acc[name]? with
+    | none => simp [ha] at h
+    | some a =>
+      simp only [ha, Option.map_some, Option.getD_some, Array.mem_push] at h ⊢
+      rcases h with h | h
+      · exact Or.inl h
+      · exact Or.inr ⟨by simp, h⟩
+  · exact Or.inl h
+
+/-- **Each root a map holds for a member `n` is the record's root at `<n>/<b>`**, `b` its port. -/
+def OwnRoots (rec : Json) (acc : Std.HashMap String (Array Json)) : Prop :=
+  ∀ n, ∀ x ∈ acc.getD n #[], ∃ b, getD x "port" = .str b ∧ Carries rec (n ++ "/" ++ b) x
+
+theorem rootStep_inv {rec : Json} {ts : Std.HashSet String} {acc acc' : Std.HashMap String (Array Json)} {r : Json}
+    (hr : r ∈ rootsOf rec) (h : OneStageZk.rootStep ts acc r = .ok acc') (hacc : OwnRoots rec acc) :
+    OwnRoots rec acc' := by
+  rcases rootStep_cases h with rfl | ⟨port, name, bare, hp, hs, rfl⟩
+  · exact hacc
+  · intro n x hx
+    rcases mem_modify_push hx with hx | ⟨rfl, rfl⟩
+    · exact hacc n x hx
+    · obtain ⟨h1, h2, h3, h4⟩ := getD_e4 (getD r "domain") (getD r "leaves") (getD r "root") bare
+      refine ⟨bare, h1, r, hr, ?_, h2, h3, h4⟩
+      rw [hp, ← port_of_splits hs]
+
+/-- **Step 3: `rootsOf`'s roots are the record's**: each root it gives a member `n` is the record's root at
+`<n>/<b>`, `b` its port. -/
+theorem rootsOf_own {ms : Array OneStageZk.Member} {rec : Json} {acc : Std.HashMap String (Array Json)}
+    (h : OneStageZk.rootsOf ms rec = .ok acc) : OwnRoots rec acc := by
+  unfold OneStageZk.rootsOf at h
+  split at h
+  · rename_i rs hrs
+    have hr : rootsOf rec = rs := by unfold rootsOf; rw [hrs]
+    dsimp only at h
+    split at h
+    · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+    split at h
+    · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+    obtain ⟨acc1, h1, h⟩ := ebind_ok h
+    obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
+    cases h
+    rw [← Array.foldlM_toList] at h1
+    refine foldlM_inv (OwnRoots rec) _ (· ∈ rootsOf rec) (fun _ _ _ ha hf hb => rootStep_inv ha hf hb) _ _ _
+      (fun a ha => hr ▸ Array.mem_toList_iff.1 ha) ?_ h1
+    have key := foldl_inv (fun m : Std.HashMap String (Array Json) => ∀ n, m.getD n #[] = #[])
+      (fun acc (m : OneStageZk.Member) => acc.insert m.name #[]) (fun _ => True)
+      (by intro b a _ hb n; rw [Std.HashMap.getD_insert]; split; rfl; exact hb n) ms.toList {} (fun _ _ => trivial)
+      (fun n => Std.HashMap.getD_empty)
+    rw [Array.foldl_toList] at key
+    intro n x hx
+    rw [key n] at hx
+    simp at hx
+  · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+
+/-! ## Step 5: a member's ports at C's run input nodes' trees (`rootsByPort`, `runInputRootsAt`) -/
+
+/-- **`rootsByPort`'s root at `t` is a root of the record naming `t`.** -/
+theorem rootsByPort_get {rec : Json} {t : String} {r : Json} (h : (OneStageZk.rootsByPort rec).get? t = some r) :
+    r ∈ rootsOf rec ∧ getD r "port" = .str t := by
+  unfold OneStageZk.rootsByPort at h
+  revert h r t
+  split
+  · rename_i rs hrs
+    have hr : rootsOf rec = rs := by unfold rootsOf; rw [hrs]
+    rw [hr, ← Array.foldl_toList]
+    refine foldl_inv (fun m : Std.HashMap String Json => ∀ t r, m.get? t = some r → r ∈ rs ∧ getD r "port" = .str t)
+      _ (· ∈ rs) ?_ rs.toList {} (fun a ha => Array.mem_toList_iff.1 ha) ?_
+    · intro m a ha hm t r h
+      try dsimp only at h
+      split at h
+      · rename_i p hp
+        change (m.insert p a)[t]? = some r at h
+        rw [Std.HashMap.getElem?_insert] at h
+        split at h
+        · rename_i hpt
+          cases h
+          exact ⟨ha, by rw [hp, beq_iff_eq.1 hpt]⟩
+        · exact hm t r h
+      · exact hm t r h
+    · intro t r h
+      change (∅ : Std.HashMap String Json)[t]? = some r at h
+      simp at h
+  · intro t r h
+    change (∅ : Std.HashMap String Json)[t]? = some r at h
+    simp at h
+
+theorem getD_e5 (d l r : Json) (b t : String) :
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r), ("tree", .str t)]) "tree" = .str t ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r), ("tree", .str t)]) "root" = r ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r), ("tree", .str t)]) "domain" = d ∧
+    getD (Json.mkObj [("domain", d), ("leaves", l), ("port", .str b), ("root", r), ("tree", .str t)]) "leaves" = l := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> with_unfolding_all rfl
+
+/-- **`x` is a root at a tree of `byPort`**: under the tree `t`, with the root, domain and leaves of `byPort`'s root
+at `t`. -/
+def RunTree (byPort : Std.HashMap String Json) (x : Json) : Prop :=
+  ∃ t r, byPort.get? t = some r ∧ getD x "tree" = .str t ∧ getD x "root" = getD r "root" ∧
+    getD x "domain" = getD r "domain" ∧ getD x "leaves" = getD r "leaves"
+
+/-- **Each root `runInputRootsAt` returns is one of `own`, or a root at a tree of `byPort`.** -/
+theorem runInputRootsAt_mem {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange} {name : String}
+    {u : Nat} {own out : Array Json} {byPort : Std.HashMap String Json}
+    (h : OneStageZk.runInputRootsAt P rs name u own byPort = .ok out) : ∀ x ∈ out, x ∈ own ∨ RunTree byPort x := by
+  unfold OneStageZk.runInputRootsAt at h
+  split at h
+  · split at h
+    · split at h
+      · rw [← Array.foldlM_toList] at h
+        refine foldlM_inv (fun got => ∀ x ∈ got, x ∈ own ∨ RunTree byPort x) _ (fun _ => True) ?_ _ own out
+          (fun _ _ => trivial) (fun x hx => Or.inl hx) h
+        intro got a got' _ hf hgot
+        obtain ⟨p, ty⟩ := a
+        dsimp only at hf
+        split at hf
+        · split at hf
+          · cases hf; exact hgot
+          · split at hf
+            · rename_i r hr
+              split at hf
+              · cases hf
+              · cases hf
+                intro x hx
+                rcases Array.mem_push.1 hx with hx | rfl
+                · exact hgot x hx
+                · obtain ⟨h1, h2, h3, h4⟩ := getD_e5 (getD r "domain") (getD r "leaves") (getD r "root") p
+                    (Flock.Registered.freshValue _)
+                  exact Or.inr ⟨_, r, hr, h1, h2, h3, h4⟩
+            · cases hf; exact hgot
+        · cases hf; exact hgot
+      · cases h; exact fun x hx => Or.inl hx
+    · cases h; exact fun x hx => Or.inl hx
+  · cases h; exact fun x hx => Or.inl hx
+
+/-- **Step 5: `runInputRoots`'s roots**: each root it gives a member `n` is one `roots` gave `n`, or a root at a tree
+of the record's roots by port (`rootsByPort`). -/
+theorem runInputRoots_mem {P : Flock.Program.Prog} {rs : Array Flock.TemplateQuery.TRange}
+    {ms : Array OneStageZk.Member} {rec : Json} {roots out : Std.HashMap String (Array Json)}
+    (h : OneStageZk.runInputRoots P rs ms rec roots = .ok out) :
+    ∀ n, ∀ x ∈ out.getD n #[], x ∈ roots.getD n #[] ∨ RunTree (OneStageZk.rootsByPort rec) x := by
+  unfold OneStageZk.runInputRoots at h
+  try dsimp only at h
+  rw [← Array.foldlM_toList] at h
+  refine foldlM_inv (fun acc => ∀ n, ∀ x ∈ acc.getD n #[], x ∈ roots.getD n #[] ∨
+    RunTree (OneStageZk.rootsByPort rec) x) _ (fun _ => True) ?_ _ roots out (fun _ _ => trivial)
+    (fun n x hx => Or.inl hx) h
+  intro acc m acc' _ hf hacc
+  try dsimp only at hf
+  split at hf
+  · cases hf; exact hacc
+  · obtain ⟨o, ho, hf⟩ := ebind_ok hf
+    cases hf
+    intro n x hx
+    rw [Std.HashMap.getD_insert] at hx
+    split at hx
+    · rename_i hn
+      have hn' : m.name = n := beq_iff_eq.1 hn
+      subst hn'
+      rcases runInputRootsAt_mem ho x hx with hx | hx
+      · exact hacc _ x hx
+      · exact Or.inr hx
+    · exact hacc n x hx
+
+/-- A root at a tree of the record's roots by port carries the record's root of that tree. -/
+theorem carries_of_runTree {rec x : Json} (h : RunTree (OneStageZk.rootsByPort rec) x) :
+    ∃ t, getD x "tree" = .str t ∧ Carries rec t x := by
+  obtain ⟨t, r, hg, ht, hr, hd, hl⟩ := h
+  obtain ⟨hm, hp⟩ := rootsByPort_get hg
+  exact ⟨t, ht, r, hm, hp, hr, hd, hl⟩
 
 end Properties.Spot.RootsRecordProof
