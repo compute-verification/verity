@@ -1474,12 +1474,21 @@ def dropPort (rec h : Json) (p : String) : Json × Json :=
   let fv := (fv.setObjVal! "roots" (drop (getD fv "roots"))).setObjVal! "domain_ids" (drop (getD fv "domain_ids"))
   (rec.setObjVal! "roots" (.arr rs), h.setObjVal! "frame_v3" fv)
 
+/-- A registered value's name: no committed tree (`COMMITTED`), no run input's tree (`isFreshValue`) and no field
+tree (`fieldTreeName`), the values `treePortOf` opens no tree of. -/
+def registeredValue (v : String) : Bool :=
+  !v.startsWith COMMITTED && !Flock.Registered.isFreshValue v && !fieldTreeName v
+
 /-- `headerHeld` at a member's registered reads `reads` (`(port, value)` each): a port the slice `rec` holds at a
 template's field tree (its entry's `tree`, `fieldTreesOf`) that `reads` opens at that tree is held by those reads
 (`Flock.Registered.checkPort` opens every row the header's root is over at the leaf C gives, under the registration's
 root, `portTreeHeld`), so the header's own root and domain there are not compared; one `reads` does not open there
-whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). Every other port is
-`headerHeld`'s. -/
+whose header root or domain is not the registration's refuses by name (`SHARED_UNREAD`). A port the slice holds no
+root of that `reads` names at a registered value (`registeredValue`) is held by those reads too: `checkPort` opens
+every row of it under the root of the verifier's registered file at the position C gives, and `OneCircuit.pos` reads
+such a value only at an input port whose units read a registered or supplied input node (`regNode`), so it is not
+compared either. Every
+other port is `headerHeld`'s. -/
 def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := do
   if !jeq (getD h "instances") (getD rec "population") then throw POPULATION_WHY
   let fv := getD h "frame_v3"
@@ -1494,6 +1503,9 @@ def headerHeldAt (reads : Array (String × String)) (rec h : Json) : V Unit := d
     else if !(getD (getD fv "roots") p matches .null)
         && (getD (getD fv "roots") p != getD r "root" || getD (getD fv "domain_ids") p != getD r "domain") then
       throw (SHARED_UNREAD p t)
+  for (p, v) in reads do
+    if registeredValue v && !(Record.byPort rec).any (·.1 == p) && !(getD (getD fv "roots") p matches .null) then
+      cur := dropPort cur.1 cur.2 p
   headerHeld cur.1 cur.2
 
 /-- The member's registered reads, `(port, value)` each, from its registered file (none without one). -/

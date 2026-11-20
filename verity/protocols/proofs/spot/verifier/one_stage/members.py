@@ -676,10 +676,16 @@ def shared_unread(port: str, tree: str) -> str:
             "opening it at the leaves C gives, and the header's own root there is no commitment to them")
 
 
+def registered_value(v: str) -> bool:
+    """`OneStageZk.registeredValue`: ``v`` names no committed tree, run input's tree or field tree."""
+    return not v.startswith(COMMITTED) and not G.is_fresh_value(v) and not _field_tree_name(v)
+
+
 def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], header: Any) -> tuple[Any, Any]:
     """`OneStageZk.headerHeldAt` before `headerHeld`: the slice and the header without each port the slice holds at a
-    template's field tree (its entry's ``tree``) that ``reads`` opens there; `_Refused` (`shared_unread`) for one
-    ``reads`` doesn't open whose header root or domain is not the registration's."""
+    template's field tree (its entry's ``tree``) that ``reads`` opens there, and each it holds no root of that ``reads``
+    names at a registered value (`registered_value`); `_Refused` (`shared_unread`) for one ``reads`` doesn't open whose
+    header root or domain is not the registration's."""
     h = header if isinstance(header, dict) else {}
     if not _same(h.get("instances"), slice_.get("population")):
         raise _Refused(POPULATION_WHY)
@@ -695,6 +701,8 @@ def _held_at(reads: Collection[tuple[str, str]], slice_: Mapping[str, Any], head
             drop.add(p)
         elif p in roots and (roots[p] != r.get("root") or domains.get(p) != r.get("domain")):
             raise _Refused(shared_unread(p, t))
+    held = {r.get("port") for r in slice_["roots"]}
+    drop |= {p for p, v in reads if registered_value(v) and p not in held and p in roots}
     if not drop:
         return slice_, header
     fv2 = {**fv, "roots": {k: v for k, v in roots.items() if k not in drop},
@@ -974,4 +982,5 @@ def run_reason(run: Run | None, refused: str | None) -> str | None:
 __all__ = ["EXITS", "Form", "MEMBERS_LAID", "MEMBER_STRATA", "MEMBER_UNITS", "NO_CHALLENGER",
            "Outside", "POPULATION_ORDER", "PROVED_UNITS", "ROW_TABLES", "Run", "Statement", "TABLES",
            "TABLE_PORT", "UNREAD", "blobs_of", "case_check", "check", "files_why", "flock_form", "flock_verdict",
-           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "run_reason", "shared_unread", "unwired_why", "wired_tree_why"]
+           "field_trees_why", "members_run", "population_why", "POPULATION_WHY", "registered_value", "run_reason",
+           "shared_unread", "unwired_why", "wired_tree_why"]

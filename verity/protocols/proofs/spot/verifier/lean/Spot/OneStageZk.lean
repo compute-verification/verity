@@ -1478,6 +1478,21 @@ private def ownSliceT (roots : List (String × String)) (name : String) : Json :
 #guard refusal (headerHeldAt #[("o0", "t/o0")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
   (headerT 2 [("x", "ab"), ("o0", "ff")])) == "public file: not the registration's: roots, domains"
 
+-- a port the slice holds no root of, read at a registered value (`w` of `h/w`): held by the reads, not compared
+#guard refusal (headerHeldAt #[("w", "h/w")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "aa"), ("o0", "ee"), ("w", "77")])) == ""
+-- no registered read of it, a read of another port, or one at a field tree, a run input's tree or a committed tree:
+-- refused by name as before
+#guard [#[], #[("v", "h/w")], #[("w", "t/o0")], #[("w", "u/o1")], #[("w", "input/n3")], #[("w", "committed/w")]].all
+  fun rd => refusal (headerHeldAt rd (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+    (headerT 2 [("x", "aa"), ("o0", "ee"), ("w", "77")])) == UNWIRED_WHY "w"
+-- a port the slice holds, read at a registered value: still compared to its root
+#guard refusal (headerHeldAt #[("x", "h/w")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 2 [("x", "ab"), ("o0", "ee")])) == "public file: not the registration's: roots, domains"
+-- the population first, a registered read or not
+#guard refusal (headerHeldAt #[("w", "h/w")] (ownSliceT [("t/c0/x", "aa"), ("t/o0", "ee")] "t/c0")
+  (headerT 5 [("x", "aa"), ("o0", "ee"), ("w", "77")])) == POPULATION_WHY
+
 /-- A root of the port given at the hex digit `c` repeated, its domain `d`'s, two leaves. -/
 private def hexRootT (port : String) (c : Char) : Json :=
   Json.mkObj [("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson (2 : Nat)), ("port", Json.str port),
