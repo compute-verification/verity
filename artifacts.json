@@ -188,6 +188,7 @@
   "art:85b39907e7d0a079f4a17f2f2cad00865d09285b442269d11cbaa7184131bf48": "tests/verity/circuits/format_vectors.json",
   "art:645e79087871accb66c8502db2a02cf17735c5115c74cde24a527a81269359d3": "tests/verity/circuits/qcall_vectors.json",
   "art:f1830872b1c7ea92a2a7133812f2f25d821e67d7ac14bcf1b5953a7973104198": "tests/verity/circuits/qword_vectors.json",
+  "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -274,6 +275,5 @@
       "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d",
       "art:5b4ba00d45618b4cf4aca1ccc01003e504f1e4dcfd517b9744e9f87ee31a6b0a"
     ]
-  },
-  "art:70f12de7f1b7b7621d0ad66d00462b53cd4dcd3f6c4ad5fcaa0112f856bc8dba": "tests/verity/protocols/proofs/flock/prover/fixtures/served-registered-plain"
+  }
 }

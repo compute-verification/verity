@@ -200,10 +200,14 @@ def verdicts(a, slots=None, panics=None):
         if slots is not None:
             slots.acquire()
         try:
-            p = subprocess.run(t[1] + t[2], capture_output=True, text=True)
+            # verity_flock.lean_child's ABORT_ON_PANIC: the agreement scripts import the standard library alone
+            p = subprocess.run(t[1] + t[2], capture_output=True, text=True, env={**os.environ, "LEAN_ABORT_ON_PANIC": "1"})
         finally:
             if slots is not None:
                 slots.release()
+        panic = next((x for x in p.stderr.splitlines() if x.startswith(("PANIC", "INTERNAL PANIC"))), None)
+        if t[0] == "lean" and panic is not None:  # its answer is not read: its sessions have no Lean verdict to agree
+            return "", f"{p.stderr}lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}\n"
         return p.stdout, p.stderr
 
     lean, up, logs = {}, {}, {"lean": ([], []), "upstream": ([], [])}

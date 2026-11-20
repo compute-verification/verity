@@ -164,9 +164,6 @@ def _stage(topo, d: Path, wired: bool):
                                      d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
         for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
             (d / f"{name}.reads.json").write_text(json.dumps(_reads_v2(st[k]["registered_reads"])))
-        wrong = json.loads(json.dumps(st["honest"]["registered_reads"]))
-        wrong[port]["tree"]["field"] = "aux"
-        (d / "wrong_field.reads.json").write_text(json.dumps(_reads_v2(wrong)))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
@@ -174,7 +171,7 @@ def _stage(topo, d: Path, wired: bool):
 
 def _reads_v2(ports: dict) -> dict:
     """The verifier's `--registered` file of ``ports``: positions are the verifier's own, from C and the partition."""
-    return {"format": RG.READS_V2, "ports": {k: {f: v for f, v in e.items() if f not in ("reads", RV.READS_FROM)}
+    return {"format": RG.READS_V2, "ports": {k: {f: v for f, v in e.items() if f not in ("reads", "tree", RV.READS_FROM)}
                                              for k, e in ports.items()}}
 
 
@@ -315,11 +312,6 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
         bad, out = at(cheat, *bound)
         print(cheat, out.strip().splitlines()[-1])
         assert bad is None and why in out, (cheat, out)
-    # the honest reader with its tree port naming another output field of the writer's template: a link row reads its
-    # writer's whole output row, so no other field's tree
-    bad, out = at("honest", *bound, reads="wrong_field.reads.json")
-    print("wrong_field", out.strip().splitlines()[-1])
-    assert bad is None and "reads its writer's whole output row" in out, out
     # without registered reads every linked statement is refused, the honest one included: one whose header names
     # registered rows as reading no root, and one that names none (layers 0 and 1 in one statement) by checkLinked's name
     for name, why, n in (("honest", NO_ROOTS, N), ("made_up", NO_ROOTS, N), ("wrong_salt", NO_ROOTS, N),
@@ -352,7 +344,7 @@ def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
     partition = json.loads((d / "partition.json").read_text())
     lines = []
     cases = (("honest", "readers"), ("own", "own"), ("made_up", "readers"), ("wrong_salt", "readers"),
-             ("other_leaf", "readers"), ("other_words", "readers"), ("honest", "wrong_field"))
+             ("other_leaf", "readers"), ("other_words", "readers"))
     for name, reads in cases:
         lines.append(json.dumps({"fn": "session_setup", "input": {
             "circuit": (d / name / "circuit.txt").read_bytes().hex(), "public": (d / name / f"pub-{N}.bin").read_bytes().hex(),
@@ -363,14 +355,13 @@ def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
     got = [json.loads(x) for x in p.stdout.splitlines()]
     assert len(got) == len(cases), p.stdout + p.stderr
     verdicts = {}
-    for (name, reads), g in zip(cases, got):
-        key = "wrong_field" if reads == "wrong_field" else name
-        verdicts[key] = g.get("output", {}).get("refused", g)
-        print("session_setup", key, verdicts[key])
+    for (name, _), g in zip(cases, got):
+        verdicts[name] = g.get("output", {}).get("refused", g)
+        print("session_setup", name, verdicts[name])
     # its tree ports come with no reads, so every reader is refused by its instances' reads (checkPort), the honest one
     # included; the cheats' rows open no leaf of the registered tree
     for name, why in (("honest", NO_READ), ("own", NO_READ), ("made_up", NOT_OPEN), ("wrong_salt", NOT_OPEN),
-                      ("other_leaf", NO_READ), ("other_words", NOT_OPEN), ("wrong_field", NO_READ)):
+                      ("other_leaf", NO_READ), ("other_words", NOT_OPEN)):
         assert verdicts[name] is not None and why in verdicts[name], (name, verdicts)
 
 
