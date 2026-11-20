@@ -2,12 +2,11 @@
 with a prompt planted in every file a request's values are in (a rehearsal's plan.json, probe.json, io.json and
 out-witness.jsonl, a network attester rehearsal's traffic.json and client.json): $OUT gets the public records and no
 file holding the prompt or a request's id fields. A network attester run reaches $OUT only through the gate's
-publisher. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
-the files that hold one on its private side, and the scan its SC_KEEP, where the period's reader reads them."""
+publisher. Nor does a row registration whole reach it, with its wiring's digest: the scan keeps it in its SC_KEEP,
+where the period's reader reads it."""
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -47,33 +46,6 @@ def published(out: Path) -> list[str]:
     return sorted(files)
 
 
-REHEARSAL = {
-    "plan.json": {"windows": 2, "requests": [{"session": "s0", "id_request": {"prompt": PROMPT, "max_tokens": 4}}]},
-    "probe.json": {"body": {"prompt": PROMPT}, "responses": [{"prompt_tokens": 3, "last": PROMPT[1]}]},
-    "calibration.json": {"rho0": "1"},
-    "honest/io.json": {"windows": 2, "requests": [{"user": "s0", "prompt": PROMPT, "output": [5, 6]}]},
-    "honest/out-witness.jsonl": [{"window": 0, "rows": [PROMPT], "salts": ["00"]}],
-    "honest/deployment.json": {"windows": 2},
-    "honest/certified.jsonl": [{"window": 0, "head": "cd"}],
-    "honest/cells.jsonl": [{"registration": {"wiring": "17"}, "cost": {"rows": 1}}],
-    "honest/out-records.jsonl": [{"window": 0, "root": "ef"}],
-    "honest/check.json": {"accepted": True},
-    "honest/client/certificates.jsonl": [{"window": 0}],
-}
-
-
-def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
-    g, out = tmp_path / "G", tmp_path / "OUT"
-    put(g / "g1" / "attester-x", {"end.json": {"files": {}}, "request.json": {"args": ["--requests", "24"]},
-                                   **{f"out/{k}": v for k, v in REHEARSAL.items()}})
-    (out / "gates").mkdir(parents=True)
-    got = run(block("chain_record.sh", '(cd "$G" && find', "  ! -name plan.json"), G=g, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"gates/g1/attester-x/{f}" for f in (
-        "end.json", "request.json", "out/calibration.json", "out/honest/deployment.json", "out/honest/out-records.jsonl",
-        "out/honest/check.json", "out/honest/client/certificates.jsonl"))
-
-
 #: a network attester run's files, the gate's publisher's input: a record head with its frames' root and the
 #: attester's salt, a registration with its wiring and a line's cost, the attester's own records, and the run's
 #: request values
@@ -94,15 +66,6 @@ def holds_none_of_the_run(out: Path, at: str) -> None:
     assert json.loads((out / at / "deployment.json").read_text()) == {"windows": 2}
     text = "".join(p.read_text() for p in (out / at).iterdir())
     assert not any(v in text for v in ("cd" * 64, "ef" * 64, "17" * 64, "salt_c", "wiring", "cost", "head"))
-
-
-def test_n2_zk_publishes_what_the_gate_publishes_of_a_network_attester_run(tmp_path):
-    r, out = tmp_path / "run", tmp_path / "OUT"
-    put(r, NETWORK_ATTESTER_RUN)
-    out.mkdir()
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', '"$PY" -m'), RUN=r, OUT=out, PY=sys.executable)
-    assert got.returncode == 0, got.stderr
-    holds_none_of_the_run(out, "run")
 
 
 def test_scan_zk_publishes_what_the_gate_publishes_of_its_own_rehearsal(tmp_path):
@@ -146,130 +109,8 @@ def test_network_attester_zk_keeps_its_summary_alone_of_its_drivers_directory(tm
     assert published(out) == ["wzk/summary.json"]
 
 
-def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_path):
-    """chain_record.sh's copy of a step's files into $OUT, which the leak guard reads and custody uploads, leaves
-    out the files that hold a row registration whole, its wiring's digest with it: the registrations a verifier takes
-    (the tampered one too) and the scan's answers, which carry them, go to the chain's private side, the quarantine's
-    witness/STEP, under their own paths. The step's other files are copied as before, and a prover's file, a circuit
-    and an archive's files go to neither."""
-    step, out, q = tmp_path / "W" / "scan", tmp_path / "held", tmp_path / "q"
-    whole = {"wiring": "17" * 64, "root": "ab" * 64}
-    put(step, {"summary.json": {"ok": True}, "answers.json": {"windows": [{"registrations": [whole]}]},
-               "honest/registration.json": {"roots": [{"root": "ab" * 64}]}, "honest/registered.json": {"ports": {}},
-               "honest/verifier/warden-registration-egress-0.json": whole,
-               "honest/verifier/warden-registration-ingress-0.json": whole,
-               "tampered/verifier/warden-registration-egress-0-tampered.json": whole,
-               "egress/warden-registration.json": whole, "tie/w0-registration.json": {"roots": []},
-               "honest/circuit.txt": "c", "honest/inst-4.bin": "i", "honest/archive/answers.json": whole,
-               "honest/archive/session.json": {}})
-    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept("SCANOUT", "scan"), W=step.parent, OUT=out, Q=q,
-              SCANOUT=step)
-    assert got.returncode == 0, got.stderr
-    private = ["scan/answers.json", "scan/egress/warden-registration.json",
-               "scan/honest/verifier/warden-registration-egress-0.json",
-               "scan/honest/verifier/warden-registration-ingress-0.json",
-               "scan/tampered/verifier/warden-registration-egress-0-tampered.json"]
-    assert sorted(p.relative_to(q / "witness").as_posix() for p in (q / "witness").rglob("*") if p.is_file()) == private
-    assert published(out) == ["scan/summary.json"]
-    assert not [p for p in out.rglob("*") if p.is_file() and b"17" * 64 in p.read_bytes()]
-
-
-#: a tie run's directory: its summary and public parameters, and what its verifier received, the inputs among them
-TIE_RUN = {"summary.json": {"ok": True, "tie": {"honest": [True]}}, "stager/program.json": {"units": 1},
-           "stager/partition.json": {"program": "p"},
-           "honest/verifier/inputs.json": {"places": [0], "lengths": [64], "received": [2], "digest": "ab" * 64},
-           "honest/verifier/w000-outcome.json": {"public": {"inputs": "ab" * 64}},
-           "honest/verifier/w000-registered.json": {"ports": {"pub": {"known": [64]}}},
-           "honest/verifier/w000-delivered.json": {"salts": {}}}
-TIE_KEPT = ["stager/partition.json", "stager/program.json", "summary.json"]
-
-
-def test_n2_tie_zk_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
-    """The tie's inputs (each request's place, its prompt length, the cells each window received) and the outcome records
-    naming their digest are what the verifier received, not public: $OUT/n2tie gets the summary and the tie's
-    Program and partition alone."""
-    w, out = tmp_path / "W", tmp_path / "OUT"
-    put(w / "n2tie", TIE_RUN)
-    got = run(block("n2_tie_zk.sh", 'mkdir -p "$OUT/n2tie"', "  [ -f"), W=w, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == [f"n2tie/{f}" for f in TIE_KEPT]
-
-
-def test_the_chains_tie_step_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
-    w, out = tmp_path / "W", tmp_path / "OUT"
-    put(w / "tie", TIE_RUN)
-    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept('W/tie', "tie"), W=w, OUT=out, Q=tmp_path / "q")
-    assert got.returncode == 0, got.stderr
-    assert published(out) == [f"tie/{f}" for f in TIE_KEPT]
-
-
-def kept(source: str, step: str) -> str:
-    """chain_record.sh's own call of ``keep`` for ``step``, whose files are under ``$source``."""
-    (line,) = re.findall(rf'keep "\${source}" "\$OUT/{step}"[^;\n]*', (HERE / "chain_record.sh").read_text())
-    return line + "\n"
-
-
-#: an N2 run's directory: its summary and public parameters, and what its verifier received
-N2_RUN = {"summary.json": {"ok": True}, "stager/program.json": {"units": 1}, "stager/partition.json": {"program": "p"},
-          "honest/verifier/w000-registration.json": {"roots": [{"root": "ab" * 64}]},
-          "honest/verifier/w000-certificates.json": [{"window": 0}], "honest/verifier/w000-syncs.json": [],
-          "honest/verifier/w000-delivered.json": {"salts": {"0": {"pub": "cd" * 32}}},
-          "honest/verifier/w000-outcome.json": {"public": {"verdict": 1}}, "honest/verifier/period.json": {"units": [0]},
-          "honest/verifier/w000-pub-1.bin": "p", "honest/verifier/w000-session-s-session.json": {}}
-
-
-def test_n2_zk_keeps_its_summary_and_public_parameters_and_nothing_the_verifier_received(tmp_path):
-    w, out = tmp_path / "W", tmp_path / "OUT"
-    put(w / "n2zk", N2_RUN)
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/n2zk"', "  [ -f"), W=w, OUT=out)
-    assert got.returncode == 0, got.stderr
-    assert published(out) == [f"n2zk/{f}" for f in TIE_KEPT]
-
-
-def test_the_chains_n2_and_scan_steps_keep_their_summaries_and_the_scans_program_alone(tmp_path):
-    """The chain releases N2's summary alone (its one file `released_keys.json` classifies) and the scan's summary and
-    joint Program (the attester piece's period case reads both); what each step's verifier received stays in $W."""
-    w, out, q = tmp_path / "W", tmp_path / "OUT", tmp_path / "q"
-    put(w / "n2", N2_RUN)
-    put(w / "scan", {"summary.json": {"ok": True}, "joint/program.json": {"units": 2},
-                     "honest-0/verifier/program.json": {"units": 3}, "honest-0/verifier/openings.json": [{"o0": 1}],
-                     "honest-0/registration.json": {"window": {"units": {"cells": [[1, 4]]}}}})
-    code = block("chain_record.sh", "WHOLE=(", "}") + kept("N2OUT", "n2") + kept("SCANOUT", "scan")
-    got = run(code, OUT=out, Q=q, N2OUT=w / "n2", SCANOUT=w / "scan")
-    assert got.returncode == 0, got.stderr
-    assert published(out) == ["n2/summary.json", "scan/joint/program.json", "scan/summary.json"]
-
-
-ENDPOINT_PY = """#!/bin/sh
-out=; while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
-echo '{"chain": {"bits": {"bound_why": "certified requests are in none (s0-needle)", "commit_windows": [{"requests": 7}]}}}' > "$out"
-echo "the endpoint's stdout: s0-needle"
-"""
-
-
-def test_the_chains_endpoint_step_keeps_its_report_and_logs_on_the_private_side(tmp_path):
-    """The endpoint's report holds its advice rebuilt in the clear and each Commit window's counts, and its log and the
-    advice's what it printed: whether the step rebuilds it or takes the served node's, none of it reaches $OUT."""
-    py = tmp_path / "py"
-    py.write_text(ENDPOINT_PY)
-    py.chmod(0o755)
-    code = ('unpack() { mkdir -p "$2"; cp -r "$1"/. "$2"; }\n'
-            + block("chain_record.sh", 'if [ -n "${CR_ENDPOINT:-}" ]', "fi"))
-    for k, files in enumerate(({"r/advice_trace.jsonl": "{}\n", "r/advice.log": "s0-needle\n"},
-                               {"r/report.json": '{"bits": "s0-needle"}'})):
-        ep, out, q, w = (tmp_path / f"{x}{k}" for x in ("ep", "OUT", "Q", "W"))
-        put(ep, files)
-        out.mkdir()
-        got = run(code, CR_ENDPOINT=ep, CR_EOS_IDS="1", NETWORK_CERTIFIER="g/run", G="g", PY=py, CR="cr", OUT=out, Q=q,
-                  W=w)
-        assert got.returncode == 0, got.stderr
-        assert published(out) == ["job.log"] and b"s0-needle" not in (out / "job.log").read_bytes()
-        kept = sorted(p.name for p in (q / "witness" / "endpoint").iterdir())
-        assert kept == (["advice.log", "endpoint.log", "report.json"] if k == 0 else ["report.json"])
-
-
 def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone():
-    """The report's endpoint step (chain_record.py's, from the private report) names no request and counts no window's
+    """The endpoint step (chain_record.py's, from the private report) names no request and counts no window's
     requests: the attested I/O's violations by their count, the advice's binding by whether it is bound and rebuilt."""
     sys.path.insert(0, str(HERE))
     import chain_record as cr
@@ -282,8 +123,6 @@ def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone
         assert step["verdict"] == "refused" and "needle" not in json.dumps(step) and '"requests"' not in json.dumps(step)
         assert step["advice"] == {"bound": False, "rebuilt": False}
         assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
-        e2e = cr.endpoint_step({"chain": {"bits": bits}})
-        assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]
 
 
 def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_path, monkeypatch):
@@ -358,12 +197,12 @@ def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_p
 
 
 def test_each_runner_fails_by_name_when_the_publisher_fails(tmp_path):
-    """The four runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
+    """The three runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
     than going on with an empty outcome.json."""
     (py := tmp_path / "py").write_text("#!/bin/sh\nexit 3\n")
     py.chmod(0o755)
-    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("n2_zk.sh", 'mkdir -p "$OUT/run"'),
-                          ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'), ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
+    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'),
+                          ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
         out = tmp_path / script / "OUT"
         out.mkdir(parents=True)
         got = run(block(script, first, first.split("mkdir")[0] + '"$PY" -m') + "echo went on\n",

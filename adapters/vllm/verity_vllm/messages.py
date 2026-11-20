@@ -430,7 +430,7 @@ _TYPES: tuple[int, MessageTypes] | None = None
 
 
 def types() -> MessageTypes:
-    """The message types on disk: the proof layer's, useful work's workload list (H1's, which no scheme declares), and
+    """The message types on disk: the proof layer's, useful work's workload list (which no scheme declares), and
     those of every scheme registered so far (`Scheme.messages`); `body` loads every declaration only for a type none
     of them declares (`compose.schemes.workload_messages`)."""
     global _TYPES
