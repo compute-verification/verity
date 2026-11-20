@@ -37,7 +37,7 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier import profile
+from verity.protocols.proof.spot.verifier import profile
 from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
 from verity.device import load_card, number
@@ -226,7 +226,7 @@ def carded(params: Mapping[str, Param]) -> list[Param]:
 
 def _deltas() -> list[Param]:
     window, report = float(profile.WINDOW_DELTA), [float(d) for d in DELTAS]
-    core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
+    core = "verity.protocols.proof.spot.verifier.profile WINDOW_DELTA, the per-window delta"
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
         Param("regime.remote.window_delta_coin", window, status="derived",

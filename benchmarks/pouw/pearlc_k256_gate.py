@@ -48,12 +48,12 @@ import numpy as np
 import pearlc_census as K
 import run_result
 
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.run import schemes
+from verity.protocols.accounting.compute.pouw.prover.schemes import get
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 #: what the tests read
 __all__ = ["K", "cell"]

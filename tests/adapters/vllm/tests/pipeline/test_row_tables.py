@@ -23,10 +23,10 @@ from verity.commitments import row_table as RT
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import tables as TB
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proof.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
 
 from verity_vllm.commit import index as IX
@@ -327,7 +327,7 @@ def test_the_audit_record_carries_each_sampled_chunks_reads_beside_the_roots_lea
 def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeypatch, tmp_path):
     """The chunker cuts at table boundaries, and a prover that builds its own chunks can't bring the old form back: the verifier's
     reads file names one root, and no row of another table opens it at any position through any of its paths (Lean's
-    `Registered.opens`, through its Python twin `registered.verify_read`; `tests/verity/protocols/proofs/flock/prover/test_lean_registered_reads.py`
+    `Registered.opens`, through its Python twin `registered.verify_read`; `tests/verity/protocols/proof/flock/prover/test_lean_registered_reads.py`
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)

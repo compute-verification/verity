@@ -46,5 +46,5 @@ word to another directory.
 
 | File | What is loaded | Loaded by |
 |---|---|---|
-| `ship.sh` | sourced: the ship's toolkit, cubin flags and layout | `verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh` |
+| `ship.sh` | sourced: the ship's toolkit, cubin flags and layout | `verity/protocols/accounting/memory/pous/prover/p2/p2_store/build.sh` |
 | `numabind/numabind.py` | run as a script, from the tree or from a copy sent with a job | `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |

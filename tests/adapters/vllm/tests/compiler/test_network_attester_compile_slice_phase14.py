@@ -10,7 +10,7 @@ import pytest
 from verity.commitments import hm96
 from verity.protocols.interface.charge import arith_encode as AE
 from verity.protocols.interface.charge import charge_chain as CC
-from verity.protocols.proofs.spot.prover import produced as PP
+from verity.protocols.proof.spot.prover import produced as PP
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
 from tests.compiler.test_network_attester_compile_slice_w212 import (
@@ -21,8 +21,8 @@ from tests.compiler.test_network_attester_compile_slice_w212 import (
     _load,
 )
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.resource_accounting.network.prover import charge_check as CK
-from verity.protocols.resource_accounting.network.prover import charge_rows as CR
+from verity.protocols.accounting.network.prover import charge_check as CK
+from verity.protocols.accounting.network.prover import charge_rows as CR
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 
 PROGRAM, REGISTRATION = "compile-slice-phase14", "cd" * 64

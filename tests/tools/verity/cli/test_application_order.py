@@ -1,4 +1,4 @@
-"""Each application's list attaches in its own order (`verity.protocols.resource_accounting.scheme.order_refusals`)."""
+"""Each application's list attaches in its own order (`verity.protocols.accounting.scheme.order_refusals`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,8 +7,8 @@ import pytest
 
 from verity import config as K
 from verity.channel import Refused
-from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.run import schemes
+from verity.protocols.accounting import scheme as S
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)

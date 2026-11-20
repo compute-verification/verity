@@ -25,9 +25,9 @@ from verity.commitments import RangeIndexedDomain
 from verity.commitments.cuda.salt_stream import engine as SX
 from verity.commitments.merkle import domain_message
 from verity.commitments.randomness import Key, derive
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+from verity.protocols.accounting.compute.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.compute.pouw.prover.serving import device as pouw_device
+from verity.protocols.accounting.compute.pouw.verifier.audit import (
     HM96,
     HM96_SALT,
     activation_binding,
@@ -35,7 +35,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
+from verity.protocols.accounting.compute.pouw.prover.serving.pearl_c.manifest import (  # noqa: F401 - kept importable here, as callers read them
     SaltCoins,
     SaltOpening,
     _entry,

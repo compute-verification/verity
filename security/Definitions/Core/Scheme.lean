@@ -47,7 +47,7 @@ Pearl+'s.
 
 A scheme names no level, no commitment and no duration: the audit decides which values its blocks open, and the
 probability `pr` is the audit game's, over any prover. The code's interface is
-`verity.protocols.resource_accounting.scheme` (`Scheme`, `Bound`), whose names these are.
+`verity.protocols.accounting.scheme` (`Scheme`, `Bound`), whose names these are.
 -/
 
 @[expose] public section

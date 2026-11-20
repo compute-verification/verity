@@ -62,7 +62,7 @@ from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import rate as D
 from verity.commitments import randomness as RND
 from verity.commitments import registered_value as RV

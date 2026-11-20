@@ -38,15 +38,15 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1
 from verity_flock.input_sets import InputSet
-from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.challenger import challenger as Ch, coins as CC
+from verity.protocols.proof.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
-from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
-from verity.protocols.proofs.spot.verifier.one_stage.lean_child import (LEAN_PANIC, VERIFY_EXITS, exit_why, panic_line,
+from verity.protocols.proof.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
+from verity.protocols.proof.spot.verifier.one_stage.verdict import Verdict
+from verity.protocols.proof.spot.verifier.one_stage.lean_child import (LEAN_PANIC, VERIFY_EXITS, exit_why, panic_line,
                                                                         refuse_exit, refuse_panic)
-from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
+from verity.protocols.proof.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
 
 import r2_population as R2
 

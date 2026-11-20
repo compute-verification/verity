@@ -48,8 +48,8 @@ import settings
 
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
-from verity.protocols.proofs.spot.verifier.one_stage import caller as C, registered as REG, docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier.one_stage import caller as C, registered as REG, docket as R
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -72,7 +72,7 @@ HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "prove_path"))
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
 import records_audit as RA  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
+from verity.protocols.proof.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -210,7 +210,7 @@ for tid in sys.argv[1:]:
 import records_audit as RA
 from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
 from verity.circuits.defs import REGISTRY, bind
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC, pearl_plus_tile as PT
+from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC, pearl_plus_tile as PT
 for tid in sys.argv[1:]:
     fn = RA.catalog_resolve(tid)
     assert descriptor_id(fn) == tid and fn.defn is REGISTRY[tid.partition("{{")[0]], tid
@@ -227,7 +227,7 @@ def test_a_definition_of_a_pearl_plus_id_with_another_body_is_refused_by_name():
     """A Definition named as Pearl+'s tile seed but with another body never stands for it: the registry refuses it under
     that id, and as a template it is refused as no Definition a catalog registers, by its id."""
     from verity.circuits.defs import CompositeDefinition
-    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+    from verity.protocols.accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
 
     seed = PT.PearlPlusTileSeed
     with pytest.raises(ValueError, match=f"registry already has a different definition for {seed.id}"):
@@ -892,7 +892,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
     (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     got = _tied(tmp_path / "w")
     assert got.rec["previous"] == DD.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
@@ -1030,14 +1030,14 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 
 def _auditor():
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "compose" / "verifier" / "live_challenger" / "auditor.py")
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
+    return LC._module("a5_auditor", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "run" / "verifier" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
-    code (`verity/protocols/compose/verifier/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
+    code (`verity/protocols/run/verifier/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
+    from verity.protocols.proof.spot.verifier.challenger import challenger as Ch
     from verity.commitments.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -1073,7 +1073,7 @@ def _window(session: str, reserve_seq: int, root: str, by: str = "hash", reserve
 
 
 def _verify(key: object):
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
     return AC.lms_verify
 
 
@@ -1132,7 +1132,7 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
     (`pous.period_prover.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.protocols.resource_accounting.memory.pous.prover import period_prover
+    from verity.protocols.accounting.memory.pous.prover import period_prover
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     cut = [lines[i] for i in period_prover.cited([json.loads(x) for x in lines], {S1})]
@@ -1214,7 +1214,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     docket that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
     and sample nothing, so the audit doesn't pass."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
     from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
@@ -1472,8 +1472,8 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
-    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.prover.audit import local_challenger as LC
 
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
@@ -1519,7 +1519,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_sample_can_open(tmp_pat
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
@@ -1569,7 +1569,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
     takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
     self_checks = []
@@ -1635,7 +1635,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     is the records' alone. a5's workers' flags (`a5.lean_options`) reach the stub as given, a5's defaults otherwise, and
     the summary carries a5's ``negative_workers``."""
     import a5 as A5
-    from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
+    from verity.protocols.proof.spot.verifier.challenger import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, RND.parse_design(SAMPLING_DESIGN), None)
     mine = _listed(mine)

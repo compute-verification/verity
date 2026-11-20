@@ -1,6 +1,6 @@
 # PoUW benchmarks
 
-These benchmarks measure what [PoUW](../../verity/protocols/resource_accounting/compute/pouw/verifier/README.md) costs
+These benchmarks measure what [PoUW](../../verity/protocols/accounting/compute/pouw/verifier/README.md) costs
 on real GPUs. Most of them are about Pearl-C's kernels on the RTX PRO 6000: a kernel is first held bit for bit to what
 the verifier recomputes, and only then timed. Beside them are the served vLLM path with its audits, probes of what a
 card's instructions really do, and calculators that run on a CPU.

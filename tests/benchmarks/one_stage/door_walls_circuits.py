@@ -29,5 +29,5 @@ def internal_read() -> tuple[Any, dict]:
 
 def pous_setup() -> Any:
     """PoUS's setup C at its test's point (`window.Setup(64, 189, 16, 4, 4)`), an `IF.Circuit`."""
-    from verity.protocols.resource_accounting.memory.pous.prover import window as WIN
+    from verity.protocols.accounting.memory.pous.prover import window as WIN
     return WIN.Setup(64, 189, 16, 4, 4).circuit()

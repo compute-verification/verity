@@ -127,8 +127,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proof.spot.verifier import service as SV
+from verity.protocols.proof.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore, alias_table

@@ -9,7 +9,7 @@ holds no Lean verdict of, prints no number and exits 1.
     verity bench compute --protocol NAME --from DIR|RUN --per-call [--uncredited F] [--top N]   and where the rest of
                                                              its MACs went
 
-NAME is the useful-work scheme's registered name (`verity.protocols.resource_accounting.scheme.get`, `pearl-plus`), a
+NAME is the useful-work scheme's registered name (`verity.protocols.accounting.scheme.get`, `pearl-plus`), a
 compute scheme: another name is refused (exit 2) with the registered compute schemes. The answer must be that scheme's
 verifier's (its `Scheme.protocol`). A scheme that attaches to no served run (its `Scheme.option` empty, as `dither`'s)
 raises `NotImplementedError` before any record is read: no kernel serves it and no verifier answers for a served run
@@ -159,7 +159,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.device import Site, load_card, rate
-from verity.protocols.resource_accounting.scheme import Scheme
+from verity.protocols.accounting.scheme import Scheme
 from verity_bench import kit, schemes
 from verity_bench.kit_report import RUN_ID
 
@@ -911,7 +911,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     withdrawals of parts of a record (`EvidenceStore.files`)."""
     ap = argparse.ArgumentParser(prog="verity bench compute", description=__doc__.split("\n\n")[0])
     ap.add_argument("--protocol", metavar="NAME", required=True,
-                    help="the useful-work scheme's registered name (verity.protocols.resource_accounting.scheme), a "
+                    help="the useful-work scheme's registered name (verity.protocols.accounting.scheme), a "
                          "compute scheme such as pearl-plus")
     ap.add_argument("--from", dest="source", metavar="DIR|RUN", required=True,
                     help="a run's record: its directory (the run's, holding out/ and job.json), read from disk alone, or "

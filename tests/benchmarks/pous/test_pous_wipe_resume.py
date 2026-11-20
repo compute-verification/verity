@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity.protocols.resource_accounting.memory.pous.verifier")
+pytest.importorskip("verity.protocols.accounting.memory.pous.verifier")
 
 WIPE_RESUME = Path(__file__).resolve().parents[3] / "benchmarks" / "pous" / "wipe_resume"
-POUS_TESTS = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier"
+POUS_TESTS = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "accounting" / "memory" / "pous" / "verifier"
 
 
 def _load(name: str, where: Path = WIPE_RESUME):
