@@ -16,10 +16,11 @@ from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC  #
 
 
 def test_one_template_its_blocks_between_the_floor_and_the_cap():
-    c = OL.circuit()
-    assert [n for _t, n in c.templates] == [OL.UNITS] and not c.wires
-    k_log = I.check_proof_block(OL.gemm())
-    assert laying.zk_min_units(k_log, 1) <= OL.CAP and k_log + (OL.CAP - 1).bit_length() <= I.K_MAX
+    """C is `ops.product`'s at the unit size the window lays (k_log 24, g 1), its blocks of `CAP` units."""
+    c, p = OL.circuit(), OL.product()
+    assert [n for _t, n in c.templates] == [OL.UNITS] and not c.wires and p.blocks[:1] == [(0, OL.CAP)]
+    k_log = I.check_proof_block(p.template)
+    assert k_log == 24 and laying.zk_min_units(k_log, 1) <= OL.CAP and k_log + (OL.CAP - 1).bit_length() <= I.K_MAX
 
 
 def test_two_levels_are_refused_at_the_door_by_name():

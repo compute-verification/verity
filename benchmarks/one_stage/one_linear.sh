@@ -6,13 +6,29 @@
 # two levels refused at the door before any coin; a changed output word in every block (so in every drawn one)
 # refused; one changed output word in one unit, accepted unless its block is drawn; a stratified rate refused by its
 # kind (SUBSET_ONLY). The accept's weight is a run input each unit commits. RULE: the accept's rate over the population.
+# No accept is printed unless C's template rows hold against its evaluator (`door_walls.py census`, one unit a block)
+# and C has neither of the two word shapes (`word_shape_scan.py`), both read from the one C.json whose sha256 is printed.
 # bash benchmarks/one_stage/one_linear.sh
 # research run --on auto --cwd source --mem-gb 96 --cpus 16 --timeout 4h -- bash benchmarks/one_stage/one_linear.sh
 set -uo pipefail
 RULE=${RULE:-rate:1/72}
 B=${OUT:-${RESEARCH_RUN_DIR:-/tmp/one-linear}/out}; mkdir -p $B
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
-echo "SCOPE one template, no wired port between units: no wire between blocks, no block of several templates, no scan"
+echo "SCOPE one template, no wired port between units; activations computed, not served; challenger local; the weight is the prover's committed value; nothing ties it to the model"
+echo "SCOPE an accept is about the block circuit the verifier derives from C; no theorem yet says that is C's block"
+( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/one_linear.py c --out $B/c ) > $B/c.log 2>&1; CC=$?
+cat $B/c.log
+( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/door_walls.py census --circuit $B/c --blocks one-per-template \
+    --json $B/census.json ) > $B/census.log 2>&1; W=$?
+echo "CENSUS rc $W"; grep -h '^BUILT\|^CENSUS\|^|' $B/census.log | cut -c1-1500
+ROWS=$(python3 -c 'import json, sys
+print("; ".join(str(r["rows"]) for r in json.load(open(sys.argv[1]))["table"]))' $B/census.json 2>/dev/null)
+echo "ROWS $ROWS"
+( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/word_shape_scan.py $B/c/C.json ) > $B/scan.log 2>&1; SC=$?
+grep -h '^DESCRIPTION\|^COUNTS\|^SCAN' $B/scan.log | cut -c1-1500
+SHAPES=$(python3 -c 'import json, sys
+s = [json.loads(l[5:]) for l in open(sys.argv[1]) if l.startswith("SCAN ")][0]
+print(s["shape"] + s["unaligned"])' $B/scan.log 2>/dev/null)
 ( unset PYTHONPATH; $UV run -q python benchmarks/one_stage/one_linear.py levels ) > $B/levels.txt 2>&1
 LV=$?; cat $B/levels.txt
 audit() {  # name, rule, window flags, audit flags
@@ -37,5 +53,13 @@ audit forged-one $RULE "--weights committed --forge 1" ""; U=$?
 audit stratified stratified-${RULE#rate:} "--weights committed" ""; R=$?
 echo "LAW the zero-knowledge audit's proved statement covers a subset design, so the accept is under $RULE, a subset draw over one stratum; the audit under a rated law waits on its claim"
 echo "RESULT $(python3 -c 'import json,sys; print(json.dumps(dict(zip(["levels","honest","registered","forged_drawn","forged_one","stratified"], map(int, sys.argv[1:])))))' $LV $H $G $F $U $R)"
-[ $LV = 0 ] && [ $H = 0 ] && echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on three open premises"
-[ $LV = 0 ] && [ $H = 0 ] && [ $F = 0 ]
+OK=1; [ $CC = 0 ] && [ $W = 0 ] && [ $SC = 0 ] && [ "$SHAPES" = 0 ] && [ $LV = 0 ] && [ $H = 0 ] && OK=0
+if [ $OK = 0 ]; then
+  echo "ACCEPT accepted by the Lean verifier, in zero knowledge, about the block circuits Lean's lowering derives from the registered circuit; that the lowering agrees with the circuit rests on open premises"
+  echo "ACCEPT the lowering's rows for this template were checked against the evaluator ($ROWS), one unit a block"
+  echo "ACCEPT scanned for the two shapes lean found on 19 Nov: none (C sha256 $(sha256sum $B/c/C.json | cut -c1-64))"
+  echo "ACCEPT recorded under a rate the verifier resolves to a subset of 4 of 144 blocks; the rated design is not on one-circuit"
+else
+  echo "NO ACCEPT c $CC census $W scan $SC shapes ${SHAPES:-?} levels $LV honest $H"
+fi
+[ $OK = 0 ] && [ $F = 0 ]
