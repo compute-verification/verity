@@ -1,5 +1,5 @@
-"""The recursion bench's settings (``settings.py``): every variable job.sh reads is declared, an unknown ``REPEAT_*`` or
-``OPROVE_*`` variable is refused by run.py and by job.sh's first command, the record's digest, and the ratchet on direct
+"""The recursion bench's settings (``settings.py``): an unknown ``REPEAT_*`` or
+``OPROVE_*`` variable is refused by run.py and by job.sh's first command, and the ratchet on direct
 environment uses."""
 from __future__ import annotations
 
