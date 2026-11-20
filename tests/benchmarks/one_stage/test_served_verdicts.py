@@ -2347,37 +2347,43 @@ def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, c
 
 @pytest.mark.parametrize("served, verified, reason", [
     (True, False, "Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"),
-    (True, None, "no verdict: served_passes.py verify wrote no document"),
-    (None, None, "no served run: served_passes.py serve wrote no document"),
 ])
-def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects_and_one_that_wrote_nothing(tmp_path, served, verified,
-                                                                                               reason, live):
-    """A run Pearl+'s verdict rejects, or that has no verdict, still carries its shares, its declared linears beside a
-    credit of 0; a run that served nothing has none."""
+def test_a_pearlplus_piece_rejects_a_run_pearlpluss_verdict_rejects(tmp_path, served, verified, reason, live):
+    """A run Pearl+'s verdict rejects still carries its shares, its declared linears beside a credit of 0."""
     s, v = _pearlplus_run(verified is not False)
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s if served else None, None if verified is None else v, **live[1])
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", s, v, **live[1])
     assert (doc["verdict"], doc["reasons"][0], doc["why"]) == ("reject", reason, S.pearlplus_why(S.UNNAMED_CHALLENGER))
-    if served:
-        rho = 4096 * 132 * 1830e6
-        assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
-        assert doc["shares"]["verdict"] == (None if verified is None else "reject")
-        assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
-    else:
-        assert doc["shares"] is None
+    rho = 4096 * 132 * 1830e6
+    assert doc["shares"]["macs"] == {"declared_linears": 6000, "credited": 0}
+    assert doc["shares"]["verdict"] == "reject"
+    assert S.development_line(doc)["shares_at_tensor_clock"] == {"declared_linears": 6000 / rho / 2.0, "credited": 0}
     row = S.piece_row("work", tmp_path / "pieces")
     assert (row["verdict"], row["reason"]) == ("reject", "; ".join(doc["reasons"]))
 
 
-def test_the_pearlplus_command_writes_a_reject_where_a_step_wrote_no_document(tmp_path, capsys):
-    """`served_pearlplus.sh` names both documents whether or not its steps wrote them: a serve that wrote neither gets a
-    piece that rejects, naming both, and its POUW-DEV line."""
+@pytest.mark.parametrize("served, verified, wrote_none", [
+    (False, False, "served_passes.py serve wrote no document and served_passes.py verify wrote no document"),
+    (True, False, "served_passes.py verify wrote no document"),
+    (False, True, "served_passes.py serve wrote no document"),
+])
+def test_the_pearlplus_command_refuses_by_name_where_a_step_wrote_no_document(tmp_path, capsys, served, verified,
+                                                                              wrote_none):
+    """`served_pearlplus.sh` names both documents whether or not its steps wrote them: where either wrote none there is
+    no verdict, so the piece refuses (`PEARLPLUS_NO_VERDICT`) with one sentence naming what is missing, exits 2 and
+    writes no answer, not even one left by an earlier run, and the record's row is refused with that sentence."""
+    s, v = _pearlplus_run(True)
+    for name, doc, there in (("served.json", s, served), ("v.json", v, verified)):
+        if there:
+            (tmp_path / name).write_text(json.dumps(doc))
     out = tmp_path / "pieces" / "pouw"
-    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 0
-    doc = json.loads((out / S.DEVELOPMENT).read_text())
-    assert (doc["verdict"], doc["reasons"]) == ("reject", ["no served run: served_passes.py serve wrote no document",
-                                                           "no verdict: served_passes.py verify wrote no document"])
-    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
-    assert (line["verdict"], line["credited"], line["passes"]) == ("reject", False, None)
+    out.mkdir(parents=True)
+    (out / S.DEVELOPMENT).write_text("{}")
+    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json")]) == 2
+    sentence = f"{S.PEARLPLUS_NO_VERDICT}: {wrote_none}, so Pearl+ has no verdict and the piece writes no answer"
+    assert capsys.readouterr().out == f"POUW-REFUSED {sentence}\n"
+    assert not (out / S.DEVELOPMENT).exists() and (out / S.REFUSED).read_text() == sentence + "\n"
+    assert S.piece_row("work", tmp_path / "pieces") == {"verdict": BR.REFUSED, "owner": "compute-accounting",
+                                                        "reason": sentence}
 
 
 PUBLIC = bytes(range(80))
@@ -2510,8 +2516,8 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     """Under PEARLPLUS_TIE (``--tie W``) the piece is the window's own Pearl+ epoch: on in-process coins it claims no
     verdict and says so of the window's epoch (`PEARLPLUS_WHY_TIED_IN_PROCESS`, its epoch
     `PEARLPLUS_EPOCH_TIED_IN_PROCESS`), not of a seeded load of its own after the window's serve; its load is the
-    window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok, or missing, rejects,
-    naming the window's arm."""
+    window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok rejects, and a missing
+    one refuses, each naming the window's arm."""
     window, verified, w = _tied_epoch(tmp_path)
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w)
     assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
@@ -2526,8 +2532,8 @@ def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, c
     assert S.pearlplus(tmp_path / "b", window, verified, tie=tmp_path / "none.json")["tie"]["record"] is None
     bad = S.pearlplus(tmp_path / "c", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified, tie=w)
     assert bad["reasons"] == ["the window's Pearl+ epoch isn't one round a Commit step: pass 2 retained no manifest"]
-    none = S.pearlplus(tmp_path / "d", None, verified, tie=w)
-    assert none["reasons"][0] == "no served run: serve-openai's Pearl+ arm wrote no served.json for the window"
+    with pytest.raises(S.PearlplusRefused, match="serve-openai's Pearl\\+ arm wrote no served.json for the window"):
+        S.pearlplus(tmp_path / "d", None, verified, tie=w)
 
 
 def test_publish_holds_a_tied_pearlplus_pieces_window_steps_as_it_holds_a_windows_steps(tmp_path):
