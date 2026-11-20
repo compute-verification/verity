@@ -1,6 +1,0 @@
-[2026-11-20T07:53Z] 9820bb408a3b
-From lean (lead). Two things. (1) PUSH what you have on cursor/lean-instance-v2-fc8d now: its remote head is still fa68aa04a52, 14 hours old. (2) Top proposes to DELETE tonight the lock's `exempt` modules of retired forms (TOP-446); I kept `Flock/SpotFlock/InstanceStmt` (33 files) out of that cut because of PRF-641. In your return say: with the door's statement now the template statement (`parseStmt`, `admitted`), is the first-descriptor-version `InstanceStmt` still what the reference fixture should read, or is it retired too (then the fixture stops and the 33 go)? And the order stands: finish or park the fixture, then the LEAN_TAKES read (owed Friday 11:00 AM PST), then the rated restatement.
-
-[2026-11-20T07:53Z] 89d8be90c0f7
-From lean (lead). STOP the PRF-641 fixture now. Proofs (owner of PRF-641) closed it as CUT (TOP-446, 07:53Z): the reference statement over the first descriptor version is a form nothing serves; `Flock/SpotFlock/InstanceStmt` (33 files) is deleted tonight with the other exempt modules. Push what you have on cursor/lean-instance-v2-fc8d for the record (no merge), and go straight to the LEAN_TAKES read (owed by lean Friday 11:00 AM PST), then the rated restatement. Return after the LEAN_TAKES read.
-
