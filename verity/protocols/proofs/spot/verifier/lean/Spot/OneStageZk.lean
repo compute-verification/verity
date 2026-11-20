@@ -813,11 +813,19 @@ theorem membersRun_held {p : Params} {ms : Array Member} {c : OneStage.Commitmen
   obtain ⟨⟨⟩, hpop, -⟩ := Flock.HmNets.bind_ok h
   exact ⟨hord, hpop⟩
 
+/-- The refusal of per-member evidence with no session roots object: `Record.checks` skips its `roots` check on a null. -/
+def NO_SESSION_ROOTS : String := "roots: the evidence names no session roots object"
+
+/-- The refusal of per-member evidence with no served units: `Record.checks` skips its `served` check on a null. -/
+def NO_SERVED : String := "served: the evidence names no served units"
+
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check: v1 accepts only verdicts
 that all accepted, and the run's own `all` says it again, so an acceptance reads the run. -/
 def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
+  if e.base.sessionRoots.isNone then .reject NO_SESSION_ROOTS else
+  if e.base.served.isNone then .reject NO_SERVED else
   match membersRun p ms c e sts bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
@@ -834,6 +842,10 @@ theorem checkMembersAt_accept {p : Params} {ms : Array Member} {c : OneStage.Com
     ∃ r, membersRun p ms c e sts bs = .ok r ∧ r.all = true ∧
       OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
   unfold checkMembersAt at h
+  split at h
+  · cases h
+  split at h
+  · cases h
   split at h
   · cases h
   · rename_i r hr
