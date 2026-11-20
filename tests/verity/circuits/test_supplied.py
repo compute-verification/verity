@@ -130,33 +130,38 @@ def test_each_function_has_its_lean_body(name):
 
 
 #: the storage session's material and each body's value for it, as the memory attester writes them: the session commitment
-#: (`SessionCommitment.to_json`), three coin openings, the registered LMS key, and the values of the round coins, the header
-#: and the context
+#: (`SessionCommitment.to_json`), three coin openings, the registered LMS key (at the deployed parameters), the message m and
+#: its signature at leaf 0, and the values of the round coins, the header and the context
 VECTORS = json.loads((Path(__file__).parent / "pous_session_vectors.json").read_text())
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
+MESSAGE = "pous.session.message/v1"
 KEY = VECTORS["commitment"]["coin_key"]
 COMMITMENT = {k: v for k, v in VECTORS["commitment"].items() if k != "coin_key"}
 #: what the verifier holds of the session from before its first coin: the header's fields (the coin key by its hash), the
-#: registered LMS key, and the place the verifier registered them at (before the place the coin is released at, 1)
+#: LMS key, and the place the verifier registered them at (before the place the coin is released at, 1)
 HELD = {"commitment": COMMITMENT, "key": VECTORS["key"], "place": 0}
-#: what the session releases after it: the round coin's openings and the coin key itself, and how it ended with its rounds,
-#: which the header's coin is
+#: what the session releases after it: the round coin's openings and the coin key itself, how it ended with its rounds,
+#: which the header's coin is, and the signed message with its signature, which the message's coin is
 COIN = {"openings": VECTORS["openings"], "coin_key": KEY}
 ENDED = {"ended": "complete", "rounds": 3}
+SIGNED = {"message": VECTORS["message"], "signature": VECTORS["signature"]}
+#: the configuration's pin of the memory attester's key: its SHA-512
+PINNED = (hashlib.sha512(bytes.fromhex(VECTORS["key"])).digest(),)
 
 
 def text(doc) -> str:
     return json.dumps(doc, sort_keys=True, separators=(",", ":"))
 
 
-def held(commitment=None, coin=None, ended=None, **over) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """The verifier's ``(coins, commitments)``: the commitment under each of the three functions' names, ``over`` replacing
-    parts of it, and the release under the round coin's and the header's; ``commitment``, ``coin`` and ``ended`` give a text as
-    it is."""
+def held(commitment=None, coin=None, ended=None, signed=None, **over) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """The verifier's ``(coins, commitments)``: the commitment under each of the four functions' names, ``over`` replacing
+    parts of it, and the release under the round coin's, the header's and the message's; ``commitment``, ``coin``, ``ended``
+    and ``signed`` give a text as it is."""
     blob = (commitment if commitment is not None else text({**HELD, **over})).encode()
     return ({ROUND: (coin if coin is not None else text(COIN)).encode(),
-             HEADER: (ended if ended is not None else text(ENDED)).encode()},
-            {ROUND: blob, HEADER: blob, CONTEXT: blob})
+             HEADER: (ended if ended is not None else text(ENDED)).encode(),
+             MESSAGE: (signed if signed is not None else text(SIGNED)).encode()},
+            {ROUND: blob, HEADER: blob, CONTEXT: blob, MESSAGE: blob})
 
 
 def with_commitment(**fields):
@@ -171,6 +176,10 @@ def with_ended(**fields):
     return held(ended=text({**ENDED, **fields}))
 
 
+def with_signed(**fields):
+    return held(signed=text({**SIGNED, **fields}))
+
+
 def with_key(key: bytes):
     """A coin key the commitment holds the hash of, so the opening is the only thing that can refuse."""
     return held(commitment=text({**HELD, "commitment": {**COMMITMENT, "coin_key_sha512": hashlib.sha512(key).hexdigest()}}),
@@ -181,9 +190,9 @@ def mark(fn: str, **args) -> dict:
     return {"supplied": fn, "args": args, "layout": "le", "bits": 8}
 
 
-def refusal(tables, fn: str, **args) -> str:
+def refusal(tables, fn: str, pinned=PINNED, **args) -> str:
     with pytest.raises(ValueError) as e:
-        G.body(*tables, "x", mark(fn, **args))
+        G.body(*tables, "x", mark(fn, **args), pinned)
     return str(e.value)
 
 
@@ -209,13 +218,24 @@ def test_header_of_an_even_length_has_no_padding():
 
 
 def test_context_vector():
-    assert G.body(*held(), "x", mark(CONTEXT)) == ([("bytes", VECTORS["context"])], 106)
+    assert G.body(*held(), "x", mark(CONTEXT), PINNED) == ([("bytes", VECTORS["context"])], 106)
+
+
+def test_message_vector():
+    """The message is the 64 bytes released in the clear, as released, once its signature verifies under the pinned key."""
+    assert G.body(*held(), "x", mark(MESSAGE), PINNED) == ([("bytes", VECTORS["message"])], 64)
+
+
+def test_no_pin_refuses_the_key():
+    """With no key pinned, the context and the message have no statement: the session's own key is never taken."""
+    for fn in (CONTEXT, MESSAGE):
+        assert refusal(held(), fn, pinned=()) == NO_STATEMENT + fn + "'s " + G.UNPINNED
 
 
 def test_the_marks_reach_the_leaves_their_layouts_read():
     rows = G.of_mark(*held(), "x", {"supplied": ROUND, "args": {"round": 2}, "layout": "halves", "bits": 96})
     assert G.row_leaves_of(rows[0], lambda _k, n: bytes.fromhex(n), 32, False) == [2, 0, 70000]
-    rows = G.of_mark(*held(), "x", {"supplied": CONTEXT, "args": {}, "layout": "le", "bits": 848})
+    rows = G.of_mark(*held(), "x", {"supplied": CONTEXT, "args": {}, "layout": "le", "bits": 848}, PINNED)
     assert len(G.row_leaves_of(rows[0], lambda _k, n: bytes.fromhex(n), 16, False)) == 53
 
 
@@ -346,8 +366,24 @@ REFUSALS = [
      HEADER + "'s session did not end complete"),
     ("no release held for the header", ({ROUND: held()[0][ROUND]}, held()[1]), HEADER, {"head": 753},
      "the verifier holds no coin for " + HEADER),
-    ("a key of 15 bytes", held(key="ab" * 15), CONTEXT, {}, CONTEXT + "'s key is 15 bytes, not an LMS identifier's 16"),
+    ("a key of 15 bytes", held(key="ab" * 15), CONTEXT, {}, CONTEXT + "'s " + G.UNPINNED),
+    ("a key the configuration doesn't pin", held(key=_flip(VECTORS["key"], 40)), CONTEXT, {}, CONTEXT + "'s " + G.UNPINNED),
     ("a key that is no hex", held(key="x"), CONTEXT, {}, CONTEXT + "'s commitment's key is no lowercase hex"),
+    ("a message under a key not pinned", held(key=_flip(VECTORS["key"], 40)), MESSAGE, {}, MESSAGE + "'s " + G.UNPINNED),
+    ("a message the signature doesn't sign", with_signed(message=_flip(VECTORS["message"])), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a signature of another session", with_commitment(session=_flip(VECTORS["commitment"]["session"])), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a truncated signature", with_signed(signature=VECTORS["signature"][:-2]), MESSAGE, {}, MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("a signature of another leaf", with_signed(signature="00000001" + VECTORS["signature"][8:]), MESSAGE, {},
+     MESSAGE + "'s " + G.BAD_SIGNATURE),
+    ("no signature", with_signed(signature=None), MESSAGE, {}, MESSAGE + "'s coin's signature is no lowercase hex"),
+    ("a message of 63 bytes", with_signed(message="ab" * 63), MESSAGE, {}, MESSAGE + "'s message is 63 bytes, not 64"),
+    ("a message in capitals", with_signed(message=VECTORS["message"].upper()), MESSAGE, {},
+     MESSAGE + "'s coin's message is no lowercase hex"),
+    ("no message", with_signed(message=None), MESSAGE, {}, MESSAGE + "'s coin's message is no lowercase hex"),
+    ("no release held for the message", ({ROUND: held()[0][ROUND], HEADER: held()[0][HEADER]}, held()[1]), MESSAGE, {},
+     "the verifier holds no coin for " + MESSAGE),
     # numbers: one strict reader, in every body
     ("a k of 1e0", raw('"k":3,', '"k":3e0,'), ROUND, R0, ROUND + CANON),
     ("a k with a leading zero", raw('"k":3,', '"k":03,'), ROUND, R0, ROUND + "'s commitment is no JSON"),
@@ -374,7 +410,7 @@ def test_what_has_no_statement_is_refused_by_name(name, tables, fn, args, why):
 def test_a_number_in_a_string_is_not_one():
     """`1e2` or `-0` inside a string is text: only the numbers of the JSON are held to the canonical form."""
     doc = {**HELD, "note": "limit -0 and 1e2, 03 + 3.0 \\\" 5e1"}
-    assert G.body(*held(commitment=text(doc)), "x", mark(CONTEXT)) == ([("bytes", VECTORS["context"])], 106)
+    assert G.body(*held(commitment=text(doc)), "x", mark(CONTEXT), PINNED) == ([("bytes", VECTORS["context"])], 106)
 
 
 def test_a_last_opening_stands_for_its_round():
@@ -389,6 +425,7 @@ def test_the_arguments_each_function_takes():
     assert refusal(held(), ROUND) == "supplied input x: " + ROUND + " takes the args [round]"
     assert refusal(held(), HEADER, round=0) == "supplied input x: " + HEADER + " takes the args [head]"
     assert refusal(held(), CONTEXT, head=1) == "supplied input x: " + CONTEXT + " takes no args"
+    assert refusal(held(), MESSAGE, head=1) == "supplied input x: " + MESSAGE + " takes no args"
 
 
 def test_the_header_is_compared_with_what_was_released_not_assumed():
@@ -417,6 +454,7 @@ def test_a_coin_valid_under_another_sessions_root_is_refused_by_name():
 HEADER_0 = (HEADER, {"head": 753})
 ROUND_0 = (ROUND, {"round": 0})
 CONTEXT_0 = (CONTEXT, {})
+MESSAGE_0 = (MESSAGE, {})
 LATE = "E_SUPPLIED_ORDER: ['commitment pous.session.header/v1', 'commitment pous.session.round_coin/v1'] registered after "
 NO_COMMITMENT_PLACE = "released: the verifier names no place of " + HEADER + "'s commitment, which a coin it holds follows"
 #: each refusal of the order rule over a session read by the round coin and the header, whose coins are the release: (name, the
@@ -435,9 +473,14 @@ ORDER_REFUSALS = [
      "released: the verifier names no place of " + ROUND + "'s coin, which follows a commitment it holds"),
     ("the header's coin with no place", (ROUND_0, HEADER_0), held(), {ROUND: 2},
      "released: the verifier names no place of " + HEADER + "'s coin, which follows a commitment it holds"),
+    ("the message's coin with no place", (ROUND_0, MESSAGE_0), held(), {ROUND: 2},
+     "released: the verifier names no place of " + MESSAGE + "'s coin, which follows a commitment it holds"),
+    ("a commitment placed at the message's coin's place", (MESSAGE_0,), held(place=2), {MESSAGE: 2},
+     f"E_SUPPLIED_ORDER: ['commitment {MESSAGE}'] registered after {MESSAGE}, which a supplied value reads"),
 ]
 #: the same marks in an order that holds: the commitment's place before the coin's
 ORDER_HOLDS = [("a commitment before its coin", (ROUND_0, HEADER_0), held(place=0), {ROUND: 1, HEADER: 1}),
+               ("a commitment before the message's coin", (MESSAGE_0,), held(place=0), {MESSAGE: 1}),
                ("a commitment held and no coin read", (CONTEXT_0,), held(place=7), {})]
 
 

@@ -118,11 +118,12 @@ class _Server:
             except BrokenPipeError:
                 reply = ""
             answered = reply.endswith("\n")
+            unread = None
             if not answered:
                 try:
                     self._proc.stdin.close()
-                except BrokenPipeError:
-                    pass
+                except BrokenPipeError as e:
+                    unread = e
             status = self._proc.poll() if answered else self._proc.wait()
             self._stderr.seek(0)
             err = self._stderr.read().decode("utf-8", "replace")
@@ -136,6 +137,8 @@ class _Server:
             if (panic := LC.panic_line(err)) is not None:
                 raise LeanError(f"{LC.LEAN_PANIC}: {self.exe} on {what}: {panic}")
             why = why or f"{LC.LEAN_EXIT}: status {status} before its answer line"
+            if unread is not None:
+                why += " (its input was closed before the request was written whole)"
             raise LeanError(f"{why}: {self.exe} on {what}: {err[-2000:]}")
 
     def _loads(self, reply: str, what: str) -> Any:
