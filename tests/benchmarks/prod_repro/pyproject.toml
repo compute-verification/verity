@@ -41,7 +41,7 @@ inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init_
     "adapters/vllm/verity_vllm/engine/hooks.py",
     # `window_code` takes the window it charges from network attestation's prover (`window_charge.Advice`) and its
     # code word's width from its verifier (`arith_encode.CW`); those two load its chain checks
-    # beside them and the grid and certificate `head_check` reads
+    # beside them and the grid and certificate modules
     "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py",
     "verity/protocols/resource_accounting/network/__init__.py",
     "verity/protocols/resource_accounting/network/prover/__init__.py",
@@ -51,7 +51,6 @@ inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init_
     "verity/protocols/interface/charge/arith_encode.py",
     "verity/protocols/interface/charge/charge_chain.py",
     "adapters/vllm/verity_vllm/compiler/replay_chain.py",
-    "verity/protocols/resource_accounting/network/verifier/head_check.py",
     "verity/protocols/resource_accounting/network/verifier/certificate.py",
     "verity/protocols/resource_accounting/network/verifier/grid.py",
     "verity/protocols/resource_accounting/network/verifier/schedule.py",
@@ -62,7 +61,7 @@ inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init_
     "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
     "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
     "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-    # `head_check` counts a Definition's ANDs with the census
+    # the census, which counts a Definition's ANDs
     "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/census.py",
     # network attestation's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
