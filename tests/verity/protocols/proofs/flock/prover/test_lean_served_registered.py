@@ -105,7 +105,7 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     ok = _verify(fx, SR.write_registered(doc, tmp_path / "registered.json"))
     assert (ok["accepted"], ok["why"]) == (True, ""), ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}, "x": {"value": "x", "root": x_tree.root},
-                                "out": {"value": SR.OUT_VALUE, "root": out_port["root"]}}
+                                "out": {"value": SR.out_value(query), "root": out_port["root"]}}
     assert ok["program_sha512"] == sr.partition["program"]
     moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
     bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
