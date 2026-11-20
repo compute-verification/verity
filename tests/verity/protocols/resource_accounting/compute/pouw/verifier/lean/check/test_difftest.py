@@ -357,76 +357,150 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 
 def test_credit(pass_server):
-    """Generated served windows' credited sets, sampling coins' draws, sampled proof blocks and their outcomes, A rows,
-    and weights, then each mutation of them over a few seeds (`replay`), and every refusal of the steps `credit.window`
-    and `credit.period_credit` run that these reach. A whole window, period, window draw or registered file carries a
-    real window, each case of which `test_a_real_window_case_is_judged_alike` replays once."""
+    """Generated served windows' credited sets, sampled proof blocks and their outcomes, whole windows and periods, and A rows,
+    then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
+    multiple of 32), a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or missing,
+    a period unclosed or a window of it missing or out of order, an A tree the round roots
+    didn't commit, a window's round log the challenger never received, entries or a sampled proof block's proof of another
+    registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
+    open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
+    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
+    model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
+    its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
+    Commit record the sample root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
+    another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
+    to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
+    honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
+    integer, a period whose open commits no T or a malformed one, a window's live evidence whose live Program is not
+    at its T, S and PREFIX or whose round's live@<s> outcome is missing, rejected, twice, of another circuit or opened
+    another m@<s> than the manifest's m_s, another round@<s> than its round, other slot or request tables or other
+    ok rows, and every other
+    refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (A_LINK, 400), (WEIGHTS, 300))}
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (WINDOW_DRAWN, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+                             (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
+                                  (REGISTERED_FILE, credit_cases.registered_file_instance,
+                                   credit_cases.REGISTERED_FILE_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
+                                  (WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
+                                  (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
+                                  (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
                                   (A_LINK, credit_cases.a_link_instance, credit_cases.A_LINK_NAMES),
                                   (WEIGHTS, credit_cases.weights_instance, credit_cases.WEIGHTS_NAMES)):
         swept += Counter(D.replay(port, instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-verifier-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "drawn accept", "outcome accept", "a-link accept", "weights accept"} <= set(CREDITED)
-    for part in ('credit draw: the draw root over the manifest', "credit draw: the window's draw root is not",
-                 "credit draw: the challenger's session closed with no draw coin",
-                 'credit credit: manifest row # has no', 'credit credit: call # is credited with no z',
-                 'credit coin: the draw coin: ', "credit coin: the draw's session is not trusted",
+    assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
+            "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
+            "registered-file accept j10r chunked"} <= set(CREDITED)
+    for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
+                 "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
+                 "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
+                 "credit coin: the draw's session is not trusted",
                  "credit coin: the session the auditor's ledger opens on the window does not withhold",
-                 'outcome missing: ', 'outcome failed: ', 'outcome outcome: unit # has two',
-                 'outcome outcome: unit # has a proof outcome and was not drawn', 'drawn layout: linear ',
-                 'drawn layout: the A slot #', 'drawn layout: the A blocks of K = #',
-                 'drawn layout: a call of lm_head', 'drawn draw: the draw coin is not',
-                 "drawn draw: the draw's stream", "drawn budget: the draw's K is not",
-                 "drawn budget: the window's # units are fewer than K",
+                 "outcome missing: ", "outcome failed: ",
+                 "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
+                 "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
+                 "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
+                 "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
+                 "so the period earns nothing: tile-k: the window's tile at K = #",
+                 "pad its linears' A and B rows with zero codes to K = #",
+                 "split its linears' k range into linears of at most K = # each",
+                 "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
+                 "window manifest: manifest row # states no served rows m_s at most the period's T = # table rows",
+                 "window layout: the period's T = # table rows give an A slot of # rows, not the window's M = #",
+                 "window layout: the period's table rows T are not a positive integer",
+                 "period layout: period ", "'s open commits no table rows T (rows, a positive integer",
+                 "so the period earns nothing: layout: the period's T = # table rows give an A slot",
+                 "window manifest: call # states # served rows and call # #, both of step #",
+                 "period period: period ", "period missing: session #", "period order: session #",
+                 "period period: the sessions presented run past", "period period: session ", "period window: window #",
+                 "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
+                 "drawn budget: the draw's K is not",
+                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
+                 "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
+                 "window layout: the window's circuit's units are not its record's tiles",
+                 "window layout: the window's circuit is not an H# window",
+                 "window layout: the window's template at K = # is not h#window's",
+                 "window layout: the window's descriptor is not a verity-ir/descriptor/v#",
+                 "window layout: the window's TILES are at K = ", "window layout: the window's layout is not",
+                 "window layout: a call of lm_head", "so the period earns nothing: layout: ",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
-                 'a-link a-link: the window registers no A value', 'which is no registered A value',
+                 "a-link a-link: the window registers no A value", "which is no registered A value",
                  "weights weights: the window's registered weights are not the ones its open root binds",
-                 'weights weights: the window registers no weights', 'weights weights: the window registers K = #',
-                 "'s entry is not the registration of K = #'s B rows", 'b/<K> of a K of its circuit',
+                 "weights weights: the window registers no weights", "weights weights: the window registers K = #",
+                 "'s entry is not the registration of K = #'s B rows", "b/<K> of a K of its circuit",
                  "weights weights: the window's circuit is not its descriptor's SHA#",
+                 "window rounds: the round roots are not the roots the challenger's log shows it received",
+                 "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
+                 "window a-link: the window registers no A value",
+                 "so the period earns nothing: rounds: the round roots are not",
                  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
-                 "registered-file registration: call #'s statement reads ",
-                 'which the window registers twice: register',
+                 "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
+                 "window registration: drawn unit #'s proof opened port ",
+                 "against another root than the one the window registered for",
+                 "window registration: drawn unit #'s proof was verified against another circuit",
+                 "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
+                 "which the window registers not",
+                 "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
+                 "so the period earns nothing: registration: drawn unit #",
+                 "window weights: the window's registered weights' root ",
+                 "open signed: a B row's codes or s_w differ from the ones the period registered",
+                 "'s open signs no weights' root (weights_root, a SHA# digest",
+                 "'s open signs a weights' root but no model (model, {name, checkpoint_sha#})",
+                 "with another checkpoint than the one credit pins for it: open the period with the gate's --model",
+                 "which is no checkpoint role credit pins: open the period with the gate's --model",
+                 "window weights: period ",
+                 "window weights: the window is in no period of the auditor's ledger",
+                 "window weights: the window's round# request table's root is not",
+                 "window weights: the window's registered weights are not the ones its open root binds",
+                 "window weights: registered weights ", "period weights: period ",
+                 "so the period earns nothing: weights: the window's registered weights' root",
+                 "registered-file registration: call #'s statement reads ", "which the window registers not: register",
+                 "which the window registers twice: register",
                  "credit commit: the window's Commit record is not the bytes in lowercase hex",
-                 "the window's layout gives it (credit.table_rows", '(the verifier hashes its pads)',
-                 'which only round # commits', 'or receipt table of the window',
-                 "'s receipt table, its round #'s, which only round # commits",
-                 'a-link a-link: registered receipt table ',
+                 "window commit: the window's Commit record is not the bytes in lowercase hex",
+                 "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
+                 "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
+                 "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
+                 "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
+                 "window arow: the window registers no round #'s input-ids table",
+                 "window arow: the Commit record registers row-table/#/k#",
+                 "which only round # commits",
+                 "window arow: round #'s request root (requests, the one the window's open root binds) is not",
+                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
+                 "requests@#'s domain is not the one the window's registration",
+                 "window arow: the window's request table's root is not round #'s request_table",
+                 "window arow: the window registers request table x/",
+                 "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
+                 "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
+                 "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
                  "its units' ok rows, which are the verifier's own",
-                 "registered-file layout: the window's template at K = # is not h#window's"):
+                 "registered-file layout: the window's template at K = # is not h#window's",
+                 "window live: the window registers h#/w#/slots@# not", "window live: the window registers h#/w#/requests@# not",
+                 "rows of # #-bit words its live unit reads",
+                 "window live: the window's live evidence is not {descriptor, proofs}",
+                 "window live: the window's live descriptor is not a verity-ir/descriptor/v#",
+                 "window live: the window's live circuit is not a live Program",
+                 "window live: the window's live circuit's units are not its rounds",
+                 "window live: the window's live Program is at T = #", "rounds, not the window's #: every round's",
+                 "window live: the window's live Program's PREFIX is not its circuit's",
+                 "has no proof outcome: every round's served rows m_s is proved",
+                 "has two proof outcomes: each round's is proved and verified once",
+                 "window live: live unit # has a proof outcome and the window has # rounds",
+                 "proof was rejected: its served rows m_s = # are not proved",
+                 "proof was verified against another circuit than the window's live Program",
+                 "proof opened other ports, values or roots than its statement reads",
+                 "window live: the window's live proof outcomes are not a list",
+                 "so the period earns nothing: live: round #"):
         assert any(part in k for k in CREDITED), part
-
-
-#: one case of each refusal name of `credit.window`, `credit.period_credit`, `credit._window_drawn` and
-#: `credit.registered_file`, and each honest one, at seed 0: each carries the registry's real window
-#: (`pouw_credit_cases.real_bytes`, about 60 MB), which the Lean decodes whole per case
-REAL_WINDOW_CASES = [(port, name) for port, names in (("window-drawn", credit_cases.WINDOW_DRAWN_NAMES),
-                                                      ("window", credit_cases.WINDOW_NAMES),
-                                                      ("period", credit_cases.PERIOD_NAMES),
-                                                      ("registered-file", credit_cases.REGISTERED_FILE_NAMES))
-                     for name in ["honest", *names]]
-REAL_WINDOW_PORTS = {"window-drawn": (WINDOW_DRAWN, credit_cases.window_drawn_instance),
-                     "window": (WINDOW, credit_cases.window_instance), "period": (PERIOD, credit_cases.period_instance),
-                     "registered-file": (REGISTERED_FILE, credit_cases.registered_file_instance)}
-
-
-@pytest.mark.parametrize("port,name", REAL_WINDOW_CASES)
-def test_a_real_window_case_is_judged_alike(pass_server, port, name):
-    """The compiled `Credit.executionPhase`, `Credit.periodCredit`, `Credit.descriptorDrawn` and `Credit.registeredFile`
-    give each refusal name's case and each honest one, over the registry's real window (its templates the ones
-    `credit.TILE_PINS` pins), the verdict the Python gives it (`replay` raises on a difference); `test_pouw_credit.py`
-    holds the Python's verdict to each name's refusal."""
-    p, instance = REAL_WINDOW_PORTS[port]
-    D.replay(p, instance(random.Random(f"{name}/0"), name), pass_server)
+    assert any(k.startswith("window a-link: ") and "the window's layout gives it" in k for k in CREDITED)
 
 
 def test_honest_j10r_windows_are_credited(pass_server):
