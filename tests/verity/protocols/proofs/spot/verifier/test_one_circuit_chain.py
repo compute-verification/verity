@@ -1,7 +1,7 @@
 """The periods' chain (`test_interface.chain`: eight ``Gemm_v2{K=16, N=16}`` units, one wire) through the served
 verifier's door, stage by stage: C (the wired Program) registered with theta (each layer's weight a registered read), the
 trace committed, a proof block drawn, its proof on the processor prover, the Python door and the Lean door, then the
-three cheats (a crossing value, a block that is not C's, a block left out). Each stage is a test of its own; a stage
+four cheats (a crossing value, a block that is not C's, a block left out, a block holding a unit and the unit it reads). Each stage is a test of its own; a stage
 that reaches a named hole (`one_circuit.NotDerived`, Lean's `notDerived`) or a missing piece xfails with where it
 stopped, so the suite stays green and the first line of each xfail is the stop.
 
@@ -326,9 +326,37 @@ def stage_left_out() -> str:
     return f"refused: {why}"
 
 
+def in_block() -> dict:
+    """The registered partition with C's first two blocks one, ``[0, 4)``: units 2 and 3 read units 0 and 1 inside it."""
+    part = registered()["partition"]
+    return {**part, "blocks": [[[0, 4], *[b for b in part["blocks"][0] if b[0] >= 4]]]}
+
+
+def stage_in_block() -> str:
+    """(d) a block holding a unit and the unit it reads, at the door: refused by `operands-outside` before any proof."""
+    win, _c = committed()
+    _f, why = python_door(win.window.members[0], partition=in_block())
+    assert why is not None and "operands-outside" in why[1], f"cheat (d): the door did not refuse an in-block read: {why}"
+    return f"refused: {why}"
+
+
+def stage_in_block_lean() -> str:
+    """(d) at Lean's door (`spot-one-stage-zk restrict`): block 0 of `in_block`'s partition refused, in Python's words."""
+    r = registered()
+    with tempfile.TemporaryDirectory() as d:
+        c, p, out = Path(d, "C.json"), Path(d, "partition.json"), Path(d, "c_s.txt")
+        c.write_bytes(r["C"])
+        p.write_text(json.dumps(in_block(), sort_keys=True, separators=(",", ":")))
+        run = subprocess.run([str(PF.v2_executable()), "restrict", str(c), str(p), "0", str(out)],
+                             capture_output=True, text=True)
+    assert run.returncode != 0 and "operands-outside" in run.stderr, f"cheat (d): Lean's door: {run.returncode} {run.stderr[-600:]}"
+    return f"refused: {run.stderr.strip()[-400:]}"
+
+
 STAGES = [("register", stage_register), ("commit", stage_commit), ("draw", stage_draw), ("prove", stage_prove),
           ("python door", stage_python_door), ("lean door", stage_lean_door), ("cheat a: crossing value", stage_crossing),
-          ("cheat b: block not C's", stage_not_cs), ("cheat c: block left out", stage_left_out)]
+          ("cheat b: block not C's", stage_not_cs), ("cheat c: block left out", stage_left_out),
+          ("cheat d: in-block read", stage_in_block), ("cheat d at Lean's door", stage_in_block_lean)]
 
 
 def _run(fn) -> str:
@@ -375,9 +403,18 @@ def test_cheat_block_left_out():
     _run(stage_left_out)
 
 
+def test_cheat_in_block_read():
+    _run(stage_in_block)
+
+
+@pytest.mark.slow
+def test_cheat_in_block_read_at_leans_door():
+    _run(stage_in_block_lean)
+
+
 if __name__ == "__main__":
     for name, fn in STAGES:
-        if name == "lean door" and "--lean" not in sys.argv:
+        if name in ("lean door", "cheat d at Lean's door") and "--lean" not in sys.argv:
             print(f"{name}: skipped (--lean)")
             continue
         try:
