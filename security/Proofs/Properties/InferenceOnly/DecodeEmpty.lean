@@ -329,7 +329,7 @@ theorem memo_none (m : Std.HashMap String String) (h : m = ∅) (k : String) : m
 theorem memo_one (k k' v : String) (h : k = k') : ((∅ : Std.HashMap String String).insert k v)[k']? = some v := by
   subst h; exact Std.HashMap.getElem?_insert_self
 theorem tmemo_none (m : Std.TreeMap String String) (h : m = ∅) (k : String) : m[k]? = none := by
-  subst h; exact Std.TreeMap.getElem?_empty
+  subst h; exact Std.TreeMap.getElem?_emptyc
 theorem tmemo_one (k k' v : String) (h : k = k') : ((∅ : Std.TreeMap String String).insert k v)[k']? = some v := by
   subst h; exact Std.TreeMap.getElem?_insert_self
 theorem tddefs_rule (m : Std.TreeMap String Json) (hm : m = (∅ : Std.TreeMap String Json).insert "Root_v1" rootE)
