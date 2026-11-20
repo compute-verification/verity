@@ -56,8 +56,8 @@ def wRun : Json :=
 #guard OneStageZk.RUN_OWN_ROOT_WHY "T/c0" "w" 0 == "member T/c0: port w reads C's run input node 0, and the " ++
   "registration holds a root of its own for it: a run input node's rows are committed once, in input/n0"
 
--- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the node off
--- `HmLinks.unitAt` and `OneCircuit.regRow`
+-- the door's `OneCircuit.pos` takes the port at exactly the tree `runInputRootsAt` derives: both read the unit's root
+-- node of C and its row there (`OneCircuit.regRow`)
 #guard (runAt runP #[]).toOption.map (·.map (getD · "tree")) == some #[Json.str (Flock.Registered.freshValue 0)]
 #guard (Flock.OneCircuit.pos runP #[0, 1] Flock.Test.WiredPorts.fresh).toOption.isSome
 #guard (Flock.OneCircuit.pos runP #[0, 1]
