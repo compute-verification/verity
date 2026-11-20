@@ -33,7 +33,6 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import Any
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import salt_of
@@ -55,7 +54,7 @@ RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
 EPOCHS: dict[str, int] = {}
 #: what only an H1 period's open commits, for H1's window credit to read (core's `credit.committed_k`, `committed_rows`
 #: and `committed_length`): a period whose open commits any of them is H1's
-H1_PERIOD = (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD)
+H1_PERIOD = (Wd.K_FIELD, Wd.ROWS_FIELD, Wd.LENGTH_FIELD)
 
 
 def session_setting(raw: Any) -> dict[str, Any] | None:

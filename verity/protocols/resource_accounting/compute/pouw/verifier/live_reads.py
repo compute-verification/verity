@@ -70,7 +70,7 @@ def header_words(headers: Sequence[Sequence[int]]) -> list[list[int]]:
 
 
 def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
-    """Round s's public m ``<prefix>m@<s>``: one row, m's two u16 words, under `core_check.public_row_salt` of the execution phase's
+    """Round s's public m ``<prefix>m@<s>``: one row, m's two u16 words, under `window.public_row_salt` of the execution phase's
     open root `window` and s, registered under `program` binding `window`. Every input is public."""
     if not (isinstance(m, int) and 0 <= m < 1 << 32):
         raise ValueError(f"m is a u32, not {m!r}")
@@ -81,7 +81,7 @@ def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[lis
 
 def round_table(program: str, prefix: str, window: str, s: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """Round s's public round ``<prefix>round@<s>``, the unit's ``s``: one row, s's two u16 words, under
-    `core_check.public_row_salt` of the execution phase's open root `window` and s, registered under `program` binding `window`.
+    `window.public_row_salt` of the execution phase's open root `window` and s, registered under `program` binding `window`.
     Every input is public."""
     if not (isinstance(s, int) and not isinstance(s, bool) and 0 <= s < 1 << 32):
         raise ValueError(f"s is a u32, not {s!r}")
@@ -99,7 +99,7 @@ def caps(max_tokens: Sequence[int], T: int) -> list[int]:
 def caps_table(program: str, prefix: str, window: str, T: int, max_tokens: Sequence[int]
                ) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """The v2 unit's public caps ``<prefix>caps``: T rows, row q `caps`' leaf q as two u16 words, under
-    `core_check.public_row_salt` of the execution phase's open root `window` and q, registered under `program` binding `window`.
+    `window.public_row_salt` of the execution phase's open root `window` and q, registered under `program` binding `window`.
     Every input is public: the caps are the max_tokens the credit period's open committed."""
     cs = caps(max_tokens, T)
     if not all(isinstance(c, int) and 0 <= c < 1 << 32 for c in cs):
@@ -111,7 +111,7 @@ def caps_table(program: str, prefix: str, window: str, T: int, max_tokens: Seque
 
 def base_table(program: str, prefix: str, window: str, j: int, R: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """Piece j's public first row ``<prefix>base@<j>``, the unit's ``base``: one row, j R's two u16 words, under
-    `core_check.public_row_salt` of the open root `window` and j, registered under `program` binding `window`. Every
+    `window.public_row_salt` of the open root `window` and j, registered under `program` binding `window`. Every
     input is public."""
     if not (isinstance(j, int) and not isinstance(j, bool) and j >= 0 and 0 <= j * R < 1 << 32):
         raise ValueError(f"a piece's base j R is a u32, not {j!r} × {R!r}")
@@ -122,7 +122,7 @@ def base_table(program: str, prefix: str, window: str, j: int, R: int) -> tuple[
 
 @functools.lru_cache(maxsize=8)
 def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
-    """The live units' ok rows ``<prefix>live-ok``: row s the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
+    """The live units' ok rows ``<prefix>live-ok``: row s the one word 1 (`window.OK_ROW`) under `window.ok_salt` of
     the execution phase's open root `window` and s, registered under `program` binding `window`. Every input is public."""
     rows = [list(_cc().OK_ROW) for _s in range(rounds)]
     salts = [_cc().ok_salt(window, s) for s in range(rounds)]

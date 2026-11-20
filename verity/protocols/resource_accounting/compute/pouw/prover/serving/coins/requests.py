@@ -33,7 +33,7 @@ H1's runner, now deleted, built them as it served; this module holds what they a
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
-  root also commits round s's receipt roots (`receipts_digest`), and the sampling coin opens after `credit.draw_root`, over
+  root also commits round s's receipt roots (`receipts_digest`), and the sampling coin opens after `window.draw_root`, over
   the manifest, the last round's receipts and every round's root and coin, so sampling follows every round coin by hash.
 * **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
@@ -67,7 +67,6 @@ from verity.commitments import (
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
@@ -76,7 +75,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     ROW_SCHEMA,
     rows_domain,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.credit import CREDIT, draw_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import CREDIT, draw_root
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     CoinError,
@@ -253,7 +252,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: byte
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
     """Step s's calls: SHA-512 over their manifest rows (H1's runner (deleted)), in order, with what each call's listeners
-    bound (root(A) among it, once AROW binds it), each without its credit bit (`credit.CREDIT`): the step's last verdict
+    bound (root(A) among it, once AROW binds it), each without its credit bit (`window.CREDIT`): the step's last verdict
     comes after its round closes, and calls_root commits the bits before `draw_root`."""
     return tagged(STEP_TAG, salt, s, *(json.dumps({k: v for k, v in row.items() if k != CREDIT}, sort_keys=True)
                                        for row in rows))
@@ -311,10 +310,10 @@ def round_root(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes,
 def round_row(salt: bytes, r: int, calls: bytes, requests: bytes, slots: bytes, receipts: bytes,
               segments: Mapping[str, Sequence[tuple[int, int, bytes]]]) -> dict[str, Any]:
     """Round r's row of the log before its coin: its parts, its ``inner`` root (`round_root`) and ``root``, the one the
-    challenger receives, over that and each A value's ``a`` segments (`credit.round_root`: ``[level, index, root]``
+    challenger receives, over that and each A value's ``a`` segments (`window.round_root`: ``[level, index, root]``
     subtrees of the round's rows, `pouw_h1_served.Served.segments`)."""
     inner = round_root(salt, r, calls, requests, slots, receipts)
-    return {"round": r, "root": CR.round_root(r, inner, {v: list(x) for v, x in segments.items()}).hex(),
+    return {"round": r, "root": Wd.round_root(r, inner, {v: list(x) for v, x in segments.items()}).hex(),
             "inner": inner.hex(), "a": {v: [[lv, i, h.hex()] for lv, i, h in segments[v]] for v in sorted(segments)},
             "calls": calls.hex(), "requests": requests.hex(), "slots": slots.hex(), "receipts": receipts.hex()}
 
@@ -331,8 +330,8 @@ def round_reason(salt: bytes, row: Mapping[str, Any]) -> str | None:
         return f"a round of the log is malformed ({e})"
     if round_root(salt, r, calls, requests, slots, receipts) != inner:
         return f"round {r}'s root is not over its calls, its request table, its slot table and the receipts before it"
-    if CR.round_root(r, inner, segments) != root:
-        return f"round {r}'s root is not over its inner root and its A segments (`credit.round_root`)"
+    if Wd.round_root(r, inner, segments) != root:
+        return f"round {r}'s root is not over its inner root and its A segments (`window.round_root`)"
     return None
 
 

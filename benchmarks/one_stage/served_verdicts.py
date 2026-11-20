@@ -1217,6 +1217,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
@@ -1243,7 +1244,7 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
             if not p.get("units"):
                 continue
             _salt, refused = CC.live_salt(live["key"], live["ledger"], live["pins"], live["main"], live["session"],
-                                          json.loads(Path(p["manifest"]).read_text()), CC.lms_verify)
+                                          json.loads(Path(p["manifest"]).read_text()), Wd.lms_verify)
             got["passes"] += 1
             if refused is not None:
                 got["reason"] = f"pass {p.get('pass')}: {refused[0]}: {refused[1]}"[:600]
@@ -1905,7 +1906,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
     passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.commitments import randomness as RND
@@ -1940,7 +1941,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if period is None:
         return None, f"the live session joined no period of lane {lane}"
     name = period.get("period")
-    if h1 := [f for f in (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD) if f in period]:
+    if h1 := [f for f in (Wd.K_FIELD, Wd.ROWS_FIELD, Wd.LENGTH_FIELD) if f in period]:
         return None, (f"the live session joined period {name}, a non-Pearl-C one (its open commits {', '.join(h1)}): a Pearl-C salt "
                       "session is credited in a Pearl-C period alone")
     try:

@@ -88,9 +88,9 @@ from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, Strided, coll_concat, concat, runs
 from verity.circuits.types import Array, Tuple
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1device as D
@@ -558,7 +558,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     binds the two tables' domains, the execution phase's own rows (`credit.domain_of`), and never the weights', which are
     held across execution phases. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
-    of them: each port's reads start at the call's first unit (``reads_from``, `core_check.call_reads`) and end at its
+    of them: each port's reads start at the call's first unit (``reads_from``, `window.call_reads`) and end at its
     last (the verifier reads none below ``reads_from`` or past ``reads``, `Flock.Registered.Port.readAt`), so the file
     holds a statement to one call's units and is as long as the call. With ``salt``, the execution phase's Program salt (hex),
     the statement's public row ``pub`` (`PUB_PORT`) is the call's public table (`PUBS`, `public_table`) at its rows, one
@@ -566,7 +566,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     root(b/<K>) as ``roots`` holds them, and a J10-R execution phase's (`is_j10r`) the call's first position and the unit's
     blocks (`call_blocks`), so a unit seeded under another salt, position, roots, call or blocks opens no row of it; and
     the statement's output row ``ok`` (`OK_PORT`, o1) is the execution phase's ok rows ``<prefix>ok`` (`ok_table`, row u unit
-    u's) at its known content, the one word 1 under `core_check.ok_salt` of ``window`` and u, so a unit that computed 0
+    u's) at its known content, the one word 1 under `window.ok_salt` of ``window`` and u, so a unit that computed 0
     opens no row of it."""
     S = program.fn.S()
     u0, n = call_units(program)[call]
@@ -593,7 +593,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
         out[port] = {**({G.PARAM_KEY: key} if key in (ports or {}) and port != key else {}),
             "value": r["value"], "root": roots[r["value"]], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
             "domain": RV.domain(prog, r["value"], words, leaves, window=None if r["value"] == b else window).domain_id.hex(),
-            **RV.schema_entry(G.SCHEMA_V2), **CC.call_reads(u0, r["rows"])}
+            **RV.schema_entry(G.SCHEMA_V2), **Wd.call_reads(u0, r["rows"])}
     if salt is not None:
         if window is None:
             raise ValueError("a call's public rows are committed under salts of the window's open root: give window")
@@ -602,24 +602,24 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
                                         call_blocks(program, call) if is_j10r(program) else None)
         out[PUB_PORT] = {"value": pv, "root": reg.root.hex(), "leaves": n, "words": len(rows[0]), "word_bits": RV.WORD_BITS,
                          "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                         **CC.call_reads(u0, list(range(n))), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
+                         **Wd.call_reads(u0, list(range(n))), "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
         ov = f"{S.PREFIX}{OUTPUTS[1]}"
         rows, salts, reg = ok_table(prog, ov, window, tp.population)
-        out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(CC.OK_ROW),
+        out[OK_PORT] = {"value": ov, "root": reg.root.hex(), "leaves": tp.population, "words": len(Wd.OK_ROW),
                         "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
-                        **CC.call_reads(u0, list(range(u0, u0 + n))),
+                        **Wd.call_reads(u0, list(range(u0, u0 + n))),
                         "known": {"rows": rows, "salts": [s.hex() for s in salts]}}
     return {"format": G.READS_V1, "ports": out}
 
 
 def call_blocks(program: Program, call: int) -> list[tuple[int, int]]:
     """Each of call ``call``'s units' ``blocks`` under J10-R, in its tile order: tile t = I (n/C) + J's first row block
-    and first column block of its call's stream (`core_check.j10r_blocks`, `h1tile.j10r_blocks`' arithmetic) at the
+    and first column block of its call's stream (`window.j10r_blocks`, `h1tile.j10r_blocks`' arithmetic) at the
     execution phase's slot M, the call's K and the tile. Its ``call`` is the call's first unit (`call_units`)."""
     S = program.fn.S()
     (r, c), (lin, _blk) = _rc(S), S.CALLS[call]
     k, n = next((k, n) for name, k, n in S.LINEARS if name == lin)
-    return [CC.j10r_blocks(S.M, k, (r, c), t // (n // c), t % (n // c)) for t in range(call_units(program)[call][1])]
+    return [Wd.j10r_blocks(S.M, k, (r, c), t // (n // c), t % (n // c)) for t in range(call_units(program)[call][1])]
 
 
 def j10r_inputs(program: Program) -> tuple[list[int], list[tuple[int, int]]]:
@@ -634,24 +634,24 @@ def j10r_inputs(program: Program) -> tuple[list[int], list[tuple[int, int]]]:
 def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
                  blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """A call's public rows ``value`` (`PUBS`) over its ``n`` units from unit ``u0``, their salts and their registration:
-    unit u's row the execution phase's Program salt ``salt``, its position u and its call's ``roots`` (`core_check.public_words`,
+    unit u's row the execution phase's Program salt ``salt``, its position u and its call's ``roots`` (`window.public_words`,
     each hex), and with ``blocks`` (a J10-R execution phase's `call_blocks`) the call's first position ``u0`` and the unit's
-    blocks, under the public salt `core_check.public_row_salt` of the execution phase's open root ``window`` and u, registered
+    blocks, under the public salt `window.public_row_salt` of the execution phase's open root ``window`` and u, registered
     under the execution phase Program's digest ``prog`` binding ``window``."""
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
-    rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
-    salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
+    rows = [Wd.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
+    salts = [Wd.public_row_salt(window, u) for u in range(u0, u0 + n)]
     return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
 def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """The execution phase's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
-    registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
-    `core_check.ok_salt` of the execution phase's open root ``window`` and u, registered under the execution phase Program's digest
+    registration (h1_prove's `register_ok`): row u the one word 1 (`window.OK_ROW`) under
+    `window.ok_salt` of the execution phase's open root ``window`` and u, registered under the execution phase Program's digest
     ``prog`` binding ``window``."""
-    rows = [list(CC.OK_ROW) for _u in range(population)]
-    salts = [CC.ok_salt(window, u) for u in range(population)]
+    rows = [list(Wd.OK_ROW) for _u in range(population)]
+    salts = [Wd.ok_salt(window, u) for u in range(population)]
     return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 

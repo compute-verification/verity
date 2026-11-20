@@ -69,7 +69,7 @@ H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where
 first by an earlier record W (``--tie W``: PoUW H1's docket of the window, fixed before H1's sample coin, or Pearl+'s
 window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
 docket, chained right after W, registers each as
-W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
+W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `window.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_file`) and nothing of them is registered afresh. Their readers are
 sampled like any other proof block (under a stratified rate, a stratum a table), never proved whole as an output class.
@@ -201,7 +201,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
@@ -597,7 +597,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
     pins of the values, each W's entry under the value's name, which `interface.registered_file` holds to the rows the
     value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
-    `credit.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
+    `window.window_table` (PoUW H1's docket of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
     ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
     takes no values with no W. A value of ``own`` (`phase_values`) that is the execution phase's own (`PHASE_OWN`) is
@@ -609,7 +609,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     mine = {v: own[v] for v in values if v in (own or {}) and v in PHASE_OWN}
     values = tuple(v for v in values if v not in mine)
     named = {e.get("value") for e in ((w or {}).get("registered") or ()) if isinstance(e, Mapping)}
-    if both := sorted(v for v in mine if (v if prefix is None else CR.window_table(v, prefix)) in named or v in named):
+    if both := sorted(v for v in mine if (v if prefix is None else Wd.window_table(v, prefix)) in named or v in named):
         raise ValueError(f"the execution phase registers {both} afresh, and the earlier registration registers them too")
     fresh = {"registered": {v: int(e["words"]) for v, e in mine.items()},
              "schemas": {v: IF.value_format(reg, v)[0] for v in mine}}
@@ -625,7 +625,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
         entries.setdefault(e.get("value") if isinstance(e, Mapping) else None, []).append(dict(e))
     pins, outputs, d = {}, {}, DD.digest(w)
     for v in values:
-        name = v if prefix is None else CR.window_table(v, prefix)
+        name = v if prefix is None else Wd.window_table(v, prefix)
         if len(got := entries.get(name, [])) != 1:
             raise ValueError(f"the earlier registration registers the circuit's value {v!r} as {name!r} {len(got)} times, "
                              "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
@@ -1325,7 +1325,7 @@ def main(argv: list[str] | None = None) -> int:
                    "record) that registered first the values the circuit's program takes, which the window's registration "
                    "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")
     p.add_argument("--tie-prefix", help="with --tie: W's descriptor's PREFIX, which its tables' names take "
-                   "(`credit.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
+                   "(`window.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
                    "(Pearl+'s)")
     p.add_argument("--day", type=int, default=None, help="the window's day, by its index among the monitoring period's days: "
                    "R2 holds the registration's program to the day's one declaration in --day-log (`declared_day`)")
