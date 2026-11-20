@@ -185,25 +185,6 @@ def _run_words(store: WordStore, f: dict, rid: str, engine_step: int, lo: int, h
     return w
 
 
-def _schedule_witness(pi: ProgramIndex, store: WordStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
-                      inputs_rec: list) -> np.ndarray:
-    """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
-    exactly when it ranks each expert's pairs."""
-    fam = d["family"]
-    own: Any = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None   # None: the width below then refuses
-    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
-    if width is None or width != hi - lo:
-        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
-                          f"committed rank (port 0, one key per pair) binds it")
-    at = d["row"] * width
-    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
-    if w is None:
-        raise _Unresolved(why)
-    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
-                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
-    return w
-
-
 def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
@@ -276,7 +257,7 @@ def _evaluate_row(pi: ProgramIndex, store: WordStore, weights: Callable[[str, in
                 elif pi.kv_prefix and a == pi.kv_prefix["input"]:
                     words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
                 elif pname == RM.SCHEDULE_PARAM:
-                    words.append(_schedule_witness(pi, store, r, d, rid, arrive, pname, lo, hi, inputs_rec))
+                    raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: nothing commits or binds the `schedule` witness")
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:

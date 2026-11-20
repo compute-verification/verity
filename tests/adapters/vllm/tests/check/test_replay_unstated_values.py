@@ -4,7 +4,6 @@ no mapping beside a Program that takes no cached prefix, and a schedule reader's
 checked ahead of its use, so each ends where the value is first read."""
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -16,7 +15,6 @@ from verity_vllm.check.replay import driver as DR
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import request_replay as RR
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.query.manifest import format as RM
 
 
 @pytest.fixture(scope="module")
@@ -90,25 +88,3 @@ def test_a_cached_prefix_entry_that_is_no_mapping_is_read_whatever_its_request_s
     assert served_cold and populate({"r0": {"cached": 0}, "a request with no Program": entry}) == served_cold
     with pytest.raises(AttributeError, match=named):
         populate({"r0": entry})
-
-
-def test_a_schedule_reader_with_no_member_at_port_0_reads_the_member_its_description_names_none():
-    """No description names a member None; one that did, of the slice's width, is the member the row is keyed by."""
-    reader = sorted(RM.SCHEDULE_READERS)[0]
-    index: Any = SimpleNamespace(member_of_port=lambda i: {})
-    read: list[Any] = []
-
-    class Store:
-        def words(self, rid: str, step: int, op_path: str, member: Any, lo: int, hi: int) -> tuple[np.ndarray, str]:
-            read.append(member)
-            return np.arange(lo, hi, dtype=np.uint32), "u32"
-
-    def witness(members: list) -> np.ndarray:
-        d = {"family": reader, "members": members, "row": 0, "step": 0, "op_path": "moe/L0"}
-        store: Any = Store()
-        return EV._schedule_witness(index, store, {"i": 0}, d, "r0", 0, RM.SCHEDULE_PARAM, 0, 4, [])
-
-    assert witness([(None, 4, "u32")]).tolist() == [0, 1, 2, 3] and read == [None]
-    for members in ([("rank", 4, "u32")], [(None, 8, "u32")], []):
-        with pytest.raises(EV._Unresolved, match="row's own committed rank"):
-            witness(members)
