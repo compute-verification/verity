@@ -303,6 +303,9 @@ theorem lowerGateBodies_of (hW : LiftWordNodes) : LowerGateBodies := by
     rw [hfn'] at hgL
     exact gateDef_prefix hLP' hgL (body_lt hm hbS)
 
+/-- **`LowerGateBodies`** holds. -/
+theorem lowerGateBodies : LowerGateBodies := lowerGateBodies_of liftWordNodes
+
 theorem foldlM_inv {α β : Type} (l : List α) (f : β → α → Option β) (I : ℕ → β → Prop)
     (hstep : ∀ n (hn : n < l.length) b, I n b → ∃ b', f b l[n] = some b' ∧ I (n + 1) b') :
     ∀ k n b, k + n = l.length → I n b → ∃ o, (l.drop n).foldlM f b = some o ∧ I l.length o
