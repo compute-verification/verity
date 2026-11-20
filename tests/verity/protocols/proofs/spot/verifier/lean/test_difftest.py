@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib.util
 import json
 import random
 import re
@@ -57,8 +58,6 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
-import settings
-import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
@@ -77,6 +76,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     hidden_sample as HD,
     link_points as LP,
     members as M,
+    one_circuit as OC,
     partition as P,
     produced as PD,
     proofs as PF,
@@ -99,8 +99,23 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+
+
+def _by_path(name: str, path: Path):
+    """The module at `path`, loaded once as `name`: this file is imported by path from other suites, where a bare
+    `import settings` finds their own registry and `stand_in` is on no path."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with_name("settings.py"))
+stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -1319,9 +1334,22 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
+NO_BLOCKS = "restrict: the partition object has no blocks"
+
+
+@functools.cache
+def _blocked_lookups() -> list[str]:
+    """The lookups of the circuit file `Own.circuitFile` derives for `BLOCKED`'s block at unit 0, as the door lowers it."""
+    c, part, units = b"".join(codec.descriptor_chunks(BLOCKED.program)), BLOCKED.partition, [(0, 1)]
+    text = OC.lower(OC.restrict(c, part, units), part, PF.lower_executable, cut=OC.cuts(c, part),
+                    formed=OC.formed_in(c, part, units))
+    return PF.lookups_of(json.loads(text.split(b"\n")[1].decode()[len("META "):]))
+
+
 def _tables_case(j):
-    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of a circuit whose META
-    is ``{"lookups": lookups}`` (`proofs.lookups_of`; ``{}`` without ``lookups``), or the ValueError they read with."""
+    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of the circuit file the
+    verifier derives from the case's C and partition (`BLOCKED`'s, `_blocked_lookups`), or the ValueError it refuses
+    with where the case names no partition; the case's own ``lookups`` reach no circuit the verifier reads."""
     j = _json(j)
     ds = j.get("digests") if isinstance(j, dict) else None
     if not isinstance(ds, list):
@@ -1330,10 +1358,11 @@ def _tables_case(j):
         raise D.Reject("digests is not a list of hex strings")
     if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
         raise D.Reject("not lowercase hex")
-    try:
-        return ds, PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
-    except ValueError as e:
-        return ds, e
+    if j.get("partition") is None:
+        return ds, ValueError(NO_BLOCKS)
+    if (j["partition"], j.get("program")) != (_json(BLOCKED.partition), BLOCKED.desc):
+        raise RuntimeError("the strategy drew a C and partition other than BLOCKED's")
+    return ds, _blocked_lookups()
 
 
 def tables_held(j):

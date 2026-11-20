@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _load(name: str):
-    """By path: the directory's name shadows the stdlib's `encodings`, and `code.py` the stdlib's `code`."""
+    """By path: the directory's name shadows the stdlib's `encodings`."""
     if f"enc_{name}" in sys.modules:
         return sys.modules[f"enc_{name}"]
     spec = importlib.util.spec_from_file_location(f"enc_{name}", HERE.parents[3] / "benchmarks" / "network_e2e" / "encodings" / f"{name}.py")
@@ -30,7 +30,6 @@ def _load(name: str):
 
 
 V = _load("code_v1")
-C = V.C
 
 SMALL = V.Caps(arrived=40, hits=12, hit_units=300, resumes=10, order=4, order_len=6, gap=200, index=300, lag=8)
 

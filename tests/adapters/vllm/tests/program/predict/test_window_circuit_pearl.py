@@ -8,6 +8,8 @@ position's cut linears are, of each of TINY's 2 layers, q/k/v (K = 64, N = 128),
 """
 from __future__ import annotations
 
+import re
+from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
@@ -115,6 +117,41 @@ def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(l
                                             r"y no rows of Pearl\+'s 16 words doubled hand on in one unit within 1 rows that "
                                             r"Flock proves$"):
         WK.linears(low.fn, 16, 1)
+
+
+def test_a_linear_takes_its_name_and_body_and_an_lm_head_its_selects_name_or_body(low):
+    """A linear is cut only where it has `Gemm`'s name and a registered `Gemm`'s body: either without the other is refused by
+    name. A GEMM a token select reads stays computed whether the select is known by its name or by its body, and a select's
+    name over another body is refused."""
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.ops import prims as P
+    from verity.circuits.ops.gemm import Gemm
+    from verity.circuits.refs import Coll, concat
+
+    nodes, honest = low.fn.body.nodes, WK.linears(low.fn, 16, 256)
+
+    def swapped(j, fn):
+        return NS(id=low.fn.id, body=NS(nodes=[NS(fn=fn if i == j else n.fn, args=n.args) for i, n in enumerate(nodes)]))
+
+    def like(d, name, version, body):
+        return CompositeDefinition(name, version, d.statics, d.signature, body, register=False, ports=d.ports)
+
+    def zeros(B, S, *_):
+        return Coll(Gemm.signature(S)[1], concat([B.call(P.const(16, 0)).refs] * S.N))
+
+    g = next(j for j, n in enumerate(nodes) if n.fn.name == "Gemm" and j not in honest.heads)
+    s = next(j for j, n in enumerate(nodes) if n.fn.name == "TokenSelect")
+    gb, sb, sel = nodes[g].fn.bindings, nodes[s].fn.bindings, nodes[s].fn.defn
+    assert WK.linears(swapped(s, bind(like(sel, "LogitArgmax", 1, sel.body), **sb)), 16, 256) == honest
+    for fn, why in ((bind(like(Gemm, "Gemm", 2, zeros), **gb), "a unit named as the linear Gemm whose body is no registered "
+                                                                 "Gemm's at its statics is refused"),
+                    (bind(like(Gemm, "Matmul", 1, Gemm.body), **gb), "a registered Gemm's body under another name is refused")):
+        with pytest.raises(Unexpressible, match=re.escape(f"{fn.id}: {why}")):
+            WK.linears(swapped(g, fn), 16, 256)
+    other = bind(like(sel, "TokenSelect", sel.version, lambda B, S, *_: B.call(P.const(32, 0))), **sb)
+    with pytest.raises(ValueError, match=re.escape(f"{other.id}: a unit named as the token select TokenSelect whose body is "
+                                                   "no registered select's at its statics is refused")):
+        WK.linears(swapped(s, other), 16, 256)
 
 
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):

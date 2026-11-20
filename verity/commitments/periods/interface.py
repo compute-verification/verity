@@ -2707,7 +2707,9 @@ def of_records(window_dir: str | Path, sampling_design: Mapping[str, Any], resol
 
 def tied_record(body: bytes, registration: Mapping[str, Any], name: str | Path = "circuit.json") -> dict[str, Any]:
     """The circuit record whose file's bytes are ``body``, refused (ValueError) unless it is the one ``registration`` binds
-    (its period's ``circuit``, the SHA-512 of ``body``) and names the registration's program, partition and run. This tie
+    (its period's ``circuit``, the SHA-512 of ``body``) and names the registration's program, partition and run, each of
+    which both sides name (a stated record, `descriptor_record`, has a run on neither); a field left out is refused by
+    name. This tie
     holds the record's program to the registered one, and a reader's rebuild of the record's program from its template
     ids (`window_of_record`, `block_counts.pinned`) holds the Definitions to the record's: only the two together make what
     is counted or checked the registered circuit's, so neither is redundant."""
@@ -2715,8 +2717,17 @@ def tied_record(body: bytes, registration: Mapping[str, Any], name: str | Path =
     if hashlib.sha512(body).hexdigest() != bound:
         raise ValueError(f"{name} is not the circuit record the registration binds ({bound})")
     doc = json.loads(body)
-    if (doc.get("program"), doc.get("partition"), doc.get("run")) != (
-            registration.get("program"), registration.get("partition"), (registration.get("window") or {}).get("run")):
+    mine = (doc.get("program"), doc.get("partition"), doc.get("run"))
+    theirs = (registration.get("program"), registration.get("partition"), (registration.get("window") or {}).get("run"))
+    for key, a, b in zip(("program", "partition", "run"), mine, theirs):
+        # a stated record (`descriptor_record`: its `cap`, no `RUN_FIELDS`) is emitted before any run, so neither side has one
+        if key == "run" and a is None and b is None and "cap" in doc:
+            continue
+        for side, v in (("circuit record", a), ("registration", b)):
+            if v is None:
+                raise ValueError(f"the {side} names no {key}, so nothing ties the circuit record's {key} to the "
+                                 "registered one")
+    if mine != theirs:
         raise ValueError("the circuit record names another program, partition or run than its registration")
     return doc
 

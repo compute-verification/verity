@@ -23,22 +23,14 @@ set_option backward.privateInPublic.warn false
 namespace MemoryAttester
 
 open Flock
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA)
 
 abbrev E := Except String
 
-abbrev PROTOCOL : String := SessionCoins.PROTOCOL
 def COIN_DOMAIN : String := "verity/pous/memory-challenger-coins/v1"
-abbrev COIN_TREE : String := SessionCoins.COIN_TREE
-abbrev RECORDS : String := SessionCoins.RECORDS
-abbrev COIN_TAG : ByteArray := SessionCoins.COIN_TAG
-abbrev COIN_BINDING : ByteArray := SessionCoins.COIN_BINDING
 def SESSION_TAG : ByteArray := "verity-pous/memory-challenger/session/v1".toUTF8.push 0
-abbrev COIN_SCHEMA : String := SessionCoins.COIN_SCHEMA
 def RECORD_BYTES : Nat := 92
 def TEST_PREFIX : String := "test/"
-abbrev COMPLETE : String := SessionCoins.COMPLETE
-abbrev LATE : String := SessionCoins.LATE
-abbrev CLOCK : String := SessionCoins.CLOCK
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
 A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
@@ -164,7 +156,7 @@ def pyJsonStr (s : String) : String := SessionCoins.pyJsonStr s
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds. -/
 def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
-  SessionCoins.header c.session c.coinRoot c.coinKey c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
+  SessionCoins.header c.session c.coinRoot (Sha512.hash c.coinKey) c.binding c.blocks c.k c.limitNs c.blockBytes ended rounds
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`. -/
 def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do

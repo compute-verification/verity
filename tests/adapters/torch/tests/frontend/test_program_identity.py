@@ -1,6 +1,6 @@
-"""`check_identity`: a fully qualified id names one body. Two bodies under one id in a program, and a body under a
-registered definition's id that is not the registered body, are `E_IDENTITY`; neither is first-wins. Pure
-`verity.circuits`: no torch."""
+"""`check_identity`: a fully qualified id names one body. A body under a registered definition's id that is not the
+registered body is `E_IDENTITY`, never first-wins (two bodies under one id in one program are refused at the Program's build:
+`codec.IdentityConflict`). Pure `verity.circuits`: no torch."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry.prims import BF16, Bf16Add, Bf16AddF2fp
+from verity_vllm.definitions.registry.prims import BF16, Bf16Add
 
 from verity_torch.frontend.errors import FrontendError
 from verity_torch.frontend.program_identity import check_identity
@@ -24,13 +24,6 @@ def _both(first: CompositeDefinition, second: CompositeDefinition) -> Program:
     both = CompositeDefinition("IdentityBoth", 1, (), lambda S: ((("x", Array(4, BF16)),), Array(4, BF16)),
                                lambda B, S, x: B.call(bind(second, K=4), B.call(bind(first, K=4), x)), register=False)
     return Program(bind(both))
-
-
-def test_two_bodies_under_one_id_in_one_program_are_refused():
-    with pytest.raises(FrontendError) as ei:
-        check_identity(_both(_leaf(Bf16Add), _leaf(Bf16AddF2fp)))
-    assert ei.value.code == "E_IDENTITY"
-    assert "two different bodies claim IdentityLeaf_v1{K=4} within one program" in ei.value.message
 
 
 def test_two_definitions_with_one_body_under_one_id_are_one_definition():
