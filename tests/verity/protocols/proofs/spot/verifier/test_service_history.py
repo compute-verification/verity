@@ -160,21 +160,15 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     assert 25 not in {c[5] for c in forgetful if c[0] == "refused"} and forgetful != want[0]
 
 
-def test_r8_lets_a_tied_value_through_on_both_verifiers():
-    """R8's tied values on both verifiers, which compare the tied values a verdict publishes: a v1 record whose members
-    all read `W`, named tied, is let through and its verdict publishes `W`; not named, or a name that isn't a parameter
-    named instead, it is refused; and `W` named tied while expected registered is refused (`R8-tied`), since a tied value
-    is never a registered value."""
+def test_r8_lets_a_shared_value_through_on_both_verifiers_only_registered():
+    """R8 on both verifiers: a v1 record whose members all read `W` is refused (`R8-shared-input`), and the record that
+    registers `W`, which the verifier expects registered, is not."""
     prog = _program()
     first, ports = _registered_record(prog, _registered(prog))
     v1 = DK.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
-    for rec, registered, tied, codes, through in (
-            (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
-            (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
-            (first, {"W": 2}, None, (), ())):
-        v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
-        assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
-        assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
+    for rec, registered, codes in ((v1, None, ("R8-shared-input",)), (first, {"W": 2}, ())):
+        v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered)
+        assert v.codes == codes and v.verifiers["lean"]["codes"] == list(codes), v
 
 
 def test_r7_reads_each_values_first_registration():

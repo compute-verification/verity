@@ -135,27 +135,14 @@ def R4 (rec : Json) (v : Docket.Verifier) : Prop :=
 /-- R5: the record's anchors are the verifier's. -/
 def R5 (rec : Json) (v : Docket.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
-/-- R8: every name the verifier lists as tied is a parameter of the program, neither registered nor held, whose gates
-are one interval of run Input nodes (`Docket.tiedBad`); and under a template query that applies to the verifier's
-program, its proof blocks each read their own leaves of every run Input node but a parameter's the verifier expects
-registered or lists as tied (`Partition.readAlone`, of `Partition.sharedInputs`, outside `Docket.heldGates` and
-`Docket.tiedGates`): no batch of more than one member broadcasts one or reads a leaf of one twice, and no two
-instance nodes read one leaf. A value one proof block computes that the program takes as an Input joins no proof
-blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of them computed.
-R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
-let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
-`Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
-port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
-has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
-execution phase whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
-the names an answer carries to the ones the check ties: every name an accepted period's scan's answer carries under
-`rests_on_period_check` is one of that scan's lanes' `prog<j>`; that the answer carries every Input the registration
-piece let through, and that the name `prog<j>` is the Input the entry `scan/prog<j>` registers, are not said there.
-That the rows under that root are the outputs of the proof blocks that computed them (one-stage's ports and the
-commitment's binding) is not composed with those into a theorem: unproved. -/
+/-- R8: under a template query that applies to the verifier's program, its proof blocks each read their own leaves of
+every run Input node but a parameter's the verifier expects registered (`Partition.readAlone`, of
+`Partition.sharedInputs`, outside `Docket.heldGates`): no batch of more than one member broadcasts one or reads a leaf of
+one twice, and no two instance nodes read one leaf. A value one proof block computes that the program takes as an Input
+joins no proof blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of
+them computed. -/
 def R8 (v : Docket.Verifier) : Prop :=
-  (Docket.tiedBad v).isEmpty = true ∧
-    Partition.readAlone v.program v.query (Docket.heldGates v ++ Docket.tiedGates v) = true
+  Partition.readAlone v.program v.query (Docket.heldGates v) = true
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/

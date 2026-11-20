@@ -92,7 +92,7 @@ def registration_answer(v: Any) -> dict:
     template query that applies and the tied values R8 let through when any, as `Spot.Pieces.registration` writes them
     (`Verdict.to_json`)."""
     j = v.to_json()
-    return {"codes": j["codes"], **{k: j[k] for k in ("fanout", "rests_on_period_check") if k in j}}
+    return {"codes": j["codes"], **({"fanout": j["fanout"]} if "fanout" in j else {})}
 
 
 def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:

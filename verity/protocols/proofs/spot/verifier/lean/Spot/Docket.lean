@@ -94,13 +94,9 @@ included. A record it holds no verdict for is not refused, as for the pool. A re
 (`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
 
 Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
-unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
-(`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
-Input joins no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes). A tied value
-is a run Input whose rows a later check ties to the registrations that computed them; R8 refuses a tied name that isn't
-a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes (`R8-tied`),
-and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
-acceptance rests on that later check.
+unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value
+(`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an Input joins
+no proof blocks in the fan-out (`Partition.fanout`, which the registration piece publishes).
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
@@ -239,9 +235,6 @@ structure Verifier where
   /-- its verdict log, the pool's form: each record digest it ran, with whether that run accepted, which R7 holds an
   output value's earlier port to (`portsAccepted`); empty when it gives none -/
   verdicts : Array (String × Bool) := #[]
-  /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
-  through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
-  tied : Array String := #[]
   /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, which
   `link-points` holds to one count of link points at every sample that ends (`linkRefused`); none in the one-statement
   form -/
@@ -285,29 +278,6 @@ def optStr : Option String → Json
 (`registered.held_gates`). -/
 def heldGates (v : Verifier) : Array (Nat × Nat) :=
   v.params.filterMap fun p => if v.registered.any (·.1 == p.name) then p.gates else none
-
-/-- The Input gates `(first, count)` of tied name `t` where R8 may let it through: a parameter of the program that `v`
-neither expects registered nor holds, whose gates are one non-empty interval of run Input nodes
-(`Partition.runInputs`; `registration._tied`). A tied value is never a registered value: R7 holds nothing of it. -/
-def tiedGate (v : Verifier) (t : String) : Option (Nat × Nat) :=
-  if v.registered.any (·.1 == t) || v.held.contains t then none
-  else ((v.params.find? (·.name == t)).bind (·.gates)).filter fun (first, count) =>
-    Partition.runInputs v.program.prog first count
-
-/-- The gates of the tied names R8 may let through (`tiedGate`). -/
-def tiedGates (v : Verifier) : Array (Nat × Nat) := v.tied.filterMap (tiedGate v)
-
-/-- The tied names R8 can't let through (`R8-tied`). -/
-def tiedBad (v : Verifier) : Array String := v.tied.filter fun t => (tiedGate v t).isNone
-
-/-- The tied names R8 let through: each whose gates hold a run Input node the proof blocks don't each read alone outside
-the registered parameters' gates (`Partition.shared?`). The registration piece publishes them beside the fan-out:
-acceptance rests on the later check that ties their rows. -/
-def tiedThrough (v : Verifier) : Array String :=
-  let shared := Partition.shared? v.program v.query (heldGates v)
-  v.tied.filter fun t => match tiedGate v t with
-    | some (first, count) => shared.any (Partition.within v.program.prog first count)
-    | none => false
 
 /-- The values whose domain leaves the window's open root out: `held`, then the pinned, supplied and output values. -/
 def fixedOf (v : Verifier) : Array String :=
@@ -564,13 +534,11 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
-blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
-`Partition.readAlone`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a
-join point into each of its branches. -/
+/-- R8's code added to `c`: a run Input node the proof blocks don't each read alone outside the registered parameters'
+gates (`R8-shared-input`, `Partition.readAlone`). One term rather than two lines, since `check_eq_checkRef`'s `simp`
+copies every line after a join point into each of its branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
-  kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
-    "R8-shared-input"
+  kept (Partition.readAlone v.program v.query (heldGates v)) c "R8-shared-input"
 
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/

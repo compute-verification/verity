@@ -92,7 +92,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
           held: Sequence[str] | None = None, members: Sequence[Any] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+          pool: Mapping[str, Any] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
           verdicts: Mapping[str, bool] | None = None,
@@ -154,13 +154,12 @@ def both(*args: Any, **kw: Any) -> Verdict:
     verdict that refuses what either refuses, where `gate` stops at SPOT's refusal."""
     spot, caller = R.check(*args, **kw), check(*args, **kw)
     return Verdict(spot.ok and caller.ok, spot.codes + tuple(c for c in caller.codes if c not in spot.detail),
-                   {**caller.detail, **spot.detail}, fanout=spot.fanout,
-                   rests_on_period_check=spot.rests_on_period_check)
+                   {**caller.detail, **spot.detail}, fanout=spot.fanout)
 
 
 def gate(spot: Verdict, caller: Verdict) -> Verdict:
     """`Caller.gate`: SPOT's verdict `spot` where it refuses or the caller's verdict `caller` finds nothing, else the
-    caller's, with SPOT's fan-out and tied values."""
+    caller's, with SPOT's fan-out."""
     if not spot.ok or caller.ok:
         return spot
-    return Verdict(caller.ok, caller.codes, caller.detail, caller.verifiers, spot.fanout, spot.rests_on_period_check)
+    return Verdict(caller.ok, caller.codes, caller.detail, caller.verifiers, spot.fanout)

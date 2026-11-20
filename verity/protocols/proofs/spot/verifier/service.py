@@ -407,9 +407,7 @@ class Check:
     from the sample; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
     without one. `registration_deadline`: seconds on the challenger's clock from
     the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a docket received later,
-    or before any salt, is refused (`late-registration`) and ends the epoch. `tied`: the window Program's parameters, run
-    Inputs, whose rows a later check ties to the dockets that computed them, which R8 lets through though several
-    proof blocks read them (`registration.check`'s `tied`); the stream's digest binds them."""
+    or before any salt, is refused (`late-registration`) and ends the epoch."""
 
     program: str | tuple[str, ...]
     query: Mapping[str, Any]
@@ -418,7 +416,6 @@ class Check:
     deadline: Mapping[str, Any] | None = None
     proof_deadline: float | None = None
     registration_deadline: float | None = None
-    tied: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         digests = self.program if isinstance(self.program, tuple) else (self.program,)
@@ -433,9 +430,6 @@ class Check:
         if not (isinstance(self.public_outputs, tuple) and all(isinstance(o, str) and o for o in self.public_outputs)
                 and len(set(self.public_outputs)) == len(self.public_outputs)):
             raise ValueError("a check's public outputs are distinct names")
-        if not (isinstance(self.tied, tuple) and all(isinstance(t, str) and t for t in self.tied)
-                and len(set(self.tied)) == len(self.tied)):
-            raise ValueError("a check's tied values are distinct parameter names")
         for name, d in (("proof", self.proof_deadline), ("registration", self.registration_deadline)):
             if d is not None and not (isinstance(d, (int, float)) and not isinstance(d, bool) and d > 0):
                 raise ValueError(f"a {name} deadline is a positive number of seconds, not {d!r}")
@@ -444,8 +438,7 @@ class Check:
         return {"program": list(self.program) if isinstance(self.program, tuple) else self.program,
                 "query": dict(self.query), "window": self.window,
                 "public_outputs": list(self.public_outputs), "deadline": None if self.deadline is None else dict(self.deadline),
-                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline,
-                **({"tied": list(self.tied)} if self.tied else {})}
+                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline}
 
 
 @dataclass(frozen=True)
@@ -553,8 +546,7 @@ class WindowCommitmentRecord:
     `received_at` are its readings of the salt's release and of this docket's receipt (None otherwise). `fanout`
     is the fan-out F its docket verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
     docket's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
-    `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
-    rests on the network period check. `returned` is the bits one replay block of a two-stage docket returns,
+    `returned` is the bits one replay block of a two-stage docket returns,
     counted on the challenger's own program (`second_stage.replay_returned`): no served cap S below it prices the
     docket (`plancheck.two`'s `returned`). None for a one-stage docket, an interior one, and a replay
     block whose links can't be derived."""
@@ -566,7 +558,6 @@ class WindowCommitmentRecord:
     salted_at: float | None = None
     received_at: float | None = None
     fanout: int | None = field(default=None, compare=False)
-    rests_on_period_check: tuple[str, ...] = field(default=(), compare=False)
     returned: int | None = field(default=None, compare=False)
 
 
@@ -2037,7 +2028,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, partition,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
+                            outputs=outputs, seed_salt=seed_salt,
                             history=history, certified=certified)
                 if v.ok and bernoulli(sampling_design):
                     v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
@@ -2056,7 +2047,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout, v.rests_on_period_check, self._returned(got["program"]))
+                                                     v.fanout, self._returned(got["program"]))
             op["registration"] = _docket_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -2108,10 +2099,9 @@ class Stream:
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
                       received_at: float | None = None, fanout: int | None = None,
-                      rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
+                      returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
-                                      returned)
+                                      DD.digest(record), order, salted_at, received_at, fanout, returned)
 
     def _returned(self, program: Program) -> int | None:
         """The bits one replay block of a two-stage stream's docket returns (`second_stage.replay_returned`, on
@@ -2556,7 +2546,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
+                      value_outputs=given, seed_salt=e.seed_salt,
                       history=e.history, family=e.family, key=self.key and self.key.to_json(), main=self.main,
                       certified=e.certified)
             if not v.ok:
@@ -2641,7 +2631,7 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
-                      tied=self.spec.check.tied or None, family=e.family, key=self.key and self.key.to_json(),
+                      family=e.family, key=self.key and self.key.to_json(),
                       main=self.main, certified=e.certified,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,

@@ -10,9 +10,8 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 What stands in the Lean's place then is `{"refused": reason}`, with `"answered": False` where the refusal is not the
 Lean's own (`lean`).
 
-* `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out and tied values a template query's
-  verdict publishes (`Verdict.fanout` and `Verdict.rests_on_period_check`, the Lean's `fanout` and
-  `rests_on_period_check`); the details are Python's (the Lean reports codes).
+* `check`: R1-R8 (`registration.check`), compared on `ok`, the codes and the fan-out a template query's
+  verdict publishes (`Verdict.fanout`, the Lean's `fanout`); the details are Python's (the Lean reports codes).
   History tables both refuse, the Lean's refusal its own answer, are the docket's refusal, `R.HISTORY`, with
   both reasons, which nothing holds to each other (the Lean's refusals carry no code); the Python refusing them alone,
   or a Lean that gave no answer, disagrees. Where R1-R8 pass, the caller's check (`caller.check`, its Lean
@@ -234,19 +233,17 @@ def _summary(v: Mapping[str, Any]) -> dict[str, Any]:
 
 def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
     """The verdict of record from the Lean's answer `got` and Python's `py`: compared on `ok`, the codes and the fan-out
-    and tied values a docket verdict publishes, and with `whole` on the details too."""
+    a docket verdict publishes, and with `whole` on the details too."""
     mine = py.to_json()
     both = {"lean": _summary(got), "python": _summary(mine)}
     verifiers = {"of_record": RECORD_VERDICT, **both}
     same = "refused" not in got and (_same(got, mine) if whole else both["lean"] == both["python"]
-                                     and all(got.get(k) == mine.get(k) for k in ("fanout", "rests_on_period_check")))
+                                     and got.get("fanout") == mine.get("fanout"))
     if not same:
-        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers, py.fanout,
-                       py.rests_on_period_check)
+        return Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers, py.fanout)
     if RECORD_VERDICT == "lean":
-        return Verdict(got["ok"], tuple(got["codes"]), dict(got.get("detail", py.detail)), verifiers, py.fanout,
-                       py.rests_on_period_check)
-    return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout, py.rests_on_period_check)
+        return Verdict(got["ok"], tuple(got["codes"]), dict(got.get("detail", py.detail)), verifiers, py.fanout)
+    return Verdict(py.ok, py.codes, py.detail, verifiers, py.fanout)
 
 
 def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
@@ -258,21 +255,19 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
-            tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None,
+            history: Mapping[str, Any] | None = None,
             compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
             verdicts: Mapping[str, bool] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
-    `registered` or `tied`, which name them; the certified entries name none."""
+    `registered`, which names them; the certified entries name none."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(sampling_design), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
          "ports": {k: dict(v) for k, v in ports.items()}, "program": codec.encode_program(program), "query": dict(query),
          "registered": None if registered is None else dict(registered), "scheme": scheme,
          "work_table": None if work_table is None else dict(work_table)}
-    if registered is not None or tied is not None:
+    if registered is not None:
         p["parameters"] = [[name, t.to_json()] for name, t in program.fn.signature()[0]]
-    if tied is not None:
-        p["tied"] = list(tied)
     if supplied:
         p["supplied"] = {v: [[dict(s) for s in row] for row in rows] for v, rows in supplied.items()}
     if pinned:
@@ -314,7 +309,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           window_root: str | None = None, held: Sequence[str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+          pool: Mapping[str, Any] | None = None,
           history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
           compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
           verdicts: Mapping[str, bool] | None = None) -> Verdict:
@@ -322,8 +317,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     the declared day when it passes `day` and `declarations`, the binding when it passes `binding`, the seed salt when it
     passes `seed_salt`, the registered compiler when it passes `compiler`, and the pool's reset, week and spent mark, a
     reset at most once a week, and the pool chain when it passes `pool`, and the verdicts when it passes its verdict log
-    `verdicts`; with R8's tied values when it passes `tied`, the
-    roots of the history
+    `verdicts`; with the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources, and R7's certified entries when it passes `certified`
     (``{value: {"root", "leaves", "words", "domain"}}``, `registration.check`'s). History tables the Python refuses and
@@ -338,14 +332,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         py: Verdict | None = R.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, members=members, day=day,
-                                     declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
+                                     declarations=declarations, seed_salt=seed_salt, pool=pool, history=history,
                                      compiler=compiler, certified=certified, verdicts=verdicts)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
     params = _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                      supplied, pinned, binding, schemas, window_root, held, outputs, day, declarations, seed_salt, pool,
-                     tied, history, compiler, certified, verdicts)
+                     history, compiler, certified, verdicts)
     got = _codes(lean("registration", {
         "params": params, "record": dict(rec),
         **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})}))
@@ -361,7 +355,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         return spot
     py = C.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs, schemas, window_root, held, members, day, declarations, seed_salt,
-                 pool, tied, history, compiler, certified, verdicts)
+                 pool, history, compiler, certified, verdicts)
     caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)})), py, whole=False)
     return C.gate(spot, caller)
 
@@ -371,7 +365,7 @@ def _codes(got: dict[str, Any]) -> dict[str, Any]:
     if "codes" not in got:
         return got
     return {"ok": not got["codes"], "codes": got["codes"],
-            **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
+            **({"fanout": got["fanout"]} if "fanout" in got else {})}
 
 
 def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str], domains: Mapping[str, str],
@@ -461,15 +455,14 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
-        pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+        pool: Mapping[str, Any] | None = None,
         history: Mapping[str, Any] | None = None, family: str | None = None,
         key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None,
         certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
     """The stream's run of one docket, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
-    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``tied`` the tied values its check
-    let through, ``history`` its history tables, ``certified`` its certified entries, which an interior docket
+    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``history`` its history tables, ``certified`` its certified entries, which an interior docket
     takes none of), `check_public`'s values and declared items, the receipt's challenger and
     place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
@@ -498,7 +491,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
-                              seed_salt=seed_salt, pool=pool, tied=tied, history=history, certified=certified),
+                              seed_salt=seed_salt, pool=pool, history=history, certified=certified),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],

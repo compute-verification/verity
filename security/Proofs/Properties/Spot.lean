@@ -822,8 +822,7 @@ theorem kept_nil (b : Bool) (c : Array String) (x : String) :
 theorem r8Codes_nil (v : Docket.Verifier) (c : Array String) :
     Docket.r8Codes v c = #[] ↔ c = #[] ∧ R8 v := by
   unfold Docket.r8Codes R8
-  rw [kept_nil, kept_nil]
-  exact ⟨fun ⟨⟨h, t⟩, r⟩ => ⟨h, t, r⟩, fun ⟨h, t, r⟩ => ⟨⟨h, t⟩, r⟩⟩
+  exact kept_nil _ _ _
 
 theorem any_false_iff {α : Type} (xs : Array α) (p : α → Bool) : xs.any p = false ↔ ∀ x ∈ xs, p x = false := by
   rw [Bool.eq_false_iff, ne_eq, Array.any_eq_true']
