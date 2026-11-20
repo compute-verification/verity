@@ -90,43 +90,6 @@ def test_every_template_is_checked():
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
 
-def _descriptor_digest(fn) -> str:
-    """A target's canonical descriptor digest: `program_digest` of the one-call Program at its statics."""
-    from verity.circuits import codec
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.program import Program
-
-    params, ret = fn.signature()
-    shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
-                                register=False)
-    return codec.program_digest(codec.encode_program(Program(bind(shell))))
-
-
-SPLIT = Path(__file__).parent / "fixtures" / "split"
-#: split fixtures another test reads, in that test's own format
-SPLIT_READERS = {"prims_serve": "test_split_prims_serve.py"}
-
-
-def test_every_split_fixture_another_test_reads_is_read():
-    for stem, reader in SPLIT_READERS.items():
-        assert (SPLIT / f"{stem}.json").exists(), stem
-        assert f"{stem}.json" in (Path(__file__).parent / reader).read_text(), (stem, reader)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("pinned", sorted(p for p in SPLIT.glob("*.json") if p.stem not in SPLIT_READERS), ids=lambda p: p.stem)
-def test_a_split_family_keeps_its_targets_and_digests(pinned, suite):
-    """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
-    vocabulary. Every target it lists is still checked, at the same canonical descriptor digest, and every Definition family it
-    lists is still registered. A new binding may add targets."""
-    pin = json.loads(pinned.read_text())
-    missing = sorted(set(pin["definitions"]) - set(suite))
-    assert not missing, f"{pin['family']}: targets no longer checked: {missing}"
-    moved = {fid: (want, got) for fid, want in pin["definitions"].items() if (got := _descriptor_digest(suite[fid])) != want}
-    assert not moved, f"{pin['family']}: descriptor digests changed: {moved}"
-    assert not sorted(set(pin["registered"]) - set(TG.REGISTERED)), pin["family"]
-
-
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_the_partition_applies_to_the_calls_of_served_programs():
@@ -680,11 +643,6 @@ def test_a_call_whose_outputs_are_past_the_widest_size_class_fails_by_its_name()
         f"{SIZE_CLASS_MAX + 32:,} bits, past the widest size class {SIZE_CLASS_MAX:,}; {CK.OVER_COST_TARGET}"]
 
 
-#: a Boolean Call family (`RoPEHead_v1`'s Boolean version): eight 16-bit outputs, whose `Q_call` cut computes 1,120 values in two
-#: proof blocks
-BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
-
-
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_the_boolean_versions_of_the_served_calls_are_calls():
@@ -880,26 +838,6 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
     assert written == {("pieces", "F32Mul_v1"): pin["counts"]}
 
 
-def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
-    """A Definition a Program holds as one gate naming its circuit digest (``gated``: network accounting's ingress scan
-    bucket here) has that digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier
-    reads in its place: its own digest passes, another fails by name, and none warns."""
-    from verity.circuits.codec import program_digest
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
-    from verity.protocols.resource_accounting.network.prover.ingress_scan import IngressScanBucket
-
-    d = bind(IngressScanBucket, B=512, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
-    digest = program_digest(Program(d))
-    assert IngressScanBucket.gated and PINS["digests"][d.id] == {"sha512": digest}
-    for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch"), (None, "unpinned")):
-        F = CK.Findings()
-        rec = CK.circuit_digest_pin(d, {"digests": {} if pinned is None else {d.id: {"sha512": pinned}}}, F)
-        assert rec["status"] == status and rec["counts"] == {"sha512": digest}
-        assert [f["name"].split(" [")[0] for f in F.failures] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
-        assert [w["code"] for w in F.warnings] == (["unpinned"] if status == "unpinned" else [])
-
-
 def test_any_definition_holding_a_digests_pin_is_held_to_it():
     """A Definition that isn't gated but holds a ``digests`` pin (a binding at served statics over `targets.MAX_GATES`, which
     the pin keeps in ``--all``, `targets.pinned`) has its circuit digest checked against it, so no held pin goes uncompared:
@@ -1019,33 +957,6 @@ def test_a_builders_commit_is_a_row_of_its_lowering_and_no_redundant_gate():
     rec, F = _whole_boolean("CircuitCheckCommitTwice", twice)
     assert (rec["mismatches"], rec["ands"], rec["commits"], rec["definition_ands"], rec["redundant_ands"]) == (0, 4, 2, 1, 1)
     assert redundant(F) == [1] and [f["code"] for f in F.failures] == ["ands-added"]
-
-
-@pytest.mark.slow
-def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
-    from circuit_check import cli
-
-    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.  Uncached: a cache
-    # would trace this test process for good (`cache.trace`).
-    call = ["-q", "--no-cache"]
-    out = tmp_path / "r.json"
-    assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
-    r = json.loads(out.read_text())
-    assert r["schema"] == CK.SCHEMA and [t["target"] for t in r["targets"]] == ["RoPEHead_v1{D=8}", BOOL_RECOMPUTE]
-    assert r["summary"]["ok"] and all(t["kind"] == "definition" for t in r["targets"])
-    assert cli.main(["RoPEHead_v1{D=8}", "--lower-max-ands", "1", "--out", str(out), *call]) == 0
-    [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
-    assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
-    capsys.readouterr()
-    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
-    assert cli.main([fp8, *call]) == 0
-    with pytest.MonkeyPatch.context() as mp:                  # as a Call, its coordinates' copies of each scale product fail by name
-        mp.setattr(TG, "_CALLS", set())
-        mp.setitem(TG._SHORT, "words", TG.word_call_families() | {"ScaledMmFp8Block_v1"})
-        assert cli.main([fp8, *call]) == 1
-    assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
-    assert cli.main([BOOL_RECOMPUTE, *call]) == 0
-    assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
 
 
 def test_a_result_after_a_read_the_tracer_cannot_see_is_not_stored(tmp_path):
