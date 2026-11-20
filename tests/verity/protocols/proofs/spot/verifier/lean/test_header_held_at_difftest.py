@@ -33,8 +33,9 @@ def header(n: int, roots: dict[str, str | None]) -> dict:
 
 
 def registered(ports: dict[str, str] | None) -> dict | None:
-    """The verifier's `verity/registered-reads/v2` file of the ports given, each its name and value; None for none."""
-    if ports is None:
+    """The verifier's `verity/registered-reads/v2` file of the ports given, each its name and value; None for none (a
+    file names at least one port)."""
+    if not ports:
         return None
     return {"format": "verity/registered-reads/v2",
             "ports": {p: {"domain": "dd" * 64, "leaves": 2, "root": "aa" * 64, "value": v} for p, v in ports.items()}}
