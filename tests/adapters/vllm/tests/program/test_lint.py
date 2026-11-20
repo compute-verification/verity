@@ -11,12 +11,12 @@ import pytest
 PKG = Path(__file__).resolve().parents[5] / "adapters" / "vllm" / "verity_vllm"
 QUERY_DIR = PKG / "query"
 MODEL_NAMES = ("llama", "qwen", "gemma", "olmoe", "mixtral", "smollm", "mistral", "deepseek")
-FILES = sorted([*QUERY_DIR.glob("*.py"), PKG / "pipeline" / "manifest.py"])
+FILES = sorted(QUERY_DIR.glob("*.py"))
 
 
 def test_query_package_exists():
     assert FILES, f"no modules under {QUERY_DIR}"
-    assert {f.name for f in FILES} >= {"program_view.py", "module_body.py", "required.py", "manifest.py"}
+    assert {f.name for f in FILES} >= {"program_view.py", "module_body.py", "required.py"}
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)

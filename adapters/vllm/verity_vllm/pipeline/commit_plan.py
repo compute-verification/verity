@@ -1,7 +1,7 @@
 """The Commit's plan: what the Commit reads before it arms the committer and needs no engine for, derived on a 0-GPU task before
-the GPU is held (`verity-vllm commit-plan`, the row's `plan` stage).
+the GPU is held (`cli.run(commit_plan)`, the row's `plan` stage).
 
-    verity-vllm commit-plan --workload W --required-manifest M --program-digest D (--program-dir P | --programs-root R) --out PLAN
+    cli.run(commit_plan) --workload W --required-manifest M --program-digest D (--program-dir P | --programs-root R) --out PLAN
 
 The plan is the form (B) producer facts of a query-path manifest (`oracle_producers_of_record`: the Programs of record read by
 dataflow).  The Commit (`--plan PLAN`) takes them from the plan only when the plan's key
