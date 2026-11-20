@@ -26,7 +26,7 @@ untraced = ["test_difftest.py", "test_known_rows.py", "test_lanes.py", "test_reg
 # requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof system's Lean (`core_spot`) with the
 # core protocol interface and the LMS verifier, core's identity and randomness, and Flock's verifier with its
 # configuration.
-inputs = ["tools/difftest", "verity/__init__.py", 
+inputs = ["verity/lean_process.py", "tools/difftest", "verity/__init__.py", 
           "verity/channel.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier", "verity/protocols/resource_accounting/compute/pouw/prover",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",
