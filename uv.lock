@@ -3018,6 +3018,7 @@ name = "verity-vllm"
 version = "0.1.0"
 source = { editable = "adapters/vllm" }
 dependencies = [
+    { name = "input-datasets" },
     { name = "numpy" },
     { name = "verity" },
     { name = "verity-config" },
@@ -3034,6 +3035,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
+    { name = "input-datasets", editable = "input_datasets" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },

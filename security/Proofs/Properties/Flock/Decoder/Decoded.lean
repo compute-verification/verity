@@ -426,6 +426,7 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
     decode_steps bytes P h hr
   obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo
     ⟨fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i), fun k v hk => absurd hk (by rw [hi0]; simp),
+      fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i),
       fun i hi => absurd hi (by rw [hd0]; exact Nat.not_lt_zero i)⟩
   obtain ⟨hinv1, hp1⟩ := decodeAll_grows _ _ _ _ _ hall hinv
   obtain ⟨hinv2, hp2⟩ := decodeBodies_grows _ _ _ _ _ _ hbod hinv1
@@ -453,5 +454,12 @@ theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
   refine ⟨hlt, hp, ?_⟩
   rw [((hok P.root hlt).1.2 hp).1]
   exact hp0
+
+/-- **A decoded Program's nodes read only earlier nodes**: the decoder refuses an argument naming its own node or a
+later one (`forwardRefusal`). -/
+theorem decode_fwd (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[] := by assumption) : ∀ i < P.defs.size, BodyFwd (P.defs[i]!).body := by
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P h hr
+  rw [hP]; exact hinv.2.2.2
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.BodiesOk
