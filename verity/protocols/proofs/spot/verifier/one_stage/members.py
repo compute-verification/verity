@@ -761,8 +761,9 @@ def run_own_root_why(member: str, port: str, w: int) -> str:
 def _run_input_roots(program: Program, query: Mapping[str, Any], ms: Mapping[str, Any], record: Mapping[str, Any],
                      roots: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
     """`OneStageZk.runInputRoots`: for each member, each input port its first unit reads whole from one run input node
-    ``w`` of C, the record's root of ``input/n<w>`` with that tree; a tree the record holds no root of gives none, and
-    where it holds one, a member's own root at the port refuses (`run_own_root_why`)."""
+    ``w`` of C at a row of the node (its first leaf a multiple of the port's leaves, as `regRow` reads it), the
+    record's root of ``input/n<w>`` with that tree; a tree the record holds no root of gives none, and where it holds
+    one, a member's own root at the port refuses (`run_own_root_why`)."""
     tp = PO.TemplatePartition(program, query)
     body, total = program.root.body, program.root.gates
     offs = list(body.offsets)
@@ -784,7 +785,8 @@ def _run_input_roots(program: Program, query: Mapping[str, Any], ms: Mapping[str
             w = bisect.bisect_right(offs, g[0]) - 1
             fw = body.nodes[w].fn
             end = offs[w + 1] if w + 1 < len(offs) else total
-            if not is_input(fw) or is_registered(fw) or g != list(range(g[0], g[0] + leaves)) or g[-1] >= end:
+            if (not is_input(fw) or is_registered(fw) or g != list(range(g[0], g[0] + leaves)) or g[-1] >= end
+                    or (g[0] - offs[w]) % leaves):
                 continue
             if (r := by_port.get(f"input/n{w}")) is None:
                 continue
