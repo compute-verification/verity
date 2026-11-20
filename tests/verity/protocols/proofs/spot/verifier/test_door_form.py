@@ -9,6 +9,7 @@ import json
 import re
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,7 +20,7 @@ from verity.circuits.program import input_id
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 
 LEAN = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "OneStageZkStatement.lean")
-GUARD = re.compile(r'^#guard refusedBy \((admitE|lowerE) (.*)\) "([a-z-]+)" "(.*)"$', re.M)
+GUARD = re.compile(r'^#guard refusedBy \((admitE|lowerE|admitIn) (.*)\) "([a-z-]+)" "(.*)"$', re.M)
 STR = r'"((?:[^"\\]|\\.)*)"'
 
 
@@ -56,10 +57,16 @@ def _args(s: str) -> tuple[str, str, list[tuple[str, int]]]:
     return d, t, cs
 
 
-def guards() -> list[tuple[str, str, str, list[tuple[str, int]], str, str]]:
+def _args_in(s: str) -> tuple[str, list[str], list[int]]:
+    """`admitIn`'s arguments: a descriptor, the templates the query lists, and the block's units."""
+    name, ts, us = re.fullmatch(r"(\w+) \[(.*)\] #\[(.*)\]", s.strip()).groups()
+    return descriptor(name), re.findall(STR, ts), [int(u) for u in us.split(",")]
+
+
+def guards() -> list[tuple[str, str, Any, list, str, str]]:
     out = []
     for m in GUARD.finditer(lean_text()):
-        d, t, cs = _args(m.group(2))
+        d, t, cs = _args_in(m.group(2)) if m.group(1) == "admitIn" else _args(m.group(2))
         out.append((m.group(1), d, t, cs, m.group(3), _unescape(m.group(4))))
     return out
 
@@ -74,9 +81,19 @@ def _admit(d: str, t: str, cs: list[tuple[str, int]]):
     return OC.admitted(D, {"query": PO.template_instance_query(t)}, {t: dict(cs)} if cs else None)
 
 
+def _admit_in(d: str, ts: list[str], us: list[int]):
+    """`admitIn`: C_S of the block of units ``us`` of descriptor ``d``, under a ``Q_template_instances`` query listing
+    ``ts``."""
+    c = d.encode()
+    q = PO.template_instances_query(ts)
+    part = PO.build(json.loads(d), q, [[(min(us), max(us) + 1)]])
+    D = R.program(OC.restrict(c, part, [(min(us), max(us) + 1)]))
+    return OC.admitted(D, {"query": q}, None)
+
+
 def test_every_lean_guard_is_read():
     assert len(guards()) == lean_text().count("#guard refusedBy")
-    assert {g[4] for g in guards()} >= {"listed", "port-names", "on-bits", "cut-rows", "whole-words"}
+    assert {g[4] for g in guards()} >= {"one-template", "listed", "port-names", "on-bits", "cut-rows", "whole-words"}
 
 
 def test_the_prefix_is_leans():
@@ -87,7 +104,7 @@ def test_the_prefix_is_leans():
 def test_python_refuses_what_lean_refuses_with_its_text(case):
     how, d, t, cs, clause, detail = case
     with pytest.raises(OC.Refused) as e:
-        _admit(d, t, cs)
+        _admit_in(d, t, cs) if how == "admitIn" else _admit(d, t, cs)
     assert str(e.value) == f"E_LOWER: {OC.NOT_ADMITTED}, {clause}: {detail}"
 
 

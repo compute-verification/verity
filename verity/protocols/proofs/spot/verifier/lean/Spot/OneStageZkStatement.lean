@@ -357,6 +357,18 @@ def F16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","No
 
 #guard refusedBy (lowerE F16) "whole-words" "C_S's template E_v1: return field o0 of 1 bits is not a positive whole number of u16 words"
 
+/-- C of one unit each of two templates, A(x : Array 16 (Value 1)) = map Not x and B the same. -/
+def AB16 : String := r#"{"boolean":{},"callees":["Not_v1","Input1_v1","A_v0","B_v0"],"definitions":{"A_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"A_v0"},"B_v0":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,0,16]},"type":0}],"axes":[0],"fn":0,"form":"batch","n":16,"out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,16]},"ret_type":["Array",16,["Value",1]]},"form":"composite","id":"B_v0"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[],"axes":[],"fn":1,"form":"batch","n":16,"out":0},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"axes":[0],"fn":2,"form":"batch","n":1,"out":1},{"args":[{"refs":{"affine":["n",1,0,16]},"type":1}],"axes":[0],"fn":3,"form":"batch","n":1,"out":1}],"params":[],"ret":{"concat":[{"affine":["n",2,0,16]},{"affine":["n",3,0,16]}]},"ret_type":["Tuple",[["Array",1,["Array",16,["Value",1]]],["Array",1,["Array",16,["Value",1]]]]]},"form":"composite","id":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1"}},"program_fn":"WiredPopulations_v1{templates=[\"A_v0\",\"B_v0\"],record=\"27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd\",counts=[1,1]}","root":"Root[WiredPopulations_v1{templates=('A_v0','B_v0'),record='27c74670adb75075fad058d5ceaf7b20c4e7786c83bae8a32f626f9782af34c9a33c2046ef60fd2a7878d378e29fec851806bbd9a67878f3a9f1cda4830763fd',counts=(1,1)}]_v1","schema":"verity-ir/descriptor/v2","types":[["Array",16,["Value",1]],["Array",1,["Array",16,["Value",1]]]]}"#
+
+/-- `admitted` on the block of units `us` of the descriptor `d`, under a `Q_template_instances` query listing `ts`. -/
+def admitIn (d : String) (ts : List String) (us : Array Nat) : V Admit := do
+  let P ← Flock.Program.decode d.toUTF8
+  let q := Json.mkObj [("name", "Q_template_instances"), ("params", Json.mkObj [("templates", Lean.toJson ts)])]
+  admitted (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P us)
+
+#guard refusedBy (admitIn AB16 ["A_v0", "B_v0"] #[0, 1]) "one-template" "C_S's root calls [A_v0, B_v0], and a block's units are instances of one template"
+#guard (admitIn AB16 ["A_v0", "B_v0"] #[1]).toOption.map (·.key) == some "B_v0"
+
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
 Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s
