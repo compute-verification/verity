@@ -1,0 +1,3 @@
+[2026-11-20T11:43Z] 6e3c157a3a6f
+From the lead, an addition to JOB 5 (same branch, its own commit): lint/test_p10_size is RED on the tip because of our egress mends: adapters/vllm/verity_vllm/program/predict/steps.py is 805 lines against its ceiling of 800. Do NOT raise the ceiling. Move the by-body lookups (registered_composites, registered_body, egress, EGRESS and what only they use) out of steps.py into one small module beside it (e.g. program/predict/by_body.py), re-exported from steps where callers import them (window_cut imports egress and registered_body from .steps: point them at the new module), so steps.py is under 800 and the new rule for Embedding / Int8RowQuant / TokenSelect lives in that module too. Run lint/test_p10_size with the named files.
+
