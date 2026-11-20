@@ -79,7 +79,7 @@ def test_the_bandwidth_audits_honest_session_is_accepted_and_two_dishonest_are_r
         return answer
 
     honest = run("honest", T.AT_LEAF, [], "accept")
-    assert honest["verdict"] == "accept"
+    assert honest["verdict"] == "accept", honest
     cheat = run("cheat", T.AT_LEAF, ["--skip-layer", "1"], "reject")
     assert cheat["verdict"] == "reject"
     swapped = run("swapped", "00" * 64, [], "accept")
@@ -87,3 +87,55 @@ def test_the_bandwidth_audits_honest_session_is_accepted_and_two_dishonest_are_r
     if out := os.environ.get("SMOKE_OUT"):
         with open(out, "a") as f:
             f.write("\n".join(lines) + f"\nby poub-p2-protocol sha512 {hashlib.sha512(open(case_exe, 'rb').read()).hexdigest()}\n")
+
+
+@pytest.mark.slow
+def test_the_wipe_launcher_on_a_processor_is_accepted_by_wipe_protocol_and_two_dishonest_cases_are_refused(tmp_path):
+    """`served_wipe.sh` as the application's hook runs it (`--run-keys`: the memory attester on this machine under a key made
+    for the run, so a rehearsal that certifies nothing), the fill in host memory and a stand-in `gpu-lease`, which a processor
+    has none of; the Lean it builds in a scratch copy is the declared `wipe-protocol`, whose accept ends the launcher with exit 0.
+    The case it keeps is then asked of the same executable built beside: unchanged, accepted; with a key that is not the
+    pinned one, and with one word of its signed session changed, each refused by name. It costs minutes (two Lean builds):
+    what it catches that the suite's stand-in judge cannot is a launcher or a verdict that has stopped reaching the real
+    executable, which no cheaper test touches."""
+    import shutil
+    import stat
+    import subprocess
+    import sys
+
+    if shutil.which("lake") is None:
+        pytest.skip("no Lean toolchain")
+    from test_pous_served_piece import ROOT as TREE
+    from test_pous_served_piece import _built
+
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    lease = bin_ / "gpu-lease"
+    lease.write_text('#!/usr/bin/env bash\nwhile [ "$1" != -- ]; do shift; done\nshift\nGPU_LEASE_UUID=GPU-standin exec "$@"\n')
+    lease.chmod(lease.stat().st_mode | stat.S_IXUSR)
+    serve, out = tmp_path / "serve", tmp_path / "serve" / "out"
+    serve.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE_", "WIPE_", "VERITY_"))}
+    env |= {"PATH": f"{bin_}:{os.environ['PATH']}", "PY": sys.executable, "DEVELOPMENT": "1"}
+    ran = subprocess.run(["bash", str(TREE / "benchmarks/pous/streamed_wipe/served_wipe.sh"), str(serve), "0", str(out),
+                          '{"run_keys": true, "store": "host", "streamer": "python"}'],
+                         env=env, cwd=TREE, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stdout[-2000:] + ran.stderr[-2000:]
+    said = json.loads(next(x for x in ran.stdout.splitlines() if x.startswith("WIPE ")).removeprefix("WIPE "))
+    assert said["verdict"] == "accept" and said["decided_by"]["program"] == "wipe-protocol" and said["key_pin"] == "run"
+    exe = _built(TREE / "verity/protocols/resource_accounting/memory/pous/attester/lean", "wipe-protocol")
+    assert hashlib.sha512(exe.read_bytes()).hexdigest() == said["executables"]["wipe-protocol"]
+    case = json.loads((serve / "private" / "wipe" / "wipe.case.json").read_text())
+    node = bytes.fromhex(case["params"]["server"]).decode()
+    swapped = case | {"params": case["params"] | {"trusted": ["00" * 64]}}
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    evidence["signed"]["batches"][0][next(k for k, v in evidence["signed"]["batches"][0].items() if isinstance(v, int))] += 1
+    changed = case | {"evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode().hex()}
+    answers = {n: period.serve(exe, [c], "--server", node)[0] for n, c in (("honest", case), ("swapped", swapped), ("changed", changed))}
+    assert answers["honest"]["verdict"] == "accept"
+    assert answers["swapped"]["verdict"] == "reject" and NOT_TRUSTED in answers["swapped"]["reason"]
+    assert answers["changed"]["verdict"] == "reject" and "the signature does not verify" in answers["changed"]["reason"]
+    if target := os.environ.get("SMOKE_OUT"):
+        with open(target, "a") as f:
+            f.write("SMOKE wipe: " + json.dumps({n: {k: a[k] for k in ("verdict", "reason")} for n, a in answers.items()})
+                    + f" by wipe-protocol sha512 {said['executables']['wipe-protocol']}\n")
