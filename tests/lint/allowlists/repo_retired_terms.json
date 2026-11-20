@@ -1928,7 +1928,7 @@
     {"file": "tests/adapters/vllm/tests/pipeline/test_commit_delta_placement_b1.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/pipeline/test_commit_pairs.py", "count": 2},
     {"file": "tests/adapters/vllm/tests/pipeline/test_config_run.py", "count": 10},
-    {"file": "tests/adapters/vllm/tests/pipeline/test_coverage_workloads.py", "count": 13},
+    {"file": "tests/adapters/vllm/tests/pipeline/test_coverage_workloads.py", "count": 3},
     {"file": "tests/adapters/vllm/tests/pipeline/test_cpu_replay.py", "count": 8},
     {"file": "tests/adapters/vllm/tests/pipeline/test_done_source.py", "count": 18},
     {"file": "tests/adapters/vllm/tests/pipeline/test_edge_history.py", "count": 1},
