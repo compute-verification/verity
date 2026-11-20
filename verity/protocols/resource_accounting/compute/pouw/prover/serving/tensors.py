@@ -1,9 +1,8 @@
-"""The workload's buffers, H1's device half and Pearl-C's device run, which the workload that serves the model hands in
-(`use`, `use_h1`, `use_pearl_c`).
+"""The workload's buffers and Pearl-C's device run, which the workload that serves the model hands in (`use`,
+`use_pearl_c`).
 
 PoUW's serving code names no tensor library: where it reads, writes or allocates one of the workload's buffers it asks
-`tensors()`, an object of the workload's (`Tensors`), and where H1 hashes, keeps its tables or traces a call on the device
-it asks `h1_device()` (`H1Device`). A buffer is ``Any``: whatever the workload's linears take and return. An element type
+`tensors()`, an object of the workload's (`Tensors`). A buffer is ``Any``: whatever the workload's linears take and return. An element type
 is named as NumPy names it (``"uint8"``, ``"int16"``, ``"uint16"``, ``"int32"``, ``"int64"``, ``"float32"``), and
 ``"bfloat16"``. A ``like`` is a buffer, whose device (and, where a method says so, element type) the result takes, or a
 device as the workload names one.
@@ -13,7 +12,6 @@ without either."""
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import AbstractContextManager
 from typing import Any, Protocol
 
 import numpy as np
@@ -72,63 +70,6 @@ def dtype_name(x: Any) -> str:
     return str(getattr(x, "dtype", "")).rpartition(".")[2]
 
 
-class H1Device(Protocol):
-    """H1's work on the device: its registered rows' hashes (`registered`), its call tables (H1's runner (deleted)), the check of a
-    call's z/y records where they are (`h1.records.holds_on`) and the credit gate's trace of a call (`credit_gate`)."""
-
-    def available(self) -> bool:
-        """Whether `device_hash` can run in this process (`registered` ``"auto"``)."""
-        ...
-
-    def device_hash(self, words: Any, row_salts: bytes | None, domain_id: bytes,
-                    public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Any:
-        """`registered` ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16, hashed on the current
-        device: an object whose ``result()`` gives them."""
-        ...
-
-    def device_public_salts(self, head: bytes, first: int, n: int, ok: bool = False) -> bytes:
-        """`registered` on the device."""
-        ...
-
-    def hashing(self) -> AbstractContextManager[Any]:
-        """The device `device_hash` hashes on, its stream made current meanwhile."""
-        ...
-
-    def commit_tables(self, run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-        """Queue ``call``'s A and z tables' hashes on the device, for ``run`` (H1's runner, deleted) to settle."""
-        ...
-
-    def settle(self, run: Any, wait: bool) -> None:
-        """Take ``run``'s finished table hashes in, waiting for every one with ``wait``."""
-        ...
-
-    def flush(self, run: Any) -> None:
-        """Launch ``run``'s table hashes still held back."""
-        ...
-
-    def take_z(self, run: Any, call: Any, words: Any) -> tuple[bytes, int] | None:
-        """The call's z table to commit beside its registered ``zy`` value (its domain id and nonce), when ``run`` waits
-        for it and ``words`` are its records' own bytes; else None."""
-        ...
-
-    def row_words(self, t: Any, m: int, dtype: str) -> np.ndarray:
-        """``t``'s first ``m`` rows on the host as ``dtype``."""
-        ...
-
-    def holds_on(self, zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
-        """`h1.records.holds_on` where the call's buffers are."""
-        ...
-
-    def trace(self, linear: str) -> AbstractContextManager[Any]:
-        """The credit gate's trace of one call of ``linear`` (`credit_gate`): every op the call runs, which `credit_gate.verdict`
-        reads through its ``linear``, ``invocations`` and ``producer(t)``."""
-        ...
-
-    def outside(self) -> AbstractContextManager[None]:
-        """Ops run past the innermost trace, which doesn't see them."""
-        ...
-
-
 class PearlCDevice(Protocol):
     """Pearl-C's run on the device, which a served Pearl+ opens (`compute.pouw.scheme.Attached.open`)."""
 
@@ -155,7 +96,6 @@ class PearlCDevice(Protocol):
 
 
 _tensors: Callable[[], Tensors] | None = None
-_h1: Callable[[], H1Device] | None = None
 _pearl_c: Callable[[], PearlCDevice] | None = None
 
 
@@ -163,12 +103,6 @@ def use(provider: Callable[[], Tensors]) -> None:
     """The workload's `Tensors`, as a callable that returns it when PoUW first needs it, so naming it loads nothing."""
     global _tensors
     _tensors = provider
-
-
-def use_h1(provider: Callable[[], H1Device]) -> None:
-    """The workload's `H1Device`, as `use` takes `Tensors`."""
-    global _h1
-    _h1 = provider
 
 
 def use_pearl_c(provider: Callable[[], PearlCDevice]) -> None:
@@ -188,13 +122,6 @@ def tensors() -> Tensors:
     return _tensors()
 
 
-def h1_device() -> H1Device:
-    if _h1 is None:
-        raise NotImplementedError(f"{GOAL}: no H1 device handed in; the workload that serves the model calls `tensors.use_h1` "
-                                  "first")
-    return _h1()
-
-
 def pearl_c_device() -> PearlCDevice:
     if _pearl_c is None:
         raise NotImplementedError(f"{GOAL}: no Pearl-C device run handed in; the workload that serves the model calls "
@@ -202,5 +129,5 @@ def pearl_c_device() -> PearlCDevice:
     return _pearl_c()
 
 
-__all__ = ["GOAL", "H1Device", "PearlCDevice", "Tensors", "dtype_name", "h1_device", "has_tensors", "pearl_c_device",
-           "tensors", "use", "use_h1", "use_pearl_c"]
+__all__ = ["GOAL", "PearlCDevice", "Tensors", "dtype_name", "has_tensors", "pearl_c_device", "tensors", "use",
+           "use_pearl_c"]

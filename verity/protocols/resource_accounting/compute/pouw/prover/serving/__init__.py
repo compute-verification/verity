@@ -43,7 +43,6 @@ _LAZY = {
     "Challenger": (f"{_POUW}.verifier.coins", "Challenger"),
     "CoinCommitment": (f"{_POUW}.verifier.coins", "CoinCommitment"),
     "CoinWindow": (f"{_SERVING}.coins.window", "Window"),
-    "CreditTrace": (f"{_SERVING}.credit_gate", "trace"),
     "DomainError": (f"{_POUW}.verifier.protocol", "DomainError"),
     "Epoch": (f"{_POUW}.verifier.audit", "Epoch"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
