@@ -103,7 +103,8 @@ def python_door(member: Any, circuit_file: bytes = b"", public: bytes | None = N
         cf.write_bytes(circuit_file)
         k = [m.base for m in r["window"].window.members].index(member.base)
         try:
-            units = [u for lo, hi in OC.block(r["C"], r["partition"], k) for u in range(lo, hi)]
+            units = [u for lo, hi in OC.block(r["C"], r["partition"] if partition is None else partition, k)
+                     for u in range(lo, hi)]
         except OC.Refused:
             units = [member.base]
         pub.write_bytes(json.dumps({"units": {"indices": units}}).encode() + b"\n" if public is None else public)
