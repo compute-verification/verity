@@ -4,7 +4,6 @@ public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.RecGeneric.PlansProof
 public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.Claims.Recursion.KS
-public import Proofs.Flock.Claims.Recursion.LastBindsR
 
 /-!
 # The Flock instance: well formed, its inner and outer extractions (F4, F5, F8)

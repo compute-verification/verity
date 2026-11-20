@@ -290,14 +290,10 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 
 `check` runs nothing here.
 
-## The two-stage audits
+## Two levels
 
-- **A served window's** (`two_stage.py`): each class's first stage, and a class's second stage through that audit,
-  round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics.
-- **A toy replay block's, end to end** (`toy.py`, `audit.py`): the boundary registered, a first-stage sample of replay
-  blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock
-  `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome,
-  with its negatives.
+Two levels are refused by name (`levels.TWO_LEVELS_REFUSED`): `a5.py` under `SPOT_LEVELS=2`, the stream at registration and
+the Lean verifier at the parameters.
 
 ## What you may change
 
