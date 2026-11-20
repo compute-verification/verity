@@ -1,22 +1,30 @@
 """`registry.boolean_gate_ops`' word primitives and their Boolean versions: the low byte of `cvt.rzi.u32.f32` on its edges and
 against the exact truncation, the UE8M0 byte as the exponent rounded up, C `int` division, remainder and the low product, and
-each Boolean version against its word."""
+each Boolean version against its word; MUFU.LG2 of 1.m where measured, and on bits on every mantissa against the measured
+words' SHA-256."""
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
 import math
 
 import numpy as np
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits.boolean.trace import definition, word_of
-from verity.circuits.defs import bind
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.types import Array
 
+from tests.program.test_boolean_moe import _agree
 from tests.program.test_dsa import _is_nan
 from tests.program.test_fp8_moe import _q
 from verity_vllm.definitions.registry import boolean_gate_ops as BG
+from verity_vllm.definitions.registry import prims as P
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF
 NAN = 0x7FC00000
@@ -125,3 +133,65 @@ def test_the_multiplier_is_mul_lo_on_edge_and_random_words() -> None:
     a, b = (np.array(c, dtype=np.uint64).reshape(-1, 1) for c in zip(*pairs))
     got = np.asarray(BS.evaluate_words(bind(BG.I32MulV2), a, b)).reshape(-1)
     assert got.tolist() == [BG.I32Mul.evaluate(x, y) for x, y in pairs]
+
+
+# --- MUFU.LG2 on [1, 2) ---------------------------------------------------------------------------------------------------------
+
+#: `lg2.approx.ftz.f32(1.m)` as `LG2_MEASURED`'s run read it, at segment boundaries and both ends
+MEASURED = {0x1: 0x3495F600, 0x2: 0x34F24A00, 0x3: 0x35274F00, 0x1FFFF: 0x3CB73C76, 0x20000: 0x3CB73CD1, 0x20001: 0x3CB73D2C,
+            0xA0000: 0x3DDE4224, 0x3FFFFF: 0x3F15C019, 0x400000: 0x3F15C01B, 0x7E3039: 0x3F7D6088, 0x7FFFFE: 0x3F7FFFFE,
+            0x7FFFFF: 0x3F7FFFFF}
+
+
+def test_lg2_is_the_measured_unit_where_pinned():
+    for m, y in MEASURED.items():
+        assert BG.MufuLg2Mantissa.evaluate(0x3F800000 | m) == y, hex(m)
+    assert BG.MufuLg2Mantissa.evaluate(0x3F800000) == 0
+
+
+def test_lg2_reads_only_the_mantissa_and_stays_near_log2():
+    for m in [*MEASURED, 0x155555, 0x2AAAAA, 0x6DB6DB]:
+        y = BG.MufuLg2Mantissa.evaluate(0x3F800000 | m)
+        assert all(BG.MufuLg2Mantissa.evaluate(e << 23 | s << 31 | m) == y for e in (0, 1, 0x80, 0xFF) for s in (0, 1))
+        assert abs(float(P.f32_of(y)) - math.log2(1 + m / 2 ** 23)) < 2 ** -21
+
+
+#: (And, Xor, Not gates, standalone program digest)
+LG2_PIN = (986, 4749, 92, "661ff9649d6e2fd4720a6168c02df12165d60caf36009433d919ca127311ab0e4ad3c1fb557a319eafe9b72f6c3e216cfbdbbdaa69f75171e7c6af211ad8e7bf")
+
+
+def test_the_boolean_lg2_is_pinned_by_counts_and_digest() -> None:
+    target = bind(BG.MufuLg2MantissaV2)
+    ands, xors, nots, digest = LG2_PIN
+    assert target.id == "MufuLg2Mantissa_v2" and BL.is_boolean(target)
+    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
+    prog, _ = standalone_call(target)
+    desc = codec.encode_program(prog)
+    assert codec.program_digest(desc) == digest
+    back = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
+    assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
+
+
+def test_the_lg2_word_view() -> None:
+    assert word_of(bind(BG.MufuLg2MantissaV2)).id == BG.MufuLg2Mantissa.id == "MufuLg2Mantissa_v1"
+    assert SW.boolean_version(BG.MufuLg2Mantissa).id == "MufuLg2Mantissa_v2"
+
+
+def test_lg2_where_measured_and_on_every_exponent_and_sign() -> None:
+    rng = np.random.default_rng(0xD54)
+    m = np.concatenate([np.array([0, 1, 2, 3, 0x1FFFF, 0x20000, 0x3FFFFF, 0x400000, 0x7FFFFE, 0x7FFFFF], np.uint32),
+                        rng.integers(0, 1 << 23, 2000, dtype=np.uint32)])
+    x = m | (rng.integers(0, 1 << 9, len(m), dtype=np.uint32) << 23)
+    _agree(bind(BG.MufuLg2MantissaV2), x)
+
+
+def test_lg2_on_every_mantissa_is_the_measured_unit() -> None:
+    """All 2^23 words of [1, 2) against `LG2_MEASURED`'s SHA-256 (about 10 s): the Boolean interpolator is the measured unit, not
+    only its word view.  Its exponent field is 0 exactly at m = 0, which `Dsv4HashWeightOut_v1` reads as m = 0."""
+    h = hashlib.sha256()
+    for lo in range(0, 1 << 23, 1 << 19):
+        m: np.ndarray = np.arange(lo, lo + (1 << 19), dtype=np.uint32)
+        y = np.asarray(BS.evaluate_words(bind(BG.MufuLg2MantissaV2), m | np.uint32(0x3F800000))).astype("<u4").reshape(-1)
+        assert np.array_equal((y >> 23 & 0xFF) == 0, m == 0)
+        h.update(y.tobytes())
+    assert h.hexdigest() == BG.LG2_MEASURED["sha256"]

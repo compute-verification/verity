@@ -25,16 +25,10 @@ ON_DEMAND = (
     "DsaTopKLongRowCheck131072x2048_v1", "DsaTopKThresholdKey131072x2048_v1",
     "DsaTopKCountedThresholdKey131072x2048_v1", "DsaTopKSlot131072x2048_v1",
     "TopPMaskWordx154880_v1", "BitAtx154880_v1", "BitXor_v1", "U32Xor_v1", "SelectBit_v1", "I32ToF32_v1", "NvLogf_v1",
-    "TopPNumkeep_v1", "LSelect2_v1", "LIsActive2_v1", "LBot2_v1", "LGatherRow16x154880_v1", "LStepLive2_v1", "LIsEOS2_v1",
-    "LEmitNext[H=1]_v1", "LFixedSelect2x2_v1", "LEnable_v1", "Lifted[TopPNumkeep_v1]_v1", "Lifted[TopPNumkeep_v1]_v2",
-    "TopPNumkeep_v1{ORD=1}", "GatherI32x154880_v1", "TableRead8x8_v1")
+    "TopPNumkeep_v1", "GatherI32x154880_v1", "TableRead8x8_v1")
 
-_LIFTED = "the lifted (bottom-carrying) families: no Boolean body written yet"
 #: the word primitives without a Boolean body, a family by its `ON_DEMAND` member: id -> why; only shrinks
 BODYLESS: dict[str, str] = {
-    **{f: _LIFTED for f in ("LSelect2_v1", "LIsActive2_v1", "LBot2_v1", "LGatherRow16x154880_v1", "LStepLive2_v1", "LIsEOS2_v1",
-                            "LEmitNext[H=1]_v1", "LFixedSelect2x2_v1", "LEnable_v1", "Lifted[TopPNumkeep_v1]_v1",
-                            "Lifted[TopPNumkeep_v1]_v2", "TopPNumkeep_v1{ORD=1}")},
     "TableRead8x8_v1": "a registered table's read (`registry.tables`): no Boolean body written yet",
 }
 

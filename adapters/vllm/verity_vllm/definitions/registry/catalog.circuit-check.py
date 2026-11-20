@@ -73,8 +73,6 @@ def lazy_operands() -> dict[str, tuple[str, ...]]:
         "FlashInferFp8Linear_v1": ("w",),
         "GemmF32Out_v1": ("w",),
         "Gemm_v2": ("w",),
-        "MarlinMoeExpertGemm_v1": ("wq", "ws"),
-        "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
         "MoeExpertFp8Gemm_v1": ("w",),
         "MoeExpertFp8GemmW_v1": ("w",),
         "ScaledMmFp8BlockGrouped_v1": ("w",),
@@ -95,8 +93,6 @@ def operand_probes() -> dict[str, Any]:
     return {
         "Embedding_v1": lambda S: [{"tok": 0}, {"tok": S["V"] - 1}],
         "EmbeddingShard_v1": lambda S: [{"tok": S["START"]}, {"tok": S["START"] + S["VS"] - 1}],
-        "MarlinMoeExpertGemm_v1": lambda S: [{"e": S["E"] - 1}],
-        "MarlinMoeExpertGemmW_v1": lambda S: [{"e": S["E"] - 1}],
         "MoeExpertFp8Gemm_v1": lambda S: [{"e": S["E"] - 1}],
         "MoeExpertFp8GemmW_v1": lambda S: [{"e": S["E"] - 1}],
     }
@@ -130,9 +126,3 @@ def boolean_version() -> tuple[Any, type[Exception]]:
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     return boolean_version, NoBooleanVersion
-
-
-def lift_composite(defn: Any) -> Any:
-    from verity_vllm.definitions.registry.lifted import lift_composite
-
-    return lift_composite(defn)

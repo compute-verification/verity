@@ -65,7 +65,6 @@
     {"file": "tests/pipeline/test_serve_seal.py", "kind": "attr-defined", "symbol": "test_the_served_target_carries_the_int8_scope_its_layers_ran", "detail": ""},
     {"file": "tests/pipeline/test_serve_seal.py", "kind": "name-defined", "symbol": "test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget.Model", "detail": ""},
     {"file": "tests/properties/deepgemm_capture_gpu.py", "kind": "index", "symbol": "einsum_launches", "detail": "", "count": 4},
-    {"file": "tests/properties/dsv4_moe_capture_gpu.py", "kind": "arg-type", "symbol": "run", "detail": ""},
     {"file": "tests/properties/fp8_kv_cache_capture_gpu.py", "kind": "arg-type", "symbol": "Capture.save", "detail": ""},
     {"file": "tests/properties/glm53_bf16_gemm_capture_gpu.py", "kind": "index", "symbol": "scan_run", "detail": ""},
     {"file": "tests/properties/glm53_block_fp8_capture_gpu.py", "kind": "attr-defined", "symbol": "Interceptor.__enter__", "detail": ""},

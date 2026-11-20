@@ -71,7 +71,7 @@ Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z a
 does not cover.
 
 Under cuda.matmul.allow_tf32 an f32 torch.mm on sm_120 at the rotation codecs' shapes (`TRAIN_TF32`) is an unsplit
-`cutlass_80_tensorop_s1688gemm` kernel whose k8 TF32 steps are `mhc.HopperTf32WgmmaDot8_v1`'s (`CONFORMANCE_TF32`):
+`cutlass_80_tensorop_s1688gemm` kernel whose k8 TF32 steps are `tf32_wgmma.HopperTf32WgmmaDot8_v1`'s (`CONFORMANCE_TF32`):
 
     DotTf32_v1{K}                   (x, wrow: Array<K, F32>) -> F32
                                     K/8 `HopperTf32WgmmaDot8_v1` steps in ascending k from +0, no epilogue

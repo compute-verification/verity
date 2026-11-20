@@ -316,7 +316,6 @@ SCALING: dict[str, tuple[str, tuple[str, ...], dict[str, str]]] = {
     # builds Flock's prover and audits a stand-in window of MEMBERS members before it times anything
     "members_files": ("members_files.sh", ("1", "16"), {"MEMBERS": "32"}),
     "ledger_replay": ("ledger_replay/ledger_replay.sh", ("10", "30"), {}),
-    "flock_tmpl": ("flock_tmpl.sh", ("256",), {}),
     "whole_run": ("whole_run.sh", ("run", "toy", "146", "1000"), {}),
 }
 
