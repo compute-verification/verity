@@ -61,6 +61,15 @@ by the lead or launched again naming `claude-opus-5-5-medium`. A lead is an agen
 a turn whose payload names no model, a local session, and every turn while the registry can't be read (which the hook
 says on stderr). A worker launched on Fable is not told, by the model rule, that its other turns run on another model.
 
+One worker is let through: a design worker of @top's, on Fable 5.2 Medium and no other effort. The agent that holds @top
+permits it with a command whose text carries `AGENT_GUARD_FABLE_DESIGN=1` (`shell_hook.permit_design`), which adds a
+permit to the machine's event log. The first worker there whose turn names `claude-fable-5-2-medium` within fifteen
+minutes takes the permit, by a line of its own, and holds it from then on (`shell_hook.design_worker`); one permit lets
+one worker through, and a permit nobody took lapses. Such a worker only reads: its `git commit` and `git push` are
+refused. The permit is the machine's, so the worker is a local child of @top's, started without a machine of its own.
+The guard checks who permitted, the model, and that nothing is committed or pushed; it cannot check that the worker
+designs. A command of any other agent that carries the text permits nothing.
+
 A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
 DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
 is gone. Both tests read what the VM records and nothing the caller says, so a running worker is never evicted on a

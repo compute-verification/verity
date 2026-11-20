@@ -1108,6 +1108,55 @@ def test_every_command_of_a_workers_turn_on_fable_is_refused_each_time_with_the_
     assert settled(event_log) == [] and settled(event_log, "model_ok") == []
 
 
+MEDIUM, PERMIT = "claude-fable-5-2-medium", "AGENT_GUARD_FABLE_DESIGN=1 true"
+TOP, THIRD = "bc-23232323-2323-4232-8232-232323232323", "bc-78787878-7878-4787-8787-787878787878"
+
+
+@pytest.fixture
+def top_registry(tmp_path) -> dict[str, str]:
+    """A Slack registry in which TOP holds `top` and HOLDER holds `infra`, as the hook's environment."""
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps({"handles": [{"handle": "top", "holder": TOP}, {"handle": "infra", "holder": HOLDER}]}))
+    return {"AGENT_GUARD_REGISTRY": str(path)}
+
+
+def test_tops_permit_lets_one_design_worker_run_fable_medium_and_only_read(tmp_path, event_log, top_registry):
+    """The one exception to the Fable rule: after a command of @top's holder that carries the permit, the first worker
+    whose turn names Fable 5.2 Medium passes, in that turn and its later ones, and its `git commit` and `git push` are
+    refused since it only reads. The permit lets one worker through: a second worker on the same model is refused as
+    before, and so is the permitted worker at another effort."""
+    assert on_model("ls", AGENT, TURNS[0], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
+    assert on_model(PERMIT, TOP, TURNS[1], FABLE, tmp_path, **top_registry) == ALLOW
+    assert len(settled(event_log, "fable_design_permit")) == 1
+    for turn, command in ((TURNS[2], "ls"), (TURNS[2], "git status"), (TURNS[3], "git log --oneline -3")):
+        assert on_model(command, AGENT, turn, MEDIUM, tmp_path, **top_registry) == ALLOW, command
+    for command in ("git commit -m design", "git push -u origin some-branch", "git -C /tmp/w commit --amend"):
+        refused = on_model(command, AGENT, TURNS[3], MEDIUM, tmp_path, **top_registry)
+        assert refused["permission"] == "deny" and "reads and commits nothing" in refused["user_message"], command
+    assert [e["conversation_id"] for e in settled(event_log, "fable_design_claim")] == [AGENT]
+    for agent, model in ((PEER, MEDIUM), (AGENT, FABLE), (AGENT, "claude-fable-5-2")):
+        refused = on_model("ls", agent, TURNS[4], model, tmp_path, **top_registry)
+        assert refused["permission"] == "deny" and "no worker runs Fable 5.2" in refused["user_message"], (agent, model)
+    assert on_model(PERMIT, TOP, TURNS[5], FABLE, tmp_path, **top_registry) == ALLOW
+    assert on_model("ls", PEER, TURNS[6], MEDIUM, tmp_path, **top_registry) == ALLOW
+    assert on_model("ls", THIRD, TURNS[7], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
+
+
+def test_only_tops_holder_permits_a_design_worker_and_a_permit_nobody_took_lapses(tmp_path, event_log, top_registry):
+    """The text permits nothing in a command of another lead, of a worker or of the worker itself, and a permit long
+    past its fifteen minutes that no worker took lets none through."""
+    for agent, model in ((HOLDER, FABLE), (PEER, OPUS)):
+        assert on_model(PERMIT, agent, TURNS[0], model, tmp_path, **top_registry) == ALLOW
+    assert on_model(PERMIT, AGENT, TURNS[1], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
+    assert settled(event_log, "fable_design_permit") == []
+    assert on_model("ls", AGENT, TURNS[1], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
+    with open(event_log, "a") as log:
+        log.write(json.dumps({"t": 1, "hook": "shell_hook.py", "event": "fable_design_permit",
+                              "conversation_id": TOP, "permit": "lapsed"}) + "\n")
+    assert on_model("ls", AGENT, TURNS[2], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
+    assert settled(event_log, "fable_design_claim") == []
+
+
 def test_a_leads_turn_on_fable_passes_and_so_does_a_later_generation_of_a_registered_handle(tmp_path, event_log, registry):
     """A lead is a registry holder, or launch_coordinator's id for a registered handle, held or not, at a generation from 1
     to 50; it runs Fable at any effort. A generation past 50, an unregistered handle's coordinator and a lead's child are

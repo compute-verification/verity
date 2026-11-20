@@ -87,6 +87,12 @@ RUN = re.compile(r'^\{"t": (\d+), "hook": "([^"]*)", "event": (?:"[^"]*"|null), 
 MODEL_OK = "AGENT_GUARD_MODEL_OK=1"
 #: the `event` of the line the model rule adds to EVENT_LOG for a turn it settles: refused once, or passed by MODEL_OK
 MODEL_REFUSAL, MODEL_PASS = "model_refusal", "model_ok"
+#: what a command of the agent that holds @top carries, in its text, to permit one design worker on Fable 5.2 Medium
+#: (`shell_hook.fable_reason`), read in the command's text as MODEL_OK is; the `event` of the permit's line in EVENT_LOG
+#: and of the line of the worker that takes it; and how long a permit no worker has taken stands, in seconds
+FABLE_DESIGN = "AGENT_GUARD_FABLE_DESIGN=1"
+FABLE_PERMIT, FABLE_CLAIM = "fable_design_permit", "fable_design_claim"
+FABLE_PERMIT_S = 900
 #: a model's family, the name a payload gives it without its effort: `claude-fable-5-2` of `claude-fable-5-2-xhigh`
 FAMILY = re.compile(r"claude-[a-z]+-\d+-\d+")
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
@@ -130,6 +136,26 @@ def recorded_runs() -> list[tuple[int, str, str]]:
             with open(path, errors="replace") as f:
                 runs += [(int(t), hook, agent) for t, hook, agent in RUN.findall(f.read())]
     return runs
+
+
+def named_events(*names: str) -> list[dict]:
+    """EVENT_LOG's lines whose `event` is one of `names`, whatever their agent, oldest first: those of the file it last
+    rotated to, then its own. A line that names none of them as text is skipped unparsed, and one that is not a JSON
+    object is skipped. A missing file is no lines; any other OSError rises to the caller."""
+    events = []
+    for path in (EVENT_LOG + ".1", EVENT_LOG):
+        if not os.path.isfile(path):
+            continue
+        with open(path, errors="replace") as f:
+            lines = [line for line in f if any(n in line for n in names)]
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(e, dict) and e.get("event") in names:
+                events.append(e)
+    return events
 
 
 def agent_events(agent: str) -> list[dict]:
