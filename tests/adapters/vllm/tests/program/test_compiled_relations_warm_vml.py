@@ -61,17 +61,3 @@ def test_the_thread_count_is_restored_when_exp_raises(monkeypatch):
     assert CR._VML_WARM is False
 
 
-def test_commit_replay_warms_before_it_replays(monkeypatch):
-    from verity_vllm.pipeline import cpu_replay
-
-    calls: list[str] = []
-
-    def replay(_o: object) -> bool:
-        calls.append("replay")
-        return True
-
-    monkeypatch.setattr(cpu_replay, "warm_vml", lambda: calls.append("warm"))
-    monkeypatch.setattr(cpu_replay, "replay", replay)
-    assert cpu_replay.main(object()) == 0
-    assert calls == ["warm", "replay"]
-

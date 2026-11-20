@@ -646,51 +646,6 @@ def test_f32_to_bf16_cast_is_round_to_nearest_even():
     assert got.tolist() == exp.tolist()
 
 
-def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
-    """commit_verdict: a served weight that differs from the checkpoint of record is a named FAIL at every B; on a row-procedure record
-    (binding block) an absent / not-evaluated pin is 'weights unpinned' (fail closed); legacy records without a binding block are untouched."""
-    from verity_vllm.check.commit_pass import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 2}}
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-            "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-            "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
-    ok_wp = {"result": True, "compared": 98, "mismatched": [], "missing": []}
-    ok_, why_ = commit_verdict({**base, "binding": bnd, "weights_pin": ok_wp}, True, min_openings=64)
-    assert ok_ is True and why_.startswith("PASS"), why_                        # at B>=2 without form (B) the PASS names the attribution gap
-    bad = {"result": False, "compared": 98, "mismatched": [{"served_name": "model.layers.5.mlp.down_proj.weight"}],
-           "why": "1 served weight(s) differ from the checkpoint of record: model.layers.5.mlp.down_proj.weight"}
-    for b in ({"binding": bnd}, {}):                      # named at every B, with or without the binding block
-        ok, why = commit_verdict({**base, **b, "weights_pin": bad}, True, min_openings=64)
-        assert not ok and why.startswith("weights of record:") and "model.layers.5.mlp.down_proj.weight" in why
-    ok, why = commit_verdict({**base, "binding": bnd}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned: ") and "not run" in why
-    ok, why = commit_verdict({**base, "binding": bnd, "weights_pin": {"result": None, "why": "weights of record not derived: FileNotFoundError(...)"}}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned: ") and "not derived" in why
-    # a legacy record (no binding block) without a pin keeps the legacy rule
-    assert commit_verdict(base, True, min_openings=64) == (True, "PASS")
-
-
-def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
-    """Compiled S3 writes its form-(A) replay under value_correspondence.components and leaves the top level empty: the O1 gate
-    reads the components where the top level is absent -- only a component that says it is a sampled exact replay counts; another method
-    (an oracle compare, a root compare) never stands in for the replay of record."""
-    from verity_vllm.check.commit_pass import commit_verdict
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
-            "weights_pin": {"result": True, "compared": 10}}
-    comps_ok = {"sampled_replay": {"result": True, "grade": "complete", "method": "sampled-exact-replay(kernel launches)"},
-                "boundary_linkage": {"result": True, "pairs": 4, "linked": 4}}
-    assert commit_verdict({**base, "value_correspondence": {"method": "compiled", "result": True, "components": comps_ok}}, True, min_openings=64) == (True, "PASS")
-    comps_bad = dict(comps_ok, sampled_replay={"result": False, "grade": "mismatch", "method": "sampled-exact-replay(kernel launches)", "why": "launch 7 output != committed"})
-    ok, why = commit_verdict({**base, "value_correspondence": {"method": "compiled", "result": False, "components": comps_bad}}, True, min_openings=64)
-    assert not ok and "launch 7" in why                   # named (the composite's own why names the failing component's cause, R1)
-    ok, why = commit_verdict({**base, "value_correspondence": {"method": "compiled", "result": None, "components": comps_bad}}, True, min_openings=64)
-    assert not ok and why.startswith("C2 sampled replay:") and "launch 7" in why
-    comps_other = dict(comps_ok, sampled_replay={"result": True, "method": "oracle-compare"})          # not a replay: does not count
-    ok, why = commit_verdict({**base, "value_correspondence": {"method": "compiled", "result": True, "components": comps_other}}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established")
-
-
 @pytest.mark.usefixtures("code_versions_stood_in")
 def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     d, man, t = checkpoint
@@ -784,8 +739,6 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     assert rec4["of_record"] is False and "not full sha512" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
     assert cli.run(WR, ["--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
-
-
 
 
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):

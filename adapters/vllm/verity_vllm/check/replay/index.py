@@ -19,7 +19,6 @@ from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.program.compact import (
     expanded_file_args,
     p_item_indices,
-    runs_from_file_items,
 )
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
@@ -27,10 +26,9 @@ from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import population
 
-__all__ = ["DEFAULT_QUERY", "SAMPLER_OP", "SEED_PARAM", "ProgramIndex", "const_word", "index_of", "parse_struct", "row_args"]
+__all__ = ["DEFAULT_QUERY", "SAMPLER_OP", "SEED_PARAM", "ProgramIndex", "const_word", "index_of", "parse_struct"]
 
 SAMPLER_OP = "runner.sampler"
-IDS_MEMBER = "in"
 SEED_PARAM = "seed"                     # the stochastic Program's seed input (Param name; committed as runner.sampler/seed per (step, request))
 VALUES_PARAM = "values"                 # a `registered_values` Program's registered values (the norms' eps, the attention scale)
 #: the values a request's run decides: a `registered_values` Program's per request (the sampler's temperature and top_p, a Philox
@@ -44,17 +42,6 @@ def file_args(r: dict) -> list:
     """A row's operand groups as the Program file states them; a row that states none reads no operand."""
     args = r.get("args")
     return args if args else []
-
-
-def row_args(r: dict | None) -> list:
-    """A row's operands as per-leaf run lists, whether its args are as `format.load_program` expands them or as the file stores them
-    (a v2 row's "N"/"P" progressions, `load_program(expand=False)`): how the replay reads every argument it evaluates."""
-    return expanded_file_args(file_args(r or {}))
-
-
-def node_runs(group) -> list[tuple]:
-    """The node-space runs `("n", producer, lo, hi)` of one operand (stored or expanded), in order; its parameter reads are not expanded."""
-    return runs_from_file_items(it for it in group if it and it[0] in ("n", "N"))
 
 
 def const_word(row: dict | None) -> np.ndarray | None:
@@ -119,8 +106,6 @@ def _supplied_field(binding: str, f: dict, impl) -> dict:
     return dict(f, leaves=int(f["leaves"]), op_path=impl(op), member=member)
 
 
-#: the query engine whose population addresses a Call's committed output (`addresses.rule` on the record)
-V2_QUERY = "v2-query"
 #: the query a `ProgramIndex` addresses under when its caller names none (None: the query of record)
 DEFAULT_QUERY: str | None = None
 
@@ -134,13 +119,6 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     """`ProgramIndex`'s arguments as the index reads them: its TP context and the effective query."""
     t = _tp_of(tp)
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
-
-
-def plane_copies(d: dict) -> list[dict]:
-    """The second names a described row's output is committed under (`ProgramIndex.describe`: a MoeSum's plane beside its
-    module's own output).  A description states `copies` only for such a row; every other row has none."""
-    copies = d.get("copies")
-    return copies if copies else []
 
 
 def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
@@ -541,6 +519,3 @@ class ProgramIndex:
         return 16
 
 
-#: the `moe_block_stream` address schema (the manifest / `binding.py` write `moe/L<layer>` as the op_path of the six
-#: planes): parsed here to label the (request, step, layer) triple -- the family's own address vocabulary, not a module-path rule
-_MOE_LAYER_RE = re.compile(r"^moe/L(\d+)$")
