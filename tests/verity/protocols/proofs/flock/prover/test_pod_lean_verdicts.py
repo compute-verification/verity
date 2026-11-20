@@ -1,5 +1,5 @@
-"""The pod jobs' Lean step fails closed (`verity/protocols/proofs/flock/prover/pod/lean_verdicts.py`, which 85-rec-reprice.sh and 86-zk-cpu-steps.sh
-run after their parallel `verify` lines): a part passes on its exit and its log's VERDICT together, a forgery only when Lean
+"""The pod jobs' Lean step fails closed (`verity/protocols/proofs/flock/prover/pod/lean_verdicts.py`, which 86-zk-cpu-steps.sh
+runs after its parallel `verify` lines): a part passes on its exit and its log's VERDICT together, a forgery only when Lean
 refuses it, and a part that never ran, or no part at all, fails the step."""
 from __future__ import annotations
 

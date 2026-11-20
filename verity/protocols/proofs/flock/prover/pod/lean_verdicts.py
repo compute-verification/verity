@@ -1,4 +1,4 @@
-"""A pod job's Lean step, fail closed (``85-rec-reprice.sh`` and ``86-zk-cpu-steps.sh``, STEP=lean): each part's
+"""A pod job's Lean step, fail closed (``86-zk-cpu-steps.sh``, STEP=lean): each part's
 verity-verify-proof exit, as its ``/usr/bin/time -v`` record has it (``time-PART.txt``'s ``Exit status``), and the ``VERDICT``
 lines of its log (``PART.log``, one per session). An honest part passes when it exited 0 and has a VERDICT and every VERDICT
 accepts. A forgery is the parts named ``forged-KIND-PART``, PART one of the honest parts named (else the whole name is its

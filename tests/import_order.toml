@@ -504,7 +504,6 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
-    "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/inner_registered.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
