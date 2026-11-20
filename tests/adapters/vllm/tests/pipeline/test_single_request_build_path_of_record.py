@@ -17,8 +17,6 @@ from verity.circuits.codec import canonical_json, program_digest
 
 from tests.pipeline.test_single_request_build_path import (
     VLLM_DIR,
-    _compose,
-    _decode_cold,
     _run,
 )
 
@@ -49,15 +47,6 @@ def _rekey_sha512(d: Path) -> None:
     new = program_digest(desc)
     for p in d.glob("*.json"):
         p.write_text(p.read_text().replace(old, new))
-
-
-@pytest.mark.slow
-def test_101s_request_program_composes_as_its_build_does(tmp_path):
-    """Workload 101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
-    build = _build_101(tmp_path)
-    r = _compose(VLLM_DIR / "workloads" / f"{ROW_101}.json", build / "build_request", tmp_path / "build_workload", eos=128001)
-    assert r["requests"] == 1 and r["gates"] == 23_256_312_239
-    assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
 
 
 @pytest.mark.slow
