@@ -2,8 +2,7 @@
 declaration (`verity_vllm.check.match.declaration`), a fold's supplied parameters (`verity_vllm.check.match.supplied_inputs`) and
 its instance rows (`verity_vllm.check.match.program_loaders`), a derived directory's shape
 (`verity_vllm.check.match.derived_index`), the capture log (`verity_vllm.check.match.record`), the declared prefix-cache hit
-(`verity_vllm.check.match.prefix_reads`), the sampler's geometry (`verity_vllm.check.match.sampler_geometry`) and the cross-rank
-pass (`verity_vllm.check.match.xrank_collectives`).  An absent field reads as nothing stated, and where the check needs it the
+(`verity_vllm.check.match.prefix_reads`) and the sampler's geometry (`verity_vllm.check.match.sampler_geometry`).  An absent field reads as nothing stated, and where the check needs it the
 failure names it."""
 from __future__ import annotations
 

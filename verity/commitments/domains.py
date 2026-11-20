@@ -177,7 +177,7 @@ PARTITION_OWNERS = "verity/partition/v1/owners"
 FLOCK_PUBLIC_INPUTS = "verity/flock-public-inputs/v1"
 IR_DESCRIPTOR = "verity-ir/descriptor/v1"
 
-# Shared: the served path's PoUW manifests (`verity_vllm.protocols.pouw`)
+# Shared: the served path's PoUW manifests
 VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"

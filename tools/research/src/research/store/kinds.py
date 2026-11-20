@@ -110,21 +110,21 @@ KINDS: dict[str, str] = {
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
                        "commit_summary.json (compat), never a C2 replay's facts of record (sampled_replay*.json, served tokens), "
                        "which stay on the node; meta {row, verdict, ...}; refs.build, refs.match",
-    "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
+    "vllm-replay-slim/v1": "a decided CPU replay's slim keep: payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
                            "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
                            "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
                              "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
-    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window "
-                          "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
+    "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per network attester's window: "
+                          "payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
                           "fold's held-out codebook); meta {corpus, commit, codebook_digest, T, tau_us}",
-    "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs (verity_vllm.pipeline.vu_export): payload "
+    "vllm-vu-set/v1": "one subcircuit's input set exported from a passing row's sampled VUs: payload "
                       "tree = manifest.json + index.json + flat port arrays; meta {set, relation, n, content_digest, row, model, run, "
                       "run_root, program_digest, manifest_digest, source, epoch}; refs.run_record",
-    "vllm-vu-store/v1": "one row's hierarchical VU store (verity_vllm.pipeline.vu_store): payload tree = run.json + programs/<digest>/"
+    "vllm-vu-store/v1": "one row's hierarchical VU store: payload tree = run.json + programs/<digest>/"
                         "{program.json, units.jsonl} + values/<sha256>.<dtype>; the flat vllm-vu-set/v1 sets are its extractions",
     "vllm-vu-export/v1": "one row's VU export: payload = export.json (draw, per-family counts, sets); meta {row, model, run, run_root}; "
                          "refs.sets = the vllm-vu-set/v1 artifacts, refs.run_record",

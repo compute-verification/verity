@@ -49,7 +49,7 @@ failure by its exception's class and exit status (`failed`) and ``said`` its las
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `serve_load.py`'s
+earliest. ``--window K`` holds K to the same rules. ``--of-load FILE`` (a fixed load's lines, `verity_vllm.inputs.sender`'s
 ``--out``) takes the one window whose requests are that load's and no other, and ``--attested`` the one whose requests
 are all the network attester's: neither a count nor a setting chooses it, and either refuses unless one window fits. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
@@ -1905,7 +1905,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     The answer is Pearl+'s, its work the Lean's (in the grid form, with its ``give_up``, where the verdict held the
     passes to their class's fixed load), its profile the reference's with the lane, pin, period, session and the Lean
     verdict. Nothing here decides anew: each condition reads what a check or a verifier answered."""
-    from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
+    from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
     from verity.commitments import randomness as RND
@@ -1940,7 +1940,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if period is None:
         return None, f"the live session joined no period of lane {lane}"
     name = period.get("period")
-    if h1 := [f for f in (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD) if f in period]:
+    if h1 := [f for f in (Wd.K_FIELD, Wd.ROWS_FIELD, Wd.LENGTH_FIELD) if f in period]:
         return None, (f"the live session joined period {name}, a non-Pearl-C one (its open commits {', '.join(h1)}): a Pearl-C salt "
                       "session is credited in a Pearl-C period alone")
     try:
@@ -2546,7 +2546,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
-    w.add_argument("--of-load", type=Path, help="the fixed load's lines (serve_load.py --out): the window of its requests")
+    w.add_argument("--of-load", type=Path, help="the fixed load's lines (verity_vllm.inputs.sender --out): the window of its requests")
     w.add_argument("--attested", action="store_true", help="the window of the network attester's requests alone")
     g = sub.add_parser("gate")
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))

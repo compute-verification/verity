@@ -6,7 +6,7 @@ A `credited` case is an honest served execution phase read through its challenge
 manifest rows (the serving process's call rows, each with its credit bit, a credited one with its z table's root), the
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
 the execution phase's registered entries (each K's A and B values, their domains one-stage's registration's under the execution phase's
-open root and its circuit, `registered_value.domain`), and the sample: `credit.draw_root` over them, recorded by the
+open root and its circuit, `registered_value.domain`), and the sample: `window.draw_root` over them, recorded by the
 challenger, then its sampling coin opened after it; the auditor's ledger opens and ends the session for the execution phase, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
@@ -81,8 +81,8 @@ malformed one, name no model credit pins in it (``weights-model``), open the exe
 under the domain of those rows (so `credit._registration` accepts it).
 
 A `period` case is one to three such execution phases of one circuit in one credit period of the auditor's ledger (`period-open`
-committing the SHA-512 of the circuit's descriptor, the K every execution phase is sampled at, `credit.K_FIELD`, the tables'
-rows T, `credit.ROWS_FIELD`, and the weights' root every execution phase opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each execution phase's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
+committing the SHA-512 of the circuit's descriptor, the K every execution phase is sampled at, `window.K_FIELD`, the tables'
+rows T, `window.ROWS_FIELD`, and the weights' root every execution phase opens, `credit.WEIGHTS_FIELD`, with the pinned model it is of, `credit.MODEL_FIELD`, each execution phase's session opened and ended, then the `period-close` listing them), presented in its close's order, each with that
 descriptor, an execution phase of no credit period beside it in the ledger. Its mutations leave the credit period unclosed or an
 execution phase incomplete, drop, reorder or add an execution phase, present the execution phase of no credit period among the credit period's, name a credit period
 never opened or no credit period, forge the ledger, refuse one execution phase, make one execution phase wholly another circuit's (its
@@ -107,7 +107,7 @@ another circuit registers them under its own.
 
 An `a_link` case is an execution phase's registered entries, among them one or two A values (``…/a/<K>``) whose trees are frame-v3
 SHA-512 trees (`verity.commitments.merkle.tree_levels`) of `steps` equal blocks, and its round log: each round's
-`credit.cover` segments of every A value under `credit.round_root` of a random inner root. Its mutations register an A
+`credit.cover` segments of every A value under `window.round_root` of a random inner root. Its mutations register an A
 tree other than the one the rounds committed, rewrite a segment with or without its round root, leave a gap,
 add a segment, misalign one, list an unregistered value, register none or one twice, and break the forms. It may also
 register rounds' A tables ``…/a/<K>@<s>``, each committed whole by its round; its mutations list one in another
@@ -174,7 +174,7 @@ def _draw_root(d: dict) -> str:
     salt, served, commit = bytes.fromhex(d["salt"]), d["served"], Cr.commit_of(d["commit"])[0]
     calls = Cr.calls_root(salt, d["calls"], None if served is None else bytes.fromhex(served),
                           None if commit is None else commit[0])
-    return Cr.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
+    return Wd.draw_root(calls, bytes.fromhex(d["draw"]["receipts"]), d["rounds"]).hex()
 
 
 #: each way an execution phase's A tables or input-ids tables are not the served Commit's, made before its sample: one round's A
@@ -362,7 +362,7 @@ def _once(lins: list[str]) -> list[int]:
 
 
 def table_rows(rng: random.Random, lay: dict) -> int:
-    """The tables' leaf count T a credit period of execution phases of layout `lay` commits (`credit.ROWS_FIELD`): one whose
+    """The tables' leaf count T a credit period of execution phases of layout `lay` commits (`window.ROWS_FIELD`): one whose
     `h1window.slot` is the layout's A slot M, M itself or some T in (M/2, M] (any T in [1, M] when M is the tile's R)."""
     m, r = lay["m"], lay["tile"][0]
     return rng.choice([m, rng.randint(1 if m == r else m // 2 + 1, m)])
@@ -881,15 +881,20 @@ REGISTRY_TILES = ("v1", "v3", "v5")
 
 
 @functools.cache
-def registry_window(k: int, tile: str = "v1") -> dict:
+def registry_window(k: int, tile: str = "v1", prefix: str = "") -> dict:
     """The registry's window (`h1window.program`) of one linear at K, one call, over the 4 × 8 tile unit
-    (`h1window.tile_unit`) over the H1 tile `tile` (`REGISTRY_TILES`), as `codec.encode_program` writes it: a template
-    `credit.TILE_PINS` pins when K and `tile` are an instance it holds. About 60 MB, ten seconds to build."""
+    (`h1window.tile_unit`) over the H1 tile `tile` (`REGISTRY_TILES`), its parameters named `prefix`, as
+    `codec.encode_program` writes it: a template `credit.TILE_PINS` pins when K and `tile` are an instance it holds.
+    About 60 MB, ten seconds to build."""
     from verity.circuits import codec
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1tile as H
     from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
     unit = HW.tile_unit(k, (4, 8), {"v1": None, "v3": H.PouwH1Tile3, "v5": H.PouwH1Tile5}[tile])
-    return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), unit=lambda _k: unit))
+    return codec.encode_program(HW.program((("w", k, 8),), (("w", 0),), 4, (4, 8), prefix, unit=lambda _k: unit))
+
+
+#: `registry_window`'s layout at K = 64, as `credit.layout_of` reads it
+REGISTRY_LAYOUT = {"calls": [["w", 0]], "linears": [["w", 64, 8]], "m": 4, "tile": [4, 8]}
 
 
 def shared_window(base: Path, k: int = 64, tile: str = "v1") -> bytes:
@@ -1928,7 +1933,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
                     period_pin: str | None = None, pin_floor: int | None = None,
                     stale_window: int | None = None, j10r: bool = False, nks: int | None = None,
                     tile: int | None = None, program_fn: str | None = None, windows: int | None = None,
-                    commit: Callable[[dict, int, str, str], str] | None = None) -> dict:
+                    commit: Callable[[dict, int, str, str], str] | None = None, real: bool = False) -> dict:
     """One `period` case: one to three honest execution phases in one credit period of the auditor's ledger, each proving the circuit
     whose SHA-512 the credit period's open committed (one execution phase layout's descriptor, `descriptor`), presented in its close's
     order, and an execution phase of no credit period opened after the close; then mutation `name`. The credit period's open commits
@@ -1936,13 +1941,19 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     and which execution phase runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor. `j10r`, `nks`
     and `tile` make its circuits J10-R's, at `nks` K, over ``PouwH1Tile_v<tile>`` (`layout`, `descriptor`), and
     `program_fn` replaces its circuit's program function. With `windows` it has that many execution phases, and with `commit`
-    each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`)."""
+    each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`). `real`: its circuit is the
+    registry's window at K = 64 over `tile`'s H1 tile, its parameters ``h1/`` (`registry_window`, `REGISTRY_LAYOUT`),
+    a template `credit.TILE_PINS` pins, for a mutation that leaves the circuit as it is."""
     n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3) if windows is None else windows
     pname = rng.choice(rc.PERIODS)
-    lay = layout(rng, nks=nks)
+    if real and name in ("bad-circuit", "tile-k", "other-circuit"):
+        raise ValueError(f"a real period's circuit is the registry's window, which {name} would change")
+    lay = json.loads(json.dumps(REGISTRY_LAYOUT)) if real else layout(rng, nks=nks)
     t = table_rows(rng, lay)
-    prefix = f"h1/w-{rng.randrange(100)}/"
-    desc = (_break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
+    prefix = "h1/" if real else f"h1/w-{rng.randrange(100)}/"
+    real_tile = {None: "v5" if j10r else "v1", 1: "v1", 3: "v3", 5: "v5"}[tile] if real else None
+    desc = (desc_bytes(registry_window(64, real_tile, prefix)).hex() if real else
+            _break_desc(rng, lay, rng.choice(LAYOUT_DESC_NAMES), j10r, tile) if name == "bad-circuit" else
             _break_desc(rng, lay, "tile-k", j10r, tile) if name == "tile-k" else
             descriptor(rng, lay, prefix, j10r=j10r, tile=tile))
     if program_fn is not None:
@@ -2212,7 +2223,7 @@ def _log(steps: int, values: dict, inners: list[str]) -> list[dict]:
 
 def _reroot(log: list[dict]) -> list[dict]:
     for r, x in enumerate(log):
-        x["root"] = Cr.round_root(r, bytes.fromhex(x["inner"]), {v: [(lv, i, bytes.fromhex(h)) for lv, i, h in s]
+        x["root"] = Wd.round_root(r, bytes.fromhex(x["inner"]), {v: [(lv, i, bytes.fromhex(h)) for lv, i, h in s]
                                                                   for v, s in x["a"].items()}).hex()
     return log
 

@@ -21,7 +21,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     transcript_domain,
 )
-from verity.protocols.resource_accounting.compute.pouw.verifier.core_check import MANIFEST_SCHEMA
+from verity.protocols.resource_accounting.compute.pouw.verifier.window import MANIFEST_SCHEMA
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import Schedule, SchemeId
 

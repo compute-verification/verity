@@ -720,8 +720,6 @@ KNOWN: dict[str, str] = {
     "calibration/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "calibration/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # applications/
-    "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
-        "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
     "tests/tools/verity/cli/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
     "tests/tools/verity/cli/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",

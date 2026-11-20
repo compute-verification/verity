@@ -57,6 +57,9 @@ NOT_SCANNED = {
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.inputs.serves": "I1: what the adapter serves (SERVES: its model, vocabulary and window class) and the door "
+                                 "an input dataset passes before it is sent, which `verity run` reads an application's "
+                                 "dataset through",
     "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
                             "there that can change what is computed or committed, a credential by name only, and their "
                             "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
@@ -252,8 +255,6 @@ PUBLIC = {
     "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
                                             "(step_roots, host_step, plan), which benchmarks/commitments times and "
                                             "benchmarks/serve_tax's plugin installs",
-    "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
-                                 "POS_LEAF_TAG), which benchmarks/commitments prices",
     "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
                                     "levels and roots (ROW_BYTES, KEY_BYTES, fresh_tensor_salts, tensor_root, run_program_digest), "
                                     "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
@@ -374,8 +375,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.serve_openai",
-    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.window_advice",

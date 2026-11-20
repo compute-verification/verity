@@ -372,7 +372,8 @@ theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
       _root_.Spot.OneStageZk.publicHeld c.record pubB = .ok () ∧
       _root_.Spot.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
   replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
-  unfold _root_.Spot.OneStageZk.checkOneAt at h
+  replace h := _root_.Spot.OneStageZk.checkOneAt_body h
+  unfold _root_.Spot.OneStageZk.checkOneBody at h
   dsimp only at h
   split at h
   · cases h

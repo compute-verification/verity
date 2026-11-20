@@ -1,1 +1,1 @@
-"""The E2E demo's interfaces: the drawn-unit replay bundle (`replay_bundle`) and the block record (`block_record`)."""
+"""The E2E demo's interfaces: the block record (`block_record`)."""

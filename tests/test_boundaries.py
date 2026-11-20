@@ -82,7 +82,7 @@ INTEGRATION_SITES = _integration_sites()
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "applications", "input_datasets")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.
 DEPENDENCIES = {"numpy"}
@@ -1059,9 +1059,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
-    # standin_rows from network attestation's prover: owner network-accounting, gone by 2:00 PM PST Fri 20 Nov (top's
-    # ruling, Fri 20 Nov 9:02 AM PST, TOP-447)
-    "adapters/vllm/verity_vllm/program/predict/close_record.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
 )
 

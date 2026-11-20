@@ -60,6 +60,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   circuits, which also traces a training step.
 - `applications/`: one file per demo, the configuration `verity run` reads (`applications/README.md`, one table of them); a demo holds no
   code.
+- `input_datasets/`: the input datasets a workload reads its circuits' inputs from (`input_datasets`, its own
+ distribution): one read API over definitions, and nothing under `verity/` imports it.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `calibration/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command (`cli/`), `circuit_check/`, `graph/` (the check as a graph of tasks) and `lean/`

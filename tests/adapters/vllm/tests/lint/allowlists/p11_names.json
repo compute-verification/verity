@@ -7,7 +7,6 @@
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "class-name", "symbol": "<module>", "detail": "NativeHiddenM1SourceFA3"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "def-name", "symbol": "<module>", "detail": "_runs_fast"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "module-name", "symbol": "<module>", "detail": "global_match_fast"},
-    {"file": "verity_vllm/pipeline/release_json.py", "kind": "flag-name", "symbol": "WriteOptions", "detail": "--tp3"},
     {"file": "verity_vllm/definitions/registry/__init__.py", "kind": "def-name", "symbol": "_register_lazy_families", "detail": "_b1"},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "def-name", "symbol": "<module>", "detail": "_forward_positions_v2"},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "def-name", "symbol": "<module>", "detail": "_forward_positions_v4"},
@@ -29,7 +28,6 @@
     {"file": "verity_vllm/definitions/registry/sampling_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "add_rz_ftz_v1_model"},
     {"file": "verity_vllm/definitions/registry/sampling_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "nv_log1pf_v1_model"},
     {"file": "verity_vllm/definitions/registry/serve3.py", "kind": "def-name", "symbol": "<module>", "detail": "serve_v3"},
-    {"file": "verity_vllm/commitments/vllm_v1", "kind": "package-name", "symbol": "<package>", "detail": "vllm_v1"},
     {"file": "verity_vllm/compiler/compile_slice_v7.circuit-check.py", "kind": "def-name", "symbol": "<module>", "detail": "_network_compile_slice_v7_roots"},
     {"file": "verity_vllm/compiler/compile_slice_v7.py", "kind": "module-name", "symbol": "<module>", "detail": "compile_slice_v7"}
   ]

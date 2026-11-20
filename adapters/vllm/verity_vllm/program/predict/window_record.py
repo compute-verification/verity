@@ -14,14 +14,14 @@ from verity.protocols.proofs.spot.prover import docket as DK
 
 from . import window_rows as WRS
 
-__all__ = ["SALTS", "commit", "key_of", "place_slots", "window_design"]
+__all__ = ["SALTS_DOMAIN", "commit", "key_of", "place_slots", "window_design"]
 
-SALTS = "verity/window-commit/salts/v1"
+SALTS_DOMAIN = "verity/window-commit/salts/v1"
 
 
 def key_of(run: str) -> RND.Key:
     """A window's salt key, drawn fresh for the one window under ``run``."""
-    return RND.derive(os.urandom(64), SALTS, {"window": run})
+    return RND.derive(os.urandom(64), SALTS_DOMAIN, {"window": run})
 
 
 def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:

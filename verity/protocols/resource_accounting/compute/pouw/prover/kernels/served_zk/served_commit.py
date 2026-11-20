@@ -162,7 +162,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
 #: the execution phase sample's key, from the execution phase's sampling coin (`draw_key`)
-DRAW_DOMAIN = CC.DRAW_DOMAIN
+DRAW_DOMAIN = Wd.DRAW_DOMAIN
 #: the execution phase root's port: the execution phase's entries
 PORT = "entries"
 #: an execution phase stream's failure budget: its first failure stops it
@@ -529,7 +529,7 @@ def path(levels, index: int) -> list[str]:
     return out
 
 
-verify_path = CC.verify_path
+verify_path = Wd.verify_path
 
 
 def side_leaves(dom: CommitmentDomain, schema: str, bcs: list[bytes]) -> list[bytes]:
@@ -847,18 +847,18 @@ Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The execution phase sample's key: the execution phase's sampling coin, under the stream and the registration and receipt it was opened after."""
-    return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
+    return derive(coin, DRAW_DOMAIN, Wd.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
 def draw_bytes(key: Key, sampling_design: Mapping[str, Any], n: int) -> bytes:
     """The bytes a subset:k sample over N reads (Lean's ``2 k · width(N) + 64``)."""
     if sampling_design.get("law") != "subset":
         raise _refused("law", f"the window's draw is a subset sampling design's, not {dict(sampling_design)}")
-    return key.stream("draw", 2 * sampling_design["k"] * CC.width(n) + 64)
+    return key.stream("draw", 2 * sampling_design["k"] * Wd.width(n) + 64)
 
 
 def python_sampler(sampling_design: Mapping[str, Any], n: int, src: bytes) -> list[int]:
-    units = CC.stream_subset(sampling_design["k"], n, src)
+    units = Wd.stream_subset(sampling_design["k"], n, src)
     if units is None:
         raise _refused("sampler", "the draw's stream ran out")
     return units
@@ -891,7 +891,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
                          "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
                          "(`Deployment.challenger_key`)")
     try:
-        trusted = Ch.trusted_commitment(path, key, CC.lms_verify)
+        trusted = Ch.trusted_commitment(path, key, Wd.lms_verify)
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
         same = Ch.ChallengerRecord.from_json(doc).commitment == trusted
     except (Ch.CoinError, OSError, ValueError) as e:
@@ -1402,7 +1402,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if man.get("schema") not in (Wd.MANIFEST_SCHEMA, Wd.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1680,7 +1680,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": Wd.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

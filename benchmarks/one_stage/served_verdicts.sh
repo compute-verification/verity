@@ -20,9 +20,9 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the network attester's traffic generator (`adapters/vllm/tools/served_run/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
-#     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
-#     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
-#     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
+#     so the engine's idle closes them into one window. With LOAD=dataset (default varied) they are the input dataset
+#     DATASET at TIMING instead, both of which LOAD=dataset needs, sent by the adapter's one sender
+#     (`verity_vllm.inputs.sender`, by `adapters/vllm/tools/served_run/inputs.py send`), which reads it through the adapter's door (`verity_vllm.inputs.serves`) before it sends any. With
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network attester, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
@@ -307,8 +307,8 @@
 # front's windows reserve nothing in the period's cap of 1); PEARLC_CHALLENGER_GATE set empty leaves them in-process, and the piece claims no
 # verdict. Its defaults are then Llama 3.2 1B's
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
-# /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
-# prompt P, WINDOW_STEPS its outputs: round s of W is the window's s-th step, the class's s-th output, and the cut circuit
+# /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=dataset at V3C_CLASS (SLOTS its slots, WINDOW_STEPS its
+# outputs: round s of W is the window's s-th step, the class's s-th output, and the cut circuit
 # reads Pearl+'s tables at those rows; the preflight refuses another) and PEARLC_BF16_ROWS=0; V3C_LAW has none (the launch
 # states it, a stratified rate over the cut window's templates, and the preflight refuses a launch without one), and
 # step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
@@ -474,10 +474,10 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
   REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
-  LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.compose.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.compose.schemes pearl-plus option, above)" >&2; exit 3; }
+  LOAD=${LOAD:-dataset} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.compose.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.compose.schemes pearl-plus option, above)" >&2; exit 3; }
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
-  IFS=, read -r slots prompt _ <<< "${V3C_CLASS-4,32,4}"
-  SLOTS=${SLOTS:-$slots} PROMPTS=${PROMPTS:-$prompt:$prompt}
+  IFS=, read -r slots _ <<< "${V3C_CLASS-4,32,4}"
+  SLOTS=${SLOTS:-$slots}
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
   # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
   export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
@@ -538,7 +538,7 @@ SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
 export CUDA_HOME=${CUDA_HOME:-$(python3 "$TREE/benchmarks/kernels/machine.py" toolkit 13.0)}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src:$TREE/benchmarks/harness
+export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src:$TREE/benchmarks/harness
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -566,7 +566,9 @@ host_set() {
 keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
-case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: LOAD is varied, fixed, front or session, not $LOAD"; exit 3 ;; esac
+case ${LOAD:=varied} in varied | dataset | front | session) ;; *) say "PREFLIGHT: LOAD is varied, dataset, front or session, not $LOAD"; exit 3 ;; esac
+case ${1:-} in '' | serve) [ "$LOAD" != dataset ] || { [ -n "${DATASET:-}" ] && [ -n "${TIMING:-}" ]; } \
+  || { say "PREFLIGHT: LOAD=dataset plays the input dataset DATASET at TIMING, and one of them is unset"; exit 3; } ;; esac
 case $POUW in
   pearlplus) ;;
   h1) say "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"; exit 3 ;;
@@ -1072,10 +1074,10 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the network attester's verdict
   elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-    local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
-    [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
-    "$PY" "$TREE/adapters/vllm/tools/served_run/serve_load.py" --port "$PORT" --model "$REPO" "${load[@]}" --prompt-range "$PROMPTS" \
-      --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$D/load.log" 2>&1
+    local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
+      --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
+    [ "$LOAD" = dataset ] && load=("$TREE/adapters/vllm/tools/served_run/inputs.py" send --dataset "$DATASET" --timing "$TIMING")
+    "$PY" "${load[@]}" --port "$PORT" --release "$release" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     local sent all
     sent=$(tail -1 "$D/load.log" | grep -oE '[0-9]+/[0-9]+ ok' | head -1) all=${sent#*/}
@@ -1150,21 +1152,32 @@ counted_pair() {  # class $1's circuit record and the registration counted besid
 }
 block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
   # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
-  local c tag f reg pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
-  [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
+  # its exit is 1 where a class refused (ROAD_WHY the first such line), and ROAD_NOT_RUN says why where nothing was counted
+  local c tag f reg pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json} rc counted=0 bad=0
+  [ -f "$decl" ] || { ROAD_NOT_RUN="the run declares no c, k and n"; say "BLOCK-COUNTS: none, since $ROAD_NOT_RUN"; return 0; }
   [ -f "$WREG" ] && pins=(--pins "$WREG")
-  day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
+  day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") \
+    || { ROAD_WHY="BLOCK-COUNTS refused: D/serve.json gives no clocks.time, the day the declaration is read at"; say "$ROAD_WHY"; return 1; }
   (umask 077; mkdir -p "$D/private")
   for c in $CLASSES; do
     tag=${c//,/-}; [ "$c" = record ] && tag=record
     read -r f reg < <(counted_pair "$c")
     [ -f "$f" ] || continue
-    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
-         --window "$f" "$reg" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
-         --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
+    counted=1
+    "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
+      --window "$f" "$reg" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
+      --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"
+    rc=$?
+    if [ "$rc" = 0 ]; then
       say "BLOCK-COUNTS class $c, the picked window alone: $(said 0 "$D/block-counts-$tag.err" | cut -c1-400); $BASIS_129"
-    else say "BLOCK-COUNTS class $c refused $(failed "$?" "$D/block-counts-$tag.err")"; fi
+    else
+      bad=1
+      [ -n "${ROAD_WHY:-}" ] || ROAD_WHY="BLOCK-COUNTS class $c refused $(failed "$rc" "$D/block-counts-$tag.err")"
+      say "BLOCK-COUNTS class $c refused $(failed "$rc" "$D/block-counts-$tag.err")"
+    fi
   done
+  [ "$counted" = 1 ] || ROAD_NOT_RUN="no class of CLASSES ($CLASSES) has a counted window circuit"
+  return "$bad"
 }
 IO_POLICY=${IO_POLICY:-$OUT/inference-only-policy.json}
 IO_LEAN=$TREE/verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/.lake/build/bin/inference-only-verifier
@@ -1177,7 +1190,7 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
   # PEARLPLUS_TIE in serve(), before serve-openai starts, from serve-phi's φ (pearl_circuit's) cut at Pearl+'s linears
   local c out rc phi=()
   c=$(io_class)
-  [ -n "$c" ] || { say "INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"; return 0; }
+  [ -n "$c" ] || { ROAD_NOT_RUN="CLASSES names no class but record"; say "INFERENCE-ONLY POLICY: none, since $ROAD_NOT_RUN"; return 0; }
   [ -z "$PEARLPLUS_TIE" ] || phi=(--serve "$D/pearlplus/serve-phi.json" --pearl-tables "${PEARLPLUS_ARM#pouw:}")
   [ "${1:-}" != window ] || phi=(--serve "$D/serve.json")  # the window's serve's own φ, after it served
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py policy --class "$c" --model "$REPO" \
@@ -1263,7 +1276,7 @@ print("%d/%d %d" % (d["alpha"][0], d["alpha"][1], d["gamma"]))' "$IO_LIMITS") ||
 inference_only() {  # in TREE, once step 3 counted window K's circuit at the class: its verdict against the policy
   local c out rc f reg lean=()
   c=$(io_class)
-  [ -n "$c" ] || return 0
+  [ -n "$c" ] || { ROAD_NOT_RUN="CLASSES names no class but record"; return 0; }
   read -r f reg < <(counted_pair "$c")
   [ -x "$IO_LEAN" ] && lean=(--lean "$IO_LEAN" --lean-timeout "${IO_LEAN_TIMEOUT:-1800}")
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py verdict --policy "$IO_POLICY" --serve-run "$D" \
@@ -1271,6 +1284,8 @@ inference_only() {  # in TREE, once step 3 counted window K's circuit at the cla
     "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
   if [ -n "$out" ]; then say "$out; $BASIS_129"; else say "INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node"; fi
+  # a verdict that refuses is decided; one the count could not reach is undecided, though its exit is 0
+  [[ "$out" != "INFERENCE-ONLY refuse: undecided: "* ]] || ROAD_WHY=$out
   return "$rc"
 }
 pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the run serves, asked of the piece itself
@@ -1839,16 +1854,35 @@ TPY=$TREE/.venv/bin/python
 }
 # The window's road, a plain run's: the steps on what a window's serve left in D, after the lease, serving nothing and
 # reading no ROW: the close's plan (plans.jsonl), its handoff and record (windows/wK/handoff, windows/wK/record), the
-# seal and the advice. A step the record holds nothing for refuses, naming what it lacks and whose it is.
-RAN=() REFUSED=() FAILED=()
-step_refused() { REFUSED+=("$1"); say "$1: not run: $2"; }
-road_end() {
-  local sampled="no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run"
+# seal and the advice. Each step is in one class: ran (its command ended 0 and decided), refused or undecided (by its own
+# first line), or not run (by why: a step the record holds nothing for names what it lacks and whose it is).
+RAN=() REFUSED=() NOT_RUN=()
+declare -A WHY=()
+step_not_run() { NOT_RUN+=("$1"); WHY[$1]=$2; say "$1: not run: $2"; }
+step_refused() { REFUSED+=("$1"); WHY[$1]=$2; say "$1: refused: $2"; }
+road_step() {  # NAME FN [ARGS]: FN ran where it ended 0 and set neither ROAD_WHY (its refusal or undecided line) nor
+  # ROAD_NOT_RUN (why it decided nothing); else refused by ROAD_WHY, or by the first line it said
+  local name=$1 n=0 rc first
+  shift
+  [ ! -f "$OUT/verdicts.txt" ] || n=$(wc -l < "$OUT/verdicts.txt")
+  ROAD_WHY='' ROAD_NOT_RUN=''
+  "$@"
+  rc=$?
+  first=$(tail -n +"$((n + 1))" "$OUT/verdicts.txt" 2> /dev/null | head -n 1)
+  if [ "$rc" = 0 ] && [ -z "$ROAD_WHY" ] && [ -n "$ROAD_NOT_RUN" ]; then step_not_run "$name" "$ROAD_NOT_RUN"
+  elif [ "$rc" = 0 ] && [ -z "$ROAD_WHY" ]; then RAN+=("$name")
+  else step_refused "$name" "${ROAD_WHY:-${first:-it said nothing}} (exit $rc)"; fi
+}
+road_end() {  # the road's exit is 0 only where every step ran
+  local sampled="no proof is made, and Lean verifies nothing; no sampled verdict, so no δ or ε: the sampled proofs did not run" s
   [[ " ${RAN[*]:-} " != *" sampled-proofs "* ]] || sampled="this line states no δ or ε of the sampled proofs that ran"
-  say "ROAD END (the window's record): ran ${#RAN[@]} ($(IFS=,; echo "${RAN[*]:-}")); refused ${#REFUSED[@]} ($(IFS=,; echo "${REFUSED[*]:-}")); failed ${#FAILED[@]} ($(IFS=,; echo "${FAILED[*]:-}")); no verdict stands for a step that did not run; $sampled; the circuit digest is kept private and NO public value fixes it before the coins"
+  say "ROAD END (the window's record): ran ${#RAN[@]} ($(IFS=,; echo "${RAN[*]:-}")); refused or undecided ${#REFUSED[@]} ($(IFS=,; echo "${REFUSED[*]:-}")); not run ${#NOT_RUN[@]} ($(IFS=,; echo "${NOT_RUN[*]:-}")); no verdict stands for a step that did not run; $sampled; the circuit digest is kept private and NO public value fixes it before the coins"
+  for s in "${REFUSED[@]}"; do say "  REFUSED $s: ${WHY[$s]}"; done
+  for s in "${NOT_RUN[@]}"; do say "  NOT RUN $s: ${WHY[$s]}"; done
+  [ ${#REFUSED[@]} = 0 ] && [ ${#NOT_RUN[@]} = 0 ] && exit 0
   exit "$1"
 }
-road_stop() { FAILED+=("$1"); say "STOP at $1 (exit $2)"; road_end "$2"; }
+road_stop() { step_refused "$1" "the road stops here (exit $2)"; road_end "$2"; }
 tie_refused() {  # the window commit tied to Pearl+'s W is deleted, so a setting naming it is refused before anything runs
   local v
   for v in PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM; do
@@ -1953,13 +1987,14 @@ road_pieces() {  # Pearl+, PoUS and the bandwidth audit, where the application l
   elif ! nvidia-smi -L 2> /dev/null | grep -q '^GPU '; then card="nvidia-smi lists no card on this node"; fi
   for c in "${only[@]}"; do
     step=${c/#pouw/pearl-plus} owner="memory accounting's"; [ "$c" != pouw ] || owner="compute accounting's"
-    if [ -n "$card" ]; then step_refused "$step" "needs a card: its piece takes its own gpu-lease, and $card: $owner"; continue; fi
+    if [ -n "$card" ]; then step_not_run "$step" "needs a card: its piece takes its own gpu-lease, and $card: $owner"; continue; fi
     pieces --only "$c"
     if "$PY" -c 'import json, pathlib, sys
 d = pathlib.Path(sys.argv[1])
 doc = next((json.loads((d / n).read_text()) for n in ("answer.json", "development.json") if (d / n).is_file()), {})
 sys.exit(0 if json.loads((d / "piece.json").read_text())["rc"] == 0 and doc.get("verdict") else 1)' "$OUT/pieces/$c" 2> /dev/null
-    then RAN+=("$step"); else FAILED+=("$step"); say "$step: its piece answered no verdict ($owner)"; fi
+    then RAN+=("$step")
+    else step_refused "$step" "$(head -n 1 "$OUT/pieces/$c/refused.txt" 2> /dev/null || echo "its piece answered no verdict ($owner)")"; fi
   done
 }
 road_wipe() {  # the wipe runs under the serve's lease before its engine loads, so the road only reads what it answered
@@ -1969,7 +2004,7 @@ road_wipe() {  # the wipe runs under the serve's lease before its engine loads, 
     [ ! -f "$D/pieces/wipe/summary.json" ] || cp "$D/pieces/wipe/summary.json" "$OUT/pieces/wipe/"
     say "WIPE: the card launcher's, under the serve's lease (D/pieces/wipe/answer.json)"; RAN+=(wipe)
   else
-    step_refused wipe "D/pieces/wipe/answer.json is absent: the card launcher did not run the wipe under the serve's lease (vllm's h100_smoke.sh)"
+    step_not_run wipe "D/pieces/wipe/answer.json is absent: the card launcher did not run the wipe under the serve's lease (vllm's h100_smoke.sh)"
   fi
 }
 road_network() {  # the network attester's own piece, called as step 4 or 6 calls it; its refusal is its own text
@@ -1978,9 +2013,10 @@ road_network() {  # the network attester's own piece, called as step 4 or 6 call
   mkdir -p "$dir"
   local rc=0
   (cd "$TREE" && bash -c "$cmd" _ "$D" "$K" "$dir" "${VW:-}") > "$dir/road.log" 2>&1 || rc=$?
-  if [ -f "$dir/refused.txt" ]; then REFUSED+=(network-attester); say "network-attester: $(head -c 600 "$dir/refused.txt")"
+  if [ -f "$dir/refused.txt" ]; then REFUSED+=(network-attester); WHY[network-attester]=$(head -n 1 "$dir/refused.txt" | head -c 600)
+    say "network-attester: $(head -c 600 "$dir/refused.txt")"
   elif [ "$rc" = 0 ]; then RAN+=(network-attester)
-  else FAILED+=(network-attester); say "network-attester: $(failed "$rc" "$dir/road.log")"; fi
+  else step_refused network-attester "$(failed "$rc" "$dir/road.log")"; fi
 }
 window_road() {  # in TREE: the runner's steps in its order, each from the window's record or refused by name
   [ -z "${PEARLPLUS_TIE:-}" ] || { say "PREFLIGHT: PEARLPLUS_TIE ties a window to a ROW's serve, and the window's road serves none: it ties nothing"; exit 3; }
@@ -2008,17 +2044,17 @@ EOF
     || { say "ADVICE: its registration has no public form"; road_stop advice 14; }
   say "ADVICE: committed (its root a hiding commitment); its content and length are held to no registered compiler (candidate 135)"
   RAN+=(advice)
-  if inference_policy window; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
-  if circuits; then RAN+=(circuits); else FAILED+=(circuits); fi
-  block_counts; RAN+=(block-counts)
-  step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
+  road_step inference-policy inference_policy window
+  road_step circuits circuits
+  road_step block-counts block_counts
+  step_not_run sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
   road_pieces
   road_wipe
   road_network
-  if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]] && inference_only; then RAN+=(inference-only)
-  else step_refused inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them failed"; fi
-  step_refused record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
-  step_refused composite "V3c, the composite and the hand-off read the record, which was not made"
+  if [[ " ${RAN[*]} " = *" circuits "* && " ${RAN[*]} " = *" inference-policy "* ]]; then road_step inference-only inference_only
+  else step_not_run inference-only "its verdict reads the circuits step's window circuit and the inference-only policy, and one of them did not run"; fi
+  step_not_run record "served_verdicts.py record reads step 3's sampled proofs, which did not run"
+  step_not_run composite "V3c, the composite and the hand-off read the record, which was not made"
   road_end 20
 }
 
