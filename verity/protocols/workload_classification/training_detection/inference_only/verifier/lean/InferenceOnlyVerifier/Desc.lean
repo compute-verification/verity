@@ -63,7 +63,8 @@ whole lane's first row run by run and its levels, each level's radix times the i
 before a summary's `used` and on the root nodes' reads), a rowed segment's copies period by period (`readsWalk`;
 `Seg.split` leaves none in a read), and periodic intervals whose runs don't fill their period, run by run (`PI.emit`,
 counted by `ivsCount` before a summary's `used` and, by `freshWalk`, before an inference block's `freshWidth`), the
-leaves of a strided piece taken through a parameter (`throughArg`), and segments of copies that may overlap or go
+leaves of a strided piece taken through a parameter and the rows of a mapped axis a batch member's leaves are taken
+through (`throughArg`), and segments of copies that may overlap or go
 backwards, or that meet other reads of the same inference block, expanded copy by copy (`copiesStep`, `widthIn`:
 `freshWalk`). Serve_v1 meets none of the walks, at word level or on bits.
 
@@ -446,6 +447,12 @@ def memberSpans (a : Arg) (m lo hi : Nat) : Array (Nat × Nat) :=
       let e := min hi ((q + 1) * L)
       if s < e then some ((q * d + m) * L + (s - q * L), (q * d + m) * L + (e - q * L)) else none
 
+/-- How many runs `memberSpans a m lo hi` walks: one per row of the mapped axis that `[lo, hi)` meets. -/
+def memberSpanCount (a : Arg) (lo hi : Nat) : Nat :=
+  match a.dims with
+  | none => 1
+  | some (_, L) => if L == 0 then 0 else (hi + L - 1) / L - lo / L
+
 /-- The most members, iterations or rows `analyze` walks one by one. A description of a few hundred bytes names `2^52` of
 them, so a walk it can't summarize past this is refused (`unwalked`). -/
 def WALK : Nat := 2 ^ 20
@@ -787,6 +794,8 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
     let elems : Array (Nat × Nat) := g.rowsOf.flatMap fun g =>
       if g.stride == 1 then #[(g.base.toNat, g.base.toNat + g.len)]
       else (Array.range g.len).map fun t => ((g.at t).toNat, (g.at t).toNat + 1)
+    walkAtMost "rows of a mapped axis a batch member's parameter leaves are taken through, one by one"
+      (if node.form == .batch then elems.foldl (fun n (lo, hi) => n + memberSpanCount a lo hi) 0 else 0)
     let mut out := #[]
     for (lo, hi) in elems do
       match node.form with
