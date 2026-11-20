@@ -591,4 +591,24 @@ theorem membersPortsHeld : MembersPortsHeld := by
   exact ⟨a, hd, rd, hl, ha, hh, hrd, hhl,
     portsHeld_of_headerHeldAt (header_wf hh) ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩ (slicePortsOf_nodup hps hnd) hpop⟩
 
+/-- Parameters naming no members, a default program and no ports: what the per-member form reads of them before
+the registration's roots is nothing. -/
+def bareParams : OneStageZk.Params where
+  base := { verifier := { program := default, query := .null, samplingDesign := .null, workTable := none, scheme := "",
+      ports := #[], leafLayer := none, anchors := #[], log := #[], partition := none }, delta := default }
+  own := { programJ := .null, program := ByteArray.empty, partition := .null, circuit := "", pub := "",
+    registered := none }
+  members := none
+
+/-- **`MembersPortsHeld`'s nontrivial lemma**: at a registration whose roots are not a list, the verifier's roots of
+the members refuse (`OneStageZk.rootsOf`, before any hash), so a verifier that accepted it would accept with no roots
+and `MembersPortsHeld`'s conclusion fails there. -/
+theorem membersPortsHeld_nontrivial :
+    ∀ roots, ¬ (OneStageZk.membersRootsOf bareParams #[] Json.null = .ok roots) := by
+  intro roots h
+  have e : OneStageZk.membersRootsOf bareParams #[] Json.null =
+      .error "roots: the registration's roots are not a list" := rfl
+  rw [e] at h
+  cases h
+
 end Properties.Spot.PortsHeldProof
