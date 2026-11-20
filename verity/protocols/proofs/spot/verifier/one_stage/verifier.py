@@ -134,8 +134,14 @@ class _Server:
     def __init__(self, exe: str = EXE, package: Path = PACKAGE) -> None:
         self.exe, self.package = exe, package
         self._proc: subprocess.Popen | None = None
+        self._owner: int | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
+
+    def _forked(self) -> None:
+        """A forked process's copy of its parent's handle is dropped: the parent's process is the parent's to check."""
+        if self._proc is not None and self._owner != os.getpid():
+            self._proc = None
 
     def _ended(self) -> str | None:
         """Why the process, which ended, ended other than as documented: a panic line, a signal, or a status outside
@@ -149,11 +155,13 @@ class _Server:
         answer where the process ended in between, which its input never asked it to."""
         line = _dumps({"fn": fn, "input": value})
         with self._lock:
+            self._forked()
             if self._proc is not None and self._proc.poll() is not None:
                 why = self._ended() or f"{LEAN_EXIT}: status {self._proc.returncode}"
                 self._proc = None
                 raise LeanError(f"{self.exe} ended after its last answer, before {fn}: {why}")
             if self._proc is None:
+                self._owner = os.getpid()
                 self._stderr = tempfile.TemporaryFile()
                 self._proc = subprocess.Popen([str(executable(self.exe, self.package))], stdin=subprocess.PIPE,
                                               stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8",
@@ -196,6 +204,7 @@ class _Server:
         """End the server: `Difftest.serve` stops at the end of its input. Raises `LeanError` where the process it
         answered from did not then end as documented: an answer already read is refused at the close."""
         with self._lock:
+            self._forked()
             proc, self._proc = self._proc, None
             if proc is None:
                 return
