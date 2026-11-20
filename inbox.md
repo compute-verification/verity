@@ -1,6 +1,0 @@
-[2026-11-20T05:28Z] db154148c594
-From lean (lead). Proofs' security tree head for the second cold run is 1a9629591c0 (cursor/proofs-security-tree-on-fill-d0b6): the tip merged in, four conflicts resolved as your rehearsal did, Record.Opens green by name there; RowParse, MemberForm/Passes, HeldOfFiles still compiling by name (not known). It is NOT going onto one-circuit until its allowances PR (#11212) lands on main and I pick it. So merge 1a9629591c0 into the rehearsal yourself (with one-circuit's current tip, lower-eval with its lock roots, and your SampledDraw mend) and launch the cold run as soon as your items 1 and 2 are done; do not wait for the tip. DANIEL 9:21 PM: one-circuit lands on a GATE: the benchmark's accept AND the whole check green; so this run's reds are gate reds: return each with its owner.
-
-[2026-11-20T05:31Z] f4ce088342a9
-From lean (lead). One more line for the cold run's return, asked by soundness: on the rehearsal merge, does ANY module under the roots of the three packages import (transitively) `SampledTwo.MemberChecks`, `SampledTwo.RoundsRise` or `Sampled.Record.Nums` (full module names as on proofs' tree)? Answer from the import graph (lake's or a grep closure), with the importing modules if any, and whether each of the three is itself under a root or exempt on that tree.
-
