@@ -1,0 +1,120 @@
+"""The read API over definitions: identities, order, sample, shuffle, splits, the refusals, and the one generator."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import tomllib
+from pathlib import Path
+
+import pytest
+
+import input_datasets as D
+
+ROOT = Path(__file__).resolve().parents[2]
+REMOTE = "llama32_1b_fixed_4_27_2"
+
+
+def _define(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **files: str) -> None:
+    (defs := tmp_path / "definitions").mkdir()
+    for name, text in files.items():
+        (defs / f"{name}.toml").write_text(text)
+    monkeypatch.setattr(D, "DEFINITIONS", defs)
+    monkeypatch.setattr(D, "CACHE", tmp_path)
+
+
+GENERATED = """kind = "completion-requests"
+[generated]
+generator = "fixed-window-completions"
+version = 1
+seed = {seed}
+[generated.parameters]
+model = "m"
+count = {count}
+window_steps = 2
+prompt_tokens = [4, 9]
+heads = [[1, 10, 11], [1, 20, 21, 22]]
+tail = [7, 8]
+filler = [30, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+[splits]
+head = [0, 2]
+rest = [2, {count}]
+"""
+
+
+def test_an_identity_is_stable_and_changes_with_any_parameter(monkeypatch, tmp_path):
+    _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=5), b=GENERATED.format(seed=2, count=5),
+            c=GENERATED.format(seed=1, count=6), d=GENERATED.format(seed=1, count=5).replace('"m"', '"n"'))
+    ids = {n: D.open(n).identity for n in "abcd"}
+    assert D.open("a").identity == ids["a"]
+    assert len(set(ids.values())) == 4
+    assert ids["a"].startswith("generated:fixed-window-completions/v1:seed=1:parameters-sha256=")
+
+
+def test_iteration_sample_and_shuffle_are_deterministic(monkeypatch, tmp_path):
+    _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=8))
+    ds = D.open("a")
+    records = list(ds)
+    assert records == list(D.open("a")) and len(ds) == 8
+    s, t = ds.sample(3, seed=5), ds.shuffled(seed=5)
+    assert list(s) == list(D.open("a").sample(3, seed=5)) and list(t) == list(D.open("a").shuffled(seed=5))
+    assert [records.index(r) for r in s] == sorted(records.index(r) for r in s)
+    assert sorted(map(json.dumps, t)) == sorted(map(json.dumps, records)) and list(t) != records
+    assert s.identity == f"{ds.identity}|sample:n=3,seed=5" and t.identity == f"{ds.identity}|shuffle:seed=5"
+    assert ds.sample(3, seed=6).identity != s.identity and list(ds.sample(3, seed=6)) != list(s)
+
+
+def test_a_split_is_the_range_its_definition_names(monkeypatch, tmp_path):
+    _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=5))
+    ds = D.open("a")
+    assert sorted(ds.splits) == ["head", "rest"]
+    assert list(D.open("a", split="head")) == list(ds)[0:2] and list(ds.splits["rest"]) == list(ds)[2:5]
+    assert D.open("a", split="rest").identity == f"{ds.identity}|split:rest=2:5"
+
+
+def test_an_unknown_name_an_unknown_split_and_a_changed_byte_are_refused_by_name(monkeypatch, tmp_path):
+    (tmp_path / "r.jsonl").write_bytes(b'{"x": 1}\n')
+    held, digest = (hashlib.sha256(b).hexdigest() for b in (b'{"x": 1}\n', b'{"x": 2}\n'))
+    _define(monkeypatch, tmp_path, a=GENERATED.format(seed=1, count=5),
+            r=f'kind = "k"\n[recorded]\nsource = "art:00"\npath = "r.jsonl"\nsha256 = "{digest}"\nformat = "jsonl"\n')
+    with pytest.raises(D.Refused) as e:
+        D.open("nope")
+    assert (e.value.name, str(e.value)) == ("unknown-dataset", f"no input dataset 'nope': each is a definition NAME.toml under {D.DEFINITIONS}")
+    with pytest.raises(D.Refused) as e:
+        D.open("a", split="tail")
+    assert (e.value.name, str(e.value)) == ("unknown-split", "input dataset 'a' has no split 'tail' (its splits: head, rest)")
+    with pytest.raises(D.Refused) as e:
+        list(D.open("r"))
+    assert (e.value.name, str(e.value)) == ("digest", f"input dataset 'r': r.jsonl has sha256 {held}, not its definition's "
+                                                      f"{digest}; fetch it again with `research data fetch-fixtures r.jsonl`")
+
+
+def test_the_recorded_workload_reads_as_its_requests():
+    """Through the fixture's fetch: the runner fetches the file, an entry of artifacts.json under the suite's inputs."""
+    ds = D.open("qwen05_32x16_1req")
+    [record] = list(ds)
+    assert ds.kind == "completion-requests"
+    assert ds.identity == "recorded:sha256=ea93af44cb5d59bb7da850d088e0cc01ba8c11332282c4d4f06a08ce341a261a:json:requests"
+    assert (record["request_id"], record["prompt_len"], len(record["prompt_token_ids"])) == ("728a5686-cfb6-58db-a1a8-170c12d608a6", 32, 32)
+
+
+@pytest.mark.parametrize("seed,count,lo,hi", [(None, None, None, None), (0, 8, 16, 27)])
+def test_the_generator_builds_the_bodies_serve_loads_fixed_load_sends(monkeypatch, seed, count, lo, hi):
+    """`serve_load.py --fixed`'s bodies, byte for byte, at the remote definition's parameters and at another seed, count
+    and prompt range, its /tokenize answered from the definition's token ids. Deleted with serve_load.py's generator."""
+    spec = importlib.util.spec_from_file_location("serve_load", ROOT / "adapters/vllm/tools/served_run/serve_load.py")
+    sl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sl)
+    g = tomllib.loads((D.DEFINITIONS / f"{REMOTE}.toml").read_text())["generated"]
+    p = {**g["parameters"], **({"count": count, "prompt_tokens": [lo, hi]} if seed is not None else {})}
+    seed = g["seed"] if seed is None else seed
+    bos = [p["heads"][0][0]]
+    answers = {"": bos, sl.CHAT_TAIL: bos + p["tail"], sl.VARIED_FILLER: bos + p["filler"],
+               **{sl.CHAT_HEAD + q: h for q, h in zip(sl.QUESTIONS, p["heads"], strict=True)}}
+    monkeypatch.setattr(sl, "tokenize", lambda port, model, text: answers[text])
+    want = [q["body"] for q in sl.fixed(0, p["model"], p["count"], window_steps=p["window_steps"],
+                                        prompt_tokens=tuple(p["prompt_tokens"]), seed=seed)]
+    got = D.GENERATORS[(g["generator"], g["version"])](seed, p)
+    assert [json.dumps(b) for b in got] == [json.dumps(b) for b in want]
+    if count is None:
+        assert got == list(D.open(REMOTE)) and {len(b["prompt"]) for b in got} == {27}
