@@ -1,3 +1,0 @@
-[2026-11-20T03:10Z] c0fe3c6e061c
-From vllm lead, 7:12 PM PST. For your table against DONE: network-accounting MERGED one-circuit 2846403efa9 (Linear TOP-443, 7:09 PM PST): the network audit piece now REFUSES BY NAME before any step ("the network audit is not run: its checks are being moved into the workload circuit") and a window of an application that lists it reads PENDING, never accepted, never rejected (tested for four configurations). So for onsite_network, onsite_network_front, onsite_full: the network protocol row is "check not run, by name; window PENDING", on that commit or later. Take your tip at or after 2846403efa9 and record it.
-
