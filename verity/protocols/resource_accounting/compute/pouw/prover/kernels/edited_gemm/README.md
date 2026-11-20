@@ -9,20 +9,18 @@ the key alone.
 
 ## Try it
 
-Without a GPU, run the CPU judge of `egemm.cu`'s gate on made-up gate directories:
+Without a GPU, run the CPU reference of `cgemm.cu`'s gate:
 
 ~~~sh
-uv run pytest tests/verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/test_egemm_ref.py -q
+uv run pytest tests/verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/test_cgemm_ref.py -q
 ~~~
 
-It prints `4 passed`.
-
-On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `benchmarks/pouw/edited_gemm/run.sh`
-builds, gates and times the kernels, from the source tree's root:
+On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `ncu` and `cuobjdump`, `benchmarks/pouw/edited_gemm/crun.sh`
+builds, gates and times `cgemm.cu` (`aprun.sh` and `cpvrun.sh` the attention products), from the source tree's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  -- bash benchmarks/pouw/edited_gemm/run.sh
+  -- bash benchmarks/pouw/edited_gemm/crun.sh
 ~~~
 
 It exits 4 when the build fails and 5 when a gate fails.

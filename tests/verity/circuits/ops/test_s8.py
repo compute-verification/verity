@@ -1,5 +1,5 @@
 """`verity.circuits.ops.s8`: the exact s8 matmul family against the exact integer sums, the edited arms' identities as the
-references state them (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/egemm_ref.py`, `apv_ref.py`), the no-wrap refusals and the census rule."""
+kernels state them (`verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/egemm.cu`, `apv_ref.py`), the no-wrap refusals and the census rule."""
 from __future__ import annotations
 
 import random
@@ -69,8 +69,8 @@ def test_prefix_words_and_tail_groups() -> None:
 
 
 def test_the_egemm_arm_serves_x_w() -> None:
-    """egemm: C = X W'^T with W' = W + U Id^T, S = X Id in byteclamp limbs (egemm_ref.limbs) against [U | U | U], and
-    C - 256 D_0 - D_1 = X W^T, the served product (egemm_ref's identity C - S U^T == Y)."""
+    """egemm: C = X W'^T with W' = W + U Id^T, S = X Id in byteclamp limbs against [U | U | U], and
+    C - 256 D_0 - D_1 = X W^T, the served product (egemm.cu's identity Y = C - S U^T)."""
     rng = random.Random(4)
     d = bind(S8.S8Dot, **S8.SMOKE_EDITED)
     split = bind(S8.LimbSplit, FORM="byteclamp", N=3, Y=(-254, 254))
