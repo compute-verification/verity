@@ -611,7 +611,7 @@ def test_a_return_of_no_fields_has_no_field_tree():
 def _periods_interface_tests():
     import importlib.util
     from pathlib import Path
-    path = Path(__file__).resolve().parents[5] / "tests/verity/commitments/periods/test_interface.py"
+    path = Path(__file__).resolve().parents[6] / "tests/verity/commitments/periods/test_interface.py"
     spec = importlib.util.spec_from_file_location("periods_test_interface", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
