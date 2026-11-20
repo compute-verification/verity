@@ -2,7 +2,9 @@
 (`verity.commitments.periods.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
-  the docket binds; a window with row tables is refused until its records carry their segment roots;
+  the docket binds; a window with row tables is refused until its records carry their segment roots; Pearl+'s tile and
+  credit reader resolve in a fresh audit process to the body registered under their id, and a Definition of that id with
+  another body is refused by name;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
   circuit is another or that writes none, and a length other than the registered one or none;
@@ -184,6 +186,56 @@ assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
+
+
+PEARL_PLUS_IDS = ("PearlPlusTileSeed_v4{K=256,TN=1}", "PearlPlusTileLine_v4{SIDE=0,FACTOR=1,G=32}")
+
+
+def test_pearl_plus_templates_resolve_in_a_fresh_audit_process_to_their_registered_body():
+    """Pearl+'s tile (`pearl_plus_tile`) and its credit reader (`pearl_plus_credited`) are a later place's than
+    `interface`, whose walk can't import them: in a fresh process, which has loaded nothing else, `catalog_resolve`
+    resolves each id to the Definition that module registered under it, its body and definition digest that one's,
+    where `interface.resolve` alone refuses it ("names no Definition a catalog registers")."""
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
+from verity.commitments.periods import interface as IF
+for tid in sys.argv[1:]:
+    try:
+        IF.resolve(tid)
+    except ValueError as e:
+        assert "names no Definition a catalog registers" in str(e), e
+    else:
+        raise AssertionError(f"{{tid}} resolved with no catalog of Pearl+'s loaded")
+import records_audit as RA
+from verity.circuits.codec import definition_digest, definition_entry, descriptor_id
+from verity.circuits.defs import REGISTRY, bind
+from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC, pearl_plus_tile as PT
+for tid in sys.argv[1:]:
+    fn = RA.catalog_resolve(tid)
+    assert descriptor_id(fn) == tid and fn.defn is REGISTRY[tid.partition("{{")[0]], tid
+    assert fn.defn.body.__module__ == PT.__name__, fn.defn.body.__module__
+seed = bind(PT.PearlPlusTileSeed, K=256, TN=1)
+assert definition_digest(definition_entry(RA.catalog_resolve(sys.argv[1]))) == definition_digest(definition_entry(seed))
+assert REGISTRY[PC.PearlPlusTileCoreWired.id] is PC.PearlPlusTileCoreWired
+"""
+    p = subprocess.run([sys.executable, "-c", code, *PEARL_PLUS_IDS], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+def test_a_definition_of_a_pearl_plus_id_with_another_body_is_refused_by_name():
+    """A Definition named as Pearl+'s tile seed but with another body never stands for it: the registry refuses it under
+    that id, and as a template it is refused as no Definition a catalog registers, by its id."""
+    from verity.circuits.defs import CompositeDefinition
+    from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_tile as PT
+
+    seed = PT.PearlPlusTileSeed
+    with pytest.raises(ValueError, match=f"registry already has a different definition for {seed.id}"):
+        CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None)
+    other = CompositeDefinition(seed.name, seed.version, seed.statics, seed.signature, lambda *a, **k: None, register=False)
+    with pytest.raises(ValueError, match=f"{seed.id}: not a Definition a catalog registers"):
+        IF.catalog(bind(other, K=256, TN=1))
+    assert IF.resolve(PEARL_PLUS_IDS[0]).defn is seed
 
 
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
