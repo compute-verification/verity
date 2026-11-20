@@ -11,7 +11,6 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
                                                                               the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F --verify F]         its requests again, from its recorded coins
-  (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
@@ -57,14 +56,11 @@ verity imports; run from this file, the commands that reach either refuse (NotIm
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the sampled proof blocks' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one sampling design and K′ is a function of the
   level, so the challenger holds one Stream per level.
-- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered_twin`, which
-  `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
-  (`core_check.case_twin` the Python) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
-  decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
-  rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
-  registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
-  Python's.  The outcome's verdict of record on each sampled proof block is the challenger's own run of the Lean verifier
+- **Of record** (`of_record`): the challenger's checks are Lean's alone.  PoUW's rule (which `public_problem` mirrors for
+  the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome and a unit's
+  opening each run Lean's port, whose verdict decides, is the published items' and goes in the execution phase's witness
+  (``outcome.json``'s ``of_record``, the opening verdict's ``witness``).  The service's public-items rule is Lean's too
+  (``public``, `Service.checkPublic`); the stream's own state stays Python's.  The outcome's verdict of record on each sampled proof block is the challenger's own run of the Lean verifier
   (``--verify``: `verify --zk` on the block's circuit, public file and delivered session, `run_lean`), never a verdict
   a job hands it.
 - **The coins** are the execution phase's (`pouw.coins`): the challenger process that holds the Streams holds the execution phase's coin
@@ -332,7 +328,7 @@ def install_tiles(scheme: Any) -> Callable[[], None]:
     raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
 
 
-def lean_record(lean: bool | None = None) -> OR.Record:
+def lean_record() -> OR.Record:
     """The checks of record with their Lean side (`benchmarks/pouw/served_zk/of_record_lean.py`'s `Record`), which
     `main` takes as `record`: `of_record.Record` alone refuses its first check."""
     raise NotImplementedError(NEEDS_BENCHMARK.format("of_record_lean.Record",
@@ -679,28 +675,15 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True, *,
           record: OR.Record, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
-    `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
-    one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
+    rule on the opening (`pouw-check-difftest opening`, the unit sampled unless not `drawn`), of record (`record`: an
+    `of_record.Record`, whose Lean side `of_record_lean.Record` supplies).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
     every unit of a certified execution phase without it."""
-    try:
-        ell = level_of(rec)
-        work_at(params, ell)
-    except ValueError as e:
-        pre: str | None = str(e)
-    else:
-        roots = {r["port"]: r for r in rec["roots"]}
-        pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
-            "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": record.hexed(rec),
          "units": list(draw.get("units", ())) if drawn else None, "unit": unit, "pub": pub.hex(), "opening": op,
          **({} if salt is None else {"salt": salt.hex()})}
-    try:
-        out = record.opening(x)
-        return record.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
-    except OR.Disagree as e:
-        return e.code
+    out = record.opening(x)
+    return f"opening: {out['refused']}" if isinstance(out, dict) else out
 
 
 # ---- verdicts --------------------------------------------------------------------------------------------------------------
@@ -932,8 +915,8 @@ def state_entropy(path: str):
 
 
 class Challenger:
-    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered_twin`), the pass's
-    execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`pouw-check-difftest registered`), the pass's
+    execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
     `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
     fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier sample and opens no coin, so a
@@ -1053,17 +1036,15 @@ class Challenger:
         return o
 
     def _of_record(self, name: str, check: Callable[..., Any], *args: Any) -> Any:
-        """`check`'s verdict of record (`of_record`), both verdicts kept in execution phase `name`'s witness."""
+        """`check`'s verdict of record (`of_record`), kept in execution phase `name`'s witness."""
         at = len(self.record.witness)
         try:
             return check(*args)
-        except OR.Disagree as e:
-            raise _refused(e.code, {"lean": e.lean, "python": e.python}) from None
         finally:
             self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
-        """PoUW's rule over the registration (`core_check.registered_twin`), of record.  Raises `Refused`."""
+        """PoUW's rule over the registration (`pouw-check-difftest registered`), of record.  Raises `Refused`."""
         try:
             x = {"params": self.core, "commitment": self.record.hexed(rec)}
         except TypeError as e:
@@ -1099,8 +1080,7 @@ class Challenger:
         codes = self._of_record(name, self.record.registration, params, dict(rec))
         if not codes:
             codes = self._of_record(name, self.record.caller, params, dict(rec))
-        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
-                                 lambda: S.check_public(st.spec, rec).to_json())
+        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME))
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
         if codes:
             raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
@@ -1578,7 +1558,7 @@ def cmd_challenger(a) -> int:
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
     Python's, to LOG/witness.jsonl (an execution phase that ends before its outcome keeps them there); it ends at end of input or
     ``{"op": "quit"}``."""
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     log = Path(a.log)
     log.mkdir(parents=True, exist_ok=True)
     if a.state:
@@ -1650,7 +1630,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 
 def cmd_replay(a) -> int:
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
                    record=record, verify=a.verify, lean_jobs=a.lean_jobs)
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
@@ -1690,7 +1670,7 @@ def cmd_coin_variant(a) -> int:
 
 
 def cmd_check(a) -> int:
-    record = a.record(lean=False if a.python_record else None)
+    record = a.record()
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
@@ -1755,10 +1735,6 @@ def cmd_shape(a) -> int:
     return 0 if v["same"] else 1
 
 
-PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the switch to Lean's verdict of record "
-                 "(`of_record`)")
-
-
 def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
          tiles: Callable[[Any], Callable[[], None]] = install_tiles) -> int:
     """The commands below; `record` makes the checks of record the challenger, `replay` and `check` take (`lean_record`:
@@ -1804,12 +1780,10 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
                                    "from the Lean verifier's challenges before serving); default: fresh from the Lean "
                                    "verifier when this process starts (pouw.verifier.coins, IO.getRandomBytes), before "
                                    "it publishes LOG/coins.json")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
     p.add_argument("--lean", help="Lean verity-verify-proof, the sample's sampler (default: its Python twin)")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     for p in (sub.choices["challenger"], sub.choices["replay"]):
         p.add_argument("--verify", help="Lean verity-verify-proof, which the outcome request runs itself (verify --zk) on "
                                         "each sampled proof block for its verdict of record; without it that request is "
@@ -1828,7 +1802,6 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
     p.add_argument("--undrawn", action="store_true", help="a control: open a unit the sample did not sample")
     p.add_argument("--expect-reject", action="store_true")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")
     p.add_argument("a")
     p.add_argument("b")

@@ -26,7 +26,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import salt as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.resource_accounting.compute.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
@@ -108,7 +107,7 @@ def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Cha
     live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
-    return SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(lean=False), certifier=c, prover=prover,
+    return SC.Challenger(params, live, clock=lambda: 0.0, record=ORL.Record(), certifier=c, prover=prover,
                          coin_record=path, deployment=deployment, opens=ledger)
 
 
@@ -173,7 +172,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
         assert d.units
         salt = CC.certified_salt(w["raw"], w["params"]["context"], sampled[p], committed, sid, prover)
         assert salt == PS.pouw_salt(sampled[p], p, sid, prover) == ch.salts[f"w{p}"]
-        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(ORL.Record(lean=False).hexed(w["rec"])))
+        params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(ORL.Record().hexed(w["rec"])))
         for u in d.units:
             pub, op = _pub(w["priv"], w["advice"], u), SC.opening(w["advice"], w["priv"], w["params"], u)
             why = ch.check(f"w{p}", u, pub, op)
@@ -182,10 +181,16 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
                 assert CC.opening_twin(CC.params(params), rec, list(d.units), u, pub, op, held).startswith(refused)
 
 
+def _opening_twin(x: dict) -> str | None:
+    salt = None if x.get("salt") is None else bytes.fromhex(x["salt"])
+    return CC.opening_twin(CC.params(x["params"]), CC.commitment(bytes.fromhex(x["commitment"])), x["units"], x["unit"],
+                           bytes.fromhex(x["pub"]), x["opening"], salt)
+
+
 def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_one():
     """The salted unit. A certified window's salt is `pouw_salt` of the network attester's reveal; the prover can
     pick its own salt s* before any reveal and form the H1 unit's public row under it, its rows the same. Under the
-    certified salt the verifier holds, the opening of record (`of_record.py_opening`, the difftest's input) refuses the
+    certified salt the verifier holds, the opening's Python twin (`core_check.opening_twin`, held to the Lean's by the difftest) refuses the
     s* proof at its public row and opens the proof formed under the certified salt (the honest twin: every rule of the
     opening met), so the one statement credited is the certified salt's."""
     sid, prover = _sid(), PS.prover_id(_prover(b"the prover"))
@@ -203,6 +208,6 @@ def test_a_salted_unit_formed_under_its_own_salt_is_refused_under_the_certified_
             held[s] = {"params": case["params"], "commitment": canon(case["record"]).encode().hex(), "units": case["units"],
                        "unit": case["unit"], "pub": case["pub"].hex(), "opening": case["opening"], "salt": certified.hex()}
         assert held[certified]["opening"] == held[own]["opening"] and held[certified]["pub"] != held[own]["pub"]
-        assert OR.py_opening(held[certified]) is None
-        why = OR.py_opening(held[own])
+        assert _opening_twin(held[certified]) is None
+        why = _opening_twin(held[own])
         assert why is not None and why.startswith("the proof's public row is not the window's certified salt"), why

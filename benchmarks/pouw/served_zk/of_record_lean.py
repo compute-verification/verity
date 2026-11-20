@@ -1,5 +1,5 @@
 """The challenger's checks of record (`served_zk.of_record.Record`) with what verity does not import, `verity_difftest`:
-Lean's executables (`build`, `Server`) and the canonical JSON the two sides are compared in (`canonical`)."""
+Lean's executables (`build`, `Server`) and the canonical JSON its answers are read in (`canonical`)."""
 from __future__ import annotations
 
 from pathlib import Path

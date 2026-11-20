@@ -101,15 +101,18 @@ The verifier is Lean, the source of truth for what PoUW checks: four Lake packag
 The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
 `verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
-the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
-setting it to `"python"` is the one line that undoes it.
+the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) switches what
+`of_record` doesn't read (the statement runs and the committed circuit files), and setting
+it to `"python"` is the one line that undoes those.
 
 ### Verdicts of record
 
 No function here returns a verdict of its own. Each verdict PoUW acts on comes from one of two places. Some come from
 its Lean check: `verifier.of_record` for a `pouw-check-difftest` function, or `verifier.serve_of_record` for a core
-protocol's `serve`. The Python computes its answer beside the Lean as the twin (`*_twin`), and a disagreement, or no
-answer from the Lean, is a refusal. The rest refuse until their Lean is reached: the public entry raises
+protocol's `serve`. The Lean's answer is the verdict, and no answer from the Lean is the refusal `no-answer`
+(`verifier.NO_ANSWER`); the Python twin (`*_twin`) answers the difftest only. `credit.window` and `period_credit` still
+run `_window` and `_period_of`, which drive the statement runs whose outcomes the Lean reads; their verdicts are not
+read. The rest refuse until their Lean is reached: the public entry raises
 `NotImplementedError("compute-accounting/pouw-verdict-from-main")` (`verifier.not_written`), and its twin answers the
 difftest only.
 
@@ -133,3 +136,27 @@ Several functions are twins only, because the Lean decides their verdict inside 
 only refuse to go on, never credit. The verdict of record checks the same rules again in Lean, except `salt.unit_reason`
 and `core_check.recorded_reason`: they guard a certified execution phase, which only the prover's `served_commit.Challenger`
 class runs, and no command runs one, so no verdict of record rechecks them yet.
+
+### Refusals only Python makes
+
+No Lean verdict makes these refusals. Each runs in the served road's challenger,
+`verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py`, and its own test stays until a Lean check makes it:
+
+| Code | What it holds | Where |
+| --- | --- | --- |
+| `unknown` | A check, sample or outcome names an execution phase that was never registered. | `Challenger._held` |
+| `not-drawn` | An execution phase is checked or delivered before its sample. | `Challenger._drawn` |
+| `drawn` | An execution phase's sampling coin opens once, and a second sample is refused. | `Challenger.select` |
+| `late-registration` | An execution phase registers before its epoch's draw coin is released. | `Challenger.register` |
+| `certifier` | A certified execution phase is its own pass's, with no replay and no recorded salt, and the certifier reveals what it committed. | `Challenger._certified` |
+| `unsalted` | A certified execution phase's sampled proof block reads its salt (`salt.unit_reason`). | `Challenger._certified` |
+| `reregistered` | A certified execution phase enters the registration ledger once per stream and prover. | `Challenger._certified` |
+| `level` | A registration's grid level has a population. | `register` |
+| `law` | The window's draw follows a subset sampling design. | `draw_bytes` |
+| `units` | The outcome's proof blocks are exactly the sampled ones, in order. | `Challenger.outcome` |
+| `public` | The outcome's public items are exactly `window.PUBLIC`. | `Challenger.outcome` |
+| `pouw-verifier` | An accepted stream outcome is accepted by the Lean answer too. | `Challenger.outcome` |
+| `lean-run` | The challenger runs the Lean verifier and gets a documented status from it. | `LEAN_RUN` |
+| `public-header` | The Lean verifier's verdict names the challenger's copy of the public file. | `PUBLIC_HEADER` |
+
+`reject`, Python's answer form, leaves with the twins; `lean-python-disagree` went with `of_record.Record`'s Python side.
