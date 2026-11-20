@@ -1529,6 +1529,56 @@ theorem unitOuts_widths {bytes : ByteArray} {P : Prog} (hd : decode bytes = .ok 
         Array.getElem!_eq_getD]
       rfl
 
+/-- **The gate of a member of a primitive node inside a unit**: in member `m` of root node `k`, which calls a
+composite, the gate of member `m'` of its node `k'`, which calls a primitive of one gate, is located at that node, in
+the unit's activation, with the member's operands. -/
+theorem unit_gate_at {P : Prog} (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    {k' m' : ℕ} (hk' : k' < (P.defs[(P.child P.rootScope k m).d]!).body.nodes.size)
+    (hm' : m' < ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[k']!).members)
+    (hp' : (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[k']!).fn]!).prim = true)
+    (hg1 : (P.defs[((P.defs[(P.child P.rootScope k m).d]!).body.nodes[k']!).fn]!).gates = 1)
+    {p : ℕ} {ops : Array ℕ} {sc' : Scope}
+    (h : P.gate ((P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[k']! + m') =
+      .ok (p, ops, sc')) :
+    p = ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[k']!).fn ∧ sc' = P.child P.rootScope k m ∧
+      operands P (P.child P.rootScope k m) ((P.defs[(P.child P.rootScope k m).d]!).body.nodes[k']!) m' = .ok ops := by
+  have hgood : Resolve.Good P (P.child P.rootScope k m) :=
+    Resolve.good_child P (parent := P.rootScope) ⟨rfl, rfl, rfl⟩ hk rfl hc hm rfl
+  obtain ⟨hd, hpc⟩ := Resolve.good_d P hroot hB _ hgood
+  obtain ⟨-, hK, hnodes⟩ := hL _ hd hpc
+  have hstep := hnodes k' hk'
+  rw [hg1, Nat.mul_one] at hstep
+  have hend := Resolve.offsets_mono P _ (hL _ hd) hpc (k' + 1) _ (by omega) (Nat.le_refl _)
+  have hoff : (P.child P.rootScope k m).off = P.rootScope.off + (P.defs[P.rootScope.d]!).body.offsets[k]! +
+      m * (P.defs[((P.defs[P.rootScope.d]!).body.nodes[k]!).fn]!).gates := rfl
+  have hgd : (P.defs[(P.child P.rootScope k m).d]!).gates =
+      (P.defs[((P.defs[P.rootScope.d]!).body.nodes[k]!).fn]!).gates := rfl
+  rw [Prog.gate_of (Prog.gate_recut h)] at h
+  by_cases hge : (P.child P.rootScope k m).off + (P.defs[(P.child P.rootScope k m).d]!).body.offsets[k']! + m' ≥
+      (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [hge, ite_false, bind, Except.bind] at h
+  obtain ⟨n, hn⟩ : ∃ n, Flock.Steps.FUEL = n + 2 := ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
+  rw [hn, Flock.Steps.run.eq_2] at h
+  rcases hs1 : gateStep P ((P.child P.rootScope k m).off +
+      (P.defs[(P.child P.rootScope k m).d]!).body.offsets[k']! + m') P.rootScope with e | x
+  · simp [hs1, bind, Except.bind] at h
+  have hx := Resolve.gateStep_member P hL P.rootScope hroot.1 hroot.2 hk hm hc (by omega) (by omega) hs1
+  subst hx
+  simp only [hs1, bind, Except.bind] at h
+  rw [Flock.Steps.run.eq_2] at h
+  rcases hs2 : gateStep P ((P.child P.rootScope k m).off +
+      (P.defs[(P.child P.rootScope k m).d]!).body.offsets[k']! + m') (P.child P.rootScope k m) with e | x
+  · simp [hs2, bind, Except.bind] at h
+  obtain ⟨ops', rfl, hops⟩ := Resolve.gateStep_at_prim P hL (P.child P.rootScope k m) hd hpc hk' hm' hp'
+    (by rw [hg1, Nat.mul_one]) (by rw [hg1, Nat.mul_one]; omega) hs2
+  simp only [hs2, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+  obtain ⟨rfl, rfl, rfl⟩ := h
+  exact ⟨rfl, rfl, hops⟩
+
 end UnitWidthsProof
 
 /-- **`UnitWidths`** holds. -/
