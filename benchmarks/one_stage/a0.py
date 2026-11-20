@@ -44,7 +44,8 @@ from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
-from verity.protocols.proofs.spot.verifier.one_stage.lean_child import LEAN_PANIC, panic_line, refuse_panic
+from verity.protocols.proofs.spot.verifier.one_stage.lean_child import (LEAN_PANIC, VERIFY_EXITS, exit_why, panic_line,
+                                                                        refuse_panic)
 from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
 
 import r2_population as R2
@@ -511,14 +512,17 @@ class VerifyMembers:
                 else:
                     self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
         stderr = self._stderr()
-        if (panic := panic_line(stderr)) is not None:
+        panic = panic_line(stderr)
+        refused = (f"{LEAN_PANIC}: {panic}" if panic is not None
+                   else None if status is None else exit_why(status, VERIFY_EXITS))
+        if refused is not None:
             status = None
         # what the process printed for a member it did not answer is kept, and is no verdict to any reader of the log
         stdout = "".join(("" if status is not None else "not taken: ") + x + "\n" for x in printed)
-        why = (f"{LEAN_PANIC}: {panic}" if panic is not None else f"no verdict (rc {status}): {stderr[-400:]}" if status is not None
+        why = (refused if refused is not None else f"no verdict (rc {status}): {stderr[-400:]}" if status is not None
                else f"no verdict: {self.ended}: {stderr[-400:]}")
         log.write_text(f"$ {self.cmd[0]} verify {' '.join(args)}\n# rc {status} in {time.time() - t:.3f} s\n"
-                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended if panic is None else why}")
+                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended if refused is None else why}")
                        + f"\n--- stdout\n{stdout}\n--- stderr\n{stderr}")
         return (stdout if status is not None else ""), why
 
@@ -588,7 +592,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     t = time.time()
     if members is None:
         p = run([lean, "verify", *args], out / f"{log}.log", env=verifier_env())
-        stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
+        exited = exit_why(p.returncode, VERIFY_EXITS)
+        stdout, none = ("", exited) if exited else (p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}")
     else:
         stdout, none = members.verify(args, out / f"{log}.log")
     line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)

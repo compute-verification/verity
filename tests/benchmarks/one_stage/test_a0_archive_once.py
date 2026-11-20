@@ -21,7 +21,8 @@ import a0  # noqa: E402
 #: a stand-in for verity-verify-proof: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
 #: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with
 #: `verify`'s lines on standard error; and ``verify-members``, that check for each line of standard input, a member's
-#: arguments, then its ``MEMBER`` line (`Flock.VerifyMembers`). A session's ``mode`` file makes the stand-in misbehave on it.
+#: arguments, then its ``MEMBER`` line (`Flock.VerifyMembers`). A session's ``mode`` file makes the stand-in misbehave on it
+#: (``exit N``: its verdict, then status N).
 FAKE = '''#!{python}
 import hashlib, json, pathlib, sys
 args = sys.argv[1:]
@@ -37,7 +38,7 @@ def verify(args):
              for f in ("--circuit", "--public"))
     print("inputs: 5 ms\\nsetup: 1 ms\\n" + str(session) + ": 3 ms", file=sys.stderr)
     print("VERDICT " + json.dumps({{"accepted": ok, "why": None if ok else "archive", "session": str(session)}}))
-    return 0 if ok else 1, mode
+    return (int(mode[5:]) if mode.startswith("exit ") else 0 if ok else 1), mode
 
 if args[0] == "archive-put":
     d = pathlib.Path(args[1]) / "sha512"
