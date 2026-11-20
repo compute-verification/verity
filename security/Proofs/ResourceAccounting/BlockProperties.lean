@@ -21,7 +21,9 @@ locations. `chain` proves `Chain`.
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
 smaller of the server-day size limit and its inference and free blocks' limits, plus the assumed hidden hardware size;
 `serverInput_le` bounds a server-day block's input from its own past and the outside world by the input limit, and
-`input_claim_binds` shows that limit refusing a claim of `2^60` bits. Those limits are per server-day block, and
+`input_claim_binds` shows that limit refusing a claim of `2^60` bits. `credited_excluded` refuses a server-day block
+whose PoUW credited use is above its capacity, `credited_le_capacity` gives that comparison from `SpendIsWork` and
+`ComputeRate`, and `credited_binds` shows it refusing at one gate. Those limits are per server-day block, and
 `cut_multiplies` shows a cut into more server-day blocks passing where the uncut run does not; a server-day block is a
 listed location and a registered day, so `serverDay_count_le` bounds their number by the listed locations times the days,
 and `serverInput_total_le`, `freeWork_total_le` and `feasible_work_le_count` bound the run's totals by that count and the
@@ -463,15 +465,61 @@ theorem blockInput_past_world_le {A : Placed L} (θ : Finset (Fin A.N)) (X : Fin
     (s₂ := A.into b.gates ∩ A.sourceGates θ b.gates X b.win .world)
   omega
 
+/-- The check's comparisons, one conjunct each, in its order. -/
+theorem check_spec {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run} (hc : InferenceOnly.check lim P r = true) :
+    (univ.filter fun u => P.cls r u = Class.inference).card ≤ lim.n ∧
+    (∀ u, P.cls r u = Class.inference →
+      (P.claimsIn r u).any InferenceOnly.isSize = true ∧ claimedSize (P.claimsIn r u) ≤ lim.c ∧
+        (P.claimsIn r u).any (InferenceOnly.freshAtMost lim.k) = true) ∧
+    (univ.filter fun u => P.cls r u = Class.free).card ≤ lim.m ∧
+    (∀ i, P.kind r i = true → P.credited r i ≤ P.capacity r i) ∧
+    (∀ i, P.kind r i = true → P.capacity r i - P.credited r i + P.tol ≤ lim.freeSize) ∧
+    (∀ i, P.kind r i = true →
+      (P.claimsOut r i).any InferenceOnly.isSize = true ∧ claimedSize (P.claimsOut r i) ≤ lim.cS) ∧
+    (∀ i, P.kind r i = true →
+      (P.claimsOut r i).any (InferenceOnly.isInputFrom [.past]) = true ∧
+        (P.claimsOut r i).any (InferenceOnly.isInputFrom [.world]) = true ∧
+        claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS) := by
+  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩ := hc
+  exact ⟨h1, h2, h3, h4, h5, h6, h7⟩
+
+theorem check_infClaims {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (u : Fin (P.nIn r)) (hu : P.cls r u = Class.inference) :
+    (P.claimsIn r u).any InferenceOnly.isSize = true ∧ claimedSize (P.claimsIn r u) ≤ lim.c ∧
+      (P.claimsIn r u).any (InferenceOnly.freshAtMost lim.k) = true :=
+  (check_spec hc).2.1 u hu
+
+theorem check_credited {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    P.credited r i ≤ P.capacity r i :=
+  (check_spec hc).2.2.2.1 i hki
+
+theorem check_freeSize {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    P.capacity r i - P.credited r i + P.tol ≤ lim.freeSize :=
+  (check_spec hc).2.2.2.2.1 i hki
+
+theorem check_serverSize {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    (P.claimsOut r i).any InferenceOnly.isSize = true ∧ claimedSize (P.claimsOut r i) ≤ lim.cS :=
+  (check_spec hc).2.2.2.2.2.1 i hki
+
+theorem check_serverInput {lim : InferenceOnly.Limits} {P : Runs L} {r : P.Run}
+    (hc : InferenceOnly.check lim P r = true) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    (P.claimsOut r i).any (InferenceOnly.isInputFrom [.past]) = true ∧
+      (P.claimsOut r i).any (InferenceOnly.isInputFrom [.world]) = true ∧
+      claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i) ≤ lim.kS :=
+  (check_spec hc).2.2.2.2.2.2 i hki
+
 /-- **The check bounds a server-day block's size**: under the check and `RealizesExcept`, a server-day block's size is at
 most `lim.cS` gates. -/
 theorem serverSize_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M) (i : Fin (P.nOut r))
     (hki : P.kind r i = true) : P.sizeOut r i ≤ lim.cS := by
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, hsz⟩, -⟩ := hc
   obtain ⟨-, -, -, -, -, hout, -⟩ := hreal
-  exact (work_le_claimedSize _ _ _ (P.outerBlock r i) _ (hout i) (hsz i hki).1).trans (hsz i hki).2
+  have hsz := check_serverSize hc i hki
+  exact (work_le_claimedSize _ _ _ (P.outerBlock r i) _ (hout i) hsz.1).trans hsz.2
 
 /-- **The limits bind what comes in**: under the check and `RealizesExcept`, a server-day block's input from its own
 past and the outside world together is at most `lim.kS` bits. Its input from another block at its location during its
@@ -480,10 +528,8 @@ theorem serverInput_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M 
     (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M) (i : Fin (P.nOut r))
     (hki : P.kind r i = true) :
     (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past, .world] ≤ lim.kS := by
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, -⟩, hin⟩ := hc
   obtain ⟨-, -, -, -, -, hout, -⟩ := hreal
-  obtain ⟨hp, hw, hsum⟩ := hin i hki
+  obtain ⟨hp, hw, hsum⟩ := check_serverInput hc i hki
   have h1 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past] ≤
       claimedInput [.past] (P.claimsOut r i) := hout i _ (claimedInput_mem _ _ hp)
   have h2 : (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.world] ≤
@@ -498,9 +544,34 @@ theorem serverInput_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Ru
     (hbig : lim.kS < claimedInput [.past] (P.claimsOut r i) + claimedInput [.world] (P.claimsOut r i)) :
     InferenceOnly.check lim P r = false := by
   by_contra hc
-  simp only [Bool.not_eq_false, InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, -⟩, -⟩, hin⟩ := hc
-  exact absurd (hin i hki).2.2 (by omega)
+  exact absurd (check_serverInput (by simpa using hc) i hki).2.2 (by omega)
+
+/-- **A server-day block credited above its capacity fails the check**, whatever the rest of the run: PoUW's credited
+use of `i` above `i`'s capacity, in gates at the run's pricing. -/
+theorem credited_excluded (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
+    (hki : P.kind r i = true) (hbig : P.capacity r i < P.credited r i) :
+    InferenceOnly.check lim P r = false := by
+  by_contra hc
+  exact absurd (check_credited (by simpa using hc) i hki) (by omega)
+
+/-- **The rows meet the credited comparison**: in an accepted run where `SpendIsWork` holds (read at the empty tolerance
+set) and every run meets `ComputeRate` over the listed locations at the hardware description's rates, every server-day
+block's PoUW credited use is at most its capacity (gates at the run's pricing). So the comparison refuses no run of
+which both premises are true. -/
+theorem credited_le_capacity (P : Runs L) (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (shown : P.Run → Prop)
+    (hspend : P.SpendIsWork salt shown) (hrate : ∀ r, (P.actual r).ComputeRate P.listed (P.π r) P.rate)
+    (r : P.Run) (ha : P.accepts r) (hs : shown r) (i : Fin (P.nOut r)) (hki : P.kind r i = true) :
+    P.credited r i ≤ P.capacity r i := by
+  have h := hspend r ha hs ∅ i hki
+  have h0 : ∑ u ∈ (P.infChildren r i).filter (· ∈ (∅ : Finset (Fin (P.nIn r)))), claimedSize (P.claimsIn r u) = 0 :=
+    Finset.sum_eq_zero fun u hu => absurd (Finset.mem_filter.mp hu).2 (Finset.notMem_empty u)
+  have h1 : ∑ u ∈ (P.infChildren r i).filter
+      (fun u => salt r u ≤ (P.winIn r u).start ∧ u ∉ (∅ : Finset (Fin (P.nIn r)))), P.sizeIn r u ≤ P.sizeOut r i :=
+    sizeAdds P r i _ fun u hu => by
+      simp only [Runs.infChildren, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+      exact hu.1.1
+  have h2 := capacityAtMost_compute P hrate r i hki
+  omega
 
 /-- **The check bites, on the path the chain reads**: under a run that passes the inference-only check and realizes its
 claims outside a tolerance set `M` (`RealizesExcept`, not `Realizes`), with the work at unlisted locations at most
@@ -521,8 +592,8 @@ theorem feasible_work_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
         min lim.cS (((P.infChildren r i).filter (fun u => u ∉ M)).card * lim.c + lim.freeSize)) +
         lim.hidden := by
   have hserver := serverSize_le lim P r M hc hreal
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, hinf⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
+  have hinf := check_infClaims hc
+  have hfcCheck := check_freeSize hc
   obtain ⟨-, -, -, hcl_out, -, -, -⟩ := hreal
   rw [work_eq_outer_sum, ← Finset.sum_filter_add_sum_filter_not univ (fun i => P.kind r i = true) (P.sizeOut r)]
   have hfalse : (univ.filter fun i => ¬ P.kind r i = true) = univ.filter fun i => P.kind r i = false := by
@@ -607,8 +678,7 @@ theorem freeWork_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) 
     ∑ i ∈ univ.filter (fun i => P.kind r i = true),
         ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) ≤
       Ls.card * P.nDays * lim.freeSize := by
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
+  have hfcCheck := check_freeSize hc
   calc _ ≤ ∑ _i ∈ univ.filter (fun i => P.kind r i = true), lim.freeSize :=
         Finset.sum_le_sum fun i hi => by
           have hki := (Finset.mem_filter.mp hi).2
@@ -812,10 +882,8 @@ theorem excluded_run (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
     (hbig : lim.freeSize < ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) :
     ¬ (InferenceOnly.check lim P r = true ∧ P.FreeWorkAtMost r M) := by
   rintro ⟨hc, hfree⟩
-  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
   have h1 := hfree i hki
-  have h2 := hfcCheck i hki
+  have h2 := check_freeSize hc i hki
   omega
 
 /-- **The excluded run, on the rows**: a run with a server-day block `i` whose inference children in the tolerance set
@@ -832,9 +900,7 @@ theorem excluded_run_rows (lim : InferenceOnly.Limits) (P : Runs L) (salt : (r :
   by_cases hc : InferenceOnly.check lim P r = true
   · refine Or.inr fun ⟨huse, hcap, htol⟩ => ?_
     have h := conversion_le_sub P salt r M i hki (P.credited r i) (P.capacity r i) P.tol huse hcap htol
-    simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
-    obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
-    have h2 := hfcCheck i hki
+    have h2 := check_freeSize hc i hki
     omega
   · exact Or.inl (by simpa using hc)
 
@@ -934,6 +1000,17 @@ theorem input_claim_binds :
     show (placed 1).blockInput _ _ _ _ ≤ _
     simp only [demoRuns, Runs.outerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
     decide
+
+/-- **The credited comparison bites, at one gate**: `demoRuns 1 1 0` (capacity 1 gate, credited use 1 gate) passes the
+check at the honest limits, and `demoRuns 1 2 0` (credited use 2 gates, one above its capacity) fails it, every limit the
+same. The free comparison alone passes `demoRuns 1 2 0`: its capacity less its credited use plus its tolerance is
+`1 − 2 + 0 = 0` gates over the naturals, at most `freeSize = 0` gates. -/
+theorem credited_binds :
+    InferenceOnly.check (demoLimits 0 1 0) (demoRuns 1 1 0) () = true ∧
+      InferenceOnly.check (demoLimits 0 1 0) (demoRuns 1 2 0) () = false ∧
+      (demoRuns 1 2 0).capacity () ⟨0, Nat.one_pos⟩ - (demoRuns 1 2 0).credited () ⟨0, Nat.one_pos⟩ +
+        (demoRuns 1 2 0).tol ≤ (demoLimits 0 1 0).freeSize :=
+  ⟨by decide, credited_excluded _ _ () ⟨0, Nat.one_pos⟩ rfl (by decide), by decide⟩
 
 /-- **The conversion bites, at one gate**: the two-gate run `demoRuns 2 1 1` with its one inference block (work 2 gates,
 committed size claim 1 gate) as the tolerance set `M = univ` and salt at tick 0. At credited use 1 gate and tolerance 1

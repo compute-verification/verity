@@ -56,9 +56,11 @@ structure Limits where
 
 /-- **The inference-only check on a run's committed blocks**: at most `n` inference blocks, each with a size claim, its
 committed size claim (`claimedSize`, the declared size the declared row sums over the tolerance set) at most `c` gates,
-and claimed of input at most `k` bits; at most `m` free blocks; every server-day block's **capacity less PoUW's credited
-use plus the tolerance** at most `freeSize` gates (`P.capacity r i − P.credited r i + P.tol ≤ lim.freeSize`; the free
-blocks' and the tolerance set's work together are at most that number, `FreeWorkAtMost`); every server-day block with a
+and claimed of input at most `k` bits; at most `m` free blocks; every server-day block's PoUW credited use at most its
+capacity (gates; the subtraction that follows is of naturals, so a credited use above the capacity would read as `0`);
+every server-day block's **capacity less PoUW's credited use plus the tolerance** at most `freeSize` gates
+(`P.capacity r i − P.credited r i + P.tol ≤ lim.freeSize`; the free blocks' and the tolerance set's work together are at
+most that number, `FreeWorkAtMost`); every server-day block with a
 size claim, its committed size claim at most `cS` gates; and every server-day block with an input claim from its own
 past (`[.past]`, the wipe's row) and one from the outside world (`[.world]`, network attestation's row), their committed
 bounds summed at most `kS` bits. The limit is on the sum because the policy reads one number for a server-day block's
@@ -73,6 +75,7 @@ def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
       (P.claimsIn r u).any isSize = true ∧ claimedSize (P.claimsIn r u) ≤ lim.c ∧
         (P.claimsIn r u).any (freshAtMost lim.k) = true) &&
     decide ((univ.filter fun u => P.cls r u = Class.free).card ≤ lim.m) &&
+    decide (∀ i, P.kind r i = true → P.credited r i ≤ P.capacity r i) &&
     decide (∀ i, P.kind r i = true → P.capacity r i - P.credited r i + P.tol ≤ lim.freeSize) &&
     decide (∀ i, P.kind r i = true →
       (P.claimsOut r i).any isSize = true ∧ claimedSize (P.claimsOut r i) ≤ lim.cS) &&
