@@ -21,15 +21,13 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.program import Program
-from verity.circuits.types import Array
 
+from tests.program.test_boolean_gate_ops import I32_EDGES
 from verity_vllm.definitions.numerics import marlin_moe_rows as MR
-from verity_vllm.definitions.registry import boolean_gate_ops as BGO
 from verity_vllm.definitions.registry import boolean_marlin_moe as BM
 from verity_vllm.definitions.registry import marlin_moe as MM
 
 DOT = BG.HopperBF16WgmmaDot16
-I32_EDGES = [0, 1, 2, 3, 7, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFF9]
 SCALE_EDGES = [0, 1, 2, 126, 127, 128, 252, 253, 254, 255]
 BF16_SPECIALS = [0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0x7FFF]
 
@@ -61,18 +59,6 @@ def test_the_steps_dequant_differs_only_in_its_nans() -> None:
     assert (got == np.where(nan, 0x7FC0 | (q.astype(np.uint16) >> 3) << 15, want)).all()
 
 
-def test_divider_is_c_int_on_edge_and_random_words() -> None:
-    probe = definition("MarlinDivRemProbe", 1, lambda C, a, b: list(BM.divrem(C, a, b)), (("a", BM.I32), ("b", BM.I32)),
-                       Array(2, BM.I32), register=False)
-    rng = np.random.default_rng(7)
-    pairs = list(itertools.product(I32_EDGES, I32_EDGES))
-    pairs += [(int(a), int(b)) for a, b in zip(rng.integers(0, 1 << 32, 200, dtype=np.uint64), rng.integers(0, 1 << 32, 200, dtype=np.uint64))]
-    pairs += [(int(a), int(b)) for a, b in zip(rng.integers(0, 5000, 200), rng.integers(1, 300, 200))]
-    a, b = (np.array(c, dtype=np.uint32) for c in zip(*pairs))
-    got = np.asarray(BS.evaluate_words(bind(probe), a, b)).reshape(len(pairs), 2)
-    assert [tuple(int(v) for v in r) for r in got] == [MM.i32_divrem(x, y) for x, y in pairs]
-
-
 @pytest.mark.parametrize("word,bits,n", [(MM.E2m1ToBf16, BM.E2m1ToBf16, 16), (MM.E8m0DequantBf16, BM.E8m0DequantBf16, 256),
                                          (MM.E2m1x2Lo, BM.E2m1x2Lo, 256), (MM.E2m1x2Hi, BM.E2m1x2Hi, 256)])
 def test_the_code_and_byte_words_on_bits_are_their_words_on_every_input(word, bits, n: int) -> None:
@@ -81,14 +67,7 @@ def test_the_code_and_byte_words_on_bits_are_their_words_on_every_input(word, bi
     assert got.tolist() == [word.evaluate(u) for u in range(n)]
 
 
-def test_the_multiplier_is_mul_lo_on_edge_and_random_words() -> None:
-    assert SW.boolean_version(MM.I32Mul).defn is BGO.I32MulV2
-    rng = np.random.default_rng(11)
-    pairs = list(itertools.product(I32_EDGES, I32_EDGES))
-    pairs += [(int(a), int(b)) for a, b in zip(rng.integers(0, 1 << 32, 500, dtype=np.uint64), rng.integers(0, 1 << 32, 500, dtype=np.uint64))]
-    a, b = (np.array(c, dtype=np.uint64).reshape(-1, 1) for c in zip(*pairs))
-    got = np.asarray(BS.evaluate_words(bind(BGO.I32MulV2), a, b)).reshape(-1)
-    assert got.tolist() == [MM.I32Mul.evaluate(x, y) for x, y in pairs]
+
 
 
 @pytest.mark.parametrize("kind,vocab", [("E2m1Pair", 300), ("E8m0", 300)])

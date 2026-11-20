@@ -13,7 +13,6 @@
 """
 from __future__ import annotations
 
-import math
 
 import numpy as np
 import pytest
@@ -70,18 +69,6 @@ def test_the_twin_is_the_reference(target):
 
 
 # --- the UE8M0 steps ---------------------------------------------------------------------------------------------------------------
-
-def test_the_scale_byte_is_the_exponent_rounded_up():
-    """For every positive normal scale s, `Ue8m0CeilByte_v1` is ceil(log2 s) + 127 (powers of two exactly, every other word one
-    up), 255 past 2^127 and for +inf; the floor 1e-4 gives 114."""
-    rng = np.random.default_rng(0)
-    s = np.concatenate([2.0 ** np.arange(-126, 128), np.nextafter(2.0 ** np.arange(-126, 127), np.inf, dtype=np.float32),
-                        rng.uniform(0.5, 1.0, 4000) * 2.0 ** rng.integers(-125, 129, 4000)]).astype(np.float32)
-    for v in s[np.isfinite(s)]:
-        m, e = math.frexp(float(v))
-        assert C.Ue8m0CeilByte.evaluate(_bits(v)) == min((e if m > 0.5 else e - 1) + 127, 255), float(v)
-    assert [C.Ue8m0CeilByte.evaluate(w) for w in (0x38D1B717, ONE, 0x7F7FFFFF, PINF)] == [114, 127, 255, 255]
-
 
 def test_the_inverse_scale_is_the_reciprocal_until_the_sign_bit():
     """`Ue8m0InvScale_v1(e)` is 2^(127 - e) for e <= 253, +0 at 254 (2^-127 is below the normal range: the word has no
@@ -253,10 +240,7 @@ def _is_its_word(target, args, n: int) -> None:
     assert np.array_equal(got, want)
 
 
-def test_the_boolean_ue8m0_steps_are_their_words():
-    rng = np.random.default_rng(7)
-    s = np.concatenate([np.asarray(SPECIAL, np.uint64), rng.integers(0, 1 << 32, 1000, dtype=np.uint64)])
-    _is_its_word(bind(BC.Ue8m0CeilByteV2), [s], len(s))
+def test_the_boolean_ue8m0_inverse_scale_is_its_word():
     _is_its_word(bind(BC.Ue8m0InvScaleV2), [np.arange(256, dtype=np.uint64)], 256)
 
 

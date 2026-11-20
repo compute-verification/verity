@@ -17,7 +17,6 @@ against models of their kernels.
 """
 from __future__ import annotations
 
-import math
 from fractions import Fraction
 
 import numpy as np
@@ -30,6 +29,7 @@ from verity.circuits.ops.boolean import versions as SW
 from verity.circuits.ops.mufu import RsqrtApprox
 
 from tests.program.test_dsa import _bf16 as _bf16_words
+from tests.program.test_boolean_gate_ops import _byte, _byte_words
 from tests.program.test_dsa import (
     _butterfly,
     _ceil_ftz,
@@ -65,15 +65,6 @@ def _fmin(a: int, b: int) -> int:
     if _val(a) == _val(b):
         return a | b
     return a if _val(a) < _val(b) else b
-
-
-def _byte(w: int) -> int:
-    """The low byte of cvt.rzi.u32.f32 from the exact value: NaN and every negative to 0, past 2^32 - 1 to 0xFF."""
-    if _is_nan(w) or w & SIGN:
-        return 0
-    if w == INF:
-        return 0xFF
-    return min(math.floor(_q(w)), M32) & 0xFF
 
 
 def _rope(x: list[int], cs: list[int], DR: int, fused: bool = True) -> list[int]:
@@ -174,25 +165,6 @@ def test_the_constants_are_the_kernels():
 
 
 # --- the scale byte --------------------------------------------------------------------------------------------------------------
-
-BYTE_EDGES = [0, SIGN, 1, 0x007FFFFF, 0x3F7FFFFF, 0x3F800000, 0x3FC00000, 0x437F0000, 0x437FFFFF, 0x43800000, 0x43808000,
-              0x4B7FFFFF, 0x4B800000, 0x4F7FFFFF, 0x4F800000, 0x7F7FFFFF, INF, SIGN | INF, NAN, 0xFFFFFFFF, 0x7F800001, 0xBF800000,
-              0xC3000000, Q.F_127, Q.F_255]
-
-
-def _byte_words(rng) -> list[int]:
-    """The edges, every (sign, exponent) at four mantissas, and random words."""
-    out = list(BYTE_EDGES)
-    for se in range(512):
-        out += [se << 23 | m for m in (0, 1, 0x400000, 0x7FFFFF)]
-    return out + rng.integers(0, 1 << 32, 4000, dtype=np.uint64).astype(int).tolist()
-
-
-def test_the_scale_byte_on_its_edges():
-    assert [Q.F32ToU32RzByte.evaluate(w) for w in BYTE_EDGES[:16]] == \
-        [0, 0, 0, 0, 0, 1, 1, 255, 255, 0, 1, 0xFF, 0, 0, 0xFF, 0xFF]
-    assert [Q.F32ToU32RzByte.evaluate(w) for w in BYTE_EDGES[16:]] == [0xFF, 0, 0, 0, 0, 0, 0, 127, 255]
-
 
 def test_the_scale_byte_against_the_exact_truncation():
     words = _byte_words(np.random.default_rng(0))
@@ -474,15 +446,6 @@ def test_bad_statics_are_refused_by_name(fn, kw, needle):
 
 
 # --- the Boolean Definitions -----------------------------------------------------------------------------------------------------
-
-def test_the_boolean_scale_byte_is_its_word():
-    target = bind(BQ.F32ToU32RzByteV2)
-    word = word_of(target)
-    assert word.id == Q.F32ToU32RzByte.id and SW.boolean_version(word).id == target.id
-    x: np.ndarray = np.asarray(_byte_words(np.random.default_rng(14)), dtype=np.uint64)
-    got = np.asarray(evaluate_words(target, x), dtype=np.uint64).reshape(-1)
-    assert got.tolist() == [_byte(int(w)) for w in x]
-
 
 BOOLEAN = [
     (bind(BQ.Dsv4QNormRopeV2, D=32, DR=8, EPS=1e-6), T._sample_q),
