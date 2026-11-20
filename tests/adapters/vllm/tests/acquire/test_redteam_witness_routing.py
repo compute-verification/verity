@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 from tests.check.opened import commit_steps
-from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import partial_source as tps
 from verity_vllm.check import oracle_compare as OC
@@ -62,7 +61,7 @@ def _kernel_align(ids: list[int]) -> tuple[torch.Tensor, ...]:
 
 def _witness(ids: list[int]) -> list[torch.Tensor]:
     sorted_ids, expert_ids, ntpp = _kernel_align(ids)
-    rank, start, blk, par, ok = MA.align_values(torch.tensor([ids], dtype=torch.int32), sorted_ids, expert_ids, ntpp, E, BM)
+    rank, start, blk, par, ok = OW.align_values(torch.tensor([ids], dtype=torch.int32), sorted_ids, expert_ids, ntpp, E, BM)
     assert bool(ok)
     return [t.view(torch.float32) for t in (rank, start, blk, par)]
 

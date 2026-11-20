@@ -8,9 +8,9 @@ The rank workers of a TP Commit still read their rows of the merged manifest: `p
 `pipeline.tp.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer, and `require_on_every_rank`
 fails the Commit closed unless every rank attached every tap that is on (`SOURCES`: the router softmax, a rank's vocabulary
 range; the norm-scale source reads no manifest and is attached by neither side).  Each rank also attaches the route source (`route_source`) when a capture map describes its model; when the rank's
-rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE
-align Definitions, the Marlin experts' align schedule (`moe_align_source`); and the narrowed-rows source (`narrowed_source`) whenever
-its rows are narrowed.  The route, linear quant, align and narrowed sources: once one rank has one, every rank must have it."""
+rows name `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); and the narrowed-rows
+source (`narrowed_source`) whenever its rows are narrowed.  The route, linear quant and narrowed sources: once one rank has one, every
+rank must have it."""
 from __future__ import annotations
 
 import json
@@ -24,7 +24,6 @@ from verity_vllm.acquire.sources import (
     call_boundary_source,
     int8_source,
     linear_quant_source,
-    moe_align_source,
     narrowed_source,
     route_source,
     router_softmax_source,
@@ -124,12 +123,6 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
     except (ValueError, RuntimeError, AttributeError) as e:
         out["linear_quant_source"] = {"error": repr(e)[:200]}
     try:
-        ma = moe_align_source.attach(com, model, mine)
-        if ma is not None:
-            out["moe_align_source"] = {"layers": len(ma.layers)}
-    except (ValueError, RuntimeError, AttributeError) as e:
-        out["moe_align_source"] = {"error": repr(e)[:200]}
-    try:
         nr = narrowed_source.attach(com, mine, model=model)
         if nr is not None:
             out["narrowed_source"] = {"sites": len(nr.sites)}
@@ -154,12 +147,11 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
                           explicit_classes: bool) -> tuple[str, ...]:
     """The TP driver's side, once every rank made its committer: every tap that is on attached on every rank (else SystemExit, fail
     closed), its family added to the required classes unless they were given, and each rank's state recorded in `versions`; the route
-    source (when any rank's model has a capture map), the linear quant source and the MoE align source (when any rank's rows name their
-    Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
+    source (when any rank's model has a capture map), the linear quant source (when any rank's rows name its Definition) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
     hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
-    for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
+    for key in ("route_source", "linear_quant_source", "narrowed_source"):
         states = {int(m["rank"]): _recorded(m, key) for m in made}
         if any(states.values()):
             bad = sorted(r for r, v in states.items() if not v or v.get("error"))
