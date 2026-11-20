@@ -17,7 +17,7 @@ network attester's definitions). It has no console script.
 
 - **Lean**: `program/lean/` is the Lake package `certifier_program`, whose library `NetworkAttester` the packages at
   `../verifier/lean` and `security/Proofs` require by path.
-- **Commands**: none. The difftests are the modules `NetworkAttester.DifftestMain`, `NetworkAttester.ChargeDifftestMain`
+- **Commands**: none. The difftests are the modules `NetworkAttester.ChargeDifftestMain`
   and `NetworkAttester.WindowDifftestMain`, each `INSTANCES PYTHON N`, which the Lean check runs interpreted (`lake env
   lean --run`).
 - **Scripts**: `program/lean/scripts/` writes the difftests' instances and the Python's results on them,

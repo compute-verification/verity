@@ -69,7 +69,7 @@ Open premises (`open`):
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
-    is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
+    is withheld. The tests run each on generated cases (`network/tests`), with the mirror in
     `network/tests/period_case.py` for the third;
   - `network-rows`, with the same three verbs: the core protocol `verity/network-rows/v1` (`NetworkCheck.RowsAudit`),
     an active network attester's run, each record held to its attested head and its attestation to the key in the
@@ -351,7 +351,7 @@ grids, exempts only the verified, expected, once-only coin openings, and counts 
 (`protocol/coin-link.md`).
 
 ~~~python
-from verity.protocols.resource_accounting.network.verifier.audit import Audit
+from verity.protocols.resource_accounting.network.verifier.lean_audit import Audit
 from verity.protocols.resource_accounting.network.verifier.grid import GridParams, Certifier
 from verity.protocols.resource_accounting.network.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
