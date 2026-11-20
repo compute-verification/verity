@@ -114,7 +114,7 @@ def population_record(all_vus: list[dict], requests: list[str], not_ev: Counter[
                                          vus_by_request=dict(Counter(v["request_id"] for v in not_exec_vus)),
                                          strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted"}
                                                           for k, n in sorted(Counter(v["stratum"] for v in not_exec_vus).items())}),
-            "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
+            "uncovered_identities": qpop["uncovered_identities"],
             "query_checks": qpop["query_checks"], "scope": qpop["scope"]}
 
 

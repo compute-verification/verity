@@ -195,11 +195,6 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
             f0 = ua.first[0] if ua.first else {}
             parts.insert(0, f"identities unreachable by alias x{ua.n} (invocation >= 1 with no op_path_aliases entry; table has "
                             f"{ua.alias_entries} entries; first {f0.get('op_path')} invocation {f0.get('invocation')} rank {f0.get('rank')})")
-        cd = c.controller_rows_disagree
-        if cd is not None and cd.n > 0:
-            f0 = cd.first[0] if cd.first else {}
-            parts.append(f"controller rows: header {f0.get('header_rows')} != request Programs' sum {f0.get('program_rows_sum')} "
-                         f"{f0.get('program_rows_by_request')} (scope: sum over request Programs)")
         return None, ("C2 population does not reconcile with Q(P): the replay's enumeration of the Program rows and the required manifest "
                       f"disagree on what the Program produces -- {'; '.join(parts) or 'see population.query_checks'}")
     scope = str(pop.get("scope") or "")

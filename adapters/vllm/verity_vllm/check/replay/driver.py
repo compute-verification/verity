@@ -74,7 +74,6 @@ from verity_vllm.check.replay.checks import checks_of
 from verity_vllm.check.replay.checks import fold as fold_checks
 from verity_vllm.check.replay.coverage import (
     _uncovered_mechanisms,
-    controller_rows_of,
     query_population,
 )
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
@@ -698,8 +697,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # identity by identity and carry query_total / sampled_strata / uncovered_by_name on the record (a required identity the exact replay
     # has no VU for is NAMED with its mechanism of record -- never inside the grade, never silently "qualified")
     evaluated_keys = {(vu["request_id"], int(vu["step"]), vu["op_path"]) for vu, rec, _dt in results if rec.get("result") is not None}
-    qpop = query_population(manifest, addresses, evaluated_keys, ranks=ranks, strata=strata, executed_prefix=executed_prefix,
-                            controller_rows=controller_rows_of(programs, indices))   # [R4 c2] the replay's own guard-row count per request
+    qpop = query_population(manifest, addresses, evaluated_keys, ranks=ranks, strata=strata, executed_prefix=executed_prefix)
     return {"schema": SCHEMA, "method": "sampled-exact-replay", "result": result, "grade": grade, "why": why, "catch_probability": catch,
             "population": RR.population_record(all_vus, sorted(programs), not_ev, not_ev_fam, codes, len(strata), qpop, not_exec_vus),
             "addresses": addr_rec,

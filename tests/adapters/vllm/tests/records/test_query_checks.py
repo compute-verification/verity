@@ -91,7 +91,6 @@ def _corpus() -> dict[str, object]:
     alias = _manifest()
     alias["identities"][0]["invocation"] = 1
     out["coverage unreachable by alias"] = sr_of(qp(alias))
-    out["coverage controller rows disagree"] = sr_of(qp(controller_rows={"r0": 3}))
     rows = _manifest()
     i0 = next(i for i in rows["identities"] if i["op_path"] == "logits_processor")
     i0["element_range"] = [0, i0["element_range"][1] * 2]
@@ -164,11 +163,11 @@ def test_the_replays_and_the_served_checks_blocks_load():
     assert c.vus_outside_query == Findings(0, []) and c.ranks.replay == [0] and c.ranks.manifest == [0] and c.ranks.equal is True
     assert isinstance(c.identities_unreachable_by_alias, Unreachable) and c.identities_unreachable_by_alias.alias_entries == 0
     assert c.executed_prefix_rule is not None and c.executed_prefix_rule.applied is True and c.executed_prefix_rule.faults == []
-    assert c.rows_annotation_inconsistent is not None and c.controller_rows_disagree is not None
+    assert c.rows_annotation_inconsistent is not None
     assert (c.manifest_refused, c.missing_acquisition_families) == (None, None)
     assert QueryChecks.of(c, "elsewhere") is c
     s = QueryChecks.of(_served(), "the served check's block")
-    assert (s.identities_unreachable_by_alias, s.rows_annotation_inconsistent, s.controller_rows_disagree, s.executed_prefix_rule) == (None,) * 4
+    assert (s.identities_unreachable_by_alias, s.rows_annotation_inconsistent, s.executed_prefix_rule) == (None,) * 3
 
 
 def test_a_block_without_a_manifest_states_nothing_reconciled():
