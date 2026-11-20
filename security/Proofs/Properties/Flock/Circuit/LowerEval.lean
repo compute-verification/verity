@@ -505,7 +505,8 @@ def RestrictShape : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (S : Prog), Spot.Restrict.restrict P units = .ok S → RShape P S
 
 theorem bodyOf_eq {P S : Prog} (hm : P.BoolMapOk) (hb : S.boolean = P.boolean)
-    (hi : ∀ (k : String) (i : ℕ), P.index[k]? = some i → S.index[k]? = some i) (k : String) : S.bodyOf? k = P.bodyOf? k := by
+    (hi : ∀ (k : String) (i : ℕ), P.index[k]? = some i → S.index[k]? = some i) (k : String) :
+    S.bodyOf? k = P.bodyOf? k := by
   unfold Prog.bodyOf?
   rw [hb]
   cases hv : P.boolean[k]? with
@@ -705,5 +706,59 @@ theorem restrictBodyAgreesDecoded :
     ∀ (bytes : ByteArray) (P : Prog) (units : Array ℕ) (S : Prog), decode bytes = .ok P →
       (P.defs[P.root]!).body.recut = #[] → Spot.Restrict.restrict P units = .ok S → BodyAgrees S :=
   restrictBodyAgrees_decode restrictShape
+
+/-! ## `BlockEvalDoor`, on its four open premises -/
+
+/-- Unit `g`'s gates in C: the gates of its member scope (`Prog.child` of the root at its node and member). -/
+def InUnit (P : Prog) (k m h : ℕ) : Prop :=
+  (P.child P.rootScope k m).off ≤ h ∧
+    h < (P.child P.rootScope k m).off + (((P.defs[(P.child P.rootScope k m).d]?).map (·.gates)).getD 0)
+
+/-- **`FrontUnitRanges`** (open): each unit of a block `front` accepts is located (`unitAt`), and its gates are in the
+front's ranges. -/
+def FrontUnitRanges : Prop :=
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front), Spot.BlockFront.front P units = .ok fr →
+    ∀ g ∈ units, ∃ k m, Spot.BlockFront.unitAt P g = .ok (k, m) ∧
+      ∀ h, InUnit P k m h → Spot.BlockFront.inside fr.ranges h = true
+
+/-- **`UnitComputes`** (open): in a trace of C whose every computed gate of unit `g` is its operation on the trace,
+`g`'s return leaves hold `Prog.evalBool` of its callee on its arguments, bit for bit. -/
+def UnitComputes : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    ∀ (g k m : ℕ), Spot.BlockFront.unitAt P g = .ok (k, m) → ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
+      (∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+        Y h = (Flock.OfProgram.ofProgram P).op h Y) →
+        outBits Y g = Prog.evalBool P (P.child P.rootScope k m).d (argBits Y g)
+
+/-- **`AdmitCallee`** (open): every unit of a block whose C_S `admitted` admits calls the template `admitted` gives. -/
+def AdmitCallee : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (fr : Spot.BlockFront.Front),
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Spot.BlockFront.front P units = .ok fr →
+    ∀ g ∈ units, ∀ k m, Spot.BlockFront.unitAt P g = .ok (k, m) → (P.child P.rootScope k m).d = a.d
+
+/-- **`LiftAgreesOnArgs`** (open): the template's lift to bits evaluates, on a unit's argument bits in any trace of C,
+as C's Definition of the template. -/
+def LiftAgreesOnArgs : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (partition : Lean.Json) (cuts : List (String × List (String × ℕ)))
+    (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog) (e : ℕ),
+    decode bytes = .ok P → (P.defs[P.root]!).body.recut = #[] →
+    Spot.Restrict.restrict P units = .ok S → Spot.OneStageZk.admitted partition cuts S = .ok a →
+    Flock.Lift.lift S a.d = .ok (L, e) →
+    ∀ g ∈ units, ∀ Y : (Flock.OfProgram.ofProgram P).Trace,
+      Prog.evalBool L e (argBits Y g) = Prog.evalBool P a.d (argBits Y g)
+
+/-- **`BlockEvalDoor`**, on `FrontUnitRanges`, `UnitComputes`, `AdmitCallee` and `LiftAgreesOnArgs`. -/
+theorem blockEvalDoor_of (hF : FrontUnitRanges) (hU : UnitComputes) (hC : AdmitCallee) (hL : LiftAgreesOnArgs) :
+    BlockEvalDoor := by
+  intro bytes P partition cuts units S a fr L e hd hr hs ha hf hl blocks u hB X g hg Y
+  obtain ⟨k, m, hu, hin⟩ := hF P units fr hf g hg
+  have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+      Y h = (Flock.OfProgram.ofProgram P).op h Y :=
+    fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
+  rw [hL bytes P partition cuts units S a L e hd hr hs ha hl g hg Y, hU bytes P hd hr g k m hu Y hY,
+    hC bytes P partition cuts units S a fr hd hr hs ha hf g hg k m hu]
 
 end Flock.Chain
