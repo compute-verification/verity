@@ -38,15 +38,6 @@ HISTORY_KEYS = frozenset({"argv", "command", "cmd", "invocation", "provenance", 
 
 #: (file, the string as written: `module` or `module:attr`) that don't resolve and aren't meant to, each with why
 EXEMPT = {
-    # the reuse probe's candidates: names a design document left unstated, tried one by one on the pod
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:check_applicability"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.artifact:load_artifact"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.check.applicability:check"):
-        "probed",
-    ("tests/adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
-        "probed",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tests/tools/research/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tests/tools/research/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
