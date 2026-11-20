@@ -547,9 +547,8 @@ def tileOf (j : Json) (d : Flock.Program.Defn) (k : Nat) : Option (Nat × Nat ×
   let x ← chunks? k
   guard (!d.prim && d.id == TILE_FN)
   let pin ← TILE_PINS.lookup d.key
-  guard (match Flock.DefinitionDigest.closureDigest j d.key with
-    | .ok h => h == pin
-    | .error _ => false)
+  let .ok h := Flock.DefinitionDigest.closureDigest j d.key | none
+  guard (h == pin)
   let [("UNIT", _), ("K", kb)] := (Flock.Program.recordPairs d.key).toList | none
   guard (kb == toString k)
   let names := d.params.toList.map (·.1)
