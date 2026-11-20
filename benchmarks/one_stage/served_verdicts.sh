@@ -1871,21 +1871,14 @@ EOF
   return 3
 }
 window_seal() {  # the window's seal held to its record (close_record's finish opened its bundle to make it): the seal's
-  # run root, the record's circuit and its compiler, held to predict row's; the commit's bound Program digest beside the
-  # predicted workload digest, which no check here compares
+  # run root, the record's circuit and its compiler, each at its path in the registration (`rows.registration`'s
+  # ``window``, as `interface.of_records` reads it), the compiler held to predict row's; the commit's bound Program digest
+  # beside the predicted workload digest, which no check here compares
 "$PY" - "$D" "$K" "$PRED" <<'EOF' 2>&1 | publish_lines
 import hashlib, json, sys
 from pathlib import Path
 d, k, pred = Path(sys.argv[1]), int(sys.argv[2]), Path(sys.argv[3])
 w, why = d / "windows" / f"w{k}", []
-
-
-def found(doc, key):
-    if isinstance(doc, dict):
-        if key in doc:
-            return doc[key]
-        return next((x for v in doc.values() if (x := found(v, key)) is not None), None)
-    return None
 
 
 predicted = json.loads((pred / "predicted.json").read_text())
@@ -1895,15 +1888,20 @@ c = json.loads((w / "commit" / "runs.jsonl").read_text().splitlines()[0])["commi
 reg = json.loads((w / "record" / "registration.json").read_text())
 if seal is None or "error" in seal:
     why.append(f"seals.jsonl has {'no seal' if seal is None else 'a failed seal'} of the window")
-run = found(reg, "run")
+win = reg.get("window") if isinstance(reg.get("window"), dict) else {}
+if lacks := [f"window.{f}" for f in ("run", "circuit", "compiler") if f not in win]:
+    why.append(f"the record's registration has no {', '.join(lacks)}")
+run = win.get("run")
 if not v.get("run_root") or v.get("run_root") != run:
     why.append(f"the seal's run root {str(v.get('run_root'))[:16]}… is not the record's {str(run)[:16]}…")
-if found(reg, "circuit") != hashlib.sha512((w / "record" / "circuit.json").read_bytes()).hexdigest():
+if "circuit" in win and win["circuit"] != hashlib.sha512((w / "record" / "circuit.json").read_bytes()).hexdigest():
     why.append("the record's circuit.json is not the circuit its registration binds")
-compiler, p = found(reg, "compiler") or {}, predicted.get("compiler")
+compiler, p = win.get("compiler") if isinstance(win.get("compiler"), dict) else {}, predicted.get("compiler")
 same = bool(compiler) and compiler.get("digest") == (p.get("digest") if isinstance(p, dict) else p)
 print(f"SEAL: the window's seal, run root {str(v.get('run_root'))[:16]}…, and its record: {'PASS' if not why else 'FAIL (' + '; '.join(why) + ')'}")
 print(f"COMPILER: the record's registered compiler is predict row's: {'PASS' if same else 'FAIL'}")
+print("BOUND-PROGRAM: the commit's bound Program digest and the predicted workload digest are kept side by side and "
+      "compared by nothing, so the seal does not tie the proved circuit to the served one")
 (d / "private").mkdir(mode=0o700, exist_ok=True)
 with open(d / "private" / "verdicts.txt", "a") as kept:
     kept.write(f"COMPILER: the record's {compiler.get('name')} {compiler.get('digest')}, predict row's {p}\n"
@@ -2011,6 +2009,7 @@ if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $
 if [ "${1:-}" = served-compare ]; then K=${2:?served_verdicts.sh served-compare WINDOW}; served_compare; exit $?; fi
 if [ "${1:-}" = pearl-cubin ]; then pearl_cubin; exit $?; fi
 if [ "${1:-}" = seal ]; then seal; exit $?; fi
+if [ "${1:-}" = window-seal ]; then K=${2:?served_verdicts.sh window-seal WINDOW}; window_seal; exit $?; fi
 if [ "${1:-}" = window ]; then window; exit $?; fi
 if [ "${1:-}" = advice ]; then K=${2:?served_verdicts.sh advice WINDOW}; advice; exit $?; fi
 if [ "${1:-}" = pearlplus ]; then K=${2:?served_verdicts.sh pearlplus WINDOW}; pieces --only pouw; exit $?; fi
@@ -2077,6 +2076,8 @@ elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothi
   [ -e "$PY" ] || { say "PREFLIGHT: no python under VENV (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
   tie_refused || exit 3
+  [ -n "${APPLICATION_PROTOCOLS+x}" ] \
+    || { say "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists cannot be checked"; exit 3; }
   window_preflight || exit 3
   logs_dir
   window_road

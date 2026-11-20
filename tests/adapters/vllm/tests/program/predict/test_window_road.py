@@ -160,9 +160,60 @@ def test_compute_accounting_is_held_to_the_application_list_both_ways(tmp_path):
 
 def test_the_window_road_refuses_by_name_each_thing_its_record_lacks(tmp_path):
     """An empty serve dir: the preflight names every file it wanted, and nothing named ROW."""
-    rc, out = _preflight(tmp_path, POUW="pearlplus")
+    rc, out = _preflight(tmp_path, POUW="pearlplus", APPLICATION_PROTOCOLS="sampled-proofs pearl-plus")
     assert rc == 3, out
     assert ("PREFLIGHT: the window's record lacks WINDOW_CLASS, the class the serve took (its --window-class), which "
             "serve.json doesn't record; D/plans.jsonl, the close's plan of each window; PRED/predicted.json, predict "
             "row's Build before the lease") in out, out
     assert "ROW" not in out
+
+
+def test_a_run_naming_no_application_is_refused_by_name(tmp_path):
+    """The runner is `verity run`'s, which hands it the application's list: with none, what it lists can't be checked, so
+    the run is refused before the window's preflight, compute accounting's scheme set or not."""
+    for pouw in ("", "pearlplus"):
+        env = {k: v for k, v in os.environ.items() if k != "APPLICATION_PROTOCOLS"}
+        rc, out = _preflight(tmp_path, **env, POUW=pouw)
+        assert rc == 3 and out.strip().splitlines()[-1] == (
+            "PREFLIGHT: the runner is verity run's: no application was named (APPLICATION_PROTOCOLS), so what it lists "
+            "cannot be checked"), out
+
+
+def _sealed(tmp_path, window, drop=()):
+    d, pred, body = tmp_path / "serve", tmp_path / "predicted", b'{"templates": []}'
+    rec = d / "windows" / "w0" / "record"
+    rec.mkdir(parents=True)
+    (d / "windows" / "w0" / "commit").mkdir()
+    pred.mkdir()
+    (rec / "circuit.json").write_bytes(body)
+    good = {"run": RUN_ROOT, "circuit": hashlib.sha512(body).hexdigest(), "compiler": COMPILER}
+    decoy = {"run": "00" * 64, "circuit": "00" * 64, "compiler": {"name": "c", "digest": "00" * 64}}
+    (rec / "registration.json").write_text(json.dumps({**decoy, "window": {k: v for k, v in {**good, **window}.items()
+                                                                           if k not in drop}}))
+    (d / "seals.jsonl").write_text(json.dumps({"window": 0, "run_root": RUN_ROOT}) + "\n")
+    (d / "windows" / "w0" / "commit" / "verdict.json").write_text(json.dumps({"run_root": RUN_ROOT}))
+    (d / "windows" / "w0" / "commit" / "runs.jsonl").write_text(json.dumps({"commit": {"binding": {}}}) + "\n")
+    (pred / "predicted.json").write_text(json.dumps({"compiler": COMPILER, "workload_digest": WORKLOAD}))
+    env = {**os.environ, "D": str(d), "PRED": str(pred), "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path),
+           "VENV": sys.prefix, "PRODUCT": "remote", "CUDA_HOME": str(tmp_path), "PEARLC_CHALLENGER_GATE": ""}
+    p = subprocess.run(["bash", "benchmarks/one_stage/served_verdicts.sh", "window-seal", "0"], cwd=ROOT, env=env,
+                       capture_output=True, text=True)
+    return p.returncode, p.stdout + p.stderr
+
+
+def test_the_seal_reads_each_field_at_its_path_in_the_registration_and_refuses_a_record_without_it(tmp_path):
+    """The seal holds the registration's ``window`` run, circuit and compiler, never a field of the same name elsewhere in
+    it: a record whose top level carries other values passes on its ``window``'s, one whose ``window`` differs fails, and
+    one whose ``window`` lacks a field is refused by its path."""
+    rc, out = _sealed(tmp_path / "a", {})
+    assert rc == 0 and "and its record: PASS" in out and "predict row's: PASS" in out, out
+    assert "BOUND-PROGRAM: the commit's bound Program digest and the predicted workload digest are kept side by side and " \
+           "compared by nothing, so the seal does not tie the proved circuit to the served one" in out, out
+    rc, out = _sealed(tmp_path / "b", {"circuit": "11" * 64})
+    assert rc == 1 and "the record's circuit.json is not the circuit its registration binds" in out, out
+    rc, out = _sealed(tmp_path / "c", {"compiler": {"name": "c", "digest": "11" * 64}})
+    assert rc == 1 and "predict row's: FAIL" in out, out
+    rc, out = _sealed(tmp_path / "d", {"run": None})
+    assert rc == 1 and "the seal's run root" in out, out
+    rc, out = _sealed(tmp_path / "e", {}, drop=("compiler",))
+    assert rc == 1 and "the record's registration has no window.compiler" in out, out
