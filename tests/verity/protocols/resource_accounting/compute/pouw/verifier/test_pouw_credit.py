@@ -188,7 +188,7 @@ PERIOD_EXPECT = {
     "stale-pin": ("pin", "past its freshness floor"), "length-none": ("window", "length: no-fixed-length"),
 }
 A_LINK_EXPECT = {
-    "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`window.round_root`", "gap": "`credit.cover`",
+    "untied": UNTIED, "late-rows": UNTIED, "rewritten": UNTIED, "round-root": "`credit.round_root`", "gap": "`credit.cover`",
     "extra": "`credit.cover`", "swapped": "`credit.cover`", "misaligned": "`credit.cover`",
     "unknown": "which is no registered A value", "no-a": Cr.NO_A, "twice": " twice", "entry-form": "has no root, domain", "leaves-cap": "is not from 1 to",
     "layout-rows": "the window's layout gives it",
