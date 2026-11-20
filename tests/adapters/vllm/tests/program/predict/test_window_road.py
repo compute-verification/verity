@@ -250,13 +250,13 @@ def test_the_seal_reads_each_field_at_its_path_in_the_registration_and_refuses_a
     it: a record whose top level carries other values passes on its ``window``'s, one whose ``window`` differs fails, and
     one whose ``window`` lacks a field is refused by its path."""
     rc, out = _sealed(tmp_path / "a", {})
-    assert rc == 0 and "and its record: PASS" in out and "predict row's: PASS" in out, out
+    assert rc == 0 and "and its record: PASS" in out and "predict row's are equal strings: PASS" in out, out
     assert "BOUND-PROGRAM: the commit's bound Program digest and the predicted workload digest are kept side by side and " \
            "compared by nothing, so the seal does not tie the proved circuit to the served one" in out, out
     rc, out = _sealed(tmp_path / "b", {"circuit": "11" * 64})
     assert rc == 1 and "the record's circuit.json is not the circuit its registration binds" in out, out
     rc, out = _sealed(tmp_path / "c", {"compiler": {"name": "c", "digest": "11" * 64}})
-    assert rc == 1 and "predict row's: FAIL" in out, out
+    assert rc == 1 and "predict row's are equal strings: FAIL" in out, out
     rc, out = _sealed(tmp_path / "d", {"run": None})
     assert rc == 1 and "the seal's run root" in out, out
     rc, out = _sealed(tmp_path / "e", {}, drop=("compiler",))
