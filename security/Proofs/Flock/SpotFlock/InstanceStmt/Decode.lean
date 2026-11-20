@@ -63,8 +63,8 @@ the inserts that built its table (`hm_get_insert`, `hs_contains_insert`, `hm_get
 state is a `StateT` stepped by its monad's equations (`st_bind` and its siblings). Each well-founded function it calls
 is a fact at the statement's own values (`Ty.ofJson`, `Ty.leaves`, `Ty.beq`, `String.splitOn`, `Widths.bodyBad`) or
 its fuelled twin (`domainError_fuel`, `canon_fuel`). The program's SHA-512 is of `bareText`, its canonical text without
-`annotations`, a literal as `progHex` is (`canon_bare`). `descParse_X` is the template queries' reading of the same
-bytes (`TemplateQuery.Desc.parse`), `descX`, whose digest is `progHex` (`descX_hex`).
+`annotations`, a literal as `progHex` is (`canon_bare`). The template queries' reading of the same bytes
+(`TemplateQuery.Desc.parse`) and the walk's rules for the tables and the state are `Digests`' (`descParse_X`).
 -/
 
 @[expose] public section
@@ -82,34 +82,12 @@ open Properties.Spot.SecurityProofs (canon_fuel canonFuel qsort_fuel)
 
 /-! ## The decoder's tables -/
 
-theorem hm_get_insert {β : Type} (m : Std.HashMap String β) (k a : String) (v : β) :
-    (m.insert k v)[a]? = if k == a then some v else m[a]? := by
-  rw [Std.HashMap.getElem?_insert]
-theorem hm_get_empty {β : Type} (a : String) : (({} : Std.HashMap String β))[a]? = none :=
-  Std.HashMap.getElem?_empty
 theorem hs_contains_insert (m : Std.HashSet String) (k a : String) :
     (m.insert k).contains a = (k == a || m.contains a) := Std.HashSet.contains_insert
 theorem hs_contains_erase (m : Std.HashSet String) (k a : String) :
     (m.erase k).contains a = (!(k == a) && m.contains a) := Std.HashSet.contains_erase
 theorem hs_contains_empty (a : String) : ({} : Std.HashSet String).contains a = false :=
   Std.HashSet.contains_empty
-
-theorem hm_get_foldl_from {β : Type} (l : List (String × β)) (m : Std.HashMap String β) (a : String) :
-    (l.foldl (fun m (k, v) => m.insert k v) m)[a]? = ((l.reverse.find? (·.1 == a)).map (·.2)).or m[a]? := by
-  induction l generalizing m with
-  | nil => simp
-  | cons kv l ih =>
-    obtain ⟨k, v⟩ := kv
-    rw [List.foldl_cons, ih, Std.HashMap.getElem?_insert, List.reverse_cons, List.find?_append]
-    by_cases h : k = a
-    · subst h; cases l.reverse.find? (·.1 == k) <;> simp
-    · have : (k == a) = false := by simpa using h
-      cases l.reverse.find? (·.1 == a) <;> simp [this]
-
-theorem hm_get_foldl {β : Type} (arr : Array (String × β)) (a : String) :
-    (arr.foldl (fun m (k, v) => m.insert k v) ({} : Std.HashMap String β))[a]? =
-      (arr.toList.reverse.find? (·.1 == a)).map (·.2) := by
-  rw [← Array.foldl_toList, hm_get_foldl_from, Std.HashMap.getElem?_empty, Option.or_none]
 
 theorem hm_contains_foldl_from {β : Type} (l : List (String × β)) (m : Std.HashMap String β) (a : String) :
     (l.foldl (fun m (k, v) => m.insert k v) m).contains a = (l.any (·.1 == a) || m.contains a) := by
@@ -127,21 +105,7 @@ theorem hm_contains_foldl {β : Type} (arr : Array (String × β)) (a : String) 
 
 /-! ## The decoder's state and loops -/
 
-theorem st_bind {σ ε α β : Type} (x : StateT σ (Except ε) α) (f : α → StateT σ (Except ε) β) (s : σ) :
-    (x >>= f) s = (x s >>= fun p => f p.1 p.2) := rfl
-theorem st_get {σ ε : Type} (s : σ) : (get : StateT σ (Except ε) σ) s = .ok (s, s) := rfl
 theorem st_set {σ ε : Type} (s s' : σ) : (set s' : StateT σ (Except ε) PUnit) s = .ok (⟨⟩, s') := rfl
-theorem st_modify {σ ε : Type} (f : σ → σ) (s : σ) : (modify f : StateT σ (Except ε) PUnit) s = .ok (⟨⟩, f s) := rfl
-theorem st_pure {σ ε α : Type} (a : α) (s : σ) : (pure a : StateT σ (Except ε) α) s = .ok (a, s) := rfl
-theorem st_throw {σ ε α : Type} (e : ε) (s : σ) : (throw e : StateT σ (Except ε) α) s = .error e := rfl
-theorem st_ite {σ ε α : Type} (c : Prop) [Decidable c] (a b : StateT σ (Except ε) α) (s : σ) :
-    (ite c a b) s = ite c (a s) (b s) := by split <;> rfl
-theorem st_dite {σ ε α : Type} (c : Prop) [Decidable c] (a : c → StateT σ (Except ε) α) (b : ¬c → StateT σ (Except ε) α)
-    (s : σ) : (dite c a b) s = dite c (fun h => a h s) (fun h => b h s) := by split <;> rfl
-theorem st_run {σ ε α : Type} (x : StateT σ (Except ε) α) (s : σ) : x.run s = x s := rfl
-theorem st_forIn_empty {σ ε α β : Type} (xs : Array α) (b : β) (f : α → β → StateT σ (Except ε) (ForInStep β)) (s : σ)
-    (h : xs.size = 0) : (forIn xs b f) s = .ok (b, s) := by
-  rw [Array.eq_empty_of_size_eq_zero h]; rfl
 theorem st_forIn_range1 {σ ε β : Type} (r : Std.Legacy.Range) (b : β)
     (f : Nat → β → StateT σ (Except ε) (ForInStep β)) (s : σ) (h1 : r.start = 0) (h2 : r.stop = 1) (h3 : r.step = 1) :
     (forIn r b f) s = (f 0 b >>= fun x => pure (match x with | .done b => b | .yield b => b)) s := by
@@ -153,14 +117,6 @@ theorem st_forIn_range1 {σ ε β : Type} (r : Std.Legacy.Range) (b : β)
       (f 0 b >>= fun x => pure (match x with | .done b => b | .yield b => b)) := by
     rw [List.forIn_cons]; congr 1; funext x; cases x <;> rfl
   rw [e]
-theorem mapM_nil {ε α β : Type} (f : α → Except ε β) : (#[] : Array α).mapM f = pure #[] := by
-  simp only [Array.mapM_eq_mapM_toList, List.mapM_nil]; rfl
-theorem mapM_one {ε α β : Type} (f : α → Except ε β) (a : α) :
-    #[a].mapM f = (do let x ← f a; pure #[x]) := by
-  simp only [Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil]; cases f a <;> rfl
-theorem mapM_pair {ε α β : Type} (f : α → Except ε β) (a b : α) :
-    #[a, b].mapM f = (do let x ← f a; let y ← f b; pure #[x, y]) := by
-  simp only [Array.mapM_eq_mapM_toList, List.mapM_cons, List.mapM_nil]; cases f a <;> cases f b <;> rfl
 theorem mapM_empty {ε α β : Type} (f : α → Except ε β) (xs : Array α) (h : xs.size = 0) : xs.mapM f = pure #[] := by
   rw [Array.eq_empty_of_size_eq_zero h]; simp only [Array.mapM_eq_mapM_toList, List.mapM_nil]; rfl
 theorem st_mapM_empty {σ ε α β : Type} (f : α → StateT σ (Except ε) β) (xs : Array α) (s : σ) (h : xs.size = 0) :
@@ -189,8 +145,6 @@ theorem ex_forIn_range1 {ε β : Type} (r : Std.Legacy.Range) (b : β) (f : Nat 
   have : List.range' r.start r.size r.step = [0] := by
     simp only [Std.Legacy.Range.size, h1, h2, h3]; rfl
   rw [this, List.forIn_cons]; congr 1; funext x; cases x <;> rfl
-theorem prod_fst {α β : Type} (a : α) (b : β) : (a, b).1 = a := rfl
-theorem prod_snd {α β : Type} (a : α) (b : β) : (a, b).2 = b := rfl
 theorem ds_defs (d i b w) : Flock.Program.DecState.defs (Flock.Program.DecState.mk d i b w) = d := rfl
 theorem ds_index (d i b w) : Flock.Program.DecState.index (Flock.Program.DecState.mk d i b w) = i := rfl
 theorem ds_busy (d i b w) : Flock.Program.DecState.busy (Flock.Program.DecState.mk d i b w) = b := rfl
@@ -229,11 +183,6 @@ theorem splitOn_of (s : String) (h : s = "Root[Two_v1]_v1") : s.splitOn "_v" = [
   subst h; exact splitOn_root
 theorem all_of (s : String) (h : s = "1") : s.all Char.isDigit = true := by subst h; exact all_one
 theorem toNat_of (s : String) (h : s = "1") : s.toNat! = 1 := by subst h; exact toNat_one
-
-theorem recordFunctionIds_plain (fid : String) (h : fid.toList.contains '{' = false) : recordFunctionIds fid = #[] := by
-  have : fid.contains '{' = false := by
-    rw [String.contains_char_eq]; simpa using h
-  simp [recordFunctionIds, recordPairs, this]
 
 /-! ## The root's widths -/
 
@@ -360,15 +309,5 @@ fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse
     dup_empty]
   block [Std.HashMap.insert, Std.HashSet.insert, Std.HashSet.erase, Sha512.hash]
   shallow []
-
-fwd_def descX descParse_X : TemplateQuery.Desc.parse progBytes by [fromUTF8?_toUTF8, parse_prog, canon_bare,
-    canon_fuel 12]
-  block [Sha512.hash]
-  shallow []
-
-theorem descX_hex : hexOf descX.sha512 = progHex := by
-  have h := progHex_eq
-  rw [descParse_X] at h
-  exact Option.some.inj h
 
 end SpotFlock.InstanceStmt.Decode
