@@ -109,7 +109,7 @@ def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, di
                 "sessions": [], "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": sampling_design,
               "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
-              "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": None}, "query": s.query,
+              "proofs": {"public": _sha(PUBLIC), "registered": None}, "query": s.query,
               "registered": None, "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
     return params, rec, evidence
 
@@ -669,7 +669,9 @@ def test_spot_refuses_the_recursive_audit(name, request):
     """SPOT's case is one level's or two levels' params, never the recursive audit's, so the recursive audit's params
     are refused by one level's reading of them (`_recursive`): naming its inputs in place of proofs, as v1's by name
     (`V1_REFUSED`), and beside v2's proofs, by the parameters' keys. Remote and onsite, every other subprotocol aimed
-    at acceptance on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
+    at acceptance on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`).
+    It is the one test of the recursive audit's refusal: the old recursion's tests are gone, and none else catches an
+    audit configuration that accepts the recursive audit's params."""
     product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
     if name == "onsite":
         request.getfixturevalue("recorded")
@@ -808,7 +810,7 @@ def reusing_audit(m: dict) -> dict:
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
               "law": REUSING_SAMPLING_DESIGN, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
               "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
-              "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
+              "program": s.desc, "proofs": {"public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,

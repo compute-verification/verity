@@ -5,8 +5,6 @@ an accept on its output stream is refused."""
 
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -49,7 +47,7 @@ def test_an_accept_beside_a_panic_is_refused_by_name_whatever_the_exit(tmp_path,
 
 @pytest.mark.parametrize("serve", [p2_case.serve, period.serve], ids=["p2_case", "period"])
 def test_an_accept_from_a_process_that_exits_non_zero_is_refused(tmp_path, serve):
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(LP.LeanExit, match="^lean-exit: .*status 3"):
         serve(_fake(tmp_path, _one_shot(False, 3)), [{}])
 
 

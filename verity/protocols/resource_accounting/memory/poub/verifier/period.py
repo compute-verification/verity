@@ -257,7 +257,6 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
     """`EXE serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
     lines = "".join(canonical_json_bytes(c).decode() + "\n" for c in cases)
     p = LC.run([str(exe), "serve"], input=lines)
-    p.check_returncode()
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

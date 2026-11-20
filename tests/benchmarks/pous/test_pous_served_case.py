@@ -352,5 +352,5 @@ def test_a_lean_answer_beside_a_panic_or_after_a_failure_is_refused_by_name(tmp_
         with pytest.raises(SC.Refused, match=f"LeanPanic: lean-panic: the Lean verifier wrote a panic: its answer is not read: {panic}"):
             SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)
     exe = _lean_stand_in(tmp_path, f"{accept}sys.exit(3)\n")
-    with pytest.raises(SC.Refused, match="CalledProcessError"):
+    with pytest.raises(SC.Refused, match="LeanExit: lean-exit: .*status 3"):
         SC.lean_answer({"commitment": "", "evidence": "", "params": {}}, exe)

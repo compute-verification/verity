@@ -256,7 +256,7 @@ def setup_check_cmd(a: argparse.Namespace) -> int:
         runs = []
         for _ in range(a.lean_reps):
             t0 = time.perf_counter()
-            r = LC.run([a.lean_exe, "check", str(params), str(comm), str(ev)])
+            r = LC.run([a.lean_exe, "check", str(params), str(comm), str(ev)], ok_statuses=LC.CHECK_EXITS)
             runs.append({"s": time.perf_counter() - t0, "rc": r.returncode, "stdout": r.stdout.strip()[:2000],
                          "stderr": r.stderr.strip()[-2000:]})
         doc["lean_check"] = runs

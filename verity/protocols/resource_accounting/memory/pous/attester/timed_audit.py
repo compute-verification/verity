@@ -441,9 +441,7 @@ def run_lean(exe: str | os.PathLike, ready: Any, leaves: bytes, doc: Any) -> dic
         files[0].write_text(json.dumps(ready))
         files[1].write_bytes(leaves)
         files[2].write_text(json.dumps(doc))
-        p = LC.run([str(exe), *map(str, files)])
-    if p.returncode not in (0, 1):
-        raise RuntimeError(f"{Path(exe).name} failed ({p.returncode}): {p.stderr}")
+        p = LC.run([str(exe), *map(str, files)], ok_statuses=frozenset({0, 1}))
     return json.loads(p.stdout)
 
 

@@ -141,13 +141,15 @@ def build(package: Path, exe: str) -> Path:
     return package / ".lake" / "build" / "bin" / exe
 
 
-#: a line Lean's runtime writes on a panic (``PANIC at DECL MODULE:LINE:COL: MSG``, or the C runtime's ``PANIC: MSG`` and
-#: ``INTERNAL PANIC: MSG``), and the runtime's switch that ends the process on one where it would print it, return a
-#: default value and carry on: the shared launcher of every Lean verifier a verdict reads, as the one-stage door's
-#: `one_stage/lean_child.py` is for the door's
-PANIC = re.compile(r"^(?:INTERNAL )?PANIC\b.*$", re.M)
-ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
+#: a line Lean's runtime writes on a panic or an abort: ``PANIC at DECL MODULE:LINE:COL: MSG`` (`mkPanicMessageWithDecl`),
+#: the C runtime's ``PANIC: MSG`` and ``INTERNAL PANIC: MSG``, and its lines with no ``PANIC``: an array index past the end
+#: (`lean_array_get_panic`, `lean_array_set_panic`), `String.get!` off a character, `Task.get` in a sync task, a stack
+#: overflow and a debug build's assertion
+PANIC = re.compile(r"^(?:(?:INTERNAL )?PANIC\b.*|Error: index out of bounds|Error: invalid `String\.Pos` at `String\.get!`"
+                   r"|`Task\.get` called from a `\(sync := true\)` task|Stack overflow detected\. Aborting\."
+                   r"|LEAN ASSERTION VIOLATION)$", re.M)
 LEAN_PANIC = "lean-panic: the Lean verifier wrote a panic: its answer is not read"
+ABORT_ON_PANIC = "LEAN_ABORT_ON_PANIC"
 
 
 class Server:

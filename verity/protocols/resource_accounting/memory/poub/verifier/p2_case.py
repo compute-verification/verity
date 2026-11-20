@@ -173,7 +173,6 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]]) -> list[di
     lines = "".join(canonical_json_bytes({k: c[k] for k in ("commitment", "evidence", "params") if k in c}).decode()
                     + "\n" for c in cases)
     p = LC.run([str(exe), "serve"], input=lines)
-    p.check_returncode()
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

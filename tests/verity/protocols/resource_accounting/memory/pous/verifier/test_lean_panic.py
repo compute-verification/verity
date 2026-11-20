@@ -5,7 +5,6 @@ beside a panic line is refused by name, and one that exits non-zero with an acce
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -40,15 +39,16 @@ def test_an_accept_beside_a_panic_is_refused_by_name_whatever_the_exit(tmp_path)
 
 def test_an_accept_from_a_process_that_exits_non_zero_is_refused(tmp_path):
     exe = _fake(tmp_path, _accepting(False, 3))
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(LP.LeanExit, match="^lean-exit: .*status 3"):
         period.serve(exe, [{}])
 
 
 def test_the_verdict_by_the_timed_audit_is_refused_beside_a_panic_and_after_a_failure(tmp_path):
     with pytest.raises(LP.LeanPanic, match=f"^{LP.LEAN_PANIC}: {PANIC_LINE}$"):
         TA.run_lean(_fake(tmp_path, _accepting(True)), {}, b"", {})
-    with pytest.raises(RuntimeError, match="failed \\(3\\)"):
+    with pytest.raises(LP.LeanExit, match="^lean-exit: .*status 3"):
         TA.run_lean(_fake(tmp_path, _accepting(False, 3)), {}, b"", {})
+    assert TA.run_lean(_fake(tmp_path, _accepting(False, 1)), {}, b"", {}) == {"verdict": "accept"}
 
 
 def test_the_answers_are_read_from_a_process_started_with_the_panic_switch(tmp_path, monkeypatch):

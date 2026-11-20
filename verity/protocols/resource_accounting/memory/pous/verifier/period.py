@@ -227,7 +227,7 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
     lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
     p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, env=LC.lean_env())
     LC.refuse_panic(p.stderr)
-    p.check_returncode()
+    LC.refuse_exit(p.returncode)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

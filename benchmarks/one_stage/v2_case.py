@@ -194,7 +194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not a.exe:
         return 0
     p = LC.run([a.exe, "check", *(str(a.out / f) for f in ("params.json", "commitment.bin", "evidence.json")),
-                *v2["blobs"]], check=False)
+                *v2["blobs"]], check=False, ok_statuses=LC.CHECK_EXITS)
     line = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ""
     if not line:
         print(f"V2 no answer (exit {p.returncode})", flush=True)
