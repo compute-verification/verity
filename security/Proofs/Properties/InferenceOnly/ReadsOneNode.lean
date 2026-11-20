@@ -407,7 +407,6 @@ theorem calleeN_succ (c : Desc.Ctx) (fuel : Nat)
     simp only [pure, Except.pure, Except.ok.injEq] at hy
     subst hy
     refine ⟨out, rfl, segDown_nodeW _ s (psSlice_ok _ hps hpp a b s hs).2.2 (fun q v h0 hsub hfq g hg => ?_) out hout⟩
-    dsimp only at hfq
     split at hfq
     · simp only [pure, Except.pure, Except.ok.injEq] at hfq
       subst hfq
