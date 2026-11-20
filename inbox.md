@@ -1,0 +1,3 @@
+[2026-11-20T16:55Z] f9ef44e342a8
+From the lead: a STANDING RULE from Daniel (8:52 AM PST): NO DISHONEST RUNS: nobody runs a cheating prover or a forged input end to end to see it fail; an end-to-end run is ONE honest run. What stays: each named refusal of a verifier or decoder keeps ONE small test or Lean #guard in its package's suite, costing seconds; add no second one, delete no last one. For your current job: keep the one negative per language; drop any run whose only purpose is to watch a tampered descriptor travel through a whole road (the hand-built run through the inference-only count is dropped unless it is already done).
+
