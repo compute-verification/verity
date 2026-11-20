@@ -205,6 +205,27 @@ def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
     return False
 
 
+@functools.cache
+def _family_body(fn: SpecializedDefinition, families: tuple[str, ...]) -> str | None:
+    return next((f for f in families if registered_body(fn, (f,))), None)
+
+
+def family(fn: Any, families: tuple[str, ...], why: str) -> str | None:
+    """``fn``'s family among ``families``: its name, where a registered composite of that name has its body at its statics
+    (`registered_body`); None where it has neither the name nor such a body. A name over another body or a registered body
+    under another name is refused by name, since ``why``."""
+    name = getattr(fn, "name", None)
+    named = name if name in families else None
+    if named is not None and registered_body(fn, (named,)):
+        return named
+    body = _family_body(fn, families) if isinstance(fn, SpecializedDefinition) else None
+    if named is None and body is None:
+        return None
+    raise Unexpressible(f"{fn.id}: " + (f"a unit named as {named} whose body is no registered {named}'s at its statics"
+                                        if named is not None else f"a registered {body}'s body under another name") +
+                        f" is refused: {why}")
+
+
 @dataclass(frozen=True)
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the

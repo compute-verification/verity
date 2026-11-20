@@ -29,6 +29,7 @@ from verity_vllm.definitions.registry.dead_free import (
 from .build import Unexpressible
 from .window_builder import WEIGHTS, Row, _Builder, _spans, _step, _word, weight_run
 from .window_class import FixedLoad, PearlTables, Request, Tables, WindowClass
+from .steps import family as unit_family
 from .window_cut import Linears, cut_linear
 
 PROMPT = "prompt"
@@ -187,13 +188,14 @@ class _Program:
         last the LM head, the select and the final norm are dead, and the last layer's query and all of it from its
         attention on with them (`lower` keeps that attention's keys its layer's)."""
         nodes = self.fn.body.nodes
+        fams = [node_family(n.fn) for n in nodes]
         pos, p = [], -1
-        for n in nodes:
-            p += n.fn.name == "Embedding"
+        for f in fams:
+            p += f == "Embedding"
             pos.append(p)
         readers: list[list[int]] = [[] for _ in nodes]
         for k, n in enumerate(nodes):
-            if n.fn.name == "Embedding" and 1 <= pos[k] < self.L:
+            if fams[k] == "Embedding" and 1 <= pos[k] < self.L:
                 continue
             for a in n.args:
                 for space, idx, _lo, _hi in runs(a.refs):
@@ -201,13 +203,13 @@ class _Program:
                         readers[idx].append(k)
         live: set[int] = set()
         for k in reversed(range(len(nodes))):
-            if (nodes[k].fn.name == "TokenSelect" and pos[k] >= self.L - 1) or any(r in live for r in readers[k]):
+            if (fams[k] == "TokenSelect" and pos[k] >= self.L - 1) or any(r in live for r in readers[k]):
                 live.add(k)
         return frozenset(range(len(nodes))) - live
 
     def kind(self, j: int, node: Any) -> tuple[Any, ...]:
         """What node ``j`` allocates in this Program: Programs of one kind at a node sit side by side (`_Builder.among`)."""
-        family = node.fn.name
+        family = node_family(node.fn)
         if j in self.dead:
             return ("collect",) if family == "TokenSelect" else ("dead",)
         if family == "Embedding":
@@ -223,11 +225,12 @@ class _Program:
         embedding opens (`_token`); a dead node none, a dead select its position's collector alone (`_collect_alone`)."""
         if node.form != "call":
             raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
+        family = node_family(node.fn)
         if j in self.dead:
             self.b.label, self.b.node = (self.slot_index, self.position - 1), j
-            if node.fn.name == "TokenSelect":
+            if family == "TokenSelect":
                 self._collect_alone()
-            elif node.fn.name == "Attention":
+            elif family == "Attention":
                 T, KVH = node.fn.bindings["T"], node.fn.bindings["KVH"]
                 self._cache("k", node.args[1], T, KVH)
                 self._cache("v", node.args[2], T, KVH)
@@ -235,8 +238,7 @@ class _Program:
         ret = node.fn.signature()[1]
         fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
         self.words[j] = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
-        family = node.fn.name
-        lower = getattr(self, f"_{family}", None) if family in FAMILIES else None
+        lower = getattr(self, f"_{family}", None) if family is not None else None
         if lower is None:
             raise Unexpressible(f"{self.name}: node {j} is {node.fn.id}, a family the window's lowering "
                                 f"doesn't take ({sorted(FAMILIES)})")
@@ -696,3 +698,8 @@ class _Program:
 
 FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
             "TokenSelect")
+
+
+def node_family(fn: Any) -> str | None:
+    """``fn``'s family among `FAMILIES` by `steps.family`: the lowering takes a unit by its family's name."""
+    return unit_family(fn, FAMILIES, "the window lowers a unit by its family's name")

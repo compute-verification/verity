@@ -9,7 +9,8 @@ its members, and a member's registered read names its call's table; the circuit'
 
 Refused by name (`Unexpressible`): a class Program with an int8 linear or no linear but its LM heads, a position whose
 linears aren't the first position's, a linear whose y no rows of ``words`` doubled hand on in one unit, and a unit with a
-linear's name or its body but not both (`_linear`); and, by `steps.egress`, a select's name over another body.
+linear's, an int8 quant's or an embedding's name or its body but not both (`steps.family`); and, by `steps.egress`, a
+select's name over another body.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
-from .steps import egress, registered_body
+from .steps import egress, family
 from .window_builder import Row
 from .window_class import PearlTables, WindowClass
 
@@ -50,15 +51,8 @@ def _hands_on(N: int, W: int, rows: int) -> bool:
 
 
 def _linear(fn: Any) -> bool:
-    """Whether ``fn`` is a linear the cut takes: named `Gemm` with a registered `Gemm`'s body at its statics
-    (`steps.registered_body`). Either without the other is refused by name, since the lowering takes a linear by its name and
-    the cut holds its output to Pearl+'s product."""
-    named, body = getattr(fn, "name", None) == "Gemm", registered_body(fn, ("Gemm",))
-    if named != body:
-        raise Unexpressible(f"{fn.id}: " + ("a unit named as the linear Gemm whose body is no registered Gemm's at its statics"
-                                            if named else "a registered Gemm's body under another name") +
-                            " is refused: the cut would hold another unit's output to Pearl+'s product")
-    return named
+    """Whether ``fn`` is a linear the cut takes, a `Gemm` by `steps.family`."""
+    return family(fn, ("Gemm",), "the cut would hold another unit's output to Pearl+'s product") is not None
 
 
 def linears(fn: Any, words: int, rows: int) -> Linears:
@@ -67,13 +61,14 @@ def linears(fn: Any, words: int, rows: int) -> Linears:
     y row is read whole), so the layout is one whether or not the circuit is then proved. Refused where it has an int8
     linear, a position's linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
-    if (q := next((n for n in nodes if n.fn.name == "Int8RowQuant"), None)) is not None:
+    if (q := next((n for n in nodes if family(n.fn, ("Int8RowQuant",), "an int8 linear is known by its quant's name")),
+                  None)) is not None:
         raise Unexpressible(f"{q.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
     heads = frozenset(idx for n in nodes if egress(n.fn)
                       for space, idx, _lo, _hi in runs(n.args[0].refs) if space == "n")
     by: list[list[tuple[int, int]]] = []
     for j, n in enumerate(nodes):
-        if n.fn.name == "Embedding":
+        if family(n.fn, ("Embedding",), "a position begins at each embedding"):
             by.append([])
         elif _linear(n.fn) and j not in heads and by:
             by[-1].append((n.fn.bindings["K"], n.fn.bindings["N"]))
