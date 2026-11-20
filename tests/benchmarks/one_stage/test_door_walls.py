@@ -255,42 +255,109 @@ def _drawn(rng: random.Random) -> W.Spec:
 
 
 def _predicate(text: str) -> str | None:
-    """The door predicate's refusal in ``text``, from its prefix to the line's end; None where it holds."""
+    """The door predicate's refusal in ``text``, from its prefix (or not derived's, before its clauses) to the line's
+    end; None where it holds."""
     from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
-    i = text.find(OC.NOT_ADMITTED)
+    i = min((j for j in (text.find(OC.NOT_ADMITTED), text.find(OC.PREFIX)) if j >= 0), default=-1)
     return None if i < 0 else text[i:].splitlines()[0]
 
 
 def _clause(text: str) -> str | None:
     """The name of the door predicate's clause refusing in ``text``; None where it holds."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
     p = _predicate(text)
-    return None if p is None else p.split(", ", 1)[1].split(":")[0]
+    if p is None or p.startswith(OC.PREFIX):
+        return None if p is None else "not-derived"
+    return p.split(", ", 1)[1].split(":")[0]
+
+
+def _lean_descriptor(name: str) -> bytes:
+    """The descriptor `Spot/Admitted.lean` defines as ``name``, which its guards read."""
+    import re
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    text = (Path(OC.__file__).resolve().parents[1] / "lean" / "Spot" / "Admitted.lean").read_text()
+    m = re.search(r"^def " + name + r' : String := r#"(.*)"#$', text, re.M)
+    assert m, name
+    return m.group(1).encode()
+
+
+def _q(t: str) -> dict:
+    from verity.circuits import partition_object as PO
+    return PO.template_instance_query(t)
+
+
+#: C's that `Spot/Admitted.lean`'s guards read, each with its query, blocks and the clause both doors refuse it by:
+#: (what, descriptor, (old, new) replaced in it, the query's templates, the blocks, the clause or "holds")
+CONSTRUCTED = [
+    ("an input row of 3 bits", "E3", None, ("E_v1",), [(0, 1)], "whole-words"),
+    ("a return field of 1 bit", "F16", None, ("E_v1",), [(0, 1)], "whole-words"),
+    ("a parameter named as a field", "E3", ('[["x",', '[["o0",'), ("E_v1",), [(0, 1)], "port-names"),
+    ("a parameter's name holding ':'", "E3", ('[["x",', '[["x:1",'), ("E_v1",), [(0, 1)], "port-names"),
+    ("a word the lift keeps", "C32", None, ("C_v1",), [(0, 1)], "on-bits"),
+    ("a lift that refuses", "COL", None, ("T_v0",), [(0, 1)], "on-bits"),
+    ("a block of two templates", "AB16", None, ("A_v0", "B_v0"), [(0, 2)], "one-template"),
+    ("a unit reading another of its block", "AA16", None, ("A_v0",), [(0, 2)], "operands-outside"),
+    ("two words in and out", "E16", None, ("E_v1",), [(0, 1)], "holds"),
+]
+
+
+def _lean_restrict(lean: Path, tmp_path: Path, c: bytes, partition: dict, lo: int) -> subprocess.CompletedProcess:
+    (tmp_path / "C.json").write_bytes(c)
+    (tmp_path / "partition.json").write_text(json.dumps(partition, sort_keys=True, separators=(",", ":")))
+    return subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
+                           str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
 
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
-    """On drawn circuits and partitions (batches, stepped arguments, a member read twice), Lean's door
-    (`spot-one-stage-zk restrict`: `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's
-    (`admitted_block` from `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text."""
+    """On drawn circuits and partitions (batches, stepped arguments, a member read twice), and on the C's of
+    `Spot/Admitted.lean`'s guards (`CONSTRUCTED`), Lean's door (`spot-one-stage-zk restrict`: `admitted` on C_S, then
+    `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's (`admitted` and `admitted_block` from
+    `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text, and between them every clause
+    a decoded C can reach refuses."""
+    from verity.circuits import partition_object as PO
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
     W._catalog()
     exe, lean = _stub(tmp_path), PF.v2_executable()
     seen: dict[str, int] = {}
+    cases = []
     for seed in range(40):
         s = _drawn(random.Random(seed))
         c, q, _fns = W.realise(s)
-        door = W.Door(c, q, [tuple(b) for b in s.blocks], lambda: exe)
-        (tmp_path / "C.json").write_bytes(c)
-        (tmp_path / "partition.json").write_text(json.dumps(door.partition, sort_keys=True, separators=(",", ":")))
-        for k, (lo, hi) in enumerate(s.blocks):
+        cases.append((seed, c, q, [tuple(b) for b in s.blocks], s.doc(), None))
+    for what, name, swap, ts, blocks, clause in CONSTRUCTED:
+        c = _lean_descriptor(name)
+        c = c.replace(*(x.encode() for x in swap)) if swap else c
+        q = _q(ts[0]) if len(ts) == 1 else PO.template_instances_query(list(ts))
+        cases.append((what, c, q, blocks, None, clause))
+    for case, c, q, blocks, doc, want in cases:
+        door = W.Door(c, q, blocks, lambda: exe)
+        for k, (lo, hi) in enumerate(blocks):
             py = _predicate(door.run(k, lo, hi).text)
-            run = subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
-                                  str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
-            assert _predicate(run.stderr) == py, (seed, k, s.doc(), run.stderr[-600:], py)
-            clause = _clause(py or "") or "holds"
-            seen[clause] = seen.get(clause, 0) + 1
-    assert seen.get("holds") and seen.get("operands-outside"), seen
+            run = _lean_restrict(lean, tmp_path, c, door.partition, lo)
+            assert _predicate(run.stderr) == py, (case, k, doc, run.stderr[-600:], py)
+            got = _clause(py or "") or "holds"
+            assert want in (None, got), (case, py)
+            seen[got] = seen.get(got, 0) + 1
+    assert set(seen) == {"holds", "operands-outside", "whole-words", "port-names", "on-bits", "one-template"}, seen
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("query", [_q("F_v1"), {"name": "Q_all"}], ids=["listing another template", "no template query"])
+def test_a_partition_whose_query_does_not_name_cs_template_is_refused_by_both_doors(tmp_path, query):
+    """The partition object of E3's unit 0 with its query swapped: Python's door refuses it at its block, before C_S, and
+    Lean's refuses it too; `listed` and not derived are held clause by clause in `test_door_form`."""
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    c = _lean_descriptor("E3")
+    door = W.Door(c, _q("E_v1"), [(0, 1)], lambda: _stub(tmp_path))
+    door.partition = door.partition | {"query": query}
+    r = door.run(0, 0, 1)
+    run = _lean_restrict(PF.v2_executable(), tmp_path, c, door.partition, 0)
+    assert r.step == "block", (r.step, r.text)
+    assert run.returncode == 1 and run.stderr.startswith("restrict: "), run.stderr[-600:]
 
 
 @pytest.mark.slow

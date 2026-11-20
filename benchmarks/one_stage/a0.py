@@ -45,7 +45,7 @@ from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 from verity.protocols.proofs.spot.verifier.one_stage.lean_child import LEAN_PANIC, panic_line, refuse_panic
-from verity.protocols.proofs.spot.verifier.one_stage.settings import lean_env
+from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC, lean_env
 
 import r2_population as R2
 
@@ -307,9 +307,10 @@ def lean_sample_test(lean: str, cases: list[dict], out: Path, name: str) -> list
 
 def zk_server_env(st: dict) -> dict:
     """What a zk_served prover (`FC_ZK_SERVER=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
-    `lean_verify` verifies under, and the statement's partition and program."""
+    `lean_verify` verifies under, and the statement's partition and program; and `ABORT_ON_PANIC` for the Lean server."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
-    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args)}
+    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args),
+            ABORT_ON_PANIC: "1"}
 
 
 #: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
