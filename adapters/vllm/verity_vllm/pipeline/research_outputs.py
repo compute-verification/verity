@@ -87,8 +87,8 @@ PRIVATE_NAMES = private_names.LIST
 #: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values; nor the files
 #: PRIVATE names, wherever they sit: request values, where each rank ran and when each process ran
 KEPT_APART, PRIVATE = private_names.load()
-#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
-#: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
+#: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node:
+#: unsalted, so kept apart from `runs.jsonl`
 TOKENS_DIGESTS = "tokens_digests.jsonl"
 #: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
 TENSOR_DIGESTS = "tensor_digests_pair*.json"
