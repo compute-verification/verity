@@ -1,0 +1,3 @@
+[2026-11-20T17:16Z] 6975344eb8ef
+PORTS's branch origin/cursor/proofs-roots-record-5e1b moved, commits added only: head 930aefc559e: it now holds (a) the merge of JOIN's HmLinks mend (2865c6dd83a, clean), (b) soundness's docstring sentence on portsHeld_threeCases (ef6698ced2b; builds, 46 theorems), (c) steps 3 and 5 of the characterizing theorem in RootsRecord.lean (24 theorems, r20261120-171452-440d, standard axioms). Merge THAT head into the landing branch (it supersedes 1ef687b817b and brings the HmLinks mend with a proof already built against it), and try PortsHeld.lean and RootsRecord.lean by name on the landing head. Tell me the landing head and its job's id and state as soon as you have them, even mid-work: the honest run's arm is due about now.
+
