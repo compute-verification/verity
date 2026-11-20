@@ -40,14 +40,14 @@ def _run(d, rows: list[list[list[int]]]) -> list[int]:
 
 def test_the_rows_at_the_deployed_scheme() -> None:
     """The deployed signature's unit reads the 80-byte key, the 64-byte message and the 34,756-byte signature, and the
-    round's unit a 2,056-byte row as 1,028 words, a records row of two 92-byte records and the 12 bytes u32 j || u64 i;
+    round's unit a 2,056-byte row as 1,028 words, its opening's verdict word, a records row of two 92-byte records and the 12 bytes u32 j || u64 i;
     each outputs one bit."""
     p = R.DEPLOYED
     params, ret = resolve(bind(S.PousSessionSig, N=p.N, W=p.W, H=p.H)).signature()
     assert [(n, t.leaves) for n, t in params] == [("key", 640), ("m", 512), ("sig", 8 * p.signature_bytes())]
     assert ret.leaves == 1
     params, ret = resolve(bind(S.PousRound, N=2056, SLOT=1)).signature()
-    assert [(n, t.leaves, t.leaf_widths()[0]) for n, t in params] == [("row", 1028, 16), ("records", 1472, 1),
+    assert [(n, t.leaves, t.leaf_widths()[0]) for n, t in params] == [("row", 1028, 16), ("ok", 1, 16), ("records", 1472, 1),
                                                                         ("j", 1, 32), ("ihi", 1, 32),
                                                                         ("ilo", 1, 32)]
     assert ret.leaves == 1
@@ -84,11 +84,12 @@ def _rand(n: int) -> bytes:
 def test_the_round_unit_agrees_with_its_reference(slot) -> None:
     """About 9 s at the first slot (the row digest's ends traced over a 136-byte row: a head and a tail with its rest).
     Round j's record at slot j mod 2 of its row, holding the row's digest, gives 1; another row, the other record of the
-    pair at the unit's slot, a flipped bit of the record's digest, the wrong round and the wrong index each give 0. The
-    row is read as its words, each two bytes little-endian."""
+    pair at the unit's slot, a flipped bit of the record's digest, the wrong round and the wrong index each give 0; so do
+    an opening's verdict word of 0 (a key past the store or a row that doesn't open) and an index past 2^32, its ihi
+    half nonzero, though the record holds it. The row is read as its words, each two bytes little-endian."""
     N = 136
     row, other = _rand(N), _rand(N)
-    j, i = 2 * 5 + slot, 0x0123_4567_89AB
+    j, i = 2 * 5 + slot, 0x89AB_CDEF
     mine = Round(j, i, 10, 20, sha512_row_v2_digest(row, 8 * N)).value()
     pair = Round(j ^ 1, 77, 11, 21, sha512_row_v2_digest(other, 8 * N)).value()
     recs = mine + pair if slot == 0 else pair + mine
@@ -97,14 +98,17 @@ def test_the_round_unit_agrees_with_its_reference(slot) -> None:
         return j.to_bytes(4, "big") + i.to_bytes(8, "big")
 
     ji = coin(j, i)
-    cases = [(row, recs, ji), (other, recs, ji), (row, swapped, ji),
-             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), ji), (row, recs, coin(j ^ 1, i)),
-             (row, recs, coin(j, i ^ 1 << 40)), (row, recs, coin(j, i ^ 1 << 3))]
+    wide = Round(j, i | 1 << 40, 10, 20, sha512_row_v2_digest(row, 8 * N)).value()
+    cases = [(row, recs, ji, 1), (other, recs, ji, 1), (row, swapped, ji, 1),
+             (row, _flip(recs, S.RECORD_BYTES * slot + 60, 2), ji, 1), (row, recs, coin(j ^ 1, i), 1),
+             (row, recs, coin(j, i ^ 1 << 40), 1), (row, recs, coin(j, i ^ 1 << 3), 1), (row, recs, ji, 0),
+             (row, recs, ji, 1 << 8), (row, wide + pair if slot == 0 else pair + wide, coin(j, i | 1 << 40), 1)]
     want = [S.round_ok(N, slot, *c) for c in cases]
-    assert want == [1, 0, 0, 0, 0, 0, 0]
-    halves = [[int.from_bytes(x[h:h + 4], "big") for h in (0, 4, 8)] for _, _, x in cases]
-    cols = [np.array([np.frombuffer(r, dtype="<u2") for r, _, _ in cases], dtype=np.uint16),
-            np.array([_bits(rs) for _, rs, _ in cases], dtype=np.uint8),
+    assert want == [1] + [0] * 9
+    halves = [[int.from_bytes(x[h:h + 4], "big") for h in (0, 4, 8)] for _, _, x, _ in cases]
+    cols = [np.array([np.frombuffer(r, dtype="<u2") for r, _, _, _ in cases], dtype=np.uint16),
+            np.array([ok for *_, ok in cases], dtype=np.uint16),
+            np.array([_bits(rs) for _, rs, _, _ in cases], dtype=np.uint8),
             *(np.array([hs[h] for hs in halves], dtype=np.uint32) for h in range(3))]
     assert np.asarray(E.evaluate_batch(bind(S.PousRound, N=N, SLOT=slot), *cols)).reshape(-1).tolist() == want
 
@@ -176,9 +180,12 @@ def test_the_door_takes_the_sessions_units_in_wire_order() -> None:
     from verity.protocols.resource_accounting.memory.pous.prover import window as W
 
     c = W.session_units(3, 8, 1000, 264, 2, R.Params(R.TOY_N, 1, 1, toy=True))
-    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v1", "PousSessionSig_v1", "EmbeddingRead_v2",
+    assert [t.split("{")[0] for t in c.ids] == ["PousSessionDigest_v1", "PousSessionSig_v1", "EmbeddingRead_v3",
                                                 "PousRound_v2", "PousRound_v2"]
     assert list(c.units.values()) == [1, 1, 3, 2, 1]
+    o = c.ids[2]
+    assert sorted((w.radix, w.base, w.step) for w in c.wires if (w.port, w.writer, w.out) == ("ok", o, "o1")) == [
+        ((1,), 1, (2,)), ((2,), 0, (2,))]
     reads = {(r.port, r.param): (r.at, r.base) for r in c.registered.reads}
     assert [reads[("tok", f"{W.ROUND_COIN}/{j}")] for j in range(3)] == [(0, 4), (1, 4), (2, 4)]
     assert [reads[(h, f"{W.ROUND_COIN}/2")] for h in ("j", "ihi", "ilo")] == [(1, 0), (1, 2), (1, 4)]

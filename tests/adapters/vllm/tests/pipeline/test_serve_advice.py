@@ -231,9 +231,9 @@ def test_each_commit_windows_advice_is_committed_and_compiles_to_the_steps_it_se
             assert len(reqs[engine_of[u.id]]["streamed_ids"]) == body["max_tokens"]
 
 
-def test_a_windows_advice_names_its_commit_from_its_seal_while_its_line_waits_for_its_h1_release(tmp_path):
-    """Under ``--h1-window-commit`` a window's windows.jsonl line waits for its PoUW H1 release, which reads its advice
-    (`serve_tie`), and its seal's line comes first: its registration names its Commit from seals.jsonl."""
+def test_a_windows_advice_names_its_commit_from_its_seal_before_its_line_is_written(tmp_path):
+    """A window whose seal's line is written before its windows.jsonl line: its registration names its Commit from
+    seals.jsonl."""
     out = _served(tmp_path)
     wins = [w for w in records(out, "windows.jsonl") if not w.get("empty")]
     held = wins[-1]
