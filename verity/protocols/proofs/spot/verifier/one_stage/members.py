@@ -404,8 +404,8 @@ def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Progra
     tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
     try:
         reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
-    except P.QueryRefused:
-        return
+    except P.QueryRefused as e:
+        raise _Refused(f"held reads: {e}") from e
     for name, m in ms.items():
         if m.get("registered") is None:
             for units, i in reads:

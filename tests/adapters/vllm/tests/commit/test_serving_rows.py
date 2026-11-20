@@ -145,13 +145,16 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     # the verifier's own copies: its window over its program, the run root of record, and the public bodies it holds
     mine = window(9, 4)
     publics = {m.template: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    v = R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics),
+                partition=mine.partition)
     assert v.ok, v.detail
     other = window(9, 4, "cd" * 32)
-    v = R.check(rec, other.program, other.query, DESIGN, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, other.program, other.query, DESIGN, SR.SCHEME, SR.expected_ports(other), leaf_layer=SR.leaf_layer(publics),
+                partition=other.partition)
     assert not v.ok and "R3-domain" in v.codes
     flipped = dict(publics, **{TEMPLATES[1]: publics[TEMPLATES[1]][:-1] + bytes([publics[TEMPLATES[1]][-1] ^ 1])})
-    assert R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped)).codes == ("R4-leaf-layer",)
+    assert R.check(rec, mine.program, mine.query, DESIGN, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(flipped),
+                   partition=mine.partition).codes == ("R4-leaf-layer",)
     fewer = window(9, 3)
     assert "R2-population" in R.check(rec, fewer.program, fewer.query, DESIGN, SR.SCHEME, SR.expected_ports(fewer),
                                       leaf_layer=SR.leaf_layer(publics)).codes
@@ -329,7 +332,8 @@ def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_templat
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _ = s8_window([(0, 3), (3, 2)])
     publics = {m.name: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(ms)}
-    v = R.check(rec, mine.program, mine.query, mine.law, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, mine.law, SR.SCHEME, SR.expected_ports(mine), leaf_layer=SR.leaf_layer(publics),
+                partition=mine.partition)
     assert v.ok, v.detail
     meta = {"scheme": SR.SCHEME, "ports": [["x", 34, 1], ["w", 34, 1], ["o0", 1, 1]], "input_ports": 2, "out_ports": [["o0", 1]],
             "row_schemas": [[SEG, 544], [V2, 544], [V2, 16]], "vus_per_block": 1, "units_per_vu": 1, "subcircuit": "s8/k64", "unit": "s8/k64"}

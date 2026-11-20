@@ -301,7 +301,7 @@ DUMP_N = 128
 
 def dump_replay(path: Path, x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
                 y: torch.Tensor) -> None:
-    """The fused outputs as words for replay.py: x (bf16), xq, s_a, W's and s_w's first DUMP_N rows, and y's first DUMP_N
+    """The fused outputs as words: x (bf16), xq, s_a, W's and s_w's first DUMP_N rows, and y's first DUMP_N
     columns."""
     import numpy as np
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -452,7 +452,7 @@ def main() -> int:
     ap.add_argument("--shapes", default="all")
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(MODELS)}")
     ap.add_argument("--no-stock", action="store_true")
-    ap.add_argument("--dump", action="store_true", help="OUT/replay/*.npz, the M <= 32 outputs replay.py checks")
+    ap.add_argument("--dump", action="store_true", help="OUT/replay/*.npz, the M <= 32 outputs")
     ap.add_argument("--zy", action="store_true", help="also check the served zy op body (int8_fused.product_zy)")
     a = ap.parse_args()
     out = Path(a.out)
