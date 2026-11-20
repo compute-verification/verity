@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.RecGeneric.AtFlockReruns
-public import Proofs.Flock.Claims.Recursion.HresAsm
+public import Proofs.Flock.Recursive.KSDeployed
+public import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # L1 at Flock: the compiler's contract at the deployment's dense statements
