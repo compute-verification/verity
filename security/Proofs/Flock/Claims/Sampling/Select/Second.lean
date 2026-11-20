@@ -157,6 +157,7 @@ theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (
   dsimp only at h
   split at h
   all_goals try (rename_i hs; exact absurd hs (by decide))
+  all_goals try (exact absurd h (throw_ne _ _))
   · split at h
     · exact absurd h (throw_bind_ne _ _ _)
     rw [getD_secondSamplingDesign_k, getD_secondSamplingDesign_strata, nat_toJson] at h

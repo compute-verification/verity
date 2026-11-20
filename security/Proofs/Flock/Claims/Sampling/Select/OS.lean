@@ -193,7 +193,8 @@ theorem flockSamplingDesign_subset (samplingDesign : Json) (n k : ℕ) (h : Draw
       | exact absurd h (throw_ne _ _)
       | exact absurd (Except.ok.inj h) (by split <;> simp)
       | exact absurd (Except.ok.inj h) (by simp)
-      | split at h)
+      | split at h
+      | (obtain ⟨_, -, h⟩ := bind_eq_ok.1 h))
   next => exact absurd h (throw_ne _ _)
 
 /-- `deriveSamplingDesign` expands no sampling design of kind `subset`. -/
