@@ -673,6 +673,9 @@ theorem segSlice_pos (s : Seg) (hlen : (posAll (s.copy 0)).length = s.len) (a b 
 /-- A segment whose copies name `len` positions each. -/
 def SegOk (s : Seg) : Prop := (posAll (s.copy 0)).length = s.len
 
+theorem segOk_flat {s : Seg} (h : s.lanes = false) : SegOk s ↔ (posAll s.ps).length = s.len := by
+  unfold SegOk; rw [copy_flat s h, shiftGates_length]
+
 theorem segPos_length (s : Seg) (h : SegOk s) : (segPos s).length = s.count := by
   unfold segPos Seg.count
   exact flatMap_range_length _ s.len (fun m => by rw [copy_length]; exact h) s.reps

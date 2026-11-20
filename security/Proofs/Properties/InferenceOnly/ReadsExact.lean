@@ -3119,22 +3119,6 @@ theorem agree_shift (P : Prog) {sc sc' : Flock.Program.Scope} {o : Int} (ho : 0 
     omega
 
 
-theorem shiftGates_tgt {δ : Int} {ps : Array Piece} {q : Piece} (h : q ∈ (Desc.shiftGates δ ps).toList) :
-    ∃ g ∈ ps.toList, q.tgt = g.tgt := by
-  unfold Desc.shiftGates at h
-  rw [Array.toList_map, List.mem_map] at h
-  obtain ⟨g, hg, rfl⟩ := h
-  refine ⟨g, hg, ?_⟩
-  split <;> rfl
-
-theorem copy_tgt {s : Seg} {m : Nat} {q : Piece} (h : q ∈ (s.copy m).toList) : ∃ g ∈ s.ps.toList, q.tgt = g.tgt := by
-  unfold Desc.Seg.copy at h
-  split at h
-  · rw [Array.toList_map, List.mem_map] at h
-    obtain ⟨g, hg, rfl⟩ := h
-    exact ⟨g, hg, rfl⟩
-  · exact shiftGates_tgt h
-
 theorem rowsFrom_tgt (q : Piece) (lo n : Nat) : (q.rowsFrom lo n).tgt = q.tgt := (rowsFrom_spec q lo n).1
 
 /-- A segment of `Seg.slice` has a copy at least, and more than one only as copies of pieces of `s`'s targets, `s` of
@@ -3370,13 +3354,12 @@ theorem gates_of_all {ps : Array Piece} (h : (ps.all fun g => match g.tgt with
 
 theorem pos_rebase (q : Piece) {w : Nat} (hw : q.tgt = .gate w) (δ : Int) :
     pos { q with base := δ + q.base } = (pos q).map (shiftPos δ) := by
-  have e := pos_shiftGate δ q
-  have hm : (match q.tgt with
-      | .gate _ => { q with base := q.base + δ }
-      | _ => q) = { q with base := q.base + δ } := by rw [hw]
-  rw [hm] at e
-  rw [Int.add_comm δ q.base]
-  exact e
+  rcases q with ⟨t, base, stride, len, rows, rowStride, lv, start⟩
+  cases hw
+  simp only [pos, List.map_flatMap, List.map_map, Desc.Piece.rowOff]
+  congr 1; funext r; congr 1; funext t
+  simp only [Function.comp, shiftPos]
+  congr 1; omega
 
 /-- A segment of copies all alike names its pieces' positions once per copy. -/
 theorem segPos_alike {s : Seg} (h : s.shift = 0) (hw : s.lanes = false) :
@@ -4908,7 +4891,7 @@ theorem copies_seg_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
   obtain ⟨hok, hnn, -, hag, -⟩ := hR
   have hflat := psPos_flat _ hok (fun x hx => (hgo x hx).1)
   unfold segPos
-  simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos]
+  simp only [copy_pos, Desc.Seg.lanes, Bool.false_and, shiftGates_pos, List.map_map, shiftPos_shiftPos]
   rw [range'_blocks, List.map_flatMap]
   apply agree_flatMap
   intro u hu
@@ -5136,7 +5119,7 @@ theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
   apply agree_flatMap
   intro u hu
   rw [List.mem_range] at hu
-  simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos]
+  simp only [copy_pos, Desc.Seg.lanes, Bool.false_and, shiftGates_pos, List.map_map, shiftPos_shiftPos]
   have hB : (q.base.toNat : Int) = q.base := Int.toNat_of_nonneg hb
   have hBdec : q.base.toNat = m0 * L + j := by rw [← hmd, ← hjd]; exact (Nat.div_add_mod' _ _).symm
   have hat : q.at u = ((m0 : Int) + u * d) * L + j := by
@@ -5212,23 +5195,6 @@ theorem throughArg_shared (c : Desc.Ctx) (fuel : Nat) {k i : Nat} {node : Flock.
     rw [Desc.throughArg.eq_2, Desc.throughArg.eq_2, hn]
     simp only [bind, Except.bind, ha, hf, memberSpans_of_none hda]
 
-theorem forIn_congr_mem {β σ : Type} (l : List β) {f g : β → σ → Except String (ForInStep σ)}
-    (h : ∀ x ∈ l, f x = g x) (init : σ) : forIn l init f = forIn l init g := by
-  induction l generalizing init with
-  | nil => rfl
-  | cons x l ih =>
-    rw [List.forIn_cons, List.forIn_cons, h x List.mem_cons_self]
-    congr 1
-    funext r
-    cases r with
-    | done => rfl
-    | yield b => exact ih (fun y hy => h y (List.mem_cons_of_mem _ hy)) b
-
-theorem forIn_congr_arr {β σ : Type} (l : Array β) {f g : β → σ → Except String (ForInStep σ)}
-    (h : ∀ x ∈ l.toList, f x = g x) (init : σ) : forIn l init f = forIn l init g := by
-  rw [← Array.forIn_toList, ← Array.forIn_toList]
-  exact forIn_congr_mem _ h init
-
 theorem shiftGates_refs {δ : Int} {ps : Array Piece} (h : ∀ g ∈ ps.toList, ∃ i, g.tgt = .ref true i) :
     Desc.shiftGates δ ps = ps := by
   unfold Desc.shiftGates
@@ -5260,6 +5226,15 @@ theorem fromCallee_shared (c : Desc.Ctx) (fuel : Nat) {k : Nat} {node : Flock.Pr
       (∀ g ∈ s.ps.toList, F g = G g) → forIn s.ps init F = forIn s.ps init G :=
     fun h => forIn_congr_arr _ h _
   simp only [shiftGates_refs hsr]
+  by_cases hl : s.lanes = true
+  · simp only [hl, ↓reduceIte]
+    congr 1
+    apply segDown_congr
+    intro g ⟨g0, hg0, hgg⟩
+    obtain ⟨i, hgt, hi⟩ := hsh s hs g0 hg0
+    simp only [hgg, hgt]
+    rw [throughArg_shared c fuel hn hf hi m m' g]
+  simp only [hl, Bool.false_eq_true, ↓reduceIte]
   by_cases hr : s.reps > 1
   · simp only [hr, ↓reduceIte]
     split
@@ -5600,8 +5575,8 @@ def BatchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) : Pro
     g.tgt = .ref true i → (node.args[i]?.bind (·.dims)) = some (d, Li) →
     (Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li &&
       g.lv.isEmpty) = true →
-    Desc.throughPS (c.arg k i) ({ tgt := .gate 0, base := (((lo / Li * d + m0) * Li + (lo - lo / Li * Li) : Nat) : Int),
-      stride := 1, len := L, rows := m1 - m0, rowStride := (Li : Int) } : Piece) = some bp →
+    Desc.throughPS (c.arg k i) (Desc.Piece.mk (.gate 0) (((lo / Li * d + m0) * Li + (lo - lo / Li * Li) : Nat) : Int)
+      1 L (m1 - m0) (Li : Int) [] 0) = some bp →
     Desc.down c fuel bp = .ok segs →
     Agree c.P sc (segsPos segs) ((List.range' (m0 * L) ((m1 - m0) * L)).map fun j =>
       Flock.Program.resolve c.P (c.P.child sc k (j / L)) ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % L)))
@@ -5649,7 +5624,7 @@ theorem throughPS_some {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some 
   have hb := (Option.some.inj h.2).symm
   clear h
   simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, not_lt, Bool.not_eq_true, Bool.not_eq_eq_eq_not,
-    Bool.not_false, List.isEmpty_iff] at hc
+    Bool.not_true, Bool.not_eq_false, List.isEmpty_iff] at hc
   exact ⟨_, pa, rfl, rfl, hc.1.1.1.1, lanes_of_reps (s := ⟨#[pa], len, reps, shift, rowed⟩) hc.1.1.1.1, hc.1.1.1.2,
     hc.1.1.2, hb⟩
 
@@ -6032,7 +6007,7 @@ theorem pieceSlice_count (q : Piece) (x y : Nat) (hy : y ≤ q.count) : ∀ p �
     · rw [ite_eq_left hlo] at hp
       simp only [List.mem_singleton] at hp
       subst hp
-      simp only [Desc.Piece.count]
+      simp only [Desc.Piece.count, (rowsFrom_spec q _ _).2.2.1, (rowsFrom_spec q _ _).2.2.2.1]
       exact Nat.mul_pos (by omega) hl
     · rw [ite_eq_right hlo] at hp
       simp at hp
@@ -6068,9 +6043,27 @@ theorem shiftGates_count (δ : Int) (ps : Array Piece) (h : ∀ q ∈ ps.toList,
   have := h q hq
   split <;> exact this
 
-theorem segOk_mid (s : Seg) (hs : SegOk s) (lo n : Nat) : SegOk { s with ps := s.copy lo, reps := n } := by
+theorem segOk_mid (s : Seg) (hs : SegOk s) (lo n : Nat) : SegOk { s with ps := s.copy lo, reps := n, rowed := false } := by
   unfold SegOk at hs ⊢
-  rw [copy_length]; exact hs
+  rw [copy_flat _ rfl, shiftGates_length, copy_length]; exact hs
+
+theorem segOk_rows (s : Seg) (hs : SegOk s) (hl : s.lanes = true) (lo n : Nat) (hn : 1 < n) :
+    SegOk { s with ps := s.ps.map (·.rowsFrom lo n), reps := n } := by
+  unfold SegOk at hs ⊢
+  have hl' : ({ s with ps := s.ps.map (·.rowsFrom lo n), reps := n } : Seg).lanes = true := by
+    simp only [Desc.Seg.lanes, Bool.and_eq_true, decide_eq_true_eq] at hl ⊢; exact ⟨hl.1, hn⟩
+  rw [copy_rowed _ hl', ← hs, copy_rowed s hl, posAll_map, posAll_map]
+  simp only [Array.toList_map, List.flatMap_map, List.length_flatMap, pos_row, List.length_map, List.length_range,
+    (rowsFrom_spec _ _ _).2.2.1]
+
+theorem copy_count_pos (s : Seg) (hp : ∀ q ∈ s.ps.toList, 0 < q.count) (m : Nat) :
+    ∀ q ∈ (s.copy m).toList, 0 < q.count := by
+  intro q hq
+  obtain ⟨p, hp', h | h⟩ := copy_count s m q hq
+  · rw [h]; exact hp p hp'
+  · have := hp p hp'
+    simp only [Desc.Piece.count] at this
+    rw [h]; exact Nat.pos_of_ne_zero (fun h0 => by simp [h0] at this)
 
 /-- A segment `Seg.slice` gives of one naming its `len` positions, its pieces of positive count, does too. -/
 theorem segSlice_ok (s : Seg) (hs : SegOk s) (hp : ∀ q ∈ s.ps.toList, 0 < q.count) (a b : Nat) :
@@ -6099,9 +6092,20 @@ theorem segSlice_ok (s : Seg) (hs : SegOk s) (hp : ∀ q ∈ s.ps.toList, 0 < q.
     · exact hone _ (slicePieces_count _ _ _) hg
   · generalize (if (a % s.len == 0) = true then a / s.len else a / s.len + 1) = lo at hg
     split at hg
-    · simp only [List.mem_singleton] at hg
-      subst hg
-      exact ⟨segOk_mid s hs lo _, shiftGates_count _ _ hp⟩
+    · split at hg
+      · rename_i hlr
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hlr
+        simp only [List.mem_singleton] at hg
+        subst hg
+        refine ⟨segOk_rows s hs hlr.1 lo _ (by omega), fun q hq => ?_⟩
+        simp only [Array.toList_map, List.mem_map] at hq
+        obtain ⟨p, hp', rfl⟩ := hq
+        have := hp p hp'
+        simp only [Desc.Piece.count, (rowsFrom_spec p _ _).2.2.1, (rowsFrom_spec p _ _).2.2.2.1] at this ⊢
+        exact Nat.mul_pos (by omega) (Nat.pos_of_ne_zero (fun h0 => by simp [h0] at this))
+      · simp only [List.mem_singleton] at hg
+        subst hg
+        exact ⟨segOk_mid s hs lo _, copy_count_pos s hp lo⟩
     · simp at hg
   · exact hone _ (slicePieces_count _ _ _) hg
 
@@ -6116,7 +6120,10 @@ theorem psSlice_ok (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q �
     · refine ⟨(hr.1 i h).1, hp _ ?_⟩
       rw [getElem!_pos r.segs i h]; exact Array.getElem_mem_toList h
     · rw [getElem!_neg r.segs i h]
-      exact ⟨rfl, fun q hq => by rw [show (default : Seg).ps = #[] from rfl] at hq; simp at hq⟩
+      refine ⟨?_, fun q hq => by rw [show (default : Seg).ps = #[] from rfl] at hq; simp at hq⟩
+      unfold SegOk
+      rw [copy_flat _ rfl, show (default : Seg).ps = #[] from rfl, show (default : Seg).len = 0 from rfl]
+      simp [Desc.shiftGates, posAll]
   obtain ⟨h1, h2⟩ := segSlice_ok _ hsi.1 hsi.2 a' b' g hi
   exact ⟨h1, (segSlice_reps _ a' b' g hi).1, h2⟩
 
@@ -6128,13 +6135,14 @@ theorem retAt_pos (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q �
   · rw [hs] at h; cases h
   rw [hs] at h
   change s.ps[0]?.map (·.row 0) = some q at h
-  obtain ⟨p, h, rfl⟩ := Option.map_eq_some_iff.1 h
+  obtain ⟨p, hp0, hpq⟩ := Option.map_eq_some_iff.1 h
+  subst hpq
   have hsm : s ∈ (r.slice j (j + 1)).toList := by
     obtain ⟨h0, e⟩ := Array.getElem?_eq_some_iff.1 hs
     rw [← e]; exact Array.getElem_mem_toList h0
   obtain ⟨-, hrep, hpos⟩ := psSlice_ok r hr hp j (j + 1) s hsm
-  have hq := first_mem_segPos (by omega) h (hpos p (by
-    obtain ⟨h0, e⟩ := Array.getElem?_eq_some_iff.1 h
+  have hq := first_mem_segPos (by omega) hp0 (hpos p (by
+    obtain ⟨h0, e⟩ := Array.getElem?_eq_some_iff.1 hp0
     rw [← e]; exact Array.getElem_mem_toList h0))
   have hmem : ((p.row 0).tgt, (p.row 0).base) ∈ sl (psPos r) j (j + 1) := by
     rw [← psSlice_pos r hr]
@@ -6402,7 +6410,7 @@ theorem init_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) {fuel k : Nat} {nod
 
 /-- `carryRuns`' step over a piece of a segment of one copy. -/
 def runStep (st : Array (Nat × Nat × Bool) × Nat) (q : Piece) : Array (Nat × Nat × Bool) × Nat :=
-  (st.1.push (st.2, st.2 + q.count, q.tgt == Tgt.ref true 0 && decide (q.rows ≤ 1) && q.base == (st.2 : Int) &&
+  (st.1.push (st.2, st.2 + q.count, q.tgt == Tgt.ref true 0 && decide (q.rows ≤ 1) && q.lv.isEmpty && q.base == (st.2 : Int) &&
     (q.stride == 1 || decide (q.len ≤ 1))), st.2 + q.count)
 
 /-- `carryRuns`' step over a segment. -/
@@ -6453,8 +6461,8 @@ theorem runs_pieces (L : List (Tgt × Int)) (a : Nat) : ∀ (qs : List Piece) (s
       dsimp only
       rw [Array.toList_push]
       refine runsOk_push h q.count _ fun hid j hj1 hj2 => ?_
-      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hid
-      obtain ⟨⟨⟨ht, hrows⟩, hbase⟩, hst⟩ := hid
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true, List.isEmpty_iff] at hid
+      obtain ⟨⟨⟨⟨ht, hrows⟩, hlv⟩, hbase⟩, hst⟩ := hid
       have ht := tgt_eq_of_beq ht
       have hx := hL (j - st.2) (q.tgt, ppt q (j - st.2)) (by
         rw [List.flatMap_cons, List.getElem?_append_left (by rw [pos_length]; omega), pos_getElem?,
@@ -6471,7 +6479,7 @@ theorem runs_pieces (L : List (Tgt × Int)) (a : Nat) : ∀ (qs : List Piece) (s
       rw [hx, ht]
       simp only [Option.some.injEq, Prod.mk.injEq, true_and]
       unfold ppt
-      rw [Nat.div_eq_of_lt hlt, Nat.mod_eq_of_lt hlt, hbase]
+      rw [Nat.div_eq_of_lt hlt, Nat.mod_eq_of_lt hlt, hbase, rowOff_flat q hlv]
       rcases hst with hs | hs
       · rw [hs]; push_cast; omega
       · have : j - st.2 = 0 := by omega
@@ -6867,7 +6875,7 @@ theorem downShape_prim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q
       unfold pos at hx
       simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
       obtain ⟨r, -, t, -, rfl⟩ := hx
-      simp
+      simp [Desc.Piece.rowOff]
 
 /-- A batch of a primitive's piece is its members' gates, at the piece's positions past the node's first gate. -/
 theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (ht : q.tgt = .ref false k)
@@ -6892,11 +6900,12 @@ theorem downShape_batchPrim (c : Desc.Ctx) (fuel : Nat) (q : Piece) {k : Nat} (h
     unfold pos at hx
     simp only [List.mem_flatMap, List.mem_map, List.mem_range] at hx
     obtain ⟨r, hr, t, htl, rfl⟩ := hx
-    have hy := hq (q.tgt, q.base + (r : Int) * q.rowStride + (t : Int) * q.stride) (by
+    have hy := hq (q.tgt, q.base + q.rowOff r + (t : Int) * q.stride) (by
       unfold pos
       simp only [List.mem_flatMap, List.mem_map, List.mem_range]
       exact ⟨r, hr, t, htl, rfl⟩)
     have ho : (0 : Int) ≤ (c.body.offsets[k]! : Int) := Int.natCast_nonneg _
+    unfold Desc.Piece.rowOff at hy ⊢
     simp only at hy ⊢
     linarith
 
@@ -7406,7 +7415,7 @@ theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
       simp only [List.mem_singleton] at hs'
       subst hs'
       refine ⟨?_, fun x hxm => ?_, fun g hg => shiftGates_count _ _ hsg g hg, hrep1⟩
-      · show (posAll (Desc.shiftGates _ s.ps)).length = s.len
+      · refine (segOk_flat hnr).2 ?_; dsimp only
         rw [shiftGates_pos, List.length_map]
         exact (hsok s hs).1
       · rw [segPos_shift _ hnr] at hxm
@@ -7514,7 +7523,7 @@ theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
         · omega
       have hpa := posAll_flatMap_ps one h1
       refine ⟨?_, fun x hx' => ?_, fun g hg => ?_, hrep1⟩
-      · show (posAll (one.flatMap (·.ps))).length = s.len
+      · refine (segOk_flat (by rfl)).2 ?_; dsimp only
         rw [hpa, hA1.length_eq, List.length_map]
         exact (hsok s hs).1
       · rw [segPos_alike rfl rfl] at hx'
@@ -7910,7 +7919,7 @@ theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolv
       have hB' : (q.base.toNat : Int) = q.base := Int.toNat_of_nonneg hcp.2.2
       have hBdec : q.base.toNat = m0 * L + j := by rw [← hmd, ← hjd]; exact (Nat.div_add_mod' _ _).symm
       refine ⟨?_, fun x hx => ?_, ?_, by show 1 ≤ q.len; omega⟩
-      · show (posAll (Desc.shiftGates _ _)).length = 1
+      · refine (segOk_flat (by rfl)).2 ?_; dsimp only
         rw [shiftGates_pos, List.length_map, hpsPos]
         unfold sl
         simp only [List.length_take, List.length_drop]
@@ -7918,7 +7927,7 @@ theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolv
       · unfold segPos at hx
         obtain ⟨u, hu, hx⟩ := List.mem_flatMap.1 hx
         rw [List.mem_range] at hu
-        simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+        simp only [copy_pos, Desc.Seg.lanes, Bool.false_and, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
         obtain ⟨y, hy, rfl⟩ := hx
         have hy0 : 0 ≤ y.2 := by
           rw [hpsPos] at hy
@@ -7976,7 +7985,7 @@ theorem batchStride_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (hB : Resolv
           have hS := hCS k _ _ _ one hmem hbr hone
           have hposeq := posAll_flatMap_ps one hrep1
           refine ⟨?_, fun x hx => ?_, fun g hg => ?_, by show 1 ≤ q.len; omega⟩
-          · show (posAll (one.flatMap (·.ps))).length = 1
+          · refine (segOk_flat (by rfl)).2 ?_; dsimp only
             rw [hposeq, hA]
             simp
           · rw [segPos_alike rfl rfl] at hx
@@ -8091,7 +8100,7 @@ theorem throughPS_mem {ap : PS} {q bp : Piece} (h : Desc.throughPS ap q = some b
   rw [Option.ite_none_left_eq_some] at h
   obtain ⟨hb, hbp⟩ := h
   simp only [Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, not_or, not_lt, not_le, Bool.not_eq_true,
-    Bool.not_eq_eq_eq_not, Bool.not_false, List.isEmpty_iff] at hc hb
+    Bool.not_eq_eq_eq_not, Bool.not_true, Bool.not_eq_false, Bool.not_false, List.isEmpty_iff] at hc hb
   have e := Option.some.inj hbp
   subst e
   obtain ⟨⟨⟨⟨hr1, hpr⟩, hplv⟩, hq0⟩, -⟩ := hc
@@ -8235,11 +8244,11 @@ theorem copiesSeg_shape (P : Prog) (d : Nat) (memo : Array Desc.Summary) (f : Na
   have hlenr := (hag (.top f 0 none) rfl).length_eq
   simp only [List.length_map, List.length_range] at hlenr
   refine ⟨?_, fun x hx => ?_, ?_, hn⟩
-  · show (posAll (Desc.shiftGates _ _)).length = len
+  · refine (segOk_flat (by rfl)).2 ?_; dsimp only
     rw [shiftGates_pos, List.length_map, ← hflat, hlenr, hl]
   · unfold segPos at hx
     obtain ⟨u, -, hx⟩ := List.mem_flatMap.1 hx
-    simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+    simp only [copy_pos, Desc.Seg.lanes, Bool.false_and, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
     obtain ⟨y, hy, rfl⟩ := hx
     have hy' := hy
     unfold posAll at hy'
@@ -8281,7 +8290,7 @@ theorem sharedSeg_shape (c : Desc.Ctx) (sc : Flock.Program.Scope) (fuel : Nat) (
   have hS := hCS k m a b one hm hb hone
   have hposeq := posAll_flatMap_ps one hrep1
   refine ⟨?_, fun x hx => ?_, fun g hg => ?_, hn⟩
-  · show (posAll (one.flatMap (·.ps))).length = len
+  · refine (segOk_flat (by rfl)).2 ?_; dsimp only
     rw [hposeq, hA, hl]
     simp
   · rw [segPos_alike rfl rfl] at hx
@@ -8639,8 +8648,7 @@ theorem shapeOk_coalesce {P : Prog} {d : Nat} {segs : Array Seg} (h : ∀ g ∈ 
       (fun r hr => .inr ⟨r, rfl, hr⟩) segs (fun g hg => .inl hg) g hg with hg' | ⟨r, rfl, hr⟩
   · exact h g hg'
   · refine ⟨?_, fun x hx => ?_, fun q hq => ?_, Nat.le_refl 1⟩
-    · show (posAll #[r]).length = r.count
-      rw [posAll_singleton, pos_length]
+    · exact segOk_one r
     · have : x ∈ segsPos segs := by
         rw [← coalesce_pos]; exact List.mem_flatMap.2 ⟨_, hg, hx⟩
       obtain ⟨g', hg', hx'⟩ := List.mem_flatMap.1 this
@@ -11072,7 +11080,7 @@ theorem gateW_copies (P : Prog) {d k : Nat}
   unfold segPos at hx
   obtain ⟨u, hu, hx⟩ := List.mem_flatMap.1 hx
   rw [List.mem_range] at hu
-  simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
+  simp only [copy_pos, Desc.Seg.lanes, Bool.false_and, shiftGates_pos, List.map_map, shiftPos_shiftPos, List.mem_map] at hx
   obtain ⟨⟨t, v⟩, hy, he⟩ := hx
   cases t with
   | ref b i => simp [shiftPos] at he

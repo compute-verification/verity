@@ -476,6 +476,81 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
 /-- A segment of positive count is of pieces of positive count. -/
 def CountsOk (g : Seg) : Prop := 0 < g.count → ∀ p ∈ g.ps.toList, 0 < p.count
 
+theorem shiftGates_tgt {δ : Int} {ps : Array Piece} {q : Piece} (h : q ∈ (Desc.shiftGates δ ps).toList) :
+    ∃ g ∈ ps.toList, q.tgt = g.tgt := by
+  unfold Desc.shiftGates at h
+  rw [Array.toList_map, List.mem_map] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  refine ⟨g, hg, ?_⟩
+  split <;> rfl
+
+theorem copy_tgt {s : Seg} {m : Nat} {q : Piece} (h : q ∈ (s.copy m).toList) : ∃ g ∈ s.ps.toList, q.tgt = g.tgt := by
+  unfold Desc.Seg.copy at h
+  split at h
+  · rw [Array.toList_map, List.mem_map] at h
+    obtain ⟨g, hg, rfl⟩ := h
+    exact ⟨g, hg, rfl⟩
+  · exact shiftGates_tgt h
+
+theorem forIn_congr_mem {β σ : Type} (l : List β) {f g : β → σ → Except String (ForInStep σ)}
+    (h : ∀ x ∈ l, f x = g x) (init : σ) : forIn l init f = forIn l init g := by
+  induction l generalizing init with
+  | nil => rfl
+  | cons x l ih =>
+    rw [List.forIn_cons, List.forIn_cons, h x List.mem_cons_self]
+    congr 1
+    funext r
+    cases r with
+    | done => rfl
+    | yield b => exact ih (fun y hy => h y (List.mem_cons_of_mem _ hy)) b
+
+theorem forIn_congr_arr {β σ : Type} (l : Array β) {f g : β → σ → Except String (ForInStep σ)}
+    (h : ∀ x ∈ l.toList, f x = g x) (init : σ) : forIn l init f = forIn l init g := by
+  rw [← Array.forIn_toList, ← Array.forIn_toList]
+  exact forIn_congr_mem _ h init
+
+theorem array_mapM_congr {α β : Type} {f g : α → Except String β} (l : Array α) (h : ∀ x ∈ l.toList, f x = g x) :
+    l.mapM f = l.mapM g := by
+  rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList]
+  congr 1
+  generalize l.toList = L at h ⊢
+  induction L with
+  | nil => rfl
+  | cons x L ih => rw [List.mapM_cons, List.mapM_cons, h x List.mem_cons_self, ih (fun y hy => h y (List.mem_cons_of_mem _ hy))]
+
+/-- `segDown` applies its resolver only to pieces of `s`'s targets. -/
+theorem segDown_congr {f f' : Piece → Except String (Array Seg)} (s : Seg)
+    (H : ∀ q, (∃ g ∈ s.ps.toList, q.tgt = g.tgt) → f q = f' q) : Desc.segDown f s = Desc.segDown f' s := by
+  have hc : ∀ m, ∀ q ∈ (s.copy m).toList, f q = f' q := fun m q hq => H q (copy_tgt hq)
+  unfold Desc.segDown
+  cases hr : s.lanes
+  · simp only [Bool.not_false, ↓reduceIte]
+    congr 1
+    apply forIn_congr_arr
+    intro q hq
+    funext r
+    simp only [Array.toList_flatMap, List.mem_flatMap] at hq
+    obtain ⟨m, -, hq⟩ := hq
+    rw [hc m q hq]
+  · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+    rw [array_mapM_congr s.ps (fun q hq => H q ⟨q, hq, rfl⟩)]
+    congr 1
+    funext rs
+    split
+    · rfl
+    congr 1
+    funext u
+    congr 1
+    rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
+    apply forIn_congr_mem
+    intro m _
+    funext r
+    congr 1
+    apply forIn_congr_arr
+    intro q hq
+    funext r'
+    rw [hc m q hq]
+
 theorem countsOk_one (x : Piece) : CountsOk (Seg.one x) := by
   intro h p hp
   simp only [Seg.one, List.mem_singleton, List.toList_toArray] at hp
