@@ -662,6 +662,11 @@ theorem boundary_one_server (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
     simp only [Runs.boundaryBlock, Runs.outerBlock, hone, Finset.singleton_biUnion]
   simp only [Runs.HoldsBoundary, Runs.HoldsOut, Placed.Holds, hloc, blockInput_world_gates _ _ hg]
 
+/-- A block's output to the outside world reads its gates and location only, not its window. -/
+theorem blockOutput_gates {A : Placed L} (X : Finset L) {b b' : Verity.Block A.toCircuit} (h : b.gates = b'.gates) :
+    A.blockOutput X b = A.blockOutput X b' := by
+  simp only [Placed.blockOutput, h]
+
 /-- **A one-server attested boundary gives back the server-day block's output statement**: when server-day block `i` is
 the only one behind its attested boundary on its day, its boundary's day block has an output bound to the outside world
 exactly when block `i` has it, at every bound `k` (bits). -/
@@ -672,7 +677,7 @@ theorem boundary_one_server_output (P : Runs L) (r : P.Run) (i : Fin (P.nOut r))
     simp only [Runs.boundaryLoc, hone, Finset.singleton_biUnion]
   have hg : (P.boundaryBlock r (P.bnd r i) (P.dayOf r i)).gates = (P.outerBlock r i).gates := by
     simp only [Runs.boundaryBlock, Runs.outerBlock, hone, Finset.singleton_biUnion]
-  simp only [Runs.HoldsBoundary, Runs.HoldsOut, Placed.Holds, Placed.blockOutput, hloc, hg]
+  simp only [Runs.HoldsBoundary, Runs.HoldsOut, Placed.Holds, hloc, blockOutput_gates _ hg]
 
 /-- **A boundary whose listed location is its own holds one server a day**: when no other server-day block's location
 shares server-day block `i`'s attested boundary, `i` is the only server-day block behind it on its day (`oneBlock`). -/
@@ -1228,8 +1233,8 @@ honest one, though its boundary's input bounds (14,406 bits) are far below `kS`.
 theorem wipe_full_refused :
     Pous.StreamedWipe.wipeResidual 1 1 512 40 = 14406 ∧
       ¬ (demoWipe 1 1).WipeApplies (demoWipe 1 1).wipeChallenges () ⟨0, Nat.one_pos⟩ ∧
-      (demoWipe 1 1).boundaryPastBound () 0 0 + ((demoWipe 1 1).ingressCount () 0 0 + (demoWipe 1 1).covert 0) ≤
-        10000000000 ∧
+      (demoWipe 1 1).boundaryPastBound () 0 ⟨0, Nat.one_pos⟩ +
+          ((demoWipe 1 1).ingressCount () 0 ⟨0, Nat.one_pos⟩ + (demoWipe 1 1).covert 0) ≤ 10000000000 ∧
       InferenceOnly.check { demoLimits 0 1 0 with kS := 10000000000 } (demoWipe 1 1) () = false := by
   decide
 
@@ -1608,7 +1613,7 @@ theorem wipeInputAtMost (P : Runs L) (Ls : Finset (Finset L)) (survives : Finset
   calc P.pr _ ≤ P.pr (fun r => ∃ x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), P.accepts r ∧ ¬ survives x.1 x.2 r) :=
         P.mono _ _ hsub
     _ ≤ ∑ x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), P.pr (fun r => P.accepts r ∧ ¬ survives x.1 x.2 r) :=
-        P.union _ (fun x r => P.accepts r ∧ ¬ survives x.1 x.2 r)
+        P.union _ (fun (x : Finset L × Fin P.nDays) r => P.accepts r ∧ ¬ survives x.1 x.2 r)
     _ ≤ ∑ _x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), ((2⁻¹ : ℝ≥0∞) ^ P.wipeError + adv) :=
         Finset.sum_le_sum fun x hx => hread x.1 (Finset.mem_product.mp hx).1 x.2 hG
     _ = ((Ls.card * P.nDays : ℕ) : ℝ≥0∞) * ((2⁻¹ : ℝ≥0∞) ^ P.wipeError + adv) := by
