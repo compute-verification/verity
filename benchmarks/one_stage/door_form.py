@@ -100,7 +100,7 @@ def _load(path: Path, name: str):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=["product", "class", "chain", "one_linear", "file"])
+    ap.add_argument("what", choices=["product", "class", "chain", "one_linear", "served", "file"])
     ap.add_argument("path", nargs="?")
     ap.add_argument("--tree", default=str(Path(__file__).resolve().parents[2]))
     a = ap.parse_args()
@@ -127,6 +127,17 @@ def main() -> int:
         c, part = OL.two_levels()
         census("one_linear", c)
         blocks("one_linear", c, part)
+    elif a.what == "served":
+        sys.path.insert(0, str(tree / "tests/adapters/vllm"))
+        from verity_vllm.program.predict import window_circuit as WCirc
+        from verity_vllm.program.predict import window_class as WC
+        from tests.program.predict import test_steps as S
+        cfg = json.loads((tree / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
+        reg = S.Registered.of(S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
+                                    target=dict(S.RTXPRO6000)), default_seed=7)
+        circuit = WCirc.lower(reg, WC.WindowClass(4, 27, 2), None,
+                              requests=[WC.Request(0, j, 27, 2) for j in range(4)]).circuit
+        _windows("served llama32-1b class 4,27,2", circuit, tree)
     else:
         census(a.path, Path(a.path).read_bytes())
     return 0
