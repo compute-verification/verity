@@ -9,9 +9,11 @@ parameters, recomputed pairs) with a random cut, committed set (derived, or serv
 the `recomputed_across` count must agree too. Writes DIR/<i>.json and DIR/result.json; exits 1 unless the codes and the too-wide
 units agree on every case.
 """
-import argparse, json, random, subprocess, sys
+import argparse, json, random, sys
 from pathlib import Path
 from types import SimpleNamespace
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits.cut import WIDTH_RULE, check_cut, derived_committed
 
@@ -68,7 +70,7 @@ def main():
             v = check_cut(graph(c["graph"]), c["owner"], c["committed"], tuple(c["limits"]) if c["limits"] else None, rule)
             wide = v.detail.get("unit-too-wide", {}).get("gates", [])
             want[str(f)] = (list(v.codes), [list(x) for x in wide], v.detail.get("recomputed_across", {}).get("n"))
-    p = subprocess.run([a.lean, "cut-check", *files], capture_output=True, text=True)
+    p = LR.run([a.lean, "cut-check", *files], ok_statuses=LR.REFUSES)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("CUTCHECK "):
