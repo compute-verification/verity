@@ -156,7 +156,7 @@ settings_class() {  # $1, the settings file: the class its serve commits the win
 
 settings_engine() {  # $1, the settings file: the engine args its serve states, MAX_MODEL_LEN,T (the harness's 512 each
   # where the settings name none)
-  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-${H1_T:-512}}"' "$1"
+  bash -c 'set -a; . "$0" > /dev/null 2>&1; set +a; printf %s "${MAX_MODEL_LEN:-512},${T:-512}"' "$1"
 }
 
 serve() {
