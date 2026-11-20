@@ -116,9 +116,12 @@ def test_encode_writes_the_codecs_bytes(server, name):
     decoded = json.loads(server.call("decode", {"descriptor": text})[1])
     assert lean["ok"] == decoded["ok"], lean.get("message")
     if not lean["ok"]:
+        assert lean["message"] == TEXTS.get(name), REWRITE
         return
     encoded = lean["encoded"].encode()
     python = codec_encoding(text, REGISTRY[text])
+    if name not in LEAN_TAKES:
+        assert isinstance(python, bytes), f"the codec no longer decodes an accepted case, so no bytes were compared: {python!r}"
     if isinstance(python, bytes):
         assert encoded == python
     again = json.loads(server.call("decode", {"descriptor": lean["encoded"]})[1])
