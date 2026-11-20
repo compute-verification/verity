@@ -3119,12 +3119,30 @@ theorem agree_shift (P : Prog) {sc sc' : Flock.Program.Scope} {o : Int} (ho : 0 
     omega
 
 
-/-- A segment of `Seg.slice` has a copy at least, and more than one only as copies of `s`'s pieces moved, `s` of more
-than one copy. -/
+theorem shiftGates_tgt {δ : Int} {ps : Array Piece} {q : Piece} (h : q ∈ (Desc.shiftGates δ ps).toList) :
+    ∃ g ∈ ps.toList, q.tgt = g.tgt := by
+  unfold Desc.shiftGates at h
+  rw [Array.toList_map, List.mem_map] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  refine ⟨g, hg, ?_⟩
+  split <;> rfl
+
+theorem copy_tgt {s : Seg} {m : Nat} {q : Piece} (h : q ∈ (s.copy m).toList) : ∃ g ∈ s.ps.toList, q.tgt = g.tgt := by
+  unfold Desc.Seg.copy at h
+  split at h
+  · rw [Array.toList_map, List.mem_map] at h
+    obtain ⟨g, hg, rfl⟩ := h
+    exact ⟨g, hg, rfl⟩
+  · exact shiftGates_tgt h
+
+theorem rowsFrom_tgt (q : Piece) (lo n : Nat) : (q.rowsFrom lo n).tgt = q.tgt := (rowsFrom_spec q lo n).1
+
+/-- A segment of `Seg.slice` has a copy at least, and more than one only as copies of pieces of `s`'s targets, `s` of
+more than one copy and its shift. -/
 theorem segSlice_reps (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).toList) :
-    1 ≤ g.reps ∧ (g.reps > 1 → s.reps > 1 ∧ g.shift = s.shift ∧ ∃ δ, g.ps = Desc.shiftGates δ s.ps) := by
+    1 ≤ g.reps ∧ (g.reps > 1 → s.reps > 1 ∧ g.shift = s.shift ∧ ∀ q ∈ g.ps.toList, ∃ q0 ∈ s.ps.toList, q.tgt = q0.tgt) := by
   have hone : ∀ (ps : Array Piece), g ∈ (ps.map Seg.one).toList →
-      1 ≤ g.reps ∧ (g.reps > 1 → s.reps > 1 ∧ g.shift = s.shift ∧ ∃ δ, g.ps = Desc.shiftGates δ s.ps) := by
+      1 ≤ g.reps ∧ (g.reps > 1 → s.reps > 1 ∧ g.shift = s.shift ∧ ∀ q ∈ g.ps.toList, ∃ q0 ∈ s.ps.toList, q.tgt = q0.tgt) := by
     intro ps h
     rw [Array.toList_map, List.mem_map] at h
     obtain ⟨q, -, rfl⟩ := h
@@ -3146,9 +3164,16 @@ theorem segSlice_reps (s : Seg) (a b : Nat) (g : Seg) (hg : g ∈ (s.slice a b).
   · generalize (if (a % s.len == 0) = true then a / s.len else a / s.len + 1) = lo at hg
     split at hg
     · rename_i hlt
-      simp only [List.mem_singleton] at hg
-      subst hg
-      exact ⟨by dsimp only; omega, fun _ => ⟨by omega, rfl, _, rfl⟩⟩
+      split at hg
+      · simp only [List.mem_singleton, Array.toList_push, Array.toList_empty, List.nil_append] at hg
+        subst hg
+        refine ⟨by dsimp only; omega, fun _ => ⟨by omega, rfl, fun q hq => ?_⟩⟩
+        rw [Array.toList_map, List.mem_map] at hq
+        obtain ⟨q0, hq0, rfl⟩ := hq
+        exact ⟨q0, hq0, rowsFrom_tgt _ _ _⟩
+      · simp only [List.mem_singleton, Array.toList_push, Array.toList_empty, List.nil_append] at hg
+        subst hg
+        exact ⟨by dsimp only; omega, fun _ => ⟨by omega, rfl, fun q hq => copy_tgt hq⟩⟩
     · simp at hg
   · exact hone _ hg
 
@@ -3191,22 +3216,6 @@ theorem mem_pos_tgt {q : Piece} {x : Tgt × Int} (h : x ∈ pos q) : x.1 = q.tgt
   obtain ⟨_, _, _, _, rfl⟩ := h
   rfl
 
-theorem shiftGates_tgt {δ : Int} {ps : Array Piece} {q : Piece} (h : q ∈ (Desc.shiftGates δ ps).toList) :
-    ∃ g ∈ ps.toList, q.tgt = g.tgt := by
-  unfold Desc.shiftGates at h
-  rw [Array.toList_map, List.mem_map] at h
-  obtain ⟨g, hg, rfl⟩ := h
-  refine ⟨g, hg, ?_⟩
-  split <;> rfl
-
-theorem copy_tgt {s : Seg} {m : Nat} {q : Piece} (h : q ∈ (s.copy m).toList) : ∃ g ∈ s.ps.toList, q.tgt = g.tgt := by
-  unfold Desc.Seg.copy at h
-  split at h
-  · rw [Array.toList_map, List.mem_map] at h
-    obtain ⟨g, hg, rfl⟩ := h
-    exact ⟨g, hg, rfl⟩
-  · exact shiftGates_tgt h
-
 /-- A segment's positions name its pieces' targets. -/
 theorem segPos_tgt {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ g ∈ s.ps.toList, x.1 = g.tgt := by
   unfold segPos at h
@@ -3215,8 +3224,6 @@ theorem segPos_tgt {s : Seg} {x : Tgt × Int} (h : x ∈ segPos s) : ∃ g ∈ s
   obtain ⟨q, hq, h⟩ := List.mem_flatMap.1 h
   obtain ⟨g, hg, e⟩ := copy_tgt hq
   exact ⟨g, hg, (mem_pos_tgt h).trans e⟩
-
-theorem rowsFrom_tgt (q : Piece) (lo n : Nat) : (q.rowsFrom lo n).tgt = q.tgt := (rowsFrom_spec q lo n).1
 
 theorem pieceSlice_tgt {q : Piece} {a b : Nat} {p : Piece} (h : p ∈ (q.slice a b).toList) : p.tgt = q.tgt := by
   unfold Desc.Piece.slice at h
@@ -3335,7 +3342,7 @@ theorem retOk_slice {memo : Array Desc.Summary} {f : Nat} (hgo : ∀ s ∈ (memo
   obtain ⟨i, a', b', hi⟩ := psSlice_mem _ a b s hs
   obtain ⟨h1, h2⟩ := segSlice_reps _ a' b' s hi
   refine ⟨h1, fun hr => ?_⟩
-  obtain ⟨hr', hsh, δ, e⟩ := h2 hr
+  obtain ⟨hr', hsh, e⟩ := h2 hr
   have hlt : i < (memo[f]!).ret.segs.size := by
     refine (Nat.lt_or_ge i _).resolve_right fun hge => ?_
     rw [getElem!_neg _ i (by omega)] at hr'
@@ -3343,8 +3350,7 @@ theorem retOk_slice {memo : Array Desc.Summary} {f : Nat} (hgo : ∀ s ∈ (memo
   rw [getElem!_pos _ i hlt] at hr' hsh e
   rcases hgo _ (Array.getElem_mem_toList hlt) hr' with hg | hg
   · refine Or.inl fun g hgm => ?_
-    rw [e] at hgm
-    obtain ⟨g0, hg0, et⟩ := shiftGates_tgt hgm
+    obtain ⟨g0, hg0, et⟩ := e g hgm
     obtain ⟨w, hw⟩ := hg g0 hg0
     exact ⟨w, et.trans hw⟩
   · exact Or.inr (hsh.trans hg)
