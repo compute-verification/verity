@@ -43,7 +43,7 @@ export PYTHONPATH=$TREE:$TREE/input_datasets:$TREE/adapters/vllm:$TREE/adapters/
 APPLICATION=${APPLICATION:-applications/remote.toml}
 # the window class (S,P,O: slots, prompt ids, outputs) the serve's arena is sized from, and the model, from the adapter's
 # statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
-SAID=$("$PY" -m verity_vllm.inputs.serves application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
+SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
 read -r MODEL REV PRECISION CLASS DATASET TIMING <<< "${SAID%%$'\n'*}"
 echo "${SAID#*$'\n'}"
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
@@ -83,7 +83,7 @@ say() { echo "$1"; [ "$DRY" = 1 ] || echo "$1" > "$OUT/smoke.txt"; }
 # the load: DATASET at TIMING, released under a release run in the network attester's release order, so at once its
 # requests start in the window's first step (served_verdicts.sh's LOAD=dataset)
 RELEASE=${RELEASE:-$(tr -d - < /proc/sys/kernel/random/uuid)}
-LOAD=(-m verity_vllm.inputs.sender --port "$PORT" --dataset "$DATASET" --timing "$TIMING" --release "$RELEASE" --out "$SR/load.jsonl")
+LOAD=(adapters/vllm/tools/served_run/inputs.py send --port "$PORT" --dataset "$DATASET" --timing "$TIMING" --release "$RELEASE" --out "$SR/load.jsonl")
 REC_ARGS=()  # RECORD=0: each window's close plans its circuit and makes no record
 [ "${RECORD:-1}" = 0 ] || REC_ARGS=(--sampling-design "$LAW" --checkpoint-dir "$SNAP")
 [ "${RECORD:-1}" = 0 ] || [ "$RECORD_IN_LEASE" != 1 ] || REC_ARGS+=(--record-in-lease)

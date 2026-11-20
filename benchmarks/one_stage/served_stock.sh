@@ -49,7 +49,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   local D=$ROOT/runs/${RESEARCH_RUN_ID:-local}/$1 srv up=0 rc=0 j release ws=()
   local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
     --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
-  [ -n "$DATASET" ] && load=(-m verity_vllm.inputs.sender --dataset "$DATASET" --timing "$TIMING")
+  [ -n "$DATASET" ] && load=("$TREE/adapters/vllm/tools/served_run/inputs.py" send --dataset "$DATASET" --timing "$TIMING")
   [ -n "$WINDOW_STEPS" ] && ws=(--window-steps "$WINDOW_STEPS")
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     echo "$1: not started, past NOT_AFTER $NOT_AFTER" | tee -a "$OUT/stock.txt"; return 11

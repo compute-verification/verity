@@ -22,7 +22,7 @@
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=dataset (default varied) they are the input dataset
 #     DATASET at TIMING instead, both of which LOAD=dataset needs, sent by the adapter's one sender
-#     (`verity_vllm.inputs.sender`), which reads it through the adapter's door (`verity_vllm.inputs.serves`) before it sends any. With
+#     (`verity_vllm.inputs.sender`, by `adapters/vllm/tools/served_run/inputs.py send`), which reads it through the adapter's door (`verity_vllm.inputs.serves`) before it sends any. With
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the network attester, is the run's one load and its execution
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
@@ -567,8 +567,8 @@ keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" 
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 case ${LOAD:=varied} in varied | dataset | front | session) ;; *) say "PREFLIGHT: LOAD is varied, dataset, front or session, not $LOAD"; exit 3 ;; esac
-[ "$LOAD" != dataset ] || { [ -n "${DATASET:-}" ] && [ -n "${TIMING:-}" ]; } \
-  || { say "PREFLIGHT: LOAD=dataset plays the input dataset DATASET at TIMING, and one of them is unset"; exit 3; }
+case ${1:-} in '' | serve) [ "$LOAD" != dataset ] || { [ -n "${DATASET:-}" ] && [ -n "${TIMING:-}" ]; } \
+  || { say "PREFLIGHT: LOAD=dataset plays the input dataset DATASET at TIMING, and one of them is unset"; exit 3; } ;; esac
 case $POUW in
   pearlplus) ;;
   h1) say "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"; exit 3 ;;
@@ -1076,7 +1076,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=("$TREE/adapters/vllm/tools/served_run/serve_load.py" --model "$REPO" --varied "$REQUESTS" --rate "$RATE"
       --max-tokens "$MAX_TOKENS" --prompt-range "$PROMPTS" --seed "$SEED")
-    [ "$LOAD" = dataset ] && load=(-m verity_vllm.inputs.sender --dataset "$DATASET" --timing "$TIMING")
+    [ "$LOAD" = dataset ] && load=("$TREE/adapters/vllm/tools/served_run/inputs.py" send --dataset "$DATASET" --timing "$TIMING")
     "$PY" "${load[@]}" --port "$PORT" --release "$release" --out "$D/load.jsonl" > "$D/load.log" 2>&1
     rc=$?
     local sent all

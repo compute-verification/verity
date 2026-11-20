@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 import input_datasets
 import pytest
@@ -11,6 +12,7 @@ import pytest
 from verity_vllm.inputs import serves
 
 DATASET = "llama32_1b_fixed_4_27_2"
+INPUTS = str(Path(__file__).resolve().parents[5] / "adapters/vllm/tools/served_run/inputs.py")
 BODY = {"model": serves.SERVES.model, "user": "u.0", "prompt": [128000, 5, 6], "max_tokens": 2, "temperature": 0.0,
         "stream": True, "ignore_eos": True}
 
@@ -40,7 +42,7 @@ def test_the_remote_dataset_passes_the_door_whole():
 def test_the_door_refuses_the_first_record_it_cannot_take_by_name(kind, records, name, said):
     with pytest.raises(serves.Refused) as e:
         serves.door(kind, records)
-    assert (e.value.name, str(e.value)) == (name, said)
+    assert serves.refusal(e.value) == (name, said)
 
 
 def test_an_application_the_statement_is_not_and_a_timing_it_cannot_read_are_refused_by_name():
@@ -48,17 +50,17 @@ def test_an_application_the_statement_is_not_and_a_timing_it_cannot_read_are_ref
     assert serves.served(s.model, s.revision, s.precision, 4, 2) is s
     with pytest.raises(serves.Refused) as e:
         serves.served(s.model, s.revision, s.precision, 4, 16)
-    assert e.value.name == "not-served" and "not unsloth/Llama-3.2-1B" in str(e.value) and "16 window steps" in str(e.value)
+    assert e.value.what == "not-served" and "not unsloth/Llama-3.2-1B" in str(e.value) and "16 window steps" in str(e.value)
     assert serves.timing("at-once") == ("at-once", {}) and serves.timing("rate:2.5") == ("rate", {"rate": 2.5})
     for bad in ("rate:0", "rate:x", "poisson", ""):
         with pytest.raises(serves.Refused) as e:
             serves.timing(bad)
-        assert e.value.name == "timing"
+        assert e.value.what == "timing"
 
 
 def test_the_command_prints_the_statement_and_the_doors_answer():
-    run = lambda *a: subprocess.run([sys.executable, "-m", "verity_vllm.inputs.serves", *a], capture_output=True, text=True)  # noqa: E731
-    p = run()
+    run = lambda *a: subprocess.run([sys.executable, INPUTS, *a], capture_output=True, text=True)  # noqa: E731
+    p = run("statement")
     assert p.returncode == 0 and p.stdout.split() == [serves.SERVES.model, serves.SERVES.revision, "bfloat16", "4,27,2"]
     p = run("door", DATASET, "at-once")
     identity = input_datasets.open(DATASET).timed("at-once").identity
@@ -72,12 +74,11 @@ def test_an_application_gives_its_dataset_and_timing_once_the_statement_takes_it
     good.write_text('[workload.params]\nmodel = "unsloth/Llama-3.2-1B"\nrevision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"\n'
                     f'precision = "bfloat16"\nslots = 4\nwindow-steps = 2\ndataset = "{DATASET}"\ntiming = "rate:2"\n')
     assert serves.application(str(good)) == (DATASET, "rate:2")
-    p = subprocess.run([sys.executable, "-m", "verity_vllm.inputs.serves", "application", str(good)], capture_output=True,
-                       text=True)
+    p = subprocess.run([sys.executable, INPUTS, "application", str(good)], capture_output=True, text=True)
     first, door, _ = p.stdout.split("\n")
     assert p.returncode == 0 and first.split()[3:] == ["4,27,2", DATASET, "rate:2"] and door.startswith(f"DOOR {DATASET}: ")
     varied = tmp_path / "varied.toml"
     varied.write_text(good.read_text().replace(f'dataset = "{DATASET}"\ntiming = "rate:2"\n', 'load = "varied"\n'))
     with pytest.raises(serves.Refused) as e:
         serves.application(str(varied))
-    assert e.value.name == "application" and "names no model, window, dataset and timing" in str(e.value)
+    assert e.value.what == "application" and "names no model, window, dataset and timing" in str(e.value)

@@ -4115,7 +4115,8 @@ def test_the_script_parses_whole():
 PEARL_WREC = {"format": "verity/registration/v2", "window": {"scheme": "pearl-c-h100-v1-h3"}, "previous": None,
            "registered": {"pearl-a/0/0": {}}}
 #: a launch under PEARLPLUS_TIE, which states V3c's rule: the window cut at Pearl+'s linears has no default
-PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": "", "V3C_LAW": TIED_RULE}
+PEARL_TIES = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_CHALLENGER_GATE": "", "V3C_LAW": TIED_RULE,
+              "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
 
 
 #: `served_compare.py` as the served compare runs it: its arguments and CUDA_VISIBLE_DEVICES in $ORDER.compare; at
@@ -6543,7 +6544,7 @@ def test_a_serve_on_the_lanes_default_gate_reads_the_challenger_hosts_address_fr
     research@ the address VY_CHALLENGER_1_HOST holds, and with it unset the
     serve is refused by the variable's name before serve-openai starts. A gate given whole, or none, reads no address."""
     env = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin",
-           }
+           "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
     rc, argv = _serve_argv(tmp_path / "held", env)
     assert rc == 10 and argv[argv.index("--challenger-gate") + 1].endswith(f" research@{CHALLENGER_HOST}"), (rc, argv)
     rc, argv = _serve_argv(tmp_path / "unset", {**env, "VY_CHALLENGER_1_HOST": ""})
@@ -6607,7 +6608,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               "    echo '{}' > \"$d/windows.jsonl\"; echo '{}' > \"$d/seals.jsonl\"\n"
               "    echo 'SERVE-OPENAI listening'\n"
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
-              "  *serve_load.py*|*verity_vllm.inputs.sender*) echo '4/4 ok'; exit 0 ;;\n"
+              "  *serve_load.py*|*'served_run/inputs.py send'*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
               "  *'attester_piece.py front '*' --session '*)\n"
               "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
@@ -6655,7 +6656,8 @@ SERVE_LOAD = "{load} " f"--port 18190 --release {RELEASE_RUN} --out TMP/serve/lo
 VARIED_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/serve_load.py --model verity-int8/Llama-3.2-1B-INT8 "
                                      "--varied 4 --rate 1000 --max-tokens 4 --prompt-range 16:24 --seed 1")
 DATASET = {"LOAD": "dataset", "DATASET": "llama32_1b_fixed_4_27_2", "TIMING": "at-once"}
-DATASET_LOAD = SERVE_LOAD.format(load="-m verity_vllm.inputs.sender --dataset llama32_1b_fixed_4_27_2 --timing at-once")
+DATASET_LOAD = SERVE_LOAD.format(load="TMP/tree/adapters/vllm/tools/served_run/inputs.py send --dataset llama32_1b_fixed_4_27_2 "
+                                      "--timing at-once")
 REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate local'
 FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
@@ -7060,3 +7062,13 @@ def test_compose_off_node_is_1_or_0_and_another_value_is_refused_by_name_before_
     rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                      HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", COMPOSE_OFF_NODE="yes")
     assert (rc, lines, order) == (3, ["PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default under VERITY_HOLD_PLACEMENT=1) or 0, not yes"], [])
+
+
+def test_a_dataset_load_without_its_dataset_or_timing_is_refused_before_the_serve(tmp_path):
+    for i, unset in enumerate(("DATASET", "TIMING")):
+        env = {k: v for k, v in {**PEARL_TIES, "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": "/c/pearl_c_sm90.cubin"}.items()
+               if k != unset}
+        rc, argv = _serve_argv(tmp_path / str(i), env)
+        assert (rc, argv) == (3, [])
+        said = (tmp_path / str(i) / "out" / "verdicts.txt").read_text().splitlines()
+        assert said == ["PREFLIGHT: LOAD=dataset plays the input dataset DATASET at TIMING, and one of them is unset"], said

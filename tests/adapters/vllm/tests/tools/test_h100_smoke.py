@@ -19,7 +19,7 @@ VERDICTS = ROOT / "benchmarks/one_stage/served_verdicts.sh"
 #: the script's ``PYTHONPATH`` (its ``$TREE`` entries) holds these, linked to the real ones, so its own blocks import the
 #: library and the adapter from the tree as on a node, whatever the test's environment installs
 PATH_PARTS = ("verity", "adapters/vllm/verity_vllm", "adapters/torch", "tools/config", "tools/research", "input_datasets",
-              "applications")
+              "applications", "adapters/vllm/tools/served_run/inputs.py")
 ROW = re.search(r"^ROW=(\S+)", (ROOT / SMOKE).read_text(), re.M).group(1)
 
 #: the stand-in ``PY``: each call's argv (and, for the serve, its config) as one JSON line in ``$STUB_LOG``; the
@@ -29,7 +29,7 @@ STUB = r'''
 import json, os, subprocess, sys
 a = sys.argv[1:]
 rec = {"argv": a}
-if a[:2] == ["-m", "verity_vllm.inputs.serves"]:
+if a[:2] == ["adapters/vllm/tools/served_run/inputs.py", "application"]:
     sys.exit(subprocess.run([sys.executable, *a]).returncode)
 if a[:1] == ["-"]:
     body = sys.stdin.read()
@@ -93,7 +93,7 @@ def test_the_serve_follows_the_statement_and_the_load_is_the_dataset_through_the
         ["unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "bfloat16", "4,27,2", "4", "29", "2", "4"]
     assert "--protocols" not in args and "--scheme" not in args
     assert serve["config"] == {"network-attester": {"order": "release-order"}}
-    assert load[:2] == ["-m", "verity_vllm.inputs.sender"]
+    assert load[:2] == ["adapters/vllm/tools/served_run/inputs.py", "send"]
     assert [opt(load, k) for k in ("--dataset", "--timing")] == ["llama32_1b_fixed_4_27_2", "at-once"]
     assert re.fullmatch(r"[0-9a-f]{32}", opt(load, "--release")), load
     assert opt(commit, "--class") == "4,27,2"

@@ -93,9 +93,8 @@ def test_the_dataset_at_once_runs_every_request_at_each_of_the_windows_steps_and
     n, steps = len(records), serves.SERVES.outputs
     out = tmp_path / "load.jsonl"
     with _Endpoint(engine, n) as port:
-        assert sender.main(["--port", str(port), "--dataset", DATASET, "--timing", "at-once", "--release", "0f",
-                          "--out", str(out)], clock=lambda: float(next(ticks)), wall=lambda: 1.7e9,
-                         sleep=lambda s: None) == 0
+        assert sender.send(port, DATASET, "at-once", release="0f", out=out, clock=lambda: float(next(ticks)),
+                           wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     assert engine.steps == [n] * steps
     assert [p for p, _ in engine.admitted] == [b["prompt"] for b in records]
     assert all(q["ignore_eos"] is True and q["max_tokens"] == steps and q["temperature"] == 0.0 for _, q in engine.admitted)
@@ -120,13 +119,13 @@ def test_a_dataset_the_door_refuses_sends_nothing(tmp_path, monkeypatch, capsys)
     """A refusal by the door, or by the dataset's read, comes before any request: nothing is posted and no line written."""
     monkeypatch.setattr(sender, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sent")))
     out = tmp_path / "load.jsonl"
-    assert sender.main(["--port", "1", "--dataset", "no_such_dataset", "--timing", "at-once", "--out", str(out)]) == 3
+    assert sender.send(1, "no_such_dataset", "at-once", release=None, out=out) == 3
     assert "[send] REFUSED unknown-dataset" in capsys.readouterr().out
-    assert sender.main(["--port", "1", "--dataset", DATASET, "--timing", "rate:fast", "--out", str(out)]) == 3
+    assert sender.send(1, DATASET, "rate:fast", release=None, out=out) == 3
     assert "[send] REFUSED timing" in capsys.readouterr().out
     monkeypatch.setattr(serves, "SERVES", serves.Serves(serves.SERVES.model, serves.SERVES.revision,
                                                         serves.SERVES.precision, serves.SERVES.vocab, "4,16,2"))
-    assert sender.main(["--port", "1", "--dataset", DATASET, "--timing", "at-once", "--out", str(out)]) == 3
+    assert sender.send(1, DATASET, "at-once", release=None, out=out) == 3
     assert "[send] REFUSED positions: record 0 (fixed.00000): its prompt is 27 ids, past the class 4,16,2's 16" \
         in capsys.readouterr().out
     assert not out.exists()

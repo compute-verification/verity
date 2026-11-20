@@ -163,7 +163,8 @@ def _door(params: Mapping[str, Any]) -> None:
         ds = input_datasets.open(params["dataset"])
         serves.door(ds.kind, (b for _, b in ds.timed(rule, **parameters)))
     except (serves.Refused, input_datasets.Refused) as e:
-        raise Refused(e.name, f"[workload.params] dataset {params['dataset']!r}: {e}") from e
+        name, text = serves.refusal(e)
+        raise Refused(name, f"[workload.params] dataset {params['dataset']!r}: {text}") from e
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 """The one sender: an input dataset of the adapter's kind, read through the door (`verity_vllm.inputs.serves.door`) before anything
 is sent, then played at its timing against a `verity-vllm serve-openai` endpoint.
 
-    python -m verity_vllm.inputs.sender --port 18190 --dataset NAME --timing at-once [--release RUN] --out FILE
+    adapters/vllm/tools/served_run/inputs.py send --port 18190 --dataset NAME --timing at-once [--release RUN] --out FILE
 
 Each record is a `/v1/completions` body, sent at its time from the play's start. With ``--release RUN`` (a run id in hex,
 as `verity.release.release_fields` reads it) request j carries ``x-verity-release: j`` and ``x-verity-release-run: RUN``,
@@ -20,7 +20,6 @@ measurements; no verifier reads them.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import threading
 import time
@@ -55,7 +54,7 @@ def post(port: int, b: dict, headers: dict | None = None, times: dict | None = N
                 for c in json.loads(e).get("choices") or ():
                     if c.get("token_ids") and not ids:
                         stamp("first_token")
-                    ids += c.get("token_ids") or []
+                    ids += c["token_ids"] if c.get("token_ids") else []
                     finish = c.get("finish_reason") or finish
     stamp("done")
     return {"token_ids": ids, "finish_reason": finish}
@@ -123,37 +122,29 @@ def write(out: str | Path, reqs: list[dict], got: list, *, release: str | None, 
                       for j, (q, r) in enumerate(zip(reqs, got)))
 
 
-def main(argv: list[str] | None = None, *, clock: Callable[[], float] = time.monotonic,
-         wall: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--port", type=int, required=True)
-    ap.add_argument("--dataset", required=True, help="the input dataset's name (input_datasets.open)")
-    ap.add_argument("--timing", required=True, help="at-once, or rate:R requests a second")
-    ap.add_argument("--release", default=None, help="number the requests in order under this release run id")
-    ap.add_argument("--out", required=True)
-    a = ap.parse_args(argv)
+def send(port: int, dataset: str, timing: str, *, release: str | None, out: str | Path,
+         clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time,
+         sleep: Callable[[float], None] = time.sleep) -> int:
+    """The input dataset ``dataset`` at ``timing`` through the door, played and written (the module docstring): 0 when every
+    request is answered, 1 when one is not, 3 when the door or the dataset refuses, before anything is sent."""
     import input_datasets
 
     from verity_vllm.inputs import serves
     try:
-        ds = input_datasets.open(a.dataset)
-        rule, parameters = serves.timing(a.timing)
+        ds = input_datasets.open(dataset)
+        rule, parameters = serves.timing(timing)
         timed = ds.timed(rule, **parameters)
         pairs = list(timed)
         bodies = serves.door(ds.kind, (b for _, b in pairs))
         reqs = [{"user": b["user"], "at_s": t, "body": b} for (t, _), b in zip(pairs, bodies)]
     except (serves.Refused, input_datasets.Refused) as e:
-        print(f"[send] REFUSED {e.name}: {e}", flush=True)
+        print("[send] REFUSED {}: {}".format(*serves.refusal(e)), flush=True)
         return 3
-    got, times, t0, start_unix = play(a.port, reqs, release=a.release, clock=clock, wall=wall, sleep=sleep)
-    write(a.out, reqs, got, release=a.release)
-    timings_path(a.out).write_text(json.dumps(timings(reqs, got, times, t0, release=a.release, start_unix=start_unix,
-                                                      dataset=a.dataset, timing=a.timing, identity=timed.identity), indent=1))
+    got, times, t0, start_unix = play(port, reqs, release=release, clock=clock, wall=wall, sleep=sleep)
+    write(out, reqs, got, release=release)
+    timings_path(out).write_text(json.dumps(timings(reqs, got, times, t0, release=release, start_unix=start_unix,
+                                                    dataset=dataset, timing=timing, identity=timed.identity), indent=1))
     ok = sum("error" not in (r or {}) for r in got)
-    print(f"[send] {a.dataset} at {a.timing}: {ok}/{len(got)} ok, prompts {min(len(q['body']['prompt']) for q in reqs)}…"
+    print(f"[send] {dataset} at {timing}: {ok}/{len(got)} ok, prompts {min(len(q['body']['prompt']) for q in reqs)}…"
           f"{max(len(q['body']['prompt']) for q in reqs)} ids; identity {timed.identity}", flush=True)
     return 0 if ok == len(got) else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
