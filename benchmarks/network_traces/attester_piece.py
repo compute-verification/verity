@@ -41,6 +41,8 @@ the active network attester in front of serve-openai there (its ``CERTIFIER_FRON
   tree's gate in this process, a `relay` to PORT its tunnel): a network attester on the developer's node is no auditor's device,
   so it never stands for the gate.
   Exit as `served_session.session`'s.
+* **piece**, **chain** and **period** refuse with `NOT_RUN` before any step (`not_run`); what follows is what the
+  steps below check, which `decide` and `settle` still hold.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when ``network-rows check`` accepted the network attester's records, the chain accepted and
   ``network-period check`` accepted the period, whose answer it then is.
@@ -216,6 +218,7 @@ PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed"
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"
+NOT_RUN = "the network audit is not run: its checks are being moved into the workload's circuit"
 #: the piece's case, as `composite.py` reads it, and where it is kept under the serve dir: a case's evidence and
 #: params are witness, so it is never in DIR
 CASE = "case.json"
@@ -1137,82 +1140,11 @@ def sets_ok(sets: list[str]) -> bool:
     return not bad
 
 
-def piece(a: argparse.Namespace) -> int:
-    serve_dir, d = a.serve_dir.resolve(), a.dir.resolve()
+def not_run(a: argparse.Namespace) -> int:
+    """**piece**, **chain** and **period**: DIR/`REFUSED` naming `NOT_RUN`, before any step runs."""
+    d = a.dir.resolve()
     d.mkdir(parents=True, exist_ok=True)
-    if not sets_ok(a.set):
-        return 2
-
-    def step(hold: Path) -> tuple[dict | None, Path | None]:
-        exe, rows = lean_exe("network-period"), lean_exe("network-rows")
-        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
-                                                   a.chain_cmd)
-        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p),
-                      rows=own_rows(rows))
-    try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step)
-    except NotRun as e:
-        return refuse(d, str(e))
-    return said(got)
-
-
-def v3c_scan(v3c: Path, cls: str, sets: list[str]) -> list[str]:
-    """``sets`` with the scan's class and V3c's window first in CR_SCAN_ARGS (chain_record.sh splits it on whitespace)."""
-    window = v3c / "window"
-    if not (window / "registration.json").is_file():
-        raise NotRun(f"V3c committed no window at {window}: the chain's scan reads its scan state and slot entries")
-    if any(c.isspace() for c in f"{window}{cls}"):
-        raise NotRun(f"{window}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give V3c a path without it")
-    given = next((kv.partition("=")[2] for kv in sets if kv.startswith("CR_SCAN_ARGS=")), "")
-    return [*(kv for kv in sets if not kv.startswith("CR_SCAN_ARGS=")),
-            f"CR_SCAN_ARGS={f'--class {cls} --v3c {window} {given}'.strip()}"]
-
-
-def chain_step(a: argparse.Namespace) -> int:
-    serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
-    d.mkdir(parents=True, exist_ok=True)
-    for f in (d / "answer.json", d / CHAINED, d / REFUSED, d / CERTIFICATES, serve_dir / CASES / CASE):
-        f.unlink(missing_ok=True)
-    if not sets_ok(a.set):
-        return 2
-    try:
-        sets = v3c_scan(v3c, a.scan_class, a.set)
-        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, sets),  # noqa: E731
-                                                   a.chain_cmd)
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT",
-                     lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None,
-                                         rows=own_rows(lean_exe("network-rows"))))
-    except NotRun as e:
-        return refuse(d, str(e))
-    if got is not None:
-        return said(got)
-    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c)},
-                                        indent=1, sort_keys=True) + "\n")
-    print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
-          flush=True)
-    return 0
-
-
-def period_step(a: argparse.Namespace) -> int:
-    serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
-    d.mkdir(parents=True, exist_ok=True)
-    if (d / REFUSED).is_file():
-        print(f"ATTESTER refused at the chain: {(d / REFUSED).read_text().strip()}", flush=True)
-        return 3
-    if (d / "answer.json").is_file():
-        return said(json.loads((d / "answer.json").read_text()))
-
-    def step(hold: Path) -> tuple[dict | None, Path | None]:
-        if not (d / CHAINED).is_file():
-            raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
-        exe, rows = lean_exe("network-period"), lean_exe("network-rows")
-        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
-                      rows=own_rows(rows), case=v3c_case(v3c))
-    try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step)
-    except NotRun as e:
-        return refuse(d, str(e))
-    return said(got)
+    return refuse(d, NOT_RUN)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1282,12 +1214,8 @@ def main(argv: list[str] | None = None) -> int:
     a = parser().parse_args(argv)
     if a.cmd == "front":
         return front(a)
-    if a.cmd == "piece":
-        return piece(a)
-    if a.cmd == "chain":
-        return chain_step(a)
-    if a.cmd == "period":
-        return period_step(a)
+    if a.cmd in ("piece", "chain", "period"):
+        return not_run(a)
     if a.cmd == "close":
         return close(a)
     if a.cmd == "unit":

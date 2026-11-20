@@ -42,6 +42,7 @@ import socket
 import subprocess
 import sys
 import tarfile
+import tomllib
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -56,6 +57,7 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import attester_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+from verity.protocols.resource_accounting.network import scheme as NS  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS  # noqa: E402
@@ -463,6 +465,30 @@ def _refused_leg(rec: dict | None, line: dict, why: str) -> None:
         "undecided", f"refused to run: {why.strip()}", why.strip()), leg
     assert line["composed"] == "pending" and line["verdicts"]["the network certifier"] == "refused"
     assert "the network certifier" not in line["missing"] and "certifier" not in line["record_missing"]
+
+
+@pytest.mark.parametrize("name", ["onsite_network", "onsite_network_front", "onsite_compute", "onsite_full"])
+def test_each_configuration_listing_the_network_attester_gets_not_run_from_the_pieces_own_entry(
+        name, tmp_path, network_attester, capsys, monkeypatch):
+    """Each command the launch hands the piece (whole under Pearl+'s tie, else split around V3c) refuses with
+    `NOT_RUN` before any step: DIR holds `REFUSED` alone and no answer. The record reads it as the attester refused by
+    that sentence: undecided, the window pending, never accepted and never a reject."""
+    cfg = tomllib.loads((ROOT / "applications" / f"{name}.toml").read_text())
+    assert "network-attester" in cfg["protocols"]
+    hooks = NS._attester_hooks(cfg, {}, {"gate": "local", "peer": "node"}, {})
+    subs = [shlex.split(hooks[k])[2] for k in ("CERTIFIER_CMD", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD")
+            if k in hooks]
+    assert subs == (["piece"] if "pearl-plus" in cfg["protocols"] else ["chain", "period"]), hooks
+    d = _serve_dir(tmp_path / "serve", network_attester)
+    for sub in subs:
+        piece = tmp_path / "pieces" / "certifier"
+        assert CP.main([sub, str(d), str(K), str(piece), *([] if sub == "piece" else [str(tmp_path / "v3c")])]) == 3
+        assert {p.name for p in piece.iterdir()} == {CP.REFUSED}
+        assert (piece / CP.REFUSED).read_text() == CP.NOT_RUN + "\n"
+    assert _refused_row(tmp_path / "pieces", CP.NOT_RUN)
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    _refused_leg(rec, line, CP.NOT_RUN)
+    assert line["composed"] not in ("accept", "reject")
 
 
 @pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "crashed step", "no build",
