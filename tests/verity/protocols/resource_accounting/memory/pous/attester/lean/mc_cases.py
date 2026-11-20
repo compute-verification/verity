@@ -24,6 +24,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 from verity_difftest import protocol as P
 
+from verity.commitments import session_coins as SC
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
@@ -209,9 +210,10 @@ class _SparseTree:
 
 
 @cache
-def deployed_key() -> lms.PrivateKey:
-    identifier = hashlib.sha512(b"memory-challenger-lean/I").digest()[:16]
-    seed = hashlib.sha512(b"memory-challenger-lean/seed").digest()
+def deployed_key(label: bytes = b"memory-challenger-lean") -> lms.PrivateKey:
+    """A key at the deployed parameters that signs at leaf 0 alone, one per `label`."""
+    identifier = hashlib.sha512(label + b"/I").digest()[:16]
+    seed = hashlib.sha512(label + b"/seed").digest()
     return lms.PrivateKey(lms.DEPLOYED, identifier, seed, _SparseTree(identifier, seed))  # type: ignore[arg-type]
 
 
@@ -295,7 +297,8 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
     clock = Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
-                            binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock)
+                            binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock,
+                            salt=sample(st.binary(min_size=mc.RECORD_SALT_BYTES, max_size=mc.RECORD_SALT_BYTES)))
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -305,6 +308,14 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     signed = c.close()
     expected = tuple(mc.block_digest(block(i, block_bytes)) for i in range(blocks))
     return Session(signed, c.commitment, c.openings(), expected, (signer.public_key,), signer)
+
+
+def unsalted(c: mc.SessionCommitment, ended: str, rounds) -> bytes:
+    """The session's message without a salt, under the unsalted tag: what a salted check must refuse."""
+    head = SC.header(c.session, c.coin_root, c.coin_key, c.binding, c.blocks, c.k, c.limit_ns, c.block_bytes, ended,
+                     len(rounds))
+    return hashlib.sha512(b"verity-pous/memory-challenger/session/v1\0" + len(head).to_bytes(8, "big") + head
+                          + mc.records_digest(rounds)).digest()
 
 
 def _round(s: Session, x: int, **edits) -> Session:

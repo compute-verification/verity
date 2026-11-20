@@ -59,13 +59,14 @@ def verifyCoinFn (j : Json) : V Json := do
   pure (.bool (verifyCoin (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input"))
     (← CoinOpening.ofJson (← J.get j "opening" "input"))))
 
-/-- `session_proofs.clear_reasons(commitment, openings, scheme, public_key, store={"root", "leaves"}, trusted=…)` at the
-deployed schemes, its reasons in order. -/
+/-- `session_proofs.clear_reasons(commitment, openings, scheme, public_key, message, signature, store={"root", "leaves"},
+pinned=…)` at the deployed schemes, its reasons in order. -/
 def clearReasonsFn (j : Json) : V Json := do
   let c ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")
   let openings ← (← J.arr j "openings" "input").mapM CoinOpening.ofJson
-  pure (.arr ((InProofs.clearReasons SCHEMES (← hexes j "trusted").toList c openings (← J.str j "scheme" "input")
-    (← hex j "public_key") (← hex j "store_root") (← J.nat j "store_blocks" "input")).map .str))
+  pure (.arr ((InProofs.clearReasons SCHEMES (← hexes j "pinned").toList c openings (← J.str j "scheme" "input")
+    (← hex j "public_key") (← hex j "message") (← hex j "signature") (← hex j "store_root")
+    (← J.nat j "store_blocks" "input")).map .str))
 
 def recordsDigestFn (j : Json) : V Json := do pure (hexJ (← recordsDigest (← rounds j)))
 
