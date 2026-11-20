@@ -150,6 +150,11 @@ structure Runs (L : Type*) where
   locOut : (r : Run) → Fin (nOut r) → Finset L
   winOut : (r : Run) → Fin (nOut r) → Window
   claimsOut : (r : Run) → Fin (nOut r) → List Property
+  /-- **The free-block capacity** the conversion yields for each server-day block (`cap − b`, the compute rate over the
+  window minus the use PoUW credits to the inference blocks outside the tolerance). It bounds the free quantity, which is
+  the free blocks' work and the tolerance set's actual work together, so the tolerance is a term, not an unbounded
+  quantifier (`RealizesExcept`). -/
+  freeCap : (r : Run) → Fin (nOut r) → ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
   ref : (r : Run) → (inner r).Refines (outer r)
@@ -214,16 +219,24 @@ noncomputable def Realizes (r : P.Run) : Prop :=
 /-- **The run realizes its claims outside a tolerance set** `M` of inference blocks (the feasible-set membership with a
 tolerance): `θ` is registered, the pricing charges every computed gate, every server-day and free claim holds, and every
 inference block outside `M` holds its claims. The sampled proofs and `DeclaredBlocksRun` give the inference claims only
-outside such an `M` (declared use at most the tolerance), so the chain reads this, not `Realizes`. `M` is counted in the
-free block's work (`DeclaredWorkExclusive` over the free quantity that includes it) and the injected information the
-incorrect proof blocks in `M` pass into correct ones is a term of the inference blocks' input (a `.block` source), so an
-accepted run with an incorrect proof block stays inside the chain. `Realizes` is `RealizesExcept ∅`. -/
+outside such an `M`, so the chain reads this, not `Realizes`. **The tolerance is a term, not an unbounded quantifier**:
+`M` holds only inference blocks (`M_inf`), and inside every server-day block its actual work — the free blocks' sizes and
+`M`'s inference blocks' sizes together — is at most the free-block capacity the conversion yields (`M_bound`), so the use
+PoUW credits is over the inference blocks outside `M` and `sizeExclusive` splits over that. Without this clause taking
+`M = all inference blocks` asks compliance of a run whose inference blocks are bound by nothing (the witness
+`tolerance_unbounded_without_term`). Whoever establishes `M_bound` is `DeclaredBlocksRun` plus PoUW through the
+conversion; that an incorrect block's actual size matches its declared use is the open part. `Realizes` implies
+`RealizesExcept ∅` only when the free quantity fits the capacity (`realizes_realizesExcept`). -/
 noncomputable def RealizesExcept (r : P.Run) (M : Finset (Fin (P.nIn r))) : Prop :=
   (∀ a ∈ P.θ r, (P.actual r).isInput a = true) ∧ (P.actual r).width (P.θ r) ≤ P.registered ∧
     (∀ g ∈ (P.actual r).computed, 1 ≤ P.π r g) ∧
     (∀ u, P.cls r u = Class.inference → u ∉ M → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
     (∀ u, P.cls r u ≠ Class.inference → ∀ p ∈ P.claimsIn r u, P.HoldsIn r u p) ∧
-    (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p)
+    (∀ i, ∀ p ∈ P.claimsOut r i, P.HoldsOut r i p) ∧
+    (∀ u ∈ M, P.cls r u = Class.inference) ∧
+    (∀ i, P.kind r i = true →
+      (∑ u ∈ P.freeChildren r i, P.sizeIn r u) + (∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u)
+        ≤ P.freeCap r i)
 
 /-- **Every accepted run realizes its claims** (open): the bridge from the statements to the feasible set. -/
 def Fits : Prop := ∀ r, P.accepts r → P.Realizes r
