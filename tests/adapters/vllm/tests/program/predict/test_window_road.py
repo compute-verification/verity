@@ -121,7 +121,8 @@ def _end(log):
 def test_the_window_road_runs_remote_from_the_record_and_publishes_no_description(tmp_path, monkeypatch):
     """remote through the preflight on the window's record (no ROW read), its seal held to the record and predict row's
     compiler, each step after it run or refused by name: the sampled proofs as proofs', Pearl+ as needing a card (a processor has no gpu-lease), the
-    record and the composite after them. The end line counts what ran, refused and failed, and neither it nor any
+    record and the composite after them; the block counts count the record's circuit beside the registration that binds
+    it. The end line counts what ran, refused and failed, and neither it nor any
     published file names a template or carries the description's digest. What no cheaper test reaches: the runner itself
     on a real window's record. Slow (minutes) for the close."""
     d = _serve_dir(tmp_path, monkeypatch, "remote")
@@ -147,6 +148,8 @@ def test_the_window_road_runs_remote_from_the_record_and_publishes_no_descriptio
         "CLASS 2,4,2: 8.00 bits leave with it (its prompt length, one of the 256 that fit 2 slots in 512 tokens a step; its "
         "slots and outputs are the application's)"], lines
     assert "prove_path.py window-circuit: truncated: a 8-bit field at bit 0 of 0" in err, err
+    counts = [x for x in lines.splitlines() if x.startswith("BLOCK-COUNTS")]
+    assert counts and not [x for x in counts if "refused" in x], (counts, [f.read_text()[-600:] for f in d.glob("block-counts-*.err")])
     secret = _secret(d)
     assert _plain(d) and hashlib.sha512((d / "windows/w0/record/circuit.json").read_bytes()).hexdigest() in _plain(d).values()
     assert not [s for s in secret if s in lines or s[:16] in lines], lines

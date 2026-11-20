@@ -1134,19 +1134,26 @@ circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted)
 }
 # block_counts.py rebuilds each template from its id through the registry and compares no digest with the record's
 BASIS_129="its basis the registry at the names the record carries, not the declared circuit (candidate 129.2)"
+counted_pair() {  # class $1's circuit record and the registration counted beside it: the window's record and its
+  # registration, which binds it (interface.tied_record), where D holds one; else the circuits step's record at the class
+  # beside the advice registration, which binds none and is refused
+  local r=$D/windows/w$K/record
+  if [ -f "$r/registration.json" ] && [ -f "$r/circuit.json" ]; then echo "$r/circuit.json" "$r/registration.json"
+  else echo "$D/window-circuit-w$K-${1//,/-}.json" "$D/advice/w$K/registration.json"; fi
+}
 block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
   # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
-  local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
+  local c tag f reg pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
   [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
   [ -f "$WREG" ] && pins=(--pins "$WREG")
   day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
   (umask 077; mkdir -p "$D/private")
   for c in $CLASSES; do
     tag=${c//,/-}; [ "$c" = record ] && tag=record
-    f=$D/window-circuit-w$K-$tag.json
+    read -r f reg < <(counted_pair "$c")
     [ -f "$f" ] || continue
     if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
-         --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
+         --window "$f" "$reg" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
          --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
       say "BLOCK-COUNTS class $c, the picked window alone: $(said 0 "$D/block-counts-$tag.err" | cut -c1-400); $BASIS_129"
     else say "BLOCK-COUNTS class $c refused $(failed "$?" "$D/block-counts-$tag.err")"; fi
@@ -1247,12 +1254,13 @@ print("%d/%d %d" % (d["alpha"][0], d["alpha"][1], d["gamma"]))' "$IO_LIMITS") ||
   export ALPHA=${got% *} GAMMA=${got#* }
 }
 inference_only() {  # in TREE, once step 3 counted window K's circuit at the class: its verdict against the policy
-  local c out rc lean=()
+  local c out rc f reg lean=()
   c=$(io_class)
   [ -n "$c" ] || return 0
+  read -r f reg < <(counted_pair "$c")
   [ -x "$IO_LEAN" ] && lean=(--lean "$IO_LEAN" --lean-timeout "${IO_LEAN_TIMEOUT:-1800}")
   out=$(CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/one_stage/inference_only.py verdict --policy "$IO_POLICY" --serve-run "$D" \
-    --circuit "$D/window-circuit-w$K-${c//,/-}.json" --registration "$D/advice/w$K/registration.json" --pins "$WREG" \
+    --circuit "$f" --registration "$reg" --pins "$WREG" \
     "${lean[@]}" --out "$OUT/record/inference-only.json" --private "$D/private/inference-only.json" 2> "$D/inference-only.err")
   rc=$?
   if [ -n "$out" ]; then say "$out; $BASIS_129"; else say "INFERENCE-ONLY failed (exit $rc): its log in the serve dir, on the node"; fi
@@ -1797,7 +1805,7 @@ advice() {
 cd "$TREE/adapters/vllm" || exit 9
 CA=$(compiler_args)
 [ -n "$CA" ] || stop compiler 13
-echo "registered compiler: $CA" > "$OUT/compiler.txt"
+(umask 077; mkdir -p "$D/private" && echo "registered compiler: $CA" > "$D/private/compiler.txt")
 WA=()
 [ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
@@ -1993,8 +2001,8 @@ EOF
   say "ADVICE: the close's registration (D/advice/wK), compiled at the close"
   RAN+=(advice)
   if inference_policy window; then RAN+=(inference-policy); else FAILED+=(inference-policy); fi
-  if circuits; then RAN+=(circuits); block_counts; RAN+=(block-counts)
-  else FAILED+=(circuits); step_refused block-counts "it counts the circuits step's window circuit, which failed"; fi
+  if circuits; then RAN+=(circuits); else FAILED+=(circuits); fi
+  block_counts; RAN+=(block-counts)
   step_refused sampled-proofs "step 3's prove path (prove_path/run.sh) proves the units a partition file names (PP_PARTITION), and the window's record has none: its proof of the window's circuit is proofs'"
   road_pieces
   road_wipe

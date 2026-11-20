@@ -36,7 +36,6 @@ PUBLIC = {
     "OUT/main.txt": "main's first-parent line, the commits a challenger session pins on",
     "OUT/weights_registration.txt": "the deployment record's digest line alone",
     "OUT/registration.json": "the window's registration record",
-    "OUT/compiler.txt": "the registered compiler's digest",
     "OUT/serve/serve.json": MIRROR,
     "OUT/serve/windows.jsonl": MIRROR,
     "OUT/serve/seals.jsonl": MIRROR,
