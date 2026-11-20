@@ -569,7 +569,6 @@ loads = [
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/docket.py",
     "verity/protocols/proofs/spot/verifier",
-    "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -583,7 +582,6 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/protocols/resource_accounting/compute/pouw/prover",
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
