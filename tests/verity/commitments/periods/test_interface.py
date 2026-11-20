@@ -3040,3 +3040,38 @@ def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
     for bad in [{**doc, "scheme": "x"}, {**doc, "advice": "zz"}, {**doc, "salts": doc["salts"][:2]}, None]:
         with pytest.raises(ValueError):
             I.opened_advice(c, bad)
+
+
+def _tie(doc: dict, **change) -> tuple[bytes, dict]:
+    body = json.dumps(doc).encode()
+    reg = {"program": doc.get("program"), "partition": doc.get("partition"),
+           "window": {"circuit": hashlib.sha512(body).hexdigest(), "run": doc.get("run")}}
+    return body, {**reg, **change}
+
+
+@pytest.mark.parametrize("field", ["program", "partition", "run"])
+def test_a_tie_refuses_a_field_neither_side_names(field):
+    """A program, partition or run that the record and its registration both leave out is refused by name, never taken as
+    equal; so is one only the registration leaves out."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "run": "r1"}
+    whole = dict(doc)
+    del doc[field]
+    with pytest.raises(ValueError, match=f"^the circuit record names no {field}, so nothing ties"):
+        I.tied_record(*_tie(doc))
+    body, reg = _tie(whole)
+    reg = {**reg, "window": {**reg["window"], "run": None}} if field == "run" else {**reg, field: None}
+    with pytest.raises(ValueError, match=f"^the registration names no {field}, so nothing ties"):
+        I.tied_record(body, reg)
+    assert I.tied_record(*_tie(whole)) == whole
+
+
+def test_a_stated_record_ties_with_no_run_on_either_side():
+    """A stated record (`descriptor_record`: its ``cap``, no run) is tied with no run on either side, and only it."""
+    doc = {"program": "ab" * 64, "partition": "cd" * 64, "cap": 1}
+    assert I.tied_record(*_tie(doc)) == doc
+    body, reg = _tie(doc)
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(body, {**reg, "window": {**reg["window"], "run": "r1"}})
+    del doc["cap"]
+    with pytest.raises(ValueError, match="^the circuit record names no run, so nothing ties"):
+        I.tied_record(*_tie(doc))
