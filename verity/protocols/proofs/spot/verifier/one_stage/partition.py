@@ -216,8 +216,8 @@ def shared_inputs(program: Program, query: Mapping[str, Any], held: Iterable[ran
 
 
 def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]) -> list[tuple[range, int]]:
-    """The units of each template query range whose instance node reads a run Input node inside one of `held`, with the
-    first such node, read off its arguments' runs, never its members or its gates. The Lean's `Partition.heldReads`
+    """The units of each template query range with each run Input node inside one of `held` its instance node reads, in
+    the order its arguments' runs name them, never its members or its gates. The Lean's `Partition.heldReads`
     is this. `QueryRefused` for a query other than a template query."""
     part = _template(program, query, "an Input's readers")
     nodes, held = program.root.body.nodes, list(held)
@@ -225,8 +225,8 @@ def held_reads(program: Program, query: Mapping[str, Any], held: Iterable[range]
               and any(within(program, h, k) for h in held)}
     out: list[tuple[range, int]] = []
     for k, _t, lo, n in part.ranges:
-        if (i := next((i for a in nodes[k].args for i, *_ in _runs(a.refs) if i in inside), None)) is not None:
-            out.append((range(lo, lo + n), i))
+        ws = dict.fromkeys(i for a in nodes[k].args for i, *_ in _runs(a.refs) if i in inside)
+        out.extend((range(lo, lo + n), i) for i in ws)
     return out
 
 

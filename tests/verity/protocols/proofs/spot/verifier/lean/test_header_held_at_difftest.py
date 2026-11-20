@@ -49,9 +49,9 @@ def reference(j):
     return M.population_why([[0, n]], [("t", [[0, n]])], h, j["slice"], reads, held) or ""
 
 
-def case(reads, ports, roots, n) -> dict:
+def case(reads, ports, roots, n, slice_=SLICE) -> dict:
     """A piece's input: ``reads`` sorted, the order `population_why` reads its set in."""
-    return {"reads": sorted(reads), "registered": registered(ports), "slice": SLICE, "header": header(n, roots)}
+    return {"reads": sorted(reads), "registered": registered(ports), "slice": slice_, "header": header(n, roots)}
 
 
 INPUTS = st.builds(case,
@@ -100,6 +100,28 @@ CASES = [
 @pytest.mark.parametrize("reads, ports, roots, n, want", CASES)
 def test_a_port_is_held_by_the_reads_only_at_a_registered_value_the_file_holds(reads, ports, roots, n, want, pieces):
     j = case(reads, ports, roots, n)
+    assert reference(j) == want
+    assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
+
+
+#: a member's port ``w`` read from C's run input node 0 (`OneStageZk.runInputRootsAt`): held at ``input/n0``'s root
+RUN_SLICE = {"population": 2, "scheme": SCHEME,
+             "roots": [{"domain": "dee", "leaves": 4, "port": "w", "root": "ee", "tree": "input/n0"}]}
+RUN_CASES = [
+    ([["w", "input/n0"]], ""),
+    ([], M.shared_unread("w", "input/n0")),
+    ([["w", "input/n1"]], M.shared_unread("w", "input/n0")),
+    ([["w", "committed/w"]], M.shared_unread("w", "input/n0")),
+]
+
+
+@needs_lake
+@pytest.mark.parametrize("reads, want", RUN_CASES)
+def test_a_run_input_port_is_held_only_by_a_read_of_its_nodes_tree(reads, want, pieces):
+    """`Spot.HeaderHeldAt`'s guards on the run input slice, replayed: a header root at ``w`` that is not the
+    registration's is held only by a read of ``w`` at ``input/n0``; no read, another run input's tree and the member's
+    own committed tree each refuse by `SHARED_UNREAD`."""
+    j = case(reads, None, {"w": "77"}, 2, RUN_SLICE)
     assert reference(j) == want
     assert pieces.call("header_held_at", j) == ("output", D.canonical(want))
 
