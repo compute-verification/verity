@@ -13,7 +13,7 @@ HOMES = ("verity/lean_process.py",
          "verity/protocols/proofs/flock/prover/python/verity_flock/lean_child.py",
          "verity/protocols/proofs/flock/prover/agreement/lean_run.py")
 SERVER = "tools/difftest/python/verity_difftest/__init__.py"
-SERVER_RULE = ("PANIC", "LEAN_PANIC")
+SERVER_RULE = ("PANIC", "LEAN_PANIC", "LEAN_EXIT")
 RULE = ("PANIC", "LEAN_PANIC", "LEAN_EXIT", "OK", "ABORTED", "LeanPanic", "LeanExit", "panic_line", "refuse_panic",
         "exit_why", "refuse_exit", "run")
 
