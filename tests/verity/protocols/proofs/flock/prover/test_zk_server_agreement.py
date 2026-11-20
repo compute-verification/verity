@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity_flock import rec_live as RL
+from verity_flock import lean_child as LC, rec_live as RL
 
 from test_rec_live import (CAP0, CAP1, HELLO, PROVER_NONCE, SCHEDULE, TREE, _binding_round, _bytes, _content, _domain, _hdr,
                            _label, _obs, _sq, _tree_hello)
@@ -463,8 +463,10 @@ def test_a_lean_zk_server_that_exits_stops_the_session(built):
     lean.proc.kill()
     lean.proc.wait()
     proxy.handle(honest()[2])
-    lean.close()
-    assert proxy.stopped.startswith(f"rec proxy: {BIN} live: ") and coins.link is None and coins.end == "stop"
+    with pytest.raises(ValueError, match=f"close: {LC.LEAN_EXIT}: killed by SIGKILL$"):
+        lean.close()
+    assert proxy.stopped == f"rec proxy: {BIN} live ended after its last answer, before this request: {LC.LEAN_EXIT}: killed by SIGKILL"
+    assert coins.link is None and coins.end == "stop"
 
 
 def test_the_lean_zk_server_draws_its_own_salts(built):
