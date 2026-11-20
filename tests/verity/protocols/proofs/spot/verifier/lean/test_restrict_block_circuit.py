@@ -118,6 +118,68 @@ def test_a_row_not_whole_words_is_refused_by_both(n):
     assert got.returncode == 1 and why in got.stdout, got.stdout
 
 
+def _desc(key: str, n: int, nodes: list, ret: dict, ret_type: list, types: list, prims: dict) -> dict:
+    """`Spot.OneStageZk.X16` / `F48`: template ``key`` on x : Array n (Value 1), one instance over n inputs."""
+    v1, a = ["Value", 1], ["Array", n, ["Value", 1]]
+    callees = ["Input1_v1", *prims, key]
+    root = f"Root[{key[:-3]}Prog_v1]_v1"
+    return {"annotations": {}, "boolean": {}, "callees": callees, "definitions": {
+        key: {"bindings": {}, "form": "composite", "id": key, "body": {
+            "nodes": nodes, "params": [["x", a]], "ret": ret, "ret_type": ret_type}},
+        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": v1},
+        **{p: {"form": "primitive", "id": p, "params": ps, "ret": v1} for p, ps in prims.items()},
+        root: {"bindings": {}, "form": "composite", "id": root, "body": {
+            "nodes": [{"args": [], "axes": [], "fn": 0, "form": "batch", "n": n, "out": 1},
+                      {"args": [{"refs": {"affine": ["n", 0, 0, n]}, "type": 1}], "fn": len(callees) - 1, "form": "call",
+                       "out": types.index(ret_type)}],
+            "params": [], "ret": {"affine": ["n", 1, 0, 1 if ret_type == v1 else n]}, "ret_type": ret_type}}},
+        "program_fn": f"{key[:-3]}Prog_v1", "root": root, "schema": "verity-ir/descriptor/v2", "types": types}
+
+
+def _x16() -> dict:
+    """X(x : Array 16 (Value 1)) = Xor2(x[0], x[0]): a 1-bit return field."""
+    v1, a2 = ["Value", 1], ["Array", 2, ["Value", 1]]
+    x0 = {"affine": ["p", 0, 0, 1]}
+    node = {"args": [{"refs": {"concat": [x0, x0]}, "type": 2}], "fn": 1, "form": "primitive", "out": 0}
+    return _desc("X_v1", 16, [node], {"affine": ["n", 0, 0, 1]}, v1, [v1, ["Array", 16, v1], a2], {"Xor2_v1": [["x", a2]]})
+
+
+def _f48() -> dict:
+    """F(x : Array 48 (Value 1)) = x[0:47] ++ [Not x[47]]: rows of 24 bits when x is cut in two."""
+    v1, a = ["Value", 1], ["Array", 48, ["Value", 1]]
+    node = {"args": [{"refs": {"affine": ["p", 0, 47, 1]}, "type": 0}], "fn": 1, "form": "primitive", "out": 0}
+    ret = {"concat": [{"affine": ["p", 0, 0, 47]}, {"affine": ["n", 0, 0, 1]}]}
+    return _desc("F_v1", 48, [node], ret, a, [v1, a], {"Not_v1": [["a", v1]]})
+
+
+def test_the_lean_guards_read_these():
+    text = HERE.parents[7].joinpath("verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZkStatement.lean").read_text()
+    for key, desc in (("X16", _x16()), ("F48", _f48())):
+        assert f'def {key} : String := r#"{json.dumps(desc, sort_keys=True, separators=(",", ":"))}"#' in text
+
+
+def test_a_one_bit_return_is_refused_by_both():
+    """Xor(x, x) with a 1-bit output: its word's other 15 bits would be columns no row reads."""
+    desc = _x16()
+    c = json.dumps(desc, sort_keys=True, separators=(",", ":")).encode()
+    part = PO.build(desc, PO.template_instance_query("X_v1"), [[(0, 1)]])
+    why = f"lower: C_S's template X_v1: return field o0 of 1 bits {OC.NOT_WHOLE}"
+    with pytest.raises(OC.Refused, match=re.escape(why)):
+        OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut=OC.cuts(c, part))
+    got = lean(c, part, 0)
+    assert got.returncode == 1 and why in got.stdout, got.stdout
+
+
+def test_a_cut_row_not_whole_words_is_refused():
+    """x of 48 bits, whole, cut in two: rows of 24 bits (Lean's twin: `Spot.OneStageZk.F48`'s guard)."""
+    desc = _f48()
+    c = json.dumps(desc, sort_keys=True, separators=(",", ":")).encode()
+    part = PO.build(desc, PO.template_instance_query("F_v1"), [[(0, 1)]])
+    why = f"lower: C_S's template F_v1: input row x#0 of 24 bits {OC.NOT_WHOLE}"
+    with pytest.raises(OC.Refused, match=re.escape(why)):
+        OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut={"F_v1": {"x": 2}})
+
+
 def _ports(text: bytes) -> list[list]:
     meta = json.loads(text.split(b"\n", 2)[1][len(b"META "):])
     return [list(p[:2]) for p in meta["ports"]], meta

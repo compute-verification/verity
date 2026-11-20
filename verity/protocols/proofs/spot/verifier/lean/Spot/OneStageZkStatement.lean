@@ -245,15 +245,27 @@ padding and leave the second output's word without a row. -/
 def E3 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",3,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,3]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":3,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,3]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,4]},"ret_type":["Tuple",[["Array",3,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",3,["Value",1]],["Tuple",[["Array",3,["Value",1]],["Value",1]]]]}"#
 def E2047 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",2047,["Value",1]]],["y",["Value",1]]],"ret":{"concat":[{"affine":["p",0,0,2047]},{"affine":["n",0,0,1]}]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":2047,"out":1},{"args":[],"fn":0,"form":"primitive","out":0},{"args":[{"refs":{"affine":["n",0,0,2047]},"type":1},{"refs":{"affine":["n",1,0,1]},"type":0}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,2048]},"ret_type":["Tuple",[["Array",2047,["Value",1]],["Value",1]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",2047,["Value",1]],["Tuple",[["Array",2047,["Value",1]],["Value",1]]]]}"#
 
-/-- `lowerBlock` on unit 0 of the descriptor `d`, its template `E_v1`. -/
-def lowerE (d : String) : V ByteArray := do
+/-- X(x : Array 16 (Value 1)) = Xor2(x[0], x[0]): whole parameter and row, a 1-bit return field. -/
+def X16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Xor2_v1","X_v1"],"definitions":{"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Root[XProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1}],"fn":2,"form":"call","out":0}],"params":[],"ret":{"affine":["n",1,0,1]},"ret_type":["Value",1]},"form":"composite","id":"Root[XProg_v1]_v1"},"X_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"concat":[{"affine":["p",0,0,1]},{"affine":["p",0,0,1]}]},"type":2}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",16,["Value",1]]]],"ret":{"affine":["n",0,0,1]},"ret_type":["Value",1]},"form":"composite","id":"X_v1"},"Xor2_v1":{"form":"primitive","id":"Xor2_v1","params":[["x",["Array",2,["Value",1]]]],"ret":["Value",1]}},"program_fn":"XProg_v1","root":"Root[XProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Array",2,["Value",1]]]}"#
+/-- F(x : Array 48 (Value 1)) = x[0:47] ++ [Not x[47]]: whole parameter and return field, rows of 24 bits when x is cut in two. -/
+def F48 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","F_v1"],"definitions":{"F_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",0,47,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",48,["Value",1]]]],"ret":{"concat":[{"affine":["p",0,0,47]},{"affine":["n",0,0,1]}]},"ret_type":["Array",48,["Value",1]]},"form":"composite","id":"F_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[FProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":48,"out":1},{"args":[{"refs":{"affine":["n",0,0,48]},"type":1}],"fn":2,"form":"call","out":1}],"params":[],"ret":{"affine":["n",1,0,48]},"ret_type":["Array",48,["Value",1]]},"form":"composite","id":"Root[FProg_v1]_v1"}},"program_fn":"FProg_v1","root":"Root[FProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",48,["Value",1]]]}"#
+
+/-- `lowerBlock` on unit 0 of the descriptor `d`, its template `key`, cut as `cuts` gives. -/
+def lowerAt (d key : String) (cuts : List (String × Nat) := []) : V ByteArray := do
   let CJ ← Json.parse d
   let P ← Flock.Program.decode d.toUTF8
-  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
-  lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0])
+  let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", key)])]
+  lowerBlock CJ (Json.mkObj [("query", q)]) [(key, cuts)] (← Spot.Restrict.restrict P #[0])
 
-#guard (match lowerE E3 with | .error e => e == s!"lower: C_S's template E_v1: parameter x of 3 bits {NOT_WHOLE}" | _ => false)
-#guard (match lowerE E2047 with | .error e => e == s!"lower: C_S's template E_v1: parameter x of 2047 bits {NOT_WHOLE}" | _ => false)
+/-- `lowerAt d key cuts` refused with exactly `why`, so each clause of `wholeWords` in `lowerBlock` is held on its own. -/
+def refusedAs (t : V ByteArray) (why : String) : Bool := match t with
+  | .error e => e == s!"lower: C_S's template {why} {NOT_WHOLE}"
+  | .ok _ => false
+
+#guard refusedAs (lowerAt E3 "E_v1") "E_v1: parameter x of 3 bits"
+#guard refusedAs (lowerAt E2047 "E_v1") "E_v1: parameter x of 2047 bits"
+#guard refusedAs (lowerAt F48 "F_v1" [("x", 2)]) "F_v1: input row x#0 of 24 bits"
+#guard refusedAs (lowerAt X16 "X_v1") "X_v1: return field o0 of 1 bits"
 
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
