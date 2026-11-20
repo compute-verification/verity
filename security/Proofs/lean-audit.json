@@ -141,6 +141,7 @@
   "Proofs.Properties.Verity.Sampled.Record",
   "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session",
+  "Proofs.Properties.Verity.Sampled.MembersCircuit",
   "Proofs.Properties.Verity.Sampled.Record.Accepts",
   "Proofs.Properties.Verity.Sampled.Record.Runs",
   "Proofs.Properties.Verity.Sampled.Record.Opens",
