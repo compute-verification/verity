@@ -1938,6 +1938,65 @@ theorem unitWordComputes_nested {bytes : ByteArray} {P : Prog} (hd : decode byte
       simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1']
     rw [hwsl, hwr l hlc q hretq hqN, portWord_lt Y hqN, portWord_lt Y hqN]
 
+/-- **`UnitComputes` for a template of axis-0 batches over word primitives and earlier such templates**: each unit of the
+block computes, bit for bit, the lift of the template `admitted` gives, where that template is in `Batch0Nested`. The
+Boolean bodies' fact is the lowering's (`lowerGateBodies`). -/
+theorem unitComputes_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
+    (cuts : List (String × List (String × ℕ))) (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit) (L : Prog)
+    (e : ℕ) (t : Tmpl.Tmpl) (hd : decode bytes = .ok P) (hr : (P.defs[P.root]!).body.recut = #[])
+    (hs : Spot.Restrict.restrict P units = .ok S) (ha : Spot.OneStageZk.admitted partition cuts S = .ok a)
+    (hab : Spot.OneStageZk.admittedBlock P units a.key = .ok ()) (hl : Flock.Lift.lift S a.d = .ok (L, e))
+    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : Batch0Nested P a.d)
+    (g : ℕ) (hg : g ∈ units) (k m : ℕ) (hu : Spot.BlockFront.unitAt P g = .ok (k, m))
+    (hda : (P.child P.rootScope k m).d = a.d) (Y : (Flock.OfProgram.ofProgram P).Trace)
+    (hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+      Y h = (Flock.OfProgram.ofProgram P).op h Y) :
+    outBits Y g = Prog.evalBool L e (argBits Y g) := by
+  obtain ⟨x, f, h1, h2, -⟩ := admittedBlock_callee hab g hg k m hu
+  have hdx : (P.child P.rootScope k m).d = x.fn := by
+    rw [child_d]
+    generalize P.defs[P.root]! = R at h1 ⊢
+    simp [getElem!_def, h1]
+  have hlt : a.d < P.defs.size := by
+    rw [← hda, hdx]
+    exact (Array.getElem?_eq_some_iff.1 h2).1
+  have hgb := lowerGateBodies bytes P partition cuts units S a L e t hd hr hs ha hlt hl hbt
+  have ho := unitWordComputes_nested hd hr hov hG hu (hRs g hg) (by rw [hda]; exact hn) (by rw [hda]; exact hgb) Y hY
+  have hw : (argWords Y g).map List.length = leafWidths (P.defs[(P.child P.rootScope k m).d]!) := by
+    rw [← (unitWidths bytes P hd hr hov hG g k m hu (hRs g hg)).1]
+    simp [argWords, Function.comp_def, portWord_length]
+  rw [hda] at hw ho
+  unfold outBits argBits
+  rw [portBits_eq, portBits_eq]
+  change (outWords Y g).flatten = Prog.evalBool L e (argWords Y g).flatten
+  rw [ho, liftWordEval_nested bytes P units S a.d L e hd hr hs hlt hn hgb hl _ hw]
+
+/-- **`BlockEvalDoor` for a block whose template is in `Batch0Nested`**: `BlockEvalDoor`'s conclusion, under its
+hypotheses and that the template `admitted` gives is of axis-0 batches over word primitives and earlier such templates. -/
+theorem blockEvalDoor_nested (bytes : ByteArray) (P : Prog) (partition : Lean.Json)
+    (cuts : List (String × List (String × ℕ))) (units : Array ℕ) (S : Prog) (a : Spot.OneStageZk.Admit)
+    (fr : Spot.BlockFront.Front) (L : Prog) (e : ℕ) (t : Tmpl.Tmpl) (hd : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) (hs : Spot.Restrict.restrict P units = .ok S)
+    (ha : Spot.OneStageZk.admitted partition cuts S = .ok a)
+    (hab : Spot.OneStageZk.admittedBlock P units a.key = .ok ()) (hf : Spot.BlockFront.front P units = .ok fr)
+    (_ : units.toList.Pairwise (· < ·)) (hl : Flock.Lift.lift S a.d = .ok (L, e))
+    (hbt : Spot.OneStageZk.blockTmpl S a = .ok t) (hov : P.orderViolation = none)
+    (hG : ∀ h < InferenceOnlyVerifier.Properties.gates P, InferenceOnlyVerifier.Properties.GateOk P h)
+    (hRs : ∀ g ∈ units, UnitResolves P g) (hn : Batch0Nested P a.d)
+    (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (hB : BlockIs P blocks u fr)
+    (X : (Flock.OfProgram.ofProgram P).Trace) (g : ℕ) (hg : g ∈ units) :
+    let Y := (Flock.OfProgram.partOf P blocks).localEval X u.castSucc
+    Prog.evalBool L e (argBits Y g) = outBits Y g := by
+  intro Y
+  obtain ⟨k, m, hu, hin⟩ := frontUnitRanges P units fr hf g hg
+  have hY : ∀ h : Fin (Flock.OfProgram.ofProgram P).N, InUnit P k m h.val → Flock.OfProgram.inputAt P h = false →
+      Y h = (Flock.OfProgram.ofProgram P).op h Y :=
+    fun h h1 h2 => Verity.Partition.localEval_of_mem _ X ((hB h).2 ⟨hin h.val h1, h2⟩)
+  exact (unitComputes_nested bytes P partition cuts units S a L e t hd hr hs ha hab hl hbt hov hG hRs hn g hg k m hu
+    (admitCallee bytes P partition cuts units S a hd hs ha hab g hg k m hu) Y hY).symm
+
 end UnitWordProof
 
 /-- **The lift where the door lowers a block**: `lowerBlock` accepts only past `admitted`, whose `on-bits` lifts the
