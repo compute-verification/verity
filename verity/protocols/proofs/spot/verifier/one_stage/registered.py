@@ -70,6 +70,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
+from verity.commitments import session_coins as SC
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.circuits import supplied as SU
@@ -108,6 +109,7 @@ LE = "le"
 SHORT_BITS = 65536
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
+_EVEN_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 _DEC = re.compile(r"0|[1-9][0-9]*")
 #: `Flock.Registered.freshValue`'s prefix: ``input/n<w>`` is run input node ``w``'s one tree
 FRESH = "input/n"
@@ -559,10 +561,178 @@ def _coin(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> bytes:
     return bytes(coins[m["supplied"]])
 
 
-def body(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
-    """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
-    statement" where the verifier can't compute it."""
+def _no_statement(name: str, f: str, why: str) -> ValueError:
+    return ValueError(f"supplied input {name}: no statement: {f}'s {why}")
+
+
+def _canonical_numbers(b: bytes) -> bool:
+    """Every number in the JSON text ``b`` (read as JSON already) is ``0`` or digits with no leading zero (`Supplied.lean`'s
+    `canonicalNumbers`): no sign, fraction or exponent. A number is a run of ``0-9 + - . e E`` that starts outside a string at
+    one of ``0-9 + - .``."""
+    def ok(t: bytes) -> bool:
+        return t == b"0" or (49 <= t[0] <= 57 and t.isdigit())
+    in_str = esc = False
+    tok = bytearray()
+    for c in b:
+        if in_str:
+            if esc:
+                esc = False
+            elif c == 92:
+                esc = True
+            elif c == 34:
+                in_str = False
+            continue
+        start = 48 <= c <= 57 or c in (43, 45, 46)
+        if tok and (start or c in (101, 69)):
+            tok.append(c)
+            continue
+        if tok:
+            if not ok(bytes(tok)):
+                return False
+            tok.clear()
+        if c == 34:
+            in_str = True
+        elif start:
+            tok.append(c)
+    return not tok or ok(bytes(tok))
+
+
+def _held_object(tbl: Mapping[str, bytes], kind: str, name: str, f: str) -> Mapping[str, Any]:
+    """What the verifier holds under function ``f`` in ``tbl`` (``kind``, "commitment" or "coin"), as a JSON object of
+    canonical numbers; "no statement" for what it holds none of, or that is no such object."""
+    if f not in tbl:
+        raise ValueError(f"supplied input {name}: no statement: the verifier holds no {kind} for {f}")
+    raw = bytes(tbl[f])
+
+    def not_json(c: str) -> Any:
+        raise ValueError(c)
+    try:
+        doc = json.loads(raw.decode("utf-8"), parse_constant=not_json)
+    except ValueError:
+        raise _no_statement(name, f, f"{kind} is no JSON") from None
+    if not _canonical_numbers(raw):
+        raise _no_statement(name, f, f"{kind} holds a number that is no canonical natural")
+    if not isinstance(doc, dict):
+        raise _no_statement(name, f, f"{kind} is no object")
+    return doc
+
+
+def _session_fields(name: str, f: str, rel: Mapping[str, Any], hexes: Sequence[str],
+                    nats: Sequence[tuple[str, int]]) -> dict[str, Any]:
+    """The held commitment's fields ``hexes`` (lowercase hex of whole bytes) and ``nats`` (naturals below ``2 ** bits``)."""
+    c = rel.get("commitment")
+    if not isinstance(c, dict):
+        raise _no_statement(name, f, "commitment holds no commitment object")
+    out: dict[str, Any] = {}
+    for k in hexes:
+        v = c.get(k)
+        if not (isinstance(v, str) and _EVEN_HEX.fullmatch(v)):
+            raise _no_statement(name, f, f"commitment's {k} is no lowercase hex")
+        out[k] = bytes.fromhex(v)
+    for k, bits in nats:
+        v = c.get(k)
+        if type(v) is not int or not 0 <= v < 1 << bits:
+            raise _no_statement(name, f, f"commitment's {k} is no u{bits}")
+        out[k] = v
+    return out
+
+
+def _round_coin(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str,
+                m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """Round ``round``'s index, the last opening of the round that the coin holds, opened under the coin root of the
+    commitment the verifier holds (never one the coin carries)."""
     f = m["supplied"]
+    j = _arg(name, m, "round", int)
+    rel = _held_object(commitments, "commitment", name, f)
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key"), (("blocks", 64), ("k", 32)))
+    if j >= 1 << 32:
+        raise _no_statement(name, f, f"round {j} is no u32")
+    if j >= c["k"]:
+        raise _no_statement(name, f, f"round {j} is no round of the session's {c['k']}")
+    coin = _held_object(coins, "coin", name, f)
+    if set(coin) - {"openings"}:
+        raise _no_statement(name, f, "coin holds more than its openings: the coin root is the verifier's own")
+    ops = coin.get("openings")
+    if not isinstance(ops, list):
+        raise _no_statement(name, f, "coin holds no openings list")
+    o = next((o for o in reversed(ops) if isinstance(o, dict) and type(o.get("j")) is int and o["j"] == j), None)
+    if o is None:
+        raise _no_statement(name, f, f"coin holds no opening of round {j}")
+    index, salt, path = o.get("index"), o.get("salt"), o.get("path")
+    if not (type(index) is int and index >= 0 and isinstance(salt, str) and _EVEN_HEX.fullmatch(salt)
+            and isinstance(path, list) and all(isinstance(p, str) and _EVEN_HEX.fullmatch(p) for p in path)):
+        raise _no_statement(name, f, f"opening of round {j} is malformed")
+    if index >= 1 << 64:
+        raise _no_statement(name, f, f"round {j}'s index {index} is no u64")
+    if index >= c["blocks"]:
+        raise _no_statement(name, f, f"round {j}'s index {index} is no block of the session's {c['blocks']}")
+    if not SC.verify(c["session"], c["coin_root"], c["coin_key"], c["blocks"], c["k"], j, index, bytes.fromhex(salt),
+                     [bytes.fromhex(p) for p in path]):
+        raise _no_statement(name, f, f"round {j}'s index {index} is not its committed coin")
+    return [("bytes", (j.to_bytes(4, "big") + index.to_bytes(8, "big")).hex())], 12
+
+
+def _header(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's signed header with ``"ended": "complete"`` and ``"rounds": k``, which the commitment's own
+    ``ended`` and ``rounds`` are compared with, so a late or short session has no statement."""
+    f = m["supplied"]
+    want = _arg(name, m, "head", int)
+    rel = _held_object(commitments, "commitment", name, f)
+    c = _session_fields(name, f, rel, ("session", "coin_root", "coin_key", "binding"),
+                        (("blocks", 64), ("k", 32), ("limit_ns", 64), ("block_bytes", 64)))
+    ended, rounds = rel.get("ended"), rel.get("rounds")
+    if not isinstance(ended, str):
+        raise _no_statement(name, f, "commitment holds no ended string")
+    if type(rounds) is not int or not 0 <= rounds < 1 << 32:
+        raise _no_statement(name, f, "commitment's rounds is no u32")
+    if ended != SC.COMPLETE:
+        raise _no_statement(name, f, "session did not end complete")
+    if rounds != c["k"]:
+        raise _no_statement(name, f, f"session has {rounds} rounds, not its {c['k']}")
+    head = SC.header(c["session"], c["coin_root"], c["coin_key"], c["binding"], c["blocks"], c["k"], c["limit_ns"],
+                     c["block_bytes"], SC.COMPLETE, c["k"])
+    if len(head) != want:
+        raise _no_statement(name, f, f"header is {len(head)} bytes, not {want}")
+    row = head + bytes(len(head) % 2)
+    return [("bytes", row.hex())], len(row)
+
+
+def _context(commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """The held commitment's session id and the first 16 bytes of the held key, as the signature's message hashes them."""
+    f = m["supplied"]
+    if m["args"]:
+        raise ValueError(f"supplied input {name}: {f} takes no args")
+    rel = _held_object(commitments, "commitment", name, f)
+    key = rel.get("key")
+    if not (isinstance(key, str) and _EVEN_HEX.fullmatch(key)):
+        raise _no_statement(name, f, "commitment's key is no lowercase hex")
+    session = _session_fields(name, f, rel, ("session",), ())["session"]
+    ident = bytes.fromhex(key)[:16]
+    if len(ident) != 16:
+        raise _no_statement(name, f, f"key is {len(ident)} bytes, not an LMS identifier's 16")
+    if len(session) != 32:
+        raise _no_statement(name, f, f"session is {len(session)} bytes, not 32")
+    ctx = SC.signed_context(ident, session)
+    return [("bytes", ctx.hex())], len(ctx)
+
+
+def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[list[tuple[str, str]], int]:
+    """A supplied function's body (`Supplied.body`): its value's sources and its length in bytes; ValueError naming "no
+    statement" where the verifier can't compute it. ``coins`` and ``commitments`` are what the verifier holds of each function
+    as a coin and as a released commitment, by function name. The storage session's three functions read the commitment, a
+    JSON object `{commitment, ended, rounds, key}` (`SessionCommitment.to_json`, how the session ended and its rounds, the
+    registered LMS public key's hex), and `pous.session.round_coin/v1` the coin, `{openings}` (`CoinOpening.to_json`):
+    `u32be(round) ‖ u64be(index)` of the round's last opening, which opens its committed coin below the commitment's blocks;
+    `pous.session.header/v1` the header of a session that ended complete with all its rounds in `head` bytes, padded to whole
+    u16 words; `pous.session.context/v1` the 106 bytes the signature's message hashes before the record. Each number they read
+    is canonical (`_canonical_numbers`) and within its field's width."""
+    f = m["supplied"]
+    if f == "pous.session.round_coin/v1":
+        return _round_coin(coins, commitments, name, m)
+    if f == "pous.session.header/v1":
+        return _header(commitments, name, m)
+    if f == "pous.session.context/v1":
+        return _context(commitments, name, m)
     if f == "const.u16/v1":
         x = _arg(name, m, "value", int)
         if x >= 1 << 16:
@@ -594,20 +764,21 @@ def body(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> tuple[l
     raise ValueError(f"supplied input {name}: no statement: {f}'s body is not the verifier's yet")
 
 
-def of_mark(coins: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list[list[tuple[str, str]]]:
+def of_mark(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str, m: Mapping[str, Any]) -> list[list[tuple[str, str]]]:
     """A supplied input's one row of sources (`Supplied.ofMark`): its body's, led by ``(LE, "")`` where its layout is
     `le`."""
-    sources, n = body(coins, name, m)
+    sources, n = body(coins, commitments, name, m)
     if 8 * n != m["bits"]:
         raise ValueError(f"supplied input {name}: {m['supplied']}'s value is {8 * n} bits, and the mark says {m['bits']}")
     return [([(LE, "")] if m["layout"] == "le" else []) + sources]
 
 
 def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mapping[str, Any],
-                coins: Mapping[str, str] | None, released: Mapping[str, int] | None = None,
-                records: int = 0) -> dict[str, list[list[tuple[str, str]]]]:
-    """The rows of `program`'s supplied inputs (`marks`), each its function's value under the verifier's `coins`
-    (`{function: hex}`; `OneStage.markedRows`): ValueError where the verifier registers no read of the input, where
+                coins: Mapping[str, str] | None, commitments: Mapping[str, str] | None = None,
+                released: Mapping[str, int] | None = None, records: int = 0) -> dict[str, list[list[tuple[str, str]]]]:
+    """The rows of `program`'s supplied inputs (`marks`), each its function's value under the verifier's `coins` and
+    `commitments` (`{function: hex}` each: what it holds of a function as a coin and as a released commitment, which the
+    order rule counts the first of alone; `OneStage.markedRows`): ValueError where the verifier registers no read of the input, where
     `supplied` (the scheme's) has rows for it too, or where its layout is `digest` and its leaves aren't whole digests or
     the other way round; and refused by the order rule (`order`) at `released`, the verifier's place of each coin, after
     `records` records of the log."""
@@ -621,6 +792,15 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
         if not (isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h)):
             raise ValueError(f"coins: {f}'s coin is not hex")
         held[f] = bytes.fromhex(h)
+    if not isinstance(commitments or {}, Mapping):
+        raise ValueError("commitments are an object of hex by supplied function")
+    commit = {}
+    for f, h in (commitments or {}).items():
+        if f not in SU.FUNCTIONS:
+            raise ValueError(f"commitments: {f} is no supplied function")
+        if not (isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h)):
+            raise ValueError(f"commitments: {f}'s commitment is not hex")
+        commit[f] = bytes.fromhex(h)
     # A decoded Program has no `fn`, only the lowered root, whose parameters are the same names.
     params = dict(getattr(program, "fn", program.root).signature()[0]) if got else {}
     out = {}
@@ -635,20 +815,32 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
         if (m["layout"] == "digest") != digests(params[v]):
             raise ValueError(f"supplied input {v}: layout {m['layout']} reads whole digests only into a parameter of "
                              "whole digests")
-        out[v] = of_mark(held, v, m)
-    order(got, out, held, released, records)
+        out[v] = of_mark(held, commit, v, m)
+    order(got, out, held, commit, released, records)
     return out
 
 
+def _commitment_place(b: bytes) -> int | None:
+    """The place a held commitment was registered at: its JSON's ``place``, a natural; None for a text that is no JSON object
+    of one (`Supplied.commitmentPlace`)."""
+    try:
+        doc = json.loads(b.decode("utf-8"))
+    except ValueError:
+        return None
+    return _nat(doc.get("place")) if isinstance(doc, dict) else None
+
+
 def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[tuple[str, str]]]],
-          held: Mapping[str, bytes], released: Mapping[str, int] | None, records: int) -> None:
+          held: Mapping[str, bytes], commit: Mapping[str, bytes], released: Mapping[str, int] | None, records: int) -> None:
     """§5.4's order rule at registration (`Supplied.order`): every commitment C's marks read is registered before every
     coin they read, `E_SUPPLIED_ORDER` naming the late ones. A mark reads a coin where its function's value is one the
     verifier holds (`held`), at its place in `released` (`{function: n}`: the coin was released after n records, this
     one the `records`-th, its commitments before any coin it reads); its body's sources read the commitments: a
     ``value``'s or ``port``'s root this record's, at place `records`, and ``position`` the log's, at `records` - 1.
     ValueError where `released` is not an object of a place by supplied function, or names no place of a coin read
-    beside a commitment."""
+    beside a commitment. A held commitment (`commit`) is no coin, but a coin follows it: the ``place`` its JSON carries
+    (where the verifier registered it) is before the place of every coin a mark reads, `E_SUPPLIED_ORDER` naming the
+    commitments at or after it, and refused where a commitment has no place or the coin has none in `released`."""
     if released is not None and not (isinstance(released, Mapping) and all(
             f in SU.FUNCTIONS and _nat(n) is not None for f, n in released.items())):
         raise ValueError("released is an object of a place by supplied function")
@@ -659,7 +851,19 @@ def order(marked: Mapping[str, Mapping[str, Any]], rows: Mapping[str, list[list[
             if at is not None:
                 name = "log" if k == "position" else n
                 reads[name] = max(reads.get(name, at), at)
-    for f in sorted({m["supplied"] for m in marked.values() if m["supplied"] in held}):
+    cms = sorted({m["supplied"] for m in marked.values() if m["supplied"] in commit})
+    cos = sorted({m["supplied"] for m in marked.values() if m["supplied"] in held})
+    if cms and cos:
+        placed = {}
+        for c in cms:
+            if (p := _commitment_place(commit[c])) is None:
+                raise ValueError(f"released: the verifier names no place of {c}'s commitment, which a coin it holds follows")
+            placed[f"commitment {c}"] = p
+        for f in cos:
+            if f not in (released or {}):
+                raise ValueError(f"released: the verifier names no place of {f}'s coin, which follows a commitment it holds")
+            SU.check_order(placed, released[f], f)
+    for f in cos:
         if not reads:
             return
         if f not in (released or {}):
