@@ -139,7 +139,8 @@ class Audit:
         statements = [{"member": name, "sessions": [sessions[name]]} for name in names if name in sessions]
         self.evidence = {"coins": {k: v for k, v in ch.evidence(ch.segment.to_json()).items() if k != "key"},
                          "draw": sample, "instances": len(proved), "proved_units": proved,
-                         "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                         "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": sorted(sample["units"]),
+                         "session_roots": {r["port"]: r["root"] for r in self.rec["roots"]},
                          "statement": {}, "proofs": {"statements": statements},
                          "sessions": [s["name"] for st in statements for s in st["sessions"]]}
         members = {name: {"public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
