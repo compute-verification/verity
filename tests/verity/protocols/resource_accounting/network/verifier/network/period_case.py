@@ -1791,9 +1791,13 @@ BOOLEAN = {LOW.id: bind(CompositeDefinition("NetworkPeriodScanLowBits", 1, (), l
                                             lambda B, S, a, b: B.call(BL.xor_gate(2), BL.operands(a, b)), register=False))}
 
 
+#: the lookup registered before this module loads (the suite's `stand_in`, else the catalog's), which `_boolean` defers to
+_BEFORE = PG._BODY_LOOKUP[0] if PG._BODY_LOOKUP else V.boolean_version
+
+
 def _boolean(p: PrimitiveDefinition):
-    """A primitive's one Boolean Definition: `BOOLEAN`'s for the stand-ins', else the catalog's."""
-    return BOOLEAN[p.id] if p.id in BOOLEAN else V.boolean_version(p)
+    """A primitive's one Boolean Definition: `BOOLEAN`'s for the stand-ins', else the lookup registered before."""
+    return BOOLEAN[p.id] if p.id in BOOLEAN else _BEFORE(p)
 
 
 PG.register_boolean_bodies(_boolean)
