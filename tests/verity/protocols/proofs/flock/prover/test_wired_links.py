@@ -403,10 +403,13 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
                      *(["--program", str(where / "program.desc")] if program else []),
                      *(["--registered", str(where / f"{reads}.reads.json")] if reads else []))
 
-    for where, name, reads in ((d, "writers", "writers"), (d, "honest", "readers"), (flat, "writers", "writers")):
+    for where, name, reads, note in ((d, "writers", "writers", "no wire between the statement's units"),
+                                     (d, "honest", "readers", f"Linking checked: {N} wire(s)"),
+                                     (flat, "writers", "writers", "no wire between the statement's units")):
         ok, out = at(where, name, reads)
         print(where.name, name, ok and ok.get("partition_check"))
         assert ok is not None, out
+        assert ok["partition_check"]["note"].startswith("units derived") and note in ok["partition_check"]["note"], out
     for cheat, reads, why in (("made_up", "readers", f"port x: table row 0 {NOT_OPEN}"),
                               ("wrong_salt", "readers", f"port x: table row 0 {NOT_OPEN}"),
                               ("other_words", "readers", f"port x: table row 0 {NOT_OPEN}"),
