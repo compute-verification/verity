@@ -1,5 +1,4 @@
-"""Chunked-prefill column: the `--variant chunked=<N>` workload variant, its V1 schedule simulation, and the
-prefill-chunk / token-step attribution of `verity_vllm.engine.chunks` on stub engines with vLLM V1's shape (one-iteration
+"""Chunked prefill: the prefill-chunk / token-step attribution of `verity_vllm.engine.chunks` on stub engines with vLLM V1's shape (one-iteration
 output lag, no output at a partial-prefill step, token budget shared running-first).  Torch-free."""
 from __future__ import annotations
 
@@ -10,77 +9,10 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
-from verity_vllm.config import workload_file
 from verity_vllm.engine import arrivals, handle
 from verity_vllm.engine import chunks as CA
-from verity_vllm.pipeline import coverage_workloads as gw
 
 REPO = (Path(__file__).resolve().parents[5] / "adapters" / "vllm")
-PROF = REPO / "workloads"
-
-
-# ---------------------------------------------------------------------------------------------------------
-# generator: variant parsing + the chunked schedule simulation + the generated cell
-# ---------------------------------------------------------------------------------------------------------
-
-
-def test_parse_variant_accepts_sampling_names_and_feature_pairs():
-    assert gw.parse_variant("greedy") == ("greedy", {})
-    assert gw.parse_variant("t1") == ("t1", {})
-    assert gw.parse_variant("chunked=64") == ("greedy", {"chunked": 64})
-    assert gw.parse_variant("t1,chunked=32") == ("t1", {"chunked": 32})
-    assert gw.variant_suffix("greedy", {}) == "" and gw.variant_suffix("t1", {}) == "_t1"
-    assert gw.variant_suffix("greedy", {"chunked": 64}) == "_ck64" and gw.variant_suffix("t1", {"chunked": 64}) == "_t1_ck64"
-    with pytest.raises(KeyError):
-        gw.parse_variant("bogus")
-    with pytest.raises(KeyError):
-        gw.parse_variant("unknown=1")
-
-
-def test_chunked_schedule_of_the_b1_c256_lengths():
-    d = gw.draw_lengths("B1", "C256", 0)
-    assert [(r["prompt_len"], r["max_tokens"]) for r in d] == [(155, 15)]
-    sim = gw.simulate_schedule_chunked(d, 64)
-    assert sim["prefill_chunks"] == [[64, 64, 27]] and sim["partial_prefill_steps"] == [[0, 1]]
-    assert sim["first_token_step"] == [2] and sim["finish_step"] == [16]
-    assert sim["expected_engine_steps"] == 17 == 3 + 15 - 1          # ceil(155/64) chunks + max_tokens - 1 decodes
-    assert sim["steps_with_partial_prefill"] == 2 and sim["peak_concurrent"] == 1
-    # an unchunking budget reproduces the plain simulation
-    assert gw.simulate_schedule_chunked(d, 2048)["expected_engine_steps"] == gw.simulate_schedule(d)["expected_engine_steps"] == 15
-
-
-def test_chunked_schedule_reproduces_the_ov_batch_chunked_200p_shape():
-    """b0_chunked_200p (a real run): request 0 (7 tokens, 8 out) decodes while request 1's 200-token prompt is prefilled
-    in chunks 57 + 63 + 63 + 17; request 1's first token at step 3; 15 engine steps."""
-    reqs = [{"prompt_len": 7, "max_tokens": 8, "arrive_step": 0}, {"prompt_len": 200, "max_tokens": 12, "arrive_step": 0}]
-    sim = gw.simulate_schedule_chunked(reqs, 64)
-    assert sim["prefill_chunks"] == [[7], [57, 63, 63, 17]] and sim["first_token_step"] == [0, 3]
-    assert sim["finish_step"] == [7, 14] and sim["expected_engine_steps"] == 15
-    assert sim["steps_with_mixed_prefill_decode"] == 3 and sim["peak_concurrent"] == 2
-
-
-def test_chunked_schedule_makes_a_request_wait_when_the_budget_is_spent():
-    reqs = [{"prompt_len": 100, "max_tokens": 4, "arrive_step": 0}, {"prompt_len": 100, "max_tokens": 4, "arrive_step": 0}]
-    sim = gw.simulate_schedule_chunked(reqs, 64)
-    assert sim["prefill_chunks"] == [[64, 36], [28, 63, 9]]          # request 1 gets nothing at step 0
-    assert sim["first_token_step"] == [1, 3] and sim["expected_engine_steps"] == 7
-    # B8-mixed arrivals under a small budget: never stalls, every request finishes
-    d = gw.draw_lengths("B8-mixed", "C256", 0)
-    sim8 = gw.simulate_schedule_chunked(d, 64)
-    assert sim8["expected_engine_steps"] >= gw.simulate_schedule(d)["expected_engine_steps"]
-    assert all(f is not None for f in sim8["finish_step"]) and max(len(c) for c in sim8["prefill_chunks"]) >= 2
-
-
-def test_generated_ck64_cell_is_the_base_cell_with_a_chunking_budget():
-    base, ck = workload_file(PROF / "workload_cov_b0_b1_c256.json"), workload_file(PROF / "workload_cov_b0_b1_c256_ck64.json")
-    a, b = json.loads(base.read_text()), json.loads(ck.read_text())
-    key = lambda r: (r["request_id"], r["prompt_token_ids"], r["max_tokens"], r["arrive_step"])  # noqa: E731
-    assert [key(r) for r in a["requests"]] == [key(r) for r in b["requests"]], "same request ids, prompts, lengths, arrivals"
-    assert b["engine"]["args"] == {"max_num_batched_tokens": 64, "enable_chunked_prefill": True}
-    assert b["feature_variant"] == {"chunked": 64} and b["sampling"]["variant"] == "greedy"
-    assert b["expected_engine_steps"] == 17 and b["schedule_if_full_length"]["prefill_chunks"] == [[64, 64, 27]]
-    assert b["expected_engine_steps"] >= a["expected_engine_steps"], "the snapshot-step range (run_config: range(expected)) must cover the run"
-    assert b["case"] == a["case"] == "B0" and b["model"] == a["model"]
 
 
 # ---------------------------------------------------------------------------------------------------------

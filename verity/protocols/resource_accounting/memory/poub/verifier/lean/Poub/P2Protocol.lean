@@ -356,7 +356,7 @@ private def refusal (signedOn : ByteArray) (trust : Bool) (edit : SignedClose â†
 /-- A PoUS session record and a wipe record of the toy session, each a digest. -/
 private def pousRecord : Option ByteArray :=
   (MemoryAttester.message { (default : MemoryAttester.ChallengePhaseCommitment) with session := toyRecord }
-    MemoryAttester.COMPLETE #[]).toOption
+    Flock.SessionCoins.COMPLETE #[]).toOption
 private def wipeRecord : Option ByteArray :=
   (MemoryAttester.StreamedWipe.message
     { (default : MemoryAttester.StreamedWipe.Commitment) with session := toyRecord }

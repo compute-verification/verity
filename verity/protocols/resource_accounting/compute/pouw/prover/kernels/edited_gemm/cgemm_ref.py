@@ -1,7 +1,7 @@
 """cgemm.cu's gate judged on the CPU: each dumped tile recomputed from x (bf16), W and the per-call key alone, through
 checked_strip's own construction (`co_words.py`'s `co32c_words` and `digits`, which checked_strip analyses).
 
-From the key (meta.json's four big-endian words): b (tag 7, egemm_ref.py's dither_rows), c (tag 8, the same patch
+From the key (meta.json's four big-endian words): b (tag 7, egemm.cu's dither rows), c (tag 8, the same patch
 layout over W), beta (tag 10: block j = rows 2j, 2j + 1, entry (row % 2) 32 + r digest byte v, beta_p = bit p of v, so
 U = -64 + beta @ (1, 2, 4, 8, 16, 32, 65)) and z (tag 9: block j = rows 4j .. 4j + 3, z_d(i, r) = bit 32 d + r of digest
 bytes 16 (i % 4) .. 16 (i % 4) + 15, little-endian). Then, in Lean coordinates (P the weights, n x k; V the activations

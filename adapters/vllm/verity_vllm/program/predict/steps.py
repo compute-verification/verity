@@ -159,20 +159,21 @@ EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 
 
 @functools.cache
-def _selects() -> tuple[CompositeDefinition, ...]:
+def registered_composites(families: tuple[str, ...]) -> tuple[CompositeDefinition, ...]:
+    """The registry's composites of ``families``."""
     from verity_vllm.definitions.registry.catalog import load
 
     reg, errors = load()
     if errors:
-        raise ValueError(f"the registry's token selects can't be listed: {errors[0]}")
-    return tuple(d for d in reg.defs.values() if isinstance(d, CompositeDefinition) and d.name in EGRESS)
+        raise ValueError(f"the registry's {', '.join(families)} can't be listed: {errors[0]}")
+    return tuple(d for d in reg.defs.values() if isinstance(d, CompositeDefinition) and d.name in families)
 
 
 def egress(fn: Any) -> bool:
     """Whether ``fn`` is a token select: named as an `EGRESS` family, or with a registered select's body under another name.
     A unit so named whose body is no registered select's at its statics is refused (ValueError), neither listed nor sampled."""
     family = str(getattr(fn, "id", "")).split("{")[0].rsplit("_v", 1)[0]
-    if _select_body(fn):
+    if registered_body(fn, EGRESS):
         return True
     if family in EGRESS:
         raise ValueError(f"{fn.id}: a unit named as the token select {family} whose body is no registered select's at its "
@@ -180,13 +181,13 @@ def egress(fn: Any) -> bool:
     return False
 
 
-def _select_body(fn: Any) -> bool:
-    """Some registered `EGRESS` composite bound at ``fn``'s statics has the definition digest (`codec.definition_digest`) of
-    ``fn``'s entry under that composite's id."""
+def registered_body(fn: Any, families: tuple[str, ...]) -> bool:
+    """Some registered composite of ``families`` bound at ``fn``'s statics, of ``fn``'s signature, has the definition digest
+    (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
     if not isinstance(fn, SpecializedDefinition):
         return False
     mine = None
-    for sel in _selects():
+    for sel in registered_composites(families):
         if set(sel.statics) != set(fn.bindings):
             continue
         try:
@@ -195,6 +196,8 @@ def _select_body(fn: Any) -> bool:
             continue
         if want is fn:
             return True
+        if want.signature() != fn.signature():
+            continue
         mine = mine or definition_entry(fn)
         theirs = definition_entry(want)
         if definition_digest({**mine, "id": theirs["id"]}) == definition_digest(theirs):

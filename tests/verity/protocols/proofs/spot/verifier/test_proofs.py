@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, one_circuit as OC, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage.settings import ABORT_ON_PANIC
 from verity.circuits import partition_object as PO
 
 
@@ -148,7 +149,7 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
                          draw={"units": [0]}, registered=None)
     assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
     (env,) = children
-    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
+    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want, ABORT_ON_PANIC: "1"}
     differ = sorted(k for k in env.keys() | wanted.keys() if env.get(k) != wanted.get(k))
     assert differ == []
 
