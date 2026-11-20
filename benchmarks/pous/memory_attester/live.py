@@ -243,6 +243,7 @@ def judge(sessions: list[dict[str, Any]], expected: Callable[[int], bytes], trus
                                 "reasons_under_signer": list(t.reasons)},
                     "accepted": v.accepted, "accepted_under_signer": t.accepted,
                     "sign_ns": s["sign_ns"]})
+    lean_verdict().finish()
     return out
 
 
@@ -272,10 +273,11 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         bad = "the signature does not verify"
         out["sessions"] += 1
         out["unedited_accepted"] += reasons(signed) == ()
-        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, signed.rounds, signed.scheme,
+        out["flipped_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, signed.rounds, signed.scheme,
                                                                    signed.public_key, bytes(sig)))
-        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.ended, tuple(rounds), signed.scheme,
+        out["edited_rejected"] += bad in reasons(mc.SignedSession(commitment, signed.salt, signed.ended, tuple(rounds), signed.scheme,
                                                                   signed.public_key, signed.signature))
+    lean_verdict().finish()
     out["passed"] = bool(out["sessions"]) and out["flipped_rejected"] == out["edited_rejected"] == out["sessions"]
     return out
 

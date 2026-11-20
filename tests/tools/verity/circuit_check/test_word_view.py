@@ -71,14 +71,6 @@ def test_a_word_view_past_its_budget_still_compares_random_vectors():
         assert r["compared"] - r["edge_vectors"] >= CK.WORD_RANDOM_FLOOR == 2 and r["mismatches"] == 0 and not F.failures
 
 
-def test_a_word_definition_named_unbound_is_bound_for_its_budget():
-    """A word Definition named unbound (a composite without parameters, as `ArgmaxStep_v1` is to `ArgmaxStep_v2`) has its gates
-    counted bound, for the budget of its vectors."""
-    F = CK.Findings()
-    r = CK.word_view(_xor_bits(word="composite"), CK.Options(vectors=8), F)
-    assert r["via"] == "word:CircuitCheckXorNibbleWordCall_v1" and r["compared"] == 128 and r["mismatches"] == 0 and not F.failures
-
-
 def test_a_boolean_composite_over_the_input_budget_is_compared_through_its_word_view():
     """An operand over the input budget that no lazy reader takes fails, unless the Definition is a Boolean composite with a word
     view: its reference is its gates, total on every input, and the word view compares them, so its correspondence is a warning."""

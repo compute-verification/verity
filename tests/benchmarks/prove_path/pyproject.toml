@@ -12,6 +12,7 @@ untraced = [
     "test_run_keep.py",
     "test_run_request_values.py",
     "test_run_rows.py",
+    "test_run_rules.py",
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `adapters/torch`: the
 # frontend class_rows and the tie tests load beside it; `benchmarks/one_stage`:
