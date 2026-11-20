@@ -5,6 +5,7 @@ lowering's own query) with blocks ``[0, u), [u, u + 1), [u + 1, population)``, `
   python served_door.py build --tree TREE --out DIR                     # DIR/C.json, DIR/query.json
   python served_door.py step block|restrict|lower|door|one|stage --dir DIR --template ID
   python served_door.py step verify --dir DIR --template ID --unit U --lower EXE --lean EXE --session S...
+  python served_door.py window --tree TREE --out DIR [--seed N]         # a staged window, for records_audit.py audit
 
 ``block``, ``restrict`` and ``lower`` are the door's own steps (`one_circuit.block`, `.restrict`, `.lower`), each in its
 own process; ``door`` is `proofs.verify` on the drawn block, whose proof files (a public file naming the block's unit and
@@ -358,12 +359,56 @@ def step(a) -> int:
     return 0
 
 
+def window(a) -> int:
+    """The adapter's staged window (`test_window_rows`' TINY class and requests, random weights, every node computed, its
+    scan state the execution phase's own, `window_rows.state_value` under the run root) recorded, closed and written as
+    serving writes a window (`Window.supply`, `Rows.record`, `close`, `write` under the docket), for ``records_audit.py
+    audit``."""
+    tree, out = Path(a.tree), Path(a.out)
+    sys.path.insert(0, str(tree / "tests/adapters/vllm"))
+    from tests.program.predict import test_window_rows as TW
+    from verity.commitments import docket_digest as DD
+    from verity.commitments.periods import interface as IF
+    from verity.protocols.proofs.spot.prover import docket as DK
+    from verity_vllm.program.predict import inference_blocks as IB
+    from verity_vllm.program.predict import scan_state as SS
+    from verity_vllm.program.predict import window_rows as WR
+    t = time.perf_counter()
+    reg = TW._registered()
+    low = TW.WC.lower(reg, TW.CLASS, None, TW.GRAIN, requests=TW.REQUESTS)
+    fields = TW._weights(low.fn, a.seed)
+    bits = [[w >> k & 1 for w in row for k in range(16)] for row in TW.STATE]
+    values = {**TW.WW.weight_values(reg, fields, None, TW.GRAIN, keep_rows=True),
+              SS.SCAN_STATE: WR.state_value(IB.program_digest(low.circuit), TW.CLASS, bits, window=TW.RUN)}
+    rows = WR.Rows(low, TW.unserved_slots(low, TW.STATE, lambda label, lo, hi: fields[label][lo:hi]), values)
+    win = IF.Window(low.circuit, TW.RUN, TW.DESIGN, 64, registered=values, forms=WR.FORMS)
+    win.supply()
+    rows.record(win)
+    win.write(win.close(), out, {"served_door": "window"}, registrar=DK)
+    pins: dict[str, dict] = {}
+    for p, v in sorted(values.items()):
+        if v.window is None:
+            pins.setdefault(v.program, {})[p] = v.entry()
+    (out / "pins.json").write_text(json.dumps([{"program": g, "values": e} for g, e in sorted(pins.items())]))
+    print("STEP " + json.dumps({"step": "window", "wall_s": round(time.perf_counter() - t, 1), "peak_gib": _peak_gib(),
+                                "run": TW.RUN, "units": dict(rows.n),
+                                "circuit_sha512": hashlib.sha512((out / "circuit.json").read_bytes()).hexdigest(),
+                                "registration_sha512": hashlib.sha512((out / "registration.json").read_bytes()).hexdigest(),
+                                "docket_digest": DD.digest(json.loads((out / "registration.json").read_text()))},
+                               default=str), flush=True)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--tree", required=True)
     b.add_argument("--out", required=True)
+    w = sub.add_parser("window")
+    w.add_argument("--tree", required=True)
+    w.add_argument("--out", required=True)
+    w.add_argument("--seed", type=int, default=3)
     s = sub.add_parser("step")
     s.add_argument("name", choices=("block", "restrict", "lower", "door", "one", "stage", "verify"))
     s.add_argument("--dir", required=True)
@@ -374,7 +419,7 @@ def main() -> int:
     s.add_argument("--registered", default="registered.json", help="verify: the stage's registered file")
     s.add_argument("--session", nargs="*", default=[], help="verify: the session directories")
     a = ap.parse_args()
-    return build(a) if a.cmd == "build" else step(a)
+    return build(a) if a.cmd == "build" else window(a) if a.cmd == "window" else step(a)
 
 
 if __name__ == "__main__":

@@ -1472,6 +1472,13 @@ def own_value(port: str) -> str:
     return f"committed/{port}"
 
 
+def out_value(tree: str) -> str:
+    """The value a member's own output row is read as: its template's field tree ``<template>/o<j>`` by that tree's own
+    name, as Lean's `Flock.Registered.outReads` reads an output row and `OneStageZk.portTreeHeld` holds it to the
+    registration's root."""
+    return tree
+
+
 def _template_docs(win: Mapping[str, Any], template: str) -> list[tuple[int, Mapping[str, Any]]]:
     """Template ``template``'s members in ``window.json``, with their indices, in order."""
     return [(j, x) for j, x in enumerate(win["members"]) if x["template"] == template]
@@ -1514,7 +1521,7 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
     holds, its table's row t at the tree's leaf the wiring gives in closed form, with its path. The tree is made from its
     writers' public bodies under ``window_dir`` under its window domain (cached in ``levels`` by tree); the verifier holds
     its root to the registration's."""
-    d, levels = Path(window_dir), {} if levels is None else levels
+    d, levels, mem = Path(window_dir), {} if levels is None else levels, win["members"][k]
     out = {}
     for p, (tid, o, tree, at) in shared_ports(win, k).items():
         docs = _template_docs(win, tid)
@@ -1526,7 +1533,8 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
             levels[tree] = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bytes(bc)), schema)
                                              for i, bc in enumerate(bcs)])
         lv = levels[tree]
-        out[p] = {"value": own_value(tree), "positions": at.tolist(),
+        out[p] = {"value": out_value(tree) if tid == mem["template"] and p == o else own_value(tree),
+                  "positions": at.tolist(),
                   "paths": [b"".join(level[(int(i) >> h) ^ 1] for h, level in enumerate(lv[:-1])).hex() for i in at]}
     return out
 
@@ -1560,7 +1568,7 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
         if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
             raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
         tree = WI.tree(mem["template"], p) if j >= int(mem["input_ports"]) else f"{mem['name']}/{p}"
-        out[p] = {"value": own_value(tree), "positions": list(range(rows)),
+        out[p] = {"value": out_value(tree) if j >= int(mem["input_ports"]) else own_value(tree), "positions": list(range(rows)),
                   "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(rows)]}
     return out
 
@@ -1593,7 +1601,8 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 raise ValueError(f"{m.key} {p}: the registration holds no root for it")
             if port == m.port(p) and int(e["leaves"]) != m.n:
                 continue
-            ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
+            value = out_value(port) if p in dict(m.outs) and port != m.port(p) else own_value(port)
+            ports[p] = {"value": value, "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
                         "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
