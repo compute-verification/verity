@@ -254,12 +254,23 @@ theorem laidDef_mono {a b : Array Defn} {c : Defn} (hp : Pre a b) (h : LaidDef a
   obtain ⟨h5, h6⟩ := h4 k hk
   exact ⟨Nat.lt_of_lt_of_le h5 hp.1, by rw [hp.2 _ h5]; exact h6⟩
 
-/-- The decoder's invariant: every Definition decoded so far is `DefOk` and laid out, and the index names decoded
-ones. -/
+/-- Every node reference of node `k`'s arguments names a node before `k` (`Part.forwardOf`, `forwardRefusal`). -/
+def NodesFwd (nodes : Array Node) : Prop :=
+  ∀ k < nodes.size, ∀ a < (nodes[k]!).args.size, ∀ t < ((nodes[k]!).args[a]!).seq.count,
+    (((nodes[k]!).args[a]!).seq.get t).p = false → (((nodes[k]!).args[a]!).seq.get t).i < k
+
+/-- A body whose nodes read only earlier nodes (`NodesFwd`). -/
+def BodyFwd (b : Body) : Prop := NodesFwd b.nodes
+
+theorem bodyFwd_default : BodyFwd default := fun _ hk => absurd hk (Nat.not_lt_zero _)
+
+/-- The decoder's invariant: every Definition decoded so far is `DefOk` and laid out, the index names decoded ones,
+and every body reads only earlier nodes (`BodyFwd`). -/
 def Inv (s : DecState) : Prop :=
   (∀ i < (DecState.defs s).size, DefOk (DecState.defs s) i (DecState.defs s)[i]!) ∧
   (∀ (k : String) (v : ℕ), (DecState.index s)[k]? = some v → v < (DecState.defs s).size) ∧
-  ∀ i < (DecState.defs s).size, LaidDef (DecState.defs s) (DecState.defs s)[i]!
+  (∀ i < (DecState.defs s).size, LaidDef (DecState.defs s) (DecState.defs s)[i]!) ∧
+  ∀ i < (DecState.defs s).size, BodyFwd ((DecState.defs s)[i]!).body
 
 /-- A step of the decoder: it keeps the invariant and only appends Definitions. -/
 def Grows (s s' : DecState) : Prop := Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s')
@@ -288,13 +299,13 @@ theorem defOk_mono {a b : Array Defn} {i : ℕ} {c : Defn} (hp : Pre a b) (hi : 
 /-- `getDef`'s last step: the Definition appended and indexed. -/
 theorem push_spec (s s' : DecState) (fid : String) (defn : Defn) (hs : Inv s)
     (hd : DefOk (DecState.defs s) (DecState.defs s).size defn) (hl : LaidDef (DecState.defs s) defn)
-    (e1 : DecState.defs s' = (DecState.defs s).push defn)
+    (hf : BodyFwd defn.body) (e1 : DecState.defs s' = (DecState.defs s).push defn)
     (e2 : DecState.index s' = (DecState.index s).insert fid (DecState.defs s).size) :
     Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') := by
   rw [e1]
   have hp : Pre (DecState.defs s) ((DecState.defs s).push defn) :=
     ⟨by simp, fun i hi => getElem!_push_lt _ _ hi⟩
-  refine ⟨⟨fun i hi => ?_, fun k v hk => ?_, fun i hi => ?_⟩, hp⟩
+  refine ⟨⟨fun i hi => ?_, fun k v hk => ?_, fun i hi => ?_, fun i hi => ?_⟩, hp⟩
   · rw [e1] at hi ⊢
     simp only [Array.size_push] at hi
     rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
@@ -312,9 +323,16 @@ theorem push_spec (s s' : DecState) (fid : String) (defn : Defn) (hs : Inv s)
     simp only [Array.size_push] at hi
     rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
     · rw [getElem!_push_lt _ _ hi]
-      exact laidDef_mono hp (hs.2.2 i hi)
+      exact laidDef_mono hp (hs.2.2.1 i hi)
     · rw [getElem!_push_eq]
       exact laidDef_mono hp hl
+  · rw [e1] at hi ⊢
+    simp only [Array.size_push] at hi
+    rcases Nat.lt_succ_iff_lt_or_eq.1 hi with hi | rfl
+    · rw [getElem!_push_lt _ _ hi]
+      exact hs.2.2.2 i hi
+    · rw [getElem!_push_eq]
+      exact hf
 
 def GetSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (s : DecState) (i : ℕ) (s' : DecState),
   getDef fuel desc fid false s = .ok (i, s') → Inv s → Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧
@@ -323,7 +341,7 @@ def GetSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (s : DecStat
 def CompSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (fid : String) (d : Lean.Json) (form id : String) (s : DecState)
   (defn : Defn) (s' : DecState), composite fuel desc fid d form id false s = .ok (defn, s') → Inv s →
     Inv s' ∧ Pre (DecState.defs s) (DecState.defs s') ∧ DefOk (DecState.defs s') (DecState.defs s').size defn ∧
-      LaidDef (DecState.defs s') defn
+      LaidDef (DecState.defs s') defn ∧ BodyFwd defn.body
 
 def StatSpec (fuel : ℕ) : Prop := ∀ (desc : Desc) (v : Lean.Json) (s : DecState) (u : Unit) (s' : DecState),
   staticFns fuel desc v false s = .ok (u, s') → Grows s s'
@@ -339,9 +357,9 @@ theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
   unfold getDef at h
   extract_lets push inp main at h
   have hpush : ∀ defn s1 i s', push defn s1 = .ok (i, s') → Inv s1 →
-      DefOk (DecState.defs s1) (DecState.defs s1).size defn → LaidDef (DecState.defs s1) defn →
+      DefOk (DecState.defs s1) (DecState.defs s1).size defn → LaidDef (DecState.defs s1) defn → BodyFwd defn.body →
       Inv s' ∧ Pre (DecState.defs s1) (DecState.defs s') ∧ i < (DecState.defs s').size := by
-    intro defn s1 i s' hp hs hd hl
+    intro defn s1 i s' hp hs hd hl hf
     simp only [push] at hp
     obtain ⟨st, s2, hg, hp⟩ := st_bind hp
     obtain ⟨rfl, rfl⟩ := st_get hg
@@ -349,8 +367,8 @@ theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
     obtain ⟨rfl, rfl⟩ := st_pure hp
     injection hset with hset; injection hset with h1 h2; subst h2
     refine ⟨?_, ?_, by show _ < ((DecState.defs s1).push defn).size; simp⟩
-    · exact (push_spec s1 _ fid defn hs hd hl rfl rfl).1
-    · exact (push_spec s1 _ fid defn hs hd hl rfl rfl).2
+    · exact (push_spec s1 _ fid defn hs hd hl hf rfl rfl).1
+    · exact (push_spec s1 _ fid defn hs hd hl hf rfl rfl).2
   obtain ⟨st, s1, hg, h1⟩ := st_bind h
   obtain ⟨rfl, rfl⟩ := st_get hg
   clear h hg
@@ -396,15 +414,15 @@ theorem getDef_succ (n : ℕ) (hc : CompSpec n) : GetSpec (n + 1) := by
     all_goals rw [hinp] at h4; dsimp only at h4
     · obtain ⟨defn, s4, hdf, h5⟩ := st_bind h4
       obtain ⟨rfl, rfl⟩ := st_pure hdf
-      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _)
+      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _) bodyFwd_default
     · split at h4
       · exact absurd h4 (by intro h; injection h)
       obtain ⟨defn, s4, hdf, h5⟩ := st_bind h4
       obtain ⟨rfl, rfl⟩ := st_pure hdf
-      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _)
+      exact hpush _ _ _ _ h5 hs (hd _ _ _ _) (hl _ _ _ _) bodyFwd_default
   · obtain ⟨defn, s2, hdf, h3⟩ := st_bind h2
-    obtain ⟨i2, p2, d2, l2⟩ := hc _ _ _ _ _ _ _ _ hdf hs
-    obtain ⟨i3, p3, h4⟩ := hpush _ _ _ _ h3 i2 d2 l2
+    obtain ⟨i2, p2, d2, l2, f2⟩ := hc _ _ _ _ _ _ _ _ hdf hs
+    obtain ⟨i3, p3, h4⟩ := hpush _ _ _ _ h3 i2 d2 l2 f2
     exact ⟨i3, pre_trans p2 p3, h4⟩
 
 theorem forIn_grows {α β : Type} (l : List α) (f : α → β → DM (ForInStep β))

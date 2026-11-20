@@ -347,7 +347,7 @@ theorem unit_leaf_inj {k k' : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
         exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
       · rw [getElem!_pos _ i hi]
         exact Array.getElem_mem hi
-    obtain ⟨-, -, -, -, hsh, hdims⟩ := hno
+    obtain ⟨-, -, -, -, hsh, hdims, -⟩ := hno
     rw [hf] at hsh
     rcases hsh.2 i hi with ⟨hnone, -⟩ | ⟨ax, mt, hrem, -, hdax⟩
     · rw [hnone] at hd
