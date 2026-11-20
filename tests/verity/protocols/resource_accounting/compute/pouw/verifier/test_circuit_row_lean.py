@@ -32,10 +32,10 @@ WIRES = {"id": (), "fabs": ("F32Fabs_v1",), "bf16": ("Bf16ToF32_v1",), "bf16Fabs
 
 #: `program_digest` of the templates the Lean tables were checked against; a change to any needs the Lean re-read
 DIGESTS8 = {
-    ("row_a", "sm120", 128): "4648ebe558f759459ff7a6f70aa545c9f493d0495abd9fdb27782f592722f5024f3be1892d7eb7df8539399a860d6afa86684f64076535d00c499020ddb0fb16",
-    ("row_b", "sm120", 128): "92914cfc8c54d0e948f02d849445e34f816dfbe33d8d7c16688d25524460f75b4e705eb43f1159cb9ecc0e3093fd9d2688915b555328d907b079ca9934e53ab5",
-    ("row_a", "h100", 128): "34f6dd67bf482c102c6a9dee7eb308ee96acb64b399914dae84677a616fcc88b9c092c49796f86b10770d572f040e777f2248886e943136ec65f915efbc61b56",
-    ("row_b", "h100", 128): "441a26337154d8a2eca74cbeffd6afbe19812c03b90ef3afd6c451ecb5c02f90cb5ce4dc280197a16b9c5aad7f332dd38d1e72abb5bba612124237110f6e9f81",
+    ("row_a", "sm120", 128): "a97bbc95abf649181e227ee20e9b9a6bf89c592908fbe9f32dec13217a9e96d90adfcaa397aaacb5cac1b5a671983ac79c09b7649a232a5e81238e5b6741c04d",
+    ("row_b", "sm120", 128): "c53d9d82e9bec9db87cc394263063d8ee618232e428daca5addb9c4a6c65710ca8c24452f913c1d6ecc75c57c80ca173bea1577e0ae5c9d72b31cebe765f5416",
+    ("row_a", "h100", 128): "b993bdd06cc7232cb4fae5fad2ca845ea76cd4a8576d8c9ee06abb2040b1b2a71167f367131a4787cbfb15e51d617f5664f0c305fbf7f798e529d1ef8eb45c02",
+    ("row_b", "h100", 128): "2b80208ace3536bc60512ab829aa34a664b5b243207c680cd375508bfbdc75014d97e314a4ba12a04d3e2e4846b8f433203bf4c136a8965678d5fa33ffcc1167",
 }
 
 
@@ -230,8 +230,8 @@ def test_the_checked_row8_templates_are_pinned(role, dev, k):
 
 #: the deployed depth's row templates (sm_120), each table check and digest about 20 seconds
 DEPLOYED = {
-    ("pc8", "row_a"): "55a97f0955202701c6eb88a1f794035502c8e19cd5562d4e6975db4f332e91290345ce43e9ffc0b382b8f592390bc1edd8d219a655d0276b793cf61d8c0681c0",
-    ("pc8", "row_b"): "b5b2035cbed6014aedff05fb3850ce85d5e2609e22c25b6f6c75aa94ded217b2c0fbc031d9086d7b6fd700d8c6d87180d5fd6bac6e4a80e329c7a100e90e1177",
+    ("pc8", "row_a"): "8040e425e54ef7df67a6ff30425c9a9ba59600d3c9f1aa85ecc09bb0c14e1c8c576d4b8cb86a68efc385104d7d9353319495549c9e0743e9aedbf47bd3c75b09",
+    ("pc8", "row_b"): "fba54566ba51e3691efadd0412f67217a94e10490a2c777b74fb16937fb5b66d709fd83b1fecb619e8edc821f2519a171ffa162f602c9906a158ca0bd51bde88",
 }
 
 

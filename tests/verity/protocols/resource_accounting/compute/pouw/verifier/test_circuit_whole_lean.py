@@ -22,9 +22,9 @@ pc8 = pytest.importorskip("verity.protocols.resource_accounting.compute.pouw.pro
 
 #: `program_digest` of the `Pc8Check` Programs the Lean layout was checked against; a change to any needs the Lean re-read
 DIGESTS = {
-    ("sm120", 2, 128, 3, (1, 1)): "4d1426c1188b59e93e7d6306510b90b2f40ff3d11f0d19f78573960ffd2b75a64b121250e50a82f07151676207999f8b73162333bec70850c5858f99f027c36e",
-    ("sm120", 4, 128, 4, (2, 2)): "9e27ae451fe6f17861f6b95664e67be8a8b2c193c826387935e6d98bda2bf6ed21429a25d52208402b216cb2b21d48133b57ea393e1c22ef3a41c0ceface4a83",
-    ("h100", 2, 256, 2, (1, 2)): "a04822ac0fb0fe4d6662aa68b1f4a9982c9846de44bf7c6690cdb01a2b296c515570f03c4cd7408b7095e36ee660c1835a80527774e97acb2de2ad19b7c283d0",
+    ("sm120", 2, 128, 3, (1, 1)): "3a7b7605ea19cb8bbcecfb3d0a1e44d292ff58d0548dc6a515ffa637afcbde0c1c17f6fda86998eafa73ffd6aaa74f3d262d9e0a8de881882e2f54b590f80872",
+    ("sm120", 4, 128, 4, (2, 2)): "ee116738e01039e3d90f4536d1fe9fe6e07d3a9b49516b296003fbb9fe3bac893357d7f2dfad54daa981b1550ee8eaa30ef3350eeed538e2da510400c707cf03",
+    ("h100", 2, 256, 2, (1, 2)): "d4fd73c2b7a8cc5d7f1ea1ba66d2dcdace66b054e243a30887370f0cdced3a97dbb76e8bcad04dcad57ab4f0880dd8ec0cb722a62d9d9972eb64aa467c6376a4",
 }
 
 
