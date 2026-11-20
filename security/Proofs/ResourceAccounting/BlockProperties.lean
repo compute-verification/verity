@@ -1014,11 +1014,12 @@ theorem cut_multiplies :
             decide
         _ ≤ _ := Finset.single_le_sum (fun j _ => Nat.zero_le _) hmem
     · obtain ⟨-, -, -, hcl_in, -⟩ := hreal
-      have h := hcl_in ⟨0, Nat.one_pos⟩ rfl hM (.sizeAtMost 1) (by simp [demoRuns])
-      simp only [Runs.HoldsIn, Runs.innerBlock, Placed.Holds, demoRuns, Partition.whole, Partition.gates,
-        Placed.work] at h
-      revert h
-      decide
+      have h : (demoRuns 2 fc).sizeIn () ⟨0, Nat.one_pos⟩ ≤ 1 :=
+        hcl_in ⟨0, Nat.one_pos⟩ rfl hM (.sizeAtMost 1) (by simp [demoRuns])
+      have h2 : (demoRuns 2 fc).sizeIn () ⟨0, Nat.one_pos⟩ = 2 := by
+        show (placed 2).work (fun _ => 1) ((Partition.whole (placed 2).toCircuit).gates ⟨0, Nat.one_pos⟩) = 2
+        decide
+      omega
 
 /-- **No top block is in no class**: `kind` is total, so the degenerate case of a top block in neither the server-day nor
 the hidden class cannot be stated. Nothing sits inside an inference block, the finest scale here, so neither can a block
