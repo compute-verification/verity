@@ -928,10 +928,11 @@ def Batch0 (P : Prog) (d : ℕ) : Prop :=
       (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) ∧
     isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true
 
-/-- **A template of axis-0 batches over word primitives and earlier such templates**: `Batch0`, but a node may also call,
-as a primitive, call or batch node, an earlier Definition (a smaller index) that is itself such a template. -/
+/-- **A template of axis-0 batches over word primitives and earlier such templates**: `Batch0`, at least one node, but a
+node may also call, as a primitive, call or batch node, an earlier Definition (a smaller index) that is itself such a
+template. -/
 inductive Batch0Nested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false →
+  | mk {d : ℕ} : (P.defs[d]!).prim = false → 0 < (P.defs[d]!).body.nodes.size →
       (∀ nd ∈ (P.defs[d]!).body.nodes,
         nd.form = .prim ∨ nd.form = .call ∨
           (nd.form = .batch ∧ ∀ i < nd.args.size, nd.axes[i]? = some (some 0) ∨ ∀ ax, nd.axes[i]? ≠ some (some ax))) →
@@ -940,8 +941,9 @@ inductive Batch0Nested (P : Prog) : ℕ → Prop
         Batch0Nested P nd.fn) →
       Batch0Nested P d
 
-theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) : Batch0Nested P d :=
-  .mk h.1 (fun nd hnd => (h.2 nd hnd).1)
+theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (P.defs[d]!).body.nodes.size) :
+    Batch0Nested P d :=
+  .mk h.1 hn (fun nd hnd => (h.2 nd hnd).1)
     (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
     (fun nd hnd hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
 

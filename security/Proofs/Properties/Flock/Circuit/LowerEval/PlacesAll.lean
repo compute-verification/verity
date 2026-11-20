@@ -40,7 +40,8 @@ calling what `toL` gives their callees. -/
   (∀ x : ℕ, (S.defs[x]!).prim = false → (toL[x]?).isSome = true → x ∈ pref ∧ w[x]? = some true) ∧
   ∀ y ∈ pref, (S.defs[y]!).prim = false → w[y]? = some true → ∃ e, toL[y]? = some e ∧ S.defs.size ≤ e ∧
     ∃ fnOf primOf gatesOf, defs[e]? = some (Flock.Lift.liftDef (S.defs[y]!) fnOf primOf gatesOf) ∧
-      ∀ nd ∈ (S.defs[y]!).body.nodes, fnOf nd.fn = toL[nd.fn]?.getD nd.fn
+      (∀ nd ∈ (S.defs[y]!).body.nodes, fnOf nd.fn = toL[nd.fn]?.getD nd.fn) ∧
+      ∀ nd ∈ (S.defs[y]!).body.nodes, (S.defs[nd.fn]!).prim = false → ReachesWord S nd.fn → toL[nd.fn]?.getD nd.fn < e
 
 
 theorem snoc_split {α : Type} {pref p s : List α} {c y : α} (h : pref ++ [c] = p ++ y :: s) :
@@ -213,21 +214,35 @@ theorem liftAll_place {S : Prog} {toB : Std.HashMap ℕ ℕ} {w : Std.HashMap �
       obtain ⟨hx, hw⟩ := h3 x hp hs; exact ⟨List.mem_append_left _ hx, hw⟩
   · by_cases hcy : cur = y
     · subst hcy
-      refine ⟨defs.size, by simp, h1, fun f => toL[f]?.getD f, primOf, gatesOf, by simp, fun nd hn => ?_⟩
-      rw [Std.HashMap.getElem?_insert, if_neg (by simpa using Ne.symm (hne cur (by simp) hp nd hn))]
+      refine ⟨defs.size, by simp, h1, fun f => toL[f]?.getD f, primOf, gatesOf, by simp, fun nd hn => ?_,
+        fun nd hn hp' hr => ?_⟩
+      · rw [Std.HashMap.getElem?_insert, if_neg (by simpa using Ne.symm (hne cur (by simp) hp nd hn))]
+      · have hin := hcal cur (by simp) hp nd hn
+        obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 ((hW.1 nd.fn).2 (by rw [hL]; exact List.mem_append_left _ hin))
+        have hbt : b = true := (hW.2.1 nd.fn b hb).2 hr
+        subst hbt
+        obtain ⟨e', he', -, f', p', g', hd', -⟩ := h4 nd.fn hin hp' hb
+        have hel : e' < defs.size := by
+          rcases Nat.lt_or_ge e' defs.size with h | h
+          · exact h
+          · simp [Array.getElem?_eq_none h] at hd'
+        rw [Std.HashMap.getElem?_insert, if_neg (by simpa using Ne.symm (hne cur (by simp) hp nd hn)), he']
+        exact hel
     · have hy' : y ∈ pref := by
         rcases List.mem_append.1 hy with hy | hy
         · exact hy
         · simp at hy; exact absurd hy.symm hcy
-      obtain ⟨e, he, hse, fnOf, pO, gO, hd, hf⟩ := h4 y hy' hp hw
+      obtain ⟨e, he, hse, fnOf, pO, gO, hd, hf, hlt⟩ := h4 y hy' hp hw
       have hel : e < defs.size := by
         rcases Nat.lt_or_ge e defs.size with h | h
         · exact h
         · simp [Array.getElem?_eq_none h] at hd
-      refine ⟨e, ?_, hse, fnOf, pO, gO, ?_, fun nd hn => ?_⟩
+      refine ⟨e, ?_, hse, fnOf, pO, gO, ?_, fun nd hn => ?_, fun nd hn hp' hr => ?_⟩
       · rw [Std.HashMap.getElem?_insert, if_neg (by simpa using hcy)]; exact he
       · rw [Array.getElem?_push, if_neg (by omega)]; exact hd
       · rw [hf nd hn, Std.HashMap.getElem?_insert, if_neg (by simpa using Ne.symm (hne y hy hp nd hn))]
+      · rw [Std.HashMap.getElem?_insert, if_neg (by simpa using Ne.symm (hne y hy hp nd hn))]
+        exact hlt nd hn hp' hr
 
 theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Array ℕ} {at_ : ℕ}
     {toB : Std.HashMap ℕ ℕ} {w : Std.HashMap ℕ Bool} {defs : Array Defn} {toL : Std.HashMap ℕ ℕ}
@@ -240,7 +255,9 @@ theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Ar
       (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → toL[x]?.getD x = x) ∧
       ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ toL[x]?.getD x ∧
         ∃ fnOf primOf gatesOf, defs[toL[x]?.getD x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧
-          ∀ nd ∈ (S.defs[x]!).body.nodes, fnOf nd.fn = toL[nd.fn]?.getD nd.fn := by
+          (∀ nd ∈ (S.defs[x]!).body.nodes, fnOf nd.fn = toL[nd.fn]?.getD nd.fn) ∧
+          ∀ nd ∈ (S.defs[x]!).body.nodes, (S.defs[nd.fn]!).prim = false → ReachesWord S nd.fn →
+            toL[nd.fn]?.getD nd.fn < toL[x]?.getD x := by
   unfold LiftAll at hL
   unfold WordyAll at hW
   obtain ⟨⟨_, h2, h3, h4⟩, _⟩ := hL
@@ -257,15 +274,17 @@ theorem placesAll_final {S : Prog} {d : ℕ} {seen : Std.HashSet ℕ} {todo : Ar
     obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 ((hW.1 x).2 hm)
     have hbt : b = true := (hW.2.1 x b hb).2 hrw
     subst hbt
-    obtain ⟨e, he, hse, fnOf, pO, gO, hd, hf⟩ := h4 x hm hp hb
-    rw [he]; exact ⟨hse, fnOf, pO, gO, hd, hf⟩
+    obtain ⟨e, he, hse, fnOf, pO, gO, hd, hf, hlt⟩ := h4 x hm hp hb
+    rw [he]; exact ⟨hse, fnOf, pO, gO, hd, hf, hlt⟩
+
 theorem closure_placesAll (S : Prog) (d : ℕ) :
     ⦃⌜True⌝⦄ Flock.Lift.closure S #[d] ⦃⇓? r => ⌜
       (∀ x, Reach S d x → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → S.bodyOf? (S.defs[x]!).key = some (r.2 x)) ∧
       (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → r.2 x = x) ∧
       ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ r.2 x ∧
         ∃ fnOf primOf gatesOf, r.1.defs[r.2 x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧
-          ∀ nd ∈ (S.defs[x]!).body.nodes, fnOf nd.fn = r.2 nd.fn⌝⦄ := by
+          (∀ nd ∈ (S.defs[x]!).body.nodes, fnOf nd.fn = r.2 nd.fn) ∧
+          ∀ nd ∈ (S.defs[x]!).body.nodes, (S.defs[nd.fn]!).prim = false → ReachesWord S nd.fn → r.2 nd.fn < r.2 x⌝⦄ := by
   unfold Flock.Lift.closure
   mvcgen [hashMap_forIn_spec, exc_throw_spec, -Spec.throw_Except] invariants
   · ⇓? ⟨_, seen, todo, at_, toB⟩ => ⌜WalkInv S d seen todo at_ toB⌝
@@ -291,5 +310,49 @@ theorem closure_placesAll (S : Prog) (d : ℕ) :
     | (exact liftAll_skip (by assumption) (by assumption))
     | (exact liftAll_place _ _ (by assumption) (by assumption) (by assumption) (by assumption))
     | (exact placesAll_final (by assumption) (by assumption) (by assumption) (by assumption))
+
+theorem prim_lt {P : Prog} {i : ℕ} (h : (P.defs[i]!).prim = true) : i < P.defs.size := by
+  refine Classical.byContradiction fun hn => ?_
+  rw [getElem!_neg P.defs i hn] at h
+  cases h
+
+theorem wordPrim_lt {P : Prog} {i : ℕ} (h : isWordPrim (P.defs[i]!).prim (P.defs[i]!).key = true) : i < P.defs.size :=
+  prim_lt (by simp only [isWordPrim, Bool.and_eq_true] at h; exact h.1.1)
+
+/-- A template of axis-0 batches over word primitives and earlier such templates reaches a word primitive, read in any
+`S` that keeps `P`'s Definitions. -/
+theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
+    (h : Batch0Nested P y) (hy : y < P.defs.size) : ReachesWord S y := by
+  revert hy
+  induction h with
+  | @mk d hp hne _ hlt _ ih =>
+    intro hy
+    have hmem := Array.getElem_mem hne
+    have hpS : (S.defs[d]!).prim = false := by rw [hpre d hy]; exact hp
+    have hmemS : (P.defs[d]!).body.nodes[0] ∈ (S.defs[d]!).body.nodes := by rw [hpre d hy]; exact hmem
+    by_cases hw : isWordPrim (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).prim
+        (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).key = true
+    · exact .comp hpS hmemS (.word (by rw [hpre _ (wordPrim_lt hw)]; exact hw))
+    · have hf : isWordPrim (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).prim
+          (P.defs[((P.defs[d]!).body.nodes[0]).fn]!).key = false := by simpa using hw
+      exact .comp hpS hmemS (ih _ hmem hf (by have := hlt _ hmem hf; omega))
+
+/-- **`closure_placesAll` through `lift`**: the lift of `d` returns where its closure places `d`. -/
+theorem liftPlacesAll {S L : Prog} {d e : ℕ} (h : Flock.Lift.lift S d = .ok (L, e)) :
+    ∃ pl : ℕ → ℕ, e = pl d ∧
+      (∀ x, Reach S d x → isWordPrim (S.defs[x]!).prim (S.defs[x]!).key = true → S.bodyOf? (S.defs[x]!).key = some (pl x)) ∧
+      (∀ x, Reach S d x → (S.defs[x]!).prim = false → ¬ ReachesWord S x → pl x = x) ∧
+      ∀ x, Reach S d x → (S.defs[x]!).prim = false → ReachesWord S x → S.defs.size ≤ pl x ∧
+        ∃ fnOf primOf gatesOf, L.defs[pl x]? = some (Flock.Lift.liftDef (S.defs[x]!) fnOf primOf gatesOf) ∧
+          (∀ nd ∈ (S.defs[x]!).body.nodes, fnOf nd.fn = pl nd.fn) ∧
+          ∀ nd ∈ (S.defs[x]!).body.nodes, (S.defs[nd.fn]!).prim = false → ReachesWord S nd.fn → pl nd.fn < pl x := by
+  unfold Flock.Lift.lift at h
+  rcases hc : Flock.Lift.closure S #[d] with _ | ⟨Q, fnOf⟩
+  · rw [hc] at h; simp [bind, Except.bind] at h
+  rw [hc] at h
+  have h' : (Q, fnOf d) = (L, e) := by simpa [bind, Except.bind, pure, Except.pure] using h
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h'
+  have hpost := exc_of_triple (closure_placesAll S d) hc
+  exact ⟨fnOf, rfl, hpost⟩
 
 end Flock.Chain
