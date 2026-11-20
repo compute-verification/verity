@@ -29,33 +29,41 @@ def test_the_switch_is_one_line_in_a_module_that_imports_only_the_standard_libra
 
 _FAKE = """import json, sys
 for line in sys.stdin:
-    sys.stderr.write("PANIC at PouwVerifier.Credit.tileOf PouwVerifier.Credit:540:4: index out of bounds\\n")
+    sys.stderr.write({said!r} + "\\n")
     sys.stderr.flush()
-    print(json.dumps({"output": {"verdict": "accept"}}), flush=True)
+    print(json.dumps({{"output": {{"verdict": "accept"}}}}), flush=True)
 """
 
 
-def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_name(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("said", ["PANIC at PouwVerifier.Credit.tileOf PouwVerifier.Credit:540:4: index out of bounds",
+                                  "Error: index out of bounds"])
+def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_name(monkeypatch, tmp_path, said) -> None:
+    """A verifier that writes a panic line, a ``PANIC`` one or an out-of-range index's with none, then answers accept
+    and ends 0, gives no answer: `lean_child.LEAN_PANIC`, whatever it answered."""
     fake = tmp_path / "pouw-verifier-difftest"
-    fake.write_text(f"#!{sys.executable}\n{_FAKE}", encoding="utf-8")
+    fake.write_text(f"#!{sys.executable}\n{_FAKE.format(said=said)}", encoding="utf-8")
     fake.chmod(0o755)
     monkeypatch.setattr(V, "executable", lambda exe=V.EXE: fake)
     monkeypatch.setattr(V, "_server", V._Server())
     got = V.of_record("window", {}, {"verdict": "accept"})
     assert got["refused"][0] == V.DISAGREE and f"{V.LC.LEAN_PANIC}: " in got["refused"][1], got
-    assert "PANIC at PouwVerifier.Credit.tileOf" in got["refused"][1], got
+    assert said in got["refused"][1], got
     V._server.close()
 
 
-@pytest.mark.parametrize("end", ["os.kill(os.getpid(), signal.SIGABRT)", "sys.exit(3)"])
-def test_a_verifier_killed_by_a_signal_or_ending_with_no_verdict_is_refused_by_name(monkeypatch, tmp_path, end) -> None:
+@pytest.mark.parametrize("end, how", [("os.kill(os.getpid(), signal.SIGABRT)", "killed by SIGABRT"),
+                                      ("sys.exit(3)", "status 3"), ("os._exit(134)", "status 134 (abort)")])
+def test_a_verifier_killed_by_a_signal_or_ending_with_no_verdict_is_refused_by_name(monkeypatch, tmp_path, end,
+                                                                                   how) -> None:
+    """A verifier killed by a signal, or ending silently with a status `SERVE_EXITS` doesn't hold (134 an abort's), gives
+    no answer: `lean_child.LEAN_EXIT`."""
     fake = tmp_path / "pouw-verifier-difftest"
     fake.write_text(f"#!{sys.executable}\nimport os, signal, sys\nsys.stdin.readline()\n{end}\n", encoding="utf-8")
     fake.chmod(0o755)
     monkeypatch.setattr(V, "executable", lambda exe=V.EXE: fake)
     monkeypatch.setattr(V, "_server", V._Server())
     got = V.of_record("window", {}, {"verdict": "accept"})
-    assert got["refused"][0] == V.DISAGREE and f"{V.LEAN_ABORT}: " in got["refused"][1], got
+    assert got["refused"][0] == V.DISAGREE and f"{V.LC.LEAN_EXIT}: {how}: " in got["refused"][1], got
 
 
 def test_without_lake_the_refusal_names_the_path_it_searched(monkeypatch, tmp_path) -> None:
