@@ -259,35 +259,12 @@ readers = [
 
 [[message]]
 type = "PoUWScheme"
-today = "`--protocols NAME [--protocols-config JSON]`: run each linear's product under PoUW (H1; or Pearl+ with its kernel directory and cubin file)"
+today = "`--protocols NAME [--protocols-config JSON]`: run each linear's product under PoUW's Pearl+, with its kernel directory and cubin file"
 writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--protocols pouw:eps1-sm120-h1fx1|--protocols \\\"\\$PEARLPLUS_ARM\\\"|--protocols-config" },
 ]
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_openai.py", find = "option\\(\"--(protocols|protocols-config)\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "def config_of|config_of\\(opts\\.protocols_config\\)" },
-]
-
-[[message]]
-type = "H1State"
-today = "`--h1-prover DIR`: keep each served call's prover state (`private/h1/w<k>/`)"
-writers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--h1-prover \"\\$D/private/h1\"" },
-]
-readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-prover\"|prover=opts\\.h1\\.h1_prover" },
-]
-
-[[message]]
-type = "H1RunCommitment"
-today = "`--h1-window-commit CMD`: at each run's close run the prover's run commit, `bash -c CMD _ SERVE_DIR K W R PROVER_DIR`"
-writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "argv = \\[\"bash\", \"-c\", self\\.command" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1\\+=\\(--h1-window-commit " },
-]
-readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "^tie\\(\\) \\{|window_commit \\\"\\$D/h1/w\\$K/window-commit\\.json\\\"" },
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_h1.py", find = "option\\(\"--h1-window-commit\"|WindowTie\\(opts\\.h1\\.h1_window_commit" },
 ]
 
 [[message]]
@@ -302,52 +279,6 @@ readers = [
 ]
 
 [[message]]
-type = "H1Program"
-today = "PoUW H1's declared run Program (`h1/window-program.json.gz`, `h1/window-program.meta.json`)"
-writers = [
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "PROGRAM, PROGRAM_META = \"window-program\\.json\\.gz\"" },
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served_program.py", find = "out / PH\\.PROGRAM_META" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "^def program\\(" },
-]
-readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "PH\\.PROGRAM_META|\\\"window-program\\.json\\.gz\\\"" },
-    { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "PH\\.PROGRAM_META" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "h1/window-program\\.json\\.gz" },
-]
-
-[[message]]
-type = "H1Record"
-today = "PoUW H1's run record (`h1/w<k>/pouw-h1-calls.json`, `verity-vllm/pouw-h1-calls/v2`): the calls root, the session, the outcome"
-writers = [
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py", find = "CALLS_FILE = \"pouw-h1-calls\\.json\"" },
-]
-readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.py", find = "H1_CALLS = \"h1/w\\{k\\}/pouw-h1-calls\\.json\"|serve_dir / H1_CALLS" },
-]
-
-[[message]]
-type = "H1Registration"
-today = "H1's tie: the run's registration W (`h1/w<k>/registration.json`) and the log of ties (`h1/log.jsonl`)"
-writers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "LOG = \"log\\.jsonl\"|W_FILE, R_FILE, COMMAND_LOG = \"registration\\.json\"|M\\.(write|append)\\((wf|self\\.log), \"H1Registration\"" },
-]
-readers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--window-registration \"\\$3\"|\"\\$D/h1/log\\.jsonl\"" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_cases.py", find = "H1_LOG = Path\\(\"h1/log\\.jsonl\"\\)" },
-]
-
-[[message]]
-type = "H1Registration"
-second = true
-today = "the run's record R (`h1/w<k>/record.json`), the answer to `--h1-window-commit`"
-writers = [
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "cp \"\\$VW/window/registration\\.json\" \"\\$4\"" },
-]
-readers = [
-    { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/serve_tie.py", find = "R_FILE" },
-]
-
-[[message]]
 type = "PearlPass"
 today = "Pearl+'s passes (`pearl/w<k>/served.json`, `coins.json`, `pass-NNNNN/`)"
 writers = [
@@ -356,7 +287,6 @@ writers = [
 readers = [
     { lane = "compute-accounting", file = "benchmarks/pouw/pearl_c_vllm/served_passes.py", find = "passes / \"served\\.json\"\\)\\.read_text" },
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"retention\\.json\"|\"--pearl-passes\"" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--pearl-passes \"\\$4\"" },
 ]
 
 [[message]]
