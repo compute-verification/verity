@@ -20,7 +20,7 @@ from functools import partial
 from types import SimpleNamespace
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import OR, ZERO, add, const_bits, mux, sub
+from verity.circuits.boolean.forms import OR, ZERO, const_bits, mux, sub
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
@@ -30,14 +30,10 @@ from verity.circuits.types import Array
 from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
 from verity_vllm.definitions.registry import dsv4_compressor as C
 from verity_vllm.definitions.registry.boolean_attention import _Bits
+from verity_vllm.definitions.registry.boolean_gate_ops import Ue8m0CeilByteV2, ue8m0_byte
 
 BITS = SimpleNamespace(**vars(BI.BITS), E8M0=Array(8, BL.BIT))
 F32, E8 = BITS.F32, BITS.E8M0
-
-
-def ue8m0_byte(C_, s):
-    """`dsv4_compressor.Ue8m0CeilByte`: bits 23..30 of the 32-bit sum bits(s) + 0x7FFFFF."""
-    return add(C_, list(s), const_bits(0x7FFFFF, 32), width=32)[23:31]
 
 
 def ue8m0_inv(C_, e):
@@ -45,8 +41,6 @@ def ue8m0_inv(C_, e):
     return [ZERO] * 23 + sub(C_, const_bits(254, 9), list(e) + [ZERO], 9)[0]
 
 
-Ue8m0CeilByteV2 = definition("Ue8m0CeilByte", 2, ue8m0_byte, (("s", F32),), E8, word=C.Ue8m0CeilByte,
-                             doc="The UE8M0 byte of a scale word on bits: Ue8m0CeilByte_v1")
 Ue8m0InvScaleV2 = definition("Ue8m0InvScale", 2, ue8m0_inv, (("e", E8),), F32, word=C.Ue8m0InvScale,
                              doc="The inverse scale of a UE8M0 byte on bits: Ue8m0InvScale_v1")
 

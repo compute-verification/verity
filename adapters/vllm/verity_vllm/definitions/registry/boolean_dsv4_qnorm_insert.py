@@ -18,8 +18,6 @@ word is constant bits and `-x` one NOT gate on x's sign bit.  No table or lookup
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
-from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import cast as BC
 from verity.circuits.ops.boolean import elementwise as EW
@@ -37,6 +35,7 @@ from verity_vllm.definitions.registry.boolean_dsa import (
     U32AndV2,
     flat,
 )
+from verity_vllm.definitions.registry.boolean_gate_ops import F32ToU32RzByteV2
 from verity_vllm.definitions.registry.boolean_flashmla import (
     BIT_T,
     E8,
@@ -44,49 +43,6 @@ from verity_vllm.definitions.registry.boolean_flashmla import (
     NvExp2fV2,
     NvLog2fV2,
 )
-
-#: the stages of the right shift by 31 - k, largest first, each with the low bits its later stages read
-_STAGES = ((16, 23), (8, 15), (4, 11), (2, 9), (1, 8))
-
-
-def f32_to_u32_rz_byte(C, x):
-    """`dsv4_qnorm_insert.f32_to_u32_rz_byte`: with k = e - 127 (no borrow: x >= 1 in magnitude), x < 2^32 iff k < 32, and then the
-    truncation is (1.m << 8) >> (31 - k), 31 - k the NOT of k's five low bits; 0xFF from k >= 32 (+inf too), 0 for a NaN, a
-    negative or k < 0."""
-    m, e, s = x[:23], x[23:31], x[31]
-    k, below = sub(C, e, const_bits(127, 8), 8)
-    big = C.AND(NOT(below), or_reduce(C, k[5:]))
-    nan = C.AND(_all(C, e), or_reduce(C, m))
-    w = [ZERO] * 8 + list(m) + [ONE]
-    for (sh, keep), r in zip(_STAGES, (NOT(k[4]), NOT(k[3]), NOT(k[2]), NOT(k[1]), NOT(k[0]))):
-        w = _stage(C, r, w, sh, keep)
-    ok = C.AND(NOT(s), NOT(nan))
-    sat, fits = C.AND(ok, big), C.AND(ok, C.AND(NOT(below), NOT(big)))
-    return [sat ^ C.AND(fits, b) for b in w[:8]]
-
-
-def _stage(C, r, w, sh, keep):
-    """`mux(r, w >> sh, w)` to ``keep`` bits, each r AND v made once: in the first stage a bit read shifted at i and unshifted at
-    i + sh (its other operand zero) would be ANDed with r twice in a lowering that does not share terms."""
-    ands = {}
-    out = []
-    for i in range(keep):
-        v = (w[i + sh] if i + sh < len(w) else ZERO) ^ w[i]
-        if v.key() not in ands:
-            ands[v.key()] = C.AND(r, v)
-        out.append(w[i] ^ ands[v.key()])
-    return out
-
-
-def _all(C, bits):
-    out = bits[0]
-    for b in bits[1:]:
-        out = C.AND(out, b)
-    return out
-
-
-F32ToU32RzByteV2 = definition("F32ToU32RzByte", 2, f32_to_u32_rz_byte, (("x", F32),), E8, word=Q.F32ToU32RzByte,
-                              doc="the low byte of cvt.rzi.u32.f32 on bits: F32ToU32RzByte_v1")
 
 BITS = dict(wide=BC.Bf16ToF32, cvt=BG.F2fpBf16, add=EW.F32AddV4, mul=EW.F32MulV4, fma=EW.F32FmaV4, div=EW.F32DivV4,
             rsqrt=BM.RsqrtApprox, fabs=SC.F32Fabs, fmax=SC.F32Fmaxf, fmin=SC.F32Fminf, e4m3=SC.F32ToE4m3Sat, iadd=EW.I32Add,

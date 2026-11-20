@@ -84,6 +84,7 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.numerics import dsv4_compressor_twin
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry.boolean_gate_ops import Ue8m0CeilByte
 from verity_vllm.definitions.registry.flashmla import E8M0
 from verity_vllm.definitions.registry.prims import F32
 
@@ -99,13 +100,6 @@ DSV4_COMPRESSOR = {"D": 512, "QB": 64, "ROWS": 8, "W": 8, "R": 16, "EPS": 1e-6}
 
 #: the element types of a signature: these words, and their bits in `boolean_dsv4_compressor`
 WORDS = SimpleNamespace(**vars(I.WORDS), E8M0=E8M0)
-
-
-@primitive("Ue8m0CeilByte", 1, [("s", F32)], E8M0, conformance=_CONF)
-def Ue8m0CeilByte(s: int) -> int:
-    """The UE8M0 byte of a positive scale word, its exponent rounded up: `((bits(s) + 0x7FFFFF) >> 23) & 0xFF` (add.s32,
-    shr.u32, and.b32; cutedsl:369, 1415)."""
-    return (((s & M32) + 0x7FFFFF) & M32) >> 23 & 0xFF
 
 
 @primitive("Ue8m0InvScale", 1, [("e", E8M0)], F32, conformance=_CONF)
