@@ -12,6 +12,8 @@ of Lean sources (`PINS`), and each test's fixture (`WRITERS`).
 A test's fixture is a tracked file a test holds the tree to and its test module rewrites from the tree (``python MODULE
 --write``, in the workspace's environment). ``--write PATH`` is the one command that regenerates it, and the test's failure
 names it (`Writer.command`); only the test can tell that its fixture is stale, so ``--stale`` and ``--regen`` leave it alone.
+``--write`` also takes a test module that states its program digests in its own text (`Inline`: each rewritten to the digest
+its own test computes, never one whose pinned counts moved) and a fixture its test rewrites under ``VERITY_REPIN=1`` (`Repin`).
 `tests/test_pins.py` fails on a test module under `WRITER_DIRS` with a ``--write`` that no `Writer` lists, and on a `Writer`
 whose module doesn't name its command.
 
@@ -175,6 +177,228 @@ WRITERS = (
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
+
+
+@dataclass(frozen=True)
+class Inline:
+    """Program digests a test module states in its own text and computes through one of its module-level functions, `hook`
+    (`HOOKS`): the values of its dict `name` (a digest, or a tuple ending in one; a tuple of (ands, xors, nots, digest) keeps its
+    counts), or, with `name` None, each test's parametrize argument `by`.  A dict's value is keyed by `by`: "target", the id of
+    the hooked call's first argument, or the parametrize argument of the test that reads it.  ``--write MODULE`` runs the
+    module's tests that read them with `hook` recorded (`record`) and rewrites each literal to the digest its test computed,
+    unless the counts the test compiled differ from the pinned ones, the test computed two digests, or it never reached the
+    hook (`settle`)."""
+    module: str
+    hook: str
+    by: str
+    name: str | None = None
+
+    @property
+    def command(self) -> str:
+        return f"uv run python tools/check/pins.py --write {self.module}"
+
+
+@dataclass(frozen=True)
+class Repin:
+    """A fixture of {name: {"digest", facts...}} that its test module rewrites under ``VERITY_REPIN=1``: ``--write PATH`` runs
+    the module so and keeps the new entry only of a name whose other facts (gates, nodes) are unchanged."""
+    path: str
+    module: str
+
+    @property
+    def command(self) -> str:
+        return f"uv run python tools/check/pins.py --write {self.path}"
+
+
+INLINE = (
+    *(Inline(VLLM_PROGRAM_TESTS + m, "standalone_call", "target", n) for m, n in (
+        ("test_bf16_gemm.py", "PINS"), ("test_boolean_activation.py", "PINS"), ("test_boolean_attention.py", "PINS"),
+        ("test_boolean_dense.py", "PINS"), ("test_boolean_dense_norm.py", "PINS"), ("test_boolean_dsv4_moe.py", "PINS"),
+        ("test_boolean_fp8.py", "PINS"), ("test_boolean_gather.py", "PINS"), ("test_boolean_moe.py", "PINS"),
+        ("test_boolean_norms.py", "PINS"), ("test_boolean_rope.py", "PINS"), ("test_boolean_silu.py", "PINS"),
+        ("test_boolean_softcap.py", "PINS"), ("test_boolean_tanh.py", "PINS"), ("test_fp8_moe.py", "PINS"),
+        ("test_gumbel_boolean.py", "PINS"), ("test_gumbel_boolean.py", "LANE_PINS"), ("test_mla.py", "PINS"),
+        ("test_sampling_boolean.py", "PINS"), ("test_tp_allreduce.py", "PINS"), ("test_tp_allreduce_multimem.py", "PINS"),
+    )),
+    Inline(VLLM_PROGRAM_TESTS + "test_moe_router_sigmoid.py", "standalone_call", "launch", "SERVED"),
+    Inline(VLLM_PROGRAM_TESTS + "test_superseded_kept.py", "program_digest", "version", "KEPT"),
+    Inline(VLLM_PROGRAM_TESTS + "predict/test_predict.py", "build_program", "digest"),
+)
+REPINS = (Repin(VLLM_PROGRAM_TESTS + "derive_neutrality.json", VLLM_PROGRAM_TESTS + "test_derive_neutrality.py"),)
+#: what `record` runs a module's tests in: this file, so a caller may substitute its own `facts`
+RECORDER = [sys.executable, "-P", str(Path(__file__).resolve())]
+
+
+def facts(program) -> dict:
+    """What `record` keeps of each Program a hook saw, beside its digest."""
+    return {"gates": program.gates}
+
+
+def _hooked(mod, hook: str, args: tuple, ret) -> tuple[str, object]:
+    """(the digest the test computes, the Program) of one call of ``hook``, as the module computes it."""
+    if hook == "standalone_call":
+        return mod.codec.program_digest(mod.codec.encode_program(ret[0])), ret[0]
+    if hook == "program_digest":
+        return ret, args[0]
+    if hook == "build_program":
+        return ret.digest, ret.program
+    raise ValueError(f"{hook}: no such hook")
+
+
+HOOKS = ("standalone_call", "program_digest", "build_program")
+
+
+def _suite_of(path: Path, root: Path) -> Path:
+    """The nearest directory above ``path`` whose pyproject.toml configures pytest: where its suite runs."""
+    for d in path.parents:
+        if (d / "pyproject.toml").is_file() and "[tool.pytest.ini_options]" in (d / "pyproject.toml").read_text():
+            return d
+        if d == root:
+            break
+    raise SystemExit(f"{path}: no pytest suite above it")
+
+
+def record(module: str, out: str, spec: str) -> int:
+    """``--record``, in the suite's directory: run ``module``'s tests that read the pins of each `Inline` of ``spec`` (a JSON
+    list), every call of each hook recorded, and write [{key: {"old", "pinned", "new": [...], "counts": [...], "facts": [...]}}]
+    per entry to ``out``."""
+    import inspect
+
+    import pytest
+
+    entries = [Inline(**e) for e in json.loads(spec)]
+    got: list[dict] = [{} for _ in entries]
+    now: dict = {}
+
+    def reads(item, e: Inline) -> bool:
+        if e.name is None:
+            return e.by in getattr(getattr(item, "callspec", None), "params", {})
+        src = inspect.getsource(item.function)
+        helpers = [n for n, f in vars(item.module).items() if inspect.isfunction(f) and f.__module__ == item.module.__name__
+                   and f"{e.name}[" in inspect.getsource(f)]
+        return any(f"{h}(" in src for h in helpers)
+
+    def pin(e: Inline, i: int, key, value) -> None:
+        if isinstance(value, str):
+            got[i].setdefault(key, {"old": value, "pinned": None, "new": [], "counts": [], "facts": []})
+        elif isinstance(value, tuple) and value and (isinstance(value[-1], str) or value[-1] is None):
+            counts = list(value[:3]) if len(value) == 4 and all(isinstance(c, int) for c in value[:3]) else None
+            got[i].setdefault(key, {"old": value[-1], "pinned": counts, "new": [], "counts": [], "facts": []})
+
+    def hook(mod, name: str, orig):
+        def call(*args, **kw):
+            ret = orig(*args, **kw)
+            item = now.get("item")
+            for i, e in enumerate(entries):
+                if e.hook != name or item is None:
+                    continue
+                params = getattr(getattr(item, "callspec", None), "params", {})
+                key = getattr(args[0], "id", None) if e.by == "target" else params.get(e.by)
+                if e.name is None and isinstance(key, str):
+                    pin(e, i, key, key)
+                if key not in got[i]:
+                    continue
+                digest, program = _hooked(mod, name, args, ret)
+                row = got[i][key]
+                row["new"].append(digest)
+                row["facts"].append(facts(program))
+                if row["pinned"] is not None and name == "standalone_call":
+                    c = mod.BS.compile(args[0]).counts
+                    row["counts"].append([c["and"], c["xor"], c["not"]])
+            return ret
+        return call
+
+    class Recorder:
+        def pytest_collection_modifyitems(self, items):
+            items[:] = [it for it in items if any(reads(it, e) for e in entries)]
+            if not items:
+                return
+            mod = items[0].module
+            for i, e in enumerate(entries):
+                for key, value in (getattr(mod, e.name).items() if e.name else ()):
+                    pin(e, i, key, value)
+            for name in {e.hook for e in entries}:
+                setattr(mod, name, hook(mod, name, getattr(mod, name)))
+
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_runtest_call(self, item):
+            now["item"] = item
+            yield
+            now["item"] = None
+
+    pytest.main([module, "-q", "-p", "no:cacheprovider"], plugins=[Recorder()])
+    Path(out).write_text(json.dumps(got))
+    return 0
+
+
+def settle(text: str, entries: list[Inline], got: list[dict]) -> tuple[str, list[dict]]:
+    """(``text`` with each pin its test reached rewritten to the digest the test computed, a row per pin): a pin is "kept" when
+    the test computed it again, "rewritten", or refused: "counts moved" (the test compiled other counts than its pinned ones),
+    "two digests", "not reached" (the test never computed it) or "not one literal" (its digest is not one literal of the
+    module)."""
+    rows = []
+    for e, pins in zip(entries, got):
+        for key, p in pins.items():
+            old, new = p["old"], sorted(set(p["new"]))
+            if old is None:
+                continue
+            row = {"entry": e.name or e.by, "key": key, "old": old, "new": new[0] if len(new) == 1 else None}
+            if not new:
+                row["refused"] = "not reached"
+            elif len(new) > 1:
+                row["refused"] = "two digests"
+            elif p["pinned"] is not None and any(c != p["pinned"] for c in p["counts"]):
+                row["refused"] = f"counts moved: {p['pinned']} -> {p['counts'][0]}"
+            elif new[0] == old:
+                row["kept"] = True
+            elif sum(text.count(f"{q}{old}{q}") for q in "\"'") != 1:
+                row["refused"] = "not one literal"
+            else:
+                text = text.replace(f'"{old}"', f'"{new[0]}"').replace(f"'{old}'", f"'{new[0]}'")
+                row["rewritten"] = True
+            rows.append(row)
+    return text, rows
+
+
+def write_inline(module: str, entries: list[Inline], root: Path) -> int:
+    """`--write MODULE` of an `Inline` module: `record` in a process of its own, then `settle`; 1 when a pin was refused."""
+    suite = _suite_of(root / module, root)
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "record.json"
+        spec = json.dumps([e.__dict__ for e in entries])
+        subprocess.run([*RECORDER, "--record", str((root / module).relative_to(suite)), str(out), spec], cwd=suite)
+        if not out.is_file():
+            print(f"pins: {module}: its tests recorded nothing", file=sys.stderr)
+            return 1
+        got = json.loads(out.read_text())
+    text, rows = settle((root / module).read_text(), entries, got)
+    (root / module).write_text(text)
+    refused = [r for r in rows if "refused" in r]
+    print(json.dumps({"module": module, "rewritten": sum("rewritten" in r for r in rows), "kept": sum("kept" in r for r in rows),
+                      "refused": refused}))
+    return 1 if refused else 0
+
+
+def write_repin(r: Repin, root: Path) -> int:
+    """`--write PATH` of a `Repin` fixture; 1 when a name's other facts moved, or a name came or went."""
+    path = root / r.path
+    old = json.loads(path.read_text())
+    suite = _suite_of(root / r.module, root)
+    subprocess.run([sys.executable, "-P", "-m", "pytest", str((root / r.module).relative_to(suite)), "-q", "-p", "no:cacheprovider"],
+                   cwd=suite, env={**os.environ, "VERITY_REPIN": "1"})
+    new = json.loads(path.read_text())
+    keep, refused = {}, []
+    for name in sorted(set(old) | set(new)):
+        a, b = old.get(name), new.get(name)
+        same = a is not None and b is not None and {k: v for k, v in a.items() if k != "digest"} == \
+            {k: v for k, v in b.items() if k != "digest"}
+        if a is not None:
+            keep[name] = b if same else a
+        if not same:
+            refused.append({"key": name, "old": a, "new": b})
+    path.write_text(json.dumps(keep, indent=1, sort_keys=True) + "\n")
+    print(json.dumps({"fixture": r.path, "rewritten": sum(old.get(n) != keep.get(n) for n in keep), "refused": refused}))
+    return 1 if refused else 0
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
 EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/")
@@ -238,12 +462,20 @@ def write(paths: list[str], root: Path) -> int:
     """`--write`: run each named fixture's test module with ``--write`` at ``root``, in this interpreter, in order; 1 when one
     failed, 2 when a path is no `Writer`'s fixture (and nothing runs)."""
     by_path = {w.path: w for w in WRITERS}
+    inline = {e.module for e in INLINE}
+    repins = {r.path: r for r in REPINS}
     paths = [os.path.normpath(p) for p in paths]
-    if unknown := [p for p in paths if p not in by_path]:
-        print(f"pins: {', '.join(unknown)}: no test's fixture; --write takes one of {', '.join(by_path)}", file=sys.stderr)
+    if unknown := [p for p in paths if p not in by_path and p not in inline and p not in repins]:
+        print(f"pins: {', '.join(unknown)}: no test's fixture; --write takes one of {', '.join([*by_path, *inline, *repins])}",
+              file=sys.stderr)
         return 2
     rc = 0
-    for w in map(by_path.get, paths):
+    for p in paths:
+        if p in inline:
+            rc |= write_inline(p, [e for e in INLINE if e.module == p], root)
+        elif p in repins:
+            rc |= write_repin(repins[p], root)
+    for w in (by_path[p] for p in paths if p in by_path):
         print(f"pins: rewriting {w.path}: python {w.module} --write", flush=True)
         if r := subprocess.run([sys.executable, w.module, "--write"], cwd=root).returncode:
             print(f"pins: {w.path}: {w.module} --write exited {r}", file=sys.stderr)
@@ -425,8 +657,11 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--merged", nargs=2, metavar=("OURS", "THEIRS"))
     g.add_argument("--write", nargs="+", metavar="PATH", help="rewrite these tests' fixtures (`WRITERS`)")
     ap.add_argument("--conflicted", nargs="*", default=[], metavar="PATH", help="--merged: the merge's conflicted paths")
+    g.add_argument("--record", nargs=3, metavar=("MODULE", "OUT", "SPEC"), help=argparse.SUPPRESS)
     ap.add_argument("--root", type=Path, default=ROOT)
     a = ap.parse_args(argv)
+    if a.record:
+        return record(*a.record)
     if a.write:
         return write(a.write, a.root)
     if a.merged:
@@ -443,6 +678,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{'stale' if s else 'ok   '}  {pin.path}  `{pin.shell(a.root)}`")
     for w in WRITERS:
         print(f"test   {w.path}  `{w.command}`")
+    for m in sorted({e.module for e in INLINE}):
+        print(f"inline {m}  `uv run python tools/check/pins.py --write {m}`")
+    for r in REPINS:
+        print(f"repin  {r.path}  `{r.command}`")
     return 0
 
 
