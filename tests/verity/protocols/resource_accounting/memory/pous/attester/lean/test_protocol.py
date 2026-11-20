@@ -33,7 +33,7 @@ deployed_server = D.server_fixture(deployed_port(st.none()))
 
 @pytest.mark.slow
 def test_the_test_protocol_agrees(signers_server):
-    stats = D.run(signers_port(M.cases()), examples=400, server=signers_server)
+    stats = D.run(signers_port(M.cases()), examples=500, server=signers_server)
     assert stats.counts.get("accept", 0) > 40 and stats.rejects > 200, stats
 
 

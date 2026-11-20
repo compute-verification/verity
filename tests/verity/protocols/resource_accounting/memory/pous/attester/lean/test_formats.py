@@ -172,7 +172,7 @@ def test_header(server):
 
 
 #: a session record's salt: its 64 bytes, else one short or long, which both sides refuse
-RECORD_SALT = hexed(mostly(st.binary(min_size=64, max_size=64), st.sampled_from([b"", bytes(63), bytes(65)]), 9))
+RECORD_SALT = hexed(mostly(st.binary(min_size=64, max_size=64), st.sampled_from([b"", bytes(63), bytes(65)]), 19))
 
 
 def message(v) -> str:
@@ -398,7 +398,7 @@ def test_wipe_message(server):
                                                    "start_mark": WIPE_MARK,
                                                    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED,
                                                    "batches": WIPE_BATCHES}))
-    stats = D.run(port("wipe_message", wipe_message, inputs), examples=400, server=server)
+    stats = D.run(port("wipe_message", wipe_message, inputs), examples=500, server=server)
     assert stats.outputs > 100 and stats.rejects > 30, stats
 
 
@@ -415,7 +415,7 @@ def test_wipe_end_message(server):
     """The end message over sampled signed sessions, their signatures of any length; a start mark neither empty nor 64
     bytes, a commitment `WipeParams` refuses and a record past a field's width refused by both."""
     inputs = with_malformed(st.fixed_dictionaries({"signed": mostly(WIPE_SIGNED, malformed(WIPE_SIGNED), 5)}))
-    stats = D.run(port("wipe_end_message", wipe_end_message, inputs), examples=300, server=server)
+    stats = D.run(port("wipe_end_message", wipe_end_message, inputs), examples=600, server=server)
     assert stats.outputs > 80 and stats.rejects > 30, stats
 
 

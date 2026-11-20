@@ -351,7 +351,7 @@ def test_the_reader_refuses_another_format_or_mark():
     for certificate in (CERTIFICATE, None):
         signed = session(certificate)[1]
         j = json.loads(json.dumps(signed.to_json()))
-        assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
+        assert set(j) == {"commitment", "salt", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
                           "scheme", "public_key", "signature"}
         assert WP.signed_of(j) == signed
         assert j["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
