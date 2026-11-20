@@ -5,7 +5,6 @@ __pycache__/
 
 # Run outputs, evidence, and shipped source snapshots live in artifact storage (tests/test_repository.py is the backstop).
 out/
-!tests/benchmarks/numerical/bench/data/flock-runs/*/out/
 !benchmarks/exfiltration/made_up/out/
 runs/
 *.tgz
@@ -81,7 +80,6 @@ tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins
 tests/verity/protocols/proofs/flock/prover/fixtures/rec-links
 tests/verity/protocols/proofs/flock/prover/fixtures/zk-sessions
-tests/verity/protocols/proofs/spot/verifier/fixtures/form-refusals
 tests/adapters/vllm/tests/protocols/fixtures/challenger_periods
 tests/benchmarks/network_e2e/encodings/fixtures
 tests/benchmarks/network_e2e/encodings/fixtures_draft

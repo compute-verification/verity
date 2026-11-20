@@ -42,6 +42,7 @@ namespace MemoryAttester.Session.Properties
 
 open ResourceAccounting.Assumptions
 open MemoryAttester.Properties (Observed Recorded)
+open Flock.SessionCoins (COMPLETE LATE)
 
 /-! ## The device's code in a session -/
 

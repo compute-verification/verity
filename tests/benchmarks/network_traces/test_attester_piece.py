@@ -769,8 +769,8 @@ def test_the_launchers_scan_class_is_v3cs_setup_in_scan_zk():
     served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's
     strides, KI, KO, the lanes and EVERY."""
     from verity.protocols.resource_accounting.network import scheme as NS
-    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
+    from tests.verity.protocols.resource_accounting.network.verifier import scan_traffic as ST
 
-    setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
+    setup = ST.SETUPS[CP.V3C_SCAN_CLASS]
     c = setup.cls
     assert NS.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"

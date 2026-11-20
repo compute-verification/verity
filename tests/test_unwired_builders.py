@@ -32,7 +32,6 @@ CALLERS: dict[str, str] = {
     "benchmarks/one_stage/a6.py": "new-run",
     "benchmarks/one_stage/a7.py": "new-run",
     "benchmarks/one_stage/forged_proofs.py": "new-run",
-    "benchmarks/one_stage/form_refusals.py": "new-run",
     "benchmarks/one_stage/r2_population.py": "both",
     "benchmarks/one_stage/replay.py": "replay",
     "benchmarks/one_stage/served_cases.py": "replay",
@@ -46,8 +45,6 @@ CALLERS: dict[str, str] = {
     "verity/protocols/proofs/spot/verifier/service.py": "new-run",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.circuit-check.py": "check",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "replay",
-    "verity/protocols/resource_accounting/network/prover/network_attester_zk.py": "new-run",
-    "verity/protocols/resource_accounting/network/prover/scan_zk.py": "new-run",
     "verity/protocols/resource_accounting/network/verifier/service.py": "new-run",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py":
         "new-run",

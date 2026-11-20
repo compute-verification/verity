@@ -16,7 +16,7 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
-rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
+rows) are disjoint, each (reader, port)'s wires sorted by first unit and swept (`pairwiseDisjointFast`). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -134,6 +134,25 @@ def disjoint (a b : Wire) : Bool :=
 def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
+
+/-- The sweep over wires sorted by `start`: each wire is held disjoint from the earlier ones whose reader units reach past its
+`start` (`act`), which are the only ones it can overlap. -/
+def sweep : List Wire → List Wire → Bool
+  | [], _ => true
+  | b :: bs, act =>
+    let act' := act.filter fun a => decide (b.start < a.start + a.readerUnits)
+    act'.all (fun a => disjoint a b) && sweep bs (b :: act')
+
+/-- One (reader, port)'s wires pairwise disjoint, by sorting on `start` and sweeping. -/
+def groupDisjoint (g : List Wire) : Bool := sweep (g.mergeSort fun a b => decide (a.start ≤ b.start)) []
+
+/-- `pairwiseDisjoint` without comparing all pairs: wires of different (reader, port) are disjoint, so each group is swept
+alone (`pairwiseDisjointFast_eq`). Work `O(wires · groups + wires log wires)` beside the wires a sweep keeps active. -/
+def pairwiseDisjointFast (ws : List Wire) : Bool :=
+  ((ws.map fun w => (w.reader, w.port)).eraseDups).all fun k =>
+    groupDisjoint (ws.filter fun w => (w.reader, w.port) == k)
+
+
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
@@ -260,11 +279,36 @@ def orderedWire (o : List UnitRange) (w : Wire) : Bool :=
       let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
       (ranksIn o w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
 
+/-- The order's ranges of template `t`, each with its rank. -/
+def rangesOf (o : List UnitRange) (t : String) : List (UnitRange × Nat) := o.zipIdx.filter fun (b, _) => b.1 == t
+
+/-- Each template of the order's ranges with its `rangesOf`, so a wire reads only its own two templates' ranges. -/
+def rangeIndex (o : List UnitRange) : List (String × List (UnitRange × Nat)) :=
+  (o.map (·.1)).eraseDups.map fun t => (t, rangesOf o t)
+
+/-- `orderedWire` over `rangeIndex o`: the ranges the wire can read in are its reader template's, and the ranks it holds
+below them are its writer template's. -/
+def orderedWireIn (ix : List (String × List (UnitRange × Nat))) (w : Wire) : Bool :=
+  let of := fun t => (ix.lookup t).getD []
+  (of w.reader).all fun (b, a) =>
+    !w.readsIn b ||
+      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+      (((of w.writer).filter fun ((_, p0, n), _) => decide (max p0 s.1.toNat < min (p0 + n) (s.2.toNat + 1))).map (·.2)).all
+        (· < a)
+
 /-- The order's refusal (`orderOf`), else the first wire `f` doesn't put in it, by index. -/
 def orderCode (c : Wiring) (f : List UnitRange → Wire → Bool) : Option Refusal :=
   match orderOf c with
   | .error r => some r
   | .ok o => firstWire c fun w => if f o w then none else some .order
+
+/-- `orderCode c orderedWire` with the order's index made once (`orderCodeIx_eq`). -/
+def orderCodeIx (c : Wiring) : Option Refusal :=
+  match orderOf c with
+  | .error r => some r
+  | .ok o =>
+    let ix := rangeIndex o
+    firstWire c fun w => if orderedWireIn ix w then none else some .order
 
 /-- **The check at the size of the description**: the refusals in the module docstring's order, else the summary. -/
 def check (c : Wiring) : Except Refusal Summary :=
@@ -272,8 +316,8 @@ def check (c : Wiring) : Except Refusal Summary :=
   else match firstWire c (wireCode c) with
     | some r => .error r
     | none =>
-      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
-      else match orderCode c orderedWire with
+      if !pairwiseDisjointFast c.wires then .error ⟨.overlap, none⟩
+      else match orderCodeIx c with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
@@ -422,5 +466,12 @@ def pieceRef (j : Json) : Except String Json := do
       ("spans", Json.arr spans.toArray),
       ("lookups", Json.arr (qs.map fun (t, u, p, r) =>
         writerJson ((es.find? (·.1 == (t, u, p, r))).map (·.2))).toArray)]
+
+/-- The `wires_disjoint` piece: on `{"wires": [wire, ...]}`, whether every pair is disjoint, by `pairwiseDisjoint` and by
+`pairwiseDisjointFast`. -/
+def disjointPiece (j : Json) : Except String Json := do
+  let .arr ws := (j.getObjVal? "wires").toOption.getD Json.null | throw "an instance is {wires: [wire]}"
+  let wires ← ws.toList.mapM Wire.ofJson
+  return Json.mkObj [("pairwise", toJson (pairwiseDisjoint wires)), ("fast", toJson (pairwiseDisjointFast wires))]
 
 end Spot.Wires

@@ -55,6 +55,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agreement"))
+import lean_run as LR
+
 REFUSED = 1  # verity-verify-proof's exit when a session is refused (2: its inputs, with no VERDICT)
 RECORD = "rec-compose.json"  # the composition's record in DIR (module docstring)
 
@@ -205,7 +208,10 @@ def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool | None, str]:
         return None, f"no interactive-run record from rec-run.jsonl ({e})"
     links = ["--rec-links", (d / "rec-links.txt").read_text().strip()] if (d / "rec-links.txt").is_file() else []
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False)
+                        *links, "--rec-run", str(run), *map(str, logs)], capture_output=True, text=True, check=False,
+                       env=LR.lean_env())
+    if (why := LR.why(r, LR.VERIFY_EXITS)) is not None:
+        return None, why
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     if line is None:
         return None, f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"

@@ -580,47 +580,10 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
 #: the H200 demo's seed, frozen (its weights' registration roots depend on these bytes): public, so its weights are
 #: reproducible; the demo's salts are the prover's, drawn from the OS at registration (`salts`)
 DEMO_SEED = b"verity/cmp92/h200/weights/v1"
-#: the fixture's public seed: a test value, never the demo's
+#: the tests' public seed: a test value, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"
-#: what the fixture says of its salt file
-TEST_SALTS_NOTE = ("public test data: TINY's row salts drawn once from the operating system for this fixture and stored; "
-                   "never a run's salts")
-#: the fixture's reader, a digest of no program: every tensor at `Tensor.word_bits`
+#: the tests' reader, a digest of no program: every tensor at `Tensor.word_bits`
 TEST_PROGRAM = hashlib.sha512(b"not-a-program: the seeded weights' test reader").hexdigest()
-
-
-def first_rows(shape: Shape, seed: bytes) -> list[list[str]]:
-    """Each tensor's ``[name, SHA-256 of generation row 0, SHA-256 of its last generation row]`` (its bytes)."""
-    out = []
-    for t in tensors(shape):
-        rb = t.row_bytes
-        out.append([t.name, hashlib.sha256(tensor_bytes(shape, seed, t.name, 0, rb)).hexdigest(),
-                    hashlib.sha256(tensor_bytes(shape, seed, t.name, t.nbytes - rb, t.nbytes)).hexdigest()])
-    return out
-
-
-def fixture(salts_at: str | Path) -> dict[str, Any]:
-    """The interface's fixture (``tests/benchmarks/pous/fixtures/weights-v1.json``): under `TEST_SEED`, `TINY`'s and `PHASE1`'s manifests
-    with digests, and `TINY`'s entries and registration digest for `TEST_PROGRAM` under the stored test salts at
-    `salts_at` (`TEST_SALTS_NOTE`; `PHASE1`'s salts would pass the repository's file cap); at `H200` the
-    stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
-    SHA-256 of every tensor's
-    (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
-    of the evidence store (``manifest --digests`` writes it again)."""
-    out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v2", "seed": TEST_SEED.hex(),
-                           "salts": {"file": Path(salts_at).name, "note": TEST_SALTS_NOTE}, "program": TEST_PROGRAM,
-                           "shapes": {}}
-    roots = root(TINY, TEST_SEED, salts_at, TEST_PROGRAM)
-    out["shapes"][TINY.name] = {"manifest": manifest(TINY, TEST_SEED, digests=True),
-                                "values": entries(TINY, TEST_PROGRAM, roots),
-                                "registration": registration_digest(TINY, TEST_PROGRAM, roots)}
-    out["shapes"][PHASE1.name] = {"manifest": manifest(PHASE1, TEST_SEED, digests=True)}
-    rows = first_rows(H200, TEST_SEED)
-    out["shapes"][H200.name] = {
-        "stream_bytes": stream_bytes(H200), "stream_head": stream(H200, TEST_SEED, 0, 64).hex(),
-        "rows": [r for r in rows if not r[0].startswith("l") or r[0].startswith("l0.")],
-        "rows_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()}
-    return out
 
 
 def dumps(doc: Any) -> str:
@@ -658,9 +621,9 @@ def _bytes_arg(text: str) -> bytes:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("manifest", "write", "salts", "root", "fixture"):
+    for name in ("manifest", "write", "salts", "root"):
         p = sub.add_parser(name)
-        if name not in ("fixture", "salts"):
+        if name != "salts":
             p.add_argument("--shape", type=_shape_arg, default=H200)
             p.add_argument("--seed", type=_bytes_arg, help="hex:..., file:PATH or text:...")
         p.add_argument("--out", required=True)
@@ -674,18 +637,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                        help="the reading program's digest (128 hex digits); each tensor read at "
                                             "Tensor.word_bits, 16")
         sub.choices[name].add_argument("--tensors", help="comma-separated tensor names (default all it reads)")
-    for name in ("root", "fixture"):
-        sub.choices[name].add_argument("--salts", required=True,
-                                       help="the salt file (`salts --out`; the prover's, never under a run's output)")
+    sub.choices["root"].add_argument("--salts", required=True,
+                                     help="the salt file (`salts --out`; the prover's, never under a run's output)")
     a = ap.parse_args(argv)
 
     def say(done: int, total: int) -> None:
         if done == total or done % max(1, total // 100) == 0:
             print(f"{a.cmd}: {done}/{total}", file=sys.stderr, flush=True)
 
-    if a.cmd == "fixture":
-        Path(a.out).write_text(dumps(fixture(a.salts)))
-        return 0
     if a.cmd == "salts":
         names = a.tensors.split(",") if a.tensors else [n for n, _ in reader(a.shape, a.program).widths]
         salt_file.write(a.out, draw_salts(a.shape, names))

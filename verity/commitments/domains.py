@@ -16,9 +16,8 @@ module and the Lean equal, entry for entry; refuses a literal of the table in th
 switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
-# PoUW: the protocol and its identifier
+# PoUW: the protocol
 POUW_PROTOCOL = "verity/pouw/v1"
-POUW_IDENTIFIER = "verity/pouw/identifier/v1"
 POUW_PASS_MANIFEST = "verity/pouw/pass-manifest/v1"
 
 # PoUW: epochs: coins, salts and the weights they bind
@@ -77,7 +76,6 @@ POUW_SEED = "verity/pouw/seed/v2"
 POUW_RECEIPT = "verity/pouw/receipt/v1"
 POUW_NOISE = "verity/pouw/noise/v1"
 POUW_CALL_SEED = "verity/pouw/call-seed/v1"
-POUW_EPS1_SEED = "eps1-sm120-h1fx1/seed/v1"
 POUW_DITHER_CALL = "verity/pouw/dither/call/v1"
 POUW_DITHER_FILL = "verity/pouw/dither/fill/v1"
 POUW_DITHER_OPERAND = "verity/pouw/dither/operand/v1"
@@ -247,7 +245,6 @@ REGISTRATION_RECEIPT = "verity/registration-receipt/v1"
 REGISTRATION_PRODUCED = "verity/registration/produced/v1"
 
 # Not yet read from here: Flock and the ZK server
-COIN_COMMIT_SHA256 = "coin-commit/sha256/v1"
 ZK_SERVER_RECORD = "firewall/v0"
 FLOCK_CIRCUIT_BLOCK_COVER = "flock-circuit/unit-cover/v0"
 FLOCK_IR_TMPL = "flock-ir-tmpl/v2"
@@ -263,7 +260,6 @@ ZK_SERVER_PUBLIC = "verity/firewall-public/v0"
 ZK_SERVER_RELEASE = "verity/firewall-release/v0"
 ZK_SERVER_TRANSCRIPT = "verity/firewall-transcript/v0"
 FLOCK_CIRCUIT_BINDING = "verity/flock-circuit/binding/v2"
-FLOCK_NETLIST_SIGMA = "verity/flock-netlist/sigma/v1"
 FLOCK_NETLIST = "verity/flock-netlist/v1"
 FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
@@ -352,9 +348,6 @@ CERTIFIER_CERTIFICATES = "verity-network-certifier/certificates/v3"
 CERTIFIER_CLOCK = "verity-network-certifier/clock/v1"
 CERTIFIER_EMPTY = "verity-network-certifier/empty/v2"
 CERTIFIER_FRAME = "verity-network-certifier/frame/v2"
-CERTIFIER_INGRESS_TIE_SPEC = "verity-network-certifier/ingress-tie-spec/v1"
-CERTIFIER_INGRESS_TIE_STATEMENT = "verity-network-certifier/ingress-tie-statement/v1"
-CERTIFIER_INGRESS_TIE_VERDICT = "verity-network-certifier/ingress-tie-verdict/v1"
 CERTIFIER_NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
 CERTIFIER_NODE = "verity-network-certifier/node/v2"
 CERTIFIER_OUT_RECORD = "verity-network-certifier/out-record/v1"

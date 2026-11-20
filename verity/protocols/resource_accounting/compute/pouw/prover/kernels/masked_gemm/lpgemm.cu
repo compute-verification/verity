@@ -18,7 +18,7 @@
 // Reference (bonly): F's pass and cuBLASLt on A and B' at k, no U and no peel: the served product without A' B'^T, which only
 // the receipts need.
 // A and B in [-119, 119], so A' and B' can't saturate and every product is exact in s32.
-//   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR for lpref.py
+//   lpgemm gate DIR M N K BATCH SEED GRID   every arm at one small shape, inputs and outputs to DIR
 //   lpgemm bench REPS SHAPE...              interleaved timing, one JSON line a shape (SHAPE = name:m:n:k:batch); LP_ARMS
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a lpgemm.cu -lcuda -lcublasLt -lnvidia-ml
 // -DLP_UW=64: U in {±1..±64} (u_byte's comment), A then in [-63, 63]; -DLP_LIB: no main (benchmarks/e2e_slice/slice.cu);
