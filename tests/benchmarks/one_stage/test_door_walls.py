@@ -7,8 +7,10 @@ the door now refuses (`SEEDS`) stays refused by its step and clause, by name; an
 strict mark that fails once it is mended."""
 from __future__ import annotations
 
+import json
 import random
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -185,3 +187,62 @@ def test_each_open_seed_reaches_the_door_and_its_rows_hold(what, spec, seed, kla
     found = {f.klass for f in W.check_case(W.Spec(**spec), W._exe(None), seed)}
     assert klass not in found, found
     assert not [k for k in found if k.startswith("rows:")], found
+
+
+def _drawn(rng: random.Random) -> W.Spec:
+    """C of two to four call or batch nodes of one template on a 16-bit field, each argument a parameter of C or a
+    member of an earlier node (a batch's stepped argument, at times one member read twice), cut into contiguous blocks."""
+    t = {"params": [-16], "steps": [[-1, [0]], [2, [1]], [W.PACK, [2] * 16]], "ret": [3], "nested": False}
+    root: list[dict] = []
+    params: list[int] = []
+
+    def src() -> list:
+        if root and rng.random() < 0.6:
+            j = rng.randrange(len(root))
+            return ["r", j, 16 * rng.randrange(root[j]["n"]), 16]
+        params.append(-16)
+        return ["p", len(params) - 1]
+
+    for _ in range(rng.randint(2, 4)):
+        n = rng.randint(1, 3)
+        members = [src() for _ in range(n)]
+        if n > 1 and rng.random() < 0.3:
+            members[1] = members[0]
+        root.append({"t": 0, "form": "call" if n == 1 and rng.random() < 0.5 else "batch", "n": n, "args": [members]})
+    units = sum(nd["n"] for nd in root)
+    cuts = sorted(rng.sample(range(1, units), rng.randint(0, units - 1)))
+    bounds = [0, *cuts, units]
+    return W.Spec([t], root, params, [], [list(b) for b in zip(bounds, bounds[1:])])
+
+
+def _predicate(text: str) -> str | None:
+    """The door predicate's refusal in ``text``, from its prefix to the line's end; None where it holds."""
+    from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
+    i = text.find(OC.NOT_ADMITTED)
+    return None if i < 0 else text[i:].splitlines()[0]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
+    """On drawn circuits and partitions (batches, stepped arguments, a member read twice), Lean's door
+    (`spot-one-stage-zk restrict`: `admittedBlock` from `BlockFront.unitAt` and `operandsW`) and Python's
+    (`admitted_block` from `TemplatePartition`'s gates and inputs) refuse the same blocks with the same text."""
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+    W._catalog()
+    exe, lean = _stub(tmp_path), PF.v2_executable()
+    seen: dict[str, int] = {}
+    for seed in range(40):
+        s = _drawn(random.Random(seed))
+        c, q, _fns = W.realise(s)
+        door = W.Door(c, q, [tuple(b) for b in s.blocks], lambda: exe)
+        (tmp_path / "C.json").write_bytes(c)
+        (tmp_path / "partition.json").write_text(json.dumps(door.partition, sort_keys=True, separators=(",", ":")))
+        for k, (lo, hi) in enumerate(s.blocks):
+            py = _predicate(door.run(k, lo, hi).text)
+            run = subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
+                                  str(k), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
+            assert _predicate(run.stderr) == py, (seed, k, s.doc(), run.stderr[-600:], py)
+            clause = "holds" if py is None else py.split(", ", 1)[1].split(":")[0]
+            seen[clause] = seen.get(clause, 0) + 1
+    assert seen.get("holds") and seen.get("operands-outside"), seen

@@ -197,8 +197,8 @@ instance (partition : Json) (cuts : List (String × List (String × Nat))) (S : 
 `key`, refused under `NOT_ADMITTED` by the first clause that fails:
 * `no-recut`: C's root reads no input node recut (`body.recut` is empty), which C_S's agreement with C assumes and
   `Flock.Program.decode`, restrict's path, keeps;
-* `disjoint-ranges`: no two units hold a gate in common;
-* `one-callee`: every unit's callee is `key`;
+* `disjoint-ranges`: no unit is named twice, and no two units hold a gate in common;
+* `one-callee`: every unit's callee is a Definition of C, and is `key`;
 * `operands-outside`: every operand gate of every unit is outside the block, so each is a port of the block's front at
   its template's parameter-leaf width and no row of the block circuit stands for a gate another unit computes.
 A function of C, the units and `key`; its work is the units' operands. -/
@@ -206,10 +206,14 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
   let some root := P.defs[P.root]? | notAdmitted "no-recut" "C's root is not one of its Definitions"
   if !root.body.recut.isEmpty then
     notAdmitted "no-recut" s!"C's root reads input nodes {(root.body.recut.map (·.1)).toList} recut, in leaves of part of their width"
+  let named := units.qsort (· < ·)
+  for i in [1:named.size] do
+    if named[i - 1]! == named[i]! then notAdmitted "disjoint-ranges" s!"unit {named[i]!} is named twice in the block"
   let us ← units.mapM fun u => do
     let (k, m) ← Spot.BlockFront.unitAt P u
     let sc := P.child P.rootScope k m
-    pure (u, k, m, sc.off, sc.off + ((P.defs[sc.d]?).map (·.gates)).getD 0)
+    let some d := P.defs[sc.d]? | notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
+    pure (u, k, m, sc.off, sc.off + d.gates)
   let byLo := us.qsort fun a b => a.2.2.2.1 < b.2.2.2.1
   for i in [1:byLo.size] do
     let (u, _, _, _, hi) := byLo[i - 1]!
@@ -217,8 +221,8 @@ def admittedBlock (P : Flock.Program.Prog) (units : Array Nat) (key : String) : 
     if lo < hi then notAdmitted "disjoint-ranges" s!"units {u} and {v} of the block hold gates in common"
   for (u, k, m, _, _) in us do
     let some x := root.body.nodes[k]? | notAdmitted "one-callee" s!"unit {u} is no node of C's root"
-    let c := ((P.defs[x.fn]?).map (·.key)).getD ""
-    if c != key then notAdmitted "one-callee" s!"unit {u} calls {c}, not the block's template {key}"
+    let some f := P.defs[x.fn]? | notAdmitted "one-callee" s!"unit {u}'s callee is no Definition of C"
+    if f.key != key then notAdmitted "one-callee" s!"unit {u} calls {f.key}, not the block's template {key}"
     for (g, _) in ← Spot.BlockFront.operandsW P x m do
       if let some (v, _, _, _, _) := us.find? fun (_, _, _, lo, hi) => lo ≤ g && g < hi then
         notAdmitted "operands-outside" s!"unit {u} reads gate {g}, which unit {v} of the block computes: a unit reads only gates outside its block"
@@ -242,7 +246,7 @@ one template by `Flock.Lower.lower` and written by `Flock.Compose.compose` at th
 output ports its return fields `o{j}` in u16 words, META's `program_digests` the template's `definitionDigest` read off
 `CJ`, C's descriptor. -/
 def lowerBlock (CJ : Json) (partition : Json) (cuts : List (String × List (String × Nat))) (S : Flock.Program.Prog)
-    (formed : String → V Unit := fun _ => pure ()) : V ByteArray := do
+    (formed : String → V Unit) : V ByteArray := do
   let a ← admitted partition cuts S
   formed a.key
   let outs := a.fields.map fun (n, b) => (n, b / 16)
@@ -274,7 +278,7 @@ def lowerE (d : String) : V ByteArray := do
   let CJ ← Json.parse d
   let P ← Flock.Program.decode d.toUTF8
   let q := Json.mkObj [("name", "Q_template_instance"), ("params", Json.mkObj [("template", "E_v1")])]
-  lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0])
+  lowerBlock CJ (Json.mkObj [("query", q)]) [] (← Spot.Restrict.restrict P #[0]) (admittedBlock P #[0])
 
 /-- Whether `r` is refused by `admitted`'s clause `clause` with detail `detail`. -/
 def refusedBy {α : Type} (r : V α) (clause detail : String) : Bool :=
@@ -373,8 +377,12 @@ def formedIn (d t : String) (us : Array Nat) (f : Flock.Program.Defn → Flock.P
 
 #guard refusedBy (lowerIn AA16 "A_v0" #[0, 1]) "operands-outside" "unit 1 reads gate 32, which unit 0 of the block computes: a unit reads only gates outside its block"
 #guard refusedBy (formedIn AB16 "A_v0" #[0, 1]) "one-callee" "unit 1 calls B_v0, not the block's template A_v0"
-#guard refusedBy (formedIn AB16 "A_v0" #[0, 0]) "disjoint-ranges" "units 0 and 0 of the block hold gates in common"
+#guard refusedBy (formedIn AB16 "A_v0" #[0, 0]) "disjoint-ranges" "unit 0 is named twice in the block"
 #guard refusedBy (formedIn AB16 "A_v0" #[0] recut0) "no-recut" "C's root reads input nodes [0] recut, in leaves of part of their width"
+-- a unit whose node's callee is no Definition of C, which no decoded descriptor has
+#guard match formedIn AB16 "A_v0" #[0] fun d => { d with body := { d.body with nodes := d.body.nodes.modify 0 fun x => { x with fn := 999 } } } with
+  | .error e => e == s!"{NOT_ADMITTED}, one-callee: unit 0's callee is no Definition of C"
+  | .ok _ => false
 #guard (formedIn AB16 "A_v0" #[0]).toOption.isSome && (formedIn AA16 "A_v0" #[1]).toOption.isSome
 
 /-- C of two batches of two units of one template, the second's stepped argument the first's return: units 2 and 3

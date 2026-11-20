@@ -548,7 +548,7 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], draw: 
                                "holding its session.json")
     try:
         base = OC.lower(derived, partition, lower_executable, cut=OC.cuts(program, partition, decoded),
-                        formed=lambda key: OC.admitted_block(decoded.get(), partition, units, key))
+                        formed=OC.formed_in(decoded, partition, units))
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     name = statement()

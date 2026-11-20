@@ -114,7 +114,7 @@ def _formed_in(how: str, d: str, t: tuple[str, bool], us: list[int]) -> None:
         return OC.admitted_block(D, {"query": q}, units, key)
     ranges = [(min(us), max(us) + 1)]
     part = PO.build(json.loads(d), PO.template_instance_query(key), [ranges])
-    OC.lower(OC.restrict(c, part, ranges), part, lambda: "/nonexistent", formed=lambda k: OC.admitted_block(D, part, ranges, k))
+    OC.lower(OC.restrict(c, part, ranges), part, lambda: "/nonexistent", formed=OC.formed_in(c, part, ranges))
 
 
 def test_every_lean_guard_is_read():
@@ -192,7 +192,7 @@ def test_a_refused_block_reaches_no_executable():
     c, desc = d.encode(), json.loads(d)
     part = PO.build(desc, PO.template_instance_query("E_v1"), [[(0, 1)]])
     with pytest.raises(OC.Refused, match=re.escape(f"{OC.NOT_ADMITTED}, whole-words: ")):
-        OC.lower(OC.restrict(c, part, [(0, 1)]), part, never)
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, never, formed=OC.formed_in(c, part, [(0, 1)]))
 
 
 @pytest.mark.slow

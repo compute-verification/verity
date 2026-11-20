@@ -646,8 +646,9 @@ def door_circuit(c: bytes, part: dict, k: int, st_dir: Path, lower: Path,
     `restrict` derives too, written under ``st_dir``; `one_circuit.Refused` or `.NotDerived` where the door refuses the
     block. ``decoded``: C decoded once for every member."""
     decoded = decoded or OC.Decoded(c)
-    text = OC.lower(OC.restrict(c, part, OC.block(c, part, k, decoded), decoded), part, lambda: lower,
-                    cut=OC.cuts(c, part, decoded))
+    units = OC.block(c, part, k, decoded)
+    text = OC.lower(OC.restrict(c, part, units, decoded), part, lambda: lower, cut=OC.cuts(c, part, decoded),
+                    formed=OC.formed_in(decoded, part, units))
     circuit = st_dir / "circuit.txt"
     circuit.write_bytes(text)
     circ = FI.flock_circuit(text)
