@@ -237,19 +237,19 @@ def card_strings(plan: Any, block: Callable[[int, str], tuple[Any, int]], circui
 HANDOFF = ("handoff.json", "card.npz", "key.bin")
 
 
-def save_card(to: Any, card: Mapping, key: bytes, meta: Mapping[str, Any]) -> None:
+def save_card(to: Any, card: Mapping, key: Any, meta: Mapping[str, Any]) -> None:
     """``card`` (`card_strings`) and ``key`` written as `HANDOFF` under ``to``, ``meta`` beside the ports."""
     from pathlib import Path
 
     to = Path(to)
     to.mkdir(parents=True, exist_ok=True)
-    (to / HANDOFF[2]).write_bytes(bytes(key))
+    (to / HANDOFF[2]).write_bytes(key.value)
     ks = sorted(card)
     np.savez(to / HANDOFF[1], **{f"{x}{i}": card[k][j] for i, k in enumerate(ks) for j, x in ((1, "u"), (2, "r"), (3, "s"))})
     (to / HANDOFF[0]).write_text(json.dumps({**meta, "ports": [[*k, *card[k][0]] for k in ks]}) + "\n")
 
 
-def load_card(to: Any) -> tuple[bytes, dict, dict[str, Any]]:
+def load_card(to: Any) -> tuple[Any, dict, dict[str, Any]]:
     """`save_card`'s ``(key, card, meta)`` from ``to``; refused by name where one of `HANDOFF` is missing."""
     from pathlib import Path
 
@@ -259,7 +259,9 @@ def load_card(to: Any) -> tuple[bytes, dict, dict[str, Any]]:
     meta = json.loads((to / HANDOFF[0]).read_text())
     z = np.load(to / HANDOFF[1])
     card = {(tid, port): ((t, p, lb), z[f"u{i}"], z[f"r{i}"], z[f"s{i}"]) for i, (tid, port, t, p, lb) in enumerate(meta["ports"])}
-    return (to / HANDOFF[2]).read_bytes(), card, meta
+    from verity.commitments.randomness import Key
+
+    return Key((to / HANDOFF[2]).read_bytes()), card, meta
 
 
 def handed_strings(win: Any, key: Any, twin: HostTwin, card: Mapping, *, sample: int = 0,

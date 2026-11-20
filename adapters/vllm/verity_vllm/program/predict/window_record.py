@@ -19,7 +19,7 @@ __all__ = ["SALTS", "commit", "key_of", "place_slots", "window_design"]
 SALTS = "verity/window-commit/salts/v1"
 
 
-def key_of(run: str) -> bytes:
+def key_of(run: str) -> RND.Key:
     """A window's salt key, drawn fresh for the one window under ``run``."""
     return RND.derive(os.urandom(64), SALTS, {"window": run})
 
@@ -78,7 +78,7 @@ def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[s
 def commit(low: Any, cls: Any, slots: Sequence[Any], values: Mapping[str, Any], run: str, design: Mapping[str, Any],
            cap: int, advice: Mapping[str, Any], out: str | Path, window: int, *,
            strings: Callable[[Any, Any], Any], workers: int, lap: Callable[[str], None],
-           key: bytes | None = None) -> tuple[Any, Any]:
+           key: RND.Key | None = None) -> tuple[Any, Any]:
     """``low``'s window recorded and written to ``out``: its slots' and output rows (`window_rows.Rows`) recorded into a
     `Window` under ``run``, ``design`` and ``cap``, bound to ``advice`` (`interface.advice_binding`) with the registered
     ``values``, closed with ``strings(win, key)`` under ``key``, the one key drawn fresh for the window (`key_of`, here
