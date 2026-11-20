@@ -1,23 +1,23 @@
-"""The members road's coverage refusals deleted from this tree's Lean verifier one at a time (`OneStageZk.headerHeldAt`'s
-and `headerHeld`'s, and the null refusals of `checkMembersAt` and `checkOneAt`), each mutant's `spot-one-stage-zk`
-built by `members.check`, and a5's member negatives (`a5.run_member_negatives`) run on the case an audit kept
-(`A5_MEMBERS_NEGATIVES`). A mutant survives where every negative's verdict and reason is the honest tree's; one whose
-build fails is killed by the proof or the in-file check that reads it, which the line names (`checkOneAt_noRoots`,
-`checkOneAt_noServed` and their `checkMembersAt` pair are the null refusals' negatives over every input). The tree is
-restored after each mutant.
+"""The members road's refusals deleted from this tree's Lean verifier one at a time (`OneStageZk.headerHeldAt`'s and
+`headerHeld`'s, and the null refusals of `checkMembersAt` and `checkOneAt`), each mutant judged by the Spot package's
+build, whose `#guard`s and proofs read the refusals, and then by the Spot verifier's small tests of them (`TESTS`). A
+mutant survives where the build and every test pass; the line names what killed the others. The tree is restored after
+each mutant. A tool run by hand: no script or gate runs it.
 
-    members_mutants.py CASE_DIR
+    members_mutants.py
 """
 from __future__ import annotations
 
-import json
+import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import a5  # noqa: E402
-
-LEAN = Path(__file__).resolve().parents[2] / "verity/protocols/proofs/spot/verifier/lean/Spot"
+ROOT = Path(__file__).resolve().parents[2]
+PACKAGE = ROOT / "verity/protocols/proofs/spot/verifier/lean"
+LEAN = PACKAGE / "Spot"
+SUITE = ROOT / "tests/verity/protocols/proofs/spot/verifier"
+#: the small tests of the members road's refusals
+TESTS = [SUITE / "lean/test_members_twin.py", SUITE / "lean/test_header_held_at_difftest.py", SUITE / "test_members_run.py"]
 STATEMENT, ZK = LEAN / "OneStageZkStatement.lean", LEAN / "OneStageZk.lean"
 
 #: (name, file, the refusal's text, its deletion)
@@ -41,37 +41,38 @@ MUTANTS = [
 ]
 
 
-def main(keep: Path) -> int:
-    case = json.loads((keep / "case.json").read_text())
-    honest = {k: (v["lean"]["verdict"], v["lean"]["reason"]) for k, v in a5.run_member_negatives(case).items()}
-    print("HONEST " + json.dumps(honest, sort_keys=True), flush=True)
+def killed_by() -> str | None:
+    """What refuses the tree as it stands: the package's build (a `#guard` or a proof), a test, or nothing."""
+    b = subprocess.run(["lake", "build", "Spot", "spot-one-stage-zk"], cwd=PACKAGE, capture_output=True, text=True, check=False)
+    if b.returncode:
+        return "its build: " + (b.stdout + b.stderr)[-600:]
+    t = subprocess.run([sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *map(str, TESTS)],
+                       cwd=ROOT, capture_output=True, text=True, check=False)
+    return None if t.returncode == 0 else "a test: " + t.stdout[-600:]
+
+
+def main() -> int:
+    if (why := killed_by()) is not None:
+        print(f"HONEST refused, so no mutant is judged: {why}", flush=True)
+        return 2
     survivors = []
     for name, path, old, new in MUTANTS:
-        texts = {p: p.read_text() for p in (STATEMENT, ZK)}
-        if texts[path].count(old) != 1:
-            print(f"MUTANT {name} not applied: its refusal's text is in {path.name} {texts[path].count(old)} times", flush=True)
+        text = path.read_text()
+        if text.count(old) != 1:
+            print(f"MUTANT {name} not applied: its refusal's text is in {path.name} {text.count(old)} times", flush=True)
             survivors.append(name)
             continue
         try:
-            mutated = {**texts, path: texts[path].replace(old, new)}
-            # the in-file guards read the refusals too; as #eval they print and fail nothing, so a negative decides
-            for p, t in mutated.items():
-                p.write_text(t.replace("#guard ", "#eval "))
-            got = {k: (v["lean"]["verdict"], v["lean"]["reason"]) for k, v in a5.run_member_negatives(case).items()}
+            path.write_text(text.replace(old, new))
+            why = killed_by()
         finally:
-            for p, t in texts.items():
-                p.write_text(t)
-        if all(v == "lean-not-run" for v, _ in got.values()):
-            print(f"MUTANT {name} killed at its build: {next(iter(got.values()))[1][-600:]}", flush=True)
-            continue
-        killed = sorted(k for k in got if got[k] != honest.get(k))
-        print(f"MUTANT {name} {'killed by ' + ', '.join(killed) if killed else 'SURVIVES'} "
-              + json.dumps({k: got[k] for k in killed}, sort_keys=True)[:1500], flush=True)
-        if not killed:
+            path.write_text(text)
+        print(f"MUTANT {name} " + ("SURVIVES" if why is None else f"killed by {why}"), flush=True)
+        if why is None:
             survivors.append(name)
-    print("SURVIVORS " + json.dumps(survivors), flush=True)
+    print("SURVIVORS " + str(survivors), flush=True)
     return 1 if survivors else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(Path(sys.argv[1])))
+    raise SystemExit(main())
