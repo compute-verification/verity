@@ -7649,6 +7649,8 @@ def test_a_many_port_registration_agrees(pieces):
 
     assert codes(lambda rs: None) == []
     assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
+    assert codes(lambda rs: rs.insert(0, {**rs[1000], "root": "cd" * 64})) == ["R3-ports"]
     assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]

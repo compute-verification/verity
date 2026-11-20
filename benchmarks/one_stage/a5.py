@@ -2266,7 +2266,8 @@ def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
     (`die_with`: an audit killed outright takes its workers with it, and each worker's Lean verifier process then
     stops at the end of its input): a Lean verifier process of its own (the audit's is never written to: the worker's
     handle to the verifier's server is a new one before any check, `WorkerLean`, under which a Lean process that gives
-    no answer ends the task rather than refuse its negative), the task, and its entries or its error sent to
+    no answer ends the task rather than refuse its negative), the task, its Lean verifier process's close, a check of
+    every answer it gave (`verifier._Server.close`), and its entries or its error sent to
     the audit with its seconds, its memory and, under the memo, the checks it asked and reused (it reuses what the
     audit kept before the fork, and what it keeps ends with it: the audit's own ``verifier_checks`` count none of a
     worker's)."""
@@ -2275,10 +2276,14 @@ def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
     V._server = WorkerLean()
     try:
         try:
-            out: tuple[str, Any] = ("ok", fn())
+            got = fn()
+            lean = lean_server_memory()
+            V._server.close()
+            out: tuple[str, Any] = ("ok", got)
         except BaseException as e:  # noqa: BLE001
+            lean = lean_server_memory()
             out = ("raised", "".join(traceback.format_exception(e))[-4000:])
-        send.send((*out, {"own_s": round(time.time() - t0, 1), "worker": process_memory(), "lean": lean_server_memory(),
+        send.send((*out, {"own_s": round(time.time() - t0, 1), "worker": process_memory(), "lean": lean,
                           "verifier_checks": _checks_since(checks)}))
     finally:
         send.close()
