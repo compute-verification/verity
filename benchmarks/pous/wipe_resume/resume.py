@@ -300,7 +300,8 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
         untimed_tries: int = UNTIMED_TRIES, sample_n: int = 4096, sample_k: int = 12, sample_sessions: int = 600,
         judge: Callable[..., Any] | None = None, coin_secret: bytes | None = None) -> dict[str, Any]:
     """Every prover's session at `N = n`, `k` reads, then `sample_sessions` of `sampling` (none at 0)."""
-    judge = judge or _wipe_verdict().judge
+    verdicts = None if judge else _wipe_verdict()
+    judge = judge or verdicts.judge
     signer = ts.TestSigner(b"wipe-resume provers", height=3, directory=scratch)
     log = ts.session_log(scratch)
     out: dict[str, Any] = {"schema": "verity-pous/wipe-resume/v1", "label_bytes": LABEL, "kept_label_bytes": KEPT,
@@ -319,6 +320,8 @@ def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Cal
         s_signer = ts.TestSigner(b"wipe-resume sampling", height=10, directory=scratch)
         out["sampling"] = sampling(n=sample_n, k=sample_k, at_k=k, sessions=sample_sessions, signer=s_signer, log=log,
                                    judge=judge, decide=decide, clock=clock, limit_ns=limit_ns)
+    if verdicts is not None:
+        verdicts.finish()
     out["as_expected"] = all(s["as_expected"] for s in out["sessions"]) and (
         "sampling" not in out or abs(out["sampling"]["z_score"]) < 4)
     return out

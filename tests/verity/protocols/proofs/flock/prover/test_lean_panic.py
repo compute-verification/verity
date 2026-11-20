@@ -97,6 +97,47 @@ for line in sys.stdin:
         RL.LeanZkServer(exe, {})
 
 
+def _live(tmp_path: Path, after: str, requests: int | None = None) -> Path:
+    """A live ZK server that accepts the schedule and answers each request with nothing sent, then runs ``after``: at the
+    end of its input, or after its ``requests``-th answer with its input still open."""
+    return _fake(tmp_path, f"""assert sys.argv[1:] == ["live"] and os.environ.get({LC.ABORT_ON_PANIC!r}) == "1"
+print(json.dumps({{"ok": True}}), flush=True)
+n = 0
+for line in iter(sys.stdin.readline, ""):
+    print(json.dumps({{"sent": [], "salts": []}}), flush=True)
+    n += 1
+    if n == {requests}:
+        break
+{after}
+""")
+
+
+@pytest.mark.parametrize("after, why", [
+    ("sys.exit(134)", f"{LC.LEAN_EXIT}: status 134 (abort)"),
+    (f"print({PANIC_LINE!r}, file=sys.stderr)", f"{LC.LEAN_PANIC}: {PANIC_LINE}"),
+], ids=["abort", "panic"])
+def test_the_live_zk_servers_close_refuses_its_accepts_by_name(tmp_path, after, why):
+    """A kept live ZK server that accepted a request and then aborted or wrote a panic line at the end of its input: its
+    close raises the refusal by name, so the answers it gave stand on nothing."""
+    lean = RL.LeanZkServer(_live(tmp_path, after), {})
+    assert lean.step(b"\x00") == ([], [])
+    with pytest.raises(ValueError, match=f"did not end as documented at its close: {re.escape(why)}$"):
+        lean.close()
+
+
+def test_the_live_zk_server_ending_between_requests_refuses_the_next_by_name(tmp_path):
+    lean = RL.LeanZkServer(_live(tmp_path, "sys.exit(0)", requests=1), {})
+    with pytest.raises(ValueError, match=f"{re.escape(LC.LEAN_EXIT)}: status 0$"):
+        lean.step(b"\x00")
+        lean.step(b"\x00")
+
+
+def test_the_live_zk_server_ending_at_its_documented_status_closes(tmp_path):
+    lean = RL.LeanZkServer(_live(tmp_path, "sys.exit(0)"), {})
+    assert lean.step(b"\x00") == ([], [])
+    lean.close()
+
+
 @pytest.mark.parametrize("case", CASES)
 def test_a_composition_accepted_beside_a_panic_or_an_abort_is_neither_accepted_nor_refused(tmp_path, case):
     exe = _answering(tmp_path, case, "print('REC-COMPOSE ' + json.dumps({'accepted': True}))\n")

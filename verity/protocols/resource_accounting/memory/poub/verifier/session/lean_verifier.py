@@ -125,11 +125,16 @@ class Lean:
             self.stderr.seek(0)
             return self.stderr.read().decode("utf-8", "replace")
 
-    def _gone(self) -> str:
-        """Why the process has no more answers: its panic line, else the status it ended with (`LC.exit_why`)."""
-        code = self.proc.wait()
+    def _refusal(self, code: int) -> str | None:
+        """Why an answer read from a process that ended with ``code`` is not used: its panic line, else the status it ended
+        with where that is not 0 (`LC.exit_why`); None for a clean end."""
         panic = LC.panic_line(self._err())
-        return f"{LC.LEAN_PANIC}: {panic}" if panic else LC.exit_why(code) or f"the process ended ({code})"
+        return f"{LC.LEAN_PANIC}: {panic}" if panic else LC.exit_why(code)
+
+    def _gone(self) -> str:
+        """Why the process has no more answers: `_refusal`, else that it ended."""
+        code = self.proc.wait()
+        return self._refusal(code) or f"the process ended ({code})"
 
     def _put(self, request: dict, body: bytes, answered: Callable[[dict], None] | None) -> None:
         self.requests.put((json.dumps(request, separators=(",", ":")).encode() + b"\n" + body, answered))
@@ -148,9 +153,14 @@ class Lean:
             raise LeanError(msg["error"])
         return msg["answer"]
 
-    def close(self) -> None:
+    def close(self, check: bool = True) -> None:
+        """Ends the process: its input closed (the writer's end of input), then its end waited for. With ``check``,
+        `LeanError` by name (`LC.LEAN_PANIC`, `LC.LEAN_EXIT`) where it wrote a panic line while it ended or ended with a
+        status but 0: no answer read from it is used."""
         self.requests.put(None)
-        self.proc.wait()
+        code = self.proc.wait()
+        if check and (why := self._refusal(code)):
+            raise LeanError(why)
 
 
 def codec_json(c: codec.Codec) -> dict:

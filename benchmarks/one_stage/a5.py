@@ -892,6 +892,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     c_bytes = b"".join(descriptor_chunks(program)) if door else b""
     decoded = OC.Decoded(c_bytes) if door else None
     unlowered: dict[int, dict] = {}     # by member: the door's refusal to lower its block (`one_circuit.lower`)
+
+    def unlowerable(k: int, m: Any, why: str) -> None:
+        """Member ``k`` the door refused: recorded by name, and its public body, the commit's bytes and no circuit's,
+        staged all the same, so the leaf layer R4 holds the registration to covers every member; a draw of it is a failed
+        proof (`failed_drawn`)."""
+        unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": why[:600]}
+        print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+        publics[m.key] = (served / f"m{k}-public.bin").read_bytes()
+
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -910,8 +919,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             try:
                 circuit, made, circ = door_circuit(c_bytes, part, k, st_dir, door, decoded)
             except (OC.Refused, OC.NotDerived) as e:
-                unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"{type(e).__name__}: {e}"[:600]}
-                print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+                unlowerable(k, m, f"{type(e).__name__}: {e}")
                 continue
             # the door lowers a block to a templated circuit, whose unit rows both sides read
             tmpl = a0.templated(argparse.Namespace(meta=circ.meta, text=circuit.read_text()), st_dir / "tmpl",
@@ -945,8 +953,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             if not door:
                 raise
             # the door's circuit lays the member's rows otherwise than the period committed them
-            unlowered[k] = {"template": m.template, "base": m.base, "n": m.n, "why": f"UNLAID: {e}"[:600]}
-            print("UNLOWERED " + json.dumps({"k": k, **unlowered[k]}), flush=True)
+            unlowerable(k, m, f"UNLAID: {e}")
             continue
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
