@@ -2256,9 +2256,10 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
     call's A table or ``b/<K>``, whose roots its units' public rows hold, at a root that is no SHA-512 digest, and
     ``ok-registered`` registers the execution phase's ok rows ``<prefix>ok``, which are the verifier's own. Its templates are
     J10-R's at random (always under ``j10r``), whose public rows the verifier derives each unit's call and blocks for,
-    and ``j10r-form`` gives a J10-R execution phase a template in no one form (`j10r_misformed`). Its descriptors are
-    stand-ins': `credit.registered_file` reads no template's closure."""
-    lay = layout(rng, pinned=False)
+    and ``j10r-form`` gives a J10-R execution phase a template in no one form (`j10r_misformed`). Its window is the
+    registry's real one (`real_bytes`), whose templates return a receipt of whole words, but under ``receipt-width``
+    and ``j10r-form``, which no pinned template is."""
+    lay = layout(rng)
     j10r = name == "j10r" or (name == "honest" and rng.random() < 0.5)
     prefix = rng.choice(["", f"h1/w-{rng.randrange(100)}/"])
     call = rng.randrange(len(lay["calls"]))
@@ -2303,7 +2304,7 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
                                   ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)]])
         case _:
             raise ValueError(name)
-    return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r, stand_in=True), "call": call, "roots": roots, "window": _hex(rng),
+    return {"descriptor": descriptor(rng, lay, prefix, receipt if name == "receipt-width" else None, j10r), "call": call, "roots": roots, "window": _hex(rng),
             "steps": steps, "salt": _hex(rng)}
 
 
