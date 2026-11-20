@@ -1637,9 +1637,10 @@ private def chainRootsT (roots : List (String × String)) : V (Std.HashMap Strin
 /-- `fieldTreesHeld` on `chain()`'s derived trees (`derivedFieldTrees`) and a registration of the roots given, each
 its port and leaf count. -/
 private def chainTreesT (roots : List (String × Nat)) : String :=
-  whyT (do fieldTreesHeld (← derivedFieldTrees chainP chainRs chainMs) (templatesOf (chainMs.toList.map (·.name)))
-    (Json.mkObj [("roots", Json.arr (roots.toArray.map fun (p, n) =>
-      Json.mkObj [("leaves", Lean.toJson n), ("port", Json.str p)]))]))
+  let rec_ := Json.mkObj [("roots", Json.arr (roots.toArray.map fun (p, n) =>
+    Json.mkObj [("leaves", Lean.toJson n), ("port", Json.str p)]))]
+  whyT (derivedFieldTrees chainP chainRs chainMs >>= fun want =>
+    fieldTreesHeld want (templatesOf (chainMs.toList.map (·.name))) rec_)
 
 #guard (derivedFieldTrees chainP chainRs chainMs).toOption == some #[("G/o0", 8)]
 #guard chainTreesT [("G/c0/x", 2), ("G/o0", 8)] == ""
