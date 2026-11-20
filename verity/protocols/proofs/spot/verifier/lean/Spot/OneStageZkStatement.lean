@@ -352,6 +352,11 @@ def E16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","No
   | .error _ => false
 #guard refusedBy (admitE E16 "E_v1" [("x", 2)]) "whole-words" "C_S's template E_v1: input row x#0 of 8 bits is not a positive whole number of u16 words"
 
+/-- E(x y : Array 16 (Value 1)) = (Not y[0], x): a return field of one bit, then another. -/
+def F16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["p",0,0,16]}]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,17]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Value",1],["Array",16,["Value",1]]]]]}"#
+
+#guard refusedBy (lowerE F16) "whole-words" "C_S's template E_v1: return field o0 of 1 bits is not a positive whole number of u16 words"
+
 /-- **C_S**: `restrict : C -> Partition -> Block -> Circuit`, the circuit file of the proof block whose first unit
 is `block`: the Boolean lowering of its Definition in C, its ports in(S) and out(S), from C and the partition. The code's
 Core `Circuit.restrict`. The block is the partition's (`blocks`, `HmRow.blocksOf`), its Program `Spot.Restrict.restrict`'s

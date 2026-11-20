@@ -84,34 +84,31 @@ def test_a_unit_that_starts_no_block_is_refused():
     assert got.returncode == 1 and f"no block of the partition starts at unit {lo + 1}" in got.stdout
 
 
-def _e(n: int) -> dict:
-    """`Spot.OneStageZk.E3` / `E2047`: E(x : Array n (Value 1), y : Value 1) = (x, Not y), one instance."""
-    v1, a = ["Value", 1], ["Array", n, ["Value", 1]]
-    r = ["Tuple", [a, v1]]
-    return {"annotations": {}, "boolean": {}, "callees": ["Input1_v1", "Not_v1", "E_v1"], "definitions": {
-        "E_v1": {"bindings": {}, "form": "composite", "id": "E_v1", "body": {
-            "nodes": [{"args": [{"refs": {"affine": ["p", 1, 0, 1]}, "type": 0}], "fn": 1, "form": "primitive", "out": 0}],
-            "params": [["x", a], ["y", v1]], "ret": {"concat": [{"affine": ["p", 0, 0, n]}, {"affine": ["n", 0, 0, 1]}]},
-            "ret_type": r}},
-        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": v1},
-        "Not_v1": {"form": "primitive", "id": "Not_v1", "params": [["a", v1]], "ret": v1},
-        "Root[EProg_v1]_v1": {"bindings": {}, "form": "composite", "id": "Root[EProg_v1]_v1", "body": {
-            "nodes": [{"args": [], "axes": [], "fn": 0, "form": "batch", "n": n, "out": 1},
-                      {"args": [], "fn": 0, "form": "primitive", "out": 0},
-                      {"args": [{"refs": {"affine": ["n", 0, 0, n]}, "type": 1}, {"refs": {"affine": ["n", 1, 0, 1]}, "type": 0}],
-                       "fn": 2, "form": "call", "out": 2}],
-            "params": [], "ret": {"affine": ["n", 2, 0, n + 1]}, "ret_type": r}}},
-        "program_fn": "EProg_v1", "root": "Root[EProg_v1]_v1", "schema": "verity-ir/descriptor/v2", "types": [v1, a, r]}
+@cache
+def door_form():
+    path = HERE.parents[1] / "test_door_form.py"
+    spec = importlib.util.spec_from_file_location("door_form_for_block_circuit", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
-@pytest.mark.parametrize("n", [3, 2047])
-def test_a_row_not_whole_words_is_refused_by_both(n):
-    """A parameter not whole u16 words: the one-stage path lays each row from a word while the lowering lays the leaves
-    one after another, so `y` would be read from x's padding. Lean's C_S and the door's refuse it with one text."""
-    desc = _e(n)
-    c = json.dumps(desc, sort_keys=True, separators=(",", ":")).encode()
-    part = PO.build(desc, PO.template_instance_query("E_v1"), [[(0, 1)]])
-    why = f"lower: C_S's template E_v1: input row x of {n} bits {OC.NOT_WHOLE}"
+def _through_c():
+    """`Spot/OneStageZkStatement.lean`'s refusals of `admitted` on a C whose root calls the query's one template, at no
+    cut: the cases C alone gives, through Lean's executable and the door alike."""
+    df = door_form()
+    return [g for g in df.guards() if not g[3] and g[2] in json.loads(g[1])["definitions"]]
+
+
+@pytest.mark.parametrize("case", _through_c(), ids=lambda g: f"{g[4]}:{g[5][:48]}")
+def test_a_block_not_admitted_is_refused_by_both_with_one_text(case):
+    """Lean's two faults among them: a row not whole u16 words (`E3`, `E2047`), whose leaves after it the lowering would
+    read from its padding, and a word parameter the lift leaves as it is (`C32`)."""
+    _how, d, t, _cs, clause, detail = case
+    c, desc = d.encode(), json.loads(d)
+    part = PO.build(desc, PO.template_instance_query(t), [[(0, 1)]])
+    why = f"{OC.NOT_ADMITTED}, {clause}: {detail}"
     with pytest.raises(OC.Refused, match=re.escape(why)):
         OC.lower(OC.restrict(c, part, OC.block(c, part, 0)), part, PF.lower_executable, cut=OC.cuts(c, part))
     got = lean(c, part, 0)
