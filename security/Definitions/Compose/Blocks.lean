@@ -49,12 +49,15 @@ structure Limits where
   m : ℕ
   freeSize : ℕ
   cS : ℕ
+  /-- The limit on an attested boundary's day, in bits: the seventh comparison sums the past bounds of every server-day
+  block behind the boundary that day against it, so the policy side sets it knowing the count of servers behind each
+  boundary. -/
   kS : ℕ
   hidden : ℕ
   share : ℝ
   allowance : ℝ
 
-/-- **The inference-only check on a run**, eight comparisons:
+/-- **The inference-only check on a run**, nine comparisons:
 1. at most `n` inference blocks;
 2. each inference block has a size claim, its committed size claim (`claimedSize`, the declared size the declared row
    sums over the tolerance set) at most `c` gates, and a claim of input at most `k` bits;
@@ -67,11 +70,15 @@ structure Limits where
 7. for each attested boundary and day that has a server-day block, its server-day blocks' bounds on input from their
    own past summed (`boundaryPastBound`, each `pastBound` of the wipe's egress and challenge count) plus its bound on
    input from the outside world (the boundary's ingress count that day plus its covert figure, assumed) at most `kS`
-   bits;
-8. a unit of `inner` that is not an inference block (a free block, or a unit under hidden hardware) carries no claim.
+   bits; the covert figure is the period's and is added whole on each day;
+8. for each server-day block, the wipe's guarantee applies at its numbers (`WipeApplies`): its location's label count
+   and its wipe's challenge count positive, and the wipe residual below the label count times the label width (bits);
+   without it the residual in 7 is a number the guarantee does not bound (at 0 challenges it is the smallest it can be);
+9. a unit of `inner` that is not an inference block (a free block, or a unit under hidden hardware) carries no claim.
 
 The classes are `cls`'s, so a unit labelled inference whose window starts before its epoch's challenge tick counts among
-the free blocks. No server-day block carries a claim: 6 and 7 compare numbers the run carries for it. The limit in 7 is
+the free blocks. No server-day block carries a claim: 6, 7 and 8 compare numbers the run carries for it and the registered numbers of
+its location. The limit in 7 is
 on the sum because the policy reads one number for unregistered input, and a server-day block's input from its own past
 plus its boundary's day block's input from the outside world is at most the sum (`serverInput_le`); a server behind a
 shared attested boundary has its own input from the outside world bounded only through that union. A server-day block's input from another block at its location
@@ -93,6 +100,7 @@ def check {L : Type*} (lim : Limits) (P : Runs L) (r : P.Run) : Bool :=
     decide (∀ i, P.kind r i = true →
       P.boundaryPastBound r (P.bnd r i) (P.dayOf r i) +
         (P.ingressCount r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)) ≤ lim.kS) &&
+    decide (∀ i, P.kind r i = true → P.WipeApplies P.wipeChallenges r i) &&
     decide (∀ u, P.cls r u ≠ Class.inference → (P.claimsIn r u).isEmpty = true)
 
 end InferenceOnly

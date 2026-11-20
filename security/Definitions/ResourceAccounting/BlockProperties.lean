@@ -236,7 +236,8 @@ structure Runs (L : Type*) where
   ingressCount : (r : Run) → ℕ → Fin nDays → ℕ
   /-- **The covert figure of each attested boundary**, in bits for the period: the bits the channels the network
   attester does not see carry into that boundary; one number per boundary, not the run's; assumed: no protocol stands
-  behind it. -/
+  behind it. `BlockBounds` and `check` add it whole to each day's bound, which is sound for each day and, summed over the
+  period's days, counts it `nDays` times. -/
   covert : ℕ → ℕ
   nIn : (r : Run) → ℕ
   inner : (r : Run) → Partition (actual r).toCircuit (nIn r)
@@ -323,6 +324,15 @@ def pastBound (E k : (r : P.Run) → Fin (P.nOut r) → ℕ) (r : P.Run) (i : Fi
   E r i + Pous.StreamedWipe.wipeResidual (P.wipeLabels (P.locOut r i)) (k r i) (P.labelBits (P.locOut r i)) P.wipeError +
     P.uncovered (P.locOut r i)
 
+/-- **The wipe's guarantee applies at block `i`'s numbers**: its location's label count `N` is positive, its challenge
+count `k r i` is positive, and the wipe residual is below the `N · b` bits the wipe fills; `Pous.Guarantees.
+StreamedWipeResidual` says nothing about a wipe that fails one of the three. `check` compares it for every server-day
+block, so `check_wipeApplies` gives it for every server-day block of a run that passes. -/
+abbrev WipeApplies (k : (r : P.Run) → Fin (P.nOut r) → ℕ) (r : P.Run) (i : Fin (P.nOut r)) : Prop :=
+  0 < P.wipeLabels (P.locOut r i) ∧ 0 < k r i ∧
+    Pous.StreamedWipe.wipeResidual (P.wipeLabels (P.locOut r i)) (k r i) (P.labelBits (P.locOut r i)) P.wipeError <
+      P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i)
+
 /-- The attested boundary of block `i`'s location. -/
 def bnd (r : P.Run) (i : Fin (P.nOut r)) : ℕ := P.boundary (P.locOut r i)
 
@@ -336,7 +346,9 @@ noncomputable def boundaryBlock (r : P.Run) (b : ℕ) (d : Fin P.nDays) : Verity
   ⟨⟨(P.days.part d).start, (P.days.part d).len⟩, (P.boundaryBlocks r b d).biUnion (P.outer r).gates⟩
 
 open Classical in
-/-- The location of attested boundary `b`'s day block on day `d`: the union of its server-day blocks' locations. -/
+/-- The location of attested boundary `b`'s day block on day `d`: the union of its server-day blocks' locations. It holds
+only the locations with a server-day block that day, so a listed location behind the boundary with no server-day block
+that day counts as outside world. -/
 noncomputable def boundaryLoc (r : P.Run) (b : ℕ) (d : Fin P.nDays) : Finset L :=
   (P.boundaryBlocks r b d).biUnion (P.locOut r)
 

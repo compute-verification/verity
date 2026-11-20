@@ -26,9 +26,10 @@ hypothesis, named where this layer may import it, and the open premises that tie
   reads memory reads or memory held.
 * **The memory wipe** (`WipeInputAtMost`): input at most from its own past, for every server-day block, from
   `Pous.Guarantees.StreamedWipeResidual` at the location's registered label count and width and the wipe's challenge
-  count.
+  count, at one wipe's error times the period's wipes.
 * **Network attestation** (`NetworkInputAtMost`, `NetworkOutputAtMost`): input at most for each attested boundary's day
-  block from `AttesterOnEveryLink` and the attester's ingress count for that boundary and day; output at most from `NetTiming.Attester.PhaseGetsBack` and the record's unexplained bits.
+  block from `AttesterOnEveryLink` and the attester's ingress count for that boundary and day; output at most for each
+  attested boundary's day block from `NetTiming.Attester.PhaseGetsBack` and the record's unexplained bits.
 * **Registration** (`RegistrationBinds`): every registered input gate opens a root of the log, from
   `Verity.Guarantees.RegistrationSound`.
 * **The proof layer** is `Verity.Scheme.GetsBack` itself and gives no block property here.
@@ -199,77 +200,82 @@ def WipeInformationGivesWidth (survives : P.Run → Prop) (b : (r : P.Run) → F
 /-- **The memory wipe: input at most from its own past, for every server-day block**, at `pastBound E k` bits: `E i`, the
 bits that leave the attested boundary during the wipe that opens block `i`, plus the wipe residual at its location's
 registered label count `N` and label width `b` (bits), the wipe's challenge count `k i` and the soundness exponent `s`,
-plus the location's storage the wipe does not cover. From `Pous.Guarantees.StreamedWipeResidual`, read on the runs at
-`k` (`RunReads`), at error `2^-s` plus the PRF distinguisher's advantage `adv`. That guarantee is for a fill that is the
-whole memory, `N · b` bits, so the row's hypotheses are: the location's memory in the hardware description (`memCap`,
-bits, `CapacityAtMost Capacity.memorySize`) is at most `N · b` plus the storage the wipe does not cover, so a hardware
-description listing more memory than the wipe fills makes the row's hypothesis false unless that term holds the rest;
-`N` and `k i` are positive; and the residual is below `N · b`. `k` is tied to what the wipe's check output only through
-`RunReads`; no attester's signed output is tied to it yet. Open: `RunReads` and `WipeInformationGivesWidth`. A shape:
-its content is its premises. -/
-def WipeInputAtMost (survives : P.Run → Prop) (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (adv : ℝ≥0∞) : Prop :=
+plus the location's storage the wipe does not cover. From `Pous.Guarantees.StreamedWipeResidual`, read on the runs once
+for each wipe (`RunReads`), each wipe a location of `Ls` (a finite family holding every listed location) and a day of
+the period, at error `2^-s` plus the PRF distinguisher's advantage `adv` a wipe; the row's error is that times the
+wipes, `|Ls| · nDays`, which bounds the run's server-day blocks (`serverDay_count_le`). `survives X d r` is that the
+prior content surviving the wipe at `X` on day `d` of run `r` is under its bound. That guarantee is for a fill that is
+the whole memory, `N · b` bits, so the row's hypotheses are: the location's memory in the hardware description
+(`memCap`, bits, `CapacityAtMost Capacity.memorySize`) is at most `N · b` plus the storage the wipe does not cover, so
+a hardware description listing more memory than the wipe fills makes the row's hypothesis false unless that term holds
+the rest; and in every accepted run the guarantee applies at every server-day block's numbers (`WipeApplies`), which
+`check` compares (`check_wipeApplies`). `k` is tied to what the wipe's check output only through `RunReads`; no
+attester's signed output is tied to it yet. Open: `RunReads` and `WipeInformationGivesWidth`. Proved from its premises
+by `ResourceAccounting.SecurityProofs.BlockProperties.wipeInputAtMost`. -/
+def WipeInputAtMost (Ls : Finset (Finset L)) (survives : Finset L → Fin P.nDays → P.Run → Prop)
+    (E k memEnclosing memCap : (r : P.Run) → Fin (P.nOut r) → ℕ) (adv : ℝ≥0∞) : Prop :=
   Pous.Guarantees.StreamedWipeResidual →
-    P.RunReads Pous.Guarantees.StreamedWipeResidual survives (2⁻¹ ^ P.wipeError + adv) →
+    (∀ X ∈ Ls, ∀ d, P.RunReads Pous.Guarantees.StreamedWipeResidual (survives X d) (2⁻¹ ^ P.wipeError + adv)) →
     P.CapacityAtMost Capacity.memorySize memEnclosing memCap →
     (∀ r i, P.kind r i = true →
       memCap r i ≤ P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i) + P.uncovered (P.locOut r i)) →
-    (∀ r i, P.kind r i = true → 0 < P.wipeLabels (P.locOut r i) ∧ 0 < k r i ∧
-      Pous.StreamedWipe.wipeResidual (P.wipeLabels (P.locOut r i)) (k r i) (P.labelBits (P.locOut r i)) P.wipeError <
-        P.wipeLabels (P.locOut r i) * P.labelBits (P.locOut r i)) →
-    P.WipeInformationGivesWidth survives (P.pastBound E k) →
+    (∀ r, P.accepts r → ∀ i, P.kind r i = true → P.WipeApplies k r i) →
+    (∀ X ∈ P.listed, X ∈ Ls) →
+    P.WipeInformationGivesWidth (fun r => ∀ X ∈ Ls, ∀ d, survives X d r) (P.pastBound E k) →
       ExceptWith P.pr P.accepts
         (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (P.pastBound E k r i)))
-        (2⁻¹ ^ P.wipeError + adv)
+        ((Ls.card * P.nDays : ℕ) * (2⁻¹ ^ P.wipeError + adv))
 
 /-! ## Network attestation -/
 
 /-- **Every link of the attested boundary passes through an attester** (assumed, about the site). In an accepted run,
 for each server-day block `i`, its attested boundary's day block (the union of the boundary's server-day blocks that
 day, `HoldsBoundary`) reads from the outside world at most the attester's ingress count for that boundary and day plus
-the boundary's covert figure (`P.covert`, bits, assumed: the channels the attester does not see), and block `i`'s output
-to the outside world is at most the attester's egress count `egress r i` (bits). The links between servers behind one
-boundary are inside the union and not in the covert figure. A server behind a shared boundary has its input from the
-outside world bounded only through the union. -/
-def AttesterOnEveryLink (ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (egress : (r : P.Run) → Fin (P.nOut r) → ℕ) :
-    Prop :=
+the boundary's covert figure (`P.covert`, bits, assumed: the channels the attester does not see), and that day block's
+output to the outside world is at most the attester's egress count for that boundary and day (`egress`, bits). The
+links between servers behind one boundary are inside the union and not in the covert figure. A server behind a shared
+boundary has its input from and its output to the outside world bounded only through the union: a policy can no longer
+bound one server's output behind a shared boundary, which includes what it sends the other servers behind it. -/
+def AttesterOnEveryLink (ingress egress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) : Prop :=
   ∀ r, P.accepts r → ∀ i, P.kind r i = true →
     P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
         (.inputAtMost [.world] (ingress r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i))) ∧
-      P.HoldsOut r i (.outputAtMost (egress r i))
+      P.HoldsBoundary r (P.bnd r i) (P.dayOf r i) (.outputAtMost (egress r (P.bnd r i) (P.dayOf r i)))
 
-/-- **The record's unexplained bits are the block's undeclared output** (open, network-accounting): in an accepted run
-whose egress record the declared computation explains up to the missable cost and the charges, every server-day block's
-egress count is at most `bOut i`. -/
-def RecordIsOutput (shown : P.Run → Prop) (egress bOut : (r : P.Run) → Fin (P.nOut r) → ℕ) : Prop :=
-  ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true → egress r i ≤ bOut r i
+/-- **The record's unexplained bits are the boundary's undeclared output** (open, network-accounting): in an accepted run
+whose egress record the declared computation explains up to the missable cost and the charges, the egress count of
+every server-day block's attested boundary on its day is at most `bOut` for that boundary and day (bits). -/
+def RecordIsOutput (shown : P.Run → Prop) (egress bOut : (r : P.Run) → ℕ → Fin P.nDays → ℕ) : Prop :=
+  ∀ r, P.accepts r → shown r → ∀ i, P.kind r i = true →
+    egress r (P.bnd r i) (P.dayOf r i) ≤ bOut r (P.bnd r i) (P.dayOf r i)
 
 /-- **Network attestation: input at most from the outside world, for each attested boundary's day block** (old subject:
 the server-day block), from `AttesterOnEveryLink` and the attester's ingress count at most `bIn` for that boundary and
 day. The boundary's covert figure (`P.covert`, bits, assumed) lives **inside** the assumption, not added on here. A
 server behind a shared boundary has its input from the outside world bounded only through the union. A shape. -/
-def NetworkInputAtMost (ingress bIn : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (egress : (r : P.Run) → Fin (P.nOut r) → ℕ) :
-    Prop :=
+def NetworkInputAtMost (ingress bIn egress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) : Prop :=
   P.AttesterOnEveryLink ingress egress →
     (∀ r, P.accepts r → ∀ i, P.kind r i = true → ingress r (P.bnd r i) (P.dayOf r i) ≤ bIn r (P.bnd r i) (P.dayOf r i)) →
     ExceptWith P.pr P.accepts
       (fun r => ∀ i, P.kind r i = true → P.HoldsBoundary r (P.bnd r i) (P.dayOf r i)
         (.inputAtMost [.world] (bIn r (P.bnd r i) (P.dayOf r i) + P.covert (P.bnd r i)))) 0
 
-/-- **Network attestation: output at most to the outside world, for the attested boundary** (the server-day block its
-one-server case): a width bound that leaves the timing channel out. From `NetTiming.Attester.PhaseGetsBack`, which bounds
+/-- **Network attestation: output at most to the outside world, for each attested boundary's day block** (the server-day
+block its one-server case, `boundary_one_server_output`): a width bound that leaves the timing channel out. A policy can
+no longer bound one server's output behind a shared boundary, which includes what it sends the other servers behind it. From `NetTiming.Attester.PhaseGetsBack`, which bounds
 how much of an execution phase's egress record the declared computation does not explain. The fold from one execution
 phase to the monitoring period — that the state each phase reads is the fold of the earlier ones (`PhasesFoldToPeriod`) —
 is carried by `RunReads` here, which reads the phase guarantee on the period's runs; it is not a separate named def on this
 head, and restoring it as its own premise is ours with lean. Its channel term, the log of how many timing and failure
 patterns the operator can choose, is no width of any gate; whether the output is stated in information for that part is
 open for training. Open: `RunReads` and `RecordIsOutput`; assumed: `AttesterOnEveryLink`. A shape. -/
-def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut egress' : (r : P.Run) → Fin (P.nOut r) → ℕ)
-    (ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ) (ε : ℝ≥0∞) : Prop :=
+def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut egress' ingress : (r : P.Run) → ℕ → Fin P.nDays → ℕ)
+    (ε : ℝ≥0∞) : Prop :=
   NetTiming.Attester.PhaseGetsBack →
     P.RunReads NetTiming.Attester.PhaseGetsBack shown ε → P.RecordIsOutput shown egress bOut →
     P.AttesterOnEveryLink ingress egress' →
-      ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true → P.HoldsOut r i (.outputAtMost (bOut r i))) ε
+      ExceptWith P.pr P.accepts (fun r => ∀ i, P.kind r i = true →
+        P.HoldsBoundary r (P.bnd r i) (P.dayOf r i) (.outputAtMost (bOut r (P.bnd r i) (P.dayOf r i)))) ε
 
 /-! ## Registration -/
 
