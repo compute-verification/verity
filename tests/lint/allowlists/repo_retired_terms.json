@@ -2102,7 +2102,6 @@
     {"file": "tests/benchmarks/pouw/pearlplus_lean/test_pearlplus_lean.py", "count": 142},
     {"file": "tests/benchmarks/pouw/pearlplus_lean/test_pearlplus_lean_quick.py", "count": 4},
     {"file": "tests/benchmarks/pouw/test_budget.py", "count": 2},
-    {"file": "tests/benchmarks/pouw/test_hidden_zk_summarize.py", "count": 2},
     {"file": "tests/benchmarks/pouw/test_ledger.py", "count": 39},
     {"file": "tests/benchmarks/pouw/test_pearl_c_sm90.py", "count": 8},
     {"file": "tests/benchmarks/pouw/test_pearl_c_sm90_glm53.py", "count": 11},
