@@ -63,7 +63,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 
-# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library only.
+# `served_composite.sh` runs this file with an interpreter that may not import `verity`: the standard library and this
+# tree's `lean_child`, whose own imports are the standard library's, only.
 PRODUCTS = {"onsite": "verity/onsite/v1", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
 #: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
 #: list them; read only to name the missing ones.

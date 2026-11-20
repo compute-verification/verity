@@ -6625,6 +6625,15 @@ UNSHOWN = {"remote-v1": ["COMPOSITE remote-v1: NOT_ESTABLISHED the tree is no gi
 #: Onsite's run as served_table.py's pearl-plus piece sets it: remote v1 composes beside onsite where the tree has its Lean
 ONSITE_POUW = {"POUW": "pearlplus"}
 REMOTE_V1_MAIN = "verity/protocols/compose/verifier/remote/RemoteV1Main.lean"
+#: composite.py and the files of the tree it loads, at their paths in the tree
+COMPOSITE_FILES = ("benchmarks/one_stage/composite.py", "verity/protocols/proofs/spot/verifier/one_stage/lean_child.py",
+                   "verity/protocols/proofs/spot/verifier/one_stage/settings.py")
+
+
+def _copy_composite(tree: Path) -> None:
+    for f in COMPOSITE_FILES:
+        (tree / f).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(HERE.parents[2] / f, tree / f)
 
 
 @pytest.mark.parametrize("protocol", list(ONSITE_OWN))
@@ -6657,8 +6666,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
         (tree / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
 
     def case(where: str, of: str) -> None:
         (d / "private" / where).mkdir(parents=True)
@@ -6723,8 +6731,7 @@ def test_the_composite_takes_no_case_from_the_attester_pieces_private_directory_
     for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / REMOTE_V1_MAIN).touch()
-    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
-    shutil.copy(HERE.parents[2] / "benchmarks" / "one_stage" / "composite.py", tree / "benchmarks" / "one_stage")
+    _copy_composite(tree)
     own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
            if p != attester}
     for p, where in own.items():
