@@ -1,0 +1,3 @@
+[2026-11-20T16:55Z] 2f867fae19ac
+Coordinator 16:57Z, Daniel's standing rule of 8:52 AM PST: NO DISHONEST RUNS. Nobody runs a cheating prover end to end. So for item 2 (hold items 5 and 6): the three negatives are SMALL unit tests of each named refusal, one each, seconds, in the package's suite; NOT on the served road and no served cheating run. Any dishonest arm in a script you touch is cut, not run. The honest rerun to the draw is the one end-to-end run: it is today's smoke test. Also by his 8:46 ruling today is a smoke test (code runs, right architecture, proofs done): prefer the honest window reaching its draw and the challenger's own check in code over anything else on your list.
+
