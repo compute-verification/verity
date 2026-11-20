@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Pous.Guarantees.StreamedWipeResidual
-public import Proofs.Pous.StreamedWipe.Deployed
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Proofs.Pous.StreamedWipe.Bound
+import Proofs.Pous.StreamedWipe.Deployed
 
 /-!
 # The streamed wipe's residual at any fill and challenge count
@@ -56,6 +58,8 @@ theorem wipeMissing_spec {N k s : ℕ} (hk : 0 < k) :
   have h1 := Nat.div_add_mod (A + B - 1) B
   have h2 := Nat.mod_lt (A + B - 1) hB
   rw [mul_comm]
+  generalize (A + B - 1) / B = Q at h1 ⊢
+  generalize (A + B - 1) % B = R at h1 h2
   omega
 
 /-- **`StreamedWipeResidual`**: `streamed_wipe` at `g = N − wipeMissing N k s`, with the error split
@@ -89,7 +93,7 @@ theorem streamed_wipe_residual : Pous.Guarantees.StreamedWipeResidual := by
   unfold bound
   calc _ ≤ (2⁻¹ : ℝ≥0∞) ^ (s + 1) + (2⁻¹ : ℝ≥0∞) ^ (s + 1) :=
         add_le_add (sampling_le hDN hN hsamp)
-          (compression_le_log hD1 hDN Nat.lt_log2_self.le Nat.lt_log2_self.le rfl (by omega))
+          (compression_le_log hD1 hDN (Nat.le_of_lt Nat.lt_log2_self) (Nat.le_of_lt Nat.lt_log2_self) rfl (by omega))
     _ = (2⁻¹ : ℝ≥0∞) ^ s := half_pow_succ_add s
 
 /-- At the deployed point (`StreamedWipeMeets2600GB`'s `N`, `k`, `b` and `2^-40`) the wipe residual is 8,549,712,478
