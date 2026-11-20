@@ -109,4 +109,12 @@ example : wipeResidual 2319974400 2152 512 40 = 16666681461 ∧ wipeResidual 231
     ¬ 100 * wipeResidual 2319974400 3019 512 40 ≤ 2319974400 * 512 := by
   decide
 
+/-- At `2^-128`: 52,439,071,629 bits at the served H200 (between 4.41% and 4.42% of its fill) and 26,900,316,210 bits
+at the deployed point. -/
+example : wipeResidual 2319974400 2152 512 128 = 52439071629 ∧
+    10000 * wipeResidual 2319974400 2152 512 128 ≤ 442 * (2319974400 * 512) ∧
+    441 * (2319974400 * 512) ≤ 10000 * wipeResidual 2319974400 2152 512 128 ∧
+    wipeResidual 40625000000 74000 512 128 = 26900316210 := by
+  decide
+
 end PousStreamedWipe

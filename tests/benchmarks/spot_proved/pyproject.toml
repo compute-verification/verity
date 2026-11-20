@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # imports `verity_torch.pouw.hand_in`, and verity_torch.pouw imports serving.tensors
 # spot/prover/__init__.py and docket.py: verity_vllm's boundary and interior rows build the docket's record with SPOT's prover
 # calibration/hardware/nodes/rtx-pro-6000-server-x8.toml: verity_vllm's tp_allreduce Definition reads its node's data sheet
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
+inputs = ["verity/lean_process.py", "verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/periods",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/commitments/cuda/sha512.cuh",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/levels.py",

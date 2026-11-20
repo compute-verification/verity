@@ -42,7 +42,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}": "f355c686c25384c64486f17620a60a3ab163dfff8075e94839630fdbaef11ba66d074666413e360fd2df6456cea6bf2a538ed9663603dfc24a68663cfec3bb24"
+   "GemmCoordinate_v2{K=64,DOT=AmpereBF16TcDot16_v2}": "76e7d9704e8dab21e0b329b24de5dee40789a2338c2a7c92c827a90b6cd08b4e11abc0f31e19ad6e169b620d393c368abf79a5aff170a70f81066cc3c341ddbc"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
