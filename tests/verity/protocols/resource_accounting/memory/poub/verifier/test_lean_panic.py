@@ -87,3 +87,63 @@ def test_both_verifiers_start_with_the_panic_switch_and_read_a_clean_answer(tmp_
         lean.close()
     with p2_lean.Lean(exe) as lean:
         assert lean.call({"op": "x"}) == {"switch": "1"}
+
+
+OTHER_PANICS = ["Error: index out of bounds", "Error: invalid `String.Pos` at `String.get!`",
+                "`Task.get` called from a `(sync := true)` task", "Stack overflow detected. Aborting.",
+                "LEAN ASSERTION VIOLATION"]
+
+
+def _kept(stderr_line: str | None, then: str = "") -> str:
+    """A kept process that answers accept to every request, with ``stderr_line`` before each reply and ``then`` after."""
+    return (f"for line in sys.stdin:\n"
+            f"    {'print(%r, file=sys.stderr, flush=True)' % stderr_line if stderr_line else 'pass'}\n"
+            f"    print(json.dumps({{'answer': {ACCEPT!r}}}), flush=True)\n    {then or 'pass'}\n")
+
+
+def _sessions(exe: Path):
+    return lean_verifier.Lean(exe, lambda _: None)
+
+
+def _party(exe: Path):
+    return p2_lean.Lean(exe)
+
+
+KEPT = [pytest.param(_sessions, lean_verifier.LeanError, id="sessions"), pytest.param(_party, p2_lean.LeanError, id="party")]
+
+
+@pytest.mark.parametrize("line", OTHER_PANICS)
+@pytest.mark.parametrize("make, error", KEPT)
+def test_an_accept_beside_a_runtime_line_with_no_panic_word_is_refused_by_name(tmp_path, make, error, line):
+    lean = make(_fake(tmp_path, _kept(line)))
+    try:
+        with pytest.raises(error) as e:
+            lean.call({"op": "x"})
+        assert str(e.value) == f"{LP.LEAN_PANIC}: {line}"
+    finally:
+        lean.close()
+
+
+@pytest.mark.parametrize("make, error", KEPT)
+def test_a_kept_process_that_ends_134_or_by_a_signal_after_an_accept_is_refused_by_name_at_its_next_request(
+        tmp_path, make, error):
+    for then, why in (("sys.exit(134)", "status 134 \\(abort\\)"),
+                      ("import signal; os.kill(os.getpid(), signal.SIGKILL)", "killed by SIGKILL")):
+        lean = make(_fake(tmp_path, _kept(None, then)))
+        try:
+            assert lean.call({"op": "x"}) == ACCEPT
+            lean.proc.wait()
+            with pytest.raises(error, match=f"^{LP.LEAN_EXIT}: {why}"):
+                lean.call({"op": "x"})
+        finally:
+            lean.close()
+
+
+@pytest.mark.parametrize("make, error", KEPT)
+def test_a_refusal_sentence_that_contains_the_runtimes_text_is_no_panic(tmp_path, make, error):
+    sentence = "the window is refused: Error: index out of bounds is what its field says, not the runtime"
+    lean = make(_fake(tmp_path, _kept(sentence)))
+    try:
+        assert lean.call({"op": "x"}) == ACCEPT
+    finally:
+        lean.close()

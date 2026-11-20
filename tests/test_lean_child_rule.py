@@ -14,7 +14,7 @@ HOMES = ("verity/lean_process.py",
 #: the modules that re-export `verity.lean_process`'s rule, and so hold it by loading it
 LOADERS = ("verity/protocols/proofs/flock/prover/python/verity_flock/lean_child.py",)
 SERVER = "tools/difftest/python/verity_difftest/__init__.py"
-SERVER_RULE = ("ABORT_ON_PANIC", "PANIC", "LEAN_PANIC")
+SERVER_RULE = ("ABORT_ON_PANIC", "PANIC", "LEAN_PANIC", "LEAN_EXIT")
 RULE = ("ABORT_ON_PANIC", "lean_env", "PANIC", "LEAN_PANIC", "LEAN_EXIT", "OK", "ABORTED", "LeanPanic", "LeanExit",
         "panic_line", "refuse_panic", "exit_why", "refuse_exit", "run")
 

@@ -28,9 +28,9 @@
    "why": "the JSON parser's port reads the parser it holds to its Python mirror, and Lean core's parser through the harness"
   },
   "ProgramDifftest": {
-   "imports": ["Difftest", "Base.Bytes", "Circuits.Encode", "Circuits.Program"],
+   "imports": ["Difftest", "Base.Bytes", "Circuits.Build", "Circuits.Encode", "Circuits.Program"],
    "except": [],
-   "why": "the decoder's port reads the decoder and the encoder it holds to codec.decode_program and codec.descriptor_chunks, and the bytes it hands them, through the harness, as a port does"
+   "why": "the decoder's port reads the decoder, the encoder and the builder it holds to codec.decode_program, codec.descriptor_chunks and Program, and the bytes it hands them, through the harness, as a port does"
   }
  },
  "guarantees": {},
