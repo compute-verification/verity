@@ -4730,6 +4730,7 @@ theorem summarize_reps (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
     exact allReps_empty
   · obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
     obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     have hD : ∀ q, OkIs AllReps (Desc.down c Flock.Steps.FUEL q) := (reps_fuel c _).1
@@ -8683,6 +8684,7 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
     have hp' : (P.defs[d]!).prim = false := by simpa using hp
     obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
     obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     rw [← Array.forIn_toList] at hret
@@ -11611,6 +11613,7 @@ theorem summarize_retW (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Des
     have hp' : (P.defs[d]!).prim = false := by simpa using hp
     obtain ⟨ret, hret, h⟩ := Walk.except_bind_ok h
     obtain ⟨acc, -, h⟩ := Walk.except_bind_ok h
+    obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     rw [← Array.forIn_toList] at hret

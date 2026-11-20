@@ -2488,6 +2488,7 @@ theorem summarize_acc (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : Desc
   rw [if_neg (by simp [defn, hp])] at h
   obtain ⟨ret, -, h⟩ := Walk.except_bind_ok h
   obtain ⟨acc, hacc, h⟩ := Walk.except_bind_ok h
+  obtain ⟨_, -, h⟩ := Walk.except_bind_ok h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   refine ⟨acc, rfl, ?_⟩

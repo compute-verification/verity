@@ -99,6 +99,8 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   simp only [h4w, Bool.false_eq_true, ite_false] at h
   rcases h5 : Desc.analyze P with e | reads <;> simp only [h5] at h
   · cases h
+  rcases h5w : Desc.readsWalk reads with e | u <;> simp only [h5w] at h
+  · cases h
   rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, registered, rootBody, nodeCount] at h6 <;> simp only [h6] at h
   · cases h
   by_cases h7 : (i.owner.size != (P.defs[P.root]!).body.nodes.size) = true

@@ -436,6 +436,32 @@ def UNWALKED : String := "unwalked: "
 def walkAtMost (what : String) (n : Nat) : Except String Unit :=
   if n > WALK then throw s!"{UNWALKED}{what}: {n} of them, past the {WALK} this verifier walks one by one" else pure ()
 
+/-- `Piece.pis`'s walks of a lane, refused past `WALK`: a part of a lane, row by row, and a whole lane, each level's
+radix times the intervals before it (`levelIvs`'s copies before they merge). -/
+def Piece.pisWalk (q : Piece) : Except String Unit :=
+  if q.rows ≤ 1 || q.len == 0 || q.lv.isEmpty then pure ()
+  else if q.start == 0 && q.rows == q.lv.foldl (fun a (r, _) => a * r) 1 then
+    let step (st : Nat × Option Ivs) (rd : Nat × Int) : Nat × Option Ivs :=
+      match st.2 with
+      | none => st
+      | some I =>
+        if rd.1 * I.size > WALK then (rd.1 * I.size, none)
+        else (max st.1 (rd.1 * I.size), some (Ivs.norm ((Array.range rd.1).flatMap fun c => I.map fun (a, b) =>
+          (((a : Int) + (c : Int) * rd.2).toNat, ((b : Int) + (c : Int) * rd.2).toNat))))
+    walkAtMost "intervals of a lane's levels, a level's radix times the intervals before it"
+      (q.lv.foldl step (0, some (Ivs.norm (PI.ivs (q.row 0).rowPis)))).1
+  else walkAtMost "rows of part of a lane, as intervals one by one" q.rows
+
+/-- The walks of a summary's `used` (`ivsOf`), refused past `WALK`. -/
+def usedWalk (acc : Array (Array Piece)) : Except String Unit := acc.forM fun qs => qs.forM Piece.pisWalk
+
+/-- The walks of `freshWidth` on segments of the root nodes' reads, refused past `WALK`: a rowed segment's copies, period
+by period, and its pieces' (`gateIvs`, `Piece.pisWalk`). -/
+def readsWalk (reads : Array (Array Seg)) : Except String Unit :=
+  reads.forM fun ss => ss.forM fun s => do
+    if s.lanes then walkAtMost "periods of a grid segment's copies, one by one" s.reps
+    s.ps.forM Piece.pisWalk
+
 /-- `q` as one row when its rows are consecutive (`rowStride` one row's span), and a piece of at most one row with
 no levels: the same elements in the same order. -/
 def Piece.flat (q : Piece) : Piece :=
@@ -968,6 +994,7 @@ def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summar
       for q in s.ps do
         if let .ref true i := q.tgt then
           acc := acc.modify i (·.push q)
+  usedWalk acc
   return { ret := PS.of (coalesce ret), used := acc.map fun qs => Ivs.norm (ivsOf qs) }
 
 /-- The Definitions the root reaches, each once. -/
@@ -1211,6 +1238,7 @@ def evaluate (j : Json) : Except String Json := do
   let reads ← match analyze P with
     | .ok r => pure r
     | .error e => throw (analyzeCode e)
+  readsWalk reads
   let body := (P.defs[P.root]!).body
   let K := body.nodes.size
   let offs := body.offsets
