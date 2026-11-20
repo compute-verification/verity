@@ -407,6 +407,13 @@ def test_what_has_no_statement_is_refused_by_name(name, tables, fn, args, why):
     assert refusal(tables, fn, **args) == NO_STATEMENT + why
 
 
+@pytest.mark.parametrize("key", [VECTORS["key"][:-2], VECTORS["key"] + "00"], ids=["a byte short", "a byte long"])
+def test_a_message_under_a_pinned_key_of_another_length_is_refused_by_name(key):
+    """A key the configuration pins that is no LMS key's length: the signature does not verify under it."""
+    pinned = (hashlib.sha512(bytes.fromhex(key)).digest(),)
+    assert refusal(held(key=key), MESSAGE, pinned=pinned) == NO_STATEMENT + MESSAGE + "'s " + G.BAD_SIGNATURE
+
+
 def test_a_number_in_a_string_is_not_one():
     """`1e2` or `-0` inside a string is text: only the numbers of the JSON are held to the canonical form."""
     doc = {**HELD, "note": "limit -0 and 1e2, 03 + 3.0 \\\" 5e1"}

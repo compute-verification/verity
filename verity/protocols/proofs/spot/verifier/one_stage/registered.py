@@ -766,8 +766,8 @@ def _message(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name:
         ok = len(key) == 16 + lms.DEPLOYED.N and lms.verify(
             lms.DEPLOYED, key, lms.memory_attester_message(key[:16], session, bytes.fromhex(msg)),
             lms.Signature.decode(lms.DEPLOYED, bytes.fromhex(sig)))
-    except ValueError:
-        ok = False
+    except ValueError as e:
+        raise _no_statement(name, f, BAD_SIGNATURE) from e
     if not ok:
         raise _no_statement(name, f, BAD_SIGNATURE)
     return [("bytes", msg)], 64
