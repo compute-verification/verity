@@ -33,6 +33,7 @@ untraced = [
     "test_served_advice_day.py",
     "test_served_overhead.py",
     "test_served_verdicts.py",
+    "test_served_door_prove.py",
     "test_door_walls.py",
 ]
 # The Lean verifier and the ZK server's Lean, which `test_audit_two_members` runs and skips without: check's lean-build step

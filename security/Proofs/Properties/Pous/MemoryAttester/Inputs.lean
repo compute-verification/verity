@@ -217,17 +217,21 @@ theorem stream_inj {rounds rounds' : Array Round} {s s' : ByteArray} (h : record
   obtain rfl : vs = vs' := Array.toList_inj.mp (flat_inj w w' hl e)
   exact rounds_inj hv hv'
 
-theorem message_ok {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
-    (h : message c e rounds = .ok rec) :
-    ∃ d, recordsDigest rounds = .ok d ∧
-      rec = Sha512.hash (SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
+theorem message_ok {c : ChallengePhaseCommitment} {salt : ByteArray} {e : String} {rounds : Array Round}
+    {rec : ByteArray} (h : message c salt e rounds = .ok rec) :
+    salt.size = RECORD_SALT_BYTES ∧ ∃ d, recordsDigest rounds = .ok d ∧
+      rec = Sha512.hash (SESSION_TAG ++ salt ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
         (header c e rounds.size).toUTF8 ++ d) := by
   unfold message at h
-  cases hr : recordsDigest rounds with
-  | error _ => simp [hr, bind, Except.bind] at h
-  | ok d =>
-    simp only [hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨d, rfl, h.symm⟩
+  by_cases hs : salt.size = RECORD_SALT_BYTES
+  · refine ⟨hs, ?_⟩
+    cases hr : recordsDigest rounds with
+    | error _ => simp [hs, hr, bind, Except.bind] at h
+    | ok d =>
+      simp only [hs, ne_eq, not_true_eq_false, if_false, hr, bind, Except.bind, pure, Except.pure,
+        Except.ok.injEq] at h
+      exact ⟨d, rfl, h.symm⟩
+  · simp [hs, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryAttesterMessage I session rec = .ok m) :
     I.size = 16 ∧ m = Sha512.hash (field MEMORY_CHALLENGER_TAG.toUTF8 ++ I ++ field (field session) ++ field rec) := by
@@ -238,17 +242,19 @@ theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryAttesterMessag
     simp only [pure, Except.pure, Except.ok.injEq] at h
     exact ⟨not_not.mp hI, h.symm⟩
 
-/-- The session input, with records digests of one width, determines the header and the digest. -/
-theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
-    (e : SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
-    h = h' ∧ r = r' := by
+/-- The session input, with salts of one width and records digests of one width, determines the salt, the header and
+the digest. -/
+theorem challengePhase_split {s s' h h' r r' : ByteArray} (hs : s.size = s'.size) (hr : r.size = r'.size)
+    (e : SESSION_TAG ++ s ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ s' ++ be64 h'.size.toUInt64 ++ h' ++ r') :
+    s = s' ∧ h = h' ∧ r = r' := by
   have e := congrArg bs e
   simp only [bs_append] at e
   obtain ⟨e1, e2⟩ := List.append_inj' e (by rw [bs_length, bs_length, hr])
   simp only [List.append_assoc] at e1
   have e1 := List.append_cancel_left e1
+  obtain ⟨es, e1⟩ := split_bytes e1 hs
   obtain ⟨-, e1⟩ := split_bytes e1 (by rw [be64_size, be64_size])
-  exact ⟨bs_inj e1, bs_inj e2⟩
+  exact ⟨es, bs_inj e1, bs_inj e2⟩
 
 /-- The signed message's input, under one key identifier and with records of one width, determines the record. -/
 theorem signed_split {I s s' r r' : ByteArray} (hr : r.size = r'.size)
