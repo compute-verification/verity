@@ -194,7 +194,7 @@ private theorem sizeOf_snd_lt_of_mem {fs : Array (String × Ty)} {f : String × 
   omega
 
 /-- The total width of `t`'s leaves `lo … hi - 1`, from the type's structure: an Array's whole elements as one element's
-times their number. -/
+times their number, that element taken once, so a range costs the square of the type's depth, never its leaves. -/
 def widthSum (t : Ty) (lo hi : Nat) : Nat :=
   match t with
   | .value w => if lo == 0 && 0 < hi then w else 0
@@ -205,7 +205,10 @@ def widthSum (t : Ty) (lo hi : Nat) : Nat :=
       let a := lo / L
       let b := (hi - 1) / L
       if a == b then widthSum e (lo - a * L) (hi - a * L)
-      else widthSum e (lo - a * L) L + (b - a - 1) * widthSum e 0 L + widthSum e 0 (hi - b * L)
+      else
+        let whole := widthSum e 0 L
+        (if lo == a * L then whole else widthSum e (lo - a * L) L) + (b - a - 1) * whole +
+          (if hi == (b + 1) * L then whole else widthSum e 0 (hi - b * L))
   | .tuple fs => (fs.foldl (fun (acc : Nat × Nat) f =>
       let o := acc.2
       let m := f.leaves
