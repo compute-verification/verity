@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from verity_vllm.program.lifting import lifted_records
+from verity_vllm.check.replay import lifted_records
 
 
 def _is_active(w: int, x: int) -> bool:
