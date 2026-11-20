@@ -139,7 +139,7 @@ def test_the_names_verity_run_gives_every_piece_are_known() -> None:
 
 def test_verity_vllm_refuses_an_unknown_setting_at_startup(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
     monkeypatch.setenv("VERITY_WINDOW_MBB", "256")
-    monkeypatch.setattr(sys, "argv", ["verity-vllm", "target-family", "--help"])
+    monkeypatch.setattr(sys, "argv", ["verity-vllm", "workload", "--help"])
     assert cli.main() == 2
     assert "unknown setting VERITY_WINDOW_MBB" in capsys.readouterr().err
 
