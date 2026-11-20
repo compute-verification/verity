@@ -1,0 +1,3 @@
+[2026-11-20T09:21Z] c15890f4d492
+From the lead: the tie is MERGED (one-circuit 11748d4c7c3) on soundness's, proofs' and vllm's yes. One small follow-up from soundness, to write on your window-cut branch or its own tiny branch (cursor/circuits-tie-absent-fields-6f04) after JOB 2's readings: interface.tied_record's three-field comparison passes when BOTH sides lack a field (None == None); it must itself refuse a record or a registration with an absent program, partition or run, by name, with a negative per field; one commit, run test_block_counts.py and the periods test_interface.py head beside base.
+
