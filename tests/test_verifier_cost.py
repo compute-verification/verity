@@ -8,7 +8,8 @@ through the canonical layout (`P.gate g`, `Prog.gate P g`, `Flock.Program.Prog.g
 bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`; `let gs := C.gates.toArray` … `List.range
 gs.size`), a range or loop over a key program's gates, inputs or units (`List.range kp.size`, `List.range kp.units`: a
 `Spot.Bits.KeyProg` lays a member's units out side by side), a range or
-loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
+loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration)
+unless a `walkAtMost` on that same count refuses it first (`_bounded`),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`), or a member's key
 program built (`Spot.Bits.keyProg c n`, every one of its `n` units laid out). Outside the tests it
@@ -43,10 +44,6 @@ ALLOWED: dict[str, str] = {
     "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/Desc.lean":
-        "InferenceOnlyVerifier.Desc's loop over the members of a node reading part of a mapped argument, which the scan "
-        "flags by its form (a range over node.members): it runs after walkAtMost, which refuses past WALK, as every "
-        "other walk the module docstring lists does",
     "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyVerifier/DescFuzz.lean":
         "InferenceOnlyVerifier.DescFuzz, the desc fuzzer the Lean audit runs (InferenceOnlyVerifier.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
@@ -174,6 +171,31 @@ ZERO = re.compile(r"(?<![\w'.])(?:Compose\.)?zeroOutputsT\b(?![\w'])")
 UNIT_MAP = re.compile(r"\b(?:List|Array)\.range\b[^\n]*?\bfun\s+(\w+)\s*=>([^\n]*(?:\n[^\n]*){0,2})")
 
 
+#: a statement of its own line refusing a walk of `count` past its bound (`InferenceOnlyVerifier.Desc.walkAtMost`)
+WALK_AT_MOST = r'^([ \t]*)(?:[\w.]*\.)?walkAtMost[ \t]+"[^"\n]*"[ \t]+{count}[ \t]*$'
+
+
+def _bounded(src: str, at: int, count: str) -> bool:
+    """Whether the loop at ``at`` over ``count`` runs after a `walkAtMost` on that same text: a statement on its own line
+    before it, every line from there to the loop indented at least as deep (so neither a branch, a handler nor another
+    declaration lies between), and no line between naming an identifier of ``count`` before its first `:=`, `←`, `=>`
+    or ` in`, where it could be bound again."""
+    head = src[:src.rfind("\n", 0, at) + 1]
+    walks = list(re.finditer(WALK_AT_MOST.format(count=re.escape(count)), head, re.M))
+    if not walks:
+        return False
+    w = walks[-1]
+    names = set(re.findall(r"[A-Za-z_][\w']*", count))
+    end = src.find("\n", at)
+    for line in src[w.end():len(src) if end < 0 else end].split("\n")[1:]:
+        if line.strip() and len(line) - len(line.lstrip()) < len(w.group(1)):
+            return False
+        left = re.split(r":=|←|=>|\sin\s", line, maxsplit=1)
+        if len(left) > 1 and names & set(re.findall(r"[A-Za-z_][\w']*", left[0])):
+            return False
+    return True
+
+
 def _unit_gates(unit: str) -> re.Pattern:
     """A template query's gates of one unit, `TemplateQuery.gates d rs unit`."""
     return re.compile(rf"(?<![\w'.])(?:(?:Flock\.)?TemplateQuery\.)?gates\s+[\w.]+\s+\w+\s+{re.escape(unit)}\b(?![\w'.])")
@@ -181,7 +203,8 @@ def _unit_gates(unit: str) -> re.Pattern:
 
 def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
     """(line, what) for every unrolled walk in Lean `source`; a test (`test`) may unroll a templated unit."""
-    blank = lambda m: re.sub(r"[^\n]", " ", m.group())
+    def blank(m: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", m.group())
     src = THEOREM.sub(blank, COMMENT.sub(blank, source))
     if test:
         src = GUARD.sub(blank, src)
@@ -198,7 +221,8 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
         hits += [(m.start(), "a member's key program built, every unit laid out") for m in KEYPROG_BUILT.finditer(src)]
         hits += [(m.start(), "a template's zero output, every copy's columns written") for m in ZERO.finditer(src)]
     hits += [(m.start(), "a range over a gate count") for m in RANGE.finditer(src)]
-    hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)]
+    hits += [(m.start(), "a range over a node's members") for m in MEMBERS.finditer(src)
+             if not _bounded(src, m.start(), re.search(r"[\w.!\[\]()]*\.members\b", m.group()).group())]
     for b in BOUND.finditer(src):
         name = b.group(1) + (".size" if b.group(2) else "")
         n = re.escape(name)
@@ -281,6 +305,24 @@ def test_the_popOk_scan_reads_calls_and_imports():
     assert not POP_OK.search("theorem popOk_eq_popOkRanges : @popOkRanges = f := popOk' x")
     assert SPOT_IMPORT.findall("module\n\npublic import Spot.PopOrder\nimport all Spot.Run\nmeta import Spot.Slots\n"
                                "import Spot\npublic import Flock\n") == ["Spot.PopOrder", "Spot.Run", "Spot"]
+
+
+def test_a_loop_over_members_after_its_walkAtMost_is_bounded():
+    bounded = """
+def a (node : Node) : Except String Unit := do
+  walkAtMost "members, one by one" node.members
+  let mut out := #[]
+  for m in [0:node.members] do out := out.push m
+"""
+    branch = """
+def b (node : Node) (c : Bool) : Except String Unit := do
+  if c then
+    walkAtMost "members, one by one" node.members
+  else
+    for m in [0:node.members] do pure ()
+"""
+    assert offenses(bounded) == []
+    assert offenses(branch) == [(6, "a range over a node's members")]
 
 
 def test_the_scan_sees_each_form():
