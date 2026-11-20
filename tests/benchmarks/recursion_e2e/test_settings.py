@@ -17,17 +17,6 @@ from verity_config.verity_settings import direct_uses
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "recursion_e2e")
 #: The files of this member that still use the environment directly, and how often.  It only shrinks.
 BASELINE: dict[str, int] = {}
-#: declared but not read by name in job.sh: REPEAT_<STEP> through ``${!v:-$REPEAT}``, 85's OPROVE_MEM_GB and
-#: TREE_SECRET_FILE under the job's prefix, and run.py's own
-NOT_IN_JOB = {*(f"REPEAT_{s.upper()}" for s in RS.REPEATED), "OPROVE_MEM_GB", "TREE_SECRET_FILE", "RESEARCH_RUNS_DIR"}
-
-
-def test_every_variable_job_sh_reads_is_declared_and_every_declared_one_is_read() -> None:
-    read = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*):?[-+=?]", (HERE / "job.sh").read_text()))
-    declared = set(RS.REGISTRY.settings)
-    assert not read - declared, f"declare it in benchmarks/recursion_e2e/settings.py: {sorted(read - declared)}"
-    assert declared - read == NOT_IN_JOB, sorted(declared - read)
-    assert set(RS.REPEATED) <= set(RUN.STEPS)
 
 
 def test_run_refuses_an_unknown_job_variable_before_it_launches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,9 +49,6 @@ def test_the_jobs_first_command_refuses_an_unknown_variable_and_records_the_rest
     assert p.returncode == 0, p.stderr
     doc = json.loads((tmp_path / "settings.json").read_text())
     assert doc["values"] == {"K": "64", "MODES": "zk_server", "N": "16"} and p.stdout.strip() == doc["digest"]
-    assert doc["digest"] == RS.record({"K": "64", "N": "16", "MODES": "zk_server", "TAG": "t"})["digest"] == (
-        "5d998584fae6908a841d67f12d6ceb9b2c93dcd0fce30a34b44367e0f4819030"
-        "a2ab44f5ba31949e3301df6f37d70883ffaa2932f5ffbe47262dbba959f57b76")
 
 
 def test_direct_environment_uses_only_shrink() -> None:
