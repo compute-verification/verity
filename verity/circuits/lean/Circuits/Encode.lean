@@ -1,6 +1,9 @@
 /-
 `Flock.Program.Prog.encode`: a Program's descriptor as the codec writes it (`codec.descriptor_chunks`,
-`verity/circuits/PROTOCOL.md` §4), the canonical bytes without `annotations` that the program digest hashes.
+`verity/circuits/PROTOCOL.md` §4), the canonical bytes without `annotations` that the program digest hashes. That decoding
+the encoding gives the Program back is tested, on the decoder's corpus (`tests/tools/difftest/test_program_decode_port.py`)
+and by the `#guard`s below, and not proved. A builder owes no such theorem: the Program it registers is the decode of the
+bytes it wrote.
 -/
 module
 
@@ -35,6 +38,12 @@ namespace Encode
 
 /-- How many trailing parts an alias may leave written out (`codec.ALIAS_WINDOW`, §4.5). -/
 def ALIAS_WINDOW : Nat := 8
+
+/-- A part as the encoder writes it: an empty part is `{"explicit": []}`, the format's one form, though the decoder also reads
+an affine or strided part of count 0. -/
+def written : Part → Part
+  | .affine _ _ _ 0 | .strided _ _ _ _ _ _ 0 => .explicit #[]
+  | q => q
 
 /-- §4.6's interning tables as a writer fills them: each entry once, in first-seen order, types compared by their JSON. -/
 structure Tables where
@@ -71,7 +80,7 @@ def Aliases.ids (A : Aliases) (ps : Array Part) : Array Nat × Aliases :=
 
 /-- A body's reference sequence as §4.5's writer writes it: as argument `(k, a)` of node `k`, or as the body's `ret` (none). -/
 def Aliases.refs (A : Aliases) (s : Seq) (at? : Option (Nat × Nat)) : Json × Aliases :=
-  let ps := s.parts
+  let ps := s.parts.map written
   let n := ps.size
   let (ids, A) := A.ids ps
   let ms := (List.range (ALIAS_WINDOW + 1)).filterMap fun d => if d + 2 ≤ n then some (n - d) else none
@@ -147,9 +156,11 @@ def walk (P : Prog) : Nat → Nat → Std.HashSet Nat × Array Nat → V (Std.Ha
 end Encode
 
 open Encode in
-/-- **The encoder**: the canonical bytes (§1) of `P`'s descriptor without `annotations` (§4.1), as `codec.descriptor_chunks`
-writes them: the Definitions the root, `program_fn`'s record and the Boolean map's bodies reach, the tables in §4.6's
-order and each body's sequences by §4.5's writer. A Definition's `ports` (§12) are written by no one: `Prog` holds none. -/
+/-- **The encoder** writes no ports: the writer of record for no description that has ports (§12), since `Prog` keeps no
+trace of them and so can't tell a Program decoded from such a description. Otherwise the canonical bytes (§1) of `P`'s
+descriptor without `annotations` (§4.1), as `codec.descriptor_chunks` writes them: the Definitions the root, `program_fn`'s
+record and the Boolean map's bodies reach, the tables in §4.6's order, each body's sequences by §4.5's writer, and an empty
+part as `{"explicit": []}`. -/
 def Prog.encode (P : Prog) : V ByteArray := do
   let fuel := P.defs.size + 1
   let mut acc ← walk P fuel P.root ({}, #[])
@@ -170,13 +181,6 @@ def Prog.encode (P : Prog) : V ByteArray := do
     ("callees", .arr (T.callees.map Json.str)), ("definitions", Json.mkObj defs.toList), ("program_fn", .str P.programFn),
     ("root", .str (P.defs[P.root]!).key), ("schema", .str SCHEMA), ("types", .arr T.types)]
   return (← canon top).toUTF8
-
-/-- A Program that `encode` writes as the bytes it was decoded from is what decoding its encoding gives: the difference
-test's byte equality on a descriptor is its round trip. -/
-theorem Prog.decode_encode {b : ByteArray} {P : Prog} (hd : decode b = .ok P) (he : P.encode = .ok b) :
-    (P.encode >>= decode) = .ok P := by
-  rw [he]
-  exact hd
 
 /-- A small descriptor with its interning tables out of the writer's order and an alias inside a concatenation of one part,
 which the decoder accepts. -/
@@ -226,6 +230,29 @@ private def RECUT_WRITTEN : String :=
   4,[\"Value\",8]]},\"form\":\"composite\",\"id\":\"Root[P_v1]_v1\"}},\"program_fn\":\"P_v1\",\"root\":\"Root[P_v1]_v1\",\
   \"schema\":\"verity-ir/descriptor/v2\",\"types\":[[\"Array\",2,[\"Value\",16]]]}"
 
+/-- A root whose node reads, and which returns, empty affine parts at a position, and a callee returning an empty
+strided part, which the decoder reads. -/
+private def EMPTY : String :=
+  "{\"boolean\":{},\"callees\":[\"Input1_v1\",\"E_v1\"],\"definitions\":{\"E_v1\":{\"bindings\":{},\"body\":{\"nodes\":[]\
+  ,\"params\":[[\"x\",[\"Array\",0,[\"Value\",1]]]],\"ret\":{\"strided\":[\"p\",0,0,1,1,1,0]},\"ret_type\":[\"Array\",0,\
+  [\"Value\",1]]},\"form\":\"composite\",\"id\":\"E_v1\"},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"p\
+  arams\":[],\"ret\":[\"Value\",1]},\"Root[P_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"f\
+  n\":0,\"form\":\"batch\",\"n\":4,\"out\":0},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,3,0]},\"type\":1}],\"fn\":1,\"fo\
+  rm\":\"call\",\"out\":1}],\"params\":[],\"ret\":{\"affine\":[\"n\",1,0,0]},\"ret_type\":[\"Array\",0,[\"Value\",1]]},\"\
+  form\":\"composite\",\"id\":\"Root[P_v1]_v1\"}},\"program_fn\":\"P_v1\",\"root\":\"Root[P_v1]_v1\",\"schema\":\"verity\
+  -ir/descriptor/v2\",\"types\":[[\"Array\",4,[\"Value\",1]],[\"Array\",0,[\"Value\",1]]]}"
+
+/-- `EMPTY` as the encoder writes it: each empty part `{"explicit": []}`. -/
+private def EMPTY_WRITTEN : String :=
+  "{\"boolean\":{},\"callees\":[\"Input1_v1\",\"E_v1\"],\"definitions\":{\"E_v1\":{\"bindings\":{},\"body\":{\"nodes\":[]\
+  ,\"params\":[[\"x\",[\"Array\",0,[\"Value\",1]]]],\"ret\":{\"explicit\":[]},\"ret_type\":[\"Array\",0,[\"Value\",1]]},\
+  \"form\":\"composite\",\"id\":\"E_v1\"},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\
+  \":[\"Value\",1]},\"Root[P_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"\
+  batch\",\"n\":4,\"out\":0},{\"args\":[{\"refs\":{\"explicit\":[]},\"type\":1}],\"fn\":1,\"form\":\"call\",\"out\":1}],\
+  \"params\":[],\"ret\":{\"explicit\":[]},\"ret_type\":[\"Array\",0,[\"Value\",1]]},\"form\":\"composite\",\"id\":\"Root\
+  [P_v1]_v1\"}},\"program_fn\":\"P_v1\",\"root\":\"Root[P_v1]_v1\",\"schema\":\"verity-ir/descriptor/v2\",\"types\":[[\"\
+  Array\",4,[\"Value\",1]],[\"Array\",0,[\"Value\",1]]]}"
+
 /-- `encode` of what `decode` reads from `text`, as text; none where either refuses. -/
 private def reencode (text : String) : Option String :=
   match decode text.toUTF8 >>= Prog.encode with
@@ -236,6 +263,8 @@ private def reencode (text : String) : Option String :=
 #guard reencode HAND == some WRITTEN
 #guard reencode RECUT_WRITTEN == some RECUT_WRITTEN
 #guard reencode RECUT == some RECUT_WRITTEN
-#guard HAND != WRITTEN && RECUT != RECUT_WRITTEN
+#guard reencode EMPTY_WRITTEN == some EMPTY_WRITTEN
+#guard reencode EMPTY == some EMPTY_WRITTEN
+#guard HAND != WRITTEN && RECUT != RECUT_WRITTEN && EMPTY != EMPTY_WRITTEN
 
 end Flock.Program

@@ -19,7 +19,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.circuits import codec
+from verity.circuits import codec, refs
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity" / "circuits" / "difftest"
@@ -133,15 +133,15 @@ def test_encode_cases_hold_the_writers_form():
 
 
 _V, _A0 = ["Value", 1], ["Array", 0, ["Value", 1]]
-#: A writer's descriptor with empty parts at a position (`Affine.slice` past a value's end): Lean's `Part` holds an empty part's
-#: space alone, so its encoder writes `["n",0,0,0]` where the codec keeps `["n",0,3,0]`.
+#: Empty parts at a position, as `Affine.slice` past a value's end makes them, and an empty strided part: the decoders read
+#: them, and the format's one form of an empty part is `{"explicit": []}`.
 EMPTY_AT = codec.canonical_json({
     "schema": "verity-ir/descriptor/v2", "boolean": {}, "root": "Root[P_v1]_v1", "program_fn": "P_v1",
     "callees": ["Input1_v1", "E_v1"], "types": [["Array", 4, _V], _A0],
     "definitions": {
         "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": _V},
         "E_v1": {"form": "composite", "id": "E_v1", "bindings": {}, "body": {
-            "params": [["x", _A0]], "ret_type": _A0, "nodes": [], "ret": {"affine": ["p", 0, 0, 0]}}},
+            "params": [["x", _A0]], "ret_type": _A0, "nodes": [], "ret": {"strided": ["p", 0, 0, 1, 1, 1, 0]}}},
         "Root[P_v1]_v1": {"form": "composite", "id": "Root[P_v1]_v1", "bindings": {}, "body": {
             "params": [], "ret_type": _A0,
             "nodes": [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": 4},
@@ -149,13 +149,39 @@ EMPTY_AT = codec.canonical_json({
             "ret": {"affine": ["n", 1, 0, 0]}}}}}).decode()
 
 
-def test_codec_writes_an_empty_parts_position():
-    assert codec_encoding(EMPTY_AT, REGISTRY[next(t for n, t, _ in CASES if n == "format")]) == EMPTY_AT.encode()
+def test_encode_writes_an_empty_part_as_the_empty_explicit(server):
+    encoded = json.loads(server.call("encode", {"descriptor": EMPTY_AT})[1])["encoded"]
+    written = EMPTY_AT
+    for empty in ('{"strided":["p",0,0,1,1,1,0]}', '{"affine":["n",0,3,0]}', '{"affine":["n",1,0,0]}'):
+        written = written.replace(empty, '{"explicit":[]}')
+    assert encoded == written != EMPTY_AT
+    assert json.loads(server.call("encode", {"descriptor": encoded})[1])["encoded"] == encoded
 
 
-@pytest.mark.xfail(strict=True, reason="Lean's decoder drops an empty part's index and base, which the codec writes")
-def test_encode_writes_an_empty_parts_position(server):
-    assert json.loads(server.call("encode", {"descriptor": EMPTY_AT})[1])["encoded"] == EMPTY_AT
+@pytest.mark.xfail(strict=True, reason="waits for Python's `Affine.slice` to return the empty explicit, which lands after the "
+                   "amended decoders, which refuse an affine or strided part of count 0")
+def test_codec_writes_an_empty_part_as_the_encoder_does():
+    assert refs.Affine("n", 0, 3, 1).slice(1, 1).to_json() == {"explicit": []}
+
+
+def with_ports(text: str) -> str:
+    """``text`` with `ports` (§12) on its first primitive, in canonical form."""
+    d = json.loads(text)
+    key = next(k for k, e in sorted(d["definitions"].items()) if e["form"] == "primitive")
+    d["definitions"][key]["ports"] = {"ret": [[0, 1, {"interval": [0, 1]}]]}
+    return codec.canonical_json(d).decode()
+
+
+def test_lean_decodes_a_description_with_ports(server):
+    text = with_ports(next(t for n, t, _ in CASES if n == "format"))
+    assert json.loads(server.call("decode", {"descriptor": text})[1])["ok"] is True
+
+
+@pytest.mark.xfail(strict=True, reason="`Prog` keeps no ports, so `Prog.encode` writes none: they wait for `Defn.ports`, after "
+                   "the landing")
+def test_encode_writes_a_definitions_ports(server):
+    text = with_ports(next(t for n, t, _ in CASES if n == "format"))
+    assert json.loads(server.call("encode", {"descriptor": text})[1])["encoded"] == text
 
 
 def test_cases_reach_accepts_and_every_body_refusal():
