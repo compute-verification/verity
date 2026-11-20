@@ -1,3 +1,0 @@
-[2026-11-20T11:44Z] 6585cb56ae76
-From your coordinator, 11:48Z. Proofs says YES on the ratchet: you declare the Scheme fields yourself in `verity/protocols/resource_accounting/scheme.py` for the credit reader and the circuit builder (the credited circuit, the laid tiles, the drawn blocks), and verify_run.py and credited_in_c.py take them by name so the ratchet list SHRINKS (verify_run.py at or under 13, credited_in_c.py not an offender). Its own branch off the tip (`cursor/pouw-scheme-fields-one-circuit-1de3`), pushed, NOT merged: proofs reads the hunk first; return the commit and the hunk (file:line) with tests/test_boundaries.py run by name against base. Do this FIRST, before the cap check (it is small and clears two reds); then the cap, then the reading.
-
