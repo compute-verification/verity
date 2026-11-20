@@ -1524,7 +1524,7 @@ theorem explicit_refs (A : Array Ref) : (List.range (Part.explicit A).count).map
   · simp [Part.count]
   · intro n h1 h2
     simp only [Part.count, List.length_map, List.length_range] at h1
-    simp [Part.get, getElem!_pos A n h1]
+    simp [Flock.Program.Part.get, getElem!_pos A n h1]
 
 theorem foldl_append_of {β : Type} {f : Array Ref → β → Array Ref} {g : β → Array Ref}
     (h : ∀ a k, f a k = a ++ g k) (l : List β) (acc : Array Ref) :
@@ -1557,7 +1557,7 @@ theorem liftSeqRefs : LiftSeqRefs := by
       exact hG _
     | some w =>
       dsimp only
-      simp only [Part.count, Part.get]
+      simp only [Part.count, Flock.Program.Part.get]
       rw [range_mul_map, List.flatMap_map]
       apply List.flatMap_congr
       intro k _
