@@ -287,7 +287,6 @@ writers = [
 readers = [
     { lane = "compute-accounting", file = "benchmarks/pouw/pearl_c_vllm/served_passes.py", find = "passes / \"served\\.json\"\\)\\.read_text" },
     { lane = "proofs", file = "benchmarks/prove_path/prove_path.py", find = "d / \"retention\\.json\"|\"--pearl-passes\"" },
-    { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--pearl-passes \"\\$4\"" },
 ]
 
 [[message]]

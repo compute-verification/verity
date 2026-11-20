@@ -5,6 +5,7 @@ what it holds without the flag (`NEEDED`: the line is refused without it)."""
 from __future__ import annotations
 
 import dataclasses
+import importlib
 from typing import Any
 
 import pytest
@@ -55,7 +56,7 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("sampling_seed", ["--sampling-seed", "5"], 5, 20260917),
         ("dry_run", ["--dry-run"], True, False),
     ],
-    ("global-program",): [
+    ("verity_vllm.pipeline.global_program",): [
         ("workload", ["--workload", "w.json"], "w.json", NEEDED),
         ("derived", ["--derived", "d0", "--derived", "d1"], ["d0", "d1"], []),
         ("out", ["--out", "o"], "o", NEEDED),
@@ -66,22 +67,6 @@ LINES: dict[tuple[str, ...], list[tuple[str, list[str], Any, Any]]] = {
         ("follow_done", ["--follow-done", "done"], "done", None),
         ("follow_stop", ["--follow-stop", "stop"], "stop", None),
         ("theta_registered", ["--theta-registered"], True, False),
-    ],
-    ("manifest-verify",): [
-        ("manifest", ["--manifest", "m.json"], "m.json", NEEDED),
-        ("program", ["--program", "p.json"], "p.json", None),
-        ("workload", ["--workload", "w.json"], "w.json", None),
-        ("fixture", ["--fixture", "f.json"], "f.json", None),
-        ("programs_root", ["--programs-root", "programs"], "programs", None),
-        ("workload_digest", ["--workload-digest", "ab12"], "ab12", None),
-        ("profile", ["--profile", "a-profile"], "a-profile", None),
-        ("rank", ["--rank", "1"], 1, 0),
-        ("ranks", ["--ranks", "2"], 2, 1),
-        ("norm_scales", ["--no-norm-scales"], False, True),
-        ("router_softmax", ["--no-router-softmax"], False, True),
-        ("vocab_range", ["--no-vocab-range"], False, True),
-        ("query", ["--query", "q"], "q", None),
-        ("out", ["--out", "o.json"], "o.json", None),
     ],
     ("match",): [
         ("worker", ["--worker", "fold"], "fold", None),
@@ -195,7 +180,8 @@ def _in_a_directory_that_stores_no_workload(tmp_path, monkeypatch):
 
 
 def _read(command: tuple[str, ...], argv: list[str]) -> dict[str, Any]:
-    options = cli.parse(command[0], [*command[1:], *argv], {})
+    target = importlib.import_module(command[0]) if "." in command[0] else command[0]        # a module no command runs
+    options = cli.parse(target, [*command[1:], *argv], {})
     assert getattr(options, "cmd", command[-1]) == command[-1]                 # a command's part says which it is, to its `main`
     return {f.name: getattr(options, f.name) for f in dataclasses.fields(options) if f.init}
 
@@ -271,10 +257,3 @@ def test_a_flag_with_a_closed_list_of_values_refuses_another_and_says_the_list(c
     flag, _, _ = _row(command, field)
     said = _refusal(command, [*_line(command, but=field), flag[0], value], capsys)
     assert said.replace("'", "") == f"argument {flag[0]}: invalid choice: {value} (choose from {values})\n"       # quoted or not, by the Python
-
-
-def test_a_switch_of_the_manifest_s_check_is_on_by_its_own_name_and_off_by_its_no_form():
-    line = _line(("manifest-verify",), needed_only=True)
-    on = _read(("manifest-verify",), [*line, "--norm-scales", "--router-softmax", "--vocab-range"])
-    off = _read(("manifest-verify",), [*line, "--no-norm-scales", "--no-router-softmax", "--no-vocab-range"])
-    assert [(on[k], off[k]) for k in ("norm_scales", "router_softmax", "vocab_range")] == [(True, False)] * 3

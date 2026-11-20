@@ -16,7 +16,6 @@ from verity.circuits.codec import canonical_json
 from verity.circuits.program import RUN, input_id, is_input, is_registered
 
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
-from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
@@ -87,22 +86,6 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
     assert sum(n.gates for n in node.node_fn.body.nodes) == sum(n.gates for rp in ranks for n in rp.program.fn.body.nodes)
 
 
-@pytest.mark.parametrize("wrapper,shape", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 2})])
-def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
-    """`InferenceOnlyCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
-    is the parameters' input nodes, in order, then that Call, and the descriptor holds the body's nodes in its callee."""
-    node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), wrapper, **shape)
-    lowered = sum(len(RL.lower(t)) for _, t in node.program.fn.signature()[0])
-    root = node.program.root.body.nodes
-    assert len(root) == lowered + 1 and all(is_input(n.fn) for n in root[:-1])
-    assert root[-1].form == "call" and root[-1].fn is node.node_fn
-    s = node.summary()
-    assert (s["n_root_nodes"], s["body_nodes"], s["node_fn"]) == (lowered + 1, len(node.node_fn.body.nodes), node.node_fn.id)
-    d = node.desc
-    nodes = d["definitions"][d["root"]]["body"]["nodes"]
-    assert len(nodes) == lowered + 1 and nodes[-1]["form"] == "call"
-    callee = d["definitions"][d["callees"][nodes[-1]["fn"]]]
-    assert len(callee["body"]["nodes"]) == len(node.node_fn.body.nodes) == sum(hi - lo for _r, lo, hi in node.spans)
 
 
 @pytest.mark.slow
@@ -140,18 +123,18 @@ def test_the_node_command_writes_the_descriptor_and_prints_the_summary(tmp_path,
 
 
 def test_the_predict_command_hands_each_commands_options_to_the_module_that_runs_it(monkeypatch):
-    """`cli.main` is what the command line calls with a command's parsed options.  `node` is `cli`'s own, `node-registration`
-    `node_registration`'s, `compare`, `emit` and `row` `aot`'s and the two of `compiled` its own: each gets the options as
+    """`cli.main` is what the command line calls with a command's parsed options.  `node` is `cli`'s own, `compare`, `emit` and
+    `row` `aot`'s and the two of `compiled` its own: each gets the options as
     given, and what it returns is `main`'s."""
     pytest.importorskip("torch")  # as above
     from verity_vllm.program.predict import cli as CLI
-    for at, name in ((CLI, "node_main"), (CLI.NR, "main"), (CLI.A, "main"), (CLI.PC, "main")):
+    for at, name in ((CLI, "node_main"), (CLI.A, "main"), (CLI.PC, "main")):
         module = at.__name__.rsplit(".", 1)[-1]
         monkeypatch.setattr(at, name, lambda a, _by=module: (_by, a))
     made = {cmd: options(**{f.name: None for f in dataclasses.fields(options) if f.init and f.default is dataclasses.MISSING})
             for cmd, options in CLI.COMMANDS.items()}
     assert {cmd: CLI.main(a) for cmd, a in made.items()} == {
-        "node": ("cli", made["node"]), "node-registration": ("node_registration", made["node-registration"]),
+        "node": ("cli", made["node"]),
         **{cmd: ("aot", made[cmd]) for cmd in ("compare", "emit", "row")},
         **{cmd: ("compiled", made[cmd]) for cmd in ("compiled", "compiled-pin")}}
 

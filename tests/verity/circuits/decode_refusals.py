@@ -143,6 +143,32 @@ def _pairs(prim: str, param: list, refs: dict) -> dict:
             "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v2", "types": [v8, v16, pairs, param]}
 
 
+def _interleaved(periods: int) -> dict:
+    """`periods` 8-bit and `periods` 16-bit registered inputs, read by one grid of two lanes (period t: leaf t of each) as an
+    array of `periods` pairs `(V8, V16)` and passed to `C`: every reference is well typed, and the grid is two references
+    a period, so it is `2 * periods` references that a count states and no list writes."""
+    v8, v16, pair = ["Value", 8], ["Value", 16], ["Tuple", [["Value", 8], ["Value", 16]]]
+    pairs = ["Array", periods, pair]
+    grid = {"grid": [1, [["n", 0, 0, 1, [[periods, 1]]], ["n", 1, 0, 1, [[periods, 1]]]]]}
+    return {
+        "annotations": {}, "boolean": {},
+        "callees": ["RegisteredInput8_v1", "RegisteredInput16_v1", "C_v1"],
+        "definitions": {
+            "RegisteredInput8_v1": {"form": "primitive", "id": "RegisteredInput8_v1", "params": [], "ret": v8},
+            "RegisteredInput16_v1": {"form": "primitive", "id": "RegisteredInput16_v1", "params": [], "ret": v16},
+            "C_v1": {"form": "composite", "id": "C_v1", "bindings": {},
+                     "body": {"params": [["x0", pairs]], "nodes": [], "ret": {"affine": ["p", 0, 0, 1]}, "ret_type": v8}},
+            "R_v1": {"form": "composite", "id": "R_v1", "bindings": {},
+                     "body": {"params": [], "ret": {"affine": ["n", 2, 0, 1]}, "ret_type": v8,
+                              "nodes": [{"args": [], "axes": [], "fn": 0, "form": "batch", "n": periods, "out": 3},
+                                        {"args": [], "axes": [], "fn": 1, "form": "batch", "n": periods, "out": 4},
+                                        {"args": [{"refs": grid, "type": 2}], "fn": 2, "form": "call", "out": 0}]}},
+        },
+        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v2",
+        "types": [v8, v16, pairs, ["Array", periods, v8], ["Array", periods, v16]],
+    }
+
+
 def _static(d: dict, key: str, old: str, new: str, value) -> None:
     """The big descriptor's `TRow` rebound with static ``key`` as ``value``, its id and callee entry spelling the new record."""
     fid = next(f for f in d["definitions"] if f.startswith("TRow_v1{"))
@@ -174,6 +200,7 @@ CASES: list[tuple[str, object, object]] = [
     ("an input primitive with a parameter", tiny, lambda d: _set(d, ("definitions", "Input32_v1", "params"), [["a", V32]])),
     ("a gate primitive of another signature", tiny, lambda d: _set(d, ("definitions", "Xor2_v1", "ret"), ["Value", 2])),
     ("a callee naming no definition", tiny, lambda d: _set(d, ("callees", 1), "TAbsent_v1")),
+    ("a type index that is no integer", tiny, lambda d: _node(d, 2).update(out="x")),
     ("a callee that is no string", tiny, lambda d: _set(d, ("callees", 1), 5)),
     ("bindings that are no object", tiny, lambda d: _set(d, ("definitions", d["root"], "bindings"), 1)),
     ("a binding record of other keys than its id's", tiny, lambda d: _rekey_root(d, "Root[TTiny_v1]_v1{a=1,b=2}", a=1, c=2)),
@@ -217,6 +244,7 @@ CASES: list[tuple[str, object, object]] = [
     ("a scan whose xs is no array", big, lambda d: _scan_args(d)[1].update(type=_type_at(d, V32))),
     ("a scan whose xs element is another type", big, lambda d: _scan_args(d)[1].update(type=_type_at(d, ["Array", 2, ["Value", 16]]))),
     ("a scan whose shared argument is another type", big, lambda d: _scan_args(d)[2].update(type=_type_at(d, ["Value", 16]))),
+    ("a scan whose n_xs is no natural", big, lambda d: _node(d, 8).update(n_xs="x")),
     ("a scan whose n is not its xs length", big, lambda d: _node(d, 8).update(n=5)),
     ("an argument of a count of references other than its type's", tiny, lambda d: _ref(d, {"affine": ["n", 0, 0, 2]})),
     ("a return of a count of references other than its type's", tiny,
@@ -247,13 +275,21 @@ CASES: list[tuple[str, object, object]] = [
     ("a strided read of a parameter of mixed leaves as one width", lambda: _pairs("Sum4w8_v1", ["Array", 4, ["Value", 8]],
                                                                                  {"strided": ["p", 0, 0, 2, 1, 0, 4]}),
      lambda d: None),
+    ("a grid read in leaves of two widths past what is walked", lambda: _interleaved(2 ** 19 + 1), lambda d: None),
+    ("a grid read as a type of mixed leaves", lambda: _pairs("PairsGrid4_v1", ["Array", 2, ["Tuple", [["Value", 8], ["Value", 16]]]],
+                                                              {"grid": [1, [["p", 0, 0, 1, [[2, 4]]], ["p", 0, 0, 1, [[2, 2]]]]]}),
+     lambda d: None),
+    ("a grid whose lane reads leaves of two widths as one width", lambda: _pairs("SumGrid4w8_v1", ["Array", 4, ["Value", 8]],
+                                                                               {"grid": [1, [["p", 0, 0, 1, [[2, 4]]], ["p", 0, 0, 1, [[2, 1]]]]]}),
+     lambda d: None),
     ("a static function reference that is no string", big,
      lambda d: _static(d, "OP", '{"fn":"TAdd32_v1"}', '{"fn":5}', {"fn": 5})),
 ]
 
 
 #: the cases whose primitives are no one of `spec.REG`: the registry is the descriptor's own declarations
-DECLARED = ("a strided read of mixed leaves as a type of mixed leaves", "a strided read of a parameter of mixed leaves as one width")
+DECLARED = ("a strided read of mixed leaves as a type of mixed leaves", "a strided read of a parameter of mixed leaves as one width",
+            "a grid read as a type of mixed leaves", "a grid whose lane reads leaves of two widths as one width")
 
 
 def cases() -> list[tuple[str, str, object]]:
