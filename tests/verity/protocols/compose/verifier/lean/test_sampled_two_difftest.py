@@ -23,6 +23,9 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity.circuits import codec
+from verity.circuits.program import boolean_map
+from verity.circuits.restrict import _declared
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
 
@@ -210,11 +213,35 @@ def _at_two_levels(j: dict) -> dict:
     return {**{k: v for k, v in j.items() if k != "form"}, "levels": 2}
 
 
+def _v2(desc: dict) -> dict:
+    """A kept program descriptor at the schema the verifier reads: the case was kept at v1, which holds no Boolean
+    bodies, and no command remakes it while two levels are refused."""
+    if desc.get("schema") == codec.SCHEMA:
+        return desc
+    d = {**desc, "schema": codec.SCHEMA}
+    get = codec.definition_decoder(d, _declared(d))
+    p = codec.DecodedProgram(get(d["root"]), {}, d,
+                             tuple(get(f) for f in codec._record_function_ids(d["program_fn"]) if f in d["definitions"]))
+    p.boolean = boolean_map(p)
+    return codec.encode_program(p)
+
+
+def _kept_params(j: dict) -> dict:
+    j = copy.deepcopy(j)
+    for at, k in ((j["boundary"], "program"), (j["interior"]["params"], "program"), (j["interior"], "replay")):
+        at[k] = _v2(at[k])
+    return j
+
+
+def _params() -> dict:
+    return _kept_params(json.loads((_case_dir() / "params.json").read_text()))
+
+
 def _check(tmp_path: Path, params: dict | None = None, evidence: dict | None = None) -> subprocess.CompletedProcess:
     """`vstar-recursive sampled check` on the kept play, at two levels, its params or evidence replaced where given."""
     d = _case_dir()
     files = []
-    for name, given in (("params.json", params), ("evidence.json", evidence)):
+    for name, given in (("params.json", params if params is not None else _params()), ("evidence.json", evidence)):
         f = tmp_path / name
         f.write_text(canonical(_at_two_levels(given if given is not None else json.loads((d / name).read_text()))))
         files.append(f)
@@ -252,7 +279,7 @@ def test_two_levels_refuse_the_honest_play_on_one_window(tmp_path) -> None:
     root set to the boundary registration's is refused at its parameters and by name (`ONE_WINDOW`). The parameters
     still parse to the end, where the refusal is, which no refusal case above reaches: their interior names no
     members."""
-    params = json.loads((_case_dir() / "params.json").read_text())
+    params = _params()
     assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
     params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
     on = _check(tmp_path, params=params)
