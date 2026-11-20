@@ -79,8 +79,8 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
     loop's two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
     admission, so that one admitted two buckets late (`prompt_traffic`'s half a bucket, and the client's lag) still
     ends within the group's G windows; the check accepts the run."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
-    p = W.W63
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
+    p = sz.PARAMS
     for tokens in (2, 64):
         G = ws.group_windows(p, tokens)
         requests = [ws.id_request(model="m", user=f"user-{j}", prompt=[j + 1], max_tokens=tokens,
@@ -208,12 +208,11 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
     """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`id_form.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
-    from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-    traffic = ws.id_traffic(20, model="m", seed=2, max_tokens=(1, W.W63.egress_cells - 1))
-    assert traffic == ws.id_traffic(20, model="m", seed=2, max_tokens=(1, W.W63.egress_cells - 1))
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
+    traffic = ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    assert traffic == ws.id_traffic(20, model="m", seed=2, max_tokens=(1, sz.PARAMS.egress_cells - 1))
     assert all(1 <= x["ids"]["max_tokens"] <= 64 and all(i < 1 << 17 for i in x["ids"]["prompt"]) for x in traffic)
-    fields, P, B = traffic[0]["ids"], W.W63.payload, W.W63.cell_bytes
+    fields, P, B = traffic[0]["ids"], sz.PARAMS.payload, sz.PARAMS.cell_bytes
     request = ws.id_request(**fields, frame_bytes=B, offset=0)
 
     async def main() -> bytes:
@@ -229,12 +228,12 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
     data = asyncio.run(main())
     ids = ws.fake_ids(json.loads(request.partition(b"\r\n\r\n")[2]))
     assert data == ws.id_response(ids, P) and 1 <= len(ids) <= fields["max_tokens"]
-    assert data[len(ids) * P:] == IT.TRAILER
-    assert [IT.data_cell(x, 1, B)[IT.HEADER.size:IT.HEADER.size + P] for x in ids] == [
+    assert data[len(ids) * P:] == sz.IT.TRAILER
+    assert [sz.IT.data_cell(x, 1, B)[sz.IT.HEADER.size:sz.IT.HEADER.size + P] for x in ids] == [
         data[i:i + P] for i in range(0, len(ids) * P, P)]
     got = ws.parse_id_response(data, P)
     assert (got["ids"], got["complete"], got["completion_tokens"]) == (len(ids), True, len(ids))
-    assert not ws.parse_id_response(data[:-1], P)["complete"] and not ws.parse_id_response(data[:-len(IT.TRAILER)],
+    assert not ws.parse_id_response(data[:-1], P)["complete"] and not ws.parse_id_response(data[:-len(sz.IT.TRAILER)],
                                                                                             P)["complete"]
     assert not ws.parse_id_response(data.replace(b"data:", b"datum", 1), P)["complete"]
 

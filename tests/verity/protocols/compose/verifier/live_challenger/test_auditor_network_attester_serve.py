@@ -18,7 +18,7 @@ import pytest
 from verity.protocols.resource_accounting.network.prover import released_keys as RK
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _response, _run, _session_argv
-from tests.verity.protocols.resource_accounting.network.verifier import scan_traffic as ST
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz
 from verity.protocols.resource_accounting.network.verifier import load_check as LK, relay_check as RC, network_attester_rows as WR
 
 HERE = Path(__file__).resolve().parent
@@ -104,12 +104,12 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
     args = ws.parser().parse_args(A.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     p = ws._params(args)
-    assert args.ids and not args.fake and p == ST.W63.params
-    ST.W63.cls.serves(p)
+    assert args.ids and not args.fake and p == sz.PARAMS
+    sz.CLASS.serves(p)
     assert (p.every, p.program_slots, p.window_programs, p.delay) == (16, 4, 8, 27)
-    assert args.prompt_max <= ST.W63.cls.KI and min(args.max_tokens, p.egress_cells - 1) == ST.W63.cls.KO
+    assert args.prompt_max <= sz.CLASS.KI and min(args.max_tokens, p.egress_cells - 1) == sz.CLASS.KO
     assert (args.rate, args.seed, args.tail) == (A.NETWORK_ATTESTER_RATE, A.NETWORK_ATTESTER_SEED, A.NETWORK_ATTESTER_TAIL_S)
-    assert ST.schedule(ST.W63.params) == list(A.SCAN_SCHEDULE)
+    assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
     traffic = ws.traffic_of(args, "m")
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(0.6, 0.9)}
     sampled = ws.id_traffic(7, model="m", rate=A.NETWORK_ATTESTER_RATE, seed=A.NETWORK_ATTESTER_SEED, max_tokens=(1, 64))
@@ -120,9 +120,9 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     plain = ws.parser().parse_args(A.network_attester_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
 
-    window_s = ST.W63.params.window * ST.W63.params.bucket_ms / 1000
+    window_s = sz.PARAMS.window * sz.PARAMS.bucket_ms / 1000
     most = ws.id_traffic(A.NETWORK_ATTESTER_REQUESTS[1], model="m", rate=A.NETWORK_ATTESTER_RATE, seed=A.NETWORK_ATTESTER_SEED,
-                         max_tokens=(1, ST.W63.params.egress_cells - 1))
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
     for n in range(A.NETWORK_ATTESTER_REQUESTS[0], A.NETWORK_ATTESTER_REQUESTS[1] + 1):
         took = math.ceil((most[n - 1]["at"] + A.NETWORK_ATTESTER_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.network_attester_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
@@ -135,21 +135,22 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
     and which is the class of record's but for its egress cells, so the gate's group windows hold at it; and the gate
     bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
     egress cells past its KO + 1 = 5), so a w63k4 run needs its own."""
-    assert A.SCAN_CLASS == ST.W63.name and set(A.SCAN_CLASSES) == {"w63", "w63k4"} <= set(ST.SETUPS)
+    assert A.SCAN_CLASS == sz.W63.name and set(A.SCAN_CLASSES) == {"w63", "w63k4"} <= set(sz.SETUPS)
     (tmp_path / A.PROMPTS).write_text("[[1]]")
     for name in A.SCAN_CLASSES:
-        s = ST.SETUPS[name]
-        assert ST.schedule(s.params) == list(A.scan_schedule(scan_class=name)), name
+        s = sz.SETUPS[name]
+        assert sz.main(["schedule", "--class", name]) == 0
+        assert capsys.readouterr().out.split() == list(A.scan_schedule(scan_class=name)), name
         req = {"device": "warden", "requests": 4, "scan": True, "prompts": {"count": 1, "ids": 1}, "scan_class": name}
         args = ws.parser().parse_args(A.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
         params = ws._params(args)
-        assert params == s.params == dataclasses.replace(ST.W63.params, egress_cells=s.params.egress_cells), name
+        assert params == s.params == dataclasses.replace(sz.PARAMS, egress_cells=s.params.egress_cells), name
         s.cls.serves(params)
         assert A.scan_bounds(name) == ((1, s.cls.KI), (1, s.cls.KO)), name
         assert [ws.group_windows(params, t) for t in range(1, s.cls.KO + 1)] == \
             [A.scan_group_windows(t) for t in range(1, s.cls.KO + 1)], name
     with pytest.raises(ValueError, match="egress_cells"):
-        ST.W63K4.cls.serves(ST.W63.params)
+        sz.W63K4.cls.serves(sz.PARAMS)
 
 
 def test_the_gates_network_attester_windows_are_at_least_every_request_counts_phases_which_its_key_signs(tmp_path):
@@ -160,16 +161,16 @@ def test_the_gates_network_attester_windows_are_at_least_every_request_counts_ph
     most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     plain = ws.parser().parse_args(A.network_attester_command({"requests": 7}, tmp_path, "http://h:1")[2:])
     assert A.NETWORK_ATTESTER_WINDOW_MS == plain.window * plain.bucket_ms
-    assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == ST.W63.params.window * ST.W63.params.bucket_ms
+    assert A.SCAN["--window"] * A.SCAN["--bucket-ms"] == sz.PARAMS.window * sz.PARAMS.bucket_ms
     most, at = A.NETWORK_ATTESTER_REQUESTS[1], dict(rate=A.NETWORK_ATTESTER_RATE, seed=A.NETWORK_ATTESTER_SEED)
-    scan = {"ids": ws.id_traffic(most, model="m", max_tokens=(1, ST.W63.params.egress_cells - 1), **at),
-            "prompts": ws.prompt_traffic([[1]], most, model="m", params=ST.W63.params, max_tokens=24, **at)}
+    scan = {"ids": ws.id_traffic(most, model="m", max_tokens=(1, sz.PARAMS.egress_cells - 1), **at),
+            "prompts": ws.prompt_traffic([[1]], most, model="m", params=sz.PARAMS, max_tokens=24, **at)}
     varied = ws.varied_traffic(most, model="m", **at)
-    assert ws.prompt_traffic([[1]], 400, model="m", params=ST.W63.params, max_tokens=24, **at) == scan["prompts"][:400]
+    assert ws.prompt_traffic([[1]], 400, model="m", params=sz.PARAMS, max_tokens=24, **at) == scan["prompts"][:400]
 
     def windows(traffic, n, window_ms):
         return math.ceil((traffic[n - 1]["at"] + A.NETWORK_ATTESTER_TAIL_S) * 1000 / window_ms)
-    scan_ms = ST.W63.params.window * ST.W63.params.bucket_ms
+    scan_ms = sz.PARAMS.window * sz.PARAMS.bucket_ms
     for n in range(A.NETWORK_ATTESTER_REQUESTS[0], most + 1):
         assert all(windows(t, n, scan_ms) <= A.network_attester_windows(n) for t in scan.values()), n
         assert windows(varied, n, A.NETWORK_ATTESTER_WINDOW_MS) <= A.network_attester_windows(n, scan=False), n
@@ -192,7 +193,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     assert (args.ids, args.window_per_group, args.prompts, args.max_tokens, args.requests) == \
         (True, True, tmp_path / A.PROMPTS, 2, 7)
     params = ws._params(args)
-    assert params == ST.W63.params
+    assert params == sz.PARAMS
     assert [ws.group_windows(params, t) for t in range(1, A.NETWORK_ATTESTER_PROMPT_TOKENS[1] + 1)] == \
         [A.scan_group_windows(t) for t in range(1, A.NETWORK_ATTESTER_PROMPT_TOKENS[1] + 1)]
     G, window_s = A.scan_group_windows(2), params.window * params.bucket_ms / 1000
@@ -224,16 +225,16 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
     it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
     run."""
     lo, hi = A.SCAN_BUCKET_MS
-    assert lo == ST.W63.params.bucket_ms and hi * ST.W63.params.window > 60_000
+    assert lo == sz.PARAMS.bucket_ms and hi * sz.PARAMS.window > 60_000
     most = ws.id_traffic(A.NETWORK_ATTESTER_REQUESTS[1], model="m", rate=A.NETWORK_ATTESTER_RATE, seed=A.NETWORK_ATTESTER_SEED,
-                         max_tokens=(1, ST.W63.params.egress_cells - 1))
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
     height = A.REHEARSAL_HEIGHT[0]
     for tick in range(lo, hi + 1, 100):
         req = {"device": "warden", "requests": 7, "scan": True, "bucket_ms": tick}
         args = ws.parser().parse_args(A.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
         params = ws._params(args)
-        assert params == dataclasses.replace(ST.W63.params, bucket_ms=tick), tick
-        ST.W63.cls.serves(params)
+        assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
+        sz.CLASS.serves(params)
         window_s = params.window * tick / 1000
         assert A.network_attester_window_ms(req) == params.window * tick
         for n in range(A.NETWORK_ATTESTER_REQUESTS[0], A.NETWORK_ATTESTER_REQUESTS[1] + 1):
@@ -259,11 +260,11 @@ def test_the_gates_relay_session_is_session_at_the_scans_schedule_and_its_minute
     assert (args.command, args.upstream, args.listen, args.windows, args.height, args.out) == \
         ("session", ("127.0.0.1", 40001), ("127.0.0.1", 40002), 20, 10, tmp_path)
     assert args.ids and not args.fake and not args.watermark and args.egress == "id"
-    assert ws._params(args) == ST.W63.params and ST.W63.params.egress == "id"
+    assert ws._params(args) == sz.PARAMS and sz.PARAMS.egress == "id"
     for name in A.SCAN_CLASSES:
         given = ws.parser().parse_args(A.network_attester_command(req | {"scan_class": name, "watermark": True}, tmp_path,
                                                         "http://127.0.0.1:40001", listen=40002)[2:])
-        assert ws._params(given) == ST.SETUPS[name].params and given.watermark, name
+        assert ws._params(given) == sz.SETUPS[name].params and given.watermark, name
         rehearsal = {"device": "warden", "requests": 4, "scan": True, "scan_class": name, "prompts": {"count": 1}}
         (tmp_path / A.PROMPTS).write_text("[[1]]")
         assert ws._params(ws.parser().parse_args(A.network_attester_command(rehearsal, tmp_path, "http://h:1")[2:])) == \
@@ -277,7 +278,7 @@ def test_the_gates_relay_session_is_session_at_the_scans_schedule_and_its_minute
     for tick in range(lo, hi + 1, 100):
         at = ws.parser().parse_args(A.network_attester_command(req | {"bucket_ms": tick}, tmp_path, "http://h:1", listen=1)[2:])
         params = ws._params(at)
-        assert params == dataclasses.replace(ST.W63.params, bucket_ms=tick), tick
+        assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
         window_ms = params.window * tick
         for windows in range(A.SESSION_WINDOWS[0], A.SESSION_WINDOWS[1] + 1):
             minutes = A.session_minutes(windows, A.network_attester_height(windows), window_ms)
@@ -294,15 +295,15 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     `lanes` prompts."""
     longest = [[(1 << A.NETWORK_ATTESTER_PROMPT_ID_BITS) - 1] * A.NETWORK_ATTESTER_PROMPT_IDS[1]]
     assert A.NETWORK_ATTESTER_PROMPT_ID_BITS == ws.PROMPT_ID_BITS
-    assert (A.NETWORK_ATTESTER_PROMPT_IDS[1], A.NETWORK_ATTESTER_PROMPT_TOKENS[1]) == (ST.W63.cls.KI, ST.W63.cls.KO)
-    assert ws.read_prompts(json.dumps(longest).encode(), ST.W63.params) == longest
-    with pytest.raises(SystemExit, match=f"takes 48 ingress cells, past the schedule's {ST.W63.params.ingress_cells}"):
-        ws.read_prompts(json.dumps([[0] * 2098]).encode(), ST.W63.params)
+    assert (A.NETWORK_ATTESTER_PROMPT_IDS[1], A.NETWORK_ATTESTER_PROMPT_TOKENS[1]) == (sz.CLASS.KI, sz.CLASS.KO)
+    assert ws.read_prompts(json.dumps(longest).encode(), sz.PARAMS) == longest
+    with pytest.raises(SystemExit, match=f"takes 48 ingress cells, past the schedule's {sz.PARAMS.ingress_cells}"):
+        ws.read_prompts(json.dumps([[0] * 2098]).encode(), sz.PARAMS)
     for bad in (b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]', b"{}"):
         with pytest.raises(SystemExit, match="--prompts: "):
-            ws.read_prompts(bad, ST.W63.params)
+            ws.read_prompts(bad, sz.PARAMS)
     with pytest.raises(SystemExit, match="a group of 5 prompts, past the schedule's 4 lanes"):
-        ws.prompt_traffic([[1]] * 5, 5, model="m", params=ST.W63.params, max_tokens=2, window_per_group=True)
+        ws.prompt_traffic([[1]] * 5, 5, model="m", params=sz.PARAMS, max_tokens=2, window_per_group=True)
     (tmp_path / "p.json").write_text("[[1]]")
     base = ["rehearse", "--fake", "--out", str(tmp_path / "run")]
     for argv, why in ((["--prompts", str(tmp_path / "p.json")], "--prompts: id requests' prompts, with --ids"),

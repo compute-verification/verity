@@ -21,7 +21,7 @@ tensor-core wide-word codec on one GPU), `compile_cost`, `compute`, `dsa_topk`, 
 `baseline`), `prod_repro`, `proof_throughput` (`record`: one prover and two at once on one node's H200s), `prove`
 (`--system flock|spot`; `lean-verify`, the Lean verifier timed on one kept proof; `layers`, the proof benchmark by
 layer from its four runs, as `prove/README.md` says), `prove_path`, `poub_session`, `recursion_e2e` (`plan`, `run`,
-`result`, `table`, `store`), `replay_ladder`, `route_capture`, `serve_tax`, `serving_cost` (`minify RUN`,
+`result`, `table`, `store`), `replay_ladder`, `route_capture`, `scan_cost`, `serve_tax`, `serving_cost` (`minify RUN`,
 `exact`, `capture RUN`, `price`, `confirm`: "The serving cost in five stages"; `profile RUN`, a serving
 profile's stored result), `served_commit`, `served_errors`,
 `served_units` (`fp8-coord:K=6144`), `unit_block`, `unit_walk`, `verifier_cost` and `word_codec`.
@@ -410,6 +410,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `certifier_term/` | the network attester's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the workload's Programs (`workload/`): a Boolean MLP and vLLM's serving Program, which `verifier_cost` measures a verifier on | maintained |
 | `../calibration/attester_timing/` | the bits an interval a server moves through when the network attester releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `scan_cost/` | what the network attester's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `attester_load/` | what the network attester costs the requests it carries, at the application's schedule: the added time to a response's first and last byte through it against straight to the endpoint, the ticks' lateness at the capacity its schedule states, on a stub endpoint on a CPU and on a model on a card. The model arm's network attester runs in the bytes form, relaying vLLM's own framing, where the application's runs in the id form: the schedule and its cells' buckets are the same, and only what a cell may carry differs | maintained |
 | `mempool/` | vLLM's page pool as memory-checked RAM (`pool_ram`), held to vLLM's own pool on the encodings' traces (`difftest.py`), and `MemCheck_v1`'s pool vectors (`vectors.py`) | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |

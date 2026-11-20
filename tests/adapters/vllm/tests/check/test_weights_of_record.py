@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 import struct
 import subprocess
 import types
@@ -700,7 +701,7 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     with gzip.open(pd / "instances.json.gz", "wt") as f:
         json.dump(prog["instances"], f)
     (pd / "result.json").write_text(json.dumps(prog["result"]))
-    rc = cli.run(WR, ["--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
+    rc = cli.main(["weights-of-record", "--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
     assert rc == 0
     rec = json.loads((pd / "weights_of_record.json").read_text())
     assert rec["complete"] is True and rec["program_digest"] == "d" * 128 and rec["wrapper_prefix"] == PREFIX
@@ -736,7 +737,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     (root / "manifest.json").write_text(json.dumps({"program_digest": W, "component_digests": [A, B], "components": {"r0": {"program_digest": A, "LP": 4, "T": 2}, "r1": {"program_digest": B, "LP": 9, "T": 1}}}))
     # the CLI: derive from the first component, stamp the set, write beside the root
     out = tmp_path / "wor.json"
-    rc = cli.run(WR, ["--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
+    rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
     rec = json.loads(Path(out).read_text())
     assert rc == 0 and rec["of_record"] is True and rec["program_digest"] == A and rec["program_dir"].endswith("build_request_LP4_T2")
     ors = rec["of_record_set"]
@@ -783,9 +784,36 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     rec4 = WR.stamp_of_record_set(WR.build_record(str(r2 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r2))
     assert rec4["of_record"] is False and "not full sha512" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
-    assert cli.run(WR, ["--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
+    assert cli.main(["weights-of-record", "--programs-root", str(tmp_path / "empty"), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(tmp_path / "x.json")]) == 2
 
 
+@pytest.mark.usefixtures("code_versions_stood_in")
+def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersedes(checkpoint, tmp_path, monkeypatch):
+    """A record the CLI writes carries `derived` = {tool, code (git HEAD or null), at, sources (Program files, checkpoint
+    dir, checkpoints.json), argv, supersedes}; check() ignores it (digests are the evidence).  argv is the command's own flags, as the
+    process `verity-vllm weights-of-record ...` sees them."""
+    from verity_vllm.pipeline import row_records as R
+
+    d, man, t = checkpoint
+    prog, fields = _program()
+    pdir = tmp_path / "build_request_LP9_T2"
+    _write_program(pdir, prog, "d" * 128, 9, 2)
+    stale = pdir / "weights_of_record.stale-20260920T042250Z.json"
+    stale.write_text(json.dumps({"schema": WR.SCHEMA_V1, "program_digest": "d" * 128, "complete": True, "unpinned": []}))
+    out = pdir / "weights_of_record.json"
+    argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
+    monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
+    assert cli.main() == 0
+    rec = json.loads(Path(out).read_text())
+    dv = rec["derived"]
+    assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
+    assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
+    assert dv["sources"]["checkpoint_dir"] == str(d) and dv["sources"]["checkpoints_manifest"] == str(man)
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", dv["at"]) and (dv["code"] is None or re.fullmatch(r"[0-9a-f]{40}", dv["code"]))
+    assert WR.check(rec, live_digests(_served(t, fields)), program_digests_of_record={"d" * 128})["result"] is True
+    # the row's reuse rule accepts the freshly derived record (current schema, this Program)
+    (pdir / "result.json").write_text(json.dumps({"ok": True, "program_digest": "d" * 128, "LP": 9, "T": 2}))
+    assert R.wor_stale(str(out), str(pdir / "result.json"), WR.SCHEMA) == ""
 
 
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):

@@ -30,10 +30,10 @@ cr = _load("chain_record")
 def test_leak_counts_the_scans_terms_on_the_network_attester_run(tmp_path):
     import math
     from dataclasses import asdict
-    from verity.protocols.resource_accounting.network.verifier import network_attester as W
+    from verity.protocols.resource_accounting.network.prover import scan_zk as sz
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
-    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(W.W63)}))
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     scan = {"draw": {"honest": 65}, "T": 32}
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"accepted": True, "windows": 75}}))
     for request, why in ((None, "asks for no number of requests"), ({"client_port": 8012, "windows": 75}, "relay session"),
@@ -71,7 +71,7 @@ def test_leak_counts_the_scans_terms_on_the_network_attester_run(tmp_path):
         assert Fraction(rows["week", scope, "registered"]["eps"]) == n * Fraction(189_000, 2 ** 20)
     with pytest.raises(SystemExit, match="sampled 16 of 65"):
         cr.leak(run, {"draw": {"honest": 16}})
-    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(W.W63), "lanes": 8}}))
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
         cr.leak(run)
 

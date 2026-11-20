@@ -49,7 +49,7 @@ def _load(name: str) -> Any:
     return sys.modules[key]
 
 
-R, D, CV = _load("replay"), _load("derived"), _load("code_v1")
+R, C, D, CV = _load("replay"), _load("code"), _load("derived"), _load("code_v1")
 
 
 # --- from a trace ------------------------------------------------------------------------------------------------------

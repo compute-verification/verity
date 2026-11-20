@@ -32,8 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/c
 
 import auditor as G  # noqa: E402
 from tests.verity.protocols.resource_accounting.network.attester.test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.verifier import scan_traffic as ST  # noqa: E402
-from tests.verity.protocols.resource_accounting.network.verifier.scan_traffic import published  # noqa: E402
+from tests.verity.protocols.resource_accounting.network.prover.test_scan_zk import published, sz  # noqa: E402
 
 from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
 from verity.protocols.resource_accounting.network.verifier import blob_files as bf  # noqa: E402
@@ -83,7 +82,7 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
     lines = [json.loads(x) for x in witness]
     regs = [x["registration"] for x in lines if "registration" in x]
     public = [json.loads(x) for x in (run / "out" / "cells-certificates.jsonl").read_text().splitlines()]
-    assert len(regs) == 2 * ST.W63.windows and len(public) == len(lines)
+    assert len(regs) == 2 * sz.W63.windows and len(public) == len(lines)
     assert [x["certificate"] for x in public] == [
         {"key_id": r["certificate"]["key"], "link": r["link"], "direction": r["direction"], "window": r["window"],
          "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]} for r in regs]
@@ -101,7 +100,7 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
     assert WC.RC.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
     certified = (run / "witness" / "certified.jsonl").read_text().splitlines()
     certificates = (run / "out" / "certificates.jsonl").read_text().splitlines()
-    assert len(certified) == len(certificates) == 3 * ST.W63.windows
+    assert len(certified) == len(certificates) == 3 * sz.W63.windows
     assert all(x.endswith(", " + c[1:]) for x, c in zip(certified, certificates))
 
     record = tmp_path / "record"
@@ -139,19 +138,19 @@ def test_a_network_attester_runs_attestations_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
     got, private = WC.checked(run)
     assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
-    assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, ST.W63.windows)
-    assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (ST.W63.windows, [], 0)
+    assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
+    assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
-    assert io["accepted"] and io["requests"] == len(ST.W63.prompts) and not io["violations"]
-    assert [r["output"] for r in io["records"]] == [list(r) for r in ST.W63.responses]
+    assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
+    assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.network_attester.digest == params.digest and lw.windows == ST.W63.windows
+    assert lw.network_attester.digest == params.digest and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
-    assert len(pairs) == ST.W63.windows and refused == []
+    assert len(pairs) == sz.W63.windows and refused == []
     assert all(lw.certified(w, [r.certificate for r in pair]) for w, pair in enumerate(pairs))
 
     public = run / "out" / "certificates.jsonl"
@@ -163,7 +162,7 @@ def test_a_network_attester_runs_attestations_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path / "cell")
     path = run / "witness" / "responses.records"
     blobs = bf.read_blobs(path)
-    rec = RF.unpack_record(blobs[0], ST.W63.params.cell_bytes)
+    rec = RF.unpack_record(blobs[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
     grid = [list(row) for row in rec.grid]
     grid[t][j] = bytes([grid[t][j][0]]) + bytes(len(grid[t][j]) - 1)

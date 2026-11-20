@@ -1,6 +1,6 @@
-"""`cli.run(verdict_record)` -- a row's Commit verdict record (`check.verdict`), rebuilt from the row's evidence.
+"""`verity-vllm verdict` -- a row's Commit verdict record (`check.verdict`), rebuilt from the row's evidence.
 
-    cli.run(verdict_record) from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
+    verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
 """
 from __future__ import annotations
 

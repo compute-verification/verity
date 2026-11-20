@@ -25,7 +25,7 @@ sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for bench
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import network_attester as W  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _run  # noqa: E402
 
@@ -333,7 +333,7 @@ def test_the_gates_demo_traffic_through_the_network_attester_is_the_demo_stand_i
     (tmp_path / G.PROMPTS).write_bytes(G.network_attester_prompts(req, json.dumps(prompts).encode()))
     args = ws.parser().parse_args(G.network_attester_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
     params = ws._params(args)
-    assert params == W.W63 and (args.requests, args.max_tokens) == (4, 24)
+    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
     traffic = ws.traffic_of(args, S.Shape().name)
     assert [x["ids"]["prompt"] for x in traffic] == prompts
     assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}

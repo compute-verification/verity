@@ -38,7 +38,7 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     assert r.returncode == 0, r.stderr
     work = str(tmp_path / ".verity-work")
     paths = _paths(r.stdout)
-    assert {"WORK", "VENV", "HF_HOME", "FA2", "RT", "HOME", "XDG_CACHE_HOME", "UV_PYTHON_INSTALL_DIR",
+    assert {"WORK", "VENV", "HF_HOME", "FA2", "NT", "RT", "HOME", "XDG_CACHE_HOME", "UV_PYTHON_INSTALL_DIR",
             "TORCH_EXTENSIONS_DIR", "TRITON_CACHE_DIR", "VLLM_CACHE_ROOT", "CUDA_CACHE_PATH", "NATIVE_COLLECT_BUILD"} <= set(paths)
     assert all(p == work or p.startswith(work + "/") for p in paths.values()), paths
     assert f"uv and pip caches: {work}/.cache/" in r.stdout
@@ -48,7 +48,7 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     out = r.stdout.replace(work, "WORK").replace(tree, "TREE")   # either may sit under /workspace (a pod's checkout, a node's TMPDIR)
     assert "/workspace" not in out and "/root" not in out
     steps = [line.split(":", 1)[0][len("step "):] for line in r.stdout.splitlines() if line.startswith("step ")]
-    assert steps == ["bootstrap", "workload", "predict", "serve", "request", "stop"]
+    assert steps == ["bootstrap", "workload", "predict", "build", "serve", "request", "stop"]
     build = next(line for line in r.stdout.splitlines() if line.startswith("build: "))
     jobs = re.search(r"MAX_JOBS=(\d+) ", build)
     assert "head size 64 only" in build and jobs and 1 <= int(jobs[1]) <= (os.cpu_count() or 1), build

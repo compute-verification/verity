@@ -70,15 +70,15 @@ def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:
 
 
 def _certificates(evidence: bytes) -> dict:
-    """The attestations of a case's ``evidence``, each with its own fields alone (`kind_scan.ATTESTATION_DOC`'s):
+    """The attestations of a case's ``evidence``, each with its own fields alone (`scan_period.ATTESTATION_KEYS`):
     ``records``, each execution phase's records', and ``rows``, its row registrations'."""
-    keys = tuple(KS.ATTESTATION_DOC)
+    from verity.protocols.resource_accounting.network.prover.scan_period import ATTESTATION_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}
             for x in windows for r in x["registrations"]]
-    return {"records": [{k: c[k] for k in keys} for x in windows for c in x["certificates"]],
-            "rows": [{k: r[k] for k in keys} for r in rows]}
+    return {"records": [{k: c[k] for k in ATTESTATION_KEYS} for x in windows for c in x["certificates"]],
+            "rows": [{k: r[k] for k in ATTESTATION_KEYS} for r in rows]}
 
 
 def _dir(d: Path, case: dict, answer: dict) -> Path:

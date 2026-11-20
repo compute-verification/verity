@@ -29,7 +29,6 @@ from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcom
 from verity_vllm.check.verdict_names import OLD_TO_NEW
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import verdict_record as VR
 from verity_vllm.records.property_record import (
     REGISTRY,
     PropertyRecord,
@@ -505,7 +504,7 @@ def _row_dir(tmp_path, commit: dict, *, commit_pass: bool, rc: int, manifest_ver
     (d / "commit" / "verdict.json").write_text(json.dumps({"commit_pass": commit_pass, "runs_instrumented": 1, "runs_failed": 0 if commit_pass else 1, "first_fail_reason": None if commit_pass else "x",
                                                             "required_classes": list(CLASSES), "required_manifest": {"program_digest": "ab" * 32, "manifest_digest": "cd" * 32, "query": {"query_id": "Q_module_v1"}}}))
     (d / "commit" / "summary.json").write_text(json.dumps({"committer": "native_collect_v2b", "delta_wall_mean": 0.5}))
-    (d / "commit.log").write_text("$ verity-vllm commit --openings 64 --pairs 1 --required-manifest m.json\n")
+    (d / "commit.log").write_text("$ python -m verity_vllm.pipeline.commit --openings 64 --pairs 1 --required-manifest m.json\n")
     if manifest_verify_ok is not None:
         (d / "commit" / "manifest_verify.json").write_text(json.dumps({"ok": manifest_verify_ok, "manifest_digest": "cd" * 32}))
     (d / "global_match.json").write_text(json.dumps({"verdict": "PASS"}))
@@ -524,7 +523,7 @@ def test_from_record_pass_row_reads_its_own_execution_configuration(tmp_path):
     assert v.check("required_value_coverage/manifest_of_record_verified").outcome == V.PASS
     assert v.runs == {"instrumented": 1, "failed": 0, "control": 1, "not_pass_by_reconstruction": 0, "pairs": [0]}
     assert v.execution["engine_settings"]["openings"] == 64 and v.execution["committer"] == "native_collect_v2b"
-    out = cli.run(VR, ["from-record", str(d), "--rc", "0"])
+    out = cli.main(["verdict", "from-record", str(d), "--rc", "0"])
     assert out == 0 and V.CommitChecks.load(d / "verdict.json").outcome == V.PASS
 
 
@@ -534,7 +533,7 @@ def test_from_record_pre_p5_row_takes_rc_and_execution_from_its_commit_summary(t
     (d / "commit.log").unlink()
     (d / "commit_summary.json").write_text(json.dumps({"rc": 0, "pass": True, "committer": "native_collect_v2b", "collector_variant": "windowed",
                                                        "retention": "host", "engine_settings": {"openings": 64, "pairs": 1, "required_manifest": True},
-                                                       "cmd": "verity-vllm commit --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
+                                                       "cmd": "python -m verity_vllm.pipeline.commit --openings 64", "deprecated": "F-r19-int-21; see verdict.json"}))
     v = V.from_record(d)
     assert v.outcome == V.PASS and v.compat["rc"] == 0 and v.compat["commit_summary_pass"] is True
     assert v.execution["committer"] == "native_collect_v2b" and v.execution["engine_settings"]["openings"] == 64

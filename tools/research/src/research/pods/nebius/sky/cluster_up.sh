@@ -265,7 +265,7 @@ run sudo systemctl enable --now vy-store-evict.timer vy-store-evict-research.tim
 
 step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
 # A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform loads
-# libcuda.so.1. The task finds this copy on LD_LIBRARY_PATH; without the /dev/nvidia* devices it can't reach a
+# libcuda.so.1. The task finds this copy on LD_LIBRARY_PATH (jobs/config-run.yaml); without the /dev/nvidia* devices it can't reach a
 # GPU. Re-copied when the host's driver changes.
 drv=$(readlink -f /usr/lib/x86_64-linux-gnu/libcuda.so.1 2> /dev/null || true)
 if [ -z "$drv" ] || [ ! -r "$drv" ]; then

@@ -10,10 +10,9 @@ import json
 from typing import Any
 
 import pytest
-from verity_vllm.check import fold_compare as cmp
-from verity_vllm.observe.fold.fold import FoldResult, fold
 
-from tests.check.test_absent_commit_fields import left_out, put
+from tests.check.test_absent_commit_fields import put
+from tests.check.test_absent_link_fields import left_out
 from tests.observe.test_fold_synthetic import (
     BN,
     REQ,
@@ -22,6 +21,8 @@ from tests.observe.test_fold_synthetic import (
     toy_log,
     toy_profile,
 )
+from verity_vllm.check import fold_compare as cmp
+from verity_vllm.observe.fold.fold import FoldResult, fold
 
 TOKENS = [int(t) for t in SAMPLED]
 

@@ -1,9 +1,9 @@
 """The difftest of advice v1's in-circuit encoder (`verity.protocols.interface.charge.arith_encode`) against the advice
-code's coders (`advice_code.arith`'s `ArithEncoder`, `code_v1`), over what v1 actually codes.
+code's coders (`code.py`, `code_v1`), over what v1 actually codes.
 
-Every stream is `code_v1`'s: a list of windows, each one `ArithEncoder` segment with the symbols it took,
+Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
-integer's symbols, `ArithEncoder`'s state after each (low, high, pending, used) and the segment. With it come each bit's (name,
+integer's symbols, code.py's state after each (low, high, pending, used) and the segment. With it come each bit's (name,
 context, bit) from the book's priors (`kt`) and each window's charge (`charge`). Two sources:
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the arrival order's
   deviations; v1 sends no hits) under a book fit to them at v1's table caps with room for the hits, resumes and lag bits
@@ -16,7 +16,7 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
 
     python3 arith_vectors.py [LABEL=DIR ...] [--steps] [--circuit] [--cut N] [--out OUT.json] [--fixture PATH]
 
-checks `arith_encode`'s references against `ArithEncoder` on every stream (`check`), and with `--circuit` the Definitions too:
+checks `arith_encode`'s references against code.py on every stream (`check`), and with `--circuit` the Definitions too:
 the bit-checking step along each segment, the counting step's tally (each window's count is its segment's length, and
 its finish gives v1's charge), and the book's model (`BookKT_v1`) at each bit. On each decisions stream it holds
 `ChargeCount_v1`, one window's charge from its decisions alone, to `code_v1` (`check_charges`): its reference on each
@@ -48,8 +48,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline.advice_code.arith import ArithEncoder
-
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE.parents[2] / "tests" / "benchmarks" / "network_e2e" / "encodings" / "fixtures"
 
@@ -64,7 +62,7 @@ def _load(name: str) -> Any:
     return sys.modules[key]
 
 
-V, R, D, CV = _load("v1"), _load("replay"), _load("derived"), _load("code_v1")
+V, R, C, D, CV = _load("v1"), _load("replay"), _load("code"), _load("derived"), _load("code_v1")
 
 #: the step's scaling slots (`arith_encode.K_MAX`), the binding the vectors are cut for
 K = 18
@@ -81,7 +79,7 @@ FIXTURE = HERE.parents[2] / "tests" / "verity" / "protocols" / "resource_account
 
 
 def _ae() -> Any:
-    """`arith_encode`, for the checks only: the streams are `ArithEncoder`'s and v1's alone."""
+    """`arith_encode`, for the checks only: the streams are code.py's and v1's alone."""
     from verity.protocols.interface.charge import arith_encode as AE
     assert AE.K_MAX == K
     return AE
@@ -94,9 +92,9 @@ def _wc() -> Any:
 
 @contextmanager
 def _coded() -> Iterator[tuple[list[dict[str, list]], list[list]]]:
-    """Every `ArithEncoder` opened inside: its symbols, tagged, and its state after each; and each bit
+    """Every `code.ArithEncoder` opened inside: its symbols, tagged, and its state after each; and each bit
     `code_v1.Encoder.bit` codes, as (name, context, bit)."""
-    E, Enc = ArithEncoder, CV.Encoder
+    E, Enc = C.ArithEncoder, CV.Encoder
     init, enc, put_bit, flag = E.__init__, E.encode, Enc.bit, Enc._flag
     logs: list[dict[str, list]] = []
     kt: list[list] = []
@@ -390,7 +388,7 @@ def _look(seg: Sequence[int], pos: int, k: int) -> list[int]:
 
 
 def general(sym: Sequence[int]) -> list[int]:
-    """A tagged symbol as `ArithEncoder`'s (cum, freq, total): a bit's is v1's `encode(f0 if bit else 0, f1 if bit else f0,
+    """A tagged symbol as code.py's (cum, freq, total): a bit's is v1's `encode(f0 if bit else 0, f1 if bit else f0,
     f0 + f1)`."""
     if sym[0]:
         _, b, f0, f1 = sym
@@ -404,10 +402,10 @@ def _chunks(xs: Sequence, n: int = 4096) -> Iterator[Sequence]:
 
 
 def check(stream: dict, *, circuit: bool, rng: random.Random | None = None, flips: int = 8) -> dict[str, Any]:
-    """The references against `ArithEncoder` on the stream: after each symbol low and high are `ArithEncoder`'s, a run is open
-    exactly when `ArithEncoder` has pending bits, `used` is `ArithEncoder`'s, and the window's finish ends its segment; a sample of
+    """The references against code.py on the stream: after each symbol low and high are code.py's, a run is open
+    exactly when code.py has pending bits, `used` is code.py's, and the window's finish ends its segment; a sample of
     single-bit flips, a trailing bit and a dropped bit are refused (`check_window`). The counting step's tally after each
-    symbol is `ArithEncoder`'s interval and the bits consumed, and each window's counting finish gives v1's charge and refuses
+    symbol is code.py's interval and the bits consumed, and each window's counting finish gives v1's charge and refuses
     one bit less. The book's model gives each bit's estimate, and each decision's context is
     min(run, 2) of the decisions before it. With `circuit`, the Definitions against the references on every step and
     finish (on a flipped lookahead and a disabled step at each symbol too) and every bit's model."""
@@ -539,7 +537,7 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
 
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="advice v1's in-circuit encoder against `ArithEncoder`'s, symbol for symbol.")
+    ap = argparse.ArgumentParser(description="advice v1's in-circuit encoder against code.py's, symbol for symbol.")
     ap.add_argument("traces", nargs="*", help="LABEL=DIR: trace-corpus traces")
     ap.add_argument("--steps", action="store_true", help="the replay's step-trace fixtures and the corpus fixture")
     ap.add_argument("--stops", default="128001", help="the corpus traces' stop ids, comma-separated, EOS first")

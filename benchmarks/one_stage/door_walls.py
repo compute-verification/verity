@@ -268,6 +268,13 @@ def internal_read() -> tuple[bytes, dict]:
     return _bytes(program), query
 
 
+def network_scan() -> tuple[bytes, dict]:
+    """The network scan's units: `scan_zk.scan_root` over its own templates (start, ingress, egress) at its test class
+    and T = 4 buckets."""
+    root, query = _accounting().network_scan()
+    return _bytes(root), query
+
+
 def lean_odd() -> tuple[bytes, dict]:
     """lean's second case: C(a : Array 3 (Value 1), b : Value 1) = Not b, a field of 3 bits followed by another."""
     from verity.circuits import boolean as BL
@@ -286,7 +293,7 @@ def lean_odd_wide() -> tuple[bytes, dict]:
 
 BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
     "one_linear": one_linear, "chain": chain, "test_class": test_class, "class_of_record": class_of_record,
-    "pearl_plus": pearl_plus, "pous_setup": pous_setup,
+    "pearl_plus": pearl_plus, "pous_setup": pous_setup, "network_scan": network_scan,
     "lean_case": lean_case, "lean_case_wide": lean_case_wide, "lean_odd": lean_odd,
     "lean_odd_wide": lean_odd_wide, "internal_read": internal_read}
 

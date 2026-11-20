@@ -31,7 +31,7 @@ import pytest
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
 import served_session as SS  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS  # noqa: E402
+from verity.protocols.resource_accounting.network.prover import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
 #: the challenger host's address as the environment holds it, here a documentation address, and the gate `SS.GATE` is then
@@ -82,7 +82,7 @@ else:
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
-    assert (SS.KI, SS.KO) == (IS.W63.KI, IS.W63.KO) and SS.PROMPT_IDS == 256 < SS.KI
+    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
     a.minutes = SS.A.network_attester_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")

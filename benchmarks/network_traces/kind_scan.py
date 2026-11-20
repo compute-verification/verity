@@ -111,7 +111,7 @@ ONE_STAGE = {
     "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
-#: an attestation, the network attester's in the clear
+#: an attestation (`scan_period.ATTESTATION_KEYS`), the network attester's in the clear
 ATTESTATION_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
 #: the execution phase's attestations: its records' and
 #: its row registrations', each with its own fields alone

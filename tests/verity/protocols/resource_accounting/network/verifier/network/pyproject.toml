@@ -24,7 +24,7 @@ untraced = [
 # the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
 # the network attester's runs (`relay_runs`), which the rows audit's agreement test holds both checks to
 # the Python reference of the load's check (`load_reference`), which the load's agreement test holds the Lean check to
-inputs = ["tests/verity/circuits/stand_in.py", "verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "tools/difftest/python/verity_difftest",
           "tests/verity/protocols/resource_accounting/network/attester/relay_runs.py",
           "tests/verity/protocols/resource_accounting/network/verifier/load_reference.py"]
 

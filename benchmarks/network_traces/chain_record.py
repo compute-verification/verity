@@ -196,7 +196,7 @@ SCOPES = ("link", "datacenter", "world")
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network attester's accepted transcripts can carry about the secret, per monitoring period on
     its gate run ``run`` (a fetched copy: its ``request.json``, ``end.json`` and ``deployment.json``), for the scan's class
-    (`ingress_scan.W63`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
+    (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
     certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed
     (`leak_bounds.at_link_rate`) as the census's reference datacenter has machines (`leak_bounds.datacenter_links`)
     and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
@@ -209,6 +209,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     nothing holds its requests to one."""
     import leak_bounds as LB
     from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
     from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
     from verity.protocols.resource_accounting.network.verifier import network_attester as W
     weights = LB.WEIGHTS if weights is None else weights
@@ -223,7 +224,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     if v.get("accepted") is not True:
         raise SystemExit(f"leak: {run}'s end isn't accepted, and the gate holds only an accepted end's requests to "
                          "the number its request asked for")
-    params, cls = W.NetworkAttesterParams(**dep["params"]), IS.W63
+    params, cls = W.NetworkAttesterParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window + 1
     sampled = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
