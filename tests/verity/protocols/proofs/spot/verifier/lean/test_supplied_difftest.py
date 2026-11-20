@@ -58,9 +58,14 @@ def reference(j):
         if binding is not None and not (isinstance(binding, dict) and isinstance(binding.get("stream"), str)
                                         and isinstance(binding.get("prover"), str)):
             raise ValueError("binding")
+        keys = j.get("attester_keys", [])
+        if not (isinstance(keys, list) and all(isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h) for h in keys)):
+            raise ValueError("attester_keys")
+        pinned = [bytes.fromhex(h) for h in keys]
         held = {f: bytes.fromhex(h) for f, h in coins.items()}
         commit = {f: bytes.fromhex(h) for f, h in commitments.items()}
-        G.order(ms, {v: G.of_mark(held, commit, v, m) for v, m in ms.items()}, held, commit, j.get("released"), len(log))
+        G.order(ms, {v: G.of_mark(held, commit, v, m, pinned) for v, m in ms.items()}, held, commit, j.get("released"),
+                len(log))
         out = {}
         for v, m in ms.items():
             w = G._nat(widths.get(v))
@@ -68,7 +73,7 @@ def reference(j):
                 raise ValueError("width")
             out[v] = [G.row_leaves_of(r, lambda k, n: G._source_bytes(rec, v, k, n, list(ms), log, binding), w,
                                       m["layout"] == "digest")
-                      for r in G.of_mark(held, commit, v, m)]
+                      for r in G.of_mark(held, commit, v, m, pinned)]
             c = j["cuts"].get(v) if isinstance(j.get("cuts"), dict) else None
             if c is not None:
                 if not (isinstance(c, list) and len(c) == 2 and all(G._nat(x) is not None for x in c)):
@@ -227,6 +232,7 @@ def test_the_registrys_list_is_the_formats():
 
 
 ROUND, HEADER, CONTEXT = "pous.session.round_coin/v1", "pous.session.header/v1", "pous.session.context/v1"
+MESSAGE = "pous.session.message/v1"
 #: the circuits' own test of the three bodies: the vectors, `held` (the verifier's coins and commitments) and `REFUSALS`, each
 #: a refusal with its text, which Lean is held to here
 _CASES = Path(__file__).parents[6] / "verity" / "circuits" / "test_supplied.py"
@@ -234,6 +240,8 @@ _spec = importlib.util.spec_from_file_location("session_cases", _CASES)
 CASES = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(CASES)
 VECTORS = CASES.VECTORS
+#: the configuration's pin of the memory attester's key, hex
+PINNED = [h.hex() for h in CASES.PINNED]
 
 
 def fixed(label: str, n: int) -> bytes:
@@ -247,37 +255,38 @@ def fixed(label: str, n: int) -> bytes:
 def mark_of(fn: str, args: dict, head: int | None = None) -> dict:
     if fn == ROUND:
         return {"supplied": fn, "args": args, "layout": "halves", "bits": 96}
-    bits = 848 if fn == CONTEXT else 8 * (head + head % 2)
+    bits = 848 if fn == CONTEXT else 512 if fn == MESSAGE else 8 * (head + head % 2)
     return {"supplied": fn, "args": args, "layout": "le", "bits": bits}
 
 
 def session_instance(fn: str, args: dict, tables: tuple[dict, dict], bits: int | None = None, released=...) -> dict:
     """One input marked ``fn`` read at 16-bit leaves, the verifier holding ``tables``, its ``(coins, commitments)``, and the
-    round coin's and the header's release (the coin held under each) at place 1 unless ``released`` says otherwise (None: no
+    round coin's, the header's and the message's release (the coin held under each) at place 1 unless ``released`` says otherwise (None: no
     places)."""
     mark = mark_of(fn, args, args.get("head"))
     if bits is not None:
         mark = {**mark, "bits": bits}
     coins, commitments = tables
-    released = {fn: 1} if released is ... and fn in (ROUND, HEADER) else None if released is ... else released
+    released = {fn: 1} if released is ... and fn in (ROUND, HEADER, MESSAGE) else None if released is ... else released
     return {"program": desc([["x0", 1, mark]], [2]), "coins": {f: c.hex() for f, c in coins.items()},
-            "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {"x0": 16}, "record": RECORD, "log": [],
-            "binding": BINDING, **({} if released is None else {"released": released})}
+            "commitments": {f: c.hex() for f, c in commitments.items()}, "attester_keys": PINNED, "widths": {"x0": 16},
+            "record": RECORD, "log": [], "binding": BINDING, **({} if released is None else {"released": released})}
 
 
 @functools.cache
 def honest(k: int, blocks: int, key_label: int, seed: int, picks: tuple[int, ...]) -> dict:
     """A session the memory attester writes: ``k`` coins over ``blocks`` blocks, each at ``picks[j] % blocks``: the commitment
     the verifier holds before its first coin (the header's fields, the key by its hash, the LMS key and the place), and what
-    the session releases after it (the openings and the coin key, how it ended and its rounds)."""
-    session = fixed(f"session{seed}", 32)
+    the session releases after it (the openings and the coin key, how it ended and its rounds, the message and its
+    signature). The LMS key, the message and its signature are the vectors', over their session."""
+    session = bytes.fromhex(VECTORS["commitment"]["session"])
     key = MA.HM96.key_from_label(f"difftest-key{key_label}".encode())
     salts = [fixed(f"salt{seed}/{j}", MA.HM96.salt_bytes) for j in range(k)]
     tree = MA.CoinTree(session, blocks, [picks[j] % blocks for j in range(k)], key, salts)
     c = MA.SessionCommitment(session, tree.root, key, blocks, k, 854_000 + seed, 2056, fixed(f"binding{seed}", 64))
     return {"commitment": {n: v for n, v in c.to_json().items() if n != "coin_key"}, "coin_key": key.hex(),
             "ended": "complete", "rounds": k, "place": 0,
-            "key": (fixed(f"lms-I{seed}", 16) + fixed("lms-root", 64)).hex(),
+            "key": VECTORS["key"], "message": VECTORS["message"], "signature": VECTORS["signature"],
             "openings": [tree.opening(j).to_json() for j in range(k)]}
 
 
@@ -347,6 +356,16 @@ MUTATIONS = {
     "key upper": lambda d, j: d.update(key=d["key"].upper()),
     "key number": lambda d, j: d.update(key=5),
     "no key": lambda d, j: d.pop("key"),
+    "message short": lambda d, j: d.update(message=d["message"][2:]),
+    "message upper": lambda d, j: d.update(message=d["message"].upper()),
+    "message number": lambda d, j: d.update(message=5),
+    "no message": lambda d, j: d.pop("message"),
+    "message flipped": lambda d, j: d.update(message=_flip(d["message"])),
+    "key unpinned": lambda d, j: d.update(key=_flip(d["key"], 40)),
+    "signature flipped": lambda d, j: d.update(signature=_flip(d["signature"], 200)),
+    "signature short": lambda d, j: d.update(signature=d["signature"][:-2]),
+    "signature leaf": lambda d, j: d.update(signature="00000001" + d["signature"][8:]),
+    "no signature": lambda d, j: d.pop("signature"),
     "ended late": lambda d, j: d.update(ended="late"),
     "ended number": lambda d, j: d.update(ended=1),
     "no ended": lambda d, j: d.pop("ended"),
@@ -389,6 +408,7 @@ def sessions(draw) -> dict:
     commit = CASES.text({x: doc[x] for x in ("commitment", "key", "place") if x in doc})
     coin = CASES.text({x: doc[x] for x in ("openings", "coin_key", "carried", "coin_root") if x in doc})
     ended = CASES.text({x: doc[x] for x in ("ended", "rounds") if x in doc})
+    signed = CASES.text({x: doc[x] for x in ("message", "signature") if x in doc})
     if draw(st.integers(0, 6)) == 0:
         commit = _formed(commit, draw(st.sampled_from(COMMITMENT_NUMBERS)), draw(st.sampled_from(NUMBER_FORMS)))
     if draw(st.integers(0, 6)) == 0:
@@ -402,19 +422,24 @@ def sessions(draw) -> dict:
     if draw(st.integers(0, 24)) == 0:
         ended = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
     raw = lambda t: t.encode("latin-1") if t == "\xff" else t.encode()  # noqa: E731
-    coins = {ROUND: raw(coin), HEADER: raw(ended)}
-    commitments = {f: raw(commit) for f in (ROUND, HEADER, CONTEXT)}
     if draw(st.integers(0, 24)) == 0:
-        coins.pop(draw(st.sampled_from([ROUND, HEADER])))
+        signed = draw(st.sampled_from(["{", "[]", "null", "", "\xff"]))
+    coins = {ROUND: raw(coin), HEADER: raw(ended), MESSAGE: raw(signed)}
+    commitments = {f: raw(commit) for f in (ROUND, HEADER, CONTEXT, MESSAGE)}
     if draw(st.integers(0, 24)) == 0:
-        commitments.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT])))
-    fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT]))
+        coins.pop(draw(st.sampled_from([ROUND, HEADER, MESSAGE])))
+    if draw(st.integers(0, 24)) == 0:
+        commitments.pop(draw(st.sampled_from([ROUND, HEADER, CONTEXT, MESSAGE])))
+    fn = draw(st.sampled_from([ROUND, ROUND, HEADER, HEADER, CONTEXT, MESSAGE]))
     tables = (coins, commitments)
     if fn == ROUND:
         placed = draw(st.sampled_from([{ROUND: 1}] * 8 + [{ROUND: 0}, {ROUND: 3}, {}, None]))
         return session_instance(fn, {"round": rnd}, tables, draw(st.sampled_from([96, 96, 96, 64])), placed)
     if fn == CONTEXT:
         return session_instance(fn, {}, tables, draw(st.sampled_from([848, 848, 848, 832])))
+    if fn == MESSAGE:
+        placed = draw(st.sampled_from([{MESSAGE: 1}] * 8 + [{MESSAGE: 0}, {MESSAGE: 3}, {}, None]))
+        return session_instance(fn, {}, tables, draw(st.sampled_from([512, 512, 512, 496])), placed)
     head = max(1, _head_of(tables) + draw(st.sampled_from([0, 0, 0, 0, 0, 0, -1, 1])))
     placed = draw(st.sampled_from([{HEADER: 1}] * 8 + [{HEADER: 0}, {HEADER: 3}, {}, None]))
     return session_instance(fn, {"head": head}, tables, 8 * (head + head % 2) if draw(st.integers(0, 9)) else 8 * head, placed)
@@ -450,7 +475,8 @@ def test_the_storage_sessions_bodies_agree(pieces):
 
 VECTOR_CASES = [(f"round {j}", ROUND, {"round": j}, VECTORS["round_coin"][j], "halves", 32) for j in range(3)] + [
     ("the header", HEADER, {"head": VECTORS["head"]}, VECTORS["header"], "le", 16),
-    ("the context", CONTEXT, {}, VECTORS["context"], "le", 16)]
+    ("the context", CONTEXT, {}, VECTORS["context"], "le", 16),
+    ("the message", MESSAGE, {}, VECTORS["message"], "le", 16)]
 
 
 @needs_lake
@@ -517,7 +543,8 @@ def _programmed(marks, tables, released) -> dict:
     inputs = [[f"x{i}", 1, mark_of(fn, args, args.get("head"))] for i, (fn, args) in enumerate(marks)]
     coins, commitments = tables
     return {"program": desc(inputs, [2] * len(inputs)), "coins": {f: c.hex() for f, c in coins.items()},
-            "commitments": {f: c.hex() for f, c in commitments.items()}, "widths": {f"x{i}": 16 for i in range(len(marks))},
+            "commitments": {f: c.hex() for f, c in commitments.items()}, "attester_keys": PINNED,
+            "widths": {f"x{i}": 16 for i in range(len(marks))},
             "record": RECORD, "log": [], "binding": BINDING, "released": released}
 
 
