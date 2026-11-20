@@ -130,7 +130,9 @@ if "error" in r:
     print(f"WINDOW-STRINGS window {k}: none\nWINDOW-RECORD window {k}: none, {str(r['error'])[:200]}")
     sys.exit(0)
 s, t = r["strings"], r["strings"].get("twin") or {}
-print(f"WINDOW-STRINGS window {k}: {s['ports']} ports, card ({s['where']}) {s['acquired']} units in {s['acquired_s']} s, host "
+# handed strings (the card's, made at its close) carry no acquired_s: their time is the handoff's, under the lease
+card_s = f" in {s['acquired_s']} s" if "acquired_s" in s else ""
+print(f"WINDOW-STRINGS window {k}: {s['ports']} ports, card ({s['where']}) {s['acquired']} units{card_s}, host "
       f"{s['host']} units in {s['host_s']} s; twin on {t.get('ports')} of {t.get('of')} fed ports ({t.get('units')} units): "
       + ("EQUAL" if t.get("equal") else f"NOT EQUAL {t.get('unequal')}"))
 wc = json.loads(wc.read_text()) if wc.is_file() and wc.stat().st_size else None
