@@ -181,7 +181,7 @@ def lean_case_wide() -> tuple[bytes, dict]:
     return _rooted(_composite("WallsLeanWide", ps, Value(1), lambda B, S, a, b: B.call(BL.NOT, b)), ps, Value(1))
 
 
-def pearl_plus() -> tuple[bytes, dict]:
+def pearl_plus(n: int = 1) -> tuple[bytes, dict]:
     """Pearl+'s credited linear (`credited_in_c.py`'s C at its default size, K,TM,TN,N,M = 256,1,1,1,2, with its
     reader), laid under the composer's limit as its stage lays it."""
     import importlib.util
@@ -190,8 +190,13 @@ def pearl_plus() -> tuple[bytes, dict]:
     m = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = m
     spec.loader.exec_module(m)
-    program = LY.lay(m.linear(256, 2, 1, (1, 1), True).program, m.fits)
+    program = LY.lay(m.linear(256, 2, n, (1, 1), True).program, m.fits)
     return _bytes(program), LY.query(program)
+
+
+def pearl_plus_wide() -> tuple[bytes, dict]:
+    """`pearl_plus` at N = 64 columns, each reader row 128 bytes."""
+    return pearl_plus(64)
 
 
 def pous_setup() -> tuple[bytes, dict]:
@@ -231,7 +236,7 @@ def lean_odd_wide() -> tuple[bytes, dict]:
 
 BUILDERS: dict[str, Callable[[], tuple[bytes, dict]]] = {
     "one_linear": one_linear, "chain": chain, "test_class": test_class, "class_of_record": class_of_record,
-    "pearl_plus": pearl_plus, "pous_setup": pous_setup, "network_scan": network_scan,
+    "pearl_plus": pearl_plus, "pearl_plus_wide": pearl_plus_wide, "pous_setup": pous_setup, "network_scan": network_scan,
     "lean_case": lean_case, "lean_case_wide": lean_case_wide, "lean_odd": lean_odd,
     "lean_odd_wide": lean_odd_wide}
 
