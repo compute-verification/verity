@@ -117,13 +117,15 @@ TILE = "PearlPlusTileCoreWords_v5"
 #: strata number blocks other than its root units, one template each, on which the stratified bound rests; a root unit
 #: of the laid C lies partly inside a tile's gates, so the rule places it in no tile; a root unit carries the tile's id and
 #: is not the registry's tile at its statics, so `tile_macs` of them says nothing of what it computes; a tile's device or
-#: inert-work bounds are not the kernel scheme of record's (`scheme_statics`); C laid has a digest
+#: inert-work bounds are not the kernel scheme of record's (`scheme_statics`); a tile's N is not its linear's columns in
+#: C (`tile_columns`); C laid has a digest
 #: other than the one registered before any coin, so its tiles are not those of the C the blocks are proved against
 TILE_ABSENT = "tile-absent"
 BLOCK_NOT_UNIT = "tile-block-not-unit"
 TILE_STRADDLES = "tile-straddles"
 TILE_FOREIGN = "tile-body-foreign"
 TILE_SCHEME = "tile-statics-not-the-scheme"
+TILE_COLUMNS = "tile-columns-not-the-linears"
 C_DIGEST = "tile-c-digest-differs"
 #: `credited_tiles`' refusals: a stratum holding a tile's block lacks its registered count of drawn blocks with a
 #: verdict, so the audit is not one that passed (an empty audit included); a verdict names a block of no stratum; a tile
@@ -162,12 +164,13 @@ class LaidTile:
 
 
 #: Every static of `TILE`, by what holds it. ``credit``: `tile_macs` reads it. ``scheme``: `KERNEL` fixes it at the tile's
-#: shape (its device, its tile inert-work bound ρ = 1/RHO, its row bound ρr = 1/RHOR), `scheme_statics`. ``free``: TM,
-#: the tile's rows with its filler rows, which its body holds to zero word for word and `tile_macs` does not count; N, the
-#: linear's columns, which its body's inert-work bound reads only as the row's credit over N columns divided by N, so
-#: the bound stays 1/RHO of the tile's own cells. A static not listed here is refused (`scheme_statics`).
+#: shape (its device, its tile inert-work bound ρ = 1/RHO, its row bound ρr = 1/RHOR), `scheme_statics`. ``columns``: N,
+#: the linear's columns, held to the columns C gives the linear (`tile_columns`): the inert-work bound charges the tile
+#: TN/N of its forming, so an N above the linear's would admit more inert work. ``free``: TM, the tile's rows with its
+#: filler rows, which its body holds to zero word for word, `tile_macs` does not count, and the bound charges the forming
+#: of, so a TM above the tile's rows admits no more. A static not listed here is refused (`scheme_statics`).
 TILE_STATICS: Mapping[str, str] = MappingProxyType({"K": "credit", "TR": "credit", "TN": "credit", "DEV": "scheme",
-                                                    "RHO": "scheme", "RHOR": "scheme", "TM": "free", "N": "free"})
+                                                    "RHO": "scheme", "RHOR": "scheme", "N": "columns", "TM": "free"})
 SCHEME_STATICS = tuple(s for s, why in TILE_STATICS.items() if why == "scheme")
 
 
@@ -187,6 +190,48 @@ def scheme_statics(fn: Any) -> str | None:
         return f"has no shape {KERNEL} binds ({type(e).__name__}: {e})"
     if bad := [s for s in SCHEME_STATICS if b.get(s) != want[s]]:
         return ", ".join(f"{s} = {b.get(s)!r} where {KERNEL} binds {want[s]!r}" for s in bad)
+    return None
+
+
+def tile_columns(program: Any, partition: Any, tiles: Sequence[tuple[int, Any]]) -> str | None:
+    """Why a tile's N is not the columns C gives its linear, or None when every tile's is: each tile ``(u, fn)``, root
+    unit u of ``partition`` (C's template partition), reads its W operand (port ``b``, one column tile of TN rows of W)
+    as one whole row of a parameter of C, whose rows are the linear's column tiles, so the linear has TN × its rows
+    columns, which must be the tile's N; and every row of that parameter is read by some tile, so no column C does not
+    compute counts toward N."""
+    from verity.circuits.refs import runs
+
+    spans = []
+    for i, (name, _t) in enumerate(program.fn.signature()[0]):
+        rs = list(runs(program.input_coll(i).refs))
+        if rs and all(x[3] == y[2] for x, y in zip(rs, rs[1:])):
+            spans.append((range(rs[0][2], rs[-1][3]), name))
+    read: dict[str, set[int]] = {}
+    rows_of: dict[str, int] = {}
+    for u, fn in tiles:
+        at, per = 0, None
+        for name, t in fn.signature()[0]:
+            if name == "b":
+                per = t.leaves
+                break
+            at += t.leaves
+        gates = list(partition.inputs(u)[at:at + (per or 0)])
+        hit = next(((r, v) for r, v in spans if gates and gates[0] in r), None)
+        if per is None or hit is None:
+            return f"C's root unit {u} reads its W operand from no parameter of C"
+        (r, v), off = hit, gates[0] - hit[0].start
+        if len(r) % per or off % per or gates != list(range(gates[0], gates[0] + per)):
+            return f"C's root unit {u} reads its W operand as no one whole row of parameter {v!r}"
+        rows, b = len(r) // per, fn.bindings
+        if b["N"] != rows * b["TN"]:
+            return (f"C's root unit {u} binds N = {b['N']}, and parameter {v!r}, its W operand, holds {rows} column "
+                    f"tiles of TN = {b['TN']}: {rows * b['TN']} columns")
+        read.setdefault(v, set()).add(off // per)
+        rows_of[v] = rows
+    for v, got in read.items():
+        if unread := sorted(set(range(rows_of[v])) - got):
+            return (f"no tile of C reads column tile {unread[0]} of parameter {v!r}, so its {rows_of[v]} column tiles "
+                    "are not the linear's columns C computes")
     return None
 
 
@@ -251,7 +296,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
     C's gates in C's order, a laid root unit is the tile's whose gates in C hold its gates, and no tile's where none do.
     C must hold a tile (`TILE_ABSENT`), each tile's device and inert-work bounds must be `KERNEL`'s at its shape
     (`TILE_SCHEME`, `scheme_statics`), each tile must be the registry's `TILE` at its statics, its body and every
-    Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), and the laid C must be the one ``registered`` names, its
+    Definition it reaches (`TILE_FOREIGN`, `foreign_tile`), each tile's N the columns C gives its linear (`TILE_COLUMNS`,
+    `tile_columns`), and the laid C must be the one ``registered`` names, its
     `codec.program_digest` registered before any coin (`C_DIGEST`): the tiles credited are those of the C the
     blocks are proved against. ``strata`` are the laid C's (`verity.circuits.partition_query.strata` under its
     template-instance query): their blocks must be its root units, each of the one template its stratum names
@@ -274,6 +320,8 @@ def laid_tiles(program: Any, fits: Callable[..., bool], strata: Sequence[tuple[s
         if why := foreign_tile(fn):
             raise ValueError(f"{TILE_FOREIGN}: C's root unit {u} carries {TILE}'s id and {why}, so its statics' MACs "
                              "are not what it computes")
+    if why := tile_columns(program, before, tiles):
+        raise ValueError(f"{TILE_COLUMNS}: {why}")
     laid = LY.lay(program, fits)
     if (got := program_digest(laid)) != registered:
         raise ValueError(f"{C_DIGEST}: C laid has digest {got[:16]}…, and the digest registered before any coin is "

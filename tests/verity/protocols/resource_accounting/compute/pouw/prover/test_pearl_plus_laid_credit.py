@@ -1,5 +1,6 @@
-"""Pearl+'s credit over C as its laying lays it (`scheme.laid_tiles`, `scheme.credited_tiles`): C is two tiles, of linears
-of one and two columns so that their kinds differ, and one unit of no tile, laid under a limit below the wired core's
+"""Pearl+'s credit over C as its laying lays it (`scheme.laid_tiles`, `scheme.credited_tiles`): C is three tiles, a linear
+of one column and one of two whose W is one parameter of two rows, so that their kinds differ, and one unit of no tile,
+laid under a limit below the wired core's
 ANDs, so the laying opens the core as it does at the served K = 2048; each laid block is its tile's by the gates it holds,
 and the tiles are credited all or none, on an audit that drew every stratum holding a tile's block at its count. The
 fixture's tiles are a test instance's (K = 256 at 1 × 1), so an audit of them that passes is refused, crediting nothing."""
@@ -15,7 +16,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.rows import Bf16AddRow
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, tuple_of
-from verity.circuits.types import Tuple, Value
+from verity.circuits.types import Array, Tuple, Value
 from verity.protocols.resource_accounting.compute.pouw import scheme as PS
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pearl_plus_credited as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.pearl_c_call import ands
@@ -24,24 +25,34 @@ SCHEME = "pearl-c-h100-v1-h3"
 K = 256
 
 
-@pytest.fixture(scope="module")
-def c():
-    ts = [PC.tiles(SCHEME, K, 1, n, tile=(1, 1))[0] for n in (1, 2)]
+def _c_of(ts, w2_rows: int = 2) -> Program:
+    """A C of ``ts`` and one residual add: the first tile's ports its own parameters, the others' too but their W
+    operands, which are the rows (each tile's column tile) of one parameter ``w2`` of ``w2_rows`` rows."""
     sigs = [t.core.signature() for t in ts]
     add = bind(Bf16AddRow, N=1)
     add_sig, add_ret = add.signature()
-    params = (*((f"{p}{i}", t) for i, (sig, _r) in enumerate(sigs) for p, t in sig),
+    shared = [i > 0 for i in range(len(ts))]
+    params = (*((f"{p}{i}", t) for i, (sig, _r) in enumerate(sigs) for p, t in sig if not (shared[i] and p == "b")),
+              *((("w2", Array(w2_rows, dict(sigs[-1][0])["b"])),) if any(shared) else ()),
               *((f"{p}_add", t) for p, t in add_sig))
 
     def body(B, S, *xs):
-        it = iter(xs)
-        outs = [B.call(t.core, *[next(it) for _ in sig]) for t, (sig, _r) in zip(ts, sigs)]
-        z = B.call(add, *[next(it) for _ in add_sig])
+        held = dict(zip((v for v, _ in params), xs))
+        outs = [B.call(t.core, *[held["w2"][t.col] if shared[i] and p == "b" else held[f"{p}{i}"] for p, _ in sig])
+                for i, (t, (sig, _r)) in enumerate(zip(ts, sigs))]
+        z = B.call(add, *[held[f"{p}_add"] for p, _ in add_sig])
         return tuple_of(*(Coll(r, o.refs) for o, (_s, r) in zip(outs, sigs)), z)
 
     root = CompositeDefinition("PearlPlusLaidCreditC", 1, (), lambda S: (params, Tuple(*(r for _s, r in sigs), add_ret)),
                                body, register=False)
-    program = Program(root, registered=[v for v, _ in params])
+    return Program(root, registered=[v for v, _ in params])
+
+
+@pytest.fixture(scope="module")
+def c():
+    ts = [PC.tiles(SCHEME, K, 1, 1, tile=(1, 1))[0], *PC.tiles(SCHEME, K, 1, 2, tile=(1, 1))]
+    add = bind(Bf16AddRow, N=1)
+    program = _c_of(ts)
     laid = LY.lay(program, _fits(ts))
     strata = PQ.strata(laid, LY.query(laid))
     return ts, program, laid, strata, PS.laid_tiles(program, _fits(ts), strata, program_digest(laid)), descriptor_id(add)
@@ -70,7 +81,7 @@ def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) ->
     assert not any(tid.startswith(PC.PearlPlusTileCoreWired.id) for tid, _rs in strata), "the laying opens the core"
     per, whole = count(laid), count(program)
     of = {u: tid for tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
-    assert [t.index for t in tiles] == [0, 1]
+    assert [t.index for t in tiles] == [0, 1, 2]
     for t, tile in zip(tiles, ts):
         assert sum(per[of[b]].ands for b in t.blocks) == whole[descriptor_id(tile.core)].ands
         assert sum(t.kinds.values()) == len(t.blocks) and len(t.kinds) > 6
@@ -79,13 +90,13 @@ def test_a_tiles_laid_blocks_hold_all_its_ands_and_it_is_credited_its_macs(c) ->
 
 @pytest.mark.slow
 def test_a_unit_of_another_tile_or_of_none_is_not_counted(c) -> None:
-    """Slow: as above: the two tiles' blocks are disjoint, each in its own gates, and the unit of no tile is in neither."""
+    """Slow: as above: the tiles' blocks are disjoint, each in its own gates, and the unit of no tile is in none."""
     _ts, _program, _laid, strata, tiles, add = c
-    first, second = (set(t.blocks) for t in tiles)
+    held = [set(t.blocks) for t in tiles]
     (reader,) = _units(strata, add)
-    assert not first & second and reader not in first | second
-    assert first | second | {reader} == {u for _tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
-    assert tiles[0].gates[1] <= tiles[1].gates[0] and max(first) < min(second)
+    assert all(not a & b for i, a in enumerate(held) for b in held[i + 1:]) and reader not in set().union(*held)
+    assert set().union(*held) | {reader} == {u for _tid, rs in strata for lo, hi in rs for u in range(lo, hi)}
+    assert all(s.gates[1] <= t.gates[0] and max(a) < min(b) for s, t, a, b in zip(tiles, tiles[1:], held, held[1:]))
 
 
 @pytest.mark.slow
@@ -165,6 +176,19 @@ def _forged_c(forged) -> Program:
     return Program(root, registered=[v for v, _ in sig])
 
 
+@pytest.mark.slow
+def test_a_tile_whose_n_is_not_its_linears_columns_is_refused(c) -> None:
+    """Slow: the two-column linear's tile is built once by the module's C. Its N (2) held to the columns C gives its
+    linear: alone, reading a W of one column tile, it is refused, and beside its own W of two column tiles of which no
+    tile reads the second, it is refused too; each by name."""
+    ts, *_ = c
+    with pytest.raises(ValueError, match=PS.TILE_COLUMNS):
+        PS.laid_tiles(_forged_c(ts[1].core), lambda *_: True, [], "")
+    with pytest.raises(ValueError, match=PS.TILE_COLUMNS) as e:
+        PS.laid_tiles(_c_of([ts[0], ts[1]]), lambda *_: True, [], "")
+    assert "column tile 1" in str(e.value)
+
+
 def _tile_named(body, signature=None) -> CompositeDefinition:
     """A Definition under the tile's name, version and statics, its own ``body`` and ``signature`` (the tile's when
     None)."""
@@ -225,7 +249,7 @@ def test_every_tile_static_is_read_by_the_credit_rule_pinned_to_the_scheme_or_fr
     """The tile's statics are exactly the classified ones, a static added to the Definition fails here; the credited
     ones are those `tile_macs` reads, and the scheme of record binds each pinned one."""
     assert set(PC.PearlPlusTileCoreWords.statics) == set(PS.TILE_STATICS)
-    assert set(PS.TILE_STATICS.values()) == {"credit", "scheme", "free"}
+    assert set(PS.TILE_STATICS.values()) == {"credit", "scheme", "columns", "free"}
     credit = {s for s, why in PS.TILE_STATICS.items() if why == "credit"}
     assert PS.tile_macs(dict.fromkeys(credit, 1)) == 1
     assert set(PS.SCHEME_STATICS) <= set(PC.credited_product(SCHEME, K, 1, 1, 1, 1).bindings)
@@ -240,6 +264,39 @@ def test_the_scheme_of_record_is_the_lean_credits() -> None:
     records = Path(PS.__file__).parent / "verifier/lean/pearlplus/PouwPearlPlus/Records.lean"
     (name,) = re.findall(r'^def NAME : String := "([^"]+)"$', records.read_text(), re.M)
     assert PS.KERNEL == name == SCHEME
+
+
+def test_the_device_and_bounds_the_scheme_binds_are_the_lean_credits() -> None:
+    """The DEV, RHO and RHOR `scheme_statics` holds a tile to (`credited_product` under `KERNEL`) are what the Lean credit
+    rule takes at that shape: the tile's bound ρ = `Rule.INERT_BOUND_NUM` / `INERT_BOUND_DEN`, the row's ρ widened by
+    `Rule`'s factor at a census K (`Records.Scheme.censusKs`) and ρ elsewhere, and the device whose prices are
+    `Records`' (`FADD`, `BF16_MAC`, `FORMING`, `G`)."""
+    from fractions import Fraction
+    from pathlib import Path
+    import re
+
+    from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
+
+    lean = Path(PS.__file__).parent / "verifier/lean/pearlplus/PouwPearlPlus"
+    rule, records = (lean / "Rule.lean").read_text(), (lean / "Records.lean").read_text()
+
+    def nat(text: str, name: str) -> int:
+        (v,) = re.findall(rf"^def {name} : Nat := (\d+)(?: \+ (\d+))?$", text, re.M)
+        return int(v[0]) + int(v[1] or 0)
+
+    rho = Fraction(nat(rule, "INERT_BOUND_NUM"), nat(rule, "INERT_BOUND_DEN"))
+    ((k_census, k_min_gt),) = re.findall(r"censusKs \(s : Scheme\) : List Nat := if (\d+) < s\.kMin then \[(\d+)\]",
+                                         records)
+    (k_min,) = re.findall(r"^  kMin : Nat := (\d+)$", records, re.M)
+    (widen,) = re.findall(r"widen := if s\.censusKs\.contains u\.k then (\d+) else 1", rule)
+    census = [int(k_min_gt)] if int(k_census) < int(k_min) else []
+    for k in (256, 1024, 2048):
+        b = PC.credited_product(SCHEME, k, 1, 1, 1, 1).bindings
+        assert Fraction(1, b["RHO"]) == rho, k
+        assert Fraction(1, b["RHOR"]) == rho * (int(widen) if k in census else 1), k
+        d = DEVICES[b["DEV"]]
+        assert (d.prices.fadd, d.prices.bf16_mac, d.prices.forming, d.g) == \
+            (nat(records, "FADD"), nat(records, "BF16_MAC"), nat(records, "FORMING"), nat(records, "G")), k
 
 
 @pytest.mark.parametrize("static", ["RHO", "RHOR", "DEV"])
