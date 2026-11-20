@@ -22,6 +22,7 @@ import pous_fakes
 import pous_test_signer as ts
 import pytest
 
+from verity.commitments import session_coins as SC
 from verity.runtime import sources as S
 from verity.party import Send
 from verity.protocol import ProtocolDef
@@ -83,7 +84,7 @@ def test_the_split_session_is_the_periods() -> None:
     assert sid.hex() == p.case["params"]["session_id"]
     assert [r.index for r in session.signed.rounds] == [r.index for r in mine.signed.rounds]
     assert rounds == CS.WARMUPS + len(session.signed.rounds) == CS.WARMUPS + point.k
-    assert session.signed.ended == mc.COMPLETE
+    assert session.signed.ended == SC.COMPLETE
     inputs = period.setup_inputs(p.setup_case)
     a = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, session, sid, TEST_ID,
                       setup_inputs=inputs)
@@ -281,7 +282,7 @@ def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
     sid, session = _audit_session(point, published, lambda i: blocks[i], signer, salts, log)
     assert sid == CS.session_id(AUDIT, published.commitment, published.salt) == session.commitment.session
     assert sid == hashlib.sha512(CS.SESSION_ID_TAG + AUDIT + published.commitment + published.salt).digest()[:32]
-    assert sid in log and session.signed.ended == mc.COMPLETE
+    assert sid in log and session.signed.ended == SC.COMPLETE
     inputs = period.setup_inputs(p.setup_case)
     ok = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, session, sid, TEST_ID,
                        setup_inputs=inputs)
