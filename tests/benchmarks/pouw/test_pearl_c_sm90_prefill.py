@@ -31,9 +31,7 @@ KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "com
 
 
 def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a run.py too.  Not the suite's
-    `conftest.load`: test_pearl_c_vllm.py runs this file by path, and the suites of benchmarks/one_stage and
-    benchmarks/pouw/pearlplus_lean run that test, where `conftest` is not this suite's."""
+    """The module at `path` under its own name: other trees in the suite have a run.py too."""
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, path)
         mod = sys.modules[name] = importlib.util.module_from_spec(spec)

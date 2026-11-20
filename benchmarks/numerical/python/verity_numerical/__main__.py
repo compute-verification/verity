@@ -17,7 +17,6 @@ JOBS: dict[str, tuple[str, str]] = {
     "generate": ("bench.generate", "write synthetic input sets, one or a named suite, and register them in the evidence store"),
     "fixture_sets": ("bench.fixture_sets", "rewrite, add to or check the synthetic input sets Flock's tests read"),
     "instances": ("bench.instances", "build, verify or summarize the hash-pinned input set bench-instances/v1"),
-    "subcircuit_catalog": ("bench.subcircuit_catalog", "build the catalog of every census subcircuit's Boolean export"),
     "unit_costs": ("bench.unit_costs", "count what one unit of each served workload's unit types costs as a Boolean circuit"),
     "unit_costs_padding": ("bench.unit_costs_padding", "price proving an audit's sampled proof blocks in fixed-shape sessions"),
     "unit_costs_prover": ("bench.unit_costs_prover", "fit the inner prover's time and memory per session from recorded runs"),
@@ -28,7 +27,6 @@ JOBS: dict[str, tuple[str, str]] = {
     "placement": ("bench.placement", "probe a machine's identity and check where a run's parties are placed"),
     "sweep": ("checker.sweep", "run the reference checker over bench-instances/v1"),
     "search": ("checker.search", "search the checker's gadgets for an accepted wrong output"),
-    "search_v2": ("checker.v2.search", "the same search over the v2 gadgets"),
 }
 
 

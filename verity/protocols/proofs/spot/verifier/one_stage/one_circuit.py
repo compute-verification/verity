@@ -5,7 +5,6 @@ it does not yet derive, each refusing by name (`NotDerived`)."""
 from __future__ import annotations
 
 import json
-import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -18,6 +17,7 @@ from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_
 from verity.circuits.program import input_id
 
 from .certified_rows import _fields
+from . import lean_child as LC
 
 PREFIX = "one-circuit: not derived yet: "
 
@@ -250,8 +250,8 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
     with tempfile.TemporaryDirectory(prefix="one-circuit-lower-") as d:
         src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
         src.write_bytes(c_s)
-        p = subprocess.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
-                            PO.digest(partition), digests, str(dst)], capture_output=True, text=True)
+        p = LC.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
+                    PO.digest(partition), digests, str(dst)])
         if p.returncode != 0:
             raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
         return dst.read_bytes()

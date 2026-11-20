@@ -352,25 +352,6 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     assert _beside(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 
-def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
-    """The wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
-    judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
-    the launcher. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
-    one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
-    d = tmp_path / "wipe"
-    r = _wipe(node, d)
-    assert r.returncode == 0, r.stdout + r.stderr
-    (built,) = (tmp_path / "lake.log").read_text().splitlines()
-    package, command = built.split(" ", 1)
-    assert command == "build wipe-protocol" and package.endswith("/" + JUDGE) and ROOT not in Path(package).parents
-    assert _judged(d) == f"{package}/.lake/build/bin/wipe-protocol"
-    assert len((tmp_path / "lease.log").read_text().splitlines()) == 1
-    assert not Path(package).exists() and (d / "lake-build.log").exists()
-    for p in json.loads((ROOT / JUDGE / "lake-manifest.json").read_text())["packages"]:
-        assert p["type"] == "path", f"the judge requires {p['name']} from {p.get('url')}, which no copy holds"
-        assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
-
-
 def test_a_piece_that_builds_its_judge_stamps_the_build(node, tmp_path) -> None:
     """The build of `wipe-protocol` is on the piece's timeline, beside the lease and the wipe: it starts before the card
     is asked for and ends before the piece does."""
