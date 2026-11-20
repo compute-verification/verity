@@ -3,7 +3,8 @@
 # synthetic set (seed 20260928) staged by verity_flock.circuit (circuit.txt, the verifier's pub-8.bin), proved by a
 # selftest build (seed-injection, on seed coins) in loopback sessions of several tables: sessions/j2 (J = 2, no draw),
 # sessions/j2-draw (J = 2, `--draw subset:4`, two sessions) and sessions/j4 (J = 4, no draw), each with its live verdicts
-# (index.jsonl: each refused for its form, several tables without --zk, once every check has passed). The staged verifier's files and the sessions go into the evidence store as a fixture (`research data put
+# (index.jsonl; each record's verdict refuses its form, several tables without --zk, and keeps the verdict without that
+# refusal, `without_refusal`). The staged verifier's files and the sessions go into the evidence store as a fixture (`research data put
 # --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names (else they are out/fixture). Run from the verity tree
 # (research run --cwd source); CPU only. It exits nonzero unless every session passed every check of its server.
 # env: FLOCK_WORK=/workspace, or where /workspace isn't writable /workspace/cache/session-tables (the prover build and its venv)
@@ -64,8 +65,8 @@ run() {  # name J sessions [serve args...]
   # the server refuses the form (several tables without --zk) once every check has passed, as Lean does: its verdict without
   # the refusal is the sessions' own
   local got=$(python3 -c 'import json, sys
-print(sum(bool(d.get("accepted") or (d.get("without_refusal") or {}).get("accepted"))
-          for d in map(json.loads, open(sys.argv[1])) if d.get("session")))' $S/sessions/$name/index.jsonl 2>/dev/null)
+vs = [json.load(open(p))["verdict"] for p in sys.argv[1:]]
+print(sum(bool(v["accepted"] or (v.get("without_refusal") or {}).get("accepted")) for v in vs))' $S/sessions/$name/l*/session.json 2>/dev/null)
   echo "$name: $got of $n pass every check of the server"
   [ "$got" = "$n" ] || OK=0
 }

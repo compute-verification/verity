@@ -3,7 +3,7 @@
 # `cs_table`, 12 rows: the 8 instances' distinct cs rows and 4 decoys, permuted, read a whole row by each of 8 RoPEHead
 # Calls), proved by the pinned upstream 967b8d06 build (UP, its `upstream-967b8d06`) over its public-output statement,
 # which the tree no longer composes: the circuit and public files come from that statement's composer, verity
-# 31f68948601^ (inputs/src.tar.gz, `git archive 31f68948601^ packages/verity/src backends/numerical/python
+# 31f68948601 (inputs/src.tar.gz, `git archive 31f68948601 packages/verity/src backends/numerical/python
 # backends/flock/python protocols/sampled_proofs integrations/vllm`), bound to this tree's program and partition objects
 # (stage/program.json, stage/partition.json, their digests in META). Loopback serve/prove and offline replay of three
 # statements (registered, fresh, afresh), then the vectors: honest, fresh-salts and afresh (their own pub.bin), and the
