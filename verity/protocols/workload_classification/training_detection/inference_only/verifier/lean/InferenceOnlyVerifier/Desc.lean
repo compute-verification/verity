@@ -266,10 +266,11 @@ pieces can name different nodes' outputs (a batch member returning leaves of sev
 read is kept, and its inference block found, by its first piece. Copies that shift stay one read, since they lie in one node: they
 name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
 offsets a callee's into one member), and copies naming leaves never shift. A rowed segment's reads are its pieces, each
-one lane's every period. -/
+one lane's rows of the segment's copies. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
-  if s.reps == 1 || s.rowed then s.ps.map .one else #[s]
+  if s.rowed then s.ps.map fun p => .one (p.rowsFrom 0 s.reps)
+  else if s.reps == 1 then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
   ps.map fun q => match q.tgt with

@@ -1286,9 +1286,9 @@ theorem mem_segPos_alike (s : Seg) (x : Tgt × Int) : x ∈ segPos (Seg.alike s)
   unfold Desc.Seg.alike
   split
   · rename_i h
-    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_eq_true'] at h
     unfold segPos
-    simp only [List.mem_flatMap, List.mem_range, copy_pos, h.2, Int.mul_zero, shiftPos_zero, List.map_id]
+    simp only [List.mem_flatMap, List.mem_range, copy_pos _ h.2, h.1.2, Int.mul_zero, shiftPos_zero, List.map_id]
     exact ⟨fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩, fun ⟨_, _, hx⟩ => ⟨0, by omega, hx⟩⟩
   · rfl
 
@@ -1299,8 +1299,17 @@ theorem mem_segPos_split (s : Seg) (x : Tgt × Int) :
   unfold Desc.Seg.split
   dsimp only
   split
-  · rename_i h
-    rw [segPos_one_rep (beq_iff_eq.1 h)]
+  · rename_i hr
+    rw [mem_segPos_rowed _ hr]
+    simp only [Array.toList_map, List.mem_map]
+    constructor
+    · rintro ⟨g, ⟨q, hq, rfl⟩, hx⟩
+      exact ⟨q, hq, by rwa [segPos_one] at hx⟩
+    · rintro ⟨q, hq, hx⟩
+      exact ⟨_, ⟨q, hq, rfl⟩, by rwa [segPos_one]⟩
+  split
+  · rename_i hr h
+    rw [segPos_one_rep (beq_iff_eq.1 h) (by simpa using hr)]
     simp only [Array.toList_map, List.mem_map, posAll, List.mem_flatMap]
     constructor
     · rintro ⟨g, ⟨q, hq, rfl⟩, hx⟩
@@ -8867,26 +8876,46 @@ theorem split_shape {P : Prog} {d : Nat} {s g : Seg} (hs : ShapeOk P d s) (hg : 
     (mem_segPos_split s x).1 ⟨g, hg, hx⟩
   refine ⟨?_, hx, ?_⟩
   all_goals unfold Desc.Seg.split at hg; dsimp only at hg
-  all_goals split at hg
-  · rw [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, -, rfl⟩ := hg
-    show (posAll #[q]).length = q.count
-    rw [posAll_singleton, pos_length]
-  · simp only [List.mem_singleton] at hg
-    subst hg
-    unfold Desc.Seg.alike
-    split <;> exact hs.1
-  · rw [Array.toList_map, List.mem_map] at hg
-    obtain ⟨q, hq, rfl⟩ := hg
-    intro q' hq'
-    simp only [Desc.Seg.one, List.mem_singleton] at hq'
-    subst hq'
-    unfold Desc.Seg.alike at hq
-    split at hq <;> exact hs.2.2.1 _ hq
-  · simp only [List.mem_singleton] at hg
-    subst hg
-    unfold Desc.Seg.alike
-    split <;> exact hs.2.2.1
+  · split at hg
+    · rw [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, -, rfl⟩ := hg
+      exact segOk_one _
+    split at hg
+    · rw [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, -, rfl⟩ := hg
+      exact segOk_one _
+    · simp only [List.mem_singleton] at hg
+      subst hg
+      unfold Desc.Seg.alike
+      split <;> exact hs.1
+  · have hq0 : ∀ q ∈ (Seg.alike s).ps.toList, 0 < q.count := fun q hq => by
+      unfold Desc.Seg.alike at hq; split at hq <;> exact hs.2.2.1 _ hq
+    split at hg
+    · rw [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, hq, rfl⟩ := hg
+      intro q' hq'
+      simp only [Desc.Seg.one, List.mem_singleton] at hq'
+      subst hq'
+      have hrep : 1 ≤ (Seg.alike s).reps := by
+        unfold Desc.Seg.alike; split
+        · exact Nat.le_refl 1
+        · exact hs.2.2.2
+      have h1 := hq0 q hq
+      obtain ⟨-, -, hl, hrw, -⟩ := rowsFrom_spec q 0 (Seg.alike s).reps
+      rw [Desc.Piece.count, hl, hrw]
+      unfold Desc.Piece.count at h1
+      exact Nat.mul_pos hrep (Nat.pos_of_ne_zero (Nat.mul_ne_zero_iff.1 (Nat.pos_iff_ne_zero.1 h1)).2)
+    split at hg
+    · rw [Array.toList_map, List.mem_map] at hg
+      obtain ⟨q, hq, rfl⟩ := hg
+      intro q' hq'
+      simp only [Desc.Seg.one, List.mem_singleton] at hq'
+      subst hq'
+      exact hq0 _ hq
+    · simp only [List.mem_singleton] at hg
+      subst hg
+      unfold Desc.Seg.alike
+      split <;> exact hs.2.2.1
 
 /-- What `Desc.memberRows` gives are pieces `throughPS` gives of the argument. -/
 theorem memberRows_mem (c : Desc.Ctx) (node : Flock.Program.Node) (k i : Nat) (u : Desc.Ivs) {ps : Array Piece}

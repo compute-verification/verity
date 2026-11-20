@@ -437,8 +437,8 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
         exact ⟨q, hq, hrq, x, y, hfr, hy, hre⟩
       refine .inr ⟨fun x hx => ?_, fun p hp => ?_, rfl, rfl, rfl, ?_⟩
       · obtain ⟨m, hm, hx⟩ := List.mem_flatMap.1 hx
-        rw [show ({ s with ps, shift := 0 } : Seg).copy m = ps.map (·.row m) from
-          copy_rowed { s with ps, shift := 0 } hr m, posAll_map] at hx
+        simp only [Desc.Seg.copy, ↓reduceIte] at hx
+        rw [posAll_map] at hx
         obtain ⟨p, hp, hx⟩ := List.mem_flatMap.1 hx
         obtain ⟨q, hq, hrq, x', y, hfr, hy, hre⟩ := hone p hp
         have hmq : m < q.rows := by rw [hrq]; exact List.mem_range.1 hm
@@ -448,9 +448,9 @@ theorem segDown_mem (f : Piece → Except String (Array Seg)) (s : Seg)
       · obtain ⟨q, hq, -, x', y, -, -, hre⟩ := hone p hp
         obtain ⟨h1, h2⟩ := reshape_dims y _ _ p hre
         exact ⟨q, hq, by simp [Desc.Piece.count, h1, h2]⟩
-      · rw [show ({ s with ps, shift := 0 } : Seg).copy 0 = ps.map (·.row 0) from
-          copy_rowed { s with ps, shift := 0 } hr 0, copy_rowed s hr,
-          posAll_map, posAll_map]
+      · rw [copy_rowed s hr]
+        simp only [Desc.Seg.copy, ↓reduceIte]
+        rw [posAll_map, posAll_map]
         refine List.Forall₂.length_eq (R := fun _ _ => True) (forall2_flatMap (fun p q hpq => ?_) hpair)
         obtain ⟨-, r, -, hone⟩ := hpq
         obtain ⟨-, x, y, -, -, hre⟩ := one_spec hone
@@ -537,5 +537,22 @@ theorem ofSeq_counts (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, 1 ≤ g.r
   refine ⟨?_, partsFold_counts _ _ (by simp) g hg hc'⟩
   unfold Desc.Seg.count at hc'
   exact Nat.pos_of_ne_zero (Nat.mul_ne_zero_iff.1 (Nat.pos_iff_ne_zero.1 hc')).1
+
+/-- Rows `[lo, lo + n)` of a piece name what its rows `lo + m`, `m < n`, name. -/
+theorem mem_pos_rowsFrom (p : Piece) (lo n : Nat) (x : Tgt × Int) :
+    x ∈ pos (p.rowsFrom lo n) ↔ ∃ m < n, x ∈ pos (p.row (lo + m)) := by
+  rw [pos_eq_rows, (rowsFrom_spec p lo n).2.2.2.1, List.mem_flatMap]
+  constructor
+  · rintro ⟨m, hm, hx⟩
+    exact ⟨m, List.mem_range.1 hm, by rwa [← pos_row_rowsFrom p lo n m (List.mem_range.1 hm)]⟩
+  · rintro ⟨m, hm, hx⟩
+    exact ⟨m, List.mem_range.2 hm, by rwa [pos_row_rowsFrom p lo n m hm]⟩
+
+/-- A rowed segment names what its pieces' first `reps` rows name. -/
+theorem mem_segPos_rowed (s : Seg) (hr : s.rowed = true) (x : Tgt × Int) :
+    x ∈ segPos s ↔ ∃ p ∈ s.ps.toList, x ∈ pos (p.rowsFrom 0 s.reps) := by
+  unfold segPos
+  simp only [List.mem_flatMap, List.mem_range, copy_rowed s hr, posAll_map, mem_pos_rowsFrom, Nat.zero_add]
+  exact ⟨fun ⟨m, hm, p, hp, hx⟩ => ⟨p, hp, m, hm, hx⟩, fun ⟨p, hp, m, hm, hx⟩ => ⟨m, hm, p, hp, hx⟩⟩
 
 end InferenceOnlyVerifier.Properties.SecurityProofs.ReadsExact
