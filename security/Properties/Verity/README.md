@@ -117,11 +117,6 @@ In this order:
   `Flock.SecurityProofs.SampledKSLiveV5`, at the session v2 sets up (`Sampled.Live.v5_at`); the rest it reads are
   lemmas instantiating that theorem's binders and the coupling's pieces. `Verity.Sampled.remote_soundness_deployedReady`
   (`security/Proofs/Properties/Verity/Sampled/OpensAt.lean`) states remote's soundness with it.
-- **SPOT** at the recursive configuration: `Verity.Recursive.spotRecursive`
-  (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
-  verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
-  (`security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
-  `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SpotSound`.
 - **The inference-only policy**: `Vocab.inferenceOnlySound` (`security/Proofs/Properties/Verity/InferenceOnly.lean`)
   proves its target of the case as sent. Onsite's statement still takes the target; remote's proof applies it.
 - **The others** are hypotheses of the theorem. Each subprotocol's own guarantee, in its own form, is in

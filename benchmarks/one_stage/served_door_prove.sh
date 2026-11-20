@@ -88,7 +88,7 @@ if [ -n "${AUDIT_RULE:-}" ]; then  # the staged window on the audit's road: reco
   ( unset PYTHONPATH FC_COINS TU_PINNED; export PATH=$(dirname $RT_BIN):$PATH; RUST_MIN_STACK=$((64 << 20)) timed audit $UV run -q python benchmarks/prove_path/records_audit.py audit \
       --window $S/window --sampling-design "$AUDIT_RULE" --circuit $(sha512sum $S/window/circuit.json | cut -c1-128) \
       --run $(python3 -c 'print("ab" * 64)') --challenger local --deployed-key --registered $S/window/pins.json --main $S/main.txt --m0-pythonpath $M0 \
-      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --ports ${AUDIT_PORTS:-64} ${AUDIT_FLAGS:-} --out $S/audit ) > $O/audit.log 2> $O/audit.err
+      --bin $B --lean $LEAN_BIN --zk-server $FW_BIN --lower $LOW_BIN --tmpl-unit-bin $UNIT_BIN --ports ${AUDIT_PORTS:-64} ${AUDIT_FLAGS:-} --out $S/audit ) > $O/audit.log 2> $O/audit.err
   r=$?; echo "audit rc $r"; cat $O/time-audit.txt; grep -h '^RECORDS\|^REFUSED\|^DRAW\|^MEMBER\|^VERDICT\|^CHECK\|^UNLOWERED\|^A5' $O/audit.log | cut -c1-3000
   tail -c 3000 $O/audit.err
   cp -r $S/audit/summary.json $S/audit/window/summary.json $S/audit/window/case-v2.json $O/ 2>/dev/null
