@@ -814,6 +814,124 @@ theorem unitWordComputes_calls (hT : Batch0Typed) {bytes : ByteArray} {P : Prog}
     outWords Y g = wordEval P (P.child P.rootScope k m).d (argWords Y g) :=
   unitWordComputes_batch0 hT hd hr hG hu hR (batch0_of_calls hco) hgb Y hY
 
+/-- A word primitive's value on bits is its Boolean Definition's, where that evaluates. -/
+theorem evalBool_word {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {f b : ℕ} (hf : f < P.defs.size)
+    (hw : isWordPrim (P.defs[f]!).prim (P.defs[f]!).key = true) (hb : P.bodyOf? (P.defs[f]!).key = some b)
+    {y v : List Bool} (hv : Flock.Program.evalDef? P (b + 1) b y = some v) : Prog.evalBool P f y = v := by
+  obtain ⟨⟨hmap, hkeys⟩, hids⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
+  have hbl := body_lt hm hb
+  have hbd : P.BoolDef b := by
+    obtain ⟨b', -, hbo, hbody', -⟩ := hmap f hf hw
+    obtain rfl : b' = b := Option.some.inj (hbo.symm.trans hb)
+    exact hbody'
+  have hB := FlockSoundness.DecodeBoolean.bool_none hkeys
+  have hprim : (P.defs[f]!).prim = true := by
+    simp only [isWordPrim, Bool.and_eq_true] at hw
+    exact hw.1.1
+  obtain ⟨hid, hmis, -⟩ := hids f hf hprim
+  obtain ⟨hin, hbp⟩ := FlockSoundness.DecodeBoolean.word_ids hw
+  have hg : Flock.Lower.gateOf? (P.defs[f]!).id = none := by
+    rw [hid]; exact FlockSoundness.DecodeBoolean.gateOf_none hbp hmis hin
+  have hdf : P.defs[f]? = some (P.defs[f]!) := by rw [getElem!_pos P.defs f hf]; exact getElem?_pos P.defs f hf
+  have hP : Flock.Program.evalDef? P (2 * P.defs.size + 2) f y = some v := by
+    rw [show 2 * P.defs.size + 2 = (2 * P.defs.size + 1) + 1 from rfl]
+    unfold Flock.Program.evalDef?
+    unfold Flock.Program.walkStep
+    simp only [Flock.Program.Wires.bool, hdf, Option.bind_eq_bind, Option.bind_some, hprim, ↓reduceIte, hg, hb]
+    rw [evalDef_fuel_at P hB hbd (by omega) y, hv]
+    try rfl
+  unfold Prog.evalBool
+  rw [hP]
+  rfl
+
+theorem leaves_bitType_value (w : ℕ) : (Ty.value w).bitType.leaves = w := by
+  unfold Ty.bitType
+  split
+  · rename_i h
+    simp only [beq_iff_eq] at h
+    subst h
+    simp [Ty.leaves]
+  · simp [Ty.leaves]
+
+/-- A word primitive whose Boolean Definitions evaluate through gates alone has values of its return's width. -/
+theorem evalBool_word_length {bytes : ByteArray} {P : Prog} (h : decode bytes = .ok P)
+    (hr : (P.defs[P.root]!).body.recut = #[]) {f b w : ℕ} (hf : f < P.defs.size)
+    (hw : isWordPrim (P.defs[f]!).prim (P.defs[f]!).key = true) (hret : (P.defs[f]!).ret = .value w)
+    (hb : P.bodyOf? (P.defs[f]!).key = some b) (hG : GateDef P b) (y : List Bool) :
+    (Prog.evalBool P f y).length = w := by
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  have hm : P.BoolMapOk := ⟨hmap, hkeys⟩
+  have hbl := body_lt hm hb
+  have hrb : (P.defs[b]!).ret = (Ty.value w).bitType := by
+    obtain ⟨b', -, hbo, -, -, -, hbret⟩ := hmap f hf hw
+    obtain rfl : b' = b := Option.some.inj (hbo.symm.trans hb)
+    rw [hbret, hret]
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 (gateDef_total P b hbl hG y)
+  rw [evalBool_word h hr hf hw hb hv]
+  have hbd : P.defs[b]? = some (P.defs[b]!) := by rw [getElem!_pos P.defs b hbl]; exact getElem?_pos P.defs b hbl
+  cases hpb : (P.defs[b]!).prim
+  · rw [FlockSoundness.EvalBool.evalDef?_length P hbd hpb hv, ((hok b hbl).1.2 hpb).2.1, hrb, leaves_bitType_value]
+  · obtain ⟨-, -, -, w', hw'⟩ := (hok b hbl).1.1 hpb
+    have hw1 : w = 1 := by
+      rw [hw'] at hrb
+      unfold Ty.bitType at hrb
+      split at hrb
+      · rename_i h1
+        simpa using h1
+      · cases hrb
+    cases hG with
+    | prim _ hgt =>
+      obtain ⟨g, hg⟩ := Option.isSome_iff_exists.1 hgt
+      rw [Flock.Program.evalDef?.eq_2] at hv
+      simp [Flock.Program.walkStep, Flock.Program.Wires.bool, hbd, hpb, hg] at hv
+      rw [← hv, hw1]
+      rfl
+    | comp hp _ _ => rw [hpb] at hp; cases hp
+
+/-- **`Batch0OutWidths`** holds. -/
+theorem batch0OutWidths : Batch0OutWidths := by
+  intro bytes P h hr d hd hb hgb k hk ys hys
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P h hr
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  have hnd : (P.defs[d]!).body.nodes[k] ∈ (P.defs[d]!).body.nodes := Array.getElem_mem hk
+  obtain ⟨hlt, hno, -⟩ := (hok d hd).2.1 k hk
+  rw [getElem!_pos _ k hk] at hlt hno
+  have hGb := hgb _ hnd
+  generalize (P.defs[d]!).body.nodes[k] = X at hnd hlt hno hys hGb ⊢
+  have hfP : X.fn < P.defs.size := by omega
+  obtain ⟨hform, hwp⟩ := hb.2 X hnd
+  have hprim : (P.defs[X.fn]!).prim = true := by
+    simp only [isWordPrim, Bool.and_eq_true] at hwp
+    exact hwp.1.1
+  obtain ⟨-, -, -, w, hwv⟩ := (hok X.fn hfP).1.1 hprim
+  obtain ⟨⟨hmap, hkeys⟩, -⟩ := FlockSoundness.DecodeBoolean.decode_facts bytes P h hr
+  obtain ⟨b, -, hbo, -⟩ := hmap X.fn hfP hwp
+  have hlen := evalBool_word_length h hr hfP hwp hwv hbo (hGb b hbo)
+  have hmap' : ys.map (fun y => (Prog.evalBool P X.fn y).length) = List.replicate ys.length w := by
+    rw [List.map_congr_left (fun y _ => hlen y), List.map_const']
+  rw [hmap', hys]
+  have hsh := hno.2.2.2.2.1
+  rcases hform with hf | hf | ⟨hf, -⟩
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hwv, show (Ty.value w).widths.toList = [w] by simp [Ty.widths]]
+    simp only [Node.members, hf]
+    rfl
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hwv, show (Ty.value w).widths.toList = [w] by simp [Ty.widths]]
+    simp only [Node.members, hf]
+    rfl
+  · rw [hf] at hsh
+    obtain ⟨ho, -⟩ := hsh
+    rw [ho, hwv, widths_array_value]
+    simp only [Node.members, hf]
+    rfl
+
 end UnitWordProof
 
 /-- **The lift where the door lowers a block**: `lowerBlock` accepts only past `admitted`, whose `on-bits` lifts the
