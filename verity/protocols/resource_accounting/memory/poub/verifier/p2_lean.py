@@ -71,7 +71,7 @@ class Lean:
             self.proc.stdin.write(json.dumps(request, separators=(",", ":")).encode() + b"\n" + body)
             self.proc.stdin.flush()
         except (OSError, ValueError) as e:
-            raise LeanError(f"the process is gone: {e}") from None
+            raise LeanError(f"{LC.exit_why(self.proc.wait()) or 'the process is gone'}: {e}") from None
 
     def read(self) -> Any:
         line = self.proc.stdout.readline()
@@ -81,7 +81,8 @@ class Lean:
             self.proc.kill()
             raise LeanError(f"{LC.LEAN_PANIC}: {panic}")
         if not line:
-            raise LeanError(f"the process ended ({self.proc.poll()}): {err[-2000:]}")
+            code = self.proc.wait()
+            raise LeanError(f"{LC.exit_why(code) or f'the process ended ({code})'}: {err[-2000:]}")
         msg = json.loads(line)
         if "error" in msg:
             raise LeanError(msg["error"])

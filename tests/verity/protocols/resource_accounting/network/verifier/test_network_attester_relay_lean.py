@@ -12,9 +12,13 @@ import shutil
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _run
+from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws
-from verity.protocols.resource_accounting.network.verifier import connection_rows_check as CRC, record_files as RF
+from verity.protocols.resource_accounting.network.verifier import connection_rows_check as CRC, lean_audit as LA
+from verity.protocols.resource_accounting.network.verifier import record_files as RF
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.verifier.network_attester import W63K4, NetworkAttesterParams
 
@@ -40,14 +44,55 @@ def forged(honest: Path, out: Path) -> Path:
     return out
 
 
-def stand_in(d: Path, verdict: str | None, reason: str | None = None) -> Path:
-    """A ``network-rows`` that answers ``verdict`` (with ``reason``), and when ``verdict`` is None fails if run."""
+def stand_in(d: Path, verdict: str | None, reason: str | None = None, before: str = "") -> Path:
+    """A ``network-rows`` that runs the shell lines ``before``, then answers ``verdict`` (with ``reason``) where it was
+    started with ``LEAN_ABORT_ON_PANIC=1``; when ``verdict`` is None it fails if run."""
     d.mkdir(parents=True, exist_ok=True)
     exe, answer = d / "network-rows", d / "answer.json"
     answer.write_text(json.dumps({"protocol": RC.ROWS, "verdict": verdict, "reason": reason}) + "\n")
-    exe.write_text("#!/bin/sh\nexit 9\n" if verdict is None else f"#!/bin/sh\ncat '{answer}'\n")
+    exe.write_text("#!/bin/sh\nexit 9\n" if verdict is None else
+                   f"#!/bin/sh\n[ \"$LEAN_ABORT_ON_PANIC\" = 1 ] || exit 9\n{before}cat '{answer}'\n")
     exe.chmod(0o755)
     return exe
+
+
+def server_stand_in(d: Path, before: str = "") -> Path:
+    """A ``network-records`` whose ``verdicts`` server, started with ``LEAN_ABORT_ON_PANIC=1``, runs ``before`` on each
+    request and then answers every execution phase accepted."""
+    d.mkdir(parents=True, exist_ok=True)
+    exe = d / "network-records"
+    accept = json.dumps({"output": {"link_windows": [{"direction": "egress", "link": "a", "verdict": "accept",
+                                                      "window": 0}]}})
+    exe.write_text(f"#!/bin/sh\n[ \"$LEAN_ABORT_ON_PANIC\" = 1 ] || exit 9\nwhile read -r line; do\n{before}"
+                   f"echo '{accept}'\ndone\n")
+    exe.chmod(0o755)
+    return exe
+
+
+#: a stand-in's lines that write a panic line Lean's runtime writes with no ``PANIC``, one that carries it, and a kill
+DEATHS = {"index": "echo 'Error: index out of bounds' >&2\n",
+          "panic": "echo 'PANIC at NetworkCheck.Rows.audit NetworkCheck.Rows:1:2: unreachable' >&2\n",
+          "signal": "kill -9 $$\n"}
+REFUSED = {"index": (LC.LeanPanic, "lean-panic: .*: Error: index out of bounds"),
+           "panic": (LC.LeanPanic, "lean-panic: .*: PANIC at NetworkCheck.Rows.audit"),
+           "signal": (LC.LeanExit, "lean-exit: .*killed by SIGKILL")}
+
+
+@pytest.mark.parametrize("death", sorted(DEATHS))
+def test_a_network_rows_that_panics_or_is_killed_is_refused_by_name_whatever_it_answered(tmp_path, death):
+    exe = stand_in(tmp_path / death, "accept", before=DEATHS[death])
+    kind, why = REFUSED[death]
+    with pytest.raises(kind, match=why):
+        RC.check(served(tmp_path / "run"), rows_exe=exe)
+
+
+@pytest.mark.parametrize("death", sorted(DEATHS))
+def test_a_verdicts_server_that_panics_or_is_killed_is_refused_by_name_whatever_it_answered(tmp_path, death):
+    assert LA.Server(server_stand_in(tmp_path / "honest")).verdicts({})[0]["verdict"] == "accept"
+    server = LA.Server(server_stand_in(tmp_path / death, DEATHS[death]))
+    kind, why = REFUSED[death]
+    with pytest.raises(kind, match=why):
+        server.verdicts({})
 
 
 def test_network_rows_accepting_a_run_the_python_check_accepts_is_accepted(tmp_path):
