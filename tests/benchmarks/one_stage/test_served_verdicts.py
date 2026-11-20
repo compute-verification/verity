@@ -6978,3 +6978,22 @@ def test_a_setting_that_only_named_the_deleted_tied_leg_is_refused_by_name(tmp_p
     name = "PEARLPLUS_TIE_UNIFORM" if "PEARLPLUS_TIE_UNIFORM" in extra else "PEARLPLUS_TIE"
     rc, lines, order, _limits = _v3c(tmp_path, (), **extra)
     assert (rc, lines, order) == (3, [f"PREFLIGHT: {name} is refused: the tied leg is deleted: no window is tied to a W"], [])
+
+
+@pytest.mark.parametrize("env, line", [
+    ({"POUW": "h1"}, "PREFLIGHT: POUW=h1 is refused: PoUW H1 is deleted, and PoUW's piece is Pearl+'s: POUW=pearlplus"),
+    ({"POUW": ""}, "PREFLIGHT: POUW names PoUW's scheme, and the one left is Pearl+: POUW=pearlplus"),
+    ({"POUW": "other"}, "PREFLIGHT: POUW is pearlplus, not other"),
+    *[({name: "x"}, f"PREFLIGHT: {name} is PoUW H1's setting, and PoUW H1 is deleted")
+      for name in ("H1_GATE", "H1_TIE", "H1_CIRCUITS", "H1_STATEMENTS", "H1_LIVE_EVIDENCE", "H1_RECEIPTS", "H1_PROTOCOLS_CONFIG")],
+])
+def test_a_request_for_poow_h1_or_no_scheme_is_refused_by_name_before_anything_runs(tmp_path, env, line):
+    """PoUW H1 is deleted: POUW=h1, an empty POUW, another name, and each of H1's settings are refused with one sentence
+    that names them, exit 3, before anything is kept, built or served."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"), "POUW": "pearlplus", **env}
+    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                        env=env, check=False).returncode
+    assert rc == 3 and (tmp_path / "out" / "verdicts.txt").read_text().splitlines() == [line]
