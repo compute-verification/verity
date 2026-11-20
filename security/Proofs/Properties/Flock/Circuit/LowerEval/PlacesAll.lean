@@ -321,10 +321,10 @@ theorem prim_lt {P : Prog} {i : ℕ} (h : (P.defs[i]!).prim = true) : i < P.defs
 theorem wordPrim_lt {P : Prog} {i : ℕ} (h : isWordPrim (P.defs[i]!).prim (P.defs[i]!).key = true) : i < P.defs.size :=
   prim_lt (by simp only [isWordPrim, Bool.and_eq_true] at h; exact h.1.1)
 
-/-- A template of axis-0 batches over word primitives, gates and earlier such templates reaches a word primitive, read in any
+/-- A template of batches over word primitives, gates and earlier such templates reaches a word primitive, read in any
 `S` that keeps `P`'s Definitions. -/
 theorem reachesWord_of_nested {P S : Prog} (hpre : ∀ i < P.defs.size, S.defs[i]! = P.defs[i]!) {y : ℕ}
-    (h : Batch0Nested P y) (hy : y < P.defs.size) : ReachesWord S y := by
+    (h : BatchNested P y) (hy : y < P.defs.size) : ReachesWord S y := by
   revert hy
   induction h with
   | @mk d hp _ hlt _ _ hex ih =>

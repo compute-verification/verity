@@ -970,6 +970,28 @@ theorem batch0Nested_of_batch0 {P : Prog} {d : ℕ} (h : Batch0 P d) (hn : 0 < (
     (fun nd hnd _ hw => absurd (h.2 nd hnd).2 (by rw [hw]; decide))
     ⟨_, Array.getElem_mem hn, Or.inr (h.2 _ (Array.getElem_mem hn)).2⟩
 
+/-- **A template of batches on any axes over word primitives, gates and earlier such templates**: `Batch0Nested`, but
+a batch node may map each argument along any axis of its type. -/
+inductive BatchNested (P : Prog) : ℕ → Prop
+  | mk {d : ℕ} : (P.defs[d]!).prim = false →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, nd.form = .prim ∨ nd.form = .call ∨ nd.form = .batch) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → BatchNested P nd.fn) →
+      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
+        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
+      (∃ nd ∈ (P.defs[d]!).body.nodes,
+        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
+      BatchNested P d
+
+theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
+  induction h with
+  | mk hp hform hlt _ hgate hex ih =>
+    refine .mk hp (fun nd hnd => ?_) hlt ih hgate hex
+    rcases hform nd hnd with h | h | ⟨h, -⟩
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr h)
+
 /-- **`LiftCalls`**: the lift to bits of a template of word-primitive nodes, at least one, keeps `S`'s
 Definitions and Boolean Definitions and places Definition `d` lifted (`Flock.Lift.liftDef`) after them, each node
 calling its primitive's Boolean Definition, where every value of `S`'s Boolean map is a key of its index. A template of

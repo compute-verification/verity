@@ -2,8 +2,8 @@ module
 
 public import Proofs.Properties.Flock.Circuit.LowerEval.PlacesAll
 
-/-! The class of templates whose batches map on any axis (`BatchNested`), and how removing a batch axis acts on types:
-on the bit-level type, on the axis' dimensions, and on a member's leaf widths. -/
+/-! How removing a batch axis acts on types (on the bit-level type, on the axis' dimensions, and on a member's leaf
+widths), and what a member of a batch on any axis reads on bits (`batchBits_ax`). -/
 
 @[expose] public section
 
@@ -43,28 +43,6 @@ theorem flatten_getElem?_sum {α : Type} : ∀ (L : List (List α)) {i j : ℕ} 
 
 section BatchAxes
 open InferenceOnlyVerifier.Properties.SecurityProofs
-
-/-- **A template of batches on any axes over word primitives, gates and earlier such templates**: `Batch0Nested`, but
-a batch node may map each argument along any axis of its type. -/
-inductive BatchNested (P : Prog) : ℕ → Prop
-  | mk {d : ℕ} : (P.defs[d]!).prim = false →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, nd.form = .prim ∨ nd.form = .call ∨ nd.form = .batch) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → nd.fn < d) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = false → BatchNested P nd.fn) →
-      (∀ nd ∈ (P.defs[d]!).body.nodes, (P.defs[nd.fn]!).prim = true →
-        isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = false → GateCallee P nd.fn) →
-      (∃ nd ∈ (P.defs[d]!).body.nodes,
-        (P.defs[nd.fn]!).prim = false ∨ isWordPrim (P.defs[nd.fn]!).prim (P.defs[nd.fn]!).key = true) →
-      BatchNested P d
-
-theorem batchNested_of_batch0Nested {P : Prog} {d : ℕ} (h : Batch0Nested P d) : BatchNested P d := by
-  induction h with
-  | mk hp hform hlt _ hgate hex ih =>
-    refine .mk hp (fun nd hnd => ?_) hlt ih hgate hex
-    rcases hform nd hnd with h | h | ⟨h, -⟩
-    · exact Or.inl h
-    · exact Or.inr (Or.inl h)
-    · exact Or.inr (Or.inr h)
 
 theorem bitType_array (n : ℕ) (e : Ty) : Ty.bitType (.array n e) = .array n (Ty.bitType e) := by
   rw [Ty.bitType]
@@ -382,6 +360,73 @@ theorem liftDef_arg_ax (D : Defn) (fnOf : ℕ → ℕ) (primOf : ℕ → Bool) (
   have hg : ∀ (A : Array Arg) (h : i < A.size), A.getD i default = A[i] := fun A h => by simp [Array.getD, h]
   rw [hg _ hi', hg _ hi]
   simp [Flock.Lift.liftDef, hf, hax]
+
+/-- **A batch member's arguments' bits, on any axis**, `C` its callee on words and `C'` on bits: member `m` of a lifted
+batch node reads, on bits, the bits of the words its word node's member reads. -/
+theorem batchBits_ax {D : Defn} {fnOf : ℕ → ℕ} {primOf : ℕ → Bool} {gatesOf : ℕ → ℕ} {x : List (List Bool)}
+    (hx : x.map List.length = leafWidths D) {outs : Array (List (List Bool))} (ho : OutsOk D outs) {n : ℕ}
+    (hnD : n < D.body.nodes.size) (hnD' : n < (Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes.size)
+    (hsz : outs.size = n) (hf : (D.body.nodes[n]).form = .batch) {C C' : Defn}
+    (hpar : C'.params.map (·.2) = C.params.map (·.2.bitType))
+    (hargs : ∀ a ∈ (D.body.nodes[n]).args.toList,
+      a.seq.count = a.seq.toArray.size ∧ ∀ r ∈ a.seq.toArray.toList, RefIn D n r)
+    (hbat : ∀ i < (D.body.nodes[n]).args.size,
+      (∀ ax, (D.body.nodes[n]).axes[i]? = some (some ax) →
+        ((D.body.nodes[n]).args.getD i default).ty.removeAxis ax = some ((D.body.nodes[n]).n, (C.params.getD i default).2) ∧
+        ((D.body.nodes[n]).args.getD i default).dims = ((D.body.nodes[n]).args.getD i default).ty.axisDims ax ∧
+        i < C.params.size ∧
+        ((D.body.nodes[n]).args.getD i default).seq.toArray.toList.map (fun r => (tyAt D r).widths[r.j]!) =
+          ((D.body.nodes[n]).args.getD i default).ty.widths.toList) ∧
+      ((∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax)) → ((D.body.nodes[n]).args.getD i default).dims = none))
+    {m : ℕ} (hm' : m < (D.body.nodes[n]).n) :
+    ((List.range ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size).flatMap fun i =>
+        batchArg (Flock.Program.refVal x.flatten
+          (Flock.Program.paramStarts (D.params.map fun (n, t) => (n, Ty.bitType t))) (outs.map List.flatten))
+          C' ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]) m i) =
+      ((List.range (D.body.nodes[n]).args.size).flatMap fun i =>
+          batchArg (Flock.Program.refVal x (Flock.Program.paramStarts D.params) outs) C (D.body.nodes[n]) m i).flatten := by
+  have hasz : ((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.size = (D.body.nodes[n]).args.size := by
+    simp [Flock.Lift.liftDef]
+  rw [hasz, flatten_flatMap]
+  apply List.flatMap_congr
+  intro i hi
+  have hi' := List.mem_range.1 hi
+  obtain ⟨hseqi, -, haxn, -⟩ := liftDef_arg D fnOf primOf gatesOf hnD hnD' hi'
+  have hmemA : (D.body.nodes[n]).args.getD i default ∈ (D.body.nodes[n]).args.toList := by
+    simp [Array.getD, hi']
+  obtain ⟨hcnt, hrefs⟩ := hargs _ hmemA
+  have hrefs' : ∀ r ∈ ((D.body.nodes[n]).args.getD i default).seq.toArray.toList, RefIn D outs.size r :=
+    fun r h => by rw [hsz]; exact hrefs r h
+  by_cases hax : ∃ ax, (D.body.nodes[n]).axes[i]? = some (some ax)
+  · obtain ⟨ax, hax⟩ := hax
+    obtain ⟨hrm, hdm, hip, hw⟩ := (hbat i hi').1 ax hax
+    have hsb : C'.params.size = C.params.size := by simpa using congrArg Array.size hpar
+    have hib : i < C'.params.size := by rw [hsb]; exact hip
+    have hpb : (C'.params.getD i default).2 = Ty.bitType (C.params.getD i default).2 := by
+      have h1 := congrArg (·[i]?) hpar
+      simp only [Array.getElem?_map] at h1
+      rw [Array.getElem?_eq_getElem hib, Array.getElem?_eq_getElem hip] at h1
+      rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hib,
+        Array.getElem?_eq_getElem hip]
+      simpa using h1
+    obtain ⟨o, F, htw, hEw, hdF, hbdF⟩ := removeAxis_blocks ax hrm
+    have hd' : (((Flock.Lift.liftDef D fnOf primOf gatesOf).body.nodes[n]).args.getD i default).dims =
+        some ((D.body.nodes[n]).n, (Ty.bitType F).leaves) := by
+      rw [liftDef_arg_ax D fnOf primOf gatesOf hnD' hi' hf hax, hbdF]
+    rw [batchArg_some _ _ _ _ _ hd', batchArg_some _ _ _ _ _ (hdm.trans hdF), hpb]
+    simp only [Flock.Program.argVals]
+    rw [hseqi]
+    generalize (C.params.getD i default).2 = E at hEw ⊢
+    rw [← sum_widths E, ← sum_widths F, hEw, sum_replicate_flatten,
+      show E.leaves = E.widths.toList.length by rw [Array.length_toList, hb_widths_size],
+      show F.leaves = F.widths.toList.length by rw [Array.length_toList, hb_widths_size], hEw,
+      length_replicate_flatten]
+    exact axisBits_ax hx ho hrefs' hm' (hw.trans htw)
+  · have hn0 : ∀ ax, (D.body.nodes[n]).axes[i]? ≠ some (some ax) := fun ax h => hax ⟨ax, h⟩
+    rw [batchArg_none _ _ _ _ _ (haxn hf hn0), batchArg_none _ _ _ _ _ ((hbat i hi').2 hn0)]
+    simp only [Flock.Program.argVals]
+    rw [hseqi]
+    exact seqBits hx ho hcnt hrefs'
 
 end BatchAxes
 
