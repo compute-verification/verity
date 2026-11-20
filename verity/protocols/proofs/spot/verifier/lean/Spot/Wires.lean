@@ -279,11 +279,36 @@ def orderedWire (o : List UnitRange) (w : Wire) : Bool :=
       let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
       (ranksIn o w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
 
+/-- The order's ranges of template `t`, each with its rank. -/
+def rangesOf (o : List UnitRange) (t : String) : List (UnitRange × Nat) := o.zipIdx.filter fun (b, _) => b.1 == t
+
+/-- Each template of the order's ranges with its `rangesOf`, so a wire reads only its own two templates' ranges. -/
+def rangeIndex (o : List UnitRange) : List (String × List (UnitRange × Nat)) :=
+  (o.map (·.1)).eraseDups.map fun t => (t, rangesOf o t)
+
+/-- `orderedWire` over `rangeIndex o`: the ranges the wire can read in are its reader template's, and the ranks it holds
+below them are its writer template's. -/
+def orderedWireIn (ix : List (String × List (UnitRange × Nat))) (w : Wire) : Bool :=
+  let of := fun t => (ix.lookup t).getD []
+  (of w.reader).all fun (b, a) =>
+    !w.readsIn b ||
+      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+      (((of w.writer).filter fun ((_, p0, n), _) => decide (max p0 s.1.toNat < min (p0 + n) (s.2.toNat + 1))).map (·.2)).all
+        (· < a)
+
 /-- The order's refusal (`orderOf`), else the first wire `f` doesn't put in it, by index. -/
 def orderCode (c : Wiring) (f : List UnitRange → Wire → Bool) : Option Refusal :=
   match orderOf c with
   | .error r => some r
   | .ok o => firstWire c fun w => if f o w then none else some .order
+
+/-- `orderCode c orderedWire` with the order's index made once (`orderCodeIx_eq`). -/
+def orderCodeIx (c : Wiring) : Option Refusal :=
+  match orderOf c with
+  | .error r => some r
+  | .ok o =>
+    let ix := rangeIndex o
+    firstWire c fun w => if orderedWireIn ix w then none else some .order
 
 /-- **The check at the size of the description**: the refusals in the module docstring's order, else the summary. -/
 def check (c : Wiring) : Except Refusal Summary :=
@@ -292,7 +317,7 @@ def check (c : Wiring) : Except Refusal Summary :=
     | some r => .error r
     | none =>
       if !pairwiseDisjointFast c.wires then .error ⟨.overlap, none⟩
-      else match orderCode c orderedWire with
+      else match orderCodeIx c with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 

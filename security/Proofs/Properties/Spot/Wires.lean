@@ -58,8 +58,8 @@ theorem wiresAcyclic_honest : ∃ S, check honest = .ok S := by
   have hc : cutsOk honest = true := by decide
   have hf : (firstWire honest (wireCode honest)).isNone = true := by decide
   have hd : pairwiseDisjointFast honest.wires = true := by rw [pairwiseDisjointFast_eq]; decide
-  have ho : (orderCode honest orderedWire).isNone = true := by
-    simp only [orderCode, hof]; decide
+  have ho : (orderCodeIx honest).isNone = true := by
+    rw [orderCodeIx_eq]; simp only [orderCode, hof]; decide
   exact ⟨_, by simp only [check, hc, Option.isNone_iff_eq_none.1 hf, hd, Option.isNone_iff_eq_none.1 ho]; rfl⟩
 
 theorem wiresAcyclic_nontrivial : ¬ (wiresDataflow selfRead).Acyclic := fun h =>

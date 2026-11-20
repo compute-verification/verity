@@ -284,7 +284,7 @@ theorem check_sound {c : Wiring} {S : Summary} (h : check c = .ok S) :
             firstWire_eq_none.2 fun w hw => (wireCodeRef_of (hall w hw)).2.2
           have hd := distinctRows_of hw (by rw [← pairwiseDisjointFast_eq]; simpa using hov)
           have hord' : orderCode c orderedWireRef = none := by
-            obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
+            obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 (orderCodeIx_eq c ▸ hord)
             exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => orderedWire_eq_ref o w ▸ hin w hw'⟩
           refine ⟨rfl, ?_⟩
           unfold checkRef

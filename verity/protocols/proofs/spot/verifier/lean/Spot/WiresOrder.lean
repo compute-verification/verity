@@ -57,6 +57,65 @@ theorem orderedWire_eq_ref (o : List UnitRange) (w : Wire) : orderedWire o w = o
   dsimp only
   rw [all_ranksIn]
 
+theorem lookup_map_pair {α β : Type} [BEq α] [LawfulBEq α] (ts : List α) (f : α → β) (t : α) :
+    (ts.map fun x => (x, f x)).lookup t = if t ∈ ts then some (f t) else none := by
+  induction ts with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.map_cons, List.lookup_cons, List.mem_cons]
+    by_cases h : t = x
+    · subst h; simp
+    · simp [h, ih, beq_false_of_ne h]
+
+theorem rangesOf_nil {o : List UnitRange} {t : String} (h : t ∉ o.map (·.1)) : rangesOf o t = [] := by
+  unfold rangesOf
+  rw [List.filter_eq_nil_iff]
+  rintro ⟨b, a⟩ hm
+  have : b.1 ∈ o.map (·.1) := List.mem_map.2 ⟨b, List.mem_of_getElem? (List.mem_zipIdx_iff_getElem?.1 hm), rfl⟩
+  simp only [beq_iff_eq]
+  rintro rfl
+  exact h this
+
+theorem index_lookup (o : List UnitRange) (t : String) : ((rangeIndex o).lookup t).getD [] = rangesOf o t := by
+  unfold rangeIndex
+  rw [lookup_map_pair]
+  by_cases h : t ∈ (o.map (·.1)).eraseDups
+  · simp [h]
+  · have h' : t ∉ o.map (·.1) := fun hm => h (List.mem_eraseDups.2 hm)
+    simp [h, rangesOf_nil h']
+
+theorem ranksIn_eq (o : List UnitRange) (t : String) (lo hi : Nat) :
+    ((rangesOf o t).filter fun ((_, p0, n), _) => decide (max p0 lo < min (p0 + n) hi)).map (·.2) = ranksIn o t lo hi := by
+  unfold rangesOf ranksIn
+  rw [List.filter_filter]
+  congr 2
+  funext ⟨⟨s, p0, n⟩, k⟩
+  simp [Bool.and_comm]
+
+/-- **The indexed closed form is the closed form.** -/
+theorem orderedWireIn_eq (o : List UnitRange) (w : Wire) : orderedWireIn (rangeIndex o) w = orderedWire o w := by
+  unfold orderedWireIn orderedWire
+  simp only [index_lookup]
+  have h : ∀ x : UnitRange × Nat, (w.readsIn x.1 = false) ∨ x.1.1 = w.reader := by
+    intro x
+    by_cases hx : x.1.1 = w.reader
+    · exact Or.inr hx
+    · left; unfold Wire.readsIn; simp [hx]
+  simp only [ranksIn_eq]
+  rw [show rangesOf o w.reader = o.zipIdx.filter (fun (b, _) => b.1 == w.reader) from rfl, List.all_filter]
+  congr 1
+  funext ⟨b, a⟩
+  rcases h (b, a) with h | h
+  · simp [h]
+  · have h' : b.1 = w.reader := h
+    simp [h']
+
+theorem orderCodeIx_eq (c : Wiring) : orderCodeIx c = orderCode c orderedWire := by
+  unfold orderCodeIx orderCode
+  cases orderOf c with
+  | error r => rfl
+  | ok o => simp only [orderedWireIn_eq]
+
 theorem tiles_cover : ∀ {bs : List (Nat × Nat)} {cur units u : Nat}, tiles bs cur units = true → cur ≤ u → u < units →
     ∃ p ∈ bs, p.1 ≤ u ∧ u < p.1 + p.2
   | [], cur, units, u, h, h1, h2 => by
