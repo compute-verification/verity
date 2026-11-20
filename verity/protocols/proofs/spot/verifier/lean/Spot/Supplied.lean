@@ -480,7 +480,7 @@ def held (coins : Array (String × ByteArray)) (desc : Json) : V (Array Held) :=
   for r in rows do
     let .arr #[lo, hi, port] := r | continue
     let eqj := getD port "equals"
-    if eqj == .null then continue
+    if eqj == Json.null then continue
     let .arr eq := eqj | throw "held output: a held row is [lo, hi, {equals: [input, at, n]}]"
     let (some lo, some hi, some (Json.str name), some start, some n) :=
         (nat? lo, nat? hi, eq[0]?, eq[1]?.bind nat?, eq[2]?.bind nat?)
