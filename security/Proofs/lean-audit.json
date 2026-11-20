@@ -327,7 +327,9 @@
   "Proofs.Properties.Verity.Recursive.Assumptions",
   "Proofs.Properties.Verity.Recursive.Compiled",
   "Proofs.Properties.Verity.Recursive.PartVerdict",
-  "Proofs.Properties.Verity.Recursive.ScheduleRun"
+  "Proofs.Properties.Verity.Recursive.ScheduleRun",
+  "Proofs.Properties.Verity.Recursive.ScheduleInner",
+  "Proofs.Properties.Verity.Recursive.ScheduleSession"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -773,8 +775,6 @@
   "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.evalFields": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
-  "SpotFlock.RecordNames.jpBody": "partial def of jp_body and jp_close (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that takes one step down a registration check's do block and runs again on each goal the step leaves; no statement reads it, and the kernel checks every proof it builds",
-  "SpotFlock.RecordNames.walkGoal": "partial def of jp_walk (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that walks one goal's hypothesis down the path of a registration check on which no code is added; no statement reads it, and the kernel checks every proof it builds",
   "FlockSoundness.Refine.retWalkAux": "partial def of ret_walk_aux (Proofs.Flock.Soundness.Refine.Walk, under `compile_time`): elaborator code that walks a computation to its returns and proves each join point's body as an auxiliary theorem; no statement reads it, and the kernel checks every proof it adds"
  },
  "compile_time": {
