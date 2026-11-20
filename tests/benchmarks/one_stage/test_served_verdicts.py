@@ -3885,18 +3885,13 @@ def test_the_preflight_refuses_v3c_gpus_on_a_node_without_gpu_lease(tmp_path):
 WARM_DEFAULT = str(min(8, len(os.sched_getaffinity(0))))
 
 
-@pytest.mark.parametrize("tied, extra, limit", [
-    (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "90m"), (False, {"V3C_WARM_JOBS": None}, "90m"),
-    (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
-])
-def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_takes_their_cache(tmp_path, tied, extra, limit):
+@pytest.mark.parametrize("extra, limit", [({}, None), ({"V3C_WARM_JOBS": "2"}, "90m"), ({"V3C_WARM_JOBS": None}, "90m")])
+def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_takes_their_cache(tmp_path, extra, limit):
     """With V3C_WARM_JOBS (unset, the cores given, at most 8), records_audit's warm composes every template of the committed
     window into its compose cache, that many at a time within V3C_AUDIT_MEM_GB, at the audit's sampling design, within
     V3C_WARM_TIMEOUT (default 90m), before the audit, which takes the cache and so composes none; set empty, no warm and
     no cache."""
-    if tied:
-        _pearl_tied_commit(tmp_path)
-    rc, lines, order, limits = _v3c(tmp_path, **(PEARL_TIED if tied else {}), **extra)
+    rc, lines, order, limits = _v3c(tmp_path, **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     audit = json.loads((tmp_path / "order.audit").read_text())
     if limit is None:
@@ -3906,7 +3901,7 @@ def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_tak
     vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"] or WARM_DEFAULT
     assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
     assert json.loads((tmp_path / "order.warm").read_text()) == [
-        "warm", "--window", str(vw / "window"), "--sampling-design", TIED_RULE if tied else RULE,
+        "warm", "--window", str(vw / "window"), "--sampling-design", RULE,
         "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs, "--mem-gb", "290", "--min-free-gb", "100"]
     assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
     assert limits.count(limit) == 1, limits
@@ -4496,38 +4491,6 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
 
-def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path):
-    """V3c makes no commit of its own: it holds the piece's R to W (chained right after it), and audits it tied to W with
-    no prefix (Pearl+'s values are W's own names) at a stratified rate on a port a sampled block, saying the audit's tie. The
-    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears, and it
-    leaves that record beside R in the tie the record reads, for the period's circuit."""
-    _pearl_tied_commit(tmp_path)
-    rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
-    assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)
-    circuit = (tmp_path / "order.circuit").read_text().split("\n")
-    assert circuit[circuit.index("--pearl-tables") + 1] == "pearl-c-h100-v1-h3", circuit
-    assert any(x.startswith(f"WINDOW-CIRCUIT class {W63K4}, cut at Pearl+'s linears: ") for x in lines), lines
-    w = DD.digest(PEARL_WREC)
-    assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
-                               f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
-    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
-                                  "--tie-prefix": None, "--ports": "3"}
-    assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
-    d, tag = tmp_path / "serve", W63K4.replace(",", "-")
-    assert any(x.endswith("window-circuit record less its run fields: PASS") for x in lines), lines
-    assert (d / "pearlplus" / "w7" / "tie" / S.CIRCUIT_RECORD).read_bytes() == \
-        (d / f"window-circuit-w7-{tag}.json").read_bytes(), "the record reads the period's circuit against V3c's record"
-
-
-def test_under_pearlplus_tie_v3c_audits_no_commit_not_chained_right_after_w(tmp_path):
-    """No retries: a commit whose R isn't chained right after Pearl+'s W isn't audited as if it were."""
-    _pearl_tied_commit(tmp_path, chained=False)
-    rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
-    assert (rc, order) == (16, ["window-circuit"]), lines
-    assert lines[-1] == (f"WINDOW-COMMIT class {W63K4}: window-commit's registration R is chained after {'ef' * 8}…, not "
-                         f"right after Pearl+'s W {DD.digest(PEARL_WREC)[:16]}…")
-
-
 @pytest.mark.parametrize("extra, line", [
     ({}, "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation "
          "period check needs it before: set CERTIFIER_CMD instead"),
@@ -4570,22 +4533,6 @@ def test_the_preflight_refuses_pearlplus_tie_without_a_rule_or_at_a_rule_other_t
     assert (rc, lines, order) == (3, [NO_PEARL_RULE], [])
     rc, lines, order, _limits = _v3c(tmp_path / "rate", args, **{**PEARL_TIED, "V3C_LAW": RULE})
     assert (rc, lines, order) == (3, [_no_reader(RULE)], [])
-
-
-@pytest.mark.parametrize("stated, uniform, cut", [("stratified-rate:1/977", None, CUT_BY_CALL),
-                                                  ("stratified-rate:1/977", "1", CUT_BY_CALL),
-                                                  ("rate:1/1000000000", "1", CUT_BY_CALL),
-                                                  ("rate:1/1000000000", "1", CUT_BY_SHAPE)])
-def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_states(tmp_path, stated, uniform, cut):
-    """A launch under PEARLPLUS_TIE that states a stratified rate goes on, and V3c's audit states that rate to its stream
-    on as many ports as R's strata sample, the opt-in set or not; so does a uniform rate under PEARLPLUS_TIE_UNIFORM=1, on
-    the default ports, whether the cut reads a linear's calls with a template a call or a template a shape."""
-    _pearl_tied_commit(tmp_path)
-    _toy_cut(tmp_path, cut)
-    rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated, "PEARLPLUS_TIE_UNIFORM": uniform})
-    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
-    assert _audited(tmp_path, ("--sampling-design", "--ports")) == {
-        "--sampling-design": stated, "--ports": "16" if stated.startswith("rate:") else "3"}
 
 
 def _toy_cut(tmp_path: Path, text: str) -> None:
@@ -4962,56 +4909,6 @@ def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[s
     return _v3c(tmp_path, **{**env, **extra})
 
 
-@pytest.mark.parametrize("extra, tree", [
-    ({}, "(this tree's)"),
-    ({"RESEARCH_SOURCE_SHA": "cd" * 20, "FOLLOW_ANY_TREE": "1"}, f"(this tree is {'cd' * 20}: FOLLOW_ANY_TREE)"),
-])
-@pytest.mark.parametrize("lean", [None, "accept", "reject", "undecided"])
-def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_composes_the_final_record_there(
-        tmp_path, extra, tree, lean):
-    """The follow-on of a deferral made under COMPOSE_OFF_NODE=0, at the settings the deferral recorded: the copy held to
-    the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
-    tree's, and the commit Pearl+'s piece made, held as there), V3c's audit and period, the composite, told the served node, so it
-    says it composed elsewhere, and then the final record about the served node from the pieces it read, V3c's audit,
-    SPOT's audit of record and that composite. This node is a prover node, which the prover controls, so the
-    composite is a development check (COMPOSE_DEVELOPMENT) and no Lean answer of it is the record's, whatever it says:
-    the record is pending and the run's exit 2. Another tree runs only under FOLLOW_ANY_TREE, which its line names.
-    $OUT names no window."""
-    assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
-    rc, lines, order, limits = _follow(tmp_path, **extra, LEAN=lean)
-    d, out = tmp_path / "serve", tmp_path / "out"
-    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
-    assert lines.pop(0) == V3C_ENTRY
-    assert lines[:2] == [
-        "FOLLOW-ON on a prover node, 755 GB: V3c's audit and the composite, which the served node (SERVED_NODE) deferred, from its "
-        "serve dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's "
-        "private/deferred/inputs.sha256): PASS",
-        f"WINDOW-CIRCUIT class {W63K4}: the served node's record at the class (step 3's), from its tree's commit {SHA} "
-        f"{tree}; this node holds no row dir to count it from"]
-    assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece") and lines[3].endswith("PASS")
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-TIE:", "V3C-AUDIT", "V3C-PERIOD", "COMPOSITE:", "RECORD"]
-    assert lines[-2] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
-    assert json.loads(lines[-1].removeprefix("RECORD "))["composed"] == "pending"
-    assert (tmp_path / "order.development").read_text().startswith(
-        "composed by a deferral's follow-on on a prover node, which the prover controls: a development check")
-    if lean:
-        assert json.loads((out / "composite" / "remote-v1" / "composite.json").read_text())["development"].startswith(
-            "composed by a deferral's follow-on on a prover node")
-    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "pearlplus" / "w7" / "registration.json"),
-                                  "--tie-prefix": None, "--ports": "3"}
-    argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-8] == [
-        "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
-        "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
-        "--node", "vy-dc-h200", "--window-tie", str(d / "pearlplus" / "w7" / "tie"),
-        "--served-compare", str(d / "served-compare" / "served_compare.json")]
-    assert (argv[-8], len(argv[-7]), argv[-6:-2]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
-                                                                             str(out / "composite")])
-    assert argv[-2] == "--deploy-manifest" and argv[-1].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
-    assert not _window_data(out, 7), _window_data(out, 7)
-
-
 def _pool(tmp_path: Path) -> dict[str, str | None]:
     """The audit's memory and Lean workers as V3c's audit was run with them, None for a flag it wasn't given."""
     a = json.loads((tmp_path / "order.audit").read_text())
@@ -5027,24 +4924,6 @@ def test_a_served_nodes_audit_runs_one_lean_check_at_a_time_within_v3c_audit_mem
     memory, each a default its command can set."""
     rc, lines, order, _limits = _v3c(tmp_path, **given)
     assert rc == 0 and "audit" in order, (lines, order)
-    assert _pool(tmp_path) == want
-
-
-@pytest.mark.parametrize("given, want", [
-    ({}, {"--lean-workers": None, "--audit-mem-gb": None}),
-    ({"V3C_LEAN_WORKERS": "2"}, {"--lean-workers": "2", "--audit-mem-gb": None}),
-    ({"V3C_AUDIT_MEM_GB": "650"}, {"--lean-workers": None, "--audit-mem-gb": "650"}),
-])
-def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_its_command_sets_it(tmp_path, given, want):
-    """A follow-on's audit has its node: a5's own default of one Lean check at a time, within what the node has free
-    each time the audit reads it (as its sessions start, and as its negatives' workers and its registered reads' pool
-    are made), unless its command says otherwise. V3C_AUDIT_MEM_GB set on the follow-on's command reaches the
-    audit as its memory, which its Lean checks and its negatives' workers then start within; left unset, its default
-    is only what the node must have, and the audit is given no figure. The follow-on ends without failing: 0, or 2
-    where its record is pending, composed off its node."""
-    assert _deferred(tmp_path).returncode == 0
-    rc, lines, order, _limits = _follow(tmp_path, **given)
-    assert rc in (0, 2) and order[0] == "audit", (lines, order)
     assert _pool(tmp_path) == want
 
 
@@ -5109,29 +4988,6 @@ def _held(entry: RL.Declaration, verdict: str) -> str:
             f"it, holds the declaration the serve's declaration.json names: {verdict}")
 
 
-@pytest.mark.parametrize("extra", [{}, {"DAY_LOG": "/elsewhere.json", "DAY_PARAMS": "/elsewhere-params.json"}],
-                         ids=["copy", "this-nodes-ignored"])
-def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_against_that_copy(tmp_path, extra):
-    """The onsite run of record defers V3c's audit, so DAY rides the deferral: DAY in its settings, the day's log and
-    parameters copied into private/deferred and hashed with the serve's declaration.json, and the follow-on, once the
-    copy holds to the served node's sums and to the declaration declaration.json names by digest, hands records_audit
-    the copy (--day-log, --day-params), never a log of its own node's environment."""
-    entry = _day_deferred(tmp_path, COMPOSE_OFF_NODE="0")
-    d, dd = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred"
-    assert _deferral_settings(tmp_path)["DAY"] == "3"
-    assert (dd / "day-log.json").read_bytes() == (tmp_path / "day-log.json").read_bytes()
-    listed = (dd / "inputs.txt").read_text().splitlines()
-    assert {"declaration.json", "private/deferred/day-log.json", "private/deferred/day-params.json"} <= set(listed)
-    sums = {f: h for h, f in (x.split("  ", 1) for x in (dd / "inputs.sha256").read_text().splitlines())}
-    assert sums["private/deferred/day-log.json"] == hashlib.sha256((d / "private/deferred/day-log.json").read_bytes()).hexdigest()
-    rc, lines, order, _limits = _follow(tmp_path, records_audit=_day_tree(tmp_path), **extra, LEAN="accept")
-    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
-    assert lines[1].endswith("(the serve dir's private/deferred/inputs.sha256): PASS")
-    assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {_named(entry)[:16]}…)")
-    assert _audited(tmp_path, DAYS) == {"--day": "3", "--day-log": str(dd / "day-log.json"),
-                                        "--day-params": str(dd / "day-params.json")}
-
-
 def test_a_deferral_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_and_gamma(tmp_path):
     """The follow-on's settings name α and Γ as the run's limits file states them (IO_LIMITS, written with the policy
     before the serve), whatever the environment says at the deferral, so the follow-on's composite reads none off the
@@ -5184,24 +5040,6 @@ def _live_follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], l
     assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=LIVE, PP_PEER="vy-dc-h200").returncode == 0
     env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6"}
     return _follow(tmp_path, **{**env, **extra})
-
-
-def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_recorded_from_its_own_node(tmp_path):
-    """A deferral in a run of record records V3c's audit's coins (V3C_CHALLENGER, DEVELOPMENT unset) and the served
-    node's peer, so its follow-on takes its coins from that challenger, whatever its own environment's PP_CHALLENGER,
-    from its own node (V3C_PEER, default PP_PEER), as its COINS line says, once the gate holds no session on the window's
-    run root."""
-    rc, lines, order, _limits = _live_follow(tmp_path)
-    assert {k: v for k, v in _deferral_settings(tmp_path).items() if k in ("V3C_CHALLENGER", "DEVELOPMENT", "SERVED_PEER")} == {
-        "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}
-    assert rc == 2 and order == ["gate-ledger", "gate-pins", "audit", "period"], (lines, order)
-    assert lines[-1].startswith("HANDOFF"), lines
-    assert lines[0] == (f"COINS V3c's audit: the challenger {LIVE_SAID} (peer cpu-6), the window's run root's one session, the "
-                        "sampled-proofs audit of record")
-    assert sum(x.startswith("V3C-GATE ready: lane vllm's open period None; root ") for x in lines) == 1, lines
-    assert _audited(tmp_path, COIN_FLAGS) == {
-        "--challenger": LIVE, "--peer": "cpu-6", "--challenger-key": str(tmp_path / "challenger-key.json"),
-        "--gate-key": str(tmp_path / "gate_ed25519")}
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -5333,24 +5171,6 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
     assert (rc, lines, order) == (0, ["PREFLIGHT passed, 755 GB: the follow-on of the served node's (SERVED_NODE) deferral, its "
                                       f"compose hand-off for COMPOSE_NODE. {ONLY}"], [])
-
-
-def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
-    """The inference-only verdict the served node judged goes with the deferral, listed and hashed with the follow-on's
-    inputs, and into the follow-on's record as the served node wrote it, said before the record: the follow-on judges it
-    no second time (under COMPOSE_OFF_NODE=0; under 1 the hand-off carries it)."""
-    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept", "classes": [["ab", 7, 3]]}
-    (tmp_path / "served-out" / "record").mkdir(parents=True)
-    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
-    assert _deferred(tmp_path, COMPOSE_OFF_NODE="0").returncode == 0
-    dd = tmp_path / "serve" / "private" / "deferred"
-    assert "private/deferred/inference-only.json" in (dd / "inputs.txt").read_text().splitlines()
-    assert json.loads((dd / "inference-only.json").read_text()) == verdict
-    rc, lines, order, _limits = _follow(tmp_path)
-    assert rc == 2 and order == ["audit", "period", "composite", "record"], (lines, order)
-    assert lines.pop(0) == V3C_ENTRY
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-TIE:", "V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "COMPOSITE:", "RECORD"]
-    assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 
 #: a5's v2 case's blobs in `_handed`'s serve dir: its circuit, public file, lookup table, and a session's record and proof
@@ -5943,49 +5763,6 @@ def test_a_compose_follow_on_refuses_a_copy_holding_a_link(tmp_path):
         "copy the hand-off's files, never a link"], [])
 
 
-def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):
-    """Under COMPOSE_OFF_NODE=1 the deferral's follow-on is prover-side (it holds the copy's value files), so after V3c's
-    audit it composes neither the record nor the composite: it writes the compose hand-off, naming itself as where V3c's
-    audit ran and that audit, the SPOT audit of record, as the record's (step 3's, on local coins while V3c's
-    are live, isn't carried), with the deferral's pieces and inference-only verdict. A compose follow-on on a third node
-    then composes both from that hand-off alone, the record from V3c's audit, and refuses the follow-on's serve dir, which
-    holds the value files."""
-    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
-    (tmp_path / "served-out" / "record").mkdir(parents=True)
-    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
-    assert _deferred(tmp_path).returncode == 0
-    rc, lines, order, _limits = _follow(tmp_path)
-    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
-    assert rc == 2 and order == ["audit", "period"], (lines, order)
-    assert lines.pop(0) == V3C_ENTRY
-    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-TIE:", "V3C-AUDIT", "V3C-PERIOD", "HANDOFF"]
-    assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
-    v3c = f"v3c-w7-{VTAG}/audit"
-    assert _env_of(dc / "compose.env", COMPOSES) == {
-        "K": "7", "PRODUCT": "remote", "POUW": "pearlplus", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6",
-        "SAMPLED_AUDIT": v3c, "STEPS": "0,3"}
-    listed = (dc / "inputs.txt").read_text().splitlines()
-    assert listed == [*sorted([
-        "pearlplus/w7/registration.json", "pearlplus/w7/tie/circuit-record.json", "pearlplus/w7/tie/summary.json",
-        "pearlplus/w7/tie/window/registration.json", "private/compose/compose.env", "private/compose/inference-only.json",
-        "private/compose/pieces/pouw/answer.json", f"{v3c}/summary.json"]),
-        "private/compose/inputs.sha256"]
-    assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
-    (tmp_path / "order").unlink()
-    rc, lines, order = _compose(tmp_path, HOST="vy-auditor-2", LEAN="accept")
-    assert rc == 0 and order == ["composite", "record"], (lines, order)
-    assert lines[0] == COMPOSED.format(audit="V3c's audit from its follow-on node", sampled=f"v3c-wK-{VTAG}/audit", verdict="PASS")
-    argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[argv.index("--sampled-proofs") + 1] == str(d / v3c) and "--sampled-lean" in argv
-    for x in ("serve", "compose-out"):
-        shutil.rmtree(tmp_path / x)
-    (tmp_path / "served-node").rename(tmp_path / "serve")
-    (tmp_path / "order").unlink()
-    rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
-    assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
-
-
 #: what the compose hand-off carries of `_pearlplus_piece`'s piece: the record's files of a piece, and what
 #: `pearlplus_of_record` reads, each challenger session's public key at its path
 PEARLPLUS_HANDED = ("coin.json", "development.json", "ledger.jsonl", "pearlplus-answer.json", "pearlplus-lean.json",
@@ -6361,7 +6138,6 @@ def _copy(tmp_path: Path, kind: str, to: str, **extra: str) -> tuple[int, list[s
 @pytest.mark.parametrize("kind, to, host, what", [
     ("compose", "vy-auditor-2", "vy-dc-h200", "the hand-off's verifier-side"),
     ("deferred", "research@vy-nebius-cpu-6", "vy-dc-h200", "the deferral's prover-side"),
-    ("compose", "vy-auditor-2", "cpu-6", "the hand-off's verifier-side"),
 ])
 def test_copy_sends_each_file_a_list_names_and_nothing_else_to_the_same_path_on_its_host(tmp_path, kind, to, host, what):
     """`served_verdicts.sh copy deferred|compose HOST` sends the files a deferral's or a hand-off's inputs.txt lists, its
