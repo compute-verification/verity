@@ -17,6 +17,7 @@ public import PouwVerifier.Lanes
 public import PouwVerifier.Verified
 public import PouwVerifier.LiveVerified
 public import PouwVerifier.CommittedFiles
+public import PouwVerifier.Refusals
 
 /-!
 # PoUW's execution phase check as a core protocol
