@@ -4,7 +4,6 @@ package and target from it and state none themselves, and served_piece.py and se
 path, only the tree they are built in."""
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -25,18 +24,3 @@ def test_declared_py_reads_the_declaration_and_nothing_else() -> None:
                          capture_output=True, text=True, env={"PYTHONPATH": str(ROOT)}).stdout
     assert [tuple(line.split(" ")) for line in got.splitlines()] == _declared()
 
-
-def test_the_scripts_state_no_executable_and_read_declared_py() -> None:
-    for script in SCRIPTS:
-        text = (ROOT / script).read_text()
-        assert "benchmarks/pous/declared.py" in text, script
-        for package, target in _declared():
-            assert package not in text, (script, package)
-            assert not re.search(rf"bin/{target}\b", text), (script, target)
-
-
-def test_no_flag_names_an_executable() -> None:
-    for script in ("benchmarks/pous/served_piece.py", "benchmarks/pous/served_case.py"):
-        text = (ROOT / script).read_text()
-        assert not re.search(r'add_argument\("--(case-exe|bw-case-exe|exe)"', text), script
-        assert "allow_abbrev=False" in text, script

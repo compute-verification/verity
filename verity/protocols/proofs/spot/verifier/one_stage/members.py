@@ -58,7 +58,6 @@ import hashlib
 import json
 import math
 import os
-import subprocess
 import tempfile
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -74,6 +73,7 @@ from . import closing as CL, docket as DK, one_circuit as OC, partition as P, pr
 from verity.commitments import registered_value as RV
 from verity.commitments.domains import REGISTERED_READS_V2
 from .proofs import V2_EXE, LeanError, v2_executable
+from . import lean_child as LC
 
 #: the exit of the v2 executable's ``check`` by its verdict (`Core.BlobProtocol.main`)
 EXITS = {"accept": 0, "reject": 1, "undecided": 2}
@@ -89,8 +89,7 @@ def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: 
         canonical = json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
         for path, b in zip(paths, (canonical, commitment, evidence)):
             path.write_bytes(b)
-        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
-                           text=True)
+        p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)])
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -388,6 +387,31 @@ def _laid(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
         raise _Refused(MEMBERS_LAID)
 
 
+def held_read_why(member: str, node: int) -> str:
+    """`OneStageZk.HELD_READ_WHY`."""
+    return (f"member {member}: its units read run Input node {node}, a held or tied parameter's, which R8 lets several "
+            "proof blocks read only as one registered tree, and it carries no registered file: a reader of a held or "
+            "tied parameter opens its rows by its registered reads")
+
+
+def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
+    """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
+    tied parameter's run Input (`registered.held_gates`, `docket._tied`) carries a registered file."""
+    if not P.is_template_query(params["query"]):
+        return
+    registered = list(params.get("registered") or {})
+    tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
+    try:
+        reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
+    except P.QueryRefused as e:
+        raise _Refused(f"held reads: {e}") from e
+    for name, m in ms.items():
+        if m.get("registered") is None:
+            for units, i in reads:
+                if any(lo < units.stop and units.start < hi for lo, hi in m["units"]):
+                    raise _Refused(held_read_why(name, i))
+
+
 def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
     """`OneStageZk.sampledHeld`: each statement's member, in the statements' order, has a unit among the evidence's
     ``proved_units`` `want`; the first that has none refuses (`OneStageZk.unsampled`)."""
@@ -665,14 +689,13 @@ def _wired_roots(desc: Mapping[str, Any], ranges: Sequence[Sequence[Any]], ms: M
     return out
 
 
-def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program | None = None,
-           query: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any], *, program: Program,
+           query: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """Each member's slice of the docket `record` (`OneStageZk.Member.slice`), for the members `members` by name,
     each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
     docket's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), its template's fields' trees at
-    the output ports it has no root of (`OneStageZk.ownFieldsOf`), and the docket's scheme; with the verifier's
-    `program` and `query`, each wired port at its writer's tree (`_wired`, Lean's `fieldRoots`), which no slice gives
-    without them. `population_why` holds a member's
+    the output ports it has no root of (`OneStageZk.ownFieldsOf`), the docket's scheme, and each wired port at its
+    writer's tree under the verifier's `program` and `query` (`_wired`, Lean's `fieldRoots`). `population_why` holds a member's
     public file to its slice. `ValueError` with Lean's reason where the members are not laid over the docket's
     population (`OneStageZk.laidHeld`) or a root of the docket is not one member's: an audit outside the per-member
     form's run reads a member's slice here, never by a rule of its own."""
@@ -680,9 +703,7 @@ def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, 
     try:
         _laid(ms, record)
         roots, ft = _members_roots(ms, record)
-        if program is not None:
-            desc = json.loads(json.dumps(codec.encode_program(program)))
-            roots = _wired(program, query or {}, desc, ms, record, roots, ft)
+        roots = _wired(program, query, json.loads(json.dumps(codec.encode_program(program))), ms, record, roots, ft)
     except _Refused as e:
         raise ValueError(str(e)) from None
     return {name: _slice(m, roots[name], record) for name, m in ms.items()}
@@ -852,9 +873,8 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
     with tempfile.TemporaryDirectory(prefix="verity-members-form-") as d:
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
-        p = subprocess.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
-                            "--public", str(public), "--tables", d], capture_output=True, text=True,
-                           env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
+                    "--public", str(public), "--tables", d], env=PF.verifier_env())
     out = p.stdout.removesuffix("\n")
     if not out.startswith("KS-FORM ") or p.returncode != (0 if out == "KS-FORM ok" else 1):
         raise Outside(f"the verifier answered no form check for the files (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
@@ -902,7 +922,11 @@ def _files(name: str, m: Mapping[str, Any], blobs: Mapping[str, Path], descripto
             c = OC.lower(OC.restrict(descriptor, partition, m["units"], decoded), partition, PF.lower_executable,
                          cut=OC.cuts(descriptor, partition, decoded),
                          formed=OC.formed_in(decoded, partition, m["units"]))
-        except (OC.NotDerived, OC.Refused) as e:
+        except OC.Refused as e:
+            if str(e).startswith(f"{e.code}: {OC.NOT_ADMITTED}"):
+                raise _Refused(str(e).removeprefix(f"{e.code}: ")) from None
+            raise _Refused(f"restrict: {e}") from None
+        except OC.NotDerived as e:
             raise _Refused(f"restrict: {e}") from None
         circuit = derived / f"{hashlib.sha512(c).hexdigest()}.txt"
         circuit.write_bytes(c)
@@ -952,10 +976,10 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         if st.registered is not None:
             (at / "registered.json").write_text(json.dumps(st.registered))
             reads = ["--registered", str(at / "registered.json")]
-        p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
-                            "--public", str(st.public), "--tables", str(at / "tables"),
-                            "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
-                            "--session", str(at / "s")], capture_output=True, text=True, env=PF.verifier_env())
+        p = LC.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
+                    "--public", str(st.public), "--tables", str(at / "tables"),
+                    "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
+                    "--session", str(at / "s")], env=PF.verifier_env())
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if len(lines) != 1 or not isinstance(lines[0], dict):
         raise Outside(f"the verifier answered no verdict for the session (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
@@ -1027,6 +1051,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         if not P.in_order(program, params["query"], record["population"]):
             raise _Refused(POPULATION_ORDER)
         _laid(ms, record)
+        _held_read(ms, params, program)
         _class(ms)
         _tree_ports_held(ms, record)
         roots, ft = _members_roots(ms, record)

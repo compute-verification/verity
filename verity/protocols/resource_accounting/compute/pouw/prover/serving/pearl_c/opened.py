@@ -1,7 +1,7 @@
 """The prover's openings of a Pearl+ pass from its directory (``pass-NNNNN``, the manifest's layout: `manifest`): a tile's
 A and B rows and transcript leaf (`Opened.open`, as `clear_audit.Prover.open` has them) and its real rows of the call's
 committed y (`Opened.open_y`), each read from the pass's files (`Files`) and opened in the tree as the device laid it out
-(`opening`). ``verify_run`` replays a pass through them, and `credited` fills the credited block's ports from them."""
+(`opening`). ``verify_run`` replays a pass through them."""
 from __future__ import annotations
 
 import hashlib
@@ -9,10 +9,9 @@ import mmap
 from pathlib import Path
 
 import numpy as np
-from verity.commitments import Opening
-from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
-from verity.protocols.resource_accounting.compute.pouw.prover.clear.clear_audit import TileOpening
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, HM96_SALT, Epoch
+from verity.commitments import Opening, hm96
+
+HM96_SALT = hm96.SHA512.salt_bytes
 
 
 def pow2(n: int) -> int:
@@ -56,18 +55,19 @@ def f32_row(data, k: int, i: int) -> bytes:
 
 
 class Opened:
-    """The prover's side of the audit from the pass's files: `open`, as `clear_audit.Prover` has it."""
+    """The prover's side of the audit from the pass's files: `open`, as `clear_audit.Prover` has it. ``salted``: the
+    scheme commits under hm96-sha512, each leaf followed by its kept salt; ``tile_opening``: what `open` returns,
+    `clear_audit.TileOpening` as the caller's verifier reads it; ``epoch``, in `open` and `open_y`, is an `audit.Epoch`."""
 
-    def __init__(self, man: dict, files: Files, refs):
-        self.man, self.files, self.refs = man, files, refs
-        self.hm96 = pouw_schemes.get(man["scheme"]).commitment_hash == HM96
+    def __init__(self, man: dict, files: Files, refs, salted: bool, tile_opening: type):
+        self.man, self.files, self.refs, self.hm96, self.tile_opening = man, files, refs, salted, tile_opening
         self.nb = 64 if self.hm96 else 32
 
     def _salted(self, value: bytes, spec: dict | None, i: int) -> bytes:
         """``value`` followed by leaf ``i``'s salt from the kept salts at manifest entry ``spec``."""
         return value + bytes(self.files(spec)[HM96_SALT * i:HM96_SALT * (i + 1)]) if self.hm96 else value
 
-    def open(self, epoch: Epoch, tile_id: int) -> TileOpening:
+    def open(self, epoch, tile_id: int):
         ref, nb, sv = self.refs[tile_id], self.nb, self._salted
         u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
         wt = self.man["weights"][str(u.weight)]
@@ -76,14 +76,14 @@ class Opened:
         c = self.man["commitment"]
         leaves = self.files(self.man["leaves"])
         a_salts, b_salts, t_salts = (rec["salts"], wt["salts"], self.man["salts_t"]) if self.hm96 else (None, None, None)
-        return TileOpening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), a_salts, i), nb)
+        return self.tile_opening(ref, tuple(opening(a_tree, u.shape.m, i, sv(f32_row(a_rows, u.shape.k, i), a_salts, i), nb)
                                       for i in ref.tile.rows),
                            tuple(opening(b_tree, u.shape.n, j, sv(f32_row(b_rows, u.shape.k, j), b_salts, j), nb)
                                  for j in ref.tile.cols),
                            opening(self.files(self.man["tree_t"]), c["count"], tile_id,
                                    sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), t_salts, tile_id), nb))
 
-    def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
+    def open_y(self, epoch, tile_id: int) -> tuple[Opening, ...]:
         """The tile's real rows of its call's committed y (`served_y`; filler rows aren't served)."""
         ref = self.refs[tile_id]
         u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]

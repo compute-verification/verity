@@ -162,11 +162,11 @@ def stated_serve(doc: Mapping[str, Any], model: str, revision: str) -> dict[str,
 def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> tuple[dict[str, Any], list[str]]:
     """The class's circuit under ``serve``'s φ (`window_circuit.class_circuit`, the circuit `prove_path.py window-circuit
     --class` records for a window the class takes), with a PoUW ``scheme`` cut at its linears (`window_class.PearlTables`),
-    as the description its session and fresh bits are read from, the way `inference_blocks.budgets` reads B's k (no
-    member stated, which is work per template the counts don't read), and the parameters it registers; `Undecided` where
-    the vocabulary can't express it."""
+    as its record at `prove_path.py`'s default cap (`interface.descriptor_record`), which names the program digest the block
+    counts hold its templates to, and the parameters it registers; `Undecided` where the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
     import prove_path as PP
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.window_circuit import check_provable, class_circuit
     from verity_vllm.program.predict.window_class import PearlTables
@@ -177,8 +177,7 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
         check_provable(circuit)
     except Unexpressible as e:
         raise Undecided(f"the class's circuit under the policy's φ: {e}") from e
-    doc = {**circuit.description(), "name": circuit.name, "partition": "",
-           "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
+    doc = IF.descriptor_record(circuit, 64)
     return doc, sorted(circuit.registered.params if circuit.registered is not None else ())
 
 
