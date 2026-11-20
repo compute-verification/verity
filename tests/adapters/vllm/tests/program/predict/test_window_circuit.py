@@ -434,24 +434,26 @@ def test_a_served_window_is_one_wired_program_its_members_fed_by_hand():
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 128 wires besides the scan's, 101 registered reads,
-    root reads and openings, the same 182 ranges in their order (`interface.ordered`) and 72 inference entries, the 8
-    Programs 4 times the units.
-    The scan is a template a lane, a slot a unit of each, each template's slots side by side in one range, one inference
-    entry and one read of the scan state: its wires are its token, slot, head and the entry's occupancy word, 4 a lane
-    its slots read, whatever the boundaries."""
+    class of record's slots at 2 and at 8 Programs have the same 128 wires besides the scan's and its state owner's, 98
+    registered reads, root reads and openings, the same 183 ranges in their order (`interface.ordered`) and 73 inference
+    entries, the 8 Programs 4 times the units besides the owner's unit a boundary.
+    The scan is a template a lane, a slot a unit of each, each template's slots side by side in one range and one
+    inference entry: its wires are its token, slot, head and the entry's occupancy word, 4 a lane its slots read, and the
+    owner's state words, one a lane, whatever the boundaries. The owner alone reads the scan state, one read over the
+    boundaries."""
     reg = S._registered()
     two, eight = (class_circuit(reg, SLOTS, n, GRAIN) for n in (2, None))
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
               len(c.blocks.inference), len(c.order)) for c in (two, eight)]
     scans = [IF.descriptor_id(f) for f in SS.bridge(SLOTS.scan, SLOTS.prompt)]
-    assert shape == [(132, 101, 2, 1, 72, 182), (144, 101, 2, 1, 72, 182)]
+    assert shape == [(136, 98, 2, 1, 73, 183), (148, 98, 2, 1, 73, 183)]
     assert set(eight.ids) == set(two.ids)
     assert [sum(w.writer in scans for w in c.wires) for c in (two, eight)] == [4, 4 * SLOTS.lanes]
-    assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 5576
+    owner = next(t for t, (fn, _) in zip(two.ids, two.templates) if fn.name == "ScanState")
+    assert sum(n for _, n in eight.templates) - 2 == 4 * (sum(n for _, n in two.templates) - 2) == 5576
+    assert [sum(w.writer == owner for w in c.wires) for c in (two, eight)] == [SLOTS.lanes] * 2
     assert [[(r.reader, r.at, r.radix, r.base, r.step) for r in c.registered.reads if r.param == SS.SCAN_STATE]
-            for c in (two, eight)] == [[(t, 0, *a) for t in sorted(scans)] for a in (((2,), 0, (16 * 9090,)),
-                                                                                    ((4, 2), 0, (0, 16 * 9090)))]
+            for c in (two, eight)] == [[(owner, 0, (2,), 0, (16 * 9090,))]] * 2
 
 
 def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_patterns(window):
