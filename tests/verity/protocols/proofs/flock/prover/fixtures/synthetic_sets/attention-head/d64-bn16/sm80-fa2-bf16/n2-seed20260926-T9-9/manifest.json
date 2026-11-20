@@ -51,7 +51,7 @@
   "model": null,
   "pair": null,
   "program_digests": {
-   "AttentionHead_v3{T=9,D=64,BN=16}": "eafc59f6bb9a59f07fbb80ff15891bf2978e873474d98d832e8259a7c7e8ec47c27c86c360484622423f43a63f5d00ca78cae07c116421c1f03e3899012c846e"
+   "AttentionHead_v3{T=9,D=64,BN=16}": "0f9f1ab6c7c266c0092cfe366e9a9a6456a37ebf53d161b4b89aa1bfc84a2259622557d9cc2adbe96fcae7714f88f8b3cba08a34102ceccccbed81e10dd43778"
   },
   "recipe": {
    "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",

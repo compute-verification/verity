@@ -707,13 +707,14 @@ def test_the_memory_attesters_verdict_is_the_leans_alone(flip, monkeypatch):
     from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2
 
     live = _live()
-    lean = live.lean_verdict().verdict
+    verdicts = live.lean_verdict()
+    lean = verdicts.verdict
 
     def judged(*args, **kw):
         v = lean(*args, **kw)
         return mc.Verdict(not v.accepted, () if not v.accepted else ("forced",), v.late, v.wrong) if flip else v
 
-    monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=judged, server=lambda: None))
+    monkeypatch.setattr(live, "lean_verdict", lambda: types.SimpleNamespace(verdict=judged, server=lambda: None, finish=verdicts.finish))
     monkeypatch.setattr(mc, "verdict", lambda *_a, **_k: pytest.fail("the Python verdict ran"))
     doc, _ = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, audits=1)
     assert doc["audits"] == 1

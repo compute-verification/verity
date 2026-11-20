@@ -1228,16 +1228,20 @@ def main(argv: list[str] | None = None) -> int:
         except (lv.LeanError, OSError) as e:
             raise SystemExit(f"auditor_line: no Lean verifier to compute the line ({e}): pass --lean-exe, or "
                              "--line-by python for a reading that is not of record") from None
+    ended = False
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
                       commit=commit, pins=pins, main=first_parent, model=model, lean=lean,
                       lockdown=None if a.lockdown is None else read_lockdown(a.lockdown))
+        if lean is not None:
+            ended = True
+            lean.close()
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
     finally:
-        if lean is not None:
-            lean.close()
+        if lean is not None and not ended:
+            lean.close(check=False)
     print(json.dumps(doc, indent=1, default=str))
     if a.table is not None:
         a.table.write_text(table(doc))

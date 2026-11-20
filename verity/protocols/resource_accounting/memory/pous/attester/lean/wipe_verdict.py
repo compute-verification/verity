@@ -56,6 +56,16 @@ def server() -> D.Server:
     return D.Server([str(D.build(PACKAGE, EXE))])
 
 
+def finish() -> None:
+    """The end of a run's verdicts: the server's input closed, the process waited for, and `D.ProtocolError` by name
+    (`LEAN_PANIC` or `LEAN_EXIT`) where it ended with a panic line or a status but 0: no verdict it gave is used before this
+    returns. The next verdict starts a server of its own."""
+    if server.cache_info().currsize:
+        done = server()
+        server.cache_clear()
+        done.close_checked()
+
+
 def lean(signed: sw.SignedWipe, commitment: sw.WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
          schemes: Mapping[str, Any] = sw.SCHEMES) -> dict[str, Any]:
     """The Lean's verdict as it gives it; `ValueError` where it refuses the record."""
@@ -110,5 +120,5 @@ def outcome(v: sw.Verdict) -> str:
     return "accept" if v.accepted else "undecided" if v.reasons == (NO_JUDGE,) else "reject"
 
 
-__all__ = ["DISAGREE", "EXE", "NO_JUDGE", "VERDICT", "VERDICTS", "judge", "lean", "outcome", "python", "record",
+__all__ = ["DISAGREE", "EXE", "NO_JUDGE", "VERDICT", "VERDICTS", "finish", "judge", "lean", "outcome", "python", "record",
            "server", "verdict"]
