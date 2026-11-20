@@ -33,14 +33,17 @@ def params (p : Program) : Array Registered.Param :=
   (Registered.params p.desc (Json.arr #[Json.arr #["x", Json.arr #["Array", (3 : Nat), bit]], Json.arr #["y", bit]])).toOption.getD #[]
 
 /-- A v2 verifier of the descriptor `d`: `x` registered in rows of one word, one port, a uniform sample of one. -/
-def verifier (d : String := E3) : Verifier :=
+def verifier (d : String := Spot.OneStageZk.E3) : Verifier :=
   let p := program d
   { program := p, query := QE, samplingDesign := Json.mkObj [("law", "subset"), ("k", (1 : Nat))], workTable := none,
     scheme := "s", ports := #[("o", Json.mkObj [("leaves", (4 : Nat)), ("domain", "d")])], leafLayer := none,
     anchors := #[], log := #[], partition := none, registered := #[("x", 1)], params := params p }
 
 /-- A root, lowercase hex of 64 bytes. -/
-def ROOT : String := String.mk (List.replicate 128 'a')
+def ROOT : String := String.ofList (List.replicate 128 'a')
+
+/-- Another root. -/
+def OTHER : String := String.ofList (List.replicate 128 'b')
 
 /-- The record `v`'s own copies give: the check returns no code on it. -/
 def honest (v : Verifier) : V Json := do
@@ -66,8 +69,7 @@ def honest (v : Verifier) : V Json := do
 
 /-- The record `j` with key `k` set to `x`, or removed for none. -/
 def put (j : Json) (k : String) (x : Option Json) : Json := match j with
-  | .obj kvs => Json.mkObj ((kvs.fold (fun acc k' v' => if k' == k then acc else acc ++ [(k', v')]) []) ++
-      (x.map fun x => [(k, x)]).getD [])
+  | .obj kvs => Json.mkObj ((kvs.toArray.filter (·.1 != k)).toList ++ (x.map fun x => [(k, x)]).getD [])
   | _ => j
 
 /-- The record's first registered entry and first root, each with key `k` set to `x`. -/
@@ -81,19 +83,23 @@ def codes (v : Verifier) (f : Json → Json := id) : Array String :=
   | .ok r => check (f r) v
   | .error e => #[s!"fixture: {e}"]
 
-def V3 : Verifier := verifier
+/-- The record with an entry for the certified value `c` of domain `d`, under `ROOT`. -/
+def withCertified (c d : String) (j : Json) : Json := match getD j "registered" with
+  | .arr es => put j "registered" (some (Json.arr (es.push (Json.mkObj [("value", c), ("root", ROOT),
+      ("leaves", (1 : Nat)), ("words", (1 : Nat)), ("domain", d)]))))
+  | _ => j
 
-#eval (codes V3, codes (verifier E3S))
+def V3 : Verifier := verifier
 
 #guard codes V3 == #[]
 #guard codes V3 (put · "previous" none) == #["keys"]
 #guard codes V3 (put · "protocol" (some "verity/sampled-proofs/one-stage/v0")) == #["R1-protocol"]
 #guard codes V3 (put · "law" (some (Json.mkObj [("law", "subset"), ("k", (2 : Nat))]))) == #["R1-law"]
 #guard codes V3 (put · "window" (some (Json.mkObj [("kind", "rehearsal")]))) == #["window"]
-#guard codes V3 (put · "program" (some (String.mk (List.replicate 128 'b')))) == #["R2-program"]
+#guard codes V3 (put · "program" (some OTHER)) == #["R2-program"]
 #guard codes { V3 with partition := some (Json.mkObj [("format", "verity/partition/v0"),
   ("program", Flock.hexOf V3.program.sha512), ("query", QE)]) } == #["R2-partition"]
-#guard codes V3 (put · "query" (some (String.mk (List.replicate 128 'b')))) == #["R2-query"]
+#guard codes V3 (put · "query" (some OTHER)) == #["R2-query"]
 #guard codes V3 (put · "population" (some (2 : Nat))) == #["R2-population"]
 #guard codes V3 (put · "scheme" (some "t")) == #["R3-scheme"]
 #guard codes V3 (put · "roots" (some (Json.arr #[]))) == #["R3-roots"]
@@ -105,11 +111,9 @@ def V3 : Verifier := verifier
 #guard codes V3 (putEntry · "roots" "domain" "e") == #["R3-domain"]
 #guard codes V3 (put · "leaf_layer" (some "l")) == #["R4-leaf-layer"]
 #guard codes V3 (put · "anchors" (some (Json.arr #[(1 : Nat)]))) == #["R5-anchors"]
-#guard codes V3 (put · "previous" (some (String.mk (List.replicate 128 'b')))) == #["R6-previous"]
+#guard codes V3 (put · "previous" (some OTHER)) == #["R6-previous"]
 -- the log holds the honest record itself, so the window is the log's and the record's previous is its digest
-#guard match honest V3 with
-  | .ok r => codes { V3 with log := #[r] } == #["R6-window"]
-  | .error _ => false
+#guard codes { V3 with log := #[(honest V3).toOption.getD .null] } == #["R6-window"]
 #guard codes { V3 with outputs := #[("x", "00", .port "p")] } == #["R7-output"]
 #guard codes V3 (put · "registered" (some .null)) == #["R7-registered"]
 #guard codes V3 (put · "registered" (some (Json.arr #[]))) == #["R7-values"]
@@ -119,14 +123,10 @@ def V3 : Verifier := verifier
 #guard codes V3 (putEntry · "registered" "domain" "e") == #["R7-domain"]
 -- 16-bit words are named by leaving `word_bits` out
 #guard codes V3 (putEntry · "registered" "word_bits" (16 : Nat)) == #["R7-word_bits"]
-#guard codes { V3 with pinned := #[("x", String.mk (List.replicate 128 'b'))] } == #["R7-held"]
+#guard codes { V3 with pinned := #[("x", OTHER)] } == #["R7-held"]
 #guard codes { V3 with supplied := #[("z", #[])] } == #["R7-supplied"]
-#guard codes { V3 with certified := #[({ value := "c", leaves := 1, words := 1, wordBits := 16, domain := "d" },
-  String.mk (List.replicate 128 'b'))] }
-  (fun r => match getD r "registered" with
-    | .arr es => put r "registered" (some (Json.arr (es.push (Json.mkObj [("value", "c"), ("root", ROOT),
-        ("leaves", (1 : Nat)), ("words", (1 : Nat)), ("domain", "d")])))))
-    | _ => r) == #["R7-certified"]
+#guard codes { V3 with certified := #[({ value := "c", leaves := 1, words := 1, wordBits := 16, domain := "d" }, OTHER)] }
+  (withCertified "c" "d") == #["R7-certified"]
 #guard codes { V3 with tied := #["nope"] } == #["R8-tied"]
 #guard codes (verifier E3S) == #["R8-shared-input"]
 -- `y` tied, so R8 lets both readers through; two members of one unit each, under a sample of one unit of two
