@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The served window on its node (`run.sh window`): served_verdicts.sh under the card's lease, then its hand-off packed.
 set -uo pipefail
-for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO NORM_TAP_SO; do
+for v in CARD CORES END COMPOSE_OFF_NODE COMPOSE_NODE ROW REPO REV VENV CUDA_HOME HF_HOME SERVE_ROOT FLOCK_WORK HIDDEN_SO; do
   [ -n "${!v:-}" ] || { echo "window.sh: no $v: start it with \`adapters/vllm/tools/served_run/run.sh window\`"; exit 2; }
 done
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs OUT=$RESEARCH_RUN_DIR/out
@@ -10,7 +10,7 @@ log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$OUT/window-job.log"; }
 TREE=$PWD SHA=$(git rev-parse HEAD)
 row_id=${ROW##*/}
 end=$(date -u -d "$END" +%s) || { log "END is not a time"; exit 2; }
-for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$FLOCK_WORK/flock-gpu-link/flock/target/release/flock-circuit"; do
+for f in "$ROW/manifest.json" "$HIDDEN_SO" "$FLOCK_WORK/flock-gpu-link/flock/target/release/flock-circuit"; do
   [ -e "$f" ] || { log "the node holds no $f (\`run.sh setup\` makes it): nothing run"; exit 2; }
 done
 cp "$IN/$row_id.json" adapters/vllm/workloads/ || exit 2

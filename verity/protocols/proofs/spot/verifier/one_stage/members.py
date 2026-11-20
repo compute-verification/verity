@@ -89,7 +89,7 @@ def check(params: Mapping[str, Any], commitment: bytes, evidence: bytes, blobs: 
         canonical = json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
         for path, b in zip(paths, (canonical, commitment, evidence)):
             path.write_bytes(b)
-        p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)])
+        p = LC.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], ok_statuses=LC.CHECK_EXITS)
     try:
         got = json.loads(p.stdout.strip().splitlines()[-1])
     except (IndexError, ValueError):
@@ -874,7 +874,7 @@ def flock_form(circuit: Path, public: Path, tables: Sequence[tuple[str, Path]]) 
         for name, f in tables:
             os.symlink(f, Path(d, f"{name}.u32"))
         p = LC.run([str(PF.executable()), "ks-form", "--statement", PF.TMPL_STATEMENT, "--circuit", str(circuit),
-                    "--public", str(public), "--tables", d], env=PF.verifier_env())
+                    "--public", str(public), "--tables", d], env=PF.verifier_env(), ok_statuses=LC.KS_FORM_EXITS)
     out = p.stdout.removesuffix("\n")
     if not out.startswith("KS-FORM ") or p.returncode != (0 if out == "KS-FORM ok" else 1):
         raise Outside(f"the verifier answered no form check for the files (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")
@@ -979,7 +979,7 @@ def flock_verdict(st: Statement) -> dict[str, Any]:
         p = LC.run([str(PF.executable()), "verify", "--zk", "--statement", PF.TMPL_STATEMENT, "--circuit", str(st.circuit),
                     "--public", str(st.public), "--tables", str(at / "tables"),
                     "--partition", str(at / "partition.json"), "--program", str(at / "program.json"), *reads,
-                    "--session", str(at / "s")], env=PF.verifier_env())
+                    "--session", str(at / "s")], env=PF.verifier_env(), ok_statuses=LC.VERIFY_EXITS)
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if len(lines) != 1 or not isinstance(lines[0], dict):
         raise Outside(f"the verifier answered no verdict for the session (exit {p.returncode}): {(p.stderr or p.stdout)[-400:]}")

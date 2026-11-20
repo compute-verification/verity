@@ -10,7 +10,7 @@ the bundle in trees of their own (`ml.windows.rows`: a ``frame-v3-sha512`` tree 
 commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root and
 this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
 hash.  A window is ``served`` when its roots are serving's own, made before sampling (the in-Commit hook's, `serving_rows.readers`,
-which a deferred Commit with ``--serving-rows`` runs at its C2 site before its bundle is sealed, `c2_replay.serving_rows`); a
+run before the bundle is sealed); a
 window from the bundle becomes ``served`` only once a circuit opens the record's own leaves (rows-sha512's ``hm96-sha512/row/v2``
 stream rows, vllm-v1's SHA-256 leaves)."""
 from __future__ import annotations
@@ -87,11 +87,6 @@ def window_of(r: SimpleNamespace, partition_file: str) -> Any:
     window, _rows = SRW.population(r.programs, json.loads(Path(partition_file).read_text()), bytes(r.run.run_root).hex(), r.program_dirs,
                                    arrivals=r.arrivals)
     return window
-
-
-def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: str, required_manifest: str | None = None) -> Any:
-    """`window_of` the bundle opened against its record (`of_record`)."""
-    return window_of(of_record(bundle, row_dir, required_manifest), partition_file)
 
 
 #: the bytes of the only run root a ``served`` window is taken over: the SHA-512 record's (``frame-v3-sha512`` / ``hm96-sha512``)

@@ -224,7 +224,9 @@ def main():
     with ThreadPoolExecutor(max_workers=a.jobs) as ex:
         done = list(ex.map(lambda i: run_set(i, sets[i], a, ups, store), pick))
     results = [r for r, _ in done]
-    bad = any(b for _, b in done)
+    agreeing = [r["set"] for r in results if "skipped" not in r and r["agree"] and not r["disagree"]]
+    bad = any(b for _, b in done) or not agreeing
+    print(f"ci: {len(agreeing)} of {len(results)} sets agree: {agreeing}", file=sys.stderr)
     (a.work / "result.json").write_text(json.dumps({"seed": a.seed, "sets": results}, indent=1))
     print(json.dumps(results))
     if a.out:

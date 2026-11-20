@@ -214,7 +214,7 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
-    (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
+    (`paramsOfJson`): ``proofs``, exactly the public file's SHA-512 and the verifier's registered file or
     null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
     a subset sampling design (`subset_design`), its last refusal. The per-member form (``proofs`` exactly ``members``)
     is outside the mirror."""
@@ -223,10 +223,9 @@ def _one_stage_params(rest: dict) -> dict:
     pr = rest["proofs"]
     if isinstance(pr, dict) and sorted(pr) == ["members"]:
         raise ValueError("outside the mirror: the per-member form of the parameters' proofs")
-    _keys(pr, ["circuit", "public", "registered"], "proofs")
-    for k in ("circuit", "public"):
-        if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
-            raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
+    _keys(pr, ["public", "registered"], "proofs")
+    if not (isinstance(pr["public"], str) and len(pr["public"]) == 128 and all(c in "0123456789abcdef" for c in pr["public"])):
+        raise Reject("proofs: public is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
     p = ONE_STAGE.parsed_params_v2(rest)

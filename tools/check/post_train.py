@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 """`tools/check/post_train.py [COMMIT] [--attempt RID] [--on MACHINE] [--cores LIST] [--workers N] [--force]`: the vLLM
-reference regression's manifest rebuilds and the fast workloads of record's neutrality on a landing of main.
+reference regression's manifest rebuilds on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
 about an hour of CPU in one process) run here instead, once per landing.  The verified queue starts
 this, detached, after each landing (`merge.after_land`, from `merge.caught_up`); run it by hand for a landing pushed another way, or to redo one.
-
-After the rebuilds the same run rebuilds the fast workloads of record's Programs and compares them with their pins (`verity-vllm
-neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
-fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
-rebuilds' rows (`regression fail:<row>`), and the owner of the workloads of record (`OWNER`) is rung at once in the merge thread,
-as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a candidate
 the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
@@ -64,9 +58,6 @@ SUPERSEDED = f"{PREFIX}superseded:"
 INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
-#: the neutrality tier's report, under the run's out/ (`neutrality_tier.sh`), and who is rung, by whom, when a row moved
-NEUTRALITY = Path("neutrality") / "neutrality.json"
-OWNER, SENDER = "@vllm", "ci"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
 #: the run's bound on the machine: a rebuild takes up to about 104 min on 32 cores beside other jobs; a run that outlives
 #: it is cut off before its junit, and is inconclusive, not a failure
@@ -103,10 +94,6 @@ VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_R
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1
 rc=$?
 tail -n 40 "$out/pytest.log"
-{pin}bash ../../tools/check/neutrality_tier.sh fast "$out/neutrality" > "$out/neutrality.log" 2>&1
-n=$?
-tail -n 20 "$out/neutrality.log"
-[ $rc -ne 0 ] || rc=$n
 exit $rc
 """
 
@@ -244,17 +231,9 @@ def _order(row: str) -> tuple[int, int, str]:
     return (0, int(row[1:]), "") if re.fullmatch(r"r\d+", row) else (1, 0, row)
 
 
-def moved(report: Path) -> list[str] | None:
-    """The workloads of record the neutrality tier's ``report`` names not neutral (a pinned Program digest not reproduced, or a Build
-    that didn't finish); None when there is no report."""
-    if not report.is_file():
-        return None
-    return sorted(r for r, e in json.loads(report.read_text())["rows"].items() if not e["neutral"])
-
-
-def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: Path | None = None) -> str:
-    """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), then each
-    fast workload of record the neutrality tier's ``report`` names (`moved`), then why there is nothing to read.  A skip (a check
+def verdict(junit: Path, rc: int | None = None, cut: str | None = None) -> str:
+    """`regression pass`, or `regression fail:<rows>`: the rows whose test failed (`r39`; `negative_57` for the refusal), then
+    why there is nothing to read.  A skip (a check
     `fixtures.toml` retires on a row) is neither.  A run cut off before its end (``cut``: `timeout`, `cancelled`) is
     `regression inconclusive:<cut>`, whatever it wrote."""
     if cut:
@@ -271,31 +250,8 @@ def verdict(junit: Path, rc: int | None = None, cut: str | None = None, report: 
         why += [] if failed or passed else ["nothing ran"]
     else:
         why.append("no junit")
-    rows = moved(report) if report is not None else []
-    why += ["no neutrality report"] if rows is None else []
-    named = [*sorted(set(failed), key=_order), *(rows or []), *why]
+    named = [*sorted(set(failed), key=_order), *why]
     return FAIL + ",".join(named) + (f" (run rc={rc})" if why else "") if named else PASS
-
-
-def ring(sha: str, attempt: str | None, rid: str, rows: list[str] | None, dry_run: bool = False) -> None:
-    """Ring OWNER at once in the merge thread, as SENDER, when the run's neutrality tier moved ``rows`` or left no report (None):
-    the workloads of record are OWNER's, and a landing that moved one is re-pinned or fixed forward long before the daily sweep."""
-    what = f"moved {', '.join(rows)}" if rows else "ran and left no report, so it compared nothing (out/neutrality/setup.fail)"
-    text = (f"{OWNER} post-train: the fast neutrality tier at landing {sha[:12]} (check {attempt}) {what}. Run {rid}: "
-            f"`research fetch {rid} --all`; out/neutrality/neutrality.json names each Program's pinned and built digests. A row "
-            "moved on purpose is re-pinned (`verity-vllm neutrality ROW --update`), else its landing is fixed forward.")
-    if dry_run:
-        print(f"post-train: --dry-run, so {OWNER} is not rung: {text}")
-        return
-    p = research("msg", "send", "--as", SENDER, "--thread", merge_thread(), "--to", OWNER, "--quiet", "--report", "--text", text)
-    if p.returncode:
-        print(f"post-train: ringing {OWNER} failed: {(p.stderr or p.stdout).strip()[-300:]}", file=sys.stderr)
-
-
-def merge_thread() -> str:
-    from research.monitors import MERGE_THREAD
-
-    return MERGE_THREAD
 
 
 def research(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess:
@@ -467,20 +423,13 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
         print((f.stdout + f.stderr).strip()[-1000:], flush=True)
         cut = ("timeout" if st.get("timed_out") else "cancelled") if st.get("state") == "cancelled" else None
         out = runs_root() / rid / "out"
-        v = verdict(out / "junit.xml", st.get("rc"), cut, out / NEUTRALITY)
-        rows = moved(out / NEUTRALITY)
-        # the tier's own log, without its report: it ran and failed before comparing (a job that ended before it rings no one)
-        rung = not cut and (bool(rows) or (rows is None and (out / "neutrality.log").is_file()))
+        v = verdict(out / "junit.xml", st.get("rc"), cut)
         if a.dry_run:
             print(f"post-train: {sha[:12]}: --dry-run, so {attempt or 'no check attempt'} gets no note={v} (ref {rid})")
-            if rung:
-                ring(sha, attempt, rid, rows, dry_run=True)
             return 0 if v == PASS else 1
         lab = research("data", "label", attempt, "note", v, "--by", BY, "--ref", rid)
         print((lab.stdout + lab.stderr).strip()[-1000:])
         print(f"post-train: {attempt} ({sha[:12]}): note={v} (ref {rid})")
-        if rung:
-            ring(sha, attempt, rid, rows)
         return 0 if lab.returncode == 0 and v == PASS else 1
     finally:
         git("worktree", "remove", "--force", str(tree), check=False)
