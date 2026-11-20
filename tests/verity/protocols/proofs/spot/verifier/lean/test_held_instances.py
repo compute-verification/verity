@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_members_twin import A, B, Audit, M, _json, lms_verify, _never  # noqa: E402
-from verity_difftest import canonical  # noqa: E402
+from test_members_twin import A, B, Audit, M, _json, lms_verify, _never
+from verity_difftest import canonical
 
 pytestmark = pytest.mark.slow
 

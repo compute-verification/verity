@@ -396,22 +396,52 @@ def held_read_why(member: str, node: int) -> str:
             "tied parameter opens its rows by its registered reads")
 
 
-def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
-    """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
-    tied parameter's run Input (`registered.held_gates`, `docket._tied`) carries a registered file."""
+#: `OneStageZk.HELD_QUERY_WHY`.
+HELD_QUERY_WHY = ("the per-member form's partition is no template query that applies to the program (Q_template_instance, "
+                  "Q_template_instances), whose ranges its members' reads of a held or tied parameter are read off")
+
+
+def _held_reads(params: Mapping[str, Any], program: Program) -> list[tuple[range, int]]:
+    """`OneStageZk.heldReadsOf`: the readers of a held or tied parameter's run Input (`registered.held_gates`,
+    `docket._tied`, `partition.held_reads`), refused under a partition that is no template query applying to the
+    program (`HELD_QUERY_WHY`)."""
     if not P.is_template_query(params["query"]):
-        return
+        raise _Refused(HELD_QUERY_WHY)
     registered = list(params.get("registered") or {})
     tied = [g for g in DK._tied(program, params.get("tied") or (), registered, params.get("held") or ()) if g is not None]
     try:
-        reads = P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
+        return P.held_reads(program, params["query"], [*G.held_gates(program, registered), *tied])
     except P.QueryRefused:
-        return
+        raise _Refused(HELD_QUERY_WHY) from None
+
+
+def _held_read(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program) -> None:
+    """`OneStageZk.heldReadsFiled`: each member whose units meet a template range whose instance node reads a held or
+    tied parameter's run Input carries a registered file."""
+    reads = _held_reads(params, program)
     for name, m in ms.items():
         if m.get("registered") is None:
             for units, i in reads:
                 if any(lo < units.stop and units.start < hi for lo, hi in m["units"]):
                     raise _Refused(held_read_why(name, i))
+
+
+def held_root_why(member: str, w: int) -> str:
+    """`OneStageZk.HELD_ROOT_WHY`."""
+    return (f"member {member}: its units read C's run input node {w}, a held or tied parameter's, and its slice holds no "
+            f"port at input/n{w}: every reader of a held or tied parameter opens the record's one tree of its rows")
+
+
+def _held_roots(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program,
+                roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
+    """`OneStageZk.heldRootsOf`: each member whose units meet a range reading a held or tied parameter's run Input node
+    ``w`` has an entry of tree ``input/n<w>`` among its slice's roots."""
+    reads = _held_reads(params, program)
+    for name, m in ms.items():
+        for units, w in reads:
+            if (any(lo < units.stop and units.start < hi for lo, hi in m["units"])
+                    and not any(r.get("tree") == f"input/n{w}" for r in roots.get(name, ()))):
+                raise _Refused(held_root_why(name, w))
 
 
 def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
@@ -1102,6 +1132,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _tree_ports_held(ms, record)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
+        _held_roots(ms, params, program, roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
