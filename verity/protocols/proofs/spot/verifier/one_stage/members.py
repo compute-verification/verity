@@ -432,11 +432,10 @@ def held_root_why(member: str, w: int) -> str:
             f"port at input/n{w}: every reader of a held or tied parameter opens the record's one tree of its rows")
 
 
-def _held_roots(ms: Mapping[str, Any], params: Mapping[str, Any], program: Program,
+def _held_roots(ms: Mapping[str, Any], reads: Sequence[tuple[range, int]],
                 roots: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
-    """`OneStageZk.heldRootsOf`: each member whose units meet a range reading a held or tied parameter's run Input node
-    ``w`` has an entry of tree ``input/n<w>`` among its slice's roots."""
-    reads = _held_reads(params, program)
+    """`OneStageZk.heldRootsHeld`: each member whose units meet a range of `reads` reading a held or tied parameter's run
+    Input node ``w`` has an entry of tree ``input/n<w>`` among its slice's roots."""
     for name, m in ms.items():
         for units, w in reads:
             if (any(lo < units.stop and units.start < hi for lo, hi in m["units"])
@@ -1132,7 +1131,7 @@ def _members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence:
         _tree_ports_held(ms, record)
         roots, ft = _members_roots(ms, record)
         roots = _wired(program, params["query"], params["program"], ms, record, roots, ft)
-        _held_roots(ms, params, program, roots)
+        _held_roots(ms, _held_reads(params, program), roots)
         _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
