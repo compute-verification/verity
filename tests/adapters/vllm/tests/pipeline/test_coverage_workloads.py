@@ -1,5 +1,4 @@
-"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation.
-The generated B0 workloads are `test_coverage_workloads_of_record`."""
+"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation."""
 from __future__ import annotations
 
 import json
