@@ -75,7 +75,13 @@ input at most `k u` bits from its own past, another block and the outside world,
 Nothing in Verity proves that the prover ran the declared circuit: the proofs show committed values consistent with it.
 An inference block before its salt, with no row here, is free work the partition declares a free block. The set `M` is
 the tolerance set the chain reads through `RealizesExcept`; the unregistered information the incorrect proof blocks in `M`
-pass into correct ones (the injected information) is the `.block` source of the inference blocks' input here. -/
+pass into correct ones (the injected information) is the `.block` source of the inference blocks' input here. `decl` is to
+be the sum over `M` of the declared size the run carries (the same quantity the free block is charged), not an arbitrary
+free function of the set: with `decl ≡ 0` every `M` would be within any tolerance and the row would say nothing. The
+tolerance binds the actual work through `RealizesExcept`'s free-capacity term (`freeCap`, soundness Break 1): `M`'s
+inference blocks sit inside the free block, counted at their actual size, so `feasible_work_le` reads them. The row gives
+`.function`, `.sizeAtMost` and `.inputAtMost`; that these are an inference block's full claim list (`∀ p ∈ claimsIn`) is
+owed where the rows become the chain's hypotheses by name (`rows_chain`). -/
 def DeclaredBlocksRun (salt : (r : P.Run) → Fin (P.nIn r) → ℕ) (f : (r : P.Run) → Fin (P.nIn r) → Circuit)
     (c k : (r : P.Run) → Fin (P.nIn r) → ℕ)
     (decl : (r : P.Run) → Finset (Fin (P.nIn r)) → ℕ) (tol : ℕ) (ε : ℝ≥0∞) : Prop :=
@@ -214,7 +220,9 @@ def NetworkOutputAtMost (shown : P.Run → Prop) (egress bOut ingress egress' co
 /-- **The registered reads open the log** (open, proofs): in an accepted run, every gate of `θ` is an input gate whose
 value opens, at the position the verifier derives from the declared circuit, a root of the log `log`. The log is one for
 the period, fixed before the first epoch's first challenge. Open: `opensAt r g root` has no definition on the actual
-circuit; what defines it is the open question. -/
+circuit; what defines it is the open question. The first instance (the registered reads the verifier checks, tied to
+`Placed`) must carry with it the excluded run — an accepted-looking run whose `θ` holds a gate opening no logged root,
+shown not to satisfy this — else an instance that makes `opensAt` trivially true brings the vacuity back. -/
 def RegisteredReadsOpenLog {Root : Type} (log : Finset Root)
     (opensAt : (r : P.Run) → Fin (P.actual r).N → Root → Prop) : Prop :=
   ∀ r, P.accepts r → ∀ g ∈ P.θ r, (P.actual r).isInput g = true ∧ ∃ root ∈ log, opensAt r g root
@@ -240,8 +248,11 @@ def Compliant {L : Type*} (pol : Policy) (A : Placed L) (θ : Finset (Fin A.N)) 
 
 /-- **The policy's theorem** for the check `check`: every run whose committed blocks pass the check and realize their
 claims outside a tolerance set `M` of inference blocks (`RealizesExcept`, the tolerance path the reviews found missing)
-has a compliant actual circuit. `M` is any set the sampled proofs may miss; its declared use is counted in the free block
-and the injected information it passes into correct blocks is a term of their input, so compliance follows all the same.
+has a compliant actual circuit. The quantifier over `M` is not vacuous: `RealizesExcept` binds `M` as a term, not a free
+quantifier — `M` holds only inference blocks and its actual work sits inside each server-day block's free capacity
+(`freeCap`), so taking `M` all the inference blocks forces their total work under the capacity rather than excusing it
+(soundness Break 1). Its declared use is counted in the free block and the injected information it passes into correct
+blocks is a term of their input, so compliance follows all the same.
 The policy needs no new theorem for PoUS and PoUB: its bound already takes any family of blocks that have a size and an
 unregistered input, so placing the free block's input from its own past (PoUS) and from memory (PoUB) adds terms to the
 same bound and states no new theorem here. -/
