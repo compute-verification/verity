@@ -166,7 +166,12 @@ theorem listed_gate_in_period (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
     P.period.start ≤ (P.actual r).t g ∧ (P.actual r).t g < P.period.stop := by
   obtain ⟨i, hki, hgi⟩ := listed_gate_in_serverDay P r g hg X hX hx
   have hreg := P.insideOut r i hgi
-  simp only [Placed.region, Finset.mem_filter, Finset.mem_coe, Window.ticks, Finset.mem_Ico] at hreg
+  have hticks : ((P.winOut r i).ticks : Set ℕ)
+      = Set.Ico (P.winOut r i).start ((P.winOut r i).start + (P.winOut r i).len) := by
+    simp [Window.ticks]
+  rw [hticks] at hreg
+  simp only [Placed.region, Finset.mem_filter, Set.mem_Ico] at hreg
+  obtain ⟨-, -, hlo, hhi⟩ := hreg
   obtain ⟨hs, hl⟩ := P.winDay r i hki
   simp only [TickSpan.Cut.part] at hs hl
   have h0 := P.days.mono (Fin.zero_le (P.dayOf r i).castSucc)
@@ -179,6 +184,7 @@ theorem listed_gate_in_period (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
 /-- **No computed gate escapes both the server-day bounds and the hidden bound**: every computed gate lies in a
 server-day block, which `ServerDayBounds` reads, or is at a leaf no listed location holds (`hiddenGates`, whose work
 `lim.hidden` bounds, assumed). -/
+open Classical in
 theorem gate_serverDay_or_unlisted (P : Runs L) (r : P.Run) (g : Fin (P.actual r).N)
     (hg : g ∈ (P.actual r).computed) :
     (∃ i, P.kind r i = true ∧ g ∈ (P.outer r).gates i) ∨ g ∈ P.hiddenGates r := by
@@ -873,7 +879,7 @@ noncomputable def demoRuns (n cr tl : ℕ) : Runs Unit where
     omega
 
 /-- The one-gate demo's server-day block holds the three bounds. -/
-theorem demo_serverDayBounds_one (cr tl : ℕ) : (demoRuns 1 cr tl).ServerDayBounds () := by
+theorem demo_serverDayBounds_one : (demoRuns 1 1 0).ServerDayBounds () := by
   intro i _
   fin_cases i
   refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _), holds_input_mono (k := 0) ?_ (Nat.zero_le _)⟩
@@ -886,7 +892,7 @@ theorem demo_serverDayBounds_one (cr tl : ℕ) : (demoRuns 1 cr tl).ServerDayBou
     decide
 
 /-- The two-gate demo's server-day block holds the three bounds. -/
-theorem demo_serverDayBounds_two (cr tl : ℕ) : (demoRuns 2 cr tl).ServerDayBounds () := by
+theorem demo_serverDayBounds_two : (demoRuns 2 1 1).ServerDayBounds () := by
   intro i _
   fin_cases i
   refine ⟨?_, holds_input_mono (k := 0) ?_ (Nat.zero_le _), holds_input_mono (k := 0) ?_ (Nat.zero_le _)⟩
@@ -913,7 +919,7 @@ theorem honest_feasible : (demoRuns 1 1 0).Realizes () := by
     · show (placed 1).blockInput _ _ _ _ ≤ 0
       simp only [demoRuns, Runs.innerBlock, Placed.blockInput, Circuit.into, Circuit.width, placed, line]
       decide
-  · exact demo_serverDayBounds_one 1 0
+  · exact demo_serverDayBounds_one
 
 /-- The free blocks of `demoRuns n cr tl` are none (its one inner block is an inference block). -/
 theorem demo_freeChildren_empty (n cr tl : ℕ) (i : Fin ((demoRuns n cr tl).nOut ())) :
@@ -1049,7 +1055,7 @@ theorem freeBound_binds :
   · simp [demoRuns, Circuit.width]
   · intro u _ hu; exact absurd (Finset.mem_univ u) hu
   · intro u hu; exact absurd (rfl : (demoRuns 2 1 1).cls () u = Class.inference) hu
-  · exact demo_serverDayBounds_two 1 1
+  · exact demo_serverDayBounds_two
   · intro u _; rfl
 
 /-- `demoRuns 1 1 0` with its server-day block's ingress count at `ig` bits and covert figure at `cv` bits (wipe egress
