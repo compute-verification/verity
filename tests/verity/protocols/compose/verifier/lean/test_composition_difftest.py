@@ -669,7 +669,9 @@ def test_spot_refuses_the_recursive_audit(name, request):
     """SPOT's case is one level's or two levels' params, never the recursive audit's, so the recursive audit's params
     are refused by one level's reading of them (`_recursive`): naming its inputs in place of proofs, as v1's by name
     (`V1_REFUSED`), and beside v2's proofs, by the parameters' keys. Remote and onsite, every other subprotocol aimed
-    at acceptance on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
+    at acceptance on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`).
+    It is the one test of the recursive audit's refusal: the old recursion's tests are gone, and none else catches an
+    audit configuration that accepts the recursive audit's params."""
     product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
     if name == "onsite":
         request.getfixturevalue("recorded")
