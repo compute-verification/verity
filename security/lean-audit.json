@@ -4033,11 +4033,9 @@
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
-   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
   },
   "Verity.SecurityProofs.ExpandSize": {
@@ -4678,6 +4676,18 @@
   "Flock.SecurityProofs.RecursiveRanRegisteredExec": {
    "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
    "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
+   "type_hash": "01cd51d8c16d9cf4f07cb4cdb7efb7d094ec2b361289ccb48abe014557549133",
+   "missing": "honest",
+   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
+   "unfolded_hash": "ac8e7475d2865cfc42f3b99b49e6c1c39aafe550c4ecc491fd585d981baec9ea"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
+   "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
+   "missing": "honest",
+   "why": "its witness stood on the open premise `HonestFixture`, in a file no root built; removed with the recursive audit's exempt modules",
+   "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
@@ -10341,65 +10351,6 @@
    },
    "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
    "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
-  },
-  "Flock.SecurityProofs.RecursiveZKLoopAnySum_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :",
-    "  Exists fun y =>",
-    "    Exists fun w =>",
-    "      And Claims.ZKServer.Loop.finS.Tables",
-    "        (And (Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse))",
-    "          (And Claims.ZKServer.Loop.finS.DummyReg",
-    "            (And Claims.ZKServer.Loop.finS.Causal",
-    "              (And",
-    "                (Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)",
-    "                  Claims.ZKServer.Loop.finS.honestVals)",
-    "                (And Claims.ZKServer.Loop.finS.TapeOK",
-    "                  (And",
-    "                    (∀",
-    "                      (u :",
-    "                        Prod (Prod Unit Unit)",
-    "                          (Fin",
-    "                              (instHAdd.hAdd",
-    "                                (Flock.Guarantees.fwHoles FlockSoundness.Discharge.Recursion.LoopWitness.sched) 0) →",
-    "                            Fin 192 → Fin 256)),",
-    "                      Eq",
-    "                        (FlockSoundness.Discharge.Recursion.ZkServerAdaptive.adaptFinished",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          (FlockSoundness.Discharge.Recursion.LoopWitness.wAny u.fst.fst u.fst.snd)",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.nA (Flock.Guarantees.saltsOf u.snd))",
-    "                        Bool.true)",
-    "                    (And",
-    "                      ((FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y) fun x x_1 =>",
-    "                            w).Honest",
-    "                        (Claims.Flock.R (FlockDeploy.deployZk Flock.Readable.relation).parse) fun u =>",
-    "                        Flock.Guarantees.anyCtx FlockSoundness.Discharge.Recursion.LoopWitness.sched",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.wAny",
-    "                          FlockSoundness.Discharge.Recursion.LoopWitness.nA 0 u.val.fst.fst u.val.fst.snd u.val.snd)",
-    "                      (And",
-    "                        (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)",
-    "                          (src :",
-    "                            Claims.Msg →",
-    "                              Claims.Flock.Wit →",
-    "                                Claims.ZKServer.Loop.Tp →",
-    "                                  Nat → Flock.V (Prod (Array Flock.F128) (Prod ByteArray (Array ByteArray))))",
-    "                          (t : Nat),",
-    "                          (FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.atWorker 1 (fun x x_1 => y)",
-    "                                fun x x_1 => w).Sized",
-    "                            (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t) fun x =>",
-    "                            (FlockSoundness.Discharge.Recursion.OuterZK.loopSim L₀ src t).C y)",
-    "                        (∀ (n : Nat) (M : Fin n → Nat),",
-    "                          Flock.Guarantees.ReleaseReadsNoStop (Flock.Guarantees.loopRelease M) Option.none)))))))))"
-   ],
-   "assumptions": ["RecDeploy.HonestFixture"],
-   "premises": {
-    "assumptions": [],
-    "domain": ["Claims.Flock.R"],
-    "open": ["Claims.ZKServer.Loop.SwOk", "RecDeploy.HonestFixture"],
-    "reads": ["RecDeploy.TopsAt"]
-   },
-   "type_hash": "0fa33524f3837d0d4163b2a2c1b80ebec6f34b79144481438caa31aa88aa10c9"
   },
   "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": {
    "owner": "@proofs",
