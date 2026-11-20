@@ -117,7 +117,7 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
         if not (Cr._nat(k) and type(tid) is str):
             return None
         dj = defs.get(tid) if isinstance(defs, dict) else None
-        got = Cr._tile(dj, tid, k)
+        got = Cr._tile(dj, tid, k, j)
         if got is None:
             return None
         if not got[2]:

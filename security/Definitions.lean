@@ -103,6 +103,8 @@ public import Definitions.Poub.Assumptions.RemoteP2
 public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Pouw.Assumptions.TS.Fixed
 public import Definitions.ResourceAccounting.Guarantees
+public import Definitions.Compose.Blocks
+public import Definitions.Compose.Guarantees.Blocks
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.Certifier.Guarantees.MonitoringPeriodFails

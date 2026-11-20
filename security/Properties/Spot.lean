@@ -8,10 +8,14 @@ public import Spot.OneStage
 The property of the executable audit (`verity/protocols/proofs/spot/verifier/lean/`, the port of `one_stage.audit.audit_record`
 with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
 decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
+Among those inputs are the ports, the leaf layer and the anchors the caller gives as the verifier's, and the verdicts,
+the proved units, the served units and the session roots the evidence states. Nothing in this check derives them: the
+statement holds for every such value, so what an accept means is only as good as who supplies them.
 
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
-* **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, sampling design
+* **the registration** keeps R1–R8 against the copies the caller gives as the verifier's, the ports, the leaf layer and
+  the anchors among them (`Registered`): the record's format, protocol, sampling design
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
   (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
   window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
@@ -19,7 +23,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   in the per-member form each member's one count of link points (`RL`);
 * **the sample** is a sample of the registered sampling design over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
+* **the units**: the proved units and the served units the evidence states are the sampled ones, and the session roots
+  it states are the registered roots; and each read the verdicts the evidence states report of
   one of the record's own values, less a read named by one of its own ports taken at that port's own root, and each of a
   window value the verifier names (`Params.windowValues`), not one of the record's own, less a read taken at the root of
   that value's entry in the record's `window.activations.values`, is of a registered value, opened against its
@@ -59,7 +64,7 @@ namespace Properties.Spot
 
 open OneStage (Params Commitment Evidence Public)
 
-/-! ## The registration: R1–R8 against the verifier's own copies -/
+/-! ## The registration: R1–R8 against the copies the caller gives as the verifier's -/
 
 /-- The verifier expects a v2 record: it expects values registered or holds certified entries
 (`Docket.Verifier.v2`). -/
@@ -113,14 +118,15 @@ def portsOf (rec : Json) : Array Json :=
 def rootFor (rec : Json) (p : String) : Option Json :=
   (rootsOf rec).reverse.find? fun r => jeq (getD r "port") (.str p)
 
-/-- One registered root against the port the verifier's layout derives (`want`, its `{"leaves", "domain"}`): a hex root,
+/-- One registered root against a port the caller gives as the verifier's (`want`, its `{"leaves", "domain"}`): a hex root,
 the port's leaves and its domain. -/
 def RootIs (r want : Json) : Prop :=
   (∃ s, getD r "root" = .str s ∧ isHex s = true) ∧ jeq (getD r "leaves") (getD want "leaves") ∧
   jeq (getD r "domain") (getD want "domain")
 
 /-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
-domain}`; no port twice, and exactly the verifier's ports; and each of the verifier's ports has its root as derived. -/
+domain}`; no port twice, and exactly the ports the caller gives as the verifier's; and each of them has a root with the
+leaves and domain the caller gives for it. -/
 def R3 (rec : Json) (v : Docket.Verifier) : Prop :=
   jeq (getD rec "scheme") (.str v.scheme) ∧
   rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Docket.ROOT_KEYS) ∧
@@ -128,7 +134,7 @@ def R3 (rec : Json) (v : Docket.Verifier) : Prop :=
   (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
   ∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2
 
-/-- R4: the record names the verifier's leaf layer (the SHA-512 of its public file), or null when the verifier holds none. -/
+/-- R4: the record names the leaf layer the caller gives as the verifier's, or null when the caller gives none. -/
 def R4 (rec : Json) (v : Docket.Verifier) : Prop :=
   jeq (getD rec "leaf_layer") (match v.leafLayer with | some s => .str s | none => .null)
 
@@ -335,7 +341,8 @@ def RL (v : Docket.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ samplingDesign n, LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable = .ok (samplingDesign, n) ∧
     LinkPoints.refused samplingDesign n v.members = .ok #[]
 
-/-- The registration keeps R1–R8 against the verifier's own copies, with `samplingDesign` the agreed sampling design as derived; R7, its
+/-- The registration keeps R1–R8 against the copies the caller gives as the verifier's (the ports, the leaf layer and the
+anchors among them), with `samplingDesign` the agreed sampling design as derived; R7, its
 pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
 holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
 not these. -/
@@ -487,8 +494,9 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
     delta := p.delta, drawn := #[(Record.LEVEL, (sampledNats e.draw).size)], credited := p.credited }
 
 /-- What the check accepts: the registration keeps R1–R8 with `samplingDesign` the verifier's agreed sampling design as derived, the sample is a
-sample of `samplingDesign` over the registered population, the units were proved and served as sampled under the registered roots and
-values with the receipt naming the commitment's digest, and the verdicts accept; `samplingDesign` has a profile's sample `d`
+sample of `samplingDesign` over the registered population, the proved units and the served units the evidence states are
+the sampled ones and the session roots it states the registered roots, each read the verdicts it states report is of a
+registered value, the receipt names the commitment's digest, and those verdicts accept; `samplingDesign` has a profile's sample `d`
 (`Record.profileSample`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`, whose credited blocks `Core.Integrity.creditedProblem` does not refuse. -/
 def AcceptMeans : Prop :=

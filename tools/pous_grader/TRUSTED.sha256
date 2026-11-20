@@ -43,6 +43,7 @@ efc099a2484e91d667c799bfdac96a13800048c215001f4dbbacd4da2b158bae  ../../security
 bd63ca9b0b419cd7a54d8d145643b960b6486cb2f5dcc9b7edc5d8cb61a83958  ../../security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean
 4cf33d4bf9271a9d547d2cb7eadf5e4a63f6f48964dfee0dd5583fd51379b61e  ../../security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
 6b8b8bc740bd1d16c5f4b61c3a4c793b9451a4db79a9aa3007cc2e51c2e691b4  ../../security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
+e06a6367d2278706cf44efe47da84f8b9e173e8b09446990fef48f3fc6f5660e  ../../security/Definitions/Pous/Guarantees/StreamedWipeResidual.lean
 f22708fe694e7f39e3454f7d0cf89b83c30cd7e165b434cee117e8bf857d7718  ../../security/Definitions/Pous/Guarantees/StreamedWipeServer.lean
 5d64b2bff3e6194be960b3b0044a9e5a5533cd1f3135563d3d61416cee5a60cc  ../../security/Definitions/Pous/Model/Audit.lean
 a97955e3da7e9be41fda2412a06bd68ed842c1b2173774671e28ec2deb5e49d0  ../../security/Definitions/Pous/Model/BandChain.lean

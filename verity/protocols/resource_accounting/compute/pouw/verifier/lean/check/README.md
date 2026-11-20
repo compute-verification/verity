@@ -181,7 +181,7 @@ a coin opened twice, one opened before its round's root, a foreign execution pha
 layout's). `tests/verity/protocols/resource_accounting/compute/pouw/verifier/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from an execution phase's proof files by running the
-verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
+verifier; no test holds that step on a pinned window yet), and its `credit`, `drawn`,
 `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
 `tests/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, proof blocks the prover chose, a sampled proof block failed or

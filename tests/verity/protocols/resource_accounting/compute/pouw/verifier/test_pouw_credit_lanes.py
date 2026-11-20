@@ -1,7 +1,7 @@
 """`credit`'s lanes form's committed files (`leaf_lanes`): a K the period-open commits as ``lane<K>`` and ``combine<K>``,
 with each leaf Program's digest (`credit.LEAF_PROGRAMS`), and `leaf_of` and `leaf_unit_id` held to the real
 `h1window.leaf_program`. Every leaf statement is refused at its ``--registered`` file (`credit.leaf_registered_file`),
-which `lean/check`'s difftest reaches on compiled windows (`test_verified_difftest.test_verified`)."""
+which no difftest reaches on a pinned window yet."""
 from __future__ import annotations
 
 import hashlib
