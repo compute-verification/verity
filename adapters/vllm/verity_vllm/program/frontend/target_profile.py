@@ -247,7 +247,6 @@ class TargetProfile:
                          "padded": {"rules": "vllm_moe padded (PaddedTopkSoftmax / PaddedMoeAlignBlockSize / PaddedFusedMoeKernel / PaddedSiluAndMul / "
                                              "PaddedMoeSum -> ONE MoeFfnFixedL_v1 per token)",
                                     "definitions": ("MoeFfnFixedL_v1{E,TOPK,VPT,H,I}",),
-                                    "lift_of_record": "LMoeFfnL_v1{E,TOPK,VPT,H,I} (hand-authored; registry.lifted.register_hand_lift)",
                                     "population": "|Q(Lift(P_fixed-slot))|: every expert slot of every token, the unselected ones DISABLED (bot) -- "
                                                   "labelled with its actual population, never equated to the indexed-read row's (R17-45 (1))"},
                          "indexed-read-ordered": {"rules": "vllm_moe MOE-01, the router stated in its selection order over one committed softmax (the same function as MOE-01's)",
