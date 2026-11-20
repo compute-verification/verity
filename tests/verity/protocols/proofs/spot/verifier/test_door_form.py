@@ -137,6 +137,20 @@ def test_a_template_wide_on_its_return_alone_is_wide():
     assert len(body["params"]) == 1 and lift_shape(desc, "C_v1")[1] == ["C_v1"]
 
 
+def test_leaves_are_bits_refuses_a_lift_of_other_leaves():
+    """Lean's guard on `E16`'s `E_v1`: its bit types agree, and one more leaf in ``x`` or in a return field is refused
+    with Lean's text."""
+    from verity.circuits.boolean import BIT, bit_type
+    from verity.circuits.types import Array, Tuple
+    params, ret = R.program(descriptor("E16").encode()).defs["E_v1"].signature()
+    lifted = [(n, bit_type(t)) for n, t in params]
+    assert OC.leaves_off(params, lifted, ret, bit_type(ret)) is None
+    assert OC.leaves_off(params, [("x", Array(17, BIT))] + lifted[1:], ret, bit_type(ret)) == \
+        "parameter x of 16 bits has 17 leaves after the lift to bits"
+    assert OC.leaves_off(params, lifted, ret, Tuple(Array(16, BIT), Array(17, BIT))) == \
+        "return field o1 of 16 bits has 17 leaves after the lift to bits"
+
+
 def test_a_refused_block_reaches_no_executable():
     def never():
         raise AssertionError("built an executable for a C_S the door refuses")

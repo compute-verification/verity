@@ -217,6 +217,25 @@ def wideFrom (P : Flock.Program.Prog) (d : Nat) : Array String := Id.run do
     else break
   return wide.qsort (· < ·)
 
+/-- Where `l`, Definition `fn` lifted to bits, has other leaves than `fn` has bits: the first parameter, then return
+field (`fieldsOf`), whose bits are not its counterpart's leaves, or the totals `Flock.Lower.lower` reads
+(`paramLeaves`, `outLeaves`); none where each agrees. -/
+def leavesOff (fn l : Flock.Program.Defn) : Option String :=
+  let bits := fun (t : Flock.Program.Ty) => t.widths.foldl (· + ·) 0
+  let fs := Flock.Program.fieldsOf fn.ret
+  let gs := Flock.Program.fieldsOf l.ret
+  let ports := (fn.params.zip l.params).toList.map (fun ((n, t), (_, u)) => ("parameter", n, bits t, u.leaves)) ++
+    (fs.zip gs).mapIdx fun j (t, u) => ("return field", s!"o{j}", bits t, u.leaves)
+  let sIn := fn.params.foldl (· + bits ·.2) 0
+  if fn.params.size != l.params.size || fs.length != gs.length then
+    some s!"{fn.params.size} parameters and {fs.length} return fields, its lift's {l.params.size} and {gs.length}"
+  else match ports.find? fun (_, _, b, k) => b != k with
+    | some (what, n, b, k) => some s!"{what} {n} of {b} bits has {k} leaves after the lift to bits"
+    | none =>
+      if sIn != l.paramLeaves || bits fn.ret != l.outLeaves then
+        some s!"parameters of {sIn} bits and a return of {bits fn.ret}, its lift's {l.paramLeaves} and {l.outLeaves} leaves"
+      else none
+
 /-- A port name the block circuit's file and `flock-lower-check compose`'s `name:bits,…` carry as written. -/
 def plainName (n : String) : Bool := !n.isEmpty && n.all fun c => ![',', ':', '#', ' ', '\t', '\r', '\n'].contains c
 
@@ -276,10 +295,7 @@ def admitted (partition : Json) (cuts : List (String × List (String × Nat))) (
     if let some (n, b) := rs.find? fun (_, b) => b == 0 || b % 16 != 0 then
       notAdmitted "whole-words" s!"C_S's template {key}: {what} {n} of {b} bits is not a positive whole number of u16 words"
   let some l := L.defs[dl]? | notAdmitted "leaves-are-bits" s!"C_S's template {key} has no lift to bits"
-  let sIn := ins.foldl (· + ·.2) 0
-  let sOut := fields.foldl (· + ·.2) 0
-  if sIn != l.paramLeaves || sOut != l.outLeaves then
-    notAdmitted "leaves-are-bits" s!"C_S's template {key}: rows of {sIn} bits and fields of {sOut}, its lift's {l.paramLeaves} parameter and {l.outLeaves} return leaves"
+  if let some why := leavesOff fn l then notAdmitted "leaves-are-bits" s!"C_S's template {key}: {why}"
   return { key, d, ins, fields }
 
 /-- **The door admits C_S**: `admitted` accepts it. The hypothesis of every statement about the block circuit the door
@@ -355,6 +371,23 @@ def E16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","No
   | .ok a => a.key == "E_v1" && a.ins == #[("x", 16), ("y", 16)] && a.fields == #[("o0", 16), ("o1", 16)]
   | .error _ => false
 #guard refusedBy (admitE E16 "E_v1" [("x", 2)]) "whole-words" "C_S's template E_v1: input row x#0 of 8 bits is not a positive whole number of u16 words"
+-- `leaves-are-bits` on E16's `E_v1` and its lift, then on a lift with one more leaf in `x` and one in the return
+#guard match Flock.Program.decode E16.toUTF8 with
+  | .ok P => match P.index["E_v1"]? with
+    | some d => match Flock.Lift.lift P d with
+      | .ok (L, dl) => match P.defs[d]?, L.defs[dl]? with
+        | some fn, some l =>
+          leavesOff fn l == none &&
+          leavesOff fn { l with params := l.params.set! 0 ("x", .array 17 (.value 1)) } ==
+            some "parameter x of 16 bits has 17 leaves after the lift to bits" &&
+          leavesOff fn { l with ret := .tuple #[.array 16 (.value 1), .array 17 (.value 1)] } ==
+            some "return field o1 of 16 bits has 17 leaves after the lift to bits" &&
+          leavesOff fn { l with outLeaves := 33 } ==
+            some "parameters of 32 bits and a return of 32, its lift's 32 and 33 leaves"
+        | _, _ => false
+      | .error _ => false
+    | none => false
+  | .error _ => false
 
 /-- E(x y : Array 16 (Value 1)) = (Not y[0], x): a return field of one bit, then another. -/
 def F16 : String := r#"{"annotations":{},"boolean":{},"callees":["Input1_v1","Not_v1","E_v1"],"definitions":{"E_v1":{"bindings":{},"body":{"nodes":[{"args":[{"refs":{"affine":["p",1,0,1]},"type":0}],"fn":1,"form":"primitive","out":0}],"params":[["x",["Array",16,["Value",1]]],["y",["Array",16,["Value",1]]]],"ret":{"concat":[{"affine":["n",0,0,1]},{"affine":["p",0,0,16]}]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"E_v1"},"Input1_v1":{"form":"primitive","id":"Input1_v1","params":[],"ret":["Value",1]},"Not_v1":{"form":"primitive","id":"Not_v1","params":[["a",["Value",1]]],"ret":["Value",1]},"Root[EProg_v1]_v1":{"bindings":{},"body":{"nodes":[{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[],"axes":[],"fn":0,"form":"batch","n":16,"out":1},{"args":[{"refs":{"affine":["n",0,0,16]},"type":1},{"refs":{"affine":["n",1,0,16]},"type":1}],"fn":2,"form":"call","out":2}],"params":[],"ret":{"affine":["n",2,0,17]},"ret_type":["Tuple",[["Value",1],["Array",16,["Value",1]]]]},"form":"composite","id":"Root[EProg_v1]_v1"}},"program_fn":"EProg_v1","root":"Root[EProg_v1]_v1","schema":"verity-ir/descriptor/v2","types":[["Value",1],["Array",16,["Value",1]],["Tuple",[["Value",1],["Array",16,["Value",1]]]]]}"#
