@@ -1235,7 +1235,7 @@ theorem batchPts_n (c : Desc.Ctx) (fuel : Nat) (hD : DownNAt c fuel) (q : Piece)
   rw [range'_size] at h
   have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
     intro t
-    simp [pos, h1]
+    simp [pos, h1, Desc.Piece.rowOff, hlv]
   exact loop_mem _ (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 }) (List.range q.len)
     (fun t htm segs hs => by
       have hm := at_mem_pos h1 (List.mem_range.1 htm)
