@@ -3,6 +3,7 @@ module
 public import Definitions.ResourceAccounting.Actual
 public import Definitions.Core.Blocks
 public import Definitions.Core.CircuitLevels
+public import Definitions.Core.Period
 
 /-!
 # Blocks and their properties: the interface from accounting to policy
@@ -151,7 +152,9 @@ blocks and hidden hardware (`kind`); `inner` refines it into inference blocks, f
 unit being hidden exactly when its server-day-or-hidden parent is hidden hardware (`hiddenIff`). Each block's location
 and window are fixed data. `kind` is a fact about location, not the prover's label: a top block is a server-day block
 exactly when its location is one the hardware description lists (`kindIff`), and a hidden block's location shares no
-leaf with a listed one (`hiddenUnlisted`). -/
+leaf with a listed one (`hiddenUnlisted`). A server-day block is a listed location and a day, not the prover's cut: its
+window is one of the period's registered days (`winDay`), and no two server-day blocks of a run share a location and a day
+(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). -/
 structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
@@ -174,6 +177,20 @@ structure Runs (L : Type*) where
   /-- A hidden block's location shares no leaf with any listed location. -/
   hiddenUnlisted : ∀ r i, kind r i = false → ∀ X ∈ listed, Disjoint (locOut r i) X
   winOut : (r : Run) → Fin (nOut r) → Window
+  /-- **The monitoring period's span** (`MonitoringPeriod.span`), registered information. -/
+  period : TickSpan
+  /-- The number of the period's days. -/
+  nDays : ℕ
+  /-- **The period's days**: a cut of its span into `nDays` consecutive spans, from its start to its stop, so they tile
+  it; registered information. -/
+  days : period.Cut nDays
+  /-- The day of each top block. -/
+  dayOf : (r : Run) → Fin (nOut r) → Fin nDays
+  /-- A server-day block's window is its day. -/
+  winDay : ∀ r i, kind r i = true →
+    (winOut r i).start = (days.part (dayOf r i)).start ∧ (winOut r i).len = (days.part (dayOf r i)).len
+  /-- No two server-day blocks of a run share a location and a day. -/
+  oneBlock : ∀ r i j, kind r i = true → kind r j = true → locOut r i = locOut r j → dayOf r i = dayOf r j → i = j
   claimsOut : (r : Run) → Fin (nOut r) → List Property
   /-- **The claimed free-block capacity**: the number the prover commits for each server-day block, committed data the
   check reads (`InferenceOnly.check` compares it with `lim.freeSize`), not a quantity the model computes. It is a claim, like

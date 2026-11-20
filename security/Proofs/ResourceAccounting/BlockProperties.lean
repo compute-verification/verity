@@ -21,7 +21,11 @@ locations. `chain` proves `Chain`.
 The policy's check bites: `feasible_work_le` bounds a realizing run's total work by, for each server-day block, the
 smaller of the server-day size limit and its inference and free blocks' limits, plus the assumed hidden hardware size;
 `serverInput_le` bounds a server-day block's input from its own past and the outside world by the input limit, and
-`input_claim_binds` shows that limit refusing a claim of `2^60` bits.
+`input_claim_binds` shows that limit refusing a claim of `2^60` bits. Those limits are per server-day block, and
+`cut_multiplies` shows a cut into more server-day blocks passing where the uncut run does not; a server-day block is a
+listed location and a registered day, so `serverDay_count_le` bounds their number by the listed locations times the days,
+and `serverInput_total_le`, `freeWork_total_le` and `feasible_work_le_count` bound the run's totals by that count and the
+limits.
 
 The feasible set is not every run: `honest_feasible` puts a one-gate circuit's run in the feasible set of a one-block
 run claiming size at most 1, and `two_not_feasible` keeps a two-gate circuit's run out of it. `top_blocks_classified`
@@ -584,6 +588,71 @@ theorem feasible_work_le_total (lim : InferenceOnly.Limits) (P : Runs L) (r : P.
   refine Finset.sum_le_sum fun i _ => min_le_min le_rfl (add_le_add (Nat.mul_le_mul_right _ ?_) le_rfl)
   exact Finset.card_le_card (Finset.filter_subset _ _)
 
+/-! ## How many server-day blocks -/
+
+/-- **A run has at most the listed locations times the days of server-day blocks**: each server-day block is a listed
+location (`kindIff`) and a day (`dayOf`), and no two share both (`oneBlock`). `Ls` is any finite family holding every
+listed location; listed locations that overlap each count, so the count is servers times days only where they are
+disjoint. -/
+theorem serverDay_count_le (P : Runs L) (r : P.Run) (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
+    (univ.filter (fun i => P.kind r i = true)).card ≤ Ls.card * P.nDays := by
+  calc (univ.filter (fun i => P.kind r i = true)).card ≤ (Ls ×ˢ (univ : Finset (Fin P.nDays))).card := by
+        refine Finset.card_le_card_of_injOn (fun i => (P.locOut r i, P.dayOf r i)) ?_ ?_
+        · intro i hi
+          have hki := (Finset.mem_filter.mp hi).2
+          exact Finset.mem_product.mpr ⟨hLs _ ((P.kindIff r i).mp hki), Finset.mem_univ _⟩
+        · intro i hi j hj hij
+          simp only [Prod.mk.injEq] at hij
+          exact P.oneBlock r i j (Finset.mem_filter.mp hi).2 (Finset.mem_filter.mp hj).2 hij.1 hij.2
+    _ = Ls.card * P.nDays := by rw [Finset.card_product, Finset.card_univ, Fintype.card_fin]
+
+/-- **The run's input from the server-day blocks' own past and the outside world, in the limits and the count**: under
+the check and `RealizesExcept`, summed over the server-day blocks it is at most the listed locations times the days times
+`lim.kS` bits. -/
+theorem serverInput_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
+    (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
+    (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
+    ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        (P.actual r).blockInput (P.θ r) (P.locOut r i) (P.outerBlock r i) [.past, .world] ≤
+      Ls.card * P.nDays * lim.kS := by
+  calc _ ≤ ∑ _i ∈ univ.filter (fun i => P.kind r i = true), lim.kS :=
+        Finset.sum_le_sum fun i hi => serverInput_le lim P r M hc hreal i (Finset.mem_filter.mp hi).2
+    _ = (univ.filter (fun i => P.kind r i = true)).card * lim.kS := by rw [Finset.sum_const, smul_eq_mul]
+    _ ≤ _ := Nat.mul_le_mul_right _ (serverDay_count_le P r Ls hLs)
+
+/-- **The run's free and tolerance work, in the limits and the count**: under the check and `FreeClaimHolds`, the
+server-day blocks' free blocks' work and `M`'s inference blocks' work, summed over the run, are at most the listed
+locations times the days times `lim.freeSize` gates. -/
+theorem freeWork_total_le (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run) (M : Finset (Fin (P.nIn r)))
+    (hc : InferenceOnly.check lim P r = true) (hfree : P.FreeClaimHolds r M)
+    (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
+    ∑ i ∈ univ.filter (fun i => P.kind r i = true),
+        ((∑ u ∈ P.freeChildren r i, P.sizeIn r u) + ∑ u ∈ (P.infChildren r i).filter (· ∈ M), P.sizeIn r u) ≤
+      Ls.card * P.nDays * lim.freeSize := by
+  simp only [InferenceOnly.check, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨⟨⟨⟨-, -⟩, -⟩, hfcCheck⟩, -⟩, -⟩ := hc
+  calc _ ≤ ∑ _i ∈ univ.filter (fun i => P.kind r i = true), lim.freeSize :=
+        Finset.sum_le_sum fun i hi => by
+          have hki := (Finset.mem_filter.mp hi).2
+          exact (hfree i hki).trans (hfcCheck i hki)
+    _ = (univ.filter (fun i => P.kind r i = true)).card * lim.freeSize := by rw [Finset.sum_const, smul_eq_mul]
+    _ ≤ _ := Nat.mul_le_mul_right _ (serverDay_count_le P r Ls hLs)
+
+/-- **The check bites, in the limits and the count**: `feasible_work_le_total`'s sum has at most the listed locations
+times the days terms, each at most `lim.cS` gates, so the whole circuit's work is at most that product times `lim.cS`
+plus `lim.hidden` (assumed). -/
+theorem feasible_work_le_count (lim : InferenceOnly.Limits) (P : Runs L) (r : P.Run)
+    (M : Finset (Fin (P.nIn r)))
+    (hc : InferenceOnly.check lim P r = true) (hreal : P.RealizesExcept r M)
+    (hfree : P.FreeClaimHolds r M)
+    (hhidden : (P.actual r).work (P.π r) (P.hiddenGates r) ≤ lim.hidden)
+    (Ls : Finset (Finset L)) (hLs : ∀ X ∈ P.listed, X ∈ Ls) :
+    (P.actual r).work (P.π r) (P.actual r).computed ≤ Ls.card * P.nDays * lim.cS + lim.hidden := by
+  refine (feasible_work_le_total lim P r M hc hreal hfree hhidden).trans (Nat.add_le_add_right ?_ _)
+  calc _ ≤ ∑ _i ∈ univ.filter (fun i => P.kind r i = true), lim.cS := Finset.sum_le_sum fun i _ => min_le_left _ _
+    _ = (univ.filter (fun i => P.kind r i = true)).card * lim.cS := by rw [Finset.sum_const, smul_eq_mul]
+    _ ≤ _ := Nat.mul_le_mul_right _ (serverDay_count_le P r Ls hLs)
+
 /-! ## The feasible set is not everything -/
 
 /-- A circuit of `n + 1` one-bit gates: gate 0 an input, every other gate computed from nothing. -/
@@ -605,6 +674,13 @@ def placed (n : ℕ) : Placed Unit where
   t g := g.val
   cell _ := 0
   cell_inj a b h := Fin.ext (by simpa using congrArg (fun q => q.2.2) h)
+
+/-- The span `p` as one day. -/
+def oneDay (p : TickSpan) : p.Cut 1 where
+  boundary j := p.start + j.val * p.len
+  mono _ _ h := Nat.add_le_add_left (Nat.mul_le_mul_right _ h) _
+  first := by simp
+  last := by simp [TickSpan.stop]
 
 open Classical in
 /-- One run of the circuit `placed n` at a free-block capacity `fc`: no fresh input, one server-day block holding the
@@ -629,6 +705,12 @@ noncomputable def demoRuns (n : ℕ) (fc : ℕ) : Runs Unit where
   kindIff _ _ := by simp
   hiddenUnlisted _ _ h := absurd h (by decide)
   winOut _ _ := ⟨0, n + 1⟩
+  period := ⟨0, n + 1⟩
+  nDays := 1
+  days := oneDay _
+  dayOf _ _ := 0
+  winDay _ _ _ := by simp [TickSpan.Cut.part, oneDay]
+  oneBlock _ i j _ _ _ _ := Subsingleton.elim (α := Fin 1) i j
   claimsOut _ _ := [.sizeAtMost n, .inputAtMost [.past] 0, .inputAtMost [.world] 0]
   claimedFree _ _ := fc
   nIn _ := 1
@@ -889,10 +971,18 @@ theorem cutTwo_gate (i : Fin 2) (g : Fin (placed 2).N) (hg : cutTwo.unit g = som
     have : (1 : Fin 2).val = 1 := rfl
     omega
 
+/-- The span of ticks 1 and 2, cut into its two ticks. -/
+def twoDays : (⟨1, 2⟩ : TickSpan).Cut 2 where
+  boundary j := 1 + j.val
+  mono _ _ h := Nat.add_le_add_left h _
+  first := rfl
+  last := rfl
+
 /-- One run of the circuit `placed 2` at a free-block capacity `fc`, cut at one location into two server-day blocks, gate
 1 during tick 1 and gate 2 during tick 2, each holding its gate as one inference block claimed of size at most 1 gate and
 0 bits of fresh input, each server-day block claiming size at most 1 gate and 0 bits of input from its own past and from
-the outside world, and each committing the free-capacity claim `fc`. -/
+the outside world, and each committing the free-capacity claim `fc`. Its period, ticks 1 and 2, is registered as two days
+of one tick, one server-day block each. -/
 noncomputable def demoCut (fc : ℕ) : Runs Unit where
   Run := Unit
   pr _ := 0
@@ -911,6 +1001,13 @@ noncomputable def demoCut (fc : ℕ) : Runs Unit where
   kindIff _ _ := by simp
   hiddenUnlisted _ _ h := absurd h (by decide)
   winOut _ i := ⟨i.val + 1, 1⟩
+  period := ⟨1, 2⟩
+  nDays := 2
+  days := twoDays
+  dayOf _ i := i
+  winDay _ i _ := by
+    refine ⟨?_, ?_⟩ <;> simp only [TickSpan.Cut.part, twoDays, Fin.coe_castSucc, Fin.val_succ] <;> omega
+  oneBlock _ _ _ _ _ _ h := h
   claimsOut _ _ := [.sizeAtMost 1, .inputAtMost [.past] 0, .inputAtMost [.world] 0]
   claimedFree _ _ := fc
   nIn _ := 2
@@ -977,7 +1074,9 @@ noncomputable def cutLimits : InferenceOnly.Limits :=
 location, during ticks 1 and 2) with both its inference blocks in the tolerance set passes `check` at `cutLimits`
 (`freeSize` = 1 gate) when cut into two server-day blocks of one tick each (`demoCut 1`), realizing its claims outside
 the tolerance set with its committed free claims holding; uncut, as one server-day block (`demoRuns 2 fc`), no committed
-claim `fc` and no tolerance set `M` passes `check` at the same limits with `RealizesExcept` and `FreeClaimHolds`. -/
+claim `fc` and no tolerance set `M` passes `check` at the same limits with `RealizesExcept` and `FreeClaimHolds`. The cut
+is the registered days' (`demoCut`'s period is two days), not the prover's: a run has at most the listed locations times
+the days of server-day blocks (`serverDay_count_le`), so the per-block limits multiply by that count and no more. -/
 theorem cut_multiplies :
     InferenceOnly.check cutLimits (demoCut 1) () = true ∧ (demoCut 1).RealizesExcept () univ ∧
       (demoCut 1).FreeClaimHolds () univ ∧
