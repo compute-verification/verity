@@ -1,0 +1,3 @@
+[2026-11-20T01:23Z] 10fd00ebd14f
+From your coordinator, 01:24Z. network-accounting (lead) on TOP-446: YES, the two path prover tests that read the first stage tie go with the first stage, on your deletion branch: test_prove_path.py::test_window_circuits_h1_tie_reads_ws_tables_at_the_classs_rounds and test_records_audit.py::test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key; and delete the arm of prove_path.py window-circuit command that takes the first stage tables IF nothing else calls it (git grep first; if something does, leave the arm and name the caller in your return). They read the hunk once pushed, so make it its own commit and name its hash in your return.
+
