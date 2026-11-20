@@ -386,11 +386,9 @@ paths = [
 ]
 loads = [
     "verity/circuits",
-    "verity/circuits/kernels",
     "verity/circuits/ops",
     "verity/circuits/silicon",
     "verity/commitments",
-    "verity/commitments/crypto",
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
@@ -620,14 +618,12 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/experimental/dither/prover/pouw_scheme.py",
-    "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",
     "verity/protocols/experimental/pearl_c4/prover/pearl_c4.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/anchors.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/compile.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/circuit/eps1_reference.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1tile.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1zy.py",

@@ -496,7 +496,7 @@ SLOWDOWN_KEPT: dict[str, str] = {
 #: the calculator's directories before its moves
 _SLOWDOWN_OLD_PATH = re.compile(r"(?:inference_only|benchmarks)/rho(?![A-Za-z0-9_])")
 #: The records of moves already made: data a tool reads to map a stored old path to today's, so they keep the old paths.
-MOVE_RECORDS = (MAPS, "tools/move/layout_maps.json", "tools/research/src/research/store/moves.json")
+MOVE_RECORDS = (MAPS, "tools/research/src/research/store/moves.json")
 
 
 def slowdown_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:

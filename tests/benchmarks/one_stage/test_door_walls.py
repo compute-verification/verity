@@ -197,6 +197,37 @@ def test_each_open_seed_reaches_the_door_and_its_rows_hold(what, spec, seed, kla
     assert not [k for k in found if k.startswith("rows:")], found
 
 
+def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_read_as_lean(tmp_path):
+    """Under ``whole`` the internal read is no input row: the block's template is its ported Program, one row of in(S)'s
+    run (a, w1, w2), where the unit form's template has the reader's x as a row of its own; a registered read is refused
+    in `Spot.Restrict.ported`'s words."""
+    W._catalog()
+    exe = _stub(tmp_path)
+    c, q = W.internal_read()
+    from verity.circuits import partition_object as PO
+    from verity.circuits import restrict as R
+    p = PO.build(json.loads(c), q, [[(0, 2)]])
+    w, wq, ported, (ins, outs) = W.whole_circuit(c, p, [(0, 2)], R.program(c))
+    fn = R.program(w).defs[wq["params"]["templates"][0]]
+    assert ported == "yes" and [(n, t.leaves) for n, t in fn.signature()[0]] == [("p0", 16 + 2 * 2048)]
+    assert len(ins) == 16 + 2 * 2048 and len(outs) == 16
+    whole, = W.census(c, q, "0-2", lambda: exe, rows=False, form="whole")
+    unit, = W.census(c, q, "0-2", lambda: exe, rows=False)
+    assert (whole.step, unit.step) == ("lower", "lower") and "unit/Block_v1" in whole.text
+    assert _clause(unit.text) == "operands-outside", unit.text
+    assert (whole.row_bits, unit.row_bits) == (16 + 2 * 2048, 2048) and whole.tmpl_gates == 2 * unit.tmpl_gates
+    from verity.circuits import boolean as BL
+    from verity.circuits.types import Value
+    ps = (("a", Value(1)), ("b", Value(1)))
+    rc, rq = W._rooted(W._composite("WallsReg", ps, Value(1), lambda B, S, a, b: B.call(BL.NOT, b)), ps, Value(1),
+                       registered=["b"])
+    rp = PO.build(json.loads(rc), rq, [[(0, 1)]])
+    assert W.whole_circuit(rc, rp, [(0, 1)], R.program(rc))[2] == (
+        "ported: the block reads a registered value (RegisteredInput1_v1), and a parameter does not carry that it is "
+        "registered: its rows would be committed afresh")
+    assert W.Result(0, (0, 1), (), ported="ported: x").klass == "ported: ported: x"
+
+
 def _drawn(rng: random.Random) -> W.Spec:
     """C of two to four call or batch nodes of one template on a 16-bit field, each argument a parameter of C or a
     member of an earlier node (a batch's stepped argument, at times one member read twice), cut into contiguous blocks."""
@@ -230,6 +261,12 @@ def _predicate(text: str) -> str | None:
     return None if i < 0 else text[i:].splitlines()[0]
 
 
+def _clause(text: str) -> str | None:
+    """The name of the door predicate's clause refusing in ``text``; None where it holds."""
+    p = _predicate(text)
+    return None if p is None else p.split(", ", 1)[1].split(":")[0]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
@@ -251,6 +288,19 @@ def test_lean_and_python_give_one_verdict_on_each_drawn_blocks_form(tmp_path):
             run = subprocess.run([str(lean), "restrict", str(tmp_path / "C.json"), str(tmp_path / "partition.json"),
                                   str(lo), str(tmp_path / "c_s.txt")], capture_output=True, text=True)
             assert _predicate(run.stderr) == py, (seed, k, s.doc(), run.stderr[-600:], py)
-            clause = "holds" if py is None else py.split(", ", 1)[1].split(":")[0]
+            clause = _clause(py or "") or "holds"
             seen[clause] = seen.get(clause, 0) + 1
     assert seen.get("holds") and seen.get("operands-outside"), seen
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_internal_read_is_refused_under_the_unit_form_and_a_column_under_the_whole():
+    """On Lean's lowering: the door refuses the unit form's block by `admittedBlock`'s clause; the whole form's rows
+    hold C's values and refuse the block output a reader given a value its writer did not produce gives."""
+    got = W.internal_case(W._exe(None))
+    unit, whole = got["unit"], got["whole"]
+    assert unit["step"] == "lower" and _clause(unit["text"]) == "operands-outside", unit
+    assert whole["step"] is None and whole["ported"] == "yes", whole
+    assert whole["honest_ok"] and not whole["wrong_accepted"] and not whole["forged_accepted"], whole
+    assert whole["in_ports"] == ["p0"] and whole["in_bits"] == [16 + 2 * 2048], whole
