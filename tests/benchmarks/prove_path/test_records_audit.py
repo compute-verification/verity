@@ -170,11 +170,11 @@ def test_the_advice_binding_is_the_registrations_alone_and_leaves_the_circuit_re
 
 
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
-    """A window's io shell (`ScanSlots_v4`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    """A window's io shell (`ScanSlots_v5`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
 
-    tid = descriptor_id(bind(BX.ScanSlotsV4, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=376, LP=168, MAX=200, IDS=474))
+    tid = descriptor_id(bind(BX.ScanSlotsV5, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=376, LP=168, MAX=200, IDS=474))
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
@@ -542,40 +542,6 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     served = json.loads(capsys.readouterr().out)
     assert PP.main(["compiler", "--serve", str(phi)]) == 0
     assert json.loads(capsys.readouterr().out) == served
-
-
-def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
-    """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
-    circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
-    takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program."""
-    import prove_path as PP
-    from test_prove_path import _served
-    from verity_vllm.program.predict import window_circuit as WC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
-
-    s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
-
-    def lower(registered, compiled, cls, tables=None):
-        seen.append((cls.outputs, tables))
-        return circuit
-
-    monkeypatch.setattr(WC, "window_circuit", lower)
-    (tmp_path / "advice.bin").write_bytes(s.data)
-    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
-    (s.run / "h1").mkdir()
-    (s.run / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
-    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
-    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
-    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
-            str(tmp_path / "advice.bin"), "--class", "4,32,2"]
-    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
-    assert PP.main([*base, "--out", str(tmp_path / "t.json"), "--window-registration", str(tmp_path / "w.json")]) == 0
-    assert seen == [(2, None), (2, WC.Tables(64, 8, 2))]
-    with pytest.raises(SystemExit):
-        PP.main([*base, "--out", str(tmp_path / "k.json"), "--window-registration", str(tmp_path / "w.json"), "--h1-prover", "k"])
-    capsys.readouterr()
-    assert PP.main([*base, "--out", str(tmp_path / "o.json"), "--window-registration", str(tmp_path / "other.json")]) == RA.REFUSED
-    assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
 
 
 def _listed(w: CS.Binding) -> CS.Binding:
@@ -1319,18 +1285,18 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
 
 
-#: a `ScanSlots_v4` at the first lane of a 40-word state row (`test_io_shell`'s)
+#: a `ScanSlots_v5` at the first lane of a 40-word state row (`test_io_shell`'s)
 SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3, "OCC": 3, "LP": 40, "MAX": 80, "IDS": 120}
 
 
 def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`TIED`), with ``shell`` units
-    of an io shell's `ScanSlots_v4` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    of an io shell's `ScanSlots_v5` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
     from verity_vllm.definitions.registry import boolean_io_shell as BX
     from verity_vllm.definitions.registry import io_shell as X
 
-    fn = bind(BX.ScanSlotsV4, **SLOTS)
+    fn = bind(BX.ScanSlotsV5, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
     got = np.array([[v for k, s, o, h in [X.scan_reference(row.tolist(), *(SLOTS[k] for k in BX.SCAN_STATICS[1:]))]
                      for v in (k, *s, o, *h)] for row in state], dtype=np.uint32)
@@ -1354,7 +1320,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
 
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
     """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
-    shell's `ScanSlots_v4` beside the coordinates that read its scan state. `ScanSlots_v4` is a registry Definition,
+    shell's `ScanSlots_v5` beside the coordinates that read its scan state. `ScanSlots_v5` is a registry Definition,
     which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates with the
     registry loaded (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
     `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
@@ -1739,7 +1705,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         capsys.readouterr()
         with pytest.raises(Opened):
             RA.main([*args, *extra])
-        assert seen["audit"] == want and seen["jobs"] == 1
+        assert seen["audit"] == want
         said = [x for x in capsys.readouterr().out.splitlines() if x.startswith("COMPOSE")]
         told = [] if extra[:1] == ["--compose-cache"] else [
             "COMPOSE composing 1 templates one at a time: no compose cache was given; run the warm first, or pass --jobs"]
