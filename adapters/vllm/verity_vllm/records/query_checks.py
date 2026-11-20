@@ -90,11 +90,10 @@ class QueryChecks:
     ranks: Ranks
     accounted: bool | None                            # None: no manifest supplied to account against
     unstated_families: Sequence[str]
-    # the replay's own checks: the served check has no alias table, row annotations, controller rows or executed-prefix
+    # the replay's own checks: the served check has no alias table, row annotations or executed-prefix
     # rule, and writes none of them
     identities_unreachable_by_alias: Unreachable | None
     rows_annotation_inconsistent: Findings | None
-    controller_rows_disagree: Findings | None
     executed_prefix_rule: ExecutedPrefixRule | None
     # {field, why}: written only when the replay refused the manifest it was handed
     manifest_refused: Mapping[str, Any] | None
@@ -117,7 +116,6 @@ class QueryChecks:
                    unstated_families=required(doc, "unstated_families", where, (list, tuple)),
                    identities_unreachable_by_alias=Unreachable.if_written(doc, "identities_unreachable_by_alias", where),
                    rows_annotation_inconsistent=Findings.if_written(doc, "rows_annotation_inconsistent", where),
-                   controller_rows_disagree=Findings.if_written(doc, "controller_rows_disagree", where),
                    executed_prefix_rule=ExecutedPrefixRule.if_written(doc, where),
                    manifest_refused=optional(doc, "manifest_refused", where, Mapping),
                    missing_acquisition_families=optional(doc, "missing_acquisition_families", where, (list, tuple)))

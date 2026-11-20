@@ -124,10 +124,9 @@ def test_the_population_record_codes_each_reason_as_the_replay_stamped_it_and_an
     assert got["not_evaluable_codes"] == {"a reason": stamped, "another": RC.reason_code("other")}
     assert got["not_executed_by_rule"] == {"n": 0, "vus": 1, "vus_by_request": {"r0": 1},
                                            "strata_excluded": {"s": {"population": 1, "label": "not evaluable: unexecuted"}}}
-    assert (got["vus"], got["by_family"], got["not_evaluable_by_family"], got["strata_n"], got["controller"]) == (
-        1, {"Gemm_v1": 1}, {"X_v1": 3}, 1, None)
+    assert (got["vus"], got["by_family"], got["not_evaluable_by_family"], got["strata_n"]) == (1, {"Gemm_v1": 1}, {"X_v1": 3}, 1)
     assert sorted(got) == sorted(["vus", "source", "requests", "by_family", "not_evaluable_by_family", "not_evaluable", "not_evaluable_codes",
-                                  "strata_n", "authority", "controller", *qpop])
+                                  "strata_n", "authority", *qpop])
 
 
 def test_a_family_the_replay_does_not_evaluate_is_footnoted_by_the_reason_of_its_name_before_the_bracket():

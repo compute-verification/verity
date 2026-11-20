@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
+from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
 from verity_vllm.check.replay.population import (
     ATTENTION_ROW_FAMILIES,
@@ -40,9 +40,6 @@ ATTENTION_INTERIOR_MECHANISM = ("AttnBlock interiors (Q_fine_v1 units: s[c] dots
                                 "ref resolved to committed words at its producer's step; a row wiring another arity is unresolved by name), its "
                                 "statics come from the spec text (T, NH, KVH, D, BN, and for Attention_v2 DOT / INV by id), and every member "
                                 "the manifest requires of the row is compared (a member the evaluator does not produce = not evaluated, by name).")
-
-#: the controller / guard families of a request Program's root body (the manifest header's `guard_rows` counts them)
-GUARD_PREFIXES = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext")
 
 #: the query families the exact replay has NO VU row for, with the mechanism of record that checks their values.  The
 #: population itself is the manifest's (Q(P)); this names, per family, what covers it when no evaluator can -- a required family with no
@@ -120,19 +117,6 @@ def _header(man: RequiredManifest | None, key: str) -> Any:
     """A field of the manifest's query header; None without a manifest, a header (`acquire.served` writes none) or the field (the
     compiled manifest's header names its profile only)."""
     return man.query.get(key) if man is not None and man.query is not None else None
-
-
-def controller_rows_of(programs: dict[str, Any], indices: dict[int, ProgramIndex] | None = None) -> dict[str, int]:
-    """The replay's OWN count of guard / controller rows per request Program (spec family under GUARD_PREFIXES) -- the
-    cross-check of the manifest header's `guard_rows`, so a stale or foreign header cannot drop or shrink the controller statement ('the
-    collector cannot define its own population', applied to the controller)."""
-    out: dict[str, int] = {}
-    for rid, inst in programs.items():
-        rows = inst.get("rows") if isinstance(inst, dict) else None
-        if rows is None and indices is not None and id(inst) in indices:
-            rows = indices[id(inst)].rows
-        out[str(rid)] = sum(1 for r in (rows or []) if RM.spec_family(str(r.get("spec"))).startswith(GUARD_PREFIXES))
-    return out
 
 
 @dataclass
@@ -358,42 +342,6 @@ def _uncovered_by_class(groups: dict[tuple, dict], fam_total: Counter, keyed: Co
     return uncovered
 
 
-def _controller(mq: Mapping[str, Any] | None, controller_rows: dict[str, int] | None) -> tuple[dict[str, Any] | None, list[dict]]:
-    """The controller statement of a lifted Program (None on an un-lifted one) and the manifest header's disagreement with the
-    replay's own count of guard rows ([] when they agree).  `mq`: the manifest's query header."""
-    # a LIFTED Program's controller rows (LStepLive / LSelect / LBot; Continuation_v1's LIsEOS<E> `is_eos`,
-    # LEmitNext[H] `emit`, LSelect<w> `out` = the bits b_t / e_t / r_t / o_t / u_t) carry NO identity under Q_module_v1's rule (so
-    # RequiredValues(Lift(P), Q) == RequiredValues(P, Q) row for row) -- the population statement NAMES them as uncovered with their
-    # mechanism of record (the lifted record's R8 controller replay through the registered evaluators; the executed prefix from r_t, R3)
-    # instead of letting them be silently absent.  identities 0 by rule, rows counted; a decision to give the bits identities is a Q change
-    # (Q_module_v2: digest moves), recorded in Q-EXPANSION -- not made here.
-    controller: dict[str, Any] | None = None
-    hdr_rows = int(mq.get("guard_rows") or 0) if isinstance(mq, dict) else 0
-    own_rows = {str(k): int(v) for k, v in (controller_rows or {}).items()}          # the replay's own count per request Program (c2)
-    # the header vs the replay's own count of guard-prefixed rows: the required manifest of record is the traversal of
-    # the WORKLOAD Program (manifest_verify.used_program_digest == the workload digest; one manifest, query_total.requests = all of them), so
-    # its `guard_rows` is the SUM over the request Programs -- the compare is made AT THE HEADER'S SCOPE (sum(own) vs header), never per
-    # request (per-request equality is a semantics the header does not have: B2 {r0: 7, r1: 7} under 14 AGREES; {10, 4} under 14 agrees;
-    # under 7 both disagree).  A disagreement is a fault by name (a stale / foreign header cannot drop or shrink the statement); the
-    # statement is emitted when EITHER side names controller rows, and it says which scope the compare used.
-    own_sum = sum(own_rows.values())
-    ctrl_scope = "header = the workload Program's traversal: guard_rows is the SUM over the request Programs (compared as sum(program_rows_by_request) vs header_rows)"
-    ctrl_disagree = ([{"program_rows_sum": own_sum, "header_rows": hdr_rows, "program_rows_by_request": own_rows, "scope": ctrl_scope}]
-                     if (mq is not None and own_rows and own_sum != hdr_rows) else [])
-    if (isinstance(mq, dict) and (mq.get("lifted") or hdr_rows > 0)) or own_sum > 0:
-        gf = mq.get("guard_families") if isinstance(mq, dict) and isinstance(mq.get("guard_families"), dict) else None
-        controller = {"family": "controller", "spec": None, "class": "controller", "identities": 0, "row_addresses": 0,
-                      "program_rows": (own_sum if own_rows else hdr_rows), "header_rows": hdr_rows, "program_rows_by_request": own_rows,
-                      "compare_scope": ctrl_scope,
-                      "rows_agree": ((not ctrl_disagree) if (own_rows and mq is not None) else None),   # None: no header to agree with
-                      "families": (gf if gf is not None else "unstated (older manifest header: guard_rows only)"),
-                      "why": ("the lifted Program's guard / controller rows carry no identity under Q_module_v1's rule: RequiredValues(Lift(P), Q) == "
-                              "RequiredValues(P, Q) row for row; the bits are not sampled by C2 -- said here BY NAME"),
-                      "mechanism": ("the lifted record's R8 controller replay through the registered evaluators (LIsEOS / LEmitNext / LSelect; pad "
-                                    "Continuation_v1) + the executed prefix derived from r_t (R3, executed_prefix_of_record served=)")}
-    return controller, ctrl_disagree
-
-
 def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict] | None, req_max_step: dict[str, int], not_exec_req: Counter) -> list[dict]:
     """The classified requests whose Q(P) carries no identity at their not-executed steps, by name."""
     # the class is an EXCLUSION over the full-length manifest of record: a classified request whose Q(P) carries NO
@@ -569,7 +517,7 @@ def _not_executed_by_rule(man: RequiredManifest | None, executed_prefix: dict[st
 
 
 def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
-                     strata: dict[str, dict] | None = None, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
+                     strata: dict[str, dict] | None = None, executed_prefix: dict[str, dict] | None = None) -> dict[str, Any]:
     """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
     `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
     the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
@@ -605,9 +553,6 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     not_exec, past_stop = reach.not_exec, reach.past_stop
     kind_by_family, batch_level, batch_slots_req = _not_executed_without_rows(req.non_row_idents, executed_prefix or {}, reach)
     uncovered = _uncovered_by_class(reach.groups, fam_total, req.keyed, not_exec, reach.keyed_not_exec)
-    controller, ctrl_disagree = _controller(man.query if man is not None else None, controller_rows)
-    if controller is not None:
-        uncovered.append(controller)
     n_reached, n_evald = sum(reach.reached.values()), sum(reach.evald.values())
     n_uncovered = sum(int(u["identities"]) for u in uncovered)
     n_not_exec = sum(not_exec.values())
@@ -629,7 +574,6 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
               "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(req.ranks_seen) if man is not None else None, "equal": ranks_equal},
               "accounted": (n_reached + n_uncovered + n_not_exec == total) if man is not None else None,
               "unstated_families": [u["family"] for u in uncovered if u["class"] == "unstated"],
-              "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:FIRST]},   # [R4 c2] header vs the replay's own count
               "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:FIRST]},
                                        "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:FIRST]}}}
     if refused is not None:
@@ -637,11 +581,10 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     checks["ok"] = (False if refused is not None else None if man is None else     # None = not reconciled (no Q(P) supplied), stated
                     bool(n_outside == 0 and n_missing == 0 and n_unreachable == 0 and n_rows_disagree == 0 and ranks_equal is not False
                          and checks["accounted"] is not False and not checks["unstated_families"]
-                         and not ep_faults and not past_stop and not manifest_cut and not ctrl_disagree))
+                         and not ep_faults and not past_stop and not manifest_cut))
     scope = _scope(man, _guard_line(man, refused), fam_total, n_reached, n_evald, uncovered, n_not_exec, ep_faults, executed_prefix)
     return {"query_total": _query_total(man, refused, fam_total), "sampled_strata": _sampled_strata(reach, total, strata),
             "uncovered_by_name": uncovered, "uncovered_identities": int(n_uncovered),
-            "controller": controller,   # [R4] None on an un-lifted Program; on a lifted one the named statement above (also in uncovered_by_name)
             # the two flat keys the readers wait for, emitted from the SAME computation as the block below
             "not_executed_by_family": {k: int(v) for k, v in sorted(not_exec.items())},
             "not_executed_rule": _not_executed_rule(executed_prefix or {}, n_not_exec, reach.not_exec_req),
