@@ -1972,6 +1972,9 @@ if [ -z "$V3C" ] && [ -z "$FOLLOW$COMPOSE" ] && [ "$DEVELOPMENT" != 1 ] && hold_
     say "PREFLIGHT: with V3c off (V3C_CLASS empty) step 3's audit is the sampled-proofs audit of record, and PP_CHALLENGER is a development session, which under VERITY_HOLD_PLACEMENT=1 only a development run takes: set PP_CHALLENGER=gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY, DEVELOPMENT=1, or VERITY_HOLD_PLACEMENT unset"; exit 3 ;;
   esac
 fi
+for v in PEARLPLUS_TIE PEARLPLUS_TIE_UNIFORM; do
+  [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is refused: the tied leg is deleted: no window is tied to a W"; exit 3; }
+done
 if [ -n "$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # the window served under Pearl+, its commit and audit tied to Pearl+'s W
   [ -n "$V3C" ] || { say "PREFLIGHT: PEARLPLUS_TIE commits the window at V3C_CLASS, and it is empty"; exit 3; }
   [ -z "$SPLIT" ] || { say "PREFLIGHT: under PEARLPLUS_TIE V3c runs once Pearl+'s piece wrote W, after step 4, and the split attestation period check needs it before: set CERTIFIER_CMD instead"; exit 3; }
