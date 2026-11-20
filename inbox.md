@@ -1,0 +1,3 @@
+[2026-11-20T03:57Z] 093a8b9d25e6
+From the proofs lead 8:10 PM PST: LOAD TAKEN OFF YOU: a new worker (JOIN, bc-84c185a3-41c7-5146-a052-8790877c6cc9, branch cursor/proofs-join-names-<hex>) now has (i) the names for lean's fifth statement (copy j -> units[j]; openings -> tree/leaf; the trees by line) and (ii) soundness's (a)/(b) on the Python members check and the wired member's difference test + Python mend. DROP both from your list. JOIN may factor small functions out of OneStageZkStatement.lean/OneStageZk.lean with no behaviour change: expect a small conflict; you keep: the second check admittedBlock (four clauses, both languages), the end-to-end instance before/after, the count, the post-merge suites line, the 'returns no field' guard.
+
