@@ -395,7 +395,7 @@ def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
         return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)
     w, pr = a["public"]["work"], a["profile"]
     public = {"credited": w["credited"], "credited_tiles": w["credited_tiles"], "delta": pr["delta"],
-              "epsilon": w["epsilon"], "macs": w["macs"], "rho": w["rho"]}
+              "epsilon": w["epsilon"], "checked_macs": w["checked_macs"], "rho": w["rho"]}
     profile = {"draws": verified["draws"], "drawn": len(pr["tiles"]) - pr["exclusion_tiles"],
                "passes": len(a["public"]["passes"])}
     return P.outcome(PEARL_PLUS.id, ACCEPT, None, digest, public, profile)
