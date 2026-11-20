@@ -28,13 +28,13 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proo
 
 from test_challenger import entropy
 
-XOR8 = PrimitiveDefinition("MembersRunXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+XOR16 = PrimitiveDefinition("MembersRunXor16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: a ^ b,
                            register=False)
 #: each template's ``x`` a 128-byte row, past a compression before its last block, which a Flock block's pin needs
-PAIR = bind(CompositeDefinition("MembersRunPair", 0, (), lambda S: ((("x", Array(128, Value(8))),), Value(8)),
-                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
-TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", Array(128, Value(8))),), Value(8)),
-                                  lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
+PAIR = bind(CompositeDefinition("MembersRunPair", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                lambda B, S, x: B.call(XOR16, x[0], x[1]), register=False))
+TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", Array(64, Value(16))),), Value(16)),
+                                  lambda B, S, x: B.call(XOR16, B.call(XOR16, x[0], x[1]), x[2]), register=False))
 PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
 A, B = "a/c0", "b/c0"
@@ -439,6 +439,39 @@ def test_a_members_rows_of_a_shared_tree_are_its_registered_reads_there():
         M.POPULATION_WHY)
     named = header(B, frame_v3=frame(B, o0=("33" * 64, "cc" * 64)))
     assert M.population_why(UNITS[B], strata, named, got) is None
+
+
+def registered_file(ports: dict[str, str]) -> dict:
+    """A `verity/registered-reads/v2` file of the ports given, each its name and value."""
+    return {"format": "verity/registered-reads/v2",
+            "ports": {p: {"domain": "dd" * 64, "leaves": 2, "root": "aa" * 64, "value": v} for p, v in ports.items()}}
+
+
+def test_a_members_port_is_held_by_its_registered_reads_only_at_a_registered_value_its_file_holds():
+    """A port the slice holds no root of (``w``) is not compared where the verifier's registered file holds it at the
+    value the reads name, as a registered value (`OneStageZk.headerHeldAt`): `Flock.Registered.checkPort` holds its
+    rows to that file's root. Read at any other value, it is refused by name (`unregistered_why`), through the file
+    as `_files` reads it (`registered_reads`) and with the reads and the file apart; with no read of it, as before
+    (`unwired_why`); a port the slice holds is compared whatever the reads name."""
+    strata = P.strata(PROGRAM, QUERY)
+    got = M.slices(UNITS, RECORD)[B]
+
+    def own(out: str = ROOTS[B][0]) -> dict:
+        return header(B, frame_v3=frame(B, (out, ROOTS[B][1]), w=("77" * 64, "dd" * 64)))
+
+    def why(ports: dict[str, str]) -> str | None:
+        return M.population_why(UNITS[B], strata, own(), got, *M.registered_reads(registered_file(ports)))
+    assert why({"w": "h1/w"}) is None
+    for v in ("b/o0", "input/n3", "committed/w"):
+        assert why({"w": v}) == M.unregistered_why("w", v)
+    assert why({"v": "h1/w"}) == M.unwired_why("w")
+    assert M.population_why(UNITS[B], strata, own(), got) == M.unwired_why("w")
+    held = registered_file({"w": "h1/w"})["ports"]
+    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/z")}, held) == M.unregistered_why("w", "h1/z")
+    assert M.population_why(UNITS[B], strata, own(), got, {("w", "h1/w")}) == M.unregistered_why("w", "h1/w")
+    assert M.population_why(UNITS[B], strata, own(out="55" * 64), got,
+                            *M.registered_reads(registered_file({"w": "h1/w", "out": "h1/w"}))) == (
+        "public file: not the registration's: roots")
 
 
 def test_a_member_named_as_another_members_template_is_refused():
