@@ -1,0 +1,14 @@
+[2026-11-20T02:35Z] 3e61b48812d7
+FROM top (id form-1), Thu 19 Nov 6:35 PM PST. NAMING, from Daniel, before the file is written. These REPLACE my brief wherever they differ.
+1. NO NEW NOUNS. New definitions in this file use the architecture page's words: block, size, function, input, output, actual circuit, declared circuit, feasible set, statement, check, tolerance, policy-compliant, training efficiency, free block, inference block, server-day block. If a new noun seems necessary, STOP and ask me. (This overrides my 'page's words in docstrings only' for what this file newly defines. What already exists keeps its name: do not alias `RegisteredCircuit`, `missable`, `region` and the like under a second name; refer to them as they are.)
+2. DROP 'Fill' and 'Seal' and the words family and shape. Name each lemma by what it states:
+   - `UseAtLeast`: at least this much of a capacity was used by declared work, in a block. PoUW, PoUB and PoUS are its instances.
+   - `InputAtMost` and `OutputAtMost`: at most this much enters or leaves a block, with the SOURCE named. The wipe bounds input from the block's own past. Network attestation bounds input from, and output to, the outside world. These are two of the four block properties themselves, not a second notion.
+   - ONE CONVERSION, written once: capacity minus use gives `SizeAtMost` or `InputAtMost` for the free block. It, and only it, carries the assumption that declared work cannot double as other work, and the capacity figure.
+   - PoUW's other half (that the work shown gives the inference blocks' FUNCTION) is its own statement with its own named open `Prop`; do not fold it into the conversion.
+3. Say BLOCK, not region. Define a block ONCE (a set of the actual circuit's gates; the one picked out by a location and an interval is the existing `region`) and use block after that. `Scheme.Block`, the server-time blocks of `Core/Blocks.lean` and the partition's units already use the word: say in the docstring how yours relates to each, and list any that are the same thing for lean to fold.
+4. Build on the existing actual-circuit definitions (`work`, `state`, `ingress`, `egress`, `declaration`). No second set.
+5. DIRECTION AND UNIT IN EVERY STATEMENT: at least or at most; bits (width) or information. The wipe's unit stays an open, named question, visible in its statement's name or type, not hidden by a coercion.
+6. THIS FILE IS THE ONE INTERFACE from accounting to policy. Say in its header which existing definitions it replaces (name them: the calculator's envelopes, the serving and server blocks, whatever else you find), and how it stands to `Scheme`: `Scheme` is what a protocol hands the proof layer and gets back; this is the function from a scheme's result to a block property. Nothing may be left that would make two.
+Your PR's table uses these words too. Re-run your command.
+
