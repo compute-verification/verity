@@ -1175,7 +1175,8 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
     """`agreement_closure` leaves out every `.md` of the agreement's directory and the verifier's packages, so no file it keeps
     may read one: no Python string but a docstring, no shell text but a comment and no lakefile names a doc, and the Lean
     code, comments aside, has no `include_str` (the one way a Lake build reads a file it doesn't compile) and names a doc
-    only to cite a section of it (`PROTOCOL.md §1` in an error message)."""
+    only to cite a section of it (`PROTOCOL.md §1` in an error message); a doc's bare name counts inside a string literal,
+    not as a Lean name (a constant `PROTOCOL` is no doc)."""
     import ast
 
     files = CHECK.tracked_files()
@@ -1200,7 +1201,9 @@ def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
             reads += [f"{f}: names a doc"] if doc.search(text) else []
         elif f.endswith(".lean"):
             code = _lean_code(text)
-            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*(\.md\b(?! §)|README|PROTOCOL(?!\.md §))", code)]
+            strings = " ".join(re.findall(r'"(?:[^"\\]|\\.)*"', code))
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*\.md\b(?! §)", code)]
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"\S*(README|PROTOCOL(?!\.md §))", strings)]
     assert not reads, f"a file the agreement's key covers reads Markdown the key leaves out; key it in agreement_closure: {reads}"
 
 
