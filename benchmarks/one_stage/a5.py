@@ -821,7 +821,8 @@ def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | s
     stand-in there, holds that root by `tables.check_row_tables` and reads the slices of the record's other roots."""
     record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
     try:
-        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record,
+                                                         program=mine.program, query=mine.query)
     except (P.QueryRefused, ValueError) as e:
         return str(e)
 
