@@ -17,7 +17,8 @@ from verity.commitments import CommitmentDomain, RangeIndexedDomain, hm96
 from verity.commitments import history as HT
 from verity.commitments.merkle import merkle_depth, tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
-from verity.circuits.codec import canonical_json, decode_program, encode_program
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json, decode_program, descriptor_id, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
@@ -478,6 +479,59 @@ def test_two_parameters_of_one_name_are_refused():
     doc = G.reads_file(distinct, q, {"A": 2, "B": 2}, {"A": "ab" * 64, "B": "cd" * 64})
     assert {p: (e["value"], e["root"], e["reads"]) for p, e in doc["ports"].items()} == {
         "w": ("A", "ab" * 64, [0, 1]), "v": ("B", "cd" * 64, [0, 1])}
+
+
+def _two_templates():
+    """A program whose first two proof blocks are instances of a template reading row u of A (two bytes) at its parameter
+    `b`, and whose last two are instances of another reading row u of B (three bytes) at its own `b`; the query over both,
+    and the two templates' ids."""
+    two, three = Array(2, Value(8)), Array(3, Value(8))
+    ta = bind(CompositeDefinition("RegisteredTestPortA", 0, (), lambda S: ((("b", two),), Value(8)),
+                                  lambda B, S, b: B.call(XOR8, b[0], b[1]), register=False))
+    tb = bind(CompositeDefinition("RegisteredTestPortB", 0, (), lambda S: ((("b", three),), Value(8)),
+                                  lambda B, S, b: B.call(XOR8, B.call(XOR8, b[0], b[1]), b[2]), register=False))
+
+    def sig(S):
+        return (("A", Array(2, two)), ("B", Array(2, three))), Array(4, Value(8))
+
+    prog = Program(bind(CompositeDefinition("RegisteredTestPortProgram", 0, (), sig,
+                                            lambda B_, S, A, B: coll_concat(sig(S)[1], [B_.call(ta, A[0]), B_.call(ta, A[1]),
+                                                                                        B_.call(tb, B[0]), B_.call(tb, B[1])]),
+                                            register=False)))
+    ids = [descriptor_id(ta), descriptor_id(tb)]
+    return prog, PO.template_instances_query(ids), ids
+
+
+def test_a_port_of_one_name_in_two_templates_reads_each_templates_own_value():
+    """Two templates each read a value at a parameter `b`, A's two-byte rows in one and B's three-byte rows in the other.
+    Over both templates one key `b` would be two reads, and it is refused, never merged. With `template` each gets its
+    own: the value its own proof blocks read, at their rows, and every other proof block's row None; the file of one
+    template names its own value's leaves, row width and domain, never the other's."""
+    prog, q, (ta, tb) = _two_templates()
+    values, roots = {"A": 2, "B": 3}, {"A": "ab" * 64, "B": "cd" * 64}
+    with pytest.raises(ValueError, match="parameter 'b' reads 'A' in one template and 'B' in another"):
+        G.reads(prog, q, values)
+    assert G.reads(prog, q, values, template=ta) == {"b": {"value": "A", "rows": [0, 1, None, None]}}
+    assert G.reads(prog, q, values, template=tb) == {"b": {"value": "B", "rows": [None, None, 0, 1]}}
+    mine = G.registered_entries(prog, values)
+    for t, v in ((ta, "A"), (tb, "B")):
+        port = G.reads_file(prog, q, values, roots, positions=False, template=t)["ports"]["b"]
+        assert port == {"value": v, "root": roots[v], "leaves": 2, "words": values[v], "word_bits": 16,
+                        "domain": mine[v]["domain"]}
+    assert mine["A"]["domain"] != mine["B"]["domain"]
+
+
+def test_a_read_of_a_template_the_query_lacks_or_a_parameter_its_template_lacks_is_refused():
+    """A read is one template's parameter's: a template with no instance among the query's units is refused by name, and so
+    is a `ports` entry naming a parameter at which the named template reads no registered value (`col`, a parameter of
+    no template here), as the Lean verifier refuses a port of a parameter the statement's template does not have."""
+    prog, q, (ta, _tb) = _two_templates()
+    values, roots = {"A": 2, "B": 3}, {"A": "ab" * 64, "B": "cd" * 64}
+    with pytest.raises(ValueError, match=r"template RegisteredTestMix\S* has no instance among the query's units"):
+        G.reads(prog, q, values, template=MIX.id)
+    with pytest.raises(ValueError, match=re.escape(f"ports names parameters ['col'], and {ta} reads no registered value")):
+        G.reads_file(prog, q, values, roots, ports={"b": "b0", "col": "c"}, positions=False, template=ta)
+    assert G.reads_file(prog, q, values, roots, ports={"b": "b0"}, positions=False, template=ta)["ports"].keys() == {"b0"}
 
 
 def test_a_parameter_of_several_rows_that_are_not_whole_rows_of_one_value_is_refused():
