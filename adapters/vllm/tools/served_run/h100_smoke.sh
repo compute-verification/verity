@@ -45,6 +45,17 @@ APPLICATION=${APPLICATION:-applications/remote.toml}
 # statement; the dataset and its timing from APPLICATION, which the door reads through before the lease
 SAID=$("$PY" adapters/vllm/tools/served_run/inputs.py application "$APPLICATION") || { echo "SMOKE REFUSED dataset: $SAID"; exit 3; }
 read -r MODEL REV PRECISION CLASS DATASET TIMING <<< "${SAID%%$'\n'*}"
+if [ -n "${WIPE_CMD:-}" ]; then  # the wipe reads the application's pins and configuration as the road hands them to a piece
+  WIPE_ENV=$(PYTHONPATH=$TREE/tools/verity/cli:$PYTHONPATH "$PY" - "$APPLICATION" <<'PINS'
+import shlex, sys
+from pathlib import Path
+from verity_cli import run, served_table
+for k, v in served_table.deployment(run.load(Path(sys.argv[1]), run.registry())).items():
+    print(f"export {k}={shlex.quote(v)}")
+PINS
+  ) || { echo "SMOKE REFUSED application: $APPLICATION's pins and configuration can't be read for the wipe"; exit 3; }
+  eval "$WIPE_ENV"
+fi
 echo "${SAID#*$'\n'}"
 IFS=, read -r SLOTS PROMPT OUTPUTS _ <<< "$CLASS"
 [ $((SLOTS * PROMPT)) -le "$MNBT" ] || { echo "SMOKE REFUSED class: CLASS=$CLASS's $SLOTS prompts of $PROMPT ids are $((SLOTS * PROMPT))" \
