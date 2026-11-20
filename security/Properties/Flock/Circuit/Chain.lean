@@ -467,14 +467,14 @@ def admOf (P : Prog) (m : Spot.OneStageZk.Member) : Option Spot.OneStageZk.Admit
 
 /-- **The map from a gate of C to the verifier's tree leaves**, under the members `ms`, member `m`'s session reading the
 Circuit `cs m`: a return leaf `l` of a unit `v` of a member `m` at `outTree`, which a reader another block wires to it
-opens too (`Flock.Registered.treeReadsWhole`); any other gate an argument `x` of copy `j` of a member reads, at the row
-and index the door lays it (`rowAt` of the input rows), at that row's tree (`argTree`). A return leaf of a unit of no
-member has no leaf. -/
+opens too (`Flock.Registered.treeReadsWhole`); any gate no member's unit returns that an argument `x` of copy `j` of a
+member reads, a return of a unit of no member among them, at the row and index the door lays it (`rowAt` of the input
+rows), at that row's tree (`argTree`). A gate no member's unit returns and no member reads has no leaf. -/
 def TreeAt (P : Prog) (ms : Array Spot.OneStageZk.Member) (cs : Spot.OneStageZk.Member → Option Flock.Circuit) (g : ℕ)
     (tl : TreeLeaf) : Prop :=
   (∃ m ∈ ms, ∃ (cc : Flock.Circuit) (v l : ℕ), cs m = some cc ∧ v ∈ m.indices ∧
     ((unitOuts P v)[l]?).map Spot.BlockFront.Port.gate = some g ∧ outTree P m cc v l = some tl) ∨
-  ((¬ ∃ v l : ℕ, ((unitOuts P v)[l]?).map Spot.BlockFront.Port.gate = some g) ∧
+  ((¬ ∃ m ∈ ms, ∃ v l : ℕ, v ∈ m.indices ∧ ((unitOuts P v)[l]?).map Spot.BlockFront.Port.gate = some g) ∧
     ∃ m ∈ ms, ∃ (a : Spot.OneStageZk.Admit) (j x : ℕ) (row : String) (s : ℕ) (r : PortRead),
       admOf P m = some a ∧ j < m.indices.size ∧ ((unitArgs P m.indices[j]!)[x]?).map Spot.BlockFront.Port.gate = some g ∧
       rowAt a.ins.toList (argOff P m.indices[j]! x) = some (row, s) ∧ readsOf P m row = some r ∧
