@@ -19,22 +19,19 @@ slots are NOT engine iterations: chunked prefill advances the state once, an uns
 
 `A` is fixed at BUILD from the RESOLVED profile (the same field the declared LAG reads, through the ONE lag rule -- `A = LAG`), never
 from where the rows stop; `n_executed = n (A = 0) / min(n + 1, C) (A = 1)` with `n` served slots is a DERIVED TEST INVARIANT, never an input
-that shortens the Program.  This module is the SEMANTIC core: the reference evaluator (`next_flags`), an
-independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
-(`recurrence`), the named invariants (`invariants`), the slot <-> engine-iteration map
-(`slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.
+that shortens the Program.  This module holds the reference evaluator (`next_flags`), the checker's recurrence over a RAW
+transcript (`recurrence`), the executed prefix the Commit's consumers count on (`executed_prefix_by_rule`) and the sample
+positions the rule prescribes (`expected_sample_positions`).
 
-Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
-Everything here is labelled `lifted-padded` and carries `CONTINUATION_VERSION` beside `LIFTED_RULES_VERSION`.
+Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`).
 """
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 
-from verity_vllm.check.replay import lifted_records
+LAGS_IMPLEMENTED = (0, 1)  # the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
 
 
 def _is_active(w: int, x: int) -> bool:
@@ -52,51 +49,17 @@ def _enc_active(w: int, v: int) -> int:
     return v
 
 
-CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)
-PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-step-ahead async (run trails emit by exactly one slot after early EOS)"}
-PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read
-#: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
-#: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program samples exactly once
-#: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE sample after the served EOS, an inactive slot none.  With the counter RNG of
-#: record (Philox keyed by (seed, pos), no sequential state; `pos` = the QUERY position whose logits are sampled, the
-#: record's own `pos` fact: slot t samples at pos = prompt_len - 1 + (t - 1), the ledger's "sample k at prompt_len - 1 + k") "advances" means "the
-#: sample at pos exists": the served samples at pos < prompt_len - 1 + n are unchanged whether or not the lag slot ran.  stoch_recompute carries the
-#: accounting; POSITIONS HERE ARE THE LEDGER'S (one convention on the record).
-RNG_STATEMENT = ("RNG advances iff r_t: the sampler of slot t executes iff r_t = 1; the lag slot (0, 1) consumes exactly one sample after the served "
-                 "EOS at pos = prompt_len - 1 + n (n served slots; pos = the query position of record, slot t at prompt_len - 1 + (t - 1)); an "
-                 "inactive slot (0, 0) samples nothing; served samples are unchanged by the lag slot (counter RNG keyed by (seed, pos), no "
-                 "sequential state)")
-
-
-def rng_accounting(slots: Sequence[Slot], *, prompt_len: int | None = None) -> dict[str, Any]:
-    """The named RNG field: how many samples the rule says the Program makes, and where the post-EOS one is (position relative to the prompt, and
-    absolute when `prompt_len` is known).  A statement about the Definition; the record-side count is stoch_recompute's."""
-    exe = executed_slots(slots)
-    lag = lag_slots(slots)
-    return {"statement": RNG_STATEMENT, "samples": len(exe), "sample_slots": exe, "samples_after_served_eos": len(lag),
-            "lag_sample_slot": (lag[0] if lag else None),
-            "lag_sample_pos": (None if not lag or prompt_len is None else int(prompt_len) - 1 + (lag[0] - 1)),  # the ledger's pos
-            "inactive_slots_sample_nothing": [s.t for s in slots if not s.run]}
-
-
 def check_profile(A: int) -> int:
-    """`A in {0, 1}` and nothing else: the same refusal as the lag rule's `check_lag` (one rule).  `A` is the resolved profile, never a fit."""
-    return lifted_records.check_lag(A)
-
-
-def resolve_profile(header: dict) -> tuple[int, str]:
-    """`A` from the record's RESOLVED profile (`RunHeader.profile.engine_kwargs.async_scheduling`, True -> 1, False -> 0), through the lag rule's
-    `lag_from_header` -- the one rule; an absent / non-boolean attestation is refused by name, never defaulted."""
-    return lifted_records.lag_from_header(header)
-
-
-def declared_profile(workload_program: dict | None) -> tuple[int | None, str | None]:
-    """`A` as the Build DECLARED it (the Program's digest-bound `lag=<n>` static and the sidecar fields; the lag rule's `declared_lag_of_row`)."""
-    return lifted_records.declared_lag_of_row(workload_program)
+    """`A in {0, 1}` and nothing else: the serving profile's post-EOS lag is a declared static -- `0` (the step after the EOS is
+    never executed) or `1` (vLLM async scheduling: the EOS-stopped request is fed forward once more, its sample discarded).  Neither
+    is a default; anything else is refused by name."""
+    if A not in LAGS_IMPLEMENTED:
+        raise ValueError(f"LAG={A!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED}; nothing is assumed")
+    return int(A)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the reference evaluator and the independent three-state machine
+# the reference evaluator
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -105,39 +68,6 @@ def next_flags(*, emit: bool, token_is_eos: bool, has_next_slot: bool, async_one
     next_emit = has_next_slot and emit and not token_is_eos
     next_run = (has_next_slot and emit) if async_one_step else next_emit
     return next_emit, next_run
-
-
-class State(Enum):
-    """The independently written three-state reference: SERVING -> SERVING | INACTIVE (sync) | LAG (async); LAG -> INACTIVE;
-    INACTIVE -> INACTIVE; the cap overrides everything (no slot after C)."""
-    SERVING = "serving"
-    LAG = "lag"
-    INACTIVE = "inactive"
-
-
-STATE_BITS = {State.SERVING: (True, True), State.LAG: (False, True), State.INACTIVE: (False, False)}  # (emit, run); (1, 0) has no state
-
-
-def three_state_step(state: State, *, token_is_eos: bool, has_next_slot: bool, async_one_step: bool) -> State:
-    """One transition of the reference machine, written from the states' meaning rather than from the equations."""
-    if not has_next_slot:
-        return State.INACTIVE  # the cap: nothing after slot C in either profile
-    if state is State.SERVING:
-        if not token_is_eos:
-            return State.SERVING
-        return State.LAG if async_one_step else State.INACTIVE
-    return State.INACTIVE  # LAG -> INACTIVE (the lag token, EOS or not, changes nothing); INACTIVE absorbing
-
-
-def three_state_run(is_eos: Sequence[bool], *, cap: int, A: int) -> list[tuple[bool, bool]]:
-    """The reference machine over a full pattern `is_eos[t-1] = IsEOS(y_t)` for `t = 1..cap` (a slot whose token is never produced reads
-    False -- its bit is irrelevant, the machine is already INACTIVE); returns `(e_t, r_t)` for `t = 1..cap`."""
-    check_profile(A)
-    st, out = State.SERVING, []
-    for t in range(1, cap + 1):
-        out.append(STATE_BITS[st])
-        st = three_state_step(st, token_is_eos=bool(is_eos[t - 1]) if t - 1 < len(is_eos) else False, has_next_slot=t < cap, async_one_step=A == 1)
-    return out
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -202,18 +132,9 @@ def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int
     return out
 
 
-def bits(slots: Sequence[Slot]) -> list[tuple[bool, bool]]:
-    return [(s.emit, s.run) for s in slots]
-
-
 def executed_slots(slots: Sequence[Slot]) -> list[int]:
     """`{t : r_t = 1}` -- the executed set the Program's rule PREDICTS (Match compares the record's rows against it)."""
     return [s.t for s in slots if s.run]
-
-
-def served_output(slots: Sequence[Slot]) -> list[int | None]:
-    """`(y_t : e_t = 1)` as a LIST, EOS included, position by position."""
-    return [s.raw for s in slots if s.emit]
 
 
 def lag_slots(slots: Sequence[Slot]) -> list[int]:
@@ -228,30 +149,6 @@ def n_executed_derived(n_served: int, *, cap: int, A: int) -> int:
     if not (1 <= n_served <= cap):
         raise ValueError(f"n_served = {n_served} outside [1, C = {cap}]")
     return n_served if A == 0 else min(n_served + 1, cap)
-
-
-def invariants(slots: Sequence[Slot], *, cap: int, A: int) -> dict[str, bool]:
-    """The named invariants, each a fact about one slot table."""
-    check_profile(A)
-    bs = bits(slots)
-    e = [x for x, _ in bs]
-    r = [x for _, x in bs]
-    last = slots[-1]
-    return {
-        "length_is_cap": len(slots) == cap,
-        "initial_bits_one": bool(e[0] and r[0]),
-        "emit_implies_run": all((not x) or y for x, y in bs),
-        "no_unreachable_1_0": not any(x and not y for x, y in bs),
-        "emit_never_returns": all(not (e[i] and not e[i - 1]) for i in range(1, len(e))),
-        "run_never_restarts": all(not (r[i] and not r[i - 1]) for i in range(1, len(r))),
-        "at_most_one_lag_slot": len(lag_slots(slots)) <= 1,
-        "no_lag_slot_when_synchronous": A == 1 or not lag_slots(slots),
-        "final_next_bits_false": not last.next_emit and not last.next_run,
-        "executed_is_derived_invariant": len(executed_slots(slots)) == n_executed_derived(max(1, len(served_output(slots))), cap=cap, A=A),
-        "stop_only_when_emitting": all((not s.stop) or s.emit for s in slots),
-        "at_most_one_stop": sum(1 for s in slots if s.stop) <= 1,
-        "designated_output_is_emit_prefix": all((s.out is not None) == (s.emit and s.raw is not None) for s in slots),
-    }
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -294,39 +191,8 @@ def executed_prefix_by_rule(served: Sequence[int], *, cap: int, A: int, eos: Ite
 
 
 # ---------------------------------------------------------------------------------------------------------
-# slots <-> engine iterations: a STATED fact, or FAIL by name
+# the sample positions the rule prescribes, and the ledger's compared with them
 # ---------------------------------------------------------------------------------------------------------
-
-
-def slot_map(executed_engine_steps: Sequence[int], *, arrive_step: int, prefill_steps: Sequence[int] | None = None,
-             chunked_prefill_observed: bool | None = None) -> dict[str, Any]:
-    """The map from a request's executed ENGINE steps to its token-generation SLOTS: one iteration per slot, contiguous from `arrive_step`
-    (`slot t <-> engine step arrive + t - 1`).  Chunked prefill ("advances the state once") and an unscheduled iteration ("pending, not
-    inactive") break the identity map and the two bits cannot express them: both are NAMED here (`ok False`), never absorbed -- the workload's
-    applicability attests contiguity + unchunked prefill on the pinned profile; a preempted request is a Match FAIL by name."""
-    steps = [int(s) for s in executed_engine_steps]
-    problems: list[str] = []
-    if steps and steps[0] != arrive_step:
-        problems.append(f"first executed engine step {steps[0]} != arrive_step {arrive_step}: the request's slot 1 is not at its arrival")
-    gaps = [(a, b) for a, b in zip(steps, steps[1:]) if b != a + 1]
-    if gaps:
-        problems.append(f"executed engine steps are not contiguous ({len(gaps)} gap(s), first {gaps[0]}): an unscheduled / preempted slot is "
-                        "pending, not inactive -- the two bits cannot express it; FAIL by name")
-    if chunked_prefill_observed:
-        problems.append("chunked prefill observed: several iterations advance slot 1 once; the one-iteration-per-slot map does not hold")
-    if prefill_steps is not None and len(prefill_steps) > 1:
-        problems.append(f"prefill spans {len(prefill_steps)} engine steps {list(prefill_steps)}: not one iteration per slot")
-    # the two prefill sub-checks read the capture's OWN attestation (tokens.json timing) and are VACUOUS when it is absent --
-    # said so by name, never counted as a pass; the POSITIVE attestation (unchunked prefill on the pinned profile) is the workload's applicability
-    vacuous = ([] if chunked_prefill_observed is not None else ["chunked_prefill: no attestation in the capture (tokens.json timing.chunk_attribution absent)"]) + \
-              ([] if prefill_steps is not None else ["prefill_steps: no attestation in the capture (tokens.json timing.requests[].prefill_steps absent)"])
-    return {"ok": not problems, "rule": "slot t <-> engine step arrive_step + t - 1 (one iteration per slot, contiguous, unchunked prefill)",
-            "arrive_step": arrive_step, "executed_engine_steps": steps, "slots": [s - arrive_step + 1 for s in steps] if not problems else None,
-            "problems": problems,
-            "chunked_prefill_attested": ("absent" if chunked_prefill_observed is None else ("observed" if chunked_prefill_observed else "not-observed")),
-            "prefill_steps_attested": ("absent" if prefill_steps is None else [int(x) for x in prefill_steps]),
-            "vacuous_by_absence": vacuous,
-            "positive_attestation": "the workload's applicability (contiguity + unchunked prefill on the pinned profile) -- not this map's to give"}
 
 
 def expected_sample_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
