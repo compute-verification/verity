@@ -24,6 +24,16 @@ _stand_in()
 
 
 @pytest.fixture(autouse=True)
+def _stand_in_lookup():
+    """The stand-in bodies' lookup again after each test: `door_walls` registers the catalog's (`_catalog`), which
+    replaces the process's one lookup, and every later test on that worker would build its Programs without them."""
+    from verity.circuits import program as PG
+    saved = list(PG._BODY_LOOKUP)
+    yield
+    PG._BODY_LOOKUP[:] = saved
+
+
+@pytest.fixture(autouse=True)
 def _no_run_result(monkeypatch):
     """No test writes into a research run's result: under `research run` a test inherits `RESEARCH_RUN_DIR` and `OUT`,
     where the kit writes the run's measurements whatever directory its caller names, so each test starts with both
