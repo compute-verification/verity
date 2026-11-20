@@ -154,7 +154,9 @@ and window are fixed data. `kind` is a fact about location, not the prover's lab
 exactly when its location is one the hardware description lists (`kindIff`), and a hidden block's location shares no
 leaf with a listed one (`hiddenUnlisted`). A server-day block is a listed location and a day, not the prover's cut: its
 window is one of the period's registered days (`winDay`), and no two server-day blocks of a run share a location and a day
-(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). -/
+(`oneBlock`), so a run has at most the listed locations times the days of them (`serverDay_count_le`). Every inference
+block's window starts at or after its epoch's challenge tick (`inferenceAfterSalt`): a unit inside a server-day block
+that starts before it is a free block, its work under the free bound. -/
 structure Runs (L : Type*) where
   Run : Type
   pr : (Run → Prop) → ℝ≥0∞
@@ -210,6 +212,13 @@ structure Runs (L : Type*) where
   winIn : (r : Run) → Fin (nIn r) → Window
   claimsIn : (r : Run) → Fin (nIn r) → List Property
   hiddenIff : ∀ r u, cls r u = Class.hidden ↔ kind r ((ref r).parent u) = false
+  /-- **The challenge tick of each unit's epoch**: the tick of the verifier's live coin that opens the epoch (PoUW's
+  salt), public. -/
+  salt : (r : Run) → Fin (nIn r) → ℕ
+  /-- An inference block's window starts at or after its epoch's challenge tick, so a unit whose window starts before it
+  is not an inference block. Whoever instantiates `Runs` owes it, as a property of the committed partition that the
+  outer proof checks. -/
+  inferenceAfterSalt : ∀ r u, cls r u = Class.inference → salt r u ≤ (winIn r u).start
   /-- **A block is its place and time**: every server-day-or-hidden block's gates are computed at its location during
   its window (main's `Placed.region`), so a server-day block is a `region` and its size is bounded by `ComputeRate`, not
   assumed. -/
