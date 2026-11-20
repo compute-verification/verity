@@ -185,7 +185,7 @@ def test_the_whole_form_lowers_the_blocks_own_program_and_refuses_a_registered_r
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_an_internal_read_is_free_under_the_unit_form_and_a_column_under_the_whole():
     """On Lean's lowering: the unit form's rows take a reader whose x is not the writer's output (each copy's rows are
-    its own, candidate 127's hole at the statement); the whole form's rows hold C's values and refuse the block output
+    its own, the statement's hole); the whole form's rows hold C's values and refuse the block output
     such a read gives."""
     got = W.internal_case(W._exe(None))
     unit, whole = got["unit"], got["whole"]
