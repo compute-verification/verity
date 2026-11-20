@@ -1,23 +1,17 @@
-"""zk-drivers: the command line of network attestation's zero-knowledge drivers, which live in its prover
-(`verity/protocols/resource_accounting/network/prover/`) and take the proof system's benchmark drivers as one
-`proof_drivers.ProofDrivers`. This builds it from SPOT's template audit, challenger session and development challenger
+"""zk-drivers: the proof system's benchmark drivers as one `proof_drivers.ProofDrivers`, which network attestation's
+prover takes (`verity/protocols/resource_accounting/network/prover/`). This builds it from SPOT's template audit, challenger session and development challenger
 (`a0`, `a5_coins`, `local_challenger`),
 `benchmarks/one_stage/` (`a7`, `a8`, `prove_subprotocol`), Flock's distribution (`verity_flock.circuit`,
 `verity_flock.class_statement`), Flock's proof-format reader (`redigest`) and the chain's reader (`network_attester_chain`),
-installs it, and runs the driver's `main`:
-
-    python benchmarks/network_traces/zk_drivers.py scan_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR
-    python benchmarks/network_traces/zk_drivers.py network_attester_zk ARGS...
+and installs it (`install`), which `leak_scan` reads its proof-format reader from.
 """
 from __future__ import annotations
 
-import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
-DRIVERS = ("scan_zk", "network_attester_zk")
 
 
 def proof_drivers() -> SimpleNamespace:
@@ -44,16 +38,3 @@ def install() -> None:
     from verity.protocols.resource_accounting.network.prover import proof_drivers as PD
 
     PD.install(proof_drivers())
-
-
-def main(argv=None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if not argv or argv[0] not in DRIVERS:
-        raise SystemExit(f"usage: zk_drivers.py {{{'|'.join(DRIVERS)}}} ARGS...")
-    install()
-    driver = importlib.import_module(f"verity.protocols.resource_accounting.network.prover.{argv[0]}")
-    return driver.main(argv[1:])
-
-
-if __name__ == "__main__":
-    sys.exit(main())
