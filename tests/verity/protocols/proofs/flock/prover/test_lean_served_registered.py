@@ -99,7 +99,9 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert canonical_json(doc) == (fx / "stage" / "registered.json").read_bytes()
     assert doc["ports"]["cs"].get(RV.SCHEMA_KEY, RV.SCHEMA) == schema
     sr = register_served(program, query, [tree, x_tree])
-    assert sr.partition == json.loads((fx / "stage" / "partition.json").read_text())
+    stage = json.loads((fx / "stage" / "partition.json").read_text())
+    # the stage names its one block of the whole population (`PO.build`); the docket's partition object names none
+    assert stage.pop("blocks") == [[[0, 32]]] and sr.partition == stage
     ok = _verify(fx, SR.write_registered(doc, tmp_path / "registered.json"))
     assert (ok["accepted"], ok["why"]) == (True, ""), ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}, "x": {"value": "x", "root": x_tree.root},
