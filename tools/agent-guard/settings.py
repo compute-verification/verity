@@ -140,8 +140,8 @@ def recorded_runs() -> list[tuple[int, str, str]]:
 
 def named_events(*names: str) -> list[dict]:
     """EVENT_LOG's lines whose `event` is one of `names`, whatever their agent, oldest first: those of the file it last
-    rotated to, then its own. A line that names none of them as text is skipped unparsed, and one that is not a JSON
-    object is skipped. A missing file is no lines; any other OSError rises to the caller."""
+    rotated to, then its own. A line that names none of them as text is skipped unparsed, and one that names one but is
+    not JSON is skipped and said on stderr. A missing file is no lines; any other OSError rises to the caller."""
     events = []
     for path in (EVENT_LOG + ".1", EVENT_LOG):
         if not os.path.isfile(path):
@@ -151,7 +151,9 @@ def named_events(*names: str) -> list[dict]:
         for line in lines:
             try:
                 e = json.loads(line)
-            except ValueError:
+            except ValueError as err:
+                print(f"settings: a line of {path} that names one of {', '.join(names)} is not JSON, skipped: {err}",
+                      file=sys.stderr)
                 continue
             if isinstance(e, dict) and e.get("event") in names:
                 events.append(e)

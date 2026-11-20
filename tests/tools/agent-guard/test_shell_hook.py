@@ -906,9 +906,12 @@ AGENT, PEER = "bc-56565656-5656-4565-8565-565656565656", "bc-67676767-6767-4676-
 TURNS = [f"{n * 8}-1111-4111-8111-111111111111" for n in "123456789"]
 
 
-def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path, **env: str) -> dict:
-    """The hook's verdict on `command` in the turn `turn` of `agent` on `model`; a None leaves that key out of the payload."""
+def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path, cwd: Path | None = None,
+             **env: str) -> dict:
+    """The hook's verdict on `command` in the turn `turn` of `agent` on `model`, run in `cwd` where one is given; a None
+    leaves that key out of the payload."""
     event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent,
+             **({"cwd": str(cwd)} if cwd is not None else {}),
              **({"generation_id": turn} if turn is not None else {}), **({"model": model} if model is not None else {})}
     out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
                          env={**os.environ, "AGENT_INBOX": str(inbox), "AGENT_GUARD_MIN_AVAIL": "0", **env}).stdout
@@ -1128,10 +1131,10 @@ def test_tops_permit_lets_one_design_worker_run_fable_medium_and_only_read(tmp_p
     assert on_model("ls", AGENT, TURNS[0], MEDIUM, tmp_path, **top_registry)["permission"] == "deny"
     assert on_model(PERMIT, TOP, TURNS[1], FABLE, tmp_path, **top_registry) == ALLOW
     assert len(settled(event_log, "fable_design_permit")) == 1
-    for turn, command in ((TURNS[2], "ls"), (TURNS[2], "git status"), (TURNS[3], "git log --oneline -3")):
+    for turn, command in ((TURNS[2], "ls"), (TURNS[2], "cat notes.md"), (TURNS[3], "pwd")):
         assert on_model(command, AGENT, turn, MEDIUM, tmp_path, **top_registry) == ALLOW, command
-    for command in ("git commit -m design", "git push -u origin some-branch", "git -C /tmp/w commit --amend"):
-        refused = on_model(command, AGENT, TURNS[3], MEDIUM, tmp_path, **top_registry)
+    for command in ("git commit -m design", "git push -u origin some-branch", "git -C . commit --amend"):
+        refused = on_model(command, AGENT, TURNS[3], MEDIUM, tmp_path, cwd=tmp_path, **top_registry)
         assert refused["permission"] == "deny" and "reads and commits nothing" in refused["user_message"], command
     assert [e["conversation_id"] for e in settled(event_log, "fable_design_claim")] == [AGENT]
     for agent, model in ((PEER, MEDIUM), (AGENT, FABLE), (AGENT, "claude-fable-5-2")):
