@@ -136,16 +136,16 @@ theorem rowsProgWired : RowsProgWired := by
 def tiedExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
-/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
+/-- A compute audit whose Program has one `SlotEntry_v2` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 2, `every` 2). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v2{KO=1}", 1, slotEntryPins[0]!)]⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, none, none, none, false⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+    [("port", "SlotEntry_v2{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- Its honest side: an execution phase whose scan's `prog` is at that port's root and domain is wired, and the slot
 audit is tied to it, so its free inputs are in the execution phase's term. -/
@@ -182,9 +182,9 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   rw [tiedExecutionPhase_unwired] at hw
   cases hw
 
-/-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
+/-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v2`'s name and
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
-def renamedAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+def renamedAudit : Audit := ⟨0, 0, "", 1, #[("SlotEntry_v2{KO=1}", 1, "")]⟩
 
 /-- A renamed body is no slot entries: the execution phase `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
@@ -193,7 +193,7 @@ theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tie
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property at a renamed body** (its nontrivial
 lemma at the pin): such a check accepts a rows-form period whose scan's `prog` is at the root and domain of an audit's
-`SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
+`SlotEntry_v2` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, #[], "",
@@ -302,7 +302,7 @@ def stateReg (root : String) : Lean.Json :=
     ("registered", Lean.Json.arr #[Lean.Json.mkObj
       [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
     ("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+      [("port", "SlotEntry_v2{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- A run of the scan's state reads: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i` (`isRun`). -/
 def stateRun (l lo hi : ℕ) : Lean.Json :=
@@ -332,7 +332,7 @@ circuit's registration commits its per-window values, at the root `root` and the
 def activationsReg (root : String) : Lean.Json :=
   Lean.Json.mkObj [
     ("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]]),
+      [("port", "SlotEntry_v2{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]]),
     ("window", Lean.Json.mkObj [("activations", Lean.Json.mkObj [("values", Lean.Json.mkObj [
       ("verity/certifier/scan-state/v1", Lean.Json.mkObj
         [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")])])])])]
@@ -542,7 +542,7 @@ theorem rowsCircuitHeld : RowsCircuitHeld := by
 `tiedExecutionPhase`'s scan's `prog` is its output. -/
 def heldReg (d : String) : Lean.Json :=
   Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
-    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+    [("port", "SlotEntry_v2{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- An execution phase whose tied audit is registered under the class circuit `c` is held to it. -/
 theorem tiedExecutionPhase_held : held (some "c") #[heldReg "c"] tiedExecutionPhase = true := by
