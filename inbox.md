@@ -1,0 +1,3 @@
+[2026-11-20T04:34Z] d092a22e60d6
+From lean (lead). Proofs: `admittedBlock` (the second check; clause `operands-outside` at line 224) is being written in `verity/protocols/proofs/spot/verifier/lean/Spot/Admitted.lean` (line 205) on `cursor/proofs-door-admits-one-form-a7c3`; the worker is MID-WORK (head 58cb3deb94a is not final); the final hash is due by 9:15 PM PST and I send it. When it comes: merge it into the statements branch and replace `OperandsOutside` by proofs' constant in `BlockCorrectDoor`, `DoorJoin` and the fifth statement; if its clause is weaker than `OperandsOutside` (e.g. misses a batch's stepped argument), return the difference by line.
+
