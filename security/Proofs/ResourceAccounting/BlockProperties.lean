@@ -1602,22 +1602,27 @@ theorem wipeInputAtMost (P : Runs L) (Ls : Finset (Finset L)) (survives : Finset
     P.WipeInputAtMost Ls survives E k memEnclosing memCap adv := by
   intro hG hread _ _ _ _ hinfo
   classical
+  let e := Ls.equivFin
   have hsub : ∀ r, (P.accepts r ∧
       ¬ ∀ i, P.kind r i = true → P.HoldsOut r i (.inputAtMost [.past] (P.pastBound E k r i))) →
-      ∃ x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), P.accepts r ∧ ¬ survives x.1 x.2 r := by
+      ∃ x ∈ (univ : Finset (Fin Ls.card × Fin P.nDays)), P.accepts r ∧ ¬ survives (e.symm x.1).1 x.2 r := by
     rintro r ⟨ha, hn⟩
     by_contra hall
-    push_neg at hall
-    exact hn (hinfo r ha fun X hX d => hall (X, d) (Finset.mem_product.mpr ⟨hX, Finset.mem_univ _⟩) ha)
+    push Not at hall
+    refine hn (hinfo r ha fun X hX d => ?_)
+    have h := hall (e ⟨X, hX⟩, d) (Finset.mem_univ _) ha
+    simpa using h
   unfold ExceptWith
-  calc P.pr _ ≤ P.pr (fun r => ∃ x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), P.accepts r ∧ ¬ survives x.1 x.2 r) :=
-        P.mono _ _ hsub
-    _ ≤ ∑ x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), P.pr (fun r => P.accepts r ∧ ¬ survives x.1 x.2 r) :=
-        P.union _ (fun (x : Finset L × Fin P.nDays) r => P.accepts r ∧ ¬ survives x.1 x.2 r)
-    _ ≤ ∑ _x ∈ Ls ×ˢ (univ : Finset (Fin P.nDays)), ((2⁻¹ : ℝ≥0∞) ^ P.wipeError + adv) :=
-        Finset.sum_le_sum fun x hx => hread x.1 (Finset.mem_product.mp hx).1 x.2 hG
+  calc P.pr _ ≤ P.pr (fun r => ∃ x ∈ (univ : Finset (Fin Ls.card × Fin P.nDays)),
+          P.accepts r ∧ ¬ survives (e.symm x.1).1 x.2 r) := P.mono _ _ hsub
+    _ ≤ ∑ x ∈ (univ : Finset (Fin Ls.card × Fin P.nDays)),
+          P.pr (fun r => P.accepts r ∧ ¬ survives (e.symm x.1).1 x.2 r) :=
+        P.union _ (fun (x : Fin Ls.card × Fin P.nDays) r => P.accepts r ∧ ¬ survives (e.symm x.1).1 x.2 r)
+    _ ≤ ∑ _x ∈ (univ : Finset (Fin Ls.card × Fin P.nDays)), ((2⁻¹ : ℝ≥0∞) ^ P.wipeError + adv) :=
+        Finset.sum_le_sum fun x _ => hread (e.symm x.1).1 (e.symm x.1).2 x.2 hG
     _ = ((Ls.card * P.nDays : ℕ) : ℝ≥0∞) * ((2⁻¹ : ℝ≥0∞) ^ P.wipeError + adv) := by
-        rw [Finset.sum_const, nsmul_eq_mul, Finset.card_product, Finset.card_univ, Fintype.card_fin]
+        rw [Finset.sum_const, nsmul_eq_mul, Finset.card_univ, Fintype.card_prod, Fintype.card_fin,
+          Fintype.card_fin]
 
 /-! ## The chain, with the protocols' rows named as types
 
