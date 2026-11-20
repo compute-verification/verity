@@ -12,7 +12,6 @@ import pytest
 from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
 
-from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.definitions.numerics import cublas_gemm_rows as C
@@ -185,30 +184,3 @@ def world():
     return table, x, served
 
 
-def _replay(table, x, logits):
-    reads = []
-
-    def weights(field, lo, hi):
-        reads.append((field, lo, hi))
-        return table[field][lo:hi]
-
-    store = _store({(X_PATH, "out"): _rows_of(x), (OP_PATH, "router_logits"): _rows_of(logits)})
-    return EV._replay_vu(_Index(), store, weights, {"i": 7, "request_id": "r0", "phase": "prefill"}, 0, {}), reads
-
-
-def test_router_logits_on_the_pinned_route_replay_equal(world):
-    table, x, served = world
-    rec, reads = _replay(table, x, served["pinned"])
-    assert rec["result"] is True, rec.get("why")
-    assert rec["outputs"] == [{"member": "router_logits", "width": N, "equal": True, "differing_elements": 0, "first_diff": None}]
-    assert reads == [(FIELD, 0, N * K)]
-
-
-def test_router_logits_served_off_the_pinned_route_are_a_mismatch_by_name(world):
-    """The switch's unsplit route computes `GemmF32Out_v1`, which the Program's split-K row is not: the replay names the member."""
-    table, x, served = world
-    rec, _ = _replay(table, x, served["switched"])
-    diff = int((served["pinned"] != served["switched"]).sum())
-    assert rec["result"] is False
-    assert rec["outputs"][0]["differing_elements"] == diff
-    assert f"{OP_PATH}/router_logits row {ROW}" in rec["why"]

@@ -35,6 +35,7 @@ from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.settings import lean_env  # noqa: E402
 from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
@@ -95,7 +96,7 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FC_", "FLOCK_")) and k != "PYTHONPATH"}
     env.update(RAYON_NUM_THREADS=str(os.cpu_count()), RUST_MIN_STACK=str(64 << 20), FLOCK_CHALLENGER="1")
     t = time.monotonic()
-    p = subprocess.run(audit_argv(win, work / "audit", main, flock, lean), capture_output=True, text=True, env=env)
+    p = subprocess.run(audit_argv(win, work / "audit", main, flock, lean), capture_output=True, text=True, env=lean_env(env))
     (d / "audit.log").write_text(p.stdout)
     (d / "audit.err").write_text(p.stderr)
     res["audit"] = {"rc": p.returncode, "seconds": round(time.monotonic() - t, 1),

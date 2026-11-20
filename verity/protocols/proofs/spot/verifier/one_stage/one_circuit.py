@@ -13,7 +13,6 @@ from typing import Any
 from verity.circuits import edges as EG
 from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
-from verity.circuits.boolean import bit_type
 from verity.circuits.codec import DecodedProgram, definition_digest, descriptor_id, lift_shape
 from verity.circuits.program import input_id
 
@@ -103,7 +102,8 @@ def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None)
     """in(S)'s row cuts (`Spot.OneStageZk.cutsOf`, `edges.io_cuts`): ``{template: {port: k}}`` on C and the partition's
     ranges; `NotDerived` (`LOWER`, as `lower`) before C is read where the partition is no template query, and at a scan
     node of C's root; `Refused` where the query doesn't apply to C or C's root reads a port in rows that no writer field
-    divides."""
+    divides, or where a template of C has no gate (`Partition.checkTemplates`, which Lean's runs only on a C with an
+    edge: this refuses at least what Lean's does)."""
     if _listed(partition.get("query") or {}) is None:
         raise NotDerived(LOWER)
     D = (decoded or Decoded(c)).get()
@@ -111,6 +111,8 @@ def cuts(c: bytes, partition: Mapping[str, Any], decoded: Decoded | None = None)
         ranges = PO.TemplatePartition(D, partition["query"]).ranges
     except PO.QueryInapplicable as e:
         raise Refused("E_QUERY", str(e)) from e
+    if t := next((t for k, t, _a, n in ranges if n and D.root.body.nodes[k].fn.gates == 0), None):
+        raise Refused("E_QUERY", f"query-refused: template {t} has no gate")
     try:
         return EG.io_cuts(D.desc, ranges)
     except ValueError as e:
@@ -146,26 +148,10 @@ def admitted(D: DecodedProgram, partition: Mapping[str, Any],
     return key, rows, fields
 
 
-def leaves_off(params: Sequence[tuple[str, Any]], lifted: Sequence[tuple[str, Any]], ret: Any, lret: Any) -> str | None:
-    """`OneStageZk.leavesOff`, at the template's parameters and return and their types on bits (``lifted``, ``lret``):
-    Python has no lifted Definition, so these are `bit_type`'s, the types Lean's lift gives a lifted template."""
-    fs, gs = _fields(ret), _fields(lret)
-    if len(params) != len(lifted) or len(fs) != len(gs):
-        return f"{len(params)} parameters and {len(fs)} return fields, its lift's {len(lifted)} and {len(gs)}"
-    ports = [("parameter", n, sum(t.leaf_widths()), u.leaves) for (n, t), (_, u) in zip(params, lifted)] + \
-        [("return field", f"o{j}", sum(t.leaf_widths()), u.leaves) for j, (t, u) in enumerate(zip(fs, gs))]
-    if bad := next((p for p in ports if p[2] != p[3]), None):
-        return f"{bad[0]} {bad[1]} of {bad[2]} bits has {bad[3]} leaves after the lift to bits"
-    s_in, s_out = sum(sum(t.leaf_widths()) for _, t in params), sum(ret.leaf_widths())
-    l_in, l_out = sum(u.leaves for _, u in lifted), lret.leaves
-    if (s_in, s_out) != (l_in, l_out):
-        return f"parameters of {s_in} bits and a return of {s_out}, its lift's {l_in} and {l_out} leaves"
-    return None
-
-
 def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
     """`admitted`'s clauses from `listed` on, on template ``key`` of ``D`` at its cuts ``ks``: (its input rows, its return
-    fields), or `Refused` by the first clause that fails."""
+    fields), or `Refused` by the first clause that fails. `leaves-are-bits` is held in Lean alone: it compares the
+    template with its lifted Definition, which Python does not build, and `bit_type` of a type has its bits as leaves."""
     fn = D.defs.get(key)
     if fn is None:
         raise _not_admitted("listed", f"C_S's template {key} is no Definition of C_S")
@@ -201,8 +187,6 @@ def template_form(D: DecodedProgram, key: str, ks: Mapping[str, int]) -> tuple[l
             if bits == 0 or bits % 16:
                 raise _not_admitted("whole-words", f"C_S's template {key}: {what} {name} of {bits} bits is not a positive "
                                                    "whole number of u16 words")
-    if why := leaves_off(params, [(n, bit_type(t)) for n, t in params], ret, bit_type(ret)):
-        raise _not_admitted("leaves-are-bits", f"C_S's template {key}: {why}")
     return rows, fields
 
 
@@ -270,7 +254,7 @@ def lower(c_s: bytes, partition: Mapping[str, Any], exe: Callable[[], Path | str
         src, dst = Path(d, "c_s.json"), Path(d, "circuit.txt")
         src.write_bytes(c_s)
         p = LC.run([str(exe()), "compose", str(src), key, f"unit/{key}", ins, outs, layout, partition["program"],
-                    PO.digest(partition), digests, str(dst)])
+                    PO.digest(partition), digests, str(dst)], ok_statuses=LC.COMPOSE_EXITS)
         if p.returncode != 0:
             raise Refused("E_LOWER", f"{LOWER_EXE} compose ({p.returncode}): {(p.stderr or p.stdout)[-2000:]}")
         return dst.read_bytes()

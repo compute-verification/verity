@@ -38,6 +38,7 @@
 # answer.json, and exits 3. Exit 0 on accept, 1 on another verdict or a wipe that failed, 7 when the judge or the
 # streamer doesn't build.
 set -euo pipefail
+export LEAN_ABORT_ON_PANIC=1  # one_stage/settings.py's ABORT_ON_PANIC, for every Lean verifier below and every process it starts
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF=$HERE/$(basename "$0")
 ROOT=$(cd "$HERE/../../.." && pwd)

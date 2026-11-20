@@ -223,7 +223,7 @@ PUBLIC = {
                                    "(Rewrites, build_roles, requant, absorbed), which benchmarks/one_stage and "
                                    "benchmarks/spot_proved stage from",
     "verity_vllm.check.replay.index": "I7: the Program rows sampled replay reads, indexed per request (ProgramIndex, "
-                                      "row_args, const_word), which benchmarks/one_stage and benchmarks/prove_path read",
+                                      "const_word), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.check.replay.opening": "I7: committed words by identity, the store sampled replay reads "
                                         "(CommittedStore), which benchmarks/one_stage and benchmarks/prove_path read",
     "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
@@ -265,12 +265,10 @@ PUBLIC = {
     "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor device's challenger, one challenge phase a Commit "
                                          "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
                                          "Pearl-C arm take their coins from",
-    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
-                                          "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a sealed window leaves (MANIFEST, open_bundle), which "
+                                          "benchmarks/one_stage opens",
     "verity_vllm.pipeline.research_outputs": "I1: the names a run's public outputs never hold (PRIVATE), which "
                                              "benchmarks/serve_tax states and refuses a public write by",
-    "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
-                                           "manifest_of_rank), which benchmarks/one_stage reads",
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
                                  "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
                                  "build under",
@@ -310,7 +308,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.derived_rows",
     "verity_vllm.definitions.numerics.fp8_moe_rows",
     "verity_vllm.definitions.numerics.glm53_rows",
-    "verity_vllm.definitions.numerics.int8_rows",
     "verity_vllm.definitions.numerics.kernel_registry",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",
@@ -381,7 +378,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
-    "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
     "verity_vllm.program.frontend.derive_examples",

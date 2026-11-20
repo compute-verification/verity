@@ -807,10 +807,28 @@ def _nat(x: Any) -> bool:
     return _int(x) and x >= 0
 
 
+def _forward(r: Refs, k: int) -> int | None:
+    """The first node at or after node `k` that a part of `r` holding a reference names, None when there is none."""
+    if isinstance(r, Concat):
+        return next((i for p in r.parts if (i := _forward(p, k)) is not None), None)
+    if isinstance(r, Explicit):
+        return next((i for s, i, _ in r.items if s == "n" and i >= k), None)
+    if not r.count:
+        return None
+    if isinstance(r, Grid):
+        return next((ln[1] for ln in r.lanes if ln[0] == "n" and ln[1] >= k), None)
+    return r.idx if r.space == "n" and r.idx >= k else None
+
+
+def forward_refusal(k: int, i: int) -> str:
+    """The refusal of node `k`'s argument naming node `i`, `i >= k` (the Lean decoder's text too)."""
+    return f"forward-reference: node {k} reads node {i}, which is not before it; a node reads the body's parameters and earlier nodes only"
+
+
 def _checked_refs(r: Refs, leaves: Callable[[str, int], int | None] | None) -> Refs:
-    """`r`, if every reference in it names an existing leaf: of a parameter of the body (`p`) or of a node's output (`n`).  A node
-    naming itself or a later node decodes (checkers name that defect); the canonical layout assumes it does not (PROTOCOL.md §6).
-    `leaves(space, idx)` is that collection's leaf count, None if there is none."""
+    """`r`, if every reference in it names an existing leaf: of a parameter of the body (`p`) or of a node's output (`n`).  A node's
+    argument naming the node itself or a later one is refused after this check (`_forward`), so the width check (`Builder.finish`)
+    sees every source a node reads.  `leaves(space, idx)` is that collection's leaf count, None if there is none."""
     if leaves is None:
         return r
     if isinstance(r, Concat):
@@ -967,7 +985,12 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
                 raise ValueError(f"definition {fid!r} node {k}: an input node ({fn.id}) appears only in the root's body")
             _check_node(fid, k, nd, fn)
             try:
-                args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema, leaves)) for a in nd["args"])
+                args = []
+                for a in nd["args"]:
+                    args.append(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema, leaves)))
+                    if (i := _forward(args[-1].refs, k)) is not None:
+                        raise ValueError(forward_refusal(k, i))
+                args = tuple(args)
             except ValueError as e:
                 raise ValueError(f"definition {fid!r} node {k}: {e}") from e
             _build_node(B, fid, k, nd, fn, args, arg_type(nd["out"]))

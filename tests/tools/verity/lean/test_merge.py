@@ -174,9 +174,9 @@ def hand_written(n: str | None = None, reason: str | None = None) -> dict:
         return {"owner": "@lean", "digest": "a" * 64} | f
     rec = {"roots": ["P"], "exempt": {"P.E": "why"}, "reads_exempt": {"P.R": "why"}, "four_names_except": {"P.W": "why"},
            "layers": {"D": {"imports": ["D"], "except": [], "why": "why"}}, "unwitnessed": {"Claims.U": "why"},
-           "open": {"P.O": entry(issue="LEAN-1", due="2026-11-30")}, "domain": {"P.D": entry(why="why")},
+           "scope": {"P.S": "why"}, "open": {"P.O": entry(issue="LEAN-1", due="2026-11-30")}, "domain": {"P.D": entry(why="why")},
            "assumptions": {"P.H": entry()}, "shape": {"frozen": {"P.F": "why"}, "inline": {"P.t": {"a": "why"}}}}
-    tables = ([rec[k] for k in ("exempt", "reads_exempt", "four_names_except", "unwitnessed")]
+    tables = ([rec[k] for k in ("exempt", "reads_exempt", "four_names_except", "unwitnessed", "scope")]
               + [rec["shape"]["frozen"], rec["shape"]["inline"]["P.t"]])
     if n is not None:
         rec["roots"].append(f"P.{n}")
@@ -214,15 +214,15 @@ def test_hand_written_entries_two_sides_add_merge_as_their_union():
 
 def test_a_hand_written_entry_one_side_removed_and_the_other_changed_is_the_changed_one():
     """A changed side beats a removed one, whichever side removed it: an open premise's new due date, a domain
-    hypothesis's new why, a frozen or inline reason, a layer's rule and an exemption's or a claim's reason each stay with
+    hypothesis's new why, a frozen or inline reason, a layer's rule, a scope's sentence and an exemption's or a claim's reason each stay with
     the changed side's value, named (in ``why``, or as a candidate where the lock run judges the entry)."""
     removed, changed = hand_written(reason=""), hand_written(reason="changed")
     for ours, theirs, side in ((removed, changed, "theirs"), (changed, removed, "ours")):
         merged, why = M.merge(hand_written(), ours, theirs, candidate := [])
         assert merged == changed, side
         assert why == [f"{p}: removed on one side and changed on the other: kept {side}' change" for p in (
-            "exempt[P.E]", "reads_exempt[P.R]", "four_names_except[P.W]", "layers[D]", "shape[frozen][P.F]",
-            "shape[inline][P.t][a]")]
+            "exempt[P.E]", "reads_exempt[P.R]", "four_names_except[P.W]", "layers[D]", "scope[P.S]",
+            "shape[frozen][P.F]", "shape[inline][P.t][a]")]
         assert candidate == [f"unwitnessed[Claims.U] ({side})", "open[P.O]", "domain[P.D]"]
 
 

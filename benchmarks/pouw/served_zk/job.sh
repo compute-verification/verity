@@ -60,7 +60,7 @@
 #        deliver-again         a second delivery of the same sample                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
-#        outcome-st-<case>     the first unit's Lean verdict a selftest case's: every case                     REJECT
+#        outcome-st-<case>     the first unit's Lean verdict a selftest case's, no roots read: every case      REFUSED
 #        replay                the challenger's requests again from its recorded coins, Lean sampling          SAME
 #        replay-twin           the same, stream_subset (Lean's sample's Python twin) sampling                    SAME
 set -uo pipefail
@@ -137,7 +137,8 @@ V1=$("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'] ==
 STATE=${SZ_COIN_STATE:-$WORK/coin-state/$SERVED_RUN}
 if [ "$V1" = True ]; then REC=true STATEARG=(); else REC=false STATEARG=(--state "$STATE"); fi
 log "pass: $("$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['schema'])" "$MAN"), the challenger ${STATEARG[*]:-fresh}"
-coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
+# --verify: the outcome runs the Lean verifier itself on each sampled proof block, SZ_LEAN_JOBS at a time (default 4)
+coproc SVC { exec "$PY" "$SC" challenger "$RP" "$OUT/challenger" --lean "$LEAN" --verify "$LEAN" --lean-jobs "${SZ_LEAN_JOBS:-4}" "${STATEARG[@]}" 2> "$OUT/challenger.err"; }
 ask() {          # ask CHECK JSON: one request; its reply line in $OUT/CHECK.out, its word in $REPLY
   local line=
   if [ -n "${SVC[1]:-}" ]; then echo "$2" >&"${SVC[1]}" && IFS= read -r line <&"${SVC[0]}"; fi
@@ -198,9 +199,9 @@ finish() {       # the challenger quits, then its requests again from its record
   [ -n "${SVC[1]:-}" ] && echo '{"op": "quit"}' >&"${SVC[1]}"
   [ -n "${SVC_PID:-}" ] && wait "$SVC_PID" 2>/dev/null
   local v
-  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" | tee "$OUT/replay.out" | first)
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay" --lean "$LEAN" --verify "$LEAN" --lean-jobs "${SZ_LEAN_JOBS:-4}" | tee "$OUT/replay.out" | first)
   expect replay SAME "${v:-ERROR}"
-  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" | tee "$OUT/replay-twin.out" | first)
+  v=$("$PY" "$SC" replay "$RP" "$OUT/challenger" "$W/replay-twin" --verify "$LEAN" --lean-jobs "${SZ_LEAN_JOBS:-4}" | tee "$OUT/replay-twin.out" | first)
   expect replay-twin SAME "${v:-ERROR}"
 }
 summary() {      # summary.json
@@ -258,7 +259,7 @@ unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (control
   session "$W/$tag" "$OUT/$tag" || log "$tag: --zk session FAILED: $(tail -2 "$OUT/$tag/prove.err")"
   lean_jobs "$W/$tag" "$OUT/$tag" hidden
   printf 'lean-%s\tREFUSED\t%s\n' "$tag" "$(lean_verdict "$OUT/$tag/lean-honest-own.out")" >> "$vf"
-  rm -f "$W/$tag/inst.bin"; [ "$t" = "$FIRST" ] || rm -f "$W/$tag/circuit.txt"   # free the ~486 MB circuit; FIRST's stays for lean-foreign-pub
+  rm -f "$W/$tag/inst.bin"   # the circuit stays: the challenger's outcome runs the Lean verifier on it (removed after `finish`)
 }
 
 # A parallel fan-out over the sampled proof blocks: the session (serve + prove, ~12.5 GB together) bounds the worker count against the
@@ -328,22 +329,22 @@ v=$("$PY" "$SC" shape "$W/$FT" "$W/u$REAL_UNIT" --out "$OUT/shape-filler.json" |
 expect shape-filler SAME "${v:-ERROR}"
 
 # ---- 6. deliver and outcome ---------------------------------------------------------------------------------------------------
-units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_LEAN FIRST_OPENING FIRST_SESSION]: the sampled proof blocks' files, the first replaced
-  "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" $UNITS <<'PY'
+units_json() {   # units_json DEST [FIRST_STAGE FIRST_PUB FIRST_OPENING FIRST_SESSION]: the sampled proof blocks' files, the first replaced
+  "$PY" - "$OUT" "$W" "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" $UNITS <<'PY'
 import json, sys
 from pathlib import Path
-out, w, dest, st, pub, lean, op, session, *units = sys.argv[1:]
+out, w, dest, st, pub, op, session, *units = sys.argv[1:]
 rows = []
 for i, t in enumerate(units):
     u = f"{out}/u{t}"
     sessions = sorted(Path(f"{w}/u{t}/sessions").glob("*/session.json"))
-    row = {"unit": int(t), "stage": f"{u}/stage.json", "pub": f"{u}/pub.bin", "lean": f"{u}/lean-honest-own.out",
+    row = {"unit": int(t), "stage": f"{u}/stage.json", "pub": f"{u}/pub.bin", "circuit": f"{w}/u{t}/circuit.txt",
            "opening": f"{out}/open-u{t}.json", "rust": f"{u}/prove.out",
-           "session": str(sessions[-1]) if sessions else f"{w}/u{t}/sessions/none"}
-    if i == 0:
-        row.update({k: v for k, v in (("stage", st), ("pub", pub), ("lean", lean), ("opening", op), ("session", session)) if v})
-        if lean:
-            row.pop("rust")
+           "session": str(sessions[-1]) if sessions else f"{w}/u{t}/sessions/none",
+           **{k: f"{w}/u{t}/{k}.json" for k in ("partition", "program") if Path(f"{w}/u{t}/{k}.json").exists()}}
+    if i == 0 and any((st, pub, op, session)):
+        row.update({k: v for k, v in (("stage", st), ("pub", pub), ("opening", op), ("session", session)) if v})
+        row.pop("rust")
     rows.append(row)
 json.dump(rows, open(dest, "w"))
 PY
@@ -367,14 +368,15 @@ expect outcome-again REFUSED "$REPLY"
 ask deliver-again "$(req op deliver name honest units "$OUT/units-honest.json")"
 expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
-units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
+units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
 ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof replay honest)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue
-  units_json "$OUT/units-st-$c.json" "" "" "$U/lean-st-$c.out" "" "$W/u$U0/st/$c/session.json"
-  control "st-$c" REJECT "$OUT/units-st-$c.json"
+  units_json "$OUT/units-st-$c.json" "" "$([ -e "$W/u$U0/st/$c/pub.bin" ] && echo "$W/u$U0/st/$c/pub.bin")" "" "$W/u$U0/st/$c/session.json"
+  control "st-$c" REFUSED "$OUT/units-st-$c.json"
 done
 finish
+rm -f "$W"/u*/circuit.txt
 summary

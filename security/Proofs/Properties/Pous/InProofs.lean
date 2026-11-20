@@ -43,6 +43,7 @@ namespace MemoryAttester.Properties.InProofs
 
 open Verity.InProofs Verity.Game
 open scoped ENNReal
+open Flock.SessionCoins (COMPLETE)
 
 /-- **The values at a session's proof block's ports**, each kind reading its own: the signature's the digest `m` and the
 signature `sig`; the signed digest's `m`, how the session ended (`ended`) and its rounds; a round's its record
@@ -152,6 +153,7 @@ namespace MemoryAttester.Properties.InProofs.SecurityProofs
 
 open MemoryAttester MemoryAttester.Properties.InProofs MemoryAttester.Properties.SecurityProofs
 open Verity.InProofs Properties.ResourceAccounting.InProofs Verity.Game
+open Flock.SessionCoins (COIN_BINDING COIN_SCHEMA COMPLETE)
 
 theorem runGives : RunGives := by
   intro schemes trusted expected c openings scheme pk idx Ω μ r right ε g h hc

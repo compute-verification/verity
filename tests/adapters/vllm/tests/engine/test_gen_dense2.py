@@ -1,7 +1,7 @@
 """The two profile modules are exactly `analytic.config_of` + `build_profile` with the listed hand
 fields; the weight-name maps bind every parameter name of the served models and nothing else; the workloads mirror the B1
 one-request workload (32 prompt tokens, 16 greedy tokens, no accepted tokens); positive AND negative recognizer tests of the
-patterns (`gen_dense2_patterns`, when present).  Phi-3's captured rotary table is `test_gen_dense2_of_record`."""
+patterns (`gen_dense2_patterns`, when present)."""
 from __future__ import annotations
 
 import dataclasses
@@ -41,7 +41,7 @@ STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_
 @pytest.mark.parametrize("mod", [phi3, gemma])
 def test_embedded_hf_config_is_the_registered_one(mod):
     if not mod.HF_CONFIG_PATH.exists():
-        pytest.skip("data/hf_configs is not shipped to pods")
+        pytest.skip("the role's config.json is not shipped to pods")
     assert json.loads(mod.HF_CONFIG_PATH.read_text()) == mod.HF_CONFIG
 
 

@@ -43,6 +43,7 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib.util
 import json
 import random
 import re
@@ -57,8 +58,6 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
-import settings
-import stand_in
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.commitments import docket_digest as DD
@@ -100,8 +99,23 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+
+
+def _by_path(name: str, path: Path):
+    """The module at `path`, loaded once as `name`: this file is imported by path from other suites, where a bare
+    `import settings` finds their own registry and `stand_in` is on no path."""
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        sys.modules[name] = mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+settings = _by_path("spot_verifier_lean_settings", Path(__file__).resolve().with_name("settings.py"))
+stand_in = _by_path("stand_in", Path(__file__).resolve().parents[5] / "circuits" / "stand_in.py")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify  # noqa: E402
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 CALLER_PACKAGE = PACKAGE.parents[2] / "spot_flock/verifier/lean"
@@ -6946,6 +6960,27 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
                            (shared, PO.call_query(16)), (shared, PO.call_query(8))]:
         taken = {**case, "program": program, "query": _json(query)}
         assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(slots(copy.deepcopy(taken)))), query
+
+
+def test_glm53s_all_reduce_at_three_rows_is_refused_past_the_widest_class(pieces):
+    """GLM-5.3's TP8 MNNVL all-reduce at three rows, as `tp_allreduce.circuit-check.py`'s `_glm53_served` binds it
+    (`AllReduceMnnvl_v1{WORLD=8,N=18432,SHOT=1}`), returns 294,912 bits: Lean's slots and the Python's partition refuse
+    its instance by the widest class."""
+    from verity_vllm.definitions.registry import tp_allreduce as TA
+    c = next(c for c in TA.CAPTURED if (c.N, c.world, c.device, c.route) == (6144, 8, None, "fi_ar_comm"))
+    d, statics = TA.route_binding(c, 8, max(3, c.lo), 6144, 3)
+    unit = bind(d, **statics)
+    query = P.template_instance_query(unit.id)
+    why = "commits 294912 bits, more than the widest class, 262144"
+    with pytest.raises(P.QueryRefused, match=why):
+        P.units(PN.population_program(unit, 1), query)
+    refused = {"closure": None, "rule": {"law": "rate:1/1000", "rule": "law"},
+               "source": hashlib.shake_256(b"refused").hexdigest(400), "work_table": None,
+               "program": _template_population(unit, 1), "query": _json(query)}
+    kind, body = D.replay(SLOTS, refused, pieces)
+    assert kind == "reject" and why in str(body), (kind, body)
+    with pytest.raises(D.Reject, match=why):
+        slots(copy.deepcopy(refused))
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",
