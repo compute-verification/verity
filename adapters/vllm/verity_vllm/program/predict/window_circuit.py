@@ -11,7 +11,8 @@ request has no Program. The class circuit (`class_circuit`), every slot's Progra
 positions, is the fixed load's, at which PoUW's tables are read (`FixedLoad`). Arrival steps are values, never structure.
 
 A slot's request comes from the network attester's scan: boundary b's Programs read the scan's state row before it
-(`scan_state.SCAN_STATE`, registered) through `boolean_io_shell.ScanSlots_v5` (`scan_state.bridge`), a template a lane,
+(`scan_state.SCAN_STATE`, registered), read once a boundary by `boolean_io_shell.ScanState_v1`, a unit of no request,
+whose output each lane's `boolean_io_shell.ScanSlots_v5` (`scan_state.bridge`) reads by a wire, a template a lane,
 which gives its lane its first position's token (its prompt's first id) and the slot it carries on, its occupancy word and
 its head (its prompt's length and ``max_tokens``). A served window has a unit a lane of each boundary, empty lanes
 included; a class circuit's slot holds a unit of every lane's template and reads its own lane's, so its slots lower the
@@ -154,6 +155,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
 
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
@@ -277,13 +279,18 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     by = {(r.anchor, r.lane): k for k, r in enumerate(progs)}
     host = {a: min([(r.lane, k) for k, r in enumerate(progs) if r.anchor == a], default=(0, 0))[1] for a in cls.boundaries}
     scanned: list[tuple[int, int, tuple[str, int]]] = []
+    ns = scans[0].bindings["NS"]
+    otid, ou = b.allocation(bind(BIO.ScanStateV1, NS=ns), [None] * len(cls.boundaries))
+    owner = {a: ou + i for i, a in enumerate(cls.boundaries)}
+    for a, u in owner.items():
+        b.read(otid, "state", u, (1,), a * ns, (0,), SS.SCAN_STATE)
     for j in range(cls.lanes):
         groups = ([[(cls.anchor(k), k) for k in range(programs)]] if order is None
                   else [[(a, by.get((a, j), host[a]))] for a in cls.boundaries])
         for group in groups:
             tid, u = b.allocation(scans[j], [(k, 0) for _, k in group])
             for i, (a, k) in enumerate(group):
-                b.read(tid, "state", u + i, (1,), a * scans[j].bindings["NS"], (0,), SS.SCAN_STATE)
+                b.feed(tid, "state", u + i, 1, (Row(otid, owner[a], "o0", ns),))
                 scanned.append((a, j, (tid, u + i)))
                 if order is None and cls.lane(k) == j:
                     progs[k].scan_unit = (tid, u + i)

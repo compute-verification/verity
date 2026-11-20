@@ -205,4 +205,41 @@ def scan_rows(state, NP, IDB, K0, K, OCC, LP, MAX, IDS, **_):
 
 register_kernel(ScanSlotsV5, scan_rows, domain="every state row")
 
-BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsBitsV1, ScanSlotsV5]
+
+def _state_bits_sig(S):
+    return (("bits", Array(16 * S.NS, BL.BIT)),), Array(16 * S.NS, BL.BIT)
+
+
+def _state_bits(B, S, bits):
+    # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
+    return B.batch(BL.NOT, B.batch(BL.NOT, bits, axes=(0,)), axes=(0,))
+
+
+ScanStateBitsV1 = CompositeDefinition("ScanStateBits", 1, ("NS",), _state_bits_sig, _state_bits,
+                                      doc="`ScanState_v1`'s copy of the row's bits, two NOTs a bit.",
+                                      conformance="exact-model-tested")
+
+
+def _state_sig(S):
+    return (("state", Array(S.NS, Value(16))),), Array(S.NS, Value(16))
+
+
+def _state_words(B, S, state):
+    bits = B.batch(bind(WordBits, W=16), state, axes=(0,))
+    out = B.call(bind(ScanStateBitsV1, NS=S.NS), Coll(Array(16 * S.NS, BL.BIT), bits.refs))
+    return B.batch(bind(BitsWord, W=16), Coll(Array(S.NS, Array(16, BL.BIT)), out.refs), axes=(0,))
+
+
+ScanStateV1 = CompositeDefinition("ScanState", 1, ("NS",), _state_sig, _state_words,
+                                  doc="The scan's state row of ``NS`` u16 words, read once from its registration and "
+                                      "copied, so each lane's `ScanSlots_v5` reads it by a wire and one row owns it.",
+                                  conformance="exact-model-tested")
+
+
+def state_rows(state, **_):
+    return np.asarray(state, dtype=np.uint64), None
+
+
+register_kernel(ScanStateV1, state_rows, domain="every state row")
+
+BOOLEAN_IO_SHELL = [IngressPromptV2, IngressSampledV1, ScanSlotsBitsV1, ScanSlotsV5, ScanStateBitsV1, ScanStateV1]

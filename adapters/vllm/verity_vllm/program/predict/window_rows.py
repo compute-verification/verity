@@ -60,6 +60,7 @@ from verity.commitments.periods.rows import registered as registered_commit
 from verity_vllm.check.capture_plan import NODE, captured
 from verity_vllm.definitions.numerics.rows import ROWS
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import boolean_io_shell as BIO
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.query.manifest import format as RM
 
@@ -457,8 +458,8 @@ class Rows:
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
     registered values by parameter (`window_weights.weight_values` with their rows kept, and the scan state's,
     `scan_state.SCAN_STATE`, with its rows: the network attester's, a row a bucket of the window), of which an embedding
-    read opens its table's (its ``rows``, ``salts`` and ``path``) and a lane's `ScanSlots_v5` reads the scan state's row at
-    its anchor. Refused unless every unit's every row is filled once."""
+    read opens its table's (its ``rows``, ``salts`` and ``path``) and a boundary's `ScanState_v1` reads the scan state's
+    row at it. Refused unless every unit's every row is filled once."""
 
     def __init__(self, lowered: Lowered, slots: Sequence[Slot], registered: Mapping[str, Any]) -> None:
         if lowered.requests is None:
@@ -492,6 +493,10 @@ class Rows:
                        for t, lay in self.lays.items()}
         for P, S in zip(lowered.programs, slots):
             self._slot(P, S)
+        for tid, fn in self.fns.items():
+            if fn.defn is BIO.ScanStateV1:
+                for u, a in enumerate(lowered.programs[0].cls.boundaries):
+                    self._put(tid, u, "o0", np.asarray(self.state[a], dtype=np.uint16).reshape(1, -1), EVALUATED)
         for a, _j, (tid, u) in lowered.scans:
             for i, v in enumerate(_lane(self.fns[tid], self.state, a, IO.scan_reference)):
                 self._put(tid, u, f"o{i}", _i32(v if isinstance(v, list) else [v]), EVALUATED)

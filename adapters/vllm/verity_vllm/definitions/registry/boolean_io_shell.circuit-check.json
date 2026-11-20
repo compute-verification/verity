@@ -21,6 +21,18 @@
   },
   "ScanSlots_v5{NS=9353,NP=1024,IDB=17,K0=12,K=45,OCC=112537,LP=112329,MAX=112361,IDS=113689}": {
    "and": 30
+  },
+  "ScanStateBits_v1{NS=4548}": {
+   "and": 0,
+   "type": "3e6cc04df3bd30ab62bfd2e86db7575dfc5b294e86c17b445fc40c999fec22acb69962bee5f02bf5de3442768ba3b90b61af0a20f2da342bfacb0142d74e4a60"
+  },
+  "ScanStateBits_v1{NS=9090}": {
+   "and": 0,
+   "type": "c10079fc1ec528312567f4853c02fd2779f6b7708ac086bb240136444155ccb69f2274a9b09c34c5a01fb55138b9b77a52dd1c79516685482ec607c1adae8b90"
+  },
+  "ScanStateBits_v1{NS=9353}": {
+   "and": 0,
+   "type": "3d9c8325b81fcc8ec6df72170f296095e35ebb37b4740ba7ab451458937da9e32d3aa720c916c74814ec9fa02125f368f3a8a0691bb4bd2ea7ad642ac94221ef"
   }
  },
  "struct_max_gates": {
