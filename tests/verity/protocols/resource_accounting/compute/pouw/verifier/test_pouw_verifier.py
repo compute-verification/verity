@@ -21,8 +21,8 @@ def _imports(path: str) -> tuple[ast.Module, set[str]]:
 
 def test_the_switch_is_one_line_in_a_module_that_imports_only_the_standard_library() -> None:
     tree, beyond = _imports(V.__file__)
-    assert beyond == {"verity.protocols.proofs.spot.verifier.one_stage"}, beyond
-    assert not _imports(V.LC.__file__)[1] and not _imports(V.LC.lean_env.__code__.co_filename)[1]
+    assert beyond == {"verity"}, beyond
+    assert V.LC.__name__ == "verity.lean_process" and not _imports(V.LC.__file__)[1]
     assigned = [t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)]
     assert assigned.count("RECORD_VERDICT") == 1 and V.RECORD_VERDICT in ("lean", "python")
 
@@ -39,7 +39,7 @@ for line in sys.stdin:
                                   "Error: index out of bounds"])
 def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_name(monkeypatch, tmp_path, said) -> None:
     """A verifier that writes a panic line, a ``PANIC`` one or an out-of-range index's with none, then answers accept
-    and ends 0, gives no answer: `lean_child.LEAN_PANIC`, whatever it answered."""
+    and ends 0, gives no answer: `lean_process.LEAN_PANIC`, whatever it answered."""
     fake = tmp_path / "pouw-verifier-difftest"
     fake.write_text(f"#!{sys.executable}\n{_FAKE.format(said=said)}", encoding="utf-8")
     fake.chmod(0o755)
@@ -56,7 +56,7 @@ def test_a_verifier_that_panics_and_answers_accept_with_exit_0_is_refused_by_nam
 def test_a_verifier_killed_by_a_signal_or_ending_with_no_verdict_is_refused_by_name(monkeypatch, tmp_path, end,
                                                                                    how) -> None:
     """A verifier killed by a signal, or ending silently with a status `SERVE_EXITS` doesn't hold (134 an abort's), gives
-    no answer: `lean_child.LEAN_EXIT`."""
+    no answer: `lean_process.LEAN_EXIT`."""
     fake = tmp_path / "pouw-verifier-difftest"
     fake.write_text(f"#!{sys.executable}\nimport os, signal, sys\nsys.stdin.readline()\n{end}\n", encoding="utf-8")
     fake.chmod(0o755)

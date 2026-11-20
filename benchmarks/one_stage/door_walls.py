@@ -353,6 +353,8 @@ def owner(step: str, text: str) -> str:
         return "proofs' door (a named hole, one_circuit.NotDerived)"
     if step in ("lower", "reader"):
         return "proofs' door (one_circuit.lower, proofs.tmpl_why)"
+    if step == "cuts" and "query-refused:" in text:
+        return "proofs' door (one_circuit.cuts, Partition.checkTemplates)"
     if step == "cuts":
         return "circuits' edges (edges.io_cuts) at proofs' door"
     if step == "restrict":

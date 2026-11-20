@@ -25,7 +25,7 @@ execution phase's and a credit period's verdicts are `pouw-check serve`'s and `p
 `RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
-This module imports only the standard library and one-stage's `lean_child` (standard library only), the rule every launch of
+This module imports only the standard library and `verity.lean_process` (standard library only), the rule every launch of
 a Lean verifier whose answer can become a verdict runs under, so what decides an execution phase never depends on
 `verity.ml`."""
 from __future__ import annotations
@@ -41,7 +41,7 @@ import threading
 from pathlib import Path
 from typing import Any, NoReturn
 
-from verity.protocols.proofs.spot.verifier.one_stage import lean_child as LC
+from verity import lean_process as LC
 
 RECORD_VERDICT = "lean"
 #: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
@@ -101,8 +101,8 @@ class _Server:
 
     def exchange(self, request: Any, what: str) -> Any:
         """The JSON line `exe` answers to `request`'s canonical line; raises `LeanError` where it writes a panic line
-        (`lean_child.LEAN_PANIC`, whatever its answer: it runs in `lean_child`'s `lean_env`, so a panic aborts it), is
-        killed by a signal or ends with a status outside `SERVE_EXITS` (`lean_child.LEAN_EXIT`), ends before its
+        (`lean_process.LEAN_PANIC`, whatever its answer: it runs in `lean_process.lean_env`, so a panic aborts it), is
+        killed by a signal or ends with a status outside `SERVE_EXITS` (`lean_process.LEAN_EXIT`), ends before its
         answer line, or answers a line that is not JSON."""
         line = _canonical(request)
         with self._lock:
