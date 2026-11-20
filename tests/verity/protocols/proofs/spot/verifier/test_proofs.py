@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -484,7 +485,7 @@ def test_the_doors_lowering_of_a_partition_of_no_template_query_is_a_named_hole(
     for partition in ({"program": "p"}, {"program": "p", "query": {"name": "Q_all", "params": {"template": "T"}}},
                       {"program": "p", "query": {"name": "Q_template_instances", "params": {"templates": "T"}}}):
         with pytest.raises(OC.NotDerived, match="lower : C_S of a partition that is no template query"):
-            OC.lower(b"{}", partition, never)
+            OC.lower(b"{}", partition, never, formed=OC.NO_BLOCK_CHECK)
 
 
 def _two_templates(*counts: int) -> tuple[bytes, dict, list[str]]:
@@ -517,7 +518,8 @@ def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_ma
     exe.write_text(f"#!{sys.executable}\nimport json, sys\nopen(sys.argv[-1], 'w').write(json.dumps(sys.argv[1:]))\n")
     exe.chmod(0o755)
     for u, tid in ((1, ids[0]), (2, ids[1])):
-        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe))
+        argv = json.loads(OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, lambda: exe,
+                                  formed=OC.formed_in(c, part, [(u, u + 1)])))
         assert argv[0] == "compose" and argv[2:4] == [tid, f"unit/{tid}"], argv
         assert argv[7:9] == [part["program"], PO.digest(part)], argv
 
@@ -525,10 +527,10 @@ def test_the_doors_lowering_takes_c_s_template_from_its_root_under_a_query_of_ma
         raise AssertionError("built an executable for a C_S the door refuses")
 
     with pytest.raises(OC.Refused, match="C_S's root calls .*, and a block's units are instances of one template"):
-        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never)
+        OC.lower(OC.restrict(c, part, [(1, 3)]), part, never, formed=OC.formed_in(c, part, [(1, 3)]))
     _, only_first, _ = _two_templates(2, 0)
     with pytest.raises(OC.Refused, match="is not one the partition's query lists"):
-        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never)
+        OC.lower(OC.restrict(c, part, [(2, 3)]), only_first, never, formed=OC.formed_in(c, only_first, [(2, 3)]))
 
 
 def test_a_drawn_block_of_a_partition_of_many_templates_is_in_range_and_its_blocks_cover_c():
@@ -550,7 +552,8 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
     from verity.circuits import partition_object as PO
     c, part, ids = _two_templates(2, 2)
     for u, tid in ((0, ids[0]), (3, ids[1])):
-        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable).decode()
+        text = OC.lower(OC.restrict(c, part, [(u, u + 1)]), part, PF.lower_executable,
+                        formed=OC.formed_in(c, part, [(u, u + 1)])).decode()
         head, meta = text.split("\n", 2)[:2]
         assert head.startswith("flock-circuit/tmpl") and f"unit/{tid}" in head, head
         assert PO.digest(part) in meta and tid in meta, meta[:400]
@@ -560,8 +563,8 @@ def test_leans_lowering_takes_a_block_of_a_partition_of_many_templates():
 @pytest.mark.slow
 def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_word_primitive():
     """A template of a word parameter ``w`` (``Value 8``) that no gate reads beside two bits it XORs: the lift lifts only
-    a Definition reaching a word primitive, so Lean's lowering, the door's executable, refuses it by name
-    (`Flock.Lower.WIDE`) rather than lowering ``w`` as one wire."""
+    a Definition reaching a word primitive, so the door's predicate refuses it by its clause `on-bits`
+    (`Spot.OneStageZk.admitted`) rather than lowering ``w`` as one wire."""
     from verity.circuits import codec
     from verity.circuits import partition_object as PO
     from verity.circuits.boolean import BIT, xor_gate
@@ -575,8 +578,10 @@ def test_the_doors_lowering_refuses_a_template_whose_word_parameter_reaches_no_w
     program, query = wired_population_program([(t, 2)], {"templates": [[tid, 2]]})
     c = b"".join(codec.descriptor_chunks(program))
     part = PO.build(json.loads(c), query, [[(0, 1), (1, 2)]])
-    with pytest.raises(OC.Refused, match="a parameter or return leaf wider than one bit, not lifted to bits"):
-        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable)
+    with pytest.raises(OC.Refused, match=re.escape(
+            "(Spot.OneStageZk.admitted), on-bits: C_S's template DoorLowerWordUnread_v0 reaches DoorLowerWordUnread_v0, "
+            "whose leaves are not all one bit after the lift to bits")):
+        OC.lower(OC.restrict(c, part, [(0, 1)]), part, PF.lower_executable, formed=OC.formed_in(c, part, [(0, 1)]))
 
 
 @pytest.mark.parametrize("indices, blocks, want", [
