@@ -58,7 +58,8 @@ def opens (c d salt : ByteArray) (rec : Json) (compiler : Option (Option (String
 /-- SHA-512(COIN_TAG ‖ 0 ‖ coin ‖ commitment): a coin the challenger released after `commitment`, made a function of it. -/
 def boundCoin (coin c : ByteArray) : ByteArray := Flock.Sha512.hash (COIN_TAG.toUTF8.push 0 ++ coin ++ c)
 
-private def hexField (j : Json) (k : String) : V ByteArray := do
+/-- The field `k` of `j`, read as lowercase hex. -/
+def hexField (j : Json) (k : String) : V ByteArray := do
   let .str s := getD j k | throw s!"{k} is not hex"
   Flock.unhex s
 
