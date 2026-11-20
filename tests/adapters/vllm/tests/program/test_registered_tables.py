@@ -57,14 +57,6 @@ def test_tanh_rn_entries_are_tanh_f32_rn_at_the_region_words_low_27_bits():
     assert T.tanh_rn_entry((lo - 1) & 0x7FFFFFF) == 0 == T.tanh_rn_entry(hi & 0x7FFFFFF)
 
 
-def test_gelu_tanh_mul_bf16_v3_is_v1_reading_the_registered_table():
-    """`GeluTanhMulBf16_v3` on special words, `gelu_tanh_bf16` its operand, against `GeluTanhMulBf16_v1` (the Lean evaluator's
-    difftest runs it on every gate word)."""
-    table = T.table_words("gelu_tanh_bf16")
-    for g, u in [(0x3F80, 0x8000), (0xFF80, 0), (0x7FC0, 0x3F80), (0x0001, 0x7F80), (0x8000, 0xFF80)]:
-        assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
-
-
 def test_a_registered_values_derivation_registers_no_gelu_table():
     """`_C.gelu_tanh_and_mul` under `registered_values`: `GeluTanhMul_v1`, as the constants derivation binds it, with no table
     parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
@@ -108,4 +100,3 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     a = materialize(twin, [xs, w])
     b = materialize(prog, [xs, [eps], w])
     assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
-
