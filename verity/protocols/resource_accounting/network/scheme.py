@@ -108,6 +108,7 @@ def _reading(row: Mapping[str, Any]) -> S.Reading:
 
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
+    catalog={"attester": "verity.protocols.resource_accounting.network.verifier.network_attester"},
     messages=workload.MESSAGES,
     framings={IdsProtocol.name: IdsProtocol},
     provides=("admission",),
