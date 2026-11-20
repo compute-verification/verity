@@ -10,9 +10,11 @@ import copy
 from typing import Any
 
 import pytest
+from verity_vllm.check import c2_rules as C2
+from verity_vllm.check import verdict as V
+from verity_vllm.records import replay_codes as RC
 
-from tests.check.test_absent_commit_fields import ABSENT, put
-from tests.check.test_absent_link_fields import left_out
+from tests.check.test_absent_commit_fields import ABSENT, left_out, put
 from tests.check.test_commit_verdict_selector_no_evaluator_gap import (
     K_ROPE,
     K_SEL,
@@ -26,9 +28,6 @@ from tests.check.test_rev_r16_named_population_gap import (
     SR_COMPLETE_WITH_NAMED_EXCLUSIONS,
 )
 from tests.check.test_verdict import _base
-from verity_vllm.check import c2_rules as C2
-from verity_vllm.check import verdict as V
-from verity_vllm.records import replay_codes as RC
 
 NO_GAP = (None, None)
 BY_FORM_B = "C2 of record by form (B) [oracle compare complete: 3 compared, 0 mismatch, instance outputs 2]"

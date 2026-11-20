@@ -10,10 +10,8 @@ from pathlib import Path
 import pytest
 from verity.commitments.randomness import derive
 
-from tests.commit import test_binding_negatives as T
 from verity_vllm.acquire.committer_api import RunCommitment, StepCommitment
 from verity_vllm.check.replay import sample as SR
-from verity_vllm.commit import binding as B
 from verity_vllm.commit import challenge as CH
 
 V = json.loads(Path(__file__).with_name("challenge_legacy_vectors.json").read_text())
@@ -100,17 +98,6 @@ def test_positions_are_sampled_over_a_sha512_root_and_other_sizes_are_refused():
             CH.challenge_positions(bytes(n), lps, 4, source=AUDITOR_KEY)
 
 
-def test_identities_sample_through_the_picker():
-    c, run, bmap = T.commit(T.produce())
-    pop = list(B.expected_population(T.structure(), T.workload()))
-    fresh = B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
-    assert fresh and all(e is not None for _, e, _ in fresh)
-    assert fresh == B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
-    assert fresh != B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=b"another key")
-    with pytest.raises(ValueError, match="needs a source: the run's live coin"):
-        B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=None)
-    pick = CH.identity_picker(ROOT, "ab" * 32, source=AUDITOR_KEY)
-    assert all(0 <= pick(i, 7) < 7 for i in range(100))
 
 
 @pytest.mark.parametrize(("extra", "said"), [

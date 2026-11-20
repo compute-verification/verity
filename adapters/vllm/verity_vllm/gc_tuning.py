@@ -1,6 +1,6 @@
 """Process-level cyclic-GC thresholds for the offline analysis processes (the Build's derives (`build`) and workload Program compose
 (`global-program`), fold worker, Match checkers, `manifest build` / `build-global`), and the same thresholds for one step in
-whichever process runs it (`tuned`: a rank's Program load, `pipeline.tp.rank_replay.load`).
+whichever process runs it (`tuned`).
 
 Content-neutral by construction: CPython's cyclic collector only frees objects that are already unreachable; no
 artifact byte, digest, verdict or population depends on WHEN it runs. What depends on it is wall time. With the

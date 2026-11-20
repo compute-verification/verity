@@ -292,7 +292,8 @@ def RecRaw.ins (w : RecRaw) : Except String RecIns := do
     (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}"
   pure { base, inner, part := w.recPart, bindings, src, bound, commits, link, rows, links }
 
-/-- **`verifyCmd`'s setup with the recursive inputs** at the statement's sample, with no `--identifier`. -/
+/-- **`verifyCmd`'s setup with the recursive inputs** at the statement's sample, with no `--identifier`. Each
+statement's registered reads are checked at the reads `Registered.withPositions` derives from C, the verifier's program. -/
 def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   let r := s.base.read
   if !r.tags.hm96Rows then
@@ -303,7 +304,7 @@ def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   RecBudget.statements s.inner
   let (spec, sts) ← r.setup
   for st in sts do
-    checkRegistered st s.base.registered
+    checkRegistered st (← Registered.withPositions st.c st.pub r.I.program s.base.registered)
     noIdentifier st
   Registered.checkFull s.base.registered r.draw
   RecSetup.checks s.inner s.commits s.base.stmtTags r.I.tables sts r.I.circuitFile r.I.partition r.I.program

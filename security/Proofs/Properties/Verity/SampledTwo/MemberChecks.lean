@@ -69,7 +69,7 @@ on the blobs, the member's own lookup tables (`ownTables`), the member's registe
 theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
     {a : _root_.Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
     ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
-      bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
+      m.own.circuitFile = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
       _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
       a = _root_.Spot.OneStageZk.StepAt.ofOwn m.own Flock.Tags.circuit circuitB pubB tables rd
@@ -287,7 +287,7 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
     {m : _root_.Spot.OneStageZk.Member} (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) :
     ∃ circuitB pubB rd tables, Flock.Tags.circuit.plainLeaves = false ∧
-      bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
+      m.own.circuitFile = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
       _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables ∧
       ∀ s ∈ sf.sessions.toList, SessionAccepted
@@ -429,7 +429,7 @@ for it), whose JSON files read back (`ReadsBack`) and whose bytes decode as `w` 
 theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (hc : m.own.circuitFile = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
     {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)
@@ -522,7 +522,7 @@ theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
     (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r')
     (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
-    (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
+    (hc : m.own.circuitFile = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     {tables : List (String × ByteArray)} (ht : _root_.Spot.OneStageZk.ownTables m.own bs = .ok tables)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
     {w : FlockDeploy.Raw} (hf : MemberFields w m circuitB pubB tables) (hr : ReadsBack w m record)

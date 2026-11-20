@@ -72,22 +72,6 @@ def test_a_warm_prefill_launches_its_uncached_suffix_from_row_c():
     assert b[(168, 9)][0] == [[168, 0]]
 
 
-def test_a_warm_request_finds_its_own_program_and_a_cold_one_never_takes_it(tmp_path):
-    from verity_vllm.pipeline import manifest as PM
-    from verity_vllm.query.manifest import format as MF
-    for name, res in (("build_request", {"LP": 168, "T": 9}), ("build_request_LP168_T9_C128", {"LP": 168, "T": 9, "C": 128})):
-        (tmp_path / name).mkdir()
-        (tmp_path / name / "result.json").write_text(json.dumps(dict(res, ok=True)))
-    fx = {"requests": PP.with_cached(_wl([(P + X, 10, 0), (P + Y, 10, 4)]))}
-    want = {"r0": str(tmp_path / "build_request"), "r1": str(tmp_path / "build_request_LP168_T9_C128")}
-    assert MF.program_dirs_for(fx, str(tmp_path)) == want and PM._program_dirs_for(fx, str(tmp_path)) == want
-    (tmp_path / "build_request_LP168_T9_C128").rename(tmp_path / "build_request_warm")      # found by its result.json's C
-    assert MF.program_dirs_for(fx, str(tmp_path))["r1"] == str(tmp_path / "build_request_warm")
-    (tmp_path / "build_request_warm" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
-    with pytest.raises(SystemExit, match="r1 .*168,9,128"):
-        MF.program_dirs_for(fx, str(tmp_path))
-    with pytest.raises(SystemExit, match="r1 .*168,9,128"):
-        PM._program_dirs_for(fx, str(tmp_path))
 
 
 def test_a_warm_programs_cached_rows_are_not_token_ids():

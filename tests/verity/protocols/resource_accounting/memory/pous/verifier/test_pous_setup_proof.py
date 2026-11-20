@@ -252,4 +252,4 @@ def test_a_weights_commitment_registered_after_the_salt_is_refused():
     program, _query = c.program()
     f = V.SALT_MARK["supplied"]
     with pytest.raises(ValueError, match=r"^E_SUPPLIED_ORDER: \['weights'\] registered after pous\.setup\.salt/v1"):
-        G.marked_rows(program, c.registered.params, {}, {f: salt.hex()}, {f: 1}, 1)
+        G.marked_rows(program, c.registered.params, {}, {f: salt.hex()}, None, {f: 1}, 1)

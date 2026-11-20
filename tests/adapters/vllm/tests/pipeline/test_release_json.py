@@ -151,11 +151,11 @@ def test_native_collect_build_dir_per_tree():
 
 
 def test_cli_check_and_line_as_a_process(tmp_path):
-    """The row reads its release line through `verity-vllm release-json line` in a child process: exit codes and output as documented."""
+    """The row reads its release line through `cli.run(release_json) line` in a child process: exit codes and output as documented."""
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
     rj.write_record(_rec(own), str(own), str(pod))
-    py = [sys.executable, "-m", "verity_vllm.pipeline.cli", "release-json"]
+    py = [sys.executable, "-c", "import importlib, sys; from verity_vllm.pipeline import cli; raise SystemExit(cli.run(importlib.import_module(sys.argv[1]), sys.argv[2:]))", "verity_vllm.pipeline.release_json"]
     cwd = HERE.parents[1]
     r = subprocess.run(py + ["check", "--tree", str(own), "--tag", "r16-int-3", "--commit", "a2dabe493", "--pod-path", str(pod)], capture_output=True, text=True,
                        cwd=cwd)

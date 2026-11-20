@@ -35,7 +35,7 @@ def _arm(d: Path, taps: str, *, commit: dict[str, Any] | None = None, kernels: d
 def _merge(tmp_path: Path, control: Path, treatment: Path) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     out = tmp_path / "merged"
     with pytest.raises(SystemExit) as e:
-        cm.main(cli.parse("compiled-merge", ["--control", str(control), "--treatment", str(treatment), "--out", str(out)], {}))
+        cm.main(cli.parse(cm, ["--control", str(control), "--treatment", str(treatment), "--out", str(out)], {}))
     return e.value.code, json.loads((out / "summary.json").read_text()), json.loads((out / "verdict.json").read_text())
 
 

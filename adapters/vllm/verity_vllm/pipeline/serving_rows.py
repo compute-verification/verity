@@ -1,15 +1,12 @@
 """The serving rows of a Commit: the units of the verifier's partition, read exactly as the replay reads them (committed members
 through an opened reader, registered weights for weight slices), committed in M0's serving row format by
-:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
+:mod:`verity.commitments.periods.rows`, with core's one-stage registration over them.  Two ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
   a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
   sealed and before sampling (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
   hold the values under the Commit's roots.
-* **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
-  rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
-  the rank.
 * **From a deferred Commit's bundle** (``verity-vllm serving-rows BUNDLE --row-dir D --partition F --out O``,
   `pipeline.deferred_rows`): the sealed replay bundle opened against the Commit's record as the CPU replay opens it, and the same
   window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
@@ -202,8 +199,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     """Per template, its rows in order (request, its ProgramIndex, the row, its description), restricted to ``scope`` (an op_path
     prefix, or a list of them: a row under any) and ``steps`` (``[lo, hi)`` of the request's steps); each template's Definition;
     and its instance count.  Rows are matched by the template's word (:func:`template`), so two templates that compute one word
-    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
-    (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
+    Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program; ``reuse``: indexes already built, each taken for the Program it was built from with these
     arguments (`index_of`).  A norm row with a ``FINAL`` cut is read by the templates `final_hits` keeps (the final norm whole)."""
     ts = [template(t) for t in tmpls]
     prefixes = (scope,) if isinstance(scope, str) else tuple(scope or ())
@@ -735,7 +731,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``, rows-sha512), the research run ``run``, the row, the committer and the served Programs' ``digests``),
     ``partition.json``, the index and M0's bodies.  The window is ``served``; with ``stand_in`` (its ``of`` and ``link``), a
-    ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
+    ``stand-in`` with them in its provenance.  A TP rank's window gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
     gates, which the window's sampling design proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`); ``tables``
