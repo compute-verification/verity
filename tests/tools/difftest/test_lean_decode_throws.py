@@ -20,6 +20,10 @@ NAMED = {
 UNDECIDED = "a {form} part of {n} references, not decided by structure: {why}"
 #: throws that pass an inner refusal on, whose own text a case pins
 FORWARDED = {"{pre}: {e}", "definition '{fid}' ret: {e}"}
+#: why the program digest's own refusals (`canonEntry`, `entryFlat`, `composeEntry`, `subFns`, `digestGo`) have no case
+AFTER_DECODE = ("unreachable: `decode` takes the program digest last, over definitions it has accepted, whose aliases name earlier "
+                "arguments, whose nodes hold argument lists and id callees, whose references it has followed with no cycle "
+                "(`depends on itself`), and each referenced definition's digest is taken before the referrer's")
 
 NO_CASE = {
     "references nest deeper than this verifier follows":
@@ -29,6 +33,15 @@ NO_CASE = {
     NAMED["UNCHECKED"]: "not written: a part refused by structure whose first wrong leaf lies past `Widths.WALK` = 2^20 leaves is an "
                         "explicit one (an affine part's is found by bisection, a strided or grid one is undecided first): a descriptor "
                         "of over 2^20 references, some 15 MB",
+    **{t: AFTER_DECODE for t in (
+        "program: references nest deeper than this verifier follows",
+        "program: alias {a.compress} names no argument of an earlier node",
+        "program: a node's arguments are not a list",
+        "program: a composite without body nodes",
+        "program: a node's callee is not an id",
+        "KeyError: no digest of {s}",
+        "program: {fid}: definitions reference each other deeper than this descriptor holds definitions",
+    )},
 }
 
 
