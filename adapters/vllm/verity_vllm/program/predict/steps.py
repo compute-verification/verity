@@ -112,7 +112,7 @@ request instead: a refused request's rows and Program leave the compilation, and
 KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) rather than raising it.
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
-transfer gates (the ingress parse and the token selects, each a select by its body: `egress`), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
+transfer gates (the ingress parse and the token selects, each by its name or its body: `egress`, which refuses a select's name over another body), each of which a window proves whole. `trace_commands` (`traced`) lists the Build traces (`verity-vllm build
 --wrapper request`, in class G at the unit's `--launch-context` and `--batched`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
@@ -153,7 +153,7 @@ from .traced import NO_EDGE_TRACE, NO_PARTIAL_TRACE, trace_dir
 from .traced import trace_commands as trace_commands
 
 SCHEMA = COMPILED_STEPS_SCHEMA
-#: the token-select families, whose registered composites `egress` holds a unit's body to: its sampled ids are a request
+#: the token-select families, whose registered composites `egress` holds a unit's name or body to: its sampled ids are a request
 #: Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
 
@@ -169,8 +169,20 @@ def _selects() -> tuple[CompositeDefinition, ...]:
 
 
 def egress(fn: Any) -> bool:
-    """Whether ``fn`` is a token select by its body, whatever its name: some registered `EGRESS` composite bound at ``fn``'s
-    statics has the definition digest (`codec.definition_digest`) of ``fn``'s entry under that composite's id."""
+    """Whether ``fn`` is a token select: named as an `EGRESS` family, or with a registered select's body under another name.
+    A unit so named whose body is no registered select's at its statics is refused (ValueError), neither listed nor sampled."""
+    family = str(getattr(fn, "id", "")).split("{")[0].rsplit("_v", 1)[0]
+    if _select_body(fn):
+        return True
+    if family in EGRESS:
+        raise ValueError(f"{fn.id}: a unit named as the token select {family} whose body is no registered select's at its "
+                         "statics is refused: it is neither a transfer gate nor sampled")
+    return False
+
+
+def _select_body(fn: Any) -> bool:
+    """Some registered `EGRESS` composite bound at ``fn``'s statics has the definition digest (`codec.definition_digest`) of
+    ``fn``'s entry under that composite's id."""
     if not isinstance(fn, SpecializedDefinition):
         return False
     mine = None
