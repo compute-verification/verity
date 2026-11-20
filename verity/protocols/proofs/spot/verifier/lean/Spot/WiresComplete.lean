@@ -189,7 +189,8 @@ theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, �
         have hord' : orderCode c orderedWire = none := by
           obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
           exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => (orderedWire_eq_ref o w).symm ▸ hin w hw'⟩
+        have hdf : pairwiseDisjointFast c.wires = true := by rw [pairwiseDisjointFast_eq]; exact hd
         unfold check
-        simp [hcut, hf', hd, hord']
+        simp [hcut, hf', hdf, orderCodeIx_eq, hord']
 
 end Spot.Wires

@@ -1,6 +1,5 @@
 """[ov-sampling] the B1 (Qwen2.5-1.5B) sampling workloads and the per-request variant (mixed batch) of the SHARED-CODE
-`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source.  The GPU
-probe's noise is `test_gen_ov_sampling_of_record`."""
+`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source."""
 
 from __future__ import annotations
 

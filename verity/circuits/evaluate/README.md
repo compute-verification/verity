@@ -73,7 +73,7 @@ registry and the constant ids the Python reads; E4's primitives each on the grid
 for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP32 one), on sampled words and on words out of
 range, and on their captures (the L40S SiLU and RoPE slices, the H100 and L40S log probe, test_mufu's fingerprints and the
 RTX 4090 tanh sample); the MUFU tables against the library's SHA-512 and the registered tables against Flock's SHA-256;
-`TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges;
+a table named in the request refused where it binds no registered input of its size; the lazy families on their index edges;
 a registered input bound like a run input; and explicit examples: the pinned 2-bit adder of
 `tests/verity/circuits/boolean_vectors.json`, Boolean Definitions traced from their Python definitions (up to the
 Ampere BF16 tensor-core step), and malformed programs and inputs.

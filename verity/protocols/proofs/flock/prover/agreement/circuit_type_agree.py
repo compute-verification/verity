@@ -14,9 +14,10 @@ import dataclasses
 import hashlib
 import json
 import random
-import subprocess
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits import library
 from verity_flock import circuit_types as CT
@@ -172,7 +173,7 @@ def main() -> int:
         f = out / f"{i}.json"
         f.write_text(json.dumps({"types": archive}))
         files.append(str(f))
-    p = subprocess.run([a.lean, "circuit-type", *files], capture_output=True, text=True, check=False)
+    p = LR.run([a.lean, "circuit-type", *files])
     lean: dict = {}
     for line in p.stdout.splitlines():
         if line.startswith("CIRCUITTYPE "):

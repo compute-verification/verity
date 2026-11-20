@@ -11,10 +11,12 @@ Random cases, each checked against core's own objects:
 separable Call's member graphs are sliced from the Call's graph at the members `locate` names (extraction's part, which the
 vector does not carry). Writes DIR/<i>.json and DIR/result.json; exits 1 unless every case agrees.
 """
-import argparse, json, random, subprocess, sys
+import argparse, json, random, sys
 from array import array
 from pathlib import Path
 from types import SimpleNamespace
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lean_run as LR
 
 from verity.circuits.cut import DefinitionCut, cut_word, derived_committed
 from verity.circuits.partition_object import Partition
@@ -127,7 +129,7 @@ def vector_case(v):
 
 
 def lean(binary, files):
-    p = subprocess.run([binary, "evaluate", *files], capture_output=True, text=True)
+    p = LR.run([binary, "evaluate", *files], ok_statuses=LR.REFUSES)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("EVALUATE "):
