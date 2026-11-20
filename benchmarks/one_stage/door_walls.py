@@ -1139,7 +1139,7 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         out_w = list(ret.leaf_widths())
         n_in = sum(-(-sum(in_w[j] for j in lv) // WORD) for _p, lv in ins_p)
         n_out = sum(-(-sum(out_w[j] for j in lv) // WORD) for _p, lv in outs_p)
-        units = list(range(lo, hi))
+        units = [u for _k, tt, a, n in door.tp.ranges if tt == key for u in range(max(a, lo), min(a + n, hi))]
         try:
             t, _log = template_of(r.c_s, key, n_in, n_out, exe)
             xs, ys, vb = honest_rows(c, query, units, fn, cut, trace)
@@ -1156,7 +1156,7 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         except Exception as e:  # noqa: BLE001
             out.append(Finding(f"rows: crashed: {normalise(_err(e))}", "rows", _err(e)[:600], spec.doc(), k))
             continue
-        door_says = "door accepts" if r.step is None else f"door refuses at {r.step}"
+        door_says = ("door accepts" if r.step is None else f"door refuses at {r.step}") + _odd(r.c_s, key)
         if not v.honest_ok:
             out.append(Finding(f"rows: honest output refused ({door_says})", "rows", v.detail, spec.doc(), k))
         for w in v.wrong_ok:
@@ -1165,6 +1165,17 @@ def check_case(spec: Spec, exe: Callable[[], Path], seed: int) -> list[Finding]:
         if r.step is not None and v.honest_ok and not v.wrong_ok:
             out.append(Finding(r.klass, r.step, r.text[:600], spec.doc(), k))
     return out
+
+
+def _odd(c_s: bytes, key: str) -> str:
+    """``, odd field`` where the template has a field of bits not a multiple of 16 followed by another field of its side
+    (`codec.odd_fields`, lean's second fault), else ``, no odd field``."""
+    from verity.circuits.codec import odd_fields
+    try:
+        odd = any(follows for _side, _n, _bits, follows in odd_fields(json.loads(c_s), key))
+    except Exception:  # noqa: BLE001 - a descriptor the scanner can't read is said so
+        return ", odd fields unread"
+    return ", odd field" if odd else ", no odd field"
 
 
 def minimise(spec: Spec, klass: str, exe: Callable[[], Path], seed: int, budget: int = 40) -> Spec:
