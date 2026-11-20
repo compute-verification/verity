@@ -5,11 +5,13 @@ and `check_count`, which `inference-only-count-difftest` holds the Lean to) on t
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); the wiring between
 leaf widths prices at no gate; a primitive with no Boolean body refuses the circuit, and a block reaching one a table lacks
-leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
+leaves the gates undecided; `main` counts a record only beside the registration that binds it (its SHA-512,
+program, partition and run) and refuses one with none; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
 (`inference_blocks.budgets`); and the module's import alone loads no registry module, which `resolve` loads on its first
 call."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -146,17 +148,53 @@ def test_a_record_its_ids_do_not_rebuild_is_refused_by_name(small, monkeypatch):
             count(small)
 
 
-def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
-    """`main` on ``windows`` served windows of ``record``, each with a registration: its public file's bytes and its
-    private file."""
-    (tmp_path / "circuit.json").write_text(json.dumps(record))
-    (tmp_path / "registration.json").write_text("{}")
+def _registration(body: bytes, record: dict, **change) -> dict:
+    """The registration that binds the circuit record ``record`` whose file's bytes are ``body``, but for ``change``."""
+    return {"program": record.get("program"), "partition": record.get("partition"),
+            "window": {"circuit": hashlib.sha512(body).hexdigest(), "run": record.get("run")}, **change}
+
+
+def _main(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str, registration: dict | None = None) -> int:
+    body = json.dumps(record).encode()
+    (tmp_path / "circuit.json").write_bytes(body)
+    reg = tmp_path / "registration.json"
+    reg.write_text(json.dumps(_registration(body, record) if registration is None else registration))
     (tmp_path / "declaration.json").write_text(json.dumps(decl))
-    out, private = tmp_path / f"public-{tag}.json", tmp_path / f"private-{tag}.json"
-    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=private, out=out,
-                   window=[[str(tmp_path / "circuit.json"), "-"]] * windows)
-    assert BC.main(a) == 0
-    return out.read_bytes(), private
+    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=tmp_path / f"private-{tag}.json",
+                   out=tmp_path / f"public-{tag}.json", window=[[str(tmp_path / "circuit.json"), str(reg)]] * windows)
+    return BC.main(a)
+
+
+def _run(tmp_path: Path, record: dict, windows: int, decl: dict, tag: str) -> tuple[bytes, Path]:
+    """`main` on ``windows`` served windows of ``record``, each with the registration that binds it: its public file's
+    bytes and its private file."""
+    assert _main(tmp_path, record, windows, decl, tag) == 0
+    return (tmp_path / f"public-{tag}.json").read_bytes(), tmp_path / f"private-{tag}.json"
+
+
+@pytest.mark.parametrize("change, refusal", [
+    ({"program": "ab" * 20}, "the circuit record names another program, partition or run than its registration"),
+    ({"partition": "ab" * 20}, "the circuit record names another program, partition or run than its registration"),
+    ({"window": {"circuit": "ab" * 64}}, r"circuit.json is not the circuit record the registration binds \(abab"),
+])
+def test_a_record_its_registration_doesnt_bind_is_not_counted(small, tmp_path, change, refusal):
+    """A registration that names another program or partition than the record, or binds other bytes, refuses the count
+    before any window is counted, and nothing is written."""
+    body = json.dumps(small).encode()
+    with pytest.raises(ValueError, match=refusal):
+        _main(tmp_path, small, 1, {"c": 10 ** 12, "k": 10 ** 12, "n": 2}, "x", _registration(body, small, **change))
+    assert not (tmp_path / "public-x.json").exists() and not (tmp_path / "private-x.json").exists()
+
+
+def test_a_window_with_no_registration_is_not_counted(small, tmp_path):
+    (tmp_path / "circuit.json").write_text(json.dumps(small))
+    (tmp_path / "declaration.json").write_text(json.dumps({"c": 10 ** 12, "k": 10 ** 12, "n": 2}))
+    a = BC.Options(day=DAY, declaration=tmp_path / "declaration.json", private=tmp_path / "private.json",
+                   window=[[str(tmp_path / "circuit.json"), "-"]])
+    with pytest.raises(ValueError, match="circuit.json: no registration is given, so nothing holds the circuit record to "
+                                         "the registered circuit, and it is not counted"):
+        BC.main(a)
+    assert not (tmp_path / "private.json").exists()
 
 
 def test_days_of_different_counts_under_n_publish_the_same_bytes(small, tmp_path, capsys):

@@ -244,7 +244,8 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
     assert {r["port"] for r in rec["roots"]} == set(ports)
     assert next(r for r in rec["roots"] if r["port"] == CS.TABLE_PORT)["root"] == c.roots[CS.TABLE_PORT].hex()
     publics = {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
-    v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=CS.leaf_layer(publics))
+    v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=CS.leaf_layer(publics),
+                partition=mine.partition)
     assert v.ok, v.detail
     roots, live = {r["port"]: r["root"] for r in rec["roots"]}, dict(c.segment_roots)
     assert TB.check_row_tables(mine, publics, roots) == {} and TB.check_row_tables(mine, publics, roots, live) == {}
