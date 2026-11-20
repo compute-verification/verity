@@ -46,7 +46,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.Hash.Lms
-import Proofs.Properties.Hash.Lms
 import Proofs.Properties.Pous.MemoryAttester
 import Proofs.Properties.Pous.MemoryAttester.Inputs
 import Std.Tactic.BVDecide.Normalize.BitVec

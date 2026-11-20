@@ -124,7 +124,7 @@ at 0. -/
 def oneRecord (d : ByteArray) : Round := ⟨0, 0, 0, 0, d⟩
 
 theorem round_one (b : ByteArray) (hb : b.size = 1) :
-    Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩ = ⟨#[oneRecord (blockDigest b)], some COMPLETE⟩ := by
+    Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩ = ⟨#[oneRecord (blockDigest b)], some Flock.SessionCoins.COMPLETE⟩ := by
   have h : (⟨0, 0, b⟩ : Observed).block.size = 1 := hb
   unfold Recorded.round
   rw [h]

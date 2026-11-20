@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Pous.Run
 public import Proofs.Properties.Pous.MemoryAttester.Attest
+public import Proofs.Properties.Pous.MemoryAttester.Inputs
 
 /-!
 # An accepted run of the composed check, without evaluating SHA-512
@@ -131,12 +132,8 @@ def coinValue (j : Nat) : ByteArray :=
 
 theorem coinLeaf_honest {j : Nat} (hj : j < 2 ^ 32) :
     coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok (coinValue j) := by
-  have h32 : j < 4294967296 := hj
-  obtain ⟨v, hv⟩ : ∃ v, coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok v := by
-    have hk : Flock.SessionCoins.checkKey honestCoinKey = .ok () := checkKey_honest
-    have hs : Flock.SessionCoins.checkSalt honestSalt = .ok () := checkSalt_honest
-    unfold coinLeaf Flock.SessionCoins.coinLeaf Flock.SessionCoins.coinDigest
-    simp [Flock.SessionCoins.beN, h32, hk, hs, bind, Except.bind, pure, Except.pure]
+  obtain ⟨v, hv⟩ : ∃ v, coinLeaf honestCoinKey honestSid j 0 honestSalt = .ok v :=
+    Inputs.coinLeaf_of honestCoinKey honestSid j 0 honestSalt checkKey_honest hj (by decide) (zeros_size 192)
   unfold coinValue
   rw [hv]
 
