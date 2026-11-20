@@ -116,5 +116,12 @@ def refusedWide (t : V Tmpl.Tmpl) : Bool := match t with
     | none => false
   | .error _ => false
 #guard refusedWide (lowerAt INSIDE "D_v1" 3 3)
+-- the return side on its own: `PASS`'s `C_v1` kept to its bit parameter, its return still a word
+#guard match Program.decode PASS.toUTF8 with
+  | .ok P => match P.index["C_v1"]?.bind (P.defs[·]?) with
+    | some d => let d' := { d with params := d.params.filter (·.2.bits) }
+      d'.params.size == 1 && refusedWide (Lower.bitsOk d' >>= fun _ => throw "accepted")
+    | none => false
+  | .error _ => false
 
 end Flock.Test.LowerBad
