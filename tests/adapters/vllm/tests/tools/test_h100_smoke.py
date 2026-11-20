@@ -36,7 +36,9 @@ if a[:1] == ["-"]:
 with open(os.environ["STUB_LOG"], "a") as fh:
     fh.write(json.dumps(rec) + "\n")
 if a[:2] == ["benchmarks/kernels/machine.py", "toolkit"]:
-    sys.exit(1)
+    if "STUB_MACHINE" not in os.environ:
+        sys.exit(1)
+    sys.exit(subprocess.run([sys.executable, os.environ["STUB_MACHINE"], *a[1:]]).returncode)
 '''
 
 
@@ -154,3 +156,26 @@ def test_the_launcher_refuses_the_retired_tie_and_scheme_by_name(tmp_path):
         env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "DRY": "1", var: "1" if var == "PEARLPLUS_TIE" else "pearl-plus"}
         p = subprocess.run(["bash", str(ROOT / SMOKE)], env=env, capture_output=True, text=True)
         assert p.returncode == 3 and f"h100_smoke.sh: {var} is retired" in p.stderr, p.stdout + p.stderr
+
+
+def test_the_toolkit_is_12_9_unless_toolkit_names_another_and_cuda_home_must_be_that_one(tmp_path):
+    """``TOOLKIT`` (default 12.9) is the version the launcher asks machine.py for; a ``CUDA_HOME`` of another version is
+    refused by name off a machine whose record lists none, and one of that version is taken."""
+    _, calls = run_dry(tmp_path / "default")
+    assert [c["argv"] for c in calls if c["argv"][:2] == ["benchmarks/kernels/machine.py", "toolkit"]] == \
+        [["benchmarks/kernels/machine.py", "toolkit", "12.9"]]
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "gpu-lease").write_text("#!/bin/sh\nexit 0\n")
+    (bin_ / "gpu-lease").chmod(0o755)
+    for i, (home, said) in enumerate((("cuda-12.9", "12.9.1"), ("cuda-13.0", "13.0.0"))):
+        kit = tmp_path / home
+        kit.mkdir()
+        (kit / "version.json").write_text(json.dumps({"cuda": {"version": said}}))
+        p, _ = run_dry(tmp_path / f"t{i}", DRY="0", TOOLKIT="13.0", CUDA_HOME=str(kit), HF_HOME=str(tmp_path / "hf"),
+                       PATH=f"{bin_}:{os.environ['PATH']}", STUB_MACHINE=str(ROOT / "benchmarks/kernels/machine.py"))
+        assert p.returncode == 3, p.stdout + p.stderr
+        if said.startswith("12.9"):
+            assert "SMOKE REFUSED toolkit: neither CUDA_HOME nor the machine gives CUDA 13.0" in p.stdout, p.stdout + p.stderr
+        else:
+            assert "SMOKE REFUSED toolkit" not in p.stdout and "SMOKE REFUSED model" in p.stdout, p.stdout + p.stderr

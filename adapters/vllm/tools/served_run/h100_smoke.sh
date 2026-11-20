@@ -9,7 +9,8 @@
 #   (`benchmarks/one_stage/window_commit.py window-commit`, as served_verdicts.sh's window_commit() calls it).
 # Does NOT show: an audit, a proof, or a traced Build on the H100.
 # Needs: PY (default the node's /workspace/venv312/bin/python), gpu-lease (it leases one card for the serve alone, at most
-#   LEASE_MIN minutes, default 30), HF_HOME (default /workspace/hf) holding the model; CUDA_HOME (12.9, machine.py's),
+#   LEASE_MIN minutes, default 30), HF_HOME (default /workspace/hf) holding the model; CUDA_HOME (CUDA $TOOLKIT, default
+#   12.9, machine.py's; TOOLKIT=13.0 on the H200, as served_verdicts.sh takes there),
 #   CARD_SKU (machine.py sku), PYTHONPATH and VERITY_PROTOCOLS_CONFIG are set here. WIPE_CMD, set only where the application
 #   lists the wipe, wipes the leased card before serve-openai starts, its answer in the serve's pieces/wipe (unset: no wipe).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory
@@ -48,10 +49,10 @@ else
   SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
   command -v gpu-lease > /dev/null || { echo "SMOKE REFUSED lease: this machine has no gpu-lease, which the serve's card is leased under"; exit 3; }
 fi
-NOKIT=
-CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || if [ "$DRY" = 1 ]; then
-  NOKIT=1 CUDA_HOME=$SCRATCH/no-toolkit; echo "DRY: this machine lists no CUDA 12.9, so the committer's native build is not run"
-else echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; fi
+NOKIT= TOOLKIT=${TOOLKIT:-12.9}
+CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit "$TOOLKIT") || if [ "$DRY" = 1 ]; then
+  NOKIT=1 CUDA_HOME=$SCRATCH/no-toolkit; echo "DRY: this machine lists no CUDA $TOOLKIT, so the committer's native build is not run"
+else echo "SMOKE REFUSED toolkit: neither CUDA_HOME nor the machine gives CUDA $TOOLKIT (machine.py, above)"; exit 3; fi
 if [ "$DRY" = 1 ] && [ -n "${CARD_SKU:-}" ]; then echo "DRY: CARD_SKU $CARD_SKU as given (off the card, no card to read it from)"
 else CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku); fi || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
 export CUDA_HOME CARD_SKU HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-served-run}
