@@ -153,11 +153,22 @@ def runSalt (coin : ByteArray) (binding : Option (String × String)) (window : J
 private def decimal? (s : String) : Option Nat :=
   if s == "0" || (!s.isEmpty && s.toList.all Char.isDigit && s.front != '0') then some s.toNat! else none
 
-/-- A source's bytes: the root the record names for it, the verifier's own, a position after the log's, or the verifier's
-coin bound to its binding and the record's window; an error where there is none. -/
-def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × String)) (supplied : Array String)
+/-- The sources only a mark's body names (`body`): a table's root and domain id as the verifier holds them, never the
+record's. -/
+def HELD_ROOT : String := "held-root"
+def HELD_DOMAIN : String := "held-domain"
+
+/-- A source's bytes: the root the record names for it, the verifier's own, a position after the log's, the verifier's
+coin bound to its binding and the record's window, or a held table's root or domain id (`held`: `(value, root, domain)`
+of each table the verifier holds, its accepted pins); an error where there is none. -/
+def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × String))
+    (held : Array (String × String × String)) (supplied : Array String)
     (value : String) : String × String → V ByteArray
   | (kind, name) => do
+    if kind == HELD_ROOT || kind == HELD_DOMAIN then
+      let some (_, root, domain) := held.find? (·.1 == name)
+        | throw s!"supplied value {value}: the verifier holds no value {name}"
+      return (← Flock.unhex (if kind == HELD_ROOT then root else domain))
     if kind == "position" then
       let some k := decimal? name | throw s!"supplied value {value}: position {name} is no decimal"
       let some n := int? (getD rec "population") | throw s!"supplied value {value}: the record has no population"
@@ -182,14 +193,14 @@ def sourceBytes (rec : Json) (log : Array Json) (binding : Option (String × Str
 
 /-- `registered.supplied_rows`: each row its sources' bytes as the parameter's leaves, `Digest`s' where its leaves are
 whole digests (`digests`). -/
-def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
-    (supplied : Array String) (value : String) (rs : Rows) : V (Array (Array Nat)) := do
+def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (held : Array (String × String × String))
+    (ps : Array Registered.Param) (supplied : Array String) (value : String) (rs : Rows) : V (Array (Array Nat)) := do
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
     let le := r[0]?.map (·.1) == some LE
     let data ← (if le then r.extract 1 r.size else r).foldlM
-      (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
+      (fun acc s => return acc ++ (← sourceBytes rec log binding held supplied value s)) ByteArray.empty
     if le then leLeaves data w else if digests p.ty then digestLeaves data else leavesOf data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
@@ -227,10 +238,10 @@ def cut (got : Array (Array Nat)) (n k : Nat) : Array (Array Nat) :=
 format of `schemas` committed under `salt` at the verifier's own entry `want`, a value given as one row of all their
 leaves (a mark's, `ofMark`) cut into them (`cut`); an error where a source names nothing or the rows are not its
 shape. -/
-def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (ps : Array Registered.Param)
-    (program : String) (supplied : Array String) (schemas : Array (String × String)) (value : String) (rs : Rows)
-    (want : Registered.Entry) : V String := do
-  let given ← rows rec log binding ps supplied value rs
+def root (rec : Json) (log : Array Json) (binding : Option (String × String)) (held : Array (String × String × String))
+    (ps : Array Registered.Param) (program : String) (supplied : Array String) (schemas : Array (String × String))
+    (value : String) (rs : Rows) (want : Registered.Entry) : V String := do
+  let given ← rows rec log binding held ps supplied value rs
   let schema := (schemas.find? (·.1 == value)).elim Registered.SCHEMA (·.2)
   let some p := ps.find? (·.name == value) | throw s!"{value} is not a parameter of the program"
   let k ← Registered.rowLeaves p schema want.words want.wordBits
@@ -520,7 +531,8 @@ private def message (coins commitments : Array (String × ByteArray)) (v : Strin
 little-endian; `pous.setup.salt/v1` the coin the verifier holds for it, 24 bytes (`coins`: the memory attester's salt,
 drawn after W's commitment); `pouw.pearlplus.salt/v1` the epoch's salt of Pearl+, the coin it holds for it, 32 bytes;
 `window.salt/v1` the window's salt under the coin it holds for it (`runSalt`, 64 bytes);
-`registered.root/v1` the root the record registers for its `value`, `registered.domain/v1` that entry's domain id, and
+`registered.root/v1` the root of the table its `value` names as the verifier holds it (`HELD_ROOT`, never the record's
+entry), `registered.domain/v1` that held table's domain id (`HELD_DOMAIN`), and
 `record.root/v1` the root the record names for its
 `port` (64 bytes each); `log.base/v1` the first position after the log's records (8 bytes). The storage session's four functions read the
 session in two entries by when each part exists: the commitment, held before the first coin, `{commitment, key, place}`
@@ -554,8 +566,8 @@ def body (coins commitments : Array (String × ByteArray)) (v : String) (m : Mar
     let c ← coin coins v m
     if c.isEmpty then throw s!"supplied input {v}: no statement: {m.fn}'s coin is no bytes"
     return (#[("window", Flock.hexOf c)], 64)
-  | "registered.root/v1" => return (#[("value", ← argStr v m "value")], 64)
-  | "registered.domain/v1" => return (#[("domain", ← argStr v m "value")], 64)
+  | "registered.root/v1" => return (#[(HELD_ROOT, ← argStr v m "value")], 64)
+  | "registered.domain/v1" => return (#[(HELD_DOMAIN, ← argStr v m "value")], 64)
   | "record.root/v1" => return (#[("port", ← argStr v m "port")], 64)
   | "log.base/v1" =>
     if !m.args.isEmpty then throw s!"supplied input {v}: {m.fn} takes no args"
@@ -588,14 +600,20 @@ private def hexRep (b : String) : Json := .str (String.join (List.replicate 64 b
 private def domainRec (domain : Option String) : Json :=
   Json.mkObj [("registered", Json.arr #[Json.mkObj ([("value", .str "w"), ("root", hexRep "11")] ++
     (domain.map fun d => [("domain", hexRep d)]).getD [])])]
-private def domainRow (rec : Json) : V (Array Nat) := do
-  let rs ← ofMark #[] #[] "x" { fn := "registered.domain/v1", args := #[("value", .str "w")], layout := "digest", bits := 512 }
+private def anchorRow (fn : String) (rec : Json) (held : Array (String × String × String)) : V (Array Nat) := do
+  let rs ← ofMark #[] #[] "x" { fn, args := #[("value", .str "w")], layout := "digest", bits := 512 }
   let some r := rs[0]? | throw "no row"
-  digestLeaves (← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec #[] none #[] "x" s)) ByteArray.empty)
+  digestLeaves (← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec #[] none held #[] "x" s)) ByteArray.empty)
+private def digestOf (b : UInt8) : Option (Array Nat) := (digestLeaves ⟨(List.replicate 64 b).toArray⟩).toOption
+private def HELD_W : Array (String × String × String) :=
+  #[("w", String.join (List.replicate 64 "44"), String.join (List.replicate 64 "55"))]
 
-#guard (domainRow (domainRec (some "33"))).toOption == (digestLeaves ⟨(List.replicate 64 (0x33 : UInt8)).toArray⟩).toOption
-#guard (domainRow (domainRec (some "33"))).toOption != (digestLeaves ⟨(List.replicate 64 (0x11 : UInt8)).toArray⟩).toOption
-#guard (domainRow (domainRec none)).toOption.isNone
+-- a table input reads the held table's domain id and root, whatever the record's entry of it says
+#guard (anchorRow "registered.domain/v1" (domainRec (some "33")) HELD_W).toOption == digestOf 0x55
+#guard (anchorRow "registered.root/v1" (domainRec (some "33")) HELD_W).toOption == digestOf 0x44
+-- and with no held value it has no row: the record's entry is never its source
+#guard (anchorRow "registered.domain/v1" (domainRec (some "33")) #[]).toOption.isNone
+#guard (anchorRow "registered.root/v1" (domainRec (some "33")) #[]).toOption.isNone
 
 /-- The place a held commitment was registered at: its JSON's `place`, a natural; none for a text that is no JSON object of
 one. -/
@@ -657,7 +675,8 @@ def order (marked : Array (String × Mark)) (rows : Array (String × Rows)) (coi
     unless late.isEmpty do
       throw s!"E_SUPPLIED_ORDER: {pyNames late} registered after {f}, which a supplied value reads"
 
-/-- The difftest's `supplied_marks`: on `{program, coins, commitments, attester_keys, widths, record, log, binding}` (`coins` and
+/-- The difftest's `supplied_marks`: on `{program, coins, commitments, attester_keys, widths, record, log, binding, held}`
+(`held`: `{table: {root, domain}}`, the tables the verifier holds; `coins` and
 `commitments`: `{function: hex}`, what the verifier holds of each function as a coin and as a released commitment, which
 the order rule counts the first of alone;
 `widths`: `{input: w}`; `binding`: `{stream, prover}` or null), each supplied input's rows as leaves of its width
@@ -685,6 +704,12 @@ def piece (j : Json) : Except String Json := do
       | .str s, .str p => pure (some (s, p))
       | _, _ => throw "binding is not {stream, prover}"
   let rec_ := getD j "record"
+  let held ← match getD j "held" with
+    | .null => pure #[]
+    | .obj kvs => kvs.toArray.mapM fun (v, e) => match getD e "root", getD e "domain" with
+      | .str r, .str d => pure (v, r, d)
+      | _, _ => throw s!"held: {v} has no root and domain"
+    | _ => throw "held is not an object"
   let pinned ← attesterKeys j
   let rows ← ms.mapM fun (v, m) => do pure (v, ← ofMark coins commitments v m pinned)
   order ms rows coins commitments (getD j "released") log.size
@@ -694,7 +719,7 @@ def piece (j : Json) : Except String Json := do
     let ls ← rs.mapM fun r => do
       let le := r[0]?.map (·.1) == some LE
       let data ← (if le then r.extract 1 r.size else r).foldlM
-        (fun acc s => return acc ++ (← sourceBytes rec_ log binding (ms.map (·.1)) v s)) ByteArray.empty
+        (fun acc s => return acc ++ (← sourceBytes rec_ log binding held (ms.map (·.1)) v s)) ByteArray.empty
       if le then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
     let ls ← match getD (getD j "cuts") v with
       | .null => pure ls

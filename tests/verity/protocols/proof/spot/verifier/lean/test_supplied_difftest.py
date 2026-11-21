@@ -58,6 +58,10 @@ def reference(j):
         if not isinstance(widths, dict):
             raise ValueError("widths")
         log, binding, rec = j.get("log"), j.get("binding"), j.get("record")
+        tables = {} if j.get("held") is None else j.get("held")
+        if not (isinstance(tables, dict) and all(isinstance(e, dict) and isinstance(e.get("root"), str)
+                                                 and isinstance(e.get("domain"), str) for e in tables.values())):
+            raise ValueError("held")
         if not isinstance(log, list):
             raise ValueError("log")
         if binding is not None and not (isinstance(binding, dict) and isinstance(binding.get("stream"), str)
@@ -76,7 +80,7 @@ def reference(j):
             w = G._nat(widths.get(v))
             if w is None:
                 raise ValueError("width")
-            out[v] = [G.row_leaves_of(r, lambda k, n: G._source_bytes(rec, v, k, n, list(ms), log, binding), w,
+            out[v] = [G.row_leaves_of(r, lambda k, n: G._source_bytes(rec, v, k, n, list(ms), log, binding, tables), w,
                                       m["layout"] == "digest")
                       for r in G.of_mark(held, commit, v, m, pinned)]
             c = j["cuts"].get(v) if isinstance(j.get("cuts"), dict) else None
@@ -94,6 +98,9 @@ RECORD = {"population": 3, "window": {"start": 0}, "registered": [{"value": "w",
                                                                   {"value": "v", "root": "44" * 64}],
           "roots": [{"port": "p", "root": "22" * 64}]}
 BINDING = {"stream": "aa", "prover": "bb"}
+#: the table the verifier holds (the registration of record's pin of ``w``), at a root and domain id the record's entry
+#: of ``w`` doesn't have
+HELD = {"w": {"root": "55" * 64, "domain": "66" * 64}}
 ROOTS = [{"supplied": "registered.root/v1", "args": {"value": "w"}, "layout": "digest", "bits": 512},
          {"supplied": "record.root/v1", "args": {"port": "p"}, "layout": "halves", "bits": 512},
          {"supplied": "record.root/v1", "args": {"port": "q"}, "layout": "halves", "bits": 512},
@@ -135,8 +142,9 @@ def instances(draw) -> dict:
         widths = draw(JUNK)
     cuts = {x[0]: draw(st.one_of(st.tuples(st.integers(0, 16), st.integers(0, 16)).map(list), JUNK))
             for x in inputs if isinstance(x, list) and x and isinstance(x[0], str) and draw(st.booleans())}
+    held = draw(st.sampled_from([None, HELD, HELD, {"w": {"root": "55" * 64}}, {"w": 5}, []]))
     return {"program": desc(inputs, fns), "coins": coins, "widths": widths, "record": rec, "log": log,
-            "binding": binding, **({"cuts": cuts} if cuts else {})}
+            "binding": binding, **({"cuts": cuts} if cuts else {}), **({} if held is None else {"held": held})}
 
 
 INPUTS = st.one_of(*[instances() for _ in range(6)], JUNK)
@@ -156,15 +164,17 @@ SETUP = {"program": desc([["store", 1], ["salt", 1, SALT], ["one", 1, ONE]], [1,
          "record": RECORD, "log": [], "binding": BINDING}
 
 
-#: the setup's salt read beside the root the record registers for ``w`` (`registered.root/v1`), as input ``rw``
-ORDERED = {"program": desc([["salt", 1, SALT], ["rw", 1, ROOTS[0]]], [2, 3]), "widths": {"salt": 16, "rw": 1}}
+#: the root the record registers at port ``p`` (`record.root/v1`), one digest leaf
+PORT = {**ROOTS[1], "layout": "digest"}
+#: the setup's salt read beside the root the record registers at ``p``, as input ``rw``
+ORDERED = {"program": desc([["salt", 1, SALT], ["rw", 1, PORT]], [2, 3]), "widths": {"salt": 16, "rw": 1}}
 
 
 def test_the_order_rule_names_the_commitments_registered_after_the_coin():
     """`registered.order` refuses by name (E_SUPPLIED_ORDER) a commitment C's marks read whose place is at or after
     the place of a coin they read, and needs a place for such a coin."""
     j = {**SETUP, **ORDERED}
-    with pytest.raises(D.Reject, match=r"^E_SUPPLIED_ORDER: \['w'\] registered after pous.setup.salt/v1, which a "
+    with pytest.raises(D.Reject, match=r"^E_SUPPLIED_ORDER: \['p'\] registered after pous.setup.salt/v1, which a "
                                        r"supplied value reads$"):
         reference({**j, "released": {"pous.setup.salt/v1": 0}})
     with pytest.raises(D.Reject, match="names no place of pous.setup.salt/v1's coin"):
@@ -203,8 +213,12 @@ def test_the_order_rule_names_the_commitments_registered_after_the_coin():
      {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "one": [[1]]}),
     ("a cut not [n, k]", lambda j: {**j, "cuts": {"salt": [3]}}, None),
     ("a coin released after the record's root it is read beside", lambda j: {**j, **ORDERED, "released": {
-        "pous.setup.salt/v1": 1}}, {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "rw": [G.digest_leaves(bytes.fromhex("11" * 64))]}),
-    ("W's root registered after the setup's salt: E_SUPPLIED_ORDER", lambda j: {**j, **ORDERED, "released": {
+        "pous.setup.salt/v1": 1}}, {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "rw": [G.digest_leaves(bytes.fromhex("22" * 64))]}),
+    ("a held table's root beside the setup's salt: registered before the window, it needs no place", lambda j: {
+        **j, "held": HELD, "program": desc([["salt", 1, SALT], ["rw", 1, ROOTS[0]]], [2, 3]),
+        "widths": {"salt": 16, "rw": 1}}, {"salt": [[0x0100 + 0x0202 * i for i in range(12)]],
+                                            "rw": [G.digest_leaves(bytes.fromhex("55" * 64))]}),
+    ("p's root registered after the setup's salt: E_SUPPLIED_ORDER", lambda j: {**j, **ORDERED, "released": {
         "pous.setup.salt/v1": 0}}, None),
     ("no place of the coin read beside a root", lambda j: {**j, **ORDERED}, None),
     ("a place that is no natural", lambda j: {**j, **ORDERED, "released": {"pous.setup.salt/v1": -1}}, None),
@@ -218,14 +232,21 @@ def test_the_order_rule_names_the_commitments_registered_after_the_coin():
                                                                           [2, 2]),
         "widths": {"salt": 16, "base": 16}, "released": {"pous.setup.salt/v1": 2}},
      {"salt": [[0x0100 + 0x0202 * i for i in range(12)]], "base": [[0, 0, 5, 0]]}),
-    ("the domain id the record registers for w", lambda j: {**j, "program": desc([["dw", 1, ROOTS[5]]], [3]),
-                                                           "widths": {"dw": 1}},
-     {"dw": [G.digest_leaves(bytes.fromhex("33" * 64))]}),
-    ("a registered entry with no domain id", lambda j: {**j, "program": desc([["dv", 1, ROOTS[6]]], [3]),
-                                                       "widths": {"dv": 1}}, None),
-    ("the root and the domain id of w", lambda j: {**j, "program": desc([["rw", 1, ROOTS[0]], ["dw", 1, ROOTS[5]]], [3, 3]),
-                                                   "widths": {"rw": 1, "dw": 1}},
-     {"rw": [G.digest_leaves(bytes.fromhex("11" * 64))], "dw": [G.digest_leaves(bytes.fromhex("33" * 64))]}),
+    ("the domain id of the held table w, not the record's entry's", lambda j: {
+        **j, "held": HELD, "program": desc([["dw", 1, ROOTS[5]]], [3]), "widths": {"dw": 1}},
+     {"dw": [G.digest_leaves(bytes.fromhex("66" * 64))]}),
+    ("the record's entry of w with no held table: no source", lambda j: {
+        **j, "program": desc([["dw", 1, ROOTS[5]]], [3]), "widths": {"dw": 1}}, None),
+    ("the record's root of w with no held table: no source", lambda j: {
+        **j, "program": desc([["rw", 1, ROOTS[0]]], [3]), "widths": {"rw": 1}}, None),
+    ("a table the verifier holds not", lambda j: {**j, "held": HELD, "program": desc([["dv", 1, ROOTS[6]]], [3]),
+                                                  "widths": {"dv": 1}}, None),
+    ("a held table with no domain id", lambda j: {**j, "held": {"w": {"root": "55" * 64}},
+                                                  "program": desc([["rw", 1, ROOTS[0]]], [3]), "widths": {"rw": 1}}, None),
+    ("the root and the domain id of the held table w", lambda j: {
+        **j, "held": HELD, "program": desc([["rw", 1, ROOTS[0]], ["dw", 1, ROOTS[5]]], [3, 3]),
+        "widths": {"rw": 1, "dw": 1}},
+     {"rw": [G.digest_leaves(bytes.fromhex("55" * 64))], "dw": [G.digest_leaves(bytes.fromhex("66" * 64))]}),
     ("a window salt with no binding", lambda j: {**j, "binding": None, "coins": {"window.salt/v1": "07"},
                                                  "program": desc([["s", 1, ROOTS[3]]], [2]), "widths": {"s": 16}}, None),
 ], ids=lambda x: x if isinstance(x, str) else "")
@@ -568,10 +589,10 @@ def test_a_mark_whose_bits_are_not_the_values_is_refused():
         reference(j)
 
 
-#: the order rule's input: the program reads the root the record registers for ``w`` beside ``x0``
+#: the order rule's input: the program reads the root the record registers at ``p`` beside ``x0``
 def _ordered(fn: str, args: dict, tables, released=None) -> dict:
     return {**session_instance(fn, args, tables, released=None), "program": desc(
-        [["x0", 1, mark_of(fn, args, args.get("head"))], ["rw", 1, ROOTS[0]]], [2, 3]), "widths": {"x0": 16, "rw": 1},
+        [["x0", 1, mark_of(fn, args, args.get("head"))], ["rw", 1, PORT]], [2, 3]), "widths": {"x0": 16, "rw": 1},
         **({"released": released} if released is not None else {})}
 
 

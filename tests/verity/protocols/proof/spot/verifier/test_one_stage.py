@@ -901,6 +901,52 @@ def test_r7_refuses_a_supplied_input_with_no_source():
     assert R.unsourced_supplied(_two_programs(registered=("t",))[0], {}) == []
 
 
+def _table_input(fn: str = "registered.root/v1", value: str = "w") -> Program:
+    """`OneStageTestSupplied`'s program with ``t`` a table input of ``value``: C's mark of ``fn``."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestSupplied", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    return Program(bind(calls), supplied={"t": {"supplied": fn, "args": {"value": value}, "layout": "digest", "bits": 512}})
+
+
+def _table_pin(value: str = "w", program: str = "aa" * 64) -> dict:
+    from verity.commitments import registered_value as RV
+    return {"value": value, "root": "ab" * 64, "leaves": 4, "words": 1,
+            "domain": RV.domain(program, value, 1, 4).domain_id.hex()}
+
+
+def test_r7_expects_each_pinned_table_a_table_input_names_built_from_its_pin():
+    """`docket.table_entries` (Lean's `Docket.tableEntries`, its guards in `Spot/Test/Docket.lean`): a table a table
+    input of C names (`supplied.registered_values` past the values the verifier expects) that the registration of
+    record pins is an expected entry built from the pin; a pin no mark names, a mark of a value nothing pins, or a value
+    already expected adds none. `docket.held_tables` is each pin's root and domain."""
+    pin = _table_pin()
+    weights = _weights([pin])
+    want = {"w": {"leaves": 4, "words": 1, "word_bits": 16, "domain": pin["domain"]}}
+    for fn in R.ANCHOR_FUNCTIONS:
+        assert R.table_entries(_table_input(fn), {}, weights) == want
+        assert R.table_entries(_table_input(fn), {"x": 1}, weights) == want
+    assert R.table_entries(_table_input(), {}, None) == {}
+    assert R.table_entries(_table_input(value="z"), {}, weights) == {}
+    assert R.table_entries(_table_input(), {"w": 1}, weights) == {}
+    assert R.table_entries(_table_input("record.root/v1"), {}, weights) == {}
+    assert R.held_tables(weights) == {"w": {"root": "ab" * 64, "domain": pin["domain"]}}
+    assert R.held_tables(None) == {} and R.held_tables((weights[0], "00" * 64)) == {}
+
+
+def test_r7_counts_a_table_inputs_mark_as_no_source():
+    """`docket.unsourced_supplied` on a table input (Lean's `Docket.anchorsUnheld`): C's mark names where its rows come
+    from, never that they exist, so with no pin of its table it is named although its marked rows are there; with the
+    table pinned it is not."""
+    prog = _table_input()
+    marks = G.marks(json.loads(b"".join(codec.descriptor_chunks(prog))))
+    assert set(marks) == {"t"}
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, None) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin("z")])) == ["t"]
+    assert R.unsourced_supplied(prog, {"t": []}, None, marks, _weights([_table_pin()])) == []
+    assert R.unsourced_supplied(prog, {}, None, marks, _weights([_table_pin()])) == ["t"]
+
+
 def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     """R8's tied values (`registration.check`'s `tied`): a run Input named tied is let through, and the verdict
     publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network period check that

@@ -423,12 +423,21 @@ def _hex_bytes(value: str, kind: str, name: str, text: Any) -> bytes:
     return bytes.fromhex(text)
 
 
+HELD_ROOT, HELD_DOMAIN = "held-root", "held-domain"
+
+
 def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence[str], log: Sequence[Any],
-                  binding: Mapping[str, str] | None) -> bytes:
-    """A source's bytes: the root the record names for it (its last entry, as R3 and R7 read a name twice), the verifier's
-    own, a position after the log's, or the verifier's coin bound to its binding and the record's window; ValueError
-    where there is none."""
+                  binding: Mapping[str, str] | None, held: Mapping[str, Mapping[str, str]] | None = None) -> bytes:
+    """A source's bytes: the root the record names for it (its last entry, as R3 and R7 read a name twice), the root or
+    domain of a table the verifier holds (`held`: value to its `root` and `domain`, never the record's entry), the
+    verifier's own, a position after the log's, or the verifier's coin bound to its binding and the record's window;
+    ValueError where there is none."""
     rec = rec if isinstance(rec, Mapping) else {}
+    if kind in (HELD_ROOT, HELD_DOMAIN):
+        h = (held or {}).get(name)
+        if not isinstance(h, Mapping):
+            raise ValueError(f"supplied value {value!r}: the verifier holds no value {name!r}")
+        return _hex_bytes(value, kind, name, h.get("root" if kind == HELD_ROOT else "domain"))
     if kind == "bytes":
         return _hex_bytes(value, kind, name, name)
     if kind == "window":
@@ -453,7 +462,8 @@ def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence
 
 def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  binding: Mapping[str, str] | None = None) -> list[list[int]]:
+                  binding: Mapping[str, str] | None = None,
+                  held: Mapping[str, Mapping[str, str]] | None = None) -> list[list[int]]:
     """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records, its
     binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`leaves_of`
     at its leaf width, or `digest_leaves` where its leaves are whole digests, `digests`). `supplied`: every supplied
@@ -463,7 +473,7 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    return [row_leaves_of(row, lambda k, n: _source_bytes(rec, value, k, n, supplied, log, binding), w, digests(t))
+    return [row_leaves_of(row, lambda k, n: _source_bytes(rec, value, k, n, supplied, log, binding, held), w, digests(t))
             for row in rows]
 
 
@@ -824,9 +834,9 @@ def body(coins: Mapping[str, bytes], commitments: Mapping[str, bytes], name: str
             raise ValueError(f"supplied input {name}: no statement: {f}'s coin is no bytes")
         return [("window", c.hex())], 64
     if f == "registered.root/v1":
-        return [("value", _arg(name, m, "value", str))], 64
+        return [(HELD_ROOT, _arg(name, m, "value", str))], 64
     if f == "registered.domain/v1":
-        return [("domain", _arg(name, m, "value", str))], 64
+        return [(HELD_DOMAIN, _arg(name, m, "value", str))], 64
     if f == "record.root/v1":
         return [("port", _arg(name, m, "port", str))], 64
     if f == "log.base/v1":
@@ -965,13 +975,14 @@ def _in_format(program: Program, value: str, got: list[list[int]], word_bits: in
 
 def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA) -> str:
+                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA,
+                  held: Mapping[str, Mapping[str, str]] | None = None) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
     `leaves` (`registered_entries`), each the parameter's leaves of one row of its `words` leaves in `schema`
     (`row_leaves`), committed in `schema` under `registered_value.supplied_salts` at its `word_bits`; a value given as
     one row of all those leaves (a mark's, `of_mark`) is cut into them in order (`cut`). `prog`: `program`'s digest
     (`P.program_digest`), when the caller holds it."""
-    given = supplied_rows(program, value, rows, rec, supplied, log, binding)
+    given = supplied_rows(program, value, rows, rec, supplied, log, binding, held)
     k = row_leaves(program, value, want["words"], schema)
     got = cut(given, want["leaves"], k)
     if len(got) != want["leaves"] or any(len(r) != k for r in got):
@@ -984,12 +995,13 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                    supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
-                   binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA) -> RV.Registered:
+                   binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA,
+                   held: Mapping[str, Mapping[str, str]] | None = None) -> RV.Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
     entry will do: no row reads it), the log and the binding under the public salts, in `schema` (the row format the
     verifier names for it), whose `entry()` the record registers and whose `statement` opens a proof block's reads like
     any registered value's."""
-    got = supplied_rows(program, value, rows, rec, supplied, log, binding)
+    got = supplied_rows(program, value, rows, rec, supplied, log, binding, held)
     prog, b = prog or P.program_digest(program), width(program, value)
     return RV.Registered.commit(prog, value, _in_format(program, value, got, b, schema),
                              RV.supplied_salts(prog, value, len(got)), b, schema)
