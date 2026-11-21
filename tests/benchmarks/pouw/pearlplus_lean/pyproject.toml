@@ -21,5 +21,8 @@ inputs = ["verity", "adapters/torch/verity_torch/__init__.py", "adapters/torch/v
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "tests/benchmarks/pouw/test_pearl_c_vllm.py",
           "tests/benchmarks/pouw/test_pearl_c_hash_decode.py", "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py",
           "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py",
+          # the check package's live salt cases, which build a signed salt session for `--salt-live`
+          "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_pass_cases.py",
+          "tests/verity/protocols/accounting/compute/pouw/verifier/lean/check/pouw_rounds_cases.py",
           # verity_difftest, which test_pearlplus_lean imports: under `verity` until the difftest map moved it
           "tools/difftest"]

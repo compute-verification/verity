@@ -433,6 +433,7 @@ def ship(tmp_path_factory):
     subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(HERE / "fake_tma.c")],
                    check=True)
     shutil.copy(HERE / "run.py", out)
+    shutil.copy(HERE.parent / "pearl_c" / "driver.py", out)
     (out / "pearl_c_sm120.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
     return out
 
