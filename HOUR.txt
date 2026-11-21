@@ -1,0 +1,9 @@
+Head nameable at 17:20Z (Lean build, four suites and one-linear rerun at the head carrying (i) and the cure below).
+
+(iii) FINDING: a parameter whose root nodes are SuppliedInput<w>_v1, with no `inputs` marks in C and no source for it in
+the parameters' `supplied`, is refused by no code in either twin: the docket's `marked` (Docket.lean 389,
+Partition.regInputs 467-472) and `marked_inputs` (docket.py 246-250) count REGISTRATION bindings only; Supplied.marks
+(Supplied.lean 292-315) returns none without `inputs`; R7-supplied (Docket.lean ~681, `for (v, rs) in supplied`) checks
+only values the parameters' `supplied` lists. Its record entry is held to R7's own entry in leaves, words and domain
+(Docket.lean 667-669) and in root only where pinned or held (R7-held, 679). Cure going in now: R7 refuses a
+supplied-bound parameter with no source in `supplied` and no mark (by name), both twins.
