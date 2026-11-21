@@ -43,6 +43,7 @@ from verity_bench.prove_rows import (
     steady_row,
 )
 from verity_bench.served_table import record_runs, records
+from verity_bench.steady import _ABSENT, _field
 
 CENSUS_KIND = "block-census/v1"
 CENSUS_FILE = "census.json"
